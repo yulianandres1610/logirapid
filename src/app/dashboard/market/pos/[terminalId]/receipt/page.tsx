@@ -523,24 +523,43 @@ function ReceiptContent() {
     try {
       console.log('[Receipt] Fetching print services...')
       const response = await fetch('/api/print/services')
+
+      if (!response.ok) {
+        console.error('[Receipt] API error:', response.status, response.statusText)
+        return { services: [], thermalPrinters: [] }
+      }
+
       const data = await response.json()
-      console.log('[Receipt] Print services response:', data)
+      console.log('[Receipt] Print services response:', JSON.stringify(data, null, 2))
 
       if (data.success && data.data?.services) {
+        const allServices = data.data.services
+        console.log('[Receipt] Total services from API:', allServices.length)
+
+        // Log cada servicio para depuración
+        allServices.forEach((s: { serviceCode: string; serviceName: string; status: string; printers?: Array<{ printerName: string; printerType: string; isOnline: boolean }> }) => {
+          console.log(`[Receipt] Service: ${s.serviceCode} (${s.serviceName}) - Status: ${s.status} - Printers: ${s.printers?.length || 0}`)
+          s.printers?.forEach(p => {
+            console.log(`  - Printer: ${p.printerName} | Type: ${p.printerType} | Online: ${p.isOnline}`)
+          })
+        })
+
         // Aceptar servicios activos o pending (offline es solo indicador de heartbeat)
-        const activeServices = data.data.services.filter(
+        const activeServices = allServices.filter(
           (s: { status: string; printers?: unknown[] }) =>
             (s.status === 'active' || s.status === 'pending' || s.status === 'offline') &&
             s.printers && s.printers.length > 0
         )
-        console.log('[Receipt] Active services:', activeServices.length, activeServices.map((s: { serviceName: string; status: string }) => ({ name: s.serviceName, status: s.status })))
+        console.log('[Receipt] Active services with printers:', activeServices.length)
 
-        // Filtrar solo servicios que tienen impresoras térmicas
-        const servicesWithThermal = activeServices.map((service: { id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; isDefault: boolean; printerType: string }> }) => ({
+        // Filtrar solo servicios que tienen impresoras térmicas/recibo
+        // Tipos válidos: thermal_80mm, thermal_58mm, pos, receipt
+        const thermalTypes = ['thermal_80mm', 'thermal_58mm', 'pos', 'receipt', 'thermal']
+        const servicesWithThermal = activeServices.map((service: { id: number; serviceName: string; serviceCode: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; isDefault: boolean; printerType: string }> }) => ({
           ...service,
           printers: service.printers.filter(
             (p: { printerType: string; isOnline: boolean }) =>
-              (p.printerType === 'thermal_80mm' || p.printerType === 'thermal_58mm' || p.printerType === 'pos')
+              thermalTypes.includes(p.printerType?.toLowerCase() || '')
           )
         })).filter((s: { printers: unknown[] }) => s.printers.length > 0)
 
@@ -552,7 +571,7 @@ function ReceiptContent() {
         const thermalPrinters: Array<{ serviceId: number; printer: { id: number; printerName: string; isOnline: boolean; isDefault: boolean; printerType: string } }> = []
         for (const service of servicesWithThermal) {
           for (const printer of service.printers) {
-            console.log('[Receipt] Found thermal printer:', printer.printerName, 'type:', printer.printerType, 'online:', printer.isOnline)
+            console.log('[Receipt] Found thermal printer:', printer.printerName, 'type:', printer.printerType)
             thermalPrinters.push({ serviceId: service.id, printer })
           }
         }
@@ -561,12 +580,14 @@ function ReceiptContent() {
         if (thermalPrinters.length > 0) {
           console.log('[Receipt] Auto-selecting printer:', thermalPrinters[0].printer.printerName)
           setSelectedPrinter({ serviceId: thermalPrinters[0].serviceId, printerId: thermalPrinters[0].printer.id })
+        } else {
+          console.log('[Receipt] NO thermal printers found! Check printer types in service configuration.')
         }
 
         console.log('[Receipt] Total thermal printers found:', thermalPrinters.length)
         return { services: servicesWithThermal, thermalPrinters }
       }
-      console.log('[Receipt] No services found in response')
+      console.log('[Receipt] No services found in response or API failed:', data.error)
       return { services: [], thermalPrinters: [] }
     } catch (err) {
       console.error('[Receipt] Error fetching print services:', err)
