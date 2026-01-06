@@ -153,12 +153,25 @@ export async function POST(request: NextRequest) {
         try {
           await db.query(`ALTER TABLE product_images ADD COLUMN IF NOT EXISTS image_index INTEGER DEFAULT 1`)
           await db.query(`ALTER TABLE product_images ADD COLUMN IF NOT EXISTS is_primary BOOLEAN DEFAULT false`)
+          // Eliminar constraint único antiguo (solo barcode) y crear nuevo (barcode + image_index)
+          try {
+            await db.query(`ALTER TABLE product_images DROP CONSTRAINT IF EXISTS product_images_barcode_key`)
+            await db.query(`ALTER TABLE product_images DROP CONSTRAINT IF EXISTS product_images_barcode_unique`)
+          } catch { /* constraint may not exist */ }
+          try {
+            await db.query(`
+              CREATE UNIQUE INDEX IF NOT EXISTS product_images_barcode_index_unique
+              ON product_images (barcode, image_index)
+            `)
+          } catch { /* index may already exist */ }
         } catch (migrationError) {
           console.log('[AI Process Image] Migration columns may already exist')
         }
 
-        // Guardar en base de datos (usar INSERT simple si hay conflicto con el constraint)
+        // Guardar en base de datos
+        // Intentar INSERT con UPSERT, si falla intentar INSERT simple
         try {
+          // Primero intentar con ON CONFLICT usando el índice (barcode, image_index)
           await db.query(`
             INSERT INTO product_images (
               barcode, image_index, storage_path, image_url, is_primary,
@@ -185,9 +198,30 @@ export async function POST(request: NextRequest) {
             payload.companyId
           ])
         } catch (dbError: any) {
-          // Si falla el ON CONFLICT, intentar INSERT simple
-          if (dbError.message?.includes('constraint') || dbError.message?.includes('conflict')) {
-            console.log('[AI Process Image] Trying simple INSERT without conflict handling')
+          console.log('[AI Process Image] First INSERT failed:', dbError.message)
+          // Si falla, puede ser por constraint antiguo - intentar INSERT simple con image_index
+          try {
+            await db.query(`
+              INSERT INTO product_images (
+                barcode, image_index, storage_path, image_url, is_primary,
+                processed_with_ai, ai_model, content_type, file_size, created_by, company_id
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            `, [
+              barcode,
+              index,
+              path,
+              url,
+              isPrimary,
+              true,
+              'gemini-2.0-flash-exp',
+              contentType,
+              imageBuffer.length,
+              payload.userId,
+              payload.companyId
+            ])
+          } catch (dbError2: any) {
+            console.log('[AI Process Image] Second INSERT failed:', dbError2.message)
+            // Último intento: INSERT mínimo sin image_index
             await db.query(`
               INSERT INTO product_images (
                 barcode, storage_path, image_url, processed_with_ai, ai_model,
@@ -204,8 +238,6 @@ export async function POST(request: NextRequest) {
               payload.userId,
               payload.companyId
             ])
-          } else {
-            throw dbError
           }
         }
 
