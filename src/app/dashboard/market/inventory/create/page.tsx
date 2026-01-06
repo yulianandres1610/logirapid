@@ -141,6 +141,9 @@ export default function CreateProductPage() {
   const [generatingImage, setGeneratingImage] = useState(false)
   const [cleaningImage, setCleaningImage] = useState(false)
   const [generatingVariantImage, setGeneratingVariantImage] = useState<string | null>(null) // variant id being generated
+  const [cleaningVariantImage, setCleaningVariantImage] = useState<string | null>(null) // variant id being cleaned
+  const [imagePrompt, setImagePrompt] = useState('') // Descripción para generar imagen del producto
+  const [variantImagePrompts, setVariantImagePrompts] = useState<Record<string, string>>({}) // Descripción para generar imagen de variantes
 
   const [formData, setFormData] = useState({
     name: '',
@@ -325,13 +328,18 @@ export default function CreateProductPage() {
 
     setGeneratingImage(true)
     try {
+      // Combinar descripción del producto con el prompt personalizado
+      const fullDescription = imagePrompt.trim()
+        ? `${formData.description || ''}. Estilo de imagen: ${imagePrompt}`.trim()
+        : formData.description
+
       const res = await fetch('/api/ai/process-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'generate',
           productName: formData.name,
-          productDescription: formData.description,
+          productDescription: fullDescription,
           barcode: barcodeToUse,
           saveToStorage: true
         })
@@ -367,13 +375,20 @@ export default function CreateProductPage() {
       // Build description: "Product Name - Variant Name" (e.g. "Telefono - Rojo")
       const fullProductName = `${formData.name} - ${variantName}`
 
+      // Obtener el prompt personalizado de la variante
+      const variantPrompt = variantImagePrompts[variantId] || ''
+      const baseDescription = `${formData.description || ''} Variante: ${variantName}`
+      const fullDescription = variantPrompt.trim()
+        ? `${baseDescription}. Estilo de imagen: ${variantPrompt}`.trim()
+        : baseDescription
+
       const res = await fetch('/api/ai/process-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'generate',
           productName: fullProductName,
-          productDescription: `${formData.description || ''} Variante: ${variantName}`,
+          productDescription: fullDescription,
           saveToStorage: false // Don't save to storage until product is created
         })
       })
@@ -392,6 +407,80 @@ export default function CreateProductPage() {
       console.error('Error generating variant image:', error)
     }
     setGeneratingVariantImage(null)
+  }
+
+  // Clean variant image with AI (remove background and standardize)
+  const cleanVariantImageWithAI = async (variantId: string) => {
+    const variant = variants.find(v => v.id === variantId)
+    if (!variant?.imageUrl) {
+      return
+    }
+
+    setCleaningVariantImage(variantId)
+
+    try {
+      // Convertir imagen a base64
+      let imageBase64 = ''
+
+      if (variant.imageUrl.startsWith('data:')) {
+        imageBase64 = variant.imageUrl
+      } else if (variant.imageUrl.startsWith('blob:')) {
+        // Si es blob URL, fetch y convertir
+        const response = await fetch(variant.imageUrl)
+        const blob = await response.blob()
+        const reader = new FileReader()
+        imageBase64 = await new Promise((resolve) => {
+          reader.onload = () => resolve(reader.result as string)
+          reader.readAsDataURL(blob)
+        })
+      } else {
+        // Si es URL normal, fetch y convertir
+        const response = await fetch(variant.imageUrl)
+        const blob = await response.blob()
+        const reader = new FileReader()
+        imageBase64 = await new Promise((resolve) => {
+          reader.onload = () => resolve(reader.result as string)
+          reader.readAsDataURL(blob)
+        })
+      }
+
+      if (!imageBase64) {
+        console.error('No se pudo procesar la imagen de la variante')
+        setCleaningVariantImage(null)
+        return
+      }
+
+      // Usar el barcode de la variante o generar uno temporal
+      const barcodeToUse = variant.barcode || `VAR-${variant.id}`
+
+      const res = await fetch('/api/ai/process-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'clean',
+          imageBase64: imageBase64,
+          barcode: barcodeToUse,
+          saveToStorage: true
+        })
+      })
+
+      const data = await res.json()
+
+      if (data.success) {
+        const cleanedImage = data.data?.imageUrl ||
+          (data.data?.imageBase64 ? `data:image/jpeg;base64,${data.data.imageBase64}` : null)
+
+        if (cleanedImage) {
+          updateVariant(variantId, 'imageUrl', cleanedImage)
+        }
+      } else {
+        console.error('Error cleaning variant image:', data.error)
+      }
+    } catch (error) {
+      console.error('Error cleaning variant image:', error)
+    }
+
+    setCleaningVariantImage(null)
   }
 
   // Clean image with AI (remove background)
@@ -1625,9 +1714,37 @@ export default function CreateProductPage() {
                           <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent dark:via-gray-600" />
                           <span className="flex items-center gap-1">
                             <Sparkles className="w-4 h-4" />
-                            Opciones con IA
+                            Generar con IA
                           </span>
                           <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent dark:via-gray-600" />
+                        </div>
+
+                        {/* Campo de descripción para la IA */}
+                        <div>
+                          <label className={cn(
+                            "block text-sm font-medium mb-2",
+                            theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                          )}>
+                            Describe la imagen que deseas
+                          </label>
+                          <textarea
+                            value={imagePrompt}
+                            onChange={(e) => setImagePrompt(e.target.value)}
+                            placeholder="Ej: Producto sobre fondo blanco, estilo profesional, vista frontal, iluminación de estudio..."
+                            rows={2}
+                            className={cn(
+                              "w-full px-4 py-3 rounded-xl border text-sm resize-none transition-all",
+                              theme === 'dark'
+                                ? 'bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 focus:border-purple-500'
+                                : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-purple-500'
+                            )}
+                          />
+                          <p className={cn(
+                            "text-xs mt-1",
+                            theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                          )}>
+                            Opcional: describe el estilo, fondo, ángulo o cualquier detalle específico
+                          </p>
                         </div>
 
                         <motion.button
@@ -1660,7 +1777,7 @@ export default function CreateProductPage() {
                             "text-xs text-center",
                             theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
                           )}>
-                            Ingresa el nombre del producto en el paso anterior para usar esta opcion
+                            Ingresa el nombre del producto en el paso anterior para usar esta opción
                           </p>
                         )}
                       </div>
@@ -2179,7 +2296,7 @@ export default function CreateProductPage() {
                                     theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'
                                   )}>
                                     <label className="block text-xs text-gray-500 mb-2">Imagen de la variante</label>
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-3 mb-2">
                                       {/* Image preview */}
                                       <div className={cn(
                                         "w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center",
@@ -2236,13 +2353,87 @@ export default function CreateProductPage() {
                                             }}
                                           />
                                         </label>
-                                        {/* Generate with AI button */}
+                                        {/* Clean variant image button */}
+                                        {variant.imageUrl && (
+                                          <button
+                                            type="button"
+                                            onClick={() => cleanVariantImageWithAI(variant.id)}
+                                            disabled={cleaningVariantImage === variant.id}
+                                            className={cn(
+                                              "text-xs px-2 py-1 rounded-md transition-all flex items-center gap-1",
+                                              cleaningVariantImage === variant.id
+                                                ? 'bg-blue-400 text-white cursor-wait'
+                                                : theme === 'dark'
+                                                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700'
+                                                  : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600'
+                                            )}
+                                          >
+                                            {cleaningVariantImage === variant.id ? (
+                                              <>
+                                                <Loader2 className="w-3 h-3 animate-spin" />
+                                                Limpiando...
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Sparkles className="w-3 h-3" />
+                                                Limpiar
+                                              </>
+                                            )}
+                                          </button>
+                                        )}
+                                        {variant.imageUrl && (
+                                          <button
+                                            type="button"
+                                            onClick={() => updateVariant(variant.id, 'imageUrl', '')}
+                                            className={cn(
+                                              "text-xs px-2 py-1 rounded-md transition-all",
+                                              theme === 'dark'
+                                                ? 'bg-red-900/50 text-red-300 hover:bg-red-900'
+                                                : 'bg-red-100 text-red-700 hover:bg-red-200'
+                                            )}
+                                          >
+                                            <X className="w-3 h-3" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Generación con IA para variante */}
+                                    <div className={cn(
+                                      "mt-2 pt-2 border-t",
+                                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                                    )}>
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <Sparkles className="w-3 h-3 text-purple-500" />
+                                        <span className={cn(
+                                          "text-xs font-medium",
+                                          theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                                        )}>
+                                          Generar con IA
+                                        </span>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <input
+                                          type="text"
+                                          value={variantImagePrompts[variant.id] || ''}
+                                          onChange={(e) => setVariantImagePrompts(prev => ({
+                                            ...prev,
+                                            [variant.id]: e.target.value
+                                          }))}
+                                          placeholder="Describe la imagen (ej: fondo blanco, vista frontal...)"
+                                          className={cn(
+                                            'flex-1 px-2 py-1.5 rounded-lg border text-xs focus:outline-none',
+                                            theme === 'dark'
+                                              ? 'bg-gray-800 border-gray-600 text-white placeholder:text-gray-500'
+                                              : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-400'
+                                          )}
+                                        />
                                         <button
                                           type="button"
                                           onClick={() => generateVariantImageWithAI(variant.id, variant.name)}
                                           disabled={generatingVariantImage === variant.id || !formData.name.trim()}
                                           className={cn(
-                                            "text-xs px-2 py-1 rounded-md transition-all flex items-center gap-1",
+                                            "text-xs px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 whitespace-nowrap",
                                             generatingVariantImage === variant.id
                                               ? 'bg-purple-400 text-white cursor-wait'
                                               : theme === 'dark'
@@ -2258,24 +2449,10 @@ export default function CreateProductPage() {
                                           ) : (
                                             <>
                                               <Wand2 className="w-3 h-3" />
-                                              Generar IA
+                                              Generar
                                             </>
                                           )}
                                         </button>
-                                        {variant.imageUrl && (
-                                          <button
-                                            type="button"
-                                            onClick={() => updateVariant(variant.id, 'imageUrl', '')}
-                                            className={cn(
-                                              "text-xs px-2 py-1 rounded-md transition-all",
-                                              theme === 'dark'
-                                                ? 'bg-red-900/50 text-red-300 hover:bg-red-900'
-                                                : 'bg-red-100 text-red-700 hover:bg-red-200'
-                                            )}
-                                          >
-                                            <X className="w-3 h-3" />
-                                          </button>
-                                        )}
                                       </div>
                                     </div>
                                   </div>
