@@ -45,6 +45,16 @@ export async function GET(
     const companyId = payload.companyId
     const terminalId = parseInt(id)
 
+    // Asegurar que la columna payment_methods existe
+    try {
+      await db.query(`
+        ALTER TABLE market_pos_terminals
+        ADD COLUMN IF NOT EXISTS payment_methods TEXT[] DEFAULT '{cash,card,transfer,credit}'
+      `)
+    } catch {
+      // Column might already exist
+    }
+
     // Get terminal
     const result = await db.query(`
       SELECT
@@ -79,6 +89,19 @@ export async function GET(
     }
     if (!Array.isArray(acceptedCurrencies)) {
       acceptedCurrencies = ['USD', 'CUP', 'MLC']
+    }
+
+    // Parse payment_methods if it's a string
+    let paymentMethods = terminal.payment_methods
+    if (typeof paymentMethods === 'string') {
+      try {
+        paymentMethods = JSON.parse(paymentMethods)
+      } catch {
+        paymentMethods = ['cash', 'card', 'transfer', 'credit']
+      }
+    }
+    if (!Array.isArray(paymentMethods)) {
+      paymentMethods = ['cash', 'card', 'transfer', 'credit']
     }
 
     // Get assigned users
@@ -138,6 +161,7 @@ export async function GET(
         requireCustomer: terminal.require_customer,
         defaultCurrency: terminal.default_currency,
         acceptedCurrencies: acceptedCurrencies,
+        paymentMethods: paymentMethods,
         isActive: terminal.is_active,
         createdAt: terminal.created_at,
         updatedAt: terminal.updated_at,
@@ -236,6 +260,7 @@ export async function PUT(
       requireCustomer,
       defaultCurrency,
       acceptedCurrencies,
+      paymentMethods,
       isActive,
       users // Array of { userId, permissions }
     } = body
@@ -292,6 +317,22 @@ export async function PUT(
       const pgArray = Array.isArray(currenciesArray)
         ? `{${currenciesArray.join(',')}}`
         : '{USD,CUP,MLC}'
+      values.push(pgArray)
+    }
+    if (paymentMethods !== undefined) {
+      updates.push(`payment_methods = $${paramIndex++}`)
+      // Convertir a formato PostgreSQL array
+      let methodsArray = paymentMethods
+      if (typeof paymentMethods === 'string') {
+        try {
+          methodsArray = JSON.parse(paymentMethods)
+        } catch {
+          methodsArray = ['cash', 'card', 'transfer', 'credit']
+        }
+      }
+      const pgArray = Array.isArray(methodsArray)
+        ? `{${methodsArray.join(',')}}`
+        : '{cash,card,transfer,credit}'
       values.push(pgArray)
     }
     if (isActive !== undefined) {

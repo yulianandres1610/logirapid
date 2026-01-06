@@ -47,6 +47,7 @@ interface Terminal {
   requireCustomer: boolean
   defaultCurrency: string
   acceptedCurrencies: string[]
+  paymentMethods: string[]
   isActive: boolean
   users: TerminalUser[]
   stats?: {
@@ -162,6 +163,8 @@ export default function POSSettingsPage() {
         setDefaultCurrency(t.defaultCurrency || 'USD')
         const currencies = t.acceptedCurrencies
         setAcceptedCurrencies(Array.isArray(currencies) ? currencies : ['USD', 'CUP', 'MLC'])
+        const payments = t.paymentMethods
+        setAcceptedPaymentMethods(Array.isArray(payments) ? payments : ['cash', 'card', 'transfer', 'credit'])
         setIsActive(t.isActive ?? true)
         setAssignedUsers(Array.isArray(t.users) ? t.users : [])
 
@@ -206,7 +209,8 @@ export default function POSSettingsPage() {
           maxDiscountPercent,
           requireCustomer,
           defaultCurrency,
-          acceptedCurrencies, // Ya no se usa JSON.stringify - el API lo maneja
+          acceptedCurrencies,
+          paymentMethods: acceptedPaymentMethods,
           isActive,
           users: assignedUsers.map(u => ({
             userId: u.userId,
