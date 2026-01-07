@@ -55,27 +55,31 @@ export function generateProductLabelTspl(data: ProductLabelData): Buffer {
 
   if (!shouldIncludePrice) {
     // === LABEL WITHOUT PRICE ===
-    // Bigger name at top, barcode spans full width
+    // Centered name at top, barcode centered and full width
 
-    const maxNameLength = 24
+    const maxNameLength = 28
     const productName = data.productName.length > maxNameLength
       ? data.productName.substring(0, maxNameLength - 2) + '..'
       : data.productName
 
-    // Row 1: Product name (bigger font "3")
-    tspl.push(`TEXT 10,5,"3",0,1,1,"${escapeTspl(productName)}"`)
+    // Row 1: Product name (bigger font "3", centered)
+    const nameWidth = productName.length * 16 // Approx width per char with font 3
+    const nameX = Math.max(10, Math.round((labelWidthDots - nameWidth) / 2))
+    tspl.push(`TEXT ${nameX},5,"3",0,1,1,"${escapeTspl(productName)}"`)
 
-    // Barcode - full width
-    const barcodeY = 45
-    const barcodeHeight = 95 // Taller barcode
+    // Barcode - centered, full width
+    const barcodeY = 50
+    const barcodeHeight = 100 // Taller barcode
     const barcodeType = getTsplBarcodeType(data.barcode, data.barcodeType)
 
+    // Center barcode
+    const barcodeX = Math.round((labelWidthDots - 300) / 2) // Approx barcode width 300 dots
     // BARCODE X,Y,"type",height,human_readable,rotation,narrow,wide,"content"
-    tspl.push(`BARCODE 15,${barcodeY},"${barcodeType}",${barcodeHeight},1,0,2,4,"${data.barcode}"`)
+    tspl.push(`BARCODE ${barcodeX},${barcodeY},"${barcodeType}",${barcodeHeight},1,0,2,4,"${data.barcode}"`)
 
   } else {
     // === LABEL WITH PRICE ===
-    const maxNameLength = 20
+    const maxNameLength = 24 // Allow more chars for name
     const productName = data.productName.length > maxNameLength
       ? data.productName.substring(0, maxNameLength - 2) + '..'
       : data.productName
@@ -83,11 +87,11 @@ export function generateProductLabelTspl(data: ProductLabelData): Buffer {
     // Row 1: Product name (full width at top)
     tspl.push(`TEXT 10,8,"2",0,1,1,"${escapeTspl(productName)}"`)
 
-    // Row 2: Barcode - better positioned away from edge
-    const barcodeX = 30
+    // Row 2: Barcode - centered
     const barcodeY = 50
     const barcodeHeight = 75
     const barcodeType = getTsplBarcodeType(data.barcode, data.barcodeType)
+    const barcodeX = 25 // Slightly more margin from edge
 
     tspl.push(`BARCODE ${barcodeX},${barcodeY},"${barcodeType}",${barcodeHeight},1,0,2,3,"${data.barcode}"`)
 
@@ -98,7 +102,7 @@ export function generateProductLabelTspl(data: ProductLabelData): Buffer {
 
     if (isCUP) {
       // Precio arriba, CUP abajo
-      const priceX = 250
+      const priceX = 260
       const priceY = barcodeY + 10
       tspl.push(`TEXT ${priceX},${priceY},"4",0,1,1,"${formattedPrice}"`)
       tspl.push(`TEXT ${priceX + 10},${priceY + 35},"2",0,1,1,"CUP"`)
@@ -110,7 +114,7 @@ export function generateProductLabelTspl(data: ProductLabelData): Buffer {
       }
       const currencySymbol = (data.currency && symbolMap[data.currency]) || '$'
       const priceText = `${currencySymbol}${formattedPrice}`
-      const priceX = 255
+      const priceX = 265
       const priceY = barcodeY + 20
       tspl.push(`TEXT ${priceX},${priceY},"4",0,1,1,"${priceText}"`)
     }

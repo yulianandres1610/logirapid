@@ -41,8 +41,8 @@ export function generateProductLabelZpl(data: ProductLabelData): Buffer {
   const margin = 8
   const isCompact = labelHeightMm <= 26 // 1 inch or less
 
-  // Truncate product name
-  const maxNameLength = isCompact ? 18 : Math.floor(labelWidthMm / 2.5)
+  // Truncate product name (allow more chars for price labels)
+  const maxNameLength = isCompact ? 24 : Math.floor(labelWidthMm / 2.5)
   const productName = data.productName.length > maxNameLength
     ? data.productName.substring(0, maxNameLength - 2) + '..'
     : data.productName
@@ -63,22 +63,26 @@ export function generateProductLabelZpl(data: ProductLabelData): Buffer {
 
     if (!shouldIncludePrice) {
       // === LABEL WITHOUT PRICE ===
-      // Bigger name at top, barcode spans full width
+      // Centered name at top, barcode centered and full width
 
-      // Product name (bigger font, allow more chars)
-      const noPriceProductName = data.productName.length > 24
-        ? data.productName.substring(0, 22) + '..'
+      // Product name (bigger font, allow more chars, centered)
+      const noPriceProductName = data.productName.length > 28
+        ? data.productName.substring(0, 26) + '..'
         : data.productName
-      zpl.push(`^FO${margin},${margin}^A0N,26,26^FD${escapeZpl(noPriceProductName)}^FS`)
+      // Center the name using ^FB (field block) with ^FO centered
+      const nameWidth = noPriceProductName.length * 13 // Approx width per char
+      const nameX = Math.max(margin, Math.round((labelWidth - nameWidth) / 2))
+      zpl.push(`^FO${nameX},${margin}^A0N,26,26^FD${escapeZpl(noPriceProductName)}^FS`)
 
-      // Barcode (full width, taller)
-      const barcodeY = 50
-      const barcodeHeight = 50
+      // Barcode (centered, full width, taller)
+      const barcodeY = 55
+      const barcodeHeight = 55
 
       const barcodeCmd = getBarcodeCommand(data.barcode, data.barcodeType)
 
-      // Full width barcode
-      zpl.push(`^FO${margin},${barcodeY}^BY2`) // Wider bars
+      // Centered barcode
+      const barcodeX = Math.round(labelWidth / 2) - 100 // Center offset
+      zpl.push(`^FO${barcodeX},${barcodeY}^BY2`) // Wider bars
       zpl.push(`${barcodeCmd},${barcodeHeight},Y,N,N^FD${data.barcode}^FS`)
 
     } else {

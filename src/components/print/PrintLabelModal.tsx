@@ -57,7 +57,8 @@ interface PrintLabelModalProps {
 export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }: PrintLabelModalProps) {
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
-  const { USD_CUP_BCC } = useMarketExchangeRates() // Tasa BCC para etiquetas
+  const exchangeRates = useMarketExchangeRates()
+  const USD_CUP_BCC = exchangeRates?.USD_CUP_BCC || 411 // Tasa BCC para etiquetas con fallback
 
   const [loading, setLoading] = useState(true)
   const [printing, setPrinting] = useState(false)
@@ -149,8 +150,11 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
 
       // Calculate price in CUP using BCC rate
       const calculatePriceCUP = (priceUSD: number) => {
-        if (!includePrice || USD_CUP_BCC <= 0) return undefined
-        return Math.round(priceUSD * USD_CUP_BCC)
+        if (!includePrice) return undefined
+        const rate = USD_CUP_BCC || 411
+        const price = Number(priceUSD) || 0
+        if (rate <= 0 || price <= 0) return undefined
+        return Math.round(price * rate)
       }
 
       // Add base product job if copies > 0

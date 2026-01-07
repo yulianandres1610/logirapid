@@ -65,12 +65,14 @@ export async function generateProductLabel(
 
     if (!shouldIncludePrice) {
       // === LABEL WITHOUT PRICE ===
-      // Bigger name at top, barcode spans full width
+      // Centered name at top, barcode centered and full width
 
       const nameSize = 10 // Bigger font
-      const truncatedName = truncateText(data.productName, 22)
+      const truncatedName = truncateText(data.productName, 28) // More chars since no price
+      const nameWidth = boldFont.widthOfTextAtSize(truncatedName, nameSize)
+      const nameX = (width - nameWidth) / 2 // Center the name
       page.drawText(truncatedName, {
-        x: margin,
+        x: nameX,
         y: height - margin - nameSize,
         size: nameSize,
         font: boldFont
@@ -122,9 +124,9 @@ export async function generateProductLabel(
       }
     } else {
       // === LABEL WITH PRICE ===
-      // Product name (top left, truncated)
+      // Product name (top left, truncated - allow more chars)
       const nameSize = 8
-      const truncatedName = truncateText(data.productName, 18)
+      const truncatedName = truncateText(data.productName, 26) // More space for name
       page.drawText(truncatedName, {
         x: margin,
         y: height - margin - nameSize,
