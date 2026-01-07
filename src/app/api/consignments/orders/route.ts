@@ -401,8 +401,8 @@ export async function POST(request: NextRequest) {
         const result = await db.query(`
           INSERT INTO market_products (
             company_id, name, sku, barcode, cost_price, selling_price,
-            currency, quantity_on_hand, is_active, category, has_variants, created_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, 'USD', 0, true, $7, $8, NOW())
+            currency, quantity_on_hand, is_active, category, unit_of_measure, has_variants, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, 'USD', 0, true, $7, $8, $9, NOW())
           RETURNING id
         `, [
           payload.companyId,
@@ -412,6 +412,7 @@ export async function POST(request: NextRequest) {
           newProduct.unitCost,
           sellingPrice,
           newProduct.category || 'General',
+          newProduct.unitOfMeasure || 'unidad',
           hasVariants
         ])
 

@@ -40,6 +40,7 @@ interface ZAIResponse {
 interface ProductSuggestion {
   category: string
   description: string
+  unitOfMeasure?: string
   imageUrl?: string
 }
 
@@ -90,9 +91,25 @@ function fallbackCategorization(productName: string): ProductSuggestion {
           'Ropa': 'Prenda de vestir',
           'Hogar': 'Artículo para el hogar'
         }
+        // Unidades de medida por categoría
+        const unitOfMeasures: Record<string, string> = {
+          'Alimentos': 'unidad',
+          'Bebidas': 'unidad',
+          'Carnes y Embutidos': 'lb',
+          'Lácteos': 'unidad',
+          'Frutas y Verduras': 'lb',
+          'Panadería': 'unidad',
+          'Limpieza': 'unidad',
+          'Higiene Personal': 'unidad',
+          'Electrodomésticos': 'unidad',
+          'Electrónica': 'unidad',
+          'Ropa': 'unidad',
+          'Hogar': 'unidad'
+        }
         return {
           category,
-          description: descriptions[category] || `Producto de ${category.toLowerCase()}`
+          description: descriptions[category] || `Producto de ${category.toLowerCase()}`,
+          unitOfMeasure: unitOfMeasures[category] || 'unidad'
         }
       }
     }
@@ -101,7 +118,8 @@ function fallbackCategorization(productName: string): ProductSuggestion {
   // Default fallback
   return {
     category: 'Otros',
-    description: 'Producto para inventario'
+    description: 'Producto para inventario',
+    unitOfMeasure: 'unidad'
   }
 }
 
@@ -244,16 +262,20 @@ Producto: "${productName.trim()}"
 CATEGORÍAS DISPONIBLES (usa exactamente una):
 ${CATEGORIES.join(', ')}
 
+UNIDADES DE MEDIDA DISPONIBLES:
+unidad, lb, kg, litro, ml, paquete, caja, docena, par, metro, galón
+
 INSTRUCCIONES:
 1. Selecciona la categoría más apropiada de la lista
-2. Escribe una descripción comercial DETALLADA (150-250 caracteres) que incluya:
+2. Selecciona la unidad de medida más apropiada para el producto
+3. Escribe una descripción comercial DETALLADA (150-250 caracteres) que incluya:
    - Características principales del producto
    - Beneficios o usos comunes
    - Información relevante (tamaño, marca si aplica)
    - Lenguaje atractivo para ventas
 
 FORMATO DE RESPUESTA (JSON válido):
-{"category": "Categoría", "description": "Descripción detallada y comercial del producto..."}
+{"category": "Categoría", "description": "Descripción detallada...", "unitOfMeasure": "unidad"}
 
 JSON:`
 
@@ -290,6 +312,7 @@ JSON:`
         data: {
           category: fallbackSuggestion.category,
           description: fallbackSuggestion.description,
+          unitOfMeasure: fallbackSuggestion.unitOfMeasure,
           productName: productName.trim(),
           source: 'fallback'
         }
@@ -320,6 +343,7 @@ JSON:`
         data: {
           category: fallbackSuggestion.category,
           description: fallbackSuggestion.description,
+          unitOfMeasure: fallbackSuggestion.unitOfMeasure,
           productName: productName.trim(),
           source: 'fallback-reasoning'
         }
@@ -345,11 +369,13 @@ JSON:`
       // Try to extract data with regex as fallback
       const categoryMatch = content.match(/"category"\s*:\s*"([^"]+)"/)
       const descriptionMatch = content.match(/"description"\s*:\s*"([^"]+)"/)
+      const unitOfMeasureMatch = content.match(/"unitOfMeasure"\s*:\s*"([^"]+)"/)
 
       if (categoryMatch && descriptionMatch) {
         suggestion = {
           category: categoryMatch[1],
-          description: descriptionMatch[1]
+          description: descriptionMatch[1],
+          unitOfMeasure: unitOfMeasureMatch ? unitOfMeasureMatch[1] : 'unidad'
         }
       } else {
         // Last resort: use keyword-based fallback
@@ -360,6 +386,7 @@ JSON:`
           data: {
             category: fallbackSuggestion.category,
             description: fallbackSuggestion.description,
+            unitOfMeasure: fallbackSuggestion.unitOfMeasure,
             productName: productName.trim(),
             source: 'fallback-parse'
           }
@@ -456,6 +483,7 @@ JSON:`
       data: {
         category: suggestion.category,
         description: suggestion.description,
+        unitOfMeasure: suggestion.unitOfMeasure || 'unidad',
         imageUrl: finalImageUrl,
         productName: productName.trim()
       }

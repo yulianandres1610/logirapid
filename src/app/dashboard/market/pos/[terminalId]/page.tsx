@@ -142,7 +142,8 @@ interface WarehouseStock {
 export default function POSTerminalPage() {
   const { theme } = useTheme()
   const { user } = useAuth()
-  const { USD_CUP, USD_MLC } = useMarketExchangeRates()
+  // USD_CUP = ElToque (costo), USD_CUP_BCC = Banco Central (venta)
+  const { USD_CUP, USD_CUP_BCC, USD_MLC } = useMarketExchangeRates()
   const router = useRouter()
   const params = useParams()
   const searchParams = useSearchParams()
@@ -1520,9 +1521,9 @@ export default function POSTerminalPage() {
                       ${product.price.toFixed(2)}
                     </p>
 
-                    {/* Precios en otras monedas */}
+                    {/* Precios en otras monedas (tasa BCC para venta) */}
                     <div className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 space-y-0">
-                      <p className="text-blue-600">${Math.round(product.price * USD_CUP).toLocaleString()} CUP</p>
+                      <p className="text-blue-600">${Math.round(product.price * USD_CUP_BCC).toLocaleString()} CUP</p>
                       <p className="text-purple-600">${(product.price * USD_MLC).toFixed(2)} MLC</p>
                     </div>
 
@@ -2050,9 +2051,9 @@ export default function POSTerminalPage() {
                   <p className="text-xl font-bold text-blue-500 mt-1">
                     ${selectedProductForDetails.price.toFixed(2)}
                   </p>
-                  {/* Precios en otras monedas */}
+                  {/* Precios en otras monedas (tasa BCC para venta) */}
                   <div className="flex gap-3 mt-1 text-sm">
-                    <span className="text-blue-600">${Math.round(selectedProductForDetails.price * USD_CUP).toLocaleString()} CUP</span>
+                    <span className="text-blue-600">${Math.round(selectedProductForDetails.price * USD_CUP_BCC).toLocaleString()} CUP</span>
                     <span className="text-purple-600">${(selectedProductForDetails.price * USD_MLC).toFixed(2)} MLC</span>
                   </div>
                 </div>

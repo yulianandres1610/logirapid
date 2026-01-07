@@ -179,6 +179,7 @@ interface MatchedItem extends ScannedItem {
   editableCategoryName?: string
   editableBarcode?: string
   editableSku?: string
+  editableUnitOfMeasure?: string
   // Control de UI expandido
   isExpanded?: boolean
 }
@@ -211,6 +212,7 @@ interface Product {
   sellingPrice: number
   currency: string
   quantityOnHand: number
+  unitOfMeasure?: string // Unidad de medida (unidad, kg, lb, etc.)
   hasVariants?: boolean
   variants?: ProductVariant[]
   isNewProduct?: boolean // Producto nuevo detectado por OCR que aún no existe en inventario
@@ -805,7 +807,7 @@ export default function CreateConsignmentOrderPage() {
   // Update matched product fields (name, unitCost, suggestedSellingPrice)
   const handleUpdateMatchedProduct = useCallback((
     itemId: string,
-    field: 'name' | 'unitCost' | 'suggestedSellingPrice' | 'quantity' | 'editableDescription' | 'editableBarcode' | 'editableSku' | 'editableCategoryId' | 'isExpanded',
+    field: 'name' | 'unitCost' | 'suggestedSellingPrice' | 'quantity' | 'editableDescription' | 'editableBarcode' | 'editableSku' | 'editableCategoryId' | 'editableUnitOfMeasure' | 'isExpanded',
     value: string | number | boolean
   ) => {
     setMatchedProducts(prev => prev.map(item => {
@@ -840,6 +842,8 @@ export default function CreateConsignmentOrderPage() {
           const catId = typeof value === 'string' ? parseInt(value) || undefined : value as number
           const category = categories.find(c => c.id === catId)
           return { ...item, editableCategoryId: catId, editableCategoryName: category?.name }
+        } else if (field === 'editableUnitOfMeasure') {
+          return { ...item, editableUnitOfMeasure: value as string }
         } else if (field === 'isExpanded') {
           return { ...item, isExpanded: value as boolean }
         }
@@ -1007,6 +1011,7 @@ export default function CreateConsignmentOrderPage() {
             editableDescription: data.data.description || p.editableDescription,
             editableCategoryId: categoryId || p.editableCategoryId,
             editableCategoryName: categoryId ? categories.find(c => c.id === categoryId)?.name : p.editableCategoryName,
+            editableUnitOfMeasure: data.data.unitOfMeasure || p.unitOfMeasure || p.editableUnitOfMeasure,
             isAutoCompleting: false
           } : p
         ))
@@ -1065,6 +1070,7 @@ export default function CreateConsignmentOrderPage() {
               editableDescription: data.data.description || p.editableDescription,
               editableCategoryId: categoryId || p.editableCategoryId,
               editableCategoryName: categoryId ? categories.find(c => c.id === categoryId)?.name : p.editableCategoryName,
+              editableUnitOfMeasure: data.data.unitOfMeasure || p.unitOfMeasure || p.editableUnitOfMeasure,
               isAutoCompleting: false
             } : p
           ))
@@ -1263,6 +1269,7 @@ export default function CreateConsignmentOrderPage() {
           sellingPrice: sellingPrice,
           currency: 'USD',
           quantityOnHand: 0,
+          unitOfMeasure: item.editableUnitOfMeasure || item.unitOfMeasure || 'unidad',
           hasVariants: false,
           isNewProduct: true, // Marcador para saber que es nuevo
           generatedImageBase64: item.generatedImageBase64, // Guardar base64 para S3
@@ -1547,6 +1554,7 @@ export default function CreateConsignmentOrderPage() {
         unitCost: number
         sellingPrice: number
         category: string
+        unitOfMeasure: string
         imageBase64: string | null
         hasVariants?: boolean
         variants?: Array<{
@@ -1565,6 +1573,7 @@ export default function CreateConsignmentOrderPage() {
         unitCost: l.unitCost,
         sellingPrice: l.product.sellingPrice || l.unitCost * 1.40,
         category: 'General',
+        unitOfMeasure: l.product.unitOfMeasure || 'unidad',
         imageBase64: l.generatedImageBase64 || l.product.generatedImageBase64 || null
       }))
 
@@ -1583,6 +1592,7 @@ export default function CreateConsignmentOrderPage() {
           unitCost: avgCost,
           sellingPrice: avgSellingPrice,
           category: 'General',
+          unitOfMeasure: variants[0]?.product.unitOfMeasure || 'unidad',
           imageBase64: variants[0]?.generatedImageBase64 || variants[0]?.product.generatedImageBase64 || null,
           hasVariants: true,
           variants: variants.map(v => ({
@@ -2719,20 +2729,41 @@ export default function CreateConsignmentOrderPage() {
                                           )}
                                         />
                                       </div>
-                                      {/* Unidad de medida (readonly info) */}
+                                      {/* Unidad de medida (editable) */}
                                       <div>
                                         <label className={cn('text-xs font-medium flex items-center gap-1 mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                                           <Package className="w-3 h-3" />
                                           Unidad de Medida
                                         </label>
-                                        <div className={cn(
-                                          'w-full px-3 py-2 rounded-lg text-sm border',
-                                          theme === 'dark'
-                                            ? 'bg-gray-800/50 border-gray-700 text-gray-400'
-                                            : 'bg-gray-50 border-gray-200 text-gray-600'
-                                        )}>
-                                          {item.unitOfMeasure || 'unidad'}
-                                        </div>
+                                        <select
+                                          value={item.editableUnitOfMeasure || item.unitOfMeasure || 'unidad'}
+                                          onChange={(e) => handleUpdateMatchedProduct(item.id, 'editableUnitOfMeasure', e.target.value)}
+                                          className={cn(
+                                            'w-full px-3 py-2 rounded-lg text-sm border',
+                                            theme === 'dark'
+                                              ? 'bg-gray-800/50 border-gray-700 text-white'
+                                              : 'bg-gray-50 border-gray-200 text-gray-700'
+                                          )}
+                                        >
+                                          <option value="unidad">Unidad</option>
+                                          <option value="kg">Kilogramo (kg)</option>
+                                          <option value="lb">Libra (lb)</option>
+                                          <option value="g">Gramo (g)</option>
+                                          <option value="oz">Onza (oz)</option>
+                                          <option value="litro">Litro</option>
+                                          <option value="ml">Mililitro (ml)</option>
+                                          <option value="galón">Galón</option>
+                                          <option value="caja">Caja</option>
+                                          <option value="paquete">Paquete</option>
+                                          <option value="botella">Botella</option>
+                                          <option value="lata">Lata</option>
+                                          <option value="sobre">Sobre</option>
+                                          <option value="bolsa">Bolsa</option>
+                                          <option value="rollo">Rollo</option>
+                                          <option value="par">Par</option>
+                                          <option value="juego">Juego</option>
+                                          <option value="docena">Docena</option>
+                                        </select>
                                       </div>
                                     </div>
                                   </motion.div>

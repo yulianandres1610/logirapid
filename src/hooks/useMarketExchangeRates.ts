@@ -3,15 +3,18 @@
 import { useState, useEffect } from 'react'
 
 interface ExchangeRatesState {
-  USD_CUP: number
-  USD_MLC: number
+  USD_CUP: number          // Tasa informal (ElToque) - para costo
+  USD_CUP_BCC: number      // Tasa oficial BCC (Segmento 3) - para venta
+  USD_MLC: number          // Tasa MLC
   timestamp: string
+  timestampBCC: string
   loading: boolean
   error: string | null
 }
 
 interface UseMarketExchangeRatesReturn extends ExchangeRatesState {
   convertPrice: (priceUSD: number, toCurrency: 'CUP' | 'MLC') => number
+  convertPriceBCC: (priceUSD: number) => number  // Conversión usando tasa BCC
   formatCUP: (amount: number) => string
   formatMLC: (amount: number) => string
   formatUSD: (amount: number) => string
@@ -19,9 +22,11 @@ interface UseMarketExchangeRatesReturn extends ExchangeRatesState {
 
 export function useMarketExchangeRates(): UseMarketExchangeRatesReturn {
   const [rates, setRates] = useState<ExchangeRatesState>({
-    USD_CUP: 400,  // Fallback
-    USD_MLC: 1.10, // Fallback
+    USD_CUP: 400,      // Fallback ElToque
+    USD_CUP_BCC: 411,  // Fallback BCC Segmento 3
+    USD_MLC: 1.10,     // Fallback
     timestamp: '',
+    timestampBCC: '',
     loading: true,
     error: null
   })
@@ -29,14 +34,40 @@ export function useMarketExchangeRates(): UseMarketExchangeRatesReturn {
   useEffect(() => {
     const fetchRates = async () => {
       try {
-        const res = await fetch('/api/market/pos/exchange-rates')
-        const data = await res.json()
+        // Fetch ambas tasas en paralelo
+        const [elToqueRes, bccRes] = await Promise.all([
+          fetch('/api/market/pos/exchange-rates'),
+          fetch('https://eltoque.cubarapid.com/api/tasas/bcc')
+        ])
 
-        if (data.success && data.rates) {
+        const elToqueData = await elToqueRes.json()
+        let bccData = null
+
+        try {
+          bccData = await bccRes.json()
+        } catch (e) {
+          console.warn('[Exchange Rates] Failed to parse BCC response:', e)
+        }
+
+        // Procesar tasa BCC
+        let bccRate = 411 // Fallback
+        let bccTimestamp = ''
+        if (bccData && bccData.exito && bccData.tasas) {
+          const usdRate = bccData.tasas.find((t: { moneda: string; tasa: number }) => t.moneda === 'USD')
+          if (usdRate?.tasa) {
+            bccRate = usdRate.tasa
+            bccTimestamp = bccData.timestamp || new Date().toISOString()
+          }
+        }
+
+        // Procesar tasa ElToque
+        if (elToqueData.success && elToqueData.rates) {
           setRates({
-            USD_CUP: data.rates.CUP || 400,
-            USD_MLC: data.rates.MLC || 1.10,
-            timestamp: data.timestamp || new Date().toISOString(),
+            USD_CUP: elToqueData.rates.CUP || 400,
+            USD_CUP_BCC: bccRate,
+            USD_MLC: elToqueData.rates.MLC || 1.10,
+            timestamp: elToqueData.timestamp || new Date().toISOString(),
+            timestampBCC: bccTimestamp,
             loading: false,
             error: null
           })
@@ -51,14 +82,18 @@ export function useMarketExchangeRates(): UseMarketExchangeRatesReturn {
 
             setRates({
               USD_CUP: cupRate,
+              USD_CUP_BCC: bccRate,
               USD_MLC: mlcRate,
               timestamp: fallbackData.timestamp || new Date().toISOString(),
+              timestampBCC: bccTimestamp,
               loading: false,
               error: null
             })
           } else {
             setRates(prev => ({
               ...prev,
+              USD_CUP_BCC: bccRate,
+              timestampBCC: bccTimestamp,
               loading: false,
               error: 'No se pudieron obtener las tasas'
             }))
@@ -81,11 +116,16 @@ export function useMarketExchangeRates(): UseMarketExchangeRatesReturn {
     return () => clearInterval(interval)
   }, [])
 
-  // Función para convertir precios
+  // Función para convertir precios (tasa informal ElToque)
   const convertPrice = (priceUSD: number, toCurrency: 'CUP' | 'MLC'): number => {
     if (toCurrency === 'CUP') return priceUSD * rates.USD_CUP
     if (toCurrency === 'MLC') return priceUSD * rates.USD_MLC
     return priceUSD
+  }
+
+  // Función para convertir precios usando tasa BCC (oficial)
+  const convertPriceBCC = (priceUSD: number): number => {
+    return priceUSD * rates.USD_CUP_BCC
   }
 
   // Funciones de formateo
@@ -104,6 +144,7 @@ export function useMarketExchangeRates(): UseMarketExchangeRatesReturn {
   return {
     ...rates,
     convertPrice,
+    convertPriceBCC,
     formatCUP,
     formatMLC,
     formatUSD
