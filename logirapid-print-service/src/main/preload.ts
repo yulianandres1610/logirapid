@@ -37,6 +37,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
 
+  // Auto-start
+  getAutoStart: () => ipcRenderer.invoke('get-auto-start'),
+  setAutoStart: (enabled: boolean) => ipcRenderer.invoke('set-auto-start', enabled),
+
   // Events
   onPrintersUpdated: (callback: () => void) => {
     ipcRenderer.on('printers-updated', callback)
@@ -128,6 +132,8 @@ declare global {
         error?: string
       }>
       installUpdate: () => Promise<void>
+      getAutoStart: () => Promise<{ enabled: boolean }>
+      setAutoStart: (enabled: boolean) => Promise<{ success: boolean; enabled?: boolean; error?: string }>
       onPrintersUpdated: (callback: () => void) => () => void
       onUpdateStatus: (callback: (data: {
         status: 'checking' | 'available' | 'not-available' | 'downloaded' | 'error'

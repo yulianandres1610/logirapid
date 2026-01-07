@@ -473,6 +473,27 @@ function setupIpcHandlers(): void {
   ipcMain.handle('install-update', () => {
     autoUpdater.quitAndInstall()
   })
+
+  // Auto-start with system
+  ipcMain.handle('get-auto-start', () => {
+    const settings = app.getLoginItemSettings()
+    return { enabled: settings.openAtLogin }
+  })
+
+  ipcMain.handle('set-auto-start', (_, enabled: boolean) => {
+    try {
+      app.setLoginItemSettings({
+        openAtLogin: enabled,
+        openAsHidden: true, // Start minimized to tray
+        path: process.execPath,
+        args: ['--hidden']
+      })
+      return { success: true, enabled }
+    } catch (error: any) {
+      console.error('[Auto-Start] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
 }
 
 // App lifecycle

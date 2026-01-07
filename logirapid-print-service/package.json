@@ -1,6 +1,6 @@
 {
   "name": "logirapid-print-service",
-  "version": "1.43.0",
+  "version": "1.45.0",
   "description": "LogiRapid Silent Print Service - Local print service for thermal printers and labels",
   "main": "out/main/index.js",
   "author": {
@@ -69,7 +69,7 @@
         }
       ],
       "icon": "resources/icon.png",
-      "artifactName": "${productName}-${version}-Setup.${ext}",
+      "artifactName": "LogiRapid-Print-Service-${version}-Setup.${ext}",
       "requestedExecutionLevel": "asInvoker",
       "signAndEditExecutable": false,
       "verifyUpdateCodeSignature": false
@@ -78,6 +78,7 @@
       "target": ["dmg", "zip"],
       "icon": "resources/icon.png",
       "category": "public.app-category.utilities",
+      "artifactName": "LogiRapid-Print-Service-${version}-${arch}.${ext}",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "identity": null

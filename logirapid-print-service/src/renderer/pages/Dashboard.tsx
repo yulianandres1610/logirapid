@@ -46,6 +46,8 @@ export default function DashboardPage({ onLogout }: DashboardPageProps) {
     total: number
   } | null>(null)
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'downloaded' | 'error'>('idle')
+  const [autoStartEnabled, setAutoStartEnabled] = useState(false)
+  const [autoStartLoading, setAutoStartLoading] = useState(false)
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -69,6 +71,11 @@ export default function DashboardPage({ onLogout }: DashboardPageProps) {
 
   useEffect(() => {
     fetchStatus()
+
+    // Load auto-start setting
+    window.electronAPI.getAutoStart().then((result) => {
+      setAutoStartEnabled(result.enabled)
+    }).catch(console.error)
 
     // Auto-refresh every 5 seconds
     const interval = setInterval(fetchStatus, 5000)
@@ -195,6 +202,23 @@ export default function DashboardPage({ onLogout }: DashboardPageProps) {
 
   const handleInstallUpdate = async () => {
     await window.electronAPI.installUpdate()
+  }
+
+  const handleAutoStartToggle = async () => {
+    setAutoStartLoading(true)
+    try {
+      const result = await window.electronAPI.setAutoStart(!autoStartEnabled)
+      if (result.success) {
+        setAutoStartEnabled(result.enabled ?? !autoStartEnabled)
+      } else {
+        alert(`Error: ${result.error || 'No se pudo cambiar la configuración'}`)
+      }
+    } catch (error) {
+      console.error('Failed to toggle auto-start:', error)
+      alert('Error al cambiar la configuración de inicio automático')
+    } finally {
+      setAutoStartLoading(false)
+    }
   }
 
   if (loading) {
@@ -509,6 +533,37 @@ export default function DashboardPage({ onLogout }: DashboardPageProps) {
                 )}
               </div>
             )}
+          </div>
+
+          {/* Auto-start Setting */}
+          <div className="bg-white/10 rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-white font-medium">Iniciar con el sistema</h3>
+                <p className="text-white/60 text-sm mt-1">
+                  La aplicación se iniciará automáticamente al encender tu computadora
+                </p>
+              </div>
+              <button
+                onClick={handleAutoStartToggle}
+                disabled={autoStartLoading}
+                className={`relative w-14 h-7 rounded-full transition-colors ${
+                  autoStartEnabled ? 'bg-green-500' : 'bg-gray-600'
+                } ${autoStartLoading ? 'opacity-50' : ''}`}
+              >
+                {autoStartLoading ? (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  </div>
+                ) : (
+                  <div
+                    className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                      autoStartEnabled ? 'translate-x-8' : 'translate-x-1'
+                    }`}
+                  />
+                )}
+              </button>
+            </div>
           </div>
 
           <button

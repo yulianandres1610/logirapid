@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Printer, X, Loader2, CheckCircle, AlertCircle, Wifi, WifiOff, Minus, Plus } from 'lucide-react'
+import { Printer, X, Loader2, CheckCircle, AlertCircle, Wifi, WifiOff, Minus, Plus, DollarSign, Tag } from 'lucide-react'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
+import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
 import { cn } from '@/lib/utils'
 
 interface PrintService {
@@ -56,6 +57,7 @@ interface PrintLabelModalProps {
 export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }: PrintLabelModalProps) {
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
+  const { USD_CUP_BCC } = useMarketExchangeRates() // Tasa BCC para etiquetas
 
   const [loading, setLoading] = useState(true)
   const [printing, setPrinting] = useState(false)
@@ -129,7 +131,8 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
     }
   }
 
-  const handlePrint = async () => {
+  // includePrice: true = con precio CUP, false = solo nombre y codigo
+  const handlePrint = async (includePrice: boolean) => {
     if (!selectedService || !selectedPrinter) {
       showNotification('error', 'Error', 'Seleccione una impresora')
       return
@@ -144,6 +147,12 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
     try {
       const jobs: { documentType: string; documentData: Record<string, unknown>; copies: number }[] = []
 
+      // Calculate price in CUP using BCC rate
+      const calculatePriceCUP = (priceUSD: number) => {
+        if (!includePrice || USD_CUP_BCC <= 0) return undefined
+        return Math.round(priceUSD * USD_CUP_BCC)
+      }
+
       // Add base product job if copies > 0
       if (copies > 0) {
         jobs.push({
@@ -153,8 +162,9 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
             sku: productData.sku || '',
             barcode: productData.barcode || '',
             barcodeType: detectBarcodeType(productData.barcode || ''),
-            price: productData.price || 0,
-            currency: productData.currency || 'USD',
+            includePrice,
+            priceCUP: calculatePriceCUP(productData.price || 0),
+            currency: 'CUP',
             unitOfMeasure: productData.unitOfMeasure,
             category: productData.category,
             description: productData.description,
@@ -169,6 +179,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
         for (const variant of productData.variants) {
           const qty = variantCopies[variant.id] || 0
           if (qty > 0) {
+            const variantPrice = variant.price || productData.price || 0
             jobs.push({
               documentType: 'product_label',
               documentData: {
@@ -176,8 +187,9 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
                 sku: variant.sku || productData.sku || '',
                 barcode: variant.barcode || '',
                 barcodeType: detectBarcodeType(variant.barcode || ''),
-                price: variant.price || productData.price || 0,
-                currency: productData.currency || 'USD',
+                includePrice,
+                priceCUP: calculatePriceCUP(variantPrice),
+                currency: 'CUP',
                 unitOfMeasure: productData.unitOfMeasure,
                 category: productData.category,
                 labelSize: 'medium'
@@ -211,10 +223,11 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
         }
       }
 
+      const priceInfo = includePrice ? 'con precio CUP' : 'sin precio'
       showNotification(
         'success',
         'Imprimiendo',
-        `${jobNumbers.length} trabajo(s) enviado(s) a ${selectedPrinter.printerName} (${totalCopies} etiquetas)`
+        `${jobNumbers.length} trabajo(s) ${priceInfo} enviado(s) a ${selectedPrinter.printerName} (${totalCopies} etiquetas)`
       )
       onPrintSuccess?.(jobNumbers[0])
       onClose()
@@ -574,36 +587,55 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
           {/* Footer */}
           {!loading && services.length > 0 && (
             <div className={cn(
-              'px-6 py-4 border-t flex gap-3',
+              'px-6 py-4 border-t',
               theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
             )}>
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={() => handlePrint(true)}
+                  disabled={printing || !selectedPrinter || totalCopies === 0}
+                  className={cn(
+                    'flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors',
+                    'bg-gradient-to-r from-green-500 to-green-600 text-white',
+                    'hover:from-green-600 hover:to-green-700',
+                    'disabled:opacity-50 disabled:cursor-not-allowed'
+                  )}
+                >
+                  {printing ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <DollarSign className="w-5 h-5" />
+                  )}
+                  Con Precio (CUP)
+                </button>
+                <button
+                  onClick={() => handlePrint(false)}
+                  disabled={printing || !selectedPrinter || totalCopies === 0}
+                  className={cn(
+                    'flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors',
+                    theme === 'dark'
+                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                  )}
+                >
+                  {printing ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Tag className="w-5 h-5" />
+                  )}
+                  Sin Precio
+                </button>
+              </div>
               <button
                 onClick={onClose}
                 className={cn(
-                  'flex-1 py-3 rounded-xl font-medium transition-colors',
+                  'w-full py-2 rounded-xl font-medium transition-colors text-sm',
                   theme === 'dark'
-                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    ? 'text-gray-400 hover:text-gray-300'
+                    : 'text-gray-500 hover:text-gray-700'
                 )}
               >
                 Cancelar
-              </button>
-              <button
-                onClick={handlePrint}
-                disabled={printing || !selectedPrinter || totalCopies === 0}
-                className={cn(
-                  'flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors',
-                  'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white',
-                  'hover:from-emerald-600 hover:to-emerald-700',
-                  'disabled:opacity-50 disabled:cursor-not-allowed'
-                )}
-              >
-                {printing ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Printer className="w-5 h-5" />
-                )}
-                {printing ? 'Enviando...' : `Imprimir${totalCopies > 0 ? ` (${totalCopies})` : ''}`}
               </button>
             </div>
           )}

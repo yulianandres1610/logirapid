@@ -8,7 +8,9 @@ interface ProductLabelData {
   barcode: string
   barcodeType?: 'code128' | 'ean13' | 'upc' | 'qrcode'
   price?: number
+  priceCUP?: number // Price already converted to CUP
   currency?: string
+  includePrice?: boolean // Set to false to exclude price from label
   description?: string
   category?: string
   expirationDate?: string
@@ -63,11 +65,22 @@ export function generateProductLabelZpl(data: ProductLabelData): Buffer {
     // Product name (top left)
     zpl.push(`^FO${margin},${margin}^A0N,20,20^FD${escapeZpl(productName)}^FS`)
 
-    // Price (top right)
-    if (data.price !== undefined) {
-      const priceText = `${data.currency || '$'}${data.price.toFixed(2)}`
-      // Position price at right side
-      zpl.push(`^FO${labelWidth - 100},${margin}^A0N,24,24^FD${priceText}^FS`)
+    // Price (top right) - only if includePrice is not false
+    const shouldIncludePrice = data.includePrice !== false && (data.priceCUP !== undefined || data.price !== undefined)
+    if (shouldIncludePrice) {
+      // Use priceCUP if available, otherwise use price
+      const priceValue = data.priceCUP !== undefined ? data.priceCUP : data.price!
+      const isCUP = data.priceCUP !== undefined
+
+      // Format price: CUP uses integer format, others use 2 decimals
+      const formattedPrice = isCUP ? Math.round(priceValue).toLocaleString() : priceValue.toFixed(2)
+      const currencyLabel = isCUP ? ' CUP' : ''
+      const currencySymbol = isCUP ? '$' : (data.currency || '$')
+
+      const priceText = `${currencySymbol}${formattedPrice}${currencyLabel}`
+      // Position price at right side (wider for CUP)
+      const priceOffset = isCUP ? 130 : 100
+      zpl.push(`^FO${labelWidth - priceOffset},${margin}^A0N,24,24^FD${priceText}^FS`)
     }
 
     // Barcode (bottom, centered) - smaller for compact label
@@ -94,9 +107,19 @@ export function generateProductLabelZpl(data: ProductLabelData): Buffer {
       y += 22
     }
 
-    // Price
-    if (data.price !== undefined) {
-      const priceText = `${data.currency || '$'}${data.price.toFixed(2)}`
+    // Price - only if includePrice is not false
+    const shouldShowPrice = data.includePrice !== false && (data.priceCUP !== undefined || data.price !== undefined)
+    if (shouldShowPrice) {
+      // Use priceCUP if available, otherwise use price
+      const priceValue = data.priceCUP !== undefined ? data.priceCUP : data.price!
+      const isCUP = data.priceCUP !== undefined
+
+      // Format price: CUP uses integer format, others use 2 decimals
+      const formattedPrice = isCUP ? Math.round(priceValue).toLocaleString() : priceValue.toFixed(2)
+      const currencyLabel = isCUP ? ' CUP' : ''
+      const currencySymbol = isCUP ? '$' : (data.currency || '$')
+
+      const priceText = `${currencySymbol}${formattedPrice}${currencyLabel}`
       zpl.push(`^FO${margin},${y}^A0N,28,28^FD${priceText}^FS`)
       y += 32
     }

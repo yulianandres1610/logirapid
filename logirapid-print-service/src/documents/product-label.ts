@@ -14,7 +14,9 @@ interface ProductLabelData {
 
   // Optional fields
   price?: number
+  priceCUP?: number // Price already converted to CUP
   currency?: string
+  includePrice?: boolean // Set to false to exclude price from label
   description?: string
   category?: string
   expirationDate?: string
@@ -72,11 +74,20 @@ export async function generateProductLabel(
       font: boldFont
     })
 
-    // Price (top right, large and bold)
-    if (data.price !== undefined) {
-      // Convert currency code to symbol
+    // Price (top right, large and bold) - only if includePrice is not false
+    const shouldIncludePrice = data.includePrice !== false && (data.priceCUP !== undefined || data.price !== undefined)
+    if (shouldIncludePrice) {
+      // Use priceCUP if available, otherwise use price
+      const priceValue = data.priceCUP !== undefined ? data.priceCUP : data.price!
+      const isCUP = data.priceCUP !== undefined
+
+      // Format price: CUP uses integer format, others use 2 decimals
+      const formattedPrice = isCUP ? Math.round(priceValue).toLocaleString() : priceValue.toFixed(2)
+      const currencyLabel = isCUP ? ' CUP' : ''
+
+      // Convert currency code to symbol (only for non-CUP prices)
       let currencySymbol = '$'
-      if (data.currency) {
+      if (!isCUP && data.currency) {
         const symbolMap: Record<string, string> = {
           'USD': '$', 'usd': '$', 'EUR': '€', 'eur': '€',
           'GBP': '£', 'gbp': '£', 'MXN': '$', 'mxn': '$',
@@ -84,7 +95,8 @@ export async function generateProductLabel(
         }
         currencySymbol = symbolMap[data.currency] || '$'
       }
-      const priceText = `${currencySymbol}${data.price.toFixed(2)}`
+
+      const priceText = `${currencySymbol}${formattedPrice}${currencyLabel}`
       const priceSize = 10
       const priceWidth = boldFont.widthOfTextAtSize(priceText, priceSize)
       page.drawText(priceText, {
@@ -166,9 +178,19 @@ export async function generateProductLabel(
       y -= 10
     }
 
-    // Price (if provided)
-    if (data.price !== undefined) {
-      const priceText = `${data.currency || '$'}${data.price.toFixed(2)}`
+    // Price (if provided and includePrice is not false)
+    const shouldShowPrice = data.includePrice !== false && (data.priceCUP !== undefined || data.price !== undefined)
+    if (shouldShowPrice) {
+      // Use priceCUP if available, otherwise use price
+      const priceValue = data.priceCUP !== undefined ? data.priceCUP : data.price!
+      const isCUP = data.priceCUP !== undefined
+
+      // Format price: CUP uses integer format, others use 2 decimals
+      const formattedPrice = isCUP ? Math.round(priceValue).toLocaleString() : priceValue.toFixed(2)
+      const currencyLabel = isCUP ? ' CUP' : ''
+      const currencySymbol = isCUP ? '$' : (data.currency || '$')
+
+      const priceText = `${currencySymbol}${formattedPrice}${currencyLabel}`
       page.drawText(priceText, {
         x: margin,
         y: y - 12,
@@ -306,11 +328,15 @@ export async function generateProductLabelSheet(
           color: rgb(0.4, 0.4, 0.4)
         })
 
-        // Price
-        if (item.price !== undefined) {
-          const priceText = `$${item.price.toFixed(2)}`
+        // Price (if includePrice is not false)
+        const shouldShowItemPrice = item.includePrice !== false && (item.priceCUP !== undefined || item.price !== undefined)
+        if (shouldShowItemPrice) {
+          const priceValue = item.priceCUP !== undefined ? item.priceCUP : item.price!
+          const isCUP = item.priceCUP !== undefined
+          const formattedPrice = isCUP ? Math.round(priceValue).toLocaleString() : priceValue.toFixed(2)
+          const priceText = isCUP ? `$${formattedPrice} CUP` : `$${formattedPrice}`
           page.drawText(priceText, {
-            x: x + labelWidth - 30,
+            x: x + labelWidth - (isCUP ? 50 : 30),
             y: y + labelHeight - 14,
             size: 8,
             font: boldFont

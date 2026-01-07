@@ -23,6 +23,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { Button } from '@/components/ui/button'
+import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
 
 interface Product {
   id: number
@@ -62,6 +63,7 @@ export default function WarehouseProductsPage() {
   const { user } = useAuth()
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
+  const { USD_CUP_BCC } = useMarketExchangeRates() // Tasa BCC para etiquetas
 
   // State
   const [loading, setLoading] = useState(true)
@@ -193,8 +195,8 @@ export default function WarehouseProductsPage() {
     setPrintQueue(prev => prev.filter(q => q.productId !== productId))
   }
 
-  // Print single product
-  const printProduct = async (product: Product, copies: number) => {
+  // Print single product (includePrice: true = con precio CUP, false = solo nombre y codigo)
+  const printProduct = async (product: Product, copies: number, includePrice: boolean = true) => {
     if (!selectedService || !selectedPrinter) {
       showNotification('error', 'Error', 'Selecciona una impresora')
       return
@@ -202,6 +204,11 @@ export default function WarehouseProductsPage() {
 
     try {
       setPrinting(true)
+
+      // Calculate price in CUP using BCC rate
+      const priceCUP = includePrice && USD_CUP_BCC > 0
+        ? Math.round(product.sellingPrice * USD_CUP_BCC)
+        : undefined
 
       const response = await fetch('/api/print/jobs', {
         method: 'POST',
@@ -214,8 +221,9 @@ export default function WarehouseProductsPage() {
             productName: product.name,
             sku: product.sku,
             barcode: product.barcode,
-            price: product.sellingPrice,
-            currency: product.currency,
+            includePrice,
+            priceCUP, // Price in CUP (already converted)
+            currency: 'CUP',
             expirationDate: product.expirationDate,
             labelSize: 'medium'
           },
@@ -228,7 +236,8 @@ export default function WarehouseProductsPage() {
       const data = await response.json()
 
       if (data.success) {
-        showNotification('success', 'Imprimiendo', `Enviando ${copies} etiqueta${copies > 1 ? 's' : ''} de ${product.name}`)
+        const priceInfo = includePrice ? ' con precio' : ' sin precio'
+        showNotification('success', 'Imprimiendo', `Enviando ${copies} etiqueta${copies > 1 ? 's' : ''}${priceInfo} de ${product.name}`)
       } else {
         showNotification('error', 'Error', data.error || 'No se pudo imprimir')
       }
@@ -240,8 +249,8 @@ export default function WarehouseProductsPage() {
     }
   }
 
-  // Print all in queue
-  const printQueue_ = async () => {
+  // Print all in queue (includePrice: true = con precio CUP, false = solo nombre y codigo)
+  const printQueueItems = async (includePrice: boolean) => {
     if (printQueue.length === 0) return
 
     if (!selectedService || !selectedPrinter) {
@@ -253,12 +262,13 @@ export default function WarehouseProductsPage() {
       setPrinting(true)
 
       for (const item of printQueue) {
-        await printProduct(item.product, item.copies)
+        await printProduct(item.product, item.copies, includePrice)
         await new Promise(r => setTimeout(r, 200)) // Small delay between jobs
       }
 
       setPrintQueue([])
-      showNotification('success', 'Completado', 'Todos los trabajos de impresion enviados')
+      const priceInfo = includePrice ? 'con precio CUP' : 'sin precio'
+      showNotification('success', 'Completado', `Todos los trabajos ${priceInfo} enviados`)
     } catch (error) {
       console.error('Error printing queue:', error)
       showNotification('error', 'Error', 'Error al imprimir cola')
@@ -546,8 +556,20 @@ export default function WarehouseProductsPage() {
 
                     <Button
                       size="sm"
-                      onClick={() => printProduct(product, copies)}
+                      variant="outline"
+                      onClick={() => printProduct(product, copies, true)}
                       disabled={!selectedPrinter || printing}
+                      title="Imprimir con precio en CUP"
+                      className="text-green-600 border-green-300 hover:bg-green-50"
+                    >
+                      <DollarSign className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => printProduct(product, copies, false)}
+                      disabled={!selectedPrinter || printing}
+                      title="Imprimir sin precio"
                     >
                       <Printer className="w-4 h-4" />
                     </Button>
@@ -609,17 +631,32 @@ export default function WarehouseProductsPage() {
                 </div>
               </div>
 
-              <Button
-                onClick={printQueue_}
-                disabled={printing || !selectedPrinter}
-              >
-                {printing ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Printer className="w-4 h-4 mr-2" />
-                )}
-                Imprimir {totalQueueCopies} etiqueta{totalQueueCopies > 1 ? 's' : ''}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => printQueueItems(true)}
+                  disabled={printing || !selectedPrinter}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {printing ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <DollarSign className="w-4 h-4 mr-2" />
+                  )}
+                  Con Precio (CUP)
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => printQueueItems(false)}
+                  disabled={printing || !selectedPrinter}
+                >
+                  {printing ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Printer className="w-4 h-4 mr-2" />
+                  )}
+                  Sin Precio
+                </Button>
+              </div>
             </div>
           </div>
         )}

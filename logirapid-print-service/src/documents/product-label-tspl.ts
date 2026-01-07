@@ -9,7 +9,9 @@ interface ProductLabelData {
   barcode: string
   barcodeType?: 'code128' | 'ean13' | 'upc' | 'qrcode'
   price?: number
+  priceCUP?: number // Price already converted to CUP
   currency?: string
+  includePrice?: boolean // Set to false to exclude price from label
   description?: string
   category?: string
   expirationDate?: string
@@ -75,11 +77,20 @@ export function generateProductLabelTspl(data: ProductLabelData): Buffer {
   // BARCODE X,Y,"type",height,human_readable,rotation,narrow,wide,"content"
   tspl.push(`BARCODE ${barcodeX},${barcodeY},"${barcodeType}",${barcodeHeight},1,0,2,3,"${data.barcode}"`)
 
-  // Price - bigger and closer to barcode
-  if (data.price !== undefined) {
-    // Convert currency code to symbol (USD -> $, EUR -> €, etc.)
+  // Price - bigger and closer to barcode (only if includePrice is not false)
+  const shouldIncludePrice = data.includePrice !== false && (data.priceCUP !== undefined || data.price !== undefined)
+  if (shouldIncludePrice) {
+    // Use priceCUP if available, otherwise use price
+    const priceValue = data.priceCUP !== undefined ? data.priceCUP : data.price!
+    const isCUP = data.priceCUP !== undefined
+
+    // Format price: CUP uses integer format, others use 2 decimals
+    const formattedPrice = isCUP ? Math.round(priceValue).toLocaleString() : priceValue.toFixed(2)
+    const currencyLabel = isCUP ? ' CUP' : ''
+
+    // Convert currency code to symbol (only for non-CUP)
     let currencySymbol = '$'
-    if (data.currency) {
+    if (!isCUP && data.currency) {
       const symbolMap: Record<string, string> = {
         'USD': '$', 'usd': '$',
         'EUR': '€', 'eur': '€',
@@ -90,9 +101,10 @@ export function generateProductLabelTspl(data: ProductLabelData): Buffer {
       }
       currencySymbol = symbolMap[data.currency] || '$'
     }
-    const priceText = `${currencySymbol}${data.price.toFixed(2)}`
-    // Position price closer to barcode, more to the left
-    const priceX = 255 // Moved more to the left
+
+    const priceText = `${currencySymbol}${formattedPrice}${currencyLabel}`
+    // Position price closer to barcode (adjust for CUP which is longer)
+    const priceX = isCUP ? 220 : 255
     const priceY = barcodeY + 20 // Vertically centered with barcode
     // TEXT x,y,"font",rotation,x-mult,y-mult,"content"
     // Font "4" is bigger, multiplier 1,1 for clean look

@@ -313,7 +313,7 @@ function ReceiptContent() {
   const [selectedPrinter, setSelectedPrinter] = useState<{ serviceId: number; printerId: number } | null>(null)
   const [printingWithService, setPrintingWithService] = useState(false)
   const [copies, setCopies] = useState(1)
-  const [exchangeRate, setExchangeRate] = useState<number>(440) // Tasa USD -> CUP por defecto
+  const [exchangeRate, setExchangeRate] = useState<number>(411) // Tasa USD -> CUP BCC por defecto
 
   // Initialize on client
   useEffect(() => {
@@ -342,8 +342,9 @@ function ReceiptContent() {
       try {
         const res = await fetch('/api/market/pos/exchange-rates')
         const data = await res.json()
-        if (data.success && data.rates?.CUP) {
-          setExchangeRate(data.rates.CUP)
+        // Usar tasa BCC para recibo de venta (no ElToque)
+        if (data.success && data.rates?.CUP_BCC) {
+          setExchangeRate(data.rates.CUP_BCC)
         }
       } catch (err) {
         console.log('[Receipt] Using default exchange rate:', err)
