@@ -620,8 +620,9 @@ export default function CreateConsignmentOrderPage() {
         const currencyConfidence = data.data.currencyConfidence || 0
 
         // If currency not detected or low confidence, show modal
-        if (!detectedCurrency || currencyConfidence < 0.7) {
-          console.log('[Consignment AI] Currency not detected or low confidence, showing modal')
+        // Usar umbral alto (0.85) para ser más conservador y preguntar en caso de duda
+        if (!detectedCurrency || currencyConfidence < 0.85) {
+          console.log('[Consignment AI] Currency not detected or low confidence, showing modal. Confidence:', currencyConfidence)
           setPendingOcrData({
             data: data.data,
             detectedCurrency,
@@ -2770,11 +2771,32 @@ export default function CreateConsignmentOrderPage() {
                           'mt-3 pt-3 border-t',
                           theme === 'dark' ? 'border-blue-700/50' : 'border-blue-200'
                         )}>
-                          <div className="flex items-center gap-2 mb-2">
-                            <DollarSign className="w-4 h-4 text-blue-400" />
-                            <span className={cn('text-xs font-medium', theme === 'dark' ? 'text-blue-400' : 'text-blue-600')}>
-                              Moneda detectada: {scannedData.originalCurrency || 'USD'}
-                            </span>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <DollarSign className="w-4 h-4 text-blue-400" />
+                              <span className={cn('text-xs font-medium', theme === 'dark' ? 'text-blue-400' : 'text-blue-600')}>
+                                Moneda detectada: {scannedData.originalCurrency || 'USD'}
+                              </span>
+                            </div>
+                            {/* Botón para cambiar moneda manualmente */}
+                            <button
+                              onClick={() => {
+                                setPendingOcrData({
+                                  data: scannedData,
+                                  detectedCurrency: scannedData.originalCurrency as SupportedCurrency || null,
+                                  currencyHints: null
+                                })
+                                setShowCurrencyModal(true)
+                              }}
+                              className={cn(
+                                'px-2 py-1 rounded text-xs font-medium transition-colors',
+                                theme === 'dark'
+                                  ? 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-400'
+                                  : 'bg-blue-100 hover:bg-blue-200 text-blue-600'
+                              )}
+                            >
+                              Cambiar
+                            </button>
                           </div>
 
                           {scannedData.originalCurrency && scannedData.originalCurrency !== 'USD' ? (
