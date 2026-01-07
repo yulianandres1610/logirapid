@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 
 // Cache para evitar múltiples llamadas
 let cachedRates: {
-  CUP: number
+  CUP: number       // ElToque (para costo)
+  CUP_BCC: number   // BCC Banco Central (para venta)
   MLC: number
   EUR: number
   timestamp: string
+  timestampBCC: string
   source: string
 } | null = null
 let cacheTimestamp: number = 0
@@ -14,7 +16,8 @@ const CACHE_DURATION = 5 * 60 * 1000 // 5 minutos
 /**
  * GET /api/market/pos/exchange-rates
  * Obtiene tasas de cambio actualizadas para el POS
- * Fuente: API externa de tasas de Cuba
+ * - CUP: Tasa ElToque (informal) para COSTO
+ * - CUP_BCC: Tasa BCC (oficial) para VENTA
  */
 export async function GET(request: NextRequest) {
   try {
@@ -29,75 +32,107 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Fetch desde API externa
-    console.log('[POS Exchange Rates] Fetching from external API...')
+    // Fetch desde ambas APIs en paralelo
+    console.log('[POS Exchange Rates] Fetching from external APIs...')
 
-    const response = await fetch('http://173.249.39.167:8000/tasas', {
-      method: 'GET',
-      headers: {
-        'access_token': 'tu_clave_secreta_aqui'
-      },
-      // Timeout de 10 segundos
-      signal: AbortSignal.timeout(10000)
-    })
+    const [elToqueResponse, bccResponse] = await Promise.all([
+      fetch('http://173.249.39.167:8000/tasas', {
+        method: 'GET',
+        headers: { 'access_token': 'tu_clave_secreta_aqui' },
+        signal: AbortSignal.timeout(10000)
+      }).catch(e => {
+        console.warn('[POS Exchange Rates] ElToque API error:', e.message)
+        return null
+      }),
+      fetch('https://eltoque.cubarapid.com/api/tasas/bcc', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(10000)
+      }).catch(e => {
+        console.warn('[POS Exchange Rates] BCC API error:', e.message)
+        return null
+      })
+    ])
 
-    if (!response.ok) {
-      throw new Error(`API responded with status ${response.status}`)
+    // Procesar tasa BCC (para venta)
+    let bccRate = 411 // Fallback
+    let bccTimestamp = new Date().toISOString()
+    if (bccResponse && bccResponse.ok) {
+      try {
+        const bccData = await bccResponse.json()
+        if (bccData.exito && bccData.tasas) {
+          const usdRate = bccData.tasas.find((t: { moneda: string; tasa: number }) => t.moneda === 'USD')
+          if (usdRate?.tasa) {
+            bccRate = usdRate.tasa
+            bccTimestamp = bccData.timestamp || new Date().toISOString()
+          }
+        }
+      } catch (e) {
+        console.warn('[POS Exchange Rates] Error parsing BCC response:', e)
+      }
     }
 
-    const data = await response.json()
+    // Procesar tasa ElToque (para costo)
+    let elToqueRate = 440 // Fallback
+    let mlcRate = 1.11
+    let eurRate = 485
+    let elToqueTimestamp = new Date().toISOString()
+    let elToqueSource = 'fallback'
 
-    if (!data.monedas || !Array.isArray(data.monedas)) {
-      throw new Error('Invalid API response format')
-    }
-
-    // Extraer tasas relevantes
-    const rates: Record<string, number> = {}
-    for (const moneda of data.monedas) {
-      rates[moneda.moneda] = moneda.precio_cup
+    if (elToqueResponse && elToqueResponse.ok) {
+      try {
+        const data = await elToqueResponse.json()
+        if (data.monedas && Array.isArray(data.monedas)) {
+          const rates: Record<string, number> = {}
+          for (const moneda of data.monedas) {
+            rates[moneda.moneda] = moneda.precio_cup
+          }
+          elToqueRate = rates.USD || 440
+          mlcRate = rates.MLC ? (rates.USD / rates.MLC) : 1.11
+          eurRate = rates.EUR || 485
+          elToqueTimestamp = data.fecha_actualizacion
+          elToqueSource = data.origen || 'eltoque'
+        }
+      } catch (e) {
+        console.warn('[POS Exchange Rates] Error parsing ElToque response:', e)
+      }
     }
 
     // Construir respuesta para el POS
     const posRates = {
-      CUP: rates.USD || 440, // Tasa USD -> CUP
-      MLC: rates.MLC ? (rates.USD / rates.MLC) : 1.11, // Tasa USD -> MLC
-      EUR: rates.EUR || 485,
-      USD_CUP: rates.USD || 440,
-      MLC_CUP: rates.MLC || 395,
-      EUR_CUP: rates.EUR || 485,
-      ZELLE_CUP: rates.ZELLE || 450,
-      timestamp: data.fecha_actualizacion,
-      source: data.origen
+      CUP: elToqueRate,       // ElToque para COSTO
+      CUP_BCC: bccRate,       // BCC para VENTA
+      MLC: mlcRate,
+      EUR: eurRate,
+      USD_CUP: elToqueRate,
+      USD_CUP_BCC: bccRate,
+      timestamp: elToqueTimestamp,
+      timestampBCC: bccTimestamp,
+      source: elToqueSource
     }
 
     // Actualizar cache
     cachedRates = {
       CUP: posRates.CUP,
+      CUP_BCC: posRates.CUP_BCC,
       MLC: posRates.MLC,
-      EUR: rates.EUR || 485,
-      timestamp: data.fecha_actualizacion,
-      source: data.origen
+      EUR: eurRate,
+      timestamp: elToqueTimestamp,
+      timestampBCC: bccTimestamp,
+      source: elToqueSource
     }
     cacheTimestamp = now
 
     console.log('[POS Exchange Rates] Updated rates:', {
       CUP: posRates.CUP,
+      CUP_BCC: posRates.CUP_BCC,
       MLC: posRates.MLC,
-      source: data.origen,
-      updated: data.fecha_actualizacion
+      source: elToqueSource
     })
 
     return NextResponse.json({
       success: true,
       rates: posRates,
-      allRates: data.monedas.map((m: any) => ({
-        currency: m.moneda,
-        priceCUP: m.precio_cup,
-        trend: m.tendencia,
-        change: m.cambio
-      })),
-      lastUpdate: data.fecha_actualizacion,
-      source: data.origen,
       cached: false
     })
 
@@ -119,9 +154,11 @@ export async function GET(request: NextRequest) {
     // Tasas por defecto si todo falla
     const defaultRates = {
       CUP: 440,
+      CUP_BCC: 411,
       MLC: 1.11,
       EUR: 485,
       timestamp: new Date().toISOString(),
+      timestampBCC: new Date().toISOString(),
       source: 'default'
     }
 

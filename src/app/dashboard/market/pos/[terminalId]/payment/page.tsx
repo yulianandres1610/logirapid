@@ -248,13 +248,15 @@ interface PendingOrderData {
 }
 
 interface ExchangeRates {
-  CUP: number
+  CUP: number       // ElToque (para costo)
+  CUP_BCC: number   // BCC Banco Central (para venta)
   MLC: number
 }
 
 // Default exchange rates (actualizadas desde API externa)
 const DEFAULT_RATES: ExchangeRates = {
   CUP: 440,
+  CUP_BCC: 411,  // Tasa BCC para venta
   MLC: 1.11
 }
 
@@ -450,6 +452,7 @@ function PaymentContent() {
           if (data.success && data.rates) {
             const newRates = {
               CUP: data.rates.CUP || DEFAULT_RATES.CUP,
+              CUP_BCC: data.rates.CUP_BCC || DEFAULT_RATES.CUP_BCC,
               MLC: data.rates.MLC || DEFAULT_RATES.MLC
             }
             setRates(newRates)
@@ -483,17 +486,17 @@ function PaymentContent() {
     if (remainingUSD < 0) {
       const changeUSD = Math.abs(remainingUSD)
       if (changeCurrency === 'CUP') {
-        return Math.round(changeUSD * rates.CUP)
+        return Math.round(changeUSD * rates.CUP_BCC)  // Usar tasa BCC para venta
       }
       return Math.round(changeUSD)
     }
     return 0
   }, [remainingUSD, changeCurrency, rates])
 
-  // Convert amount to USD
+  // Convert amount to USD (usando tasa BCC para venta)
   const convertToUSD = (amount: number, currency: 'USD' | 'CUP' | 'MLC'): number => {
     switch (currency) {
-      case 'CUP': return amount / rates.CUP
+      case 'CUP': return amount / rates.CUP_BCC  // Usar tasa BCC para venta
       case 'MLC': return amount / rates.MLC
       default: return amount
     }
@@ -523,12 +526,12 @@ function PaymentContent() {
     setPayments(payments.filter(p => p.id !== id))
   }
 
-  // Set exact amount - redondeado a enteros
+  // Set exact amount - redondeado a enteros (usando tasa BCC para venta)
   const setExactAmount = () => {
     if (remainingUSD > 0) {
       let exactAmount = remainingUSD
       if (selectedCurrency === 'CUP') {
-        exactAmount = Math.round(remainingUSD * rates.CUP)
+        exactAmount = Math.round(remainingUSD * rates.CUP_BCC)  // Usar tasa BCC para venta
       } else if (selectedCurrency === 'MLC') {
         exactAmount = Math.round(remainingUSD * rates.MLC)
       }
@@ -560,7 +563,7 @@ function PaymentContent() {
         amount: p.amountInUSD,
         currency: p.currency,
         amountTendered: p.method === 'cash' ? p.amount : null,
-        changeAmount: changeAmount > 0 ? (changeCurrency === 'USD' ? changeAmount : changeAmount / rates.CUP) : null
+        changeAmount: changeAmount > 0 ? (changeCurrency === 'USD' ? changeAmount : changeAmount / rates.CUP_BCC) : null
       }))
 
       // OFFLINE MODE: Save to IndexedDB
@@ -905,7 +908,7 @@ function PaymentContent() {
                 <div className="flex items-center justify-between mb-2">
                   <label className={`text-sm ${tc.textMuted}`}>Moneda</label>
                   <span className={`text-xs ${tc.textMuted}`}>
-                    1 USD = {rates.CUP} CUP | {rates.MLC.toFixed(2)} MLC
+                    1 USD = {rates.CUP_BCC} CUP | {rates.MLC.toFixed(2)} MLC
                   </span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
@@ -1023,7 +1026,7 @@ function PaymentContent() {
                       changeCurrency === 'CUP' ? 'bg-blue-500 text-white' : tc.button
                     }`}
                   >
-                    CUP ({formatCurrency(Math.abs(remainingUSD) * rates.CUP, 'CUP')})
+                    CUP ({formatCurrency(Math.abs(remainingUSD) * rates.CUP_BCC, 'CUP')})
                   </button>
                 </div>
               </div>
