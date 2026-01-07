@@ -31,6 +31,7 @@ import { generateWarehouseOperationPdf } from '../documents/warehouse-operation-
 import { generateConsignmentReceipt, ConsignmentReceiptData } from '../documents/consignment-receipt'
 import { generateConsignmentReceiptEscpos } from '../documents/consignment-receipt-escpos'
 import { generateUnifiedReception, UnifiedReceptionData } from '../documents/unified-reception'
+import { generateUnifiedReceptionEscpos } from '../documents/unified-reception-escpos'
 import { generateTransferReceipt, TransferReceiptData } from '../documents/transfer-receipt'
 
 const execAsync = promisify(exec)
@@ -261,11 +262,14 @@ class JobProcessor {
         return printerService.getThermalPrinters()[0] || printerService.getDefaultPrinter()
 
       case 'warehouse_operation':
-      case 'unified_reception':
       case 'transfer_receipt':
-        // Reception receipts should print on STANDARD printer (not Zebra label printer)
-        // These documents have too much information for label printers
+        // These documents should print on STANDARD printer (not Zebra label printer)
         return printerService.getStandardPrinters()[0] || printerService.getDefaultPrinter()
+
+      case 'unified_reception':
+        // Reception receipts should print on THERMAL receipt printer (80mm)
+        // Using ESC/POS format with barcodes for products and order
+        return printerService.getThermalPrinters()[0] || printerService.getDefaultPrinter()
 
       default:
         return printerService.getDefaultPrinter()
@@ -394,7 +398,14 @@ class JobProcessor {
         return generateConsignmentReceipt(data as unknown as ConsignmentReceiptData)
 
       case 'unified_reception':
-        // Always PDF for unified reception receipts (has barcodes)
+        // Use ESC/POS for thermal printers (80mm ticket format with barcodes)
+        // Use PDF only for standard printers
+        if (printer.printerType === 'thermal_80mm' || printer.supportsEscpos) {
+          console.log(`[Job Processor] Using ESC/POS format for unified reception on thermal printer`)
+          return generateUnifiedReceptionEscpos(data as unknown as UnifiedReceptionData)
+        }
+        // Fallback to PDF for standard printers
+        console.log(`[Job Processor] Using PDF format for unified reception on standard printer`)
         return generateUnifiedReception(data as unknown as UnifiedReceptionData)
 
       case 'transfer_receipt':
@@ -439,11 +450,11 @@ class JobProcessor {
     const useRawLabelPrint = isLabelPrinter && canUseRaw && isLabelJob
     const useEscPos = printer.supportsEscpos &&
                       printer.printerType !== 'standard' &&
-                      ['pos_receipt'].includes(job.documentType)
+                      ['pos_receipt', 'unified_reception'].includes(job.documentType)
     const isReceiptOrReport = ['purchase_invoice', 'invoice', 'sales_report',
                                'inventory_count_report', 'cash_register_report',
-                               'warehouse_operation'].includes(job.documentType)
-    const isPdfOnly = ['consignment_receipt', 'unified_reception', 'transfer_receipt'].includes(job.documentType)
+                               'warehouse_operation', 'unified_reception'].includes(job.documentType)
+    const isPdfOnly = ['consignment_receipt', 'transfer_receipt'].includes(job.documentType)
 
     console.log(`[Job Processor] Print method selection:`)
     console.log(`[Job Processor]   - useRawLabelPrint (ZPL/TSPL): ${useRawLabelPrint}`)
