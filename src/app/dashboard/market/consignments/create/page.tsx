@@ -699,7 +699,7 @@ export default function CreateConsignmentOrderPage() {
           action: item.matchType !== 'none' ? 'use_existing' : 'create_new',
           // Precio de venta sugerido: 15% arriba del costo para productos nuevos
           suggestedSellingPrice: item.matchType === 'none'
-            ? Math.round(item.inputItem.unitCost * 1.04 * 100) / 100
+            ? Math.round(item.inputItem.unitCost * 1.40 * 100) / 100
             : undefined
         }))
 
@@ -792,7 +792,7 @@ export default function CreateConsignmentOrderPage() {
           const newCost = typeof value === 'string' ? parseFloat(value) || 0 : value
           const newTotal = newCost * item.quantity
           // Recalcular precio de venta sugerido (15% arriba del nuevo costo)
-          const newSellingPrice = Math.round(newCost * 1.04 * 100) / 100
+          const newSellingPrice = Math.round(newCost * 1.40 * 100) / 100
           return {
             ...item,
             unitCost: newCost,
@@ -1095,7 +1095,7 @@ export default function CreateConsignmentOrderPage() {
         // Producto nuevo - crear producto temporal para agregar a la orden
         // El usuario podrá crearlo en el inventario después o durante el proceso
         // Usar precio de venta editado o calcular 15% arriba del costo
-        const sellingPrice = item.suggestedSellingPrice || Math.round(item.unitCost * 1.04 * 100) / 100
+        const sellingPrice = item.suggestedSellingPrice || Math.round(item.unitCost * 1.40 * 100) / 100
         const tempProduct: Product = {
           id: -Date.now() - newLines.length, // ID temporal negativo
           name: item.name,
@@ -1406,7 +1406,7 @@ export default function CreateConsignmentOrderPage() {
         sku: l.product.sku || null,
         barcode: l.product.barcode || null,
         unitCost: l.unitCost,
-        sellingPrice: l.product.sellingPrice || l.unitCost * 1.04,
+        sellingPrice: l.product.sellingPrice || l.unitCost * 1.40,
         category: 'General',
         imageBase64: l.generatedImageBase64 || l.product.generatedImageBase64 || null
       }))
@@ -1415,7 +1415,7 @@ export default function CreateConsignmentOrderPage() {
       for (const [baseName, variants] of variantGroups) {
         // Calcular precio promedio para el producto base
         const avgCost = variants.reduce((sum, v) => sum + v.unitCost, 0) / variants.length
-        const avgSellingPrice = variants.reduce((sum, v) => sum + (v.product.sellingPrice || v.unitCost * 1.04), 0) / variants.length
+        const avgSellingPrice = variants.reduce((sum, v) => sum + (v.product.sellingPrice || v.unitCost * 1.40), 0) / variants.length
 
         // Crear producto base con variantes
         const baseProduct = {
@@ -1434,7 +1434,7 @@ export default function CreateConsignmentOrderPage() {
             sku: v.product.sku || null,
             barcode: v.product.barcode || null,
             unitCost: v.unitCost,
-            sellingPrice: v.product.sellingPrice || v.unitCost * 1.04
+            sellingPrice: v.product.sellingPrice || v.unitCost * 1.40
           }))
         }
 
@@ -1655,7 +1655,7 @@ export default function CreateConsignmentOrderPage() {
     // Check order lines
     for (const line of itemsToCheck) {
       const costPrice = line.unitCost
-      const sellingPrice = line.product.sellingPrice || costPrice * 1.04
+      const sellingPrice = line.product.sellingPrice || costPrice * 1.40
       const margin = calculateMargin(costPrice, sellingPrice)
 
       if (isLowMargin(costPrice, sellingPrice, 40)) {
@@ -1672,7 +1672,7 @@ export default function CreateConsignmentOrderPage() {
     // Check matched products that will become new products
     for (const item of matchedItemsToCheck) {
       const costPrice = item.unitCost
-      const sellingPrice = item.suggestedSellingPrice || costPrice * 1.04
+      const sellingPrice = item.suggestedSellingPrice || costPrice * 1.40
       const margin = calculateMargin(costPrice, sellingPrice)
 
       if (isLowMargin(costPrice, sellingPrice, 40)) {
@@ -2352,7 +2352,7 @@ export default function CreateConsignmentOrderPage() {
                                         <span className={cn('absolute left-2 top-1/2 -translate-y-1/2 text-sm', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>$</span>
                                         <input
                                           type="number"
-                                          value={item.suggestedSellingPrice || Math.round(item.unitCost * 1.04 * 100) / 100}
+                                          value={item.suggestedSellingPrice || Math.round(item.unitCost * 1.40 * 100) / 100}
                                           onChange={(e) => handleUpdateMatchedProduct(item.id, 'suggestedSellingPrice', e.target.value)}
                                           disabled={item.action === 'ignore' || item.action === 'link_to'}
                                           min="0"
