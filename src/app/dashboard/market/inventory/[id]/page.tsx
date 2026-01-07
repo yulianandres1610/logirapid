@@ -206,7 +206,7 @@ export default function ProductDetailPage() {
   const params = useParams()
   const productId = params.id as string
   const { theme } = useTheme()
-  const { USD_CUP, USD_MLC } = useMarketExchangeRates()
+  const { USD_CUP, USD_CUP_BCC, USD_MLC } = useMarketExchangeRates()
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
@@ -667,7 +667,7 @@ export default function ProductDetailPage() {
                     <p className="text-3xl font-bold text-emerald-600">{symbol}{Number(product.sellingPrice).toFixed(2)}</p>
                     <div className="mt-2 pt-2 border-t border-emerald-200/30 dark:border-emerald-800/30 space-y-1">
                       <p className="text-sm text-blue-600 font-medium">
-                        ${Math.round(product.sellingPrice * USD_CUP).toLocaleString()} CUP
+                        ${Math.round(product.sellingPrice * USD_CUP_BCC).toLocaleString()} CUP
                       </p>
                       <p className="text-sm text-purple-600 font-medium">
                         ${(product.sellingPrice * USD_MLC).toFixed(2)} MLC
@@ -843,7 +843,7 @@ export default function ProductDetailPage() {
                           {symbol}{Number(variant.sellingPrice).toFixed(2)}
                         </p>
                         <div className="text-[10px] space-y-0">
-                          <p className="text-blue-600">${Math.round(variant.sellingPrice * USD_CUP).toLocaleString()} CUP</p>
+                          <p className="text-blue-600">${Math.round(variant.sellingPrice * USD_CUP_BCC).toLocaleString()} CUP</p>
                           <p className="text-purple-600">${(variant.sellingPrice * USD_MLC).toFixed(2)} MLC</p>
                         </div>
                         <p className={cn(
