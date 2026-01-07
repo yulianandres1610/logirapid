@@ -2410,44 +2410,54 @@ export default function CreateConsignmentOrderPage() {
                         Total: {matchedProducts.filter(p => p.action !== 'ignore').length} productos
                       </p>
                       <p className={cn('text-2xl font-bold mt-1', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                        ${matchedProducts.filter(p => p.action !== 'ignore').reduce((sum, p) => sum + p.totalCost, 0).toFixed(2)}
+                        ${matchedProducts.filter(p => p.action !== 'ignore').reduce((sum, p) => sum + p.totalCost, 0).toFixed(2)} USD
                       </p>
-                    </div>
 
-                    {/* Currency conversion breakdown */}
-                    {scannedData?.originalCurrency && scannedData.originalCurrency !== 'USD' && (
-                      <div className={cn(
-                        'p-4 rounded-xl border',
-                        theme === 'dark' ? 'bg-amber-900/20 border-amber-700/50' : 'bg-amber-50 border-amber-200'
-                      )}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <DollarSign className="w-4 h-4 text-amber-500" />
-                          <p className={cn(
-                            'text-sm font-medium',
-                            theme === 'dark' ? 'text-amber-400' : 'text-amber-700'
-                          )}>
-                            Conversion de moneda aplicada
-                          </p>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className={theme === 'dark' ? 'text-amber-300' : 'text-amber-600'}>
-                            Original: ${scannedData.originalTotal?.toLocaleString('es-CU', { minimumFractionDigits: 2 })} {scannedData.originalCurrency}
-                          </span>
-                          <span className={theme === 'dark' ? 'text-amber-400' : 'text-amber-500'}>→</span>
-                          <span className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                            ${scannedData.total?.toFixed(2)} USD
-                          </span>
-                        </div>
-                        <p className={cn(
-                          'text-xs mt-2',
-                          theme === 'dark' ? 'text-amber-500' : 'text-amber-600'
+                      {/* Currency detection info */}
+                      {scannedData && (
+                        <div className={cn(
+                          'mt-3 pt-3 border-t',
+                          theme === 'dark' ? 'border-blue-700/50' : 'border-blue-200'
                         )}>
-                          Tasa ElToque: 1 USD = {scannedData.originalCurrency === 'CUP'
-                            ? scannedData.conversionRate?.toLocaleString()
-                            : scannedData.conversionRate?.toFixed(2)} {scannedData.originalCurrency}
-                        </p>
-                      </div>
-                    )}
+                          <div className="flex items-center gap-2 mb-2">
+                            <DollarSign className="w-4 h-4 text-blue-400" />
+                            <span className={cn('text-xs font-medium', theme === 'dark' ? 'text-blue-400' : 'text-blue-600')}>
+                              Moneda detectada: {scannedData.originalCurrency || 'USD'}
+                            </span>
+                          </div>
+
+                          {scannedData.originalCurrency && scannedData.originalCurrency !== 'USD' ? (
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}>
+                                  Original:
+                                </span>
+                                <span className={cn('font-medium', theme === 'dark' ? 'text-amber-400' : 'text-amber-600')}>
+                                  ${scannedData.originalTotal?.toLocaleString('es-CU', { minimumFractionDigits: 2 })} {scannedData.originalCurrency}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between text-sm">
+                                <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}>
+                                  Convertido:
+                                </span>
+                                <span className={cn('font-medium', theme === 'dark' ? 'text-green-400' : 'text-green-600')}>
+                                  ${scannedData.total?.toFixed(2)} USD
+                                </span>
+                              </div>
+                              <p className={cn('text-xs mt-1', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                                Tasa: 1 USD = {scannedData.originalCurrency === 'CUP'
+                                  ? scannedData.conversionRate?.toLocaleString()
+                                  : scannedData.conversionRate?.toFixed(2)} {scannedData.originalCurrency}
+                              </p>
+                            </div>
+                          ) : (
+                            <p className={cn('text-xs', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                              Sin conversion necesaria (moneda base)
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
 
                     {scanError && (
                       <div className="p-4 rounded-xl flex items-center gap-3 bg-red-500/10 border border-red-500/30">
