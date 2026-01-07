@@ -42,6 +42,17 @@ import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 import { VariantSelectorModal, Variant } from '@/components/market/VariantSelectorModal'
 import { InvoiceUploader, InvoiceFile } from '@/components/orders/InvoiceUploader'
+import { CurrencyDetectionModal } from '@/components/market/CurrencyDetectionModal'
+import { MarginWarningModal } from '@/components/market/MarginWarningModal'
+import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
+import {
+  convertToUSD,
+  convertOcrItemsToUSD,
+  calculateMargin,
+  isLowMargin,
+  calculateHealthyPrice,
+  type SupportedCurrency
+} from '@/lib/currency-conversion'
 
 interface ProductVariant {
   id: number
@@ -107,6 +118,10 @@ interface ScannedInvoice {
   tax: number
   total: number
   confidence: number
+  // Currency conversion fields (optional)
+  originalCurrency?: SupportedCurrency
+  originalTotal?: number
+  conversionRate?: number
 }
 
 // Interface para productos con match
@@ -207,6 +222,28 @@ export default function CreatePurchasePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const pathname = usePathname()
+
+  // Exchange rates for currency conversion
+  const { USD_CUP, USD_MLC, timestamp: ratesTimestamp } = useMarketExchangeRates()
+
+  // Currency detection modal state
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false)
+  const [pendingOcrData, setPendingOcrData] = useState<{
+    data: ScannedInvoice
+    detectedCurrency: SupportedCurrency | null
+    currencyHints: string | null
+  } | null>(null)
+
+  // Margin warning modal state
+  const [showMarginWarning, setShowMarginWarning] = useState(false)
+  const [lowMarginItems, setLowMarginItems] = useState<Array<{
+    name: string
+    costPrice: number
+    sellingPrice: number
+    margin: number
+    suggestedPrice: number
+  }>>([])
+  const [pendingSaveAction, setPendingSaveAction] = useState<(() => void) | null>(null)
 
   // Read initial step from URL (validate it's a valid step)
   const validSteps: Step[] = ['method', 'scan', 'review-scan', 'supplier', 'products', 'invoices', 'review']
@@ -566,15 +603,60 @@ export default function CreatePurchasePage() {
       const data = await response.json()
 
       if (data.success) {
-        setScannedData(data.data)
         console.log('[Purchase AI] OCR result:', data.data)
         console.log('[Purchase AI] Items received:', data.data.items)
         console.log('[Purchase AI] Items count:', data.data.items?.length || 0)
-        console.log('[Purchase AI] Item count field:', data.data.itemCount)
+        console.log('[Purchase AI] Currency detection:', data.data.detectedCurrency, data.data.currencyConfidence, data.data.currencyHints)
+
+        // Check if currency was detected
+        const detectedCurrency = data.data.detectedCurrency as SupportedCurrency | null
+        const currencyHints = data.data.currencyHints
+
+        if (detectedCurrency === null) {
+          // Currency not detected - show modal to ask user
+          console.log('[Purchase AI] Currency not detected, showing modal')
+          setPendingOcrData({
+            data: data.data,
+            detectedCurrency: null,
+            currencyHints
+          })
+          setShowCurrencyModal(true)
+          setIsScanning(false)
+          return
+        }
+
+        // Currency detected - process with conversion if needed
+        let processedData = data.data
+        if (detectedCurrency !== 'USD') {
+          console.log('[Purchase AI] Converting from', detectedCurrency, 'to USD')
+          const rates = { USD_CUP, USD_MLC }
+          const convertedItems = convertOcrItemsToUSD(data.data.items, detectedCurrency, rates)
+          const totalConversion = convertToUSD(data.data.total, detectedCurrency, rates)
+          const subtotalConversion = convertToUSD(data.data.subtotal, detectedCurrency, rates)
+          const taxConversion = convertToUSD(data.data.tax, detectedCurrency, rates)
+
+          processedData = {
+            ...data.data,
+            items: convertedItems,
+            total: totalConversion.convertedAmount,
+            subtotal: subtotalConversion.convertedAmount,
+            tax: taxConversion.convertedAmount,
+            originalCurrency: detectedCurrency,
+            originalTotal: data.data.total,
+            conversionRate: totalConversion.rate
+          }
+          console.log('[Purchase AI] Converted totals:', {
+            original: data.data.total,
+            converted: processedData.total,
+            rate: totalConversion.rate
+          })
+        }
+
+        setScannedData(processedData)
 
         // Now match the products
-        if (data.data.items && data.data.items.length > 0) {
-          await matchScannedProducts(data.data.items)
+        if (processedData.items && processedData.items.length > 0) {
+          await matchScannedProducts(processedData.items)
         } else {
           console.warn('[Purchase AI] No items received from OCR!')
           setMatchedProducts([])
@@ -601,7 +683,7 @@ export default function CreatePurchasePage() {
     } finally {
       setIsScanning(false)
     }
-  }, [invoiceFileBase64, aiContext])
+  }, [invoiceFileBase64, aiContext, USD_CUP, USD_MLC])
 
   // Match scanned products against database
   const matchScannedProducts = useCallback(async (items: ScannedItem[]) => {
@@ -634,9 +716,9 @@ export default function CreatePurchasePage() {
           confidence: item.confidence,
           // Default action based on match type
           action: item.matchType !== 'none' ? 'use_existing' : 'create_new',
-          // Precio de venta sugerido: 15% arriba del costo para productos nuevos
+          // Precio de venta sugerido: 4% arriba del costo para productos nuevos
           suggestedSellingPrice: item.matchType === 'none'
-            ? Math.round(item.inputItem.unitCost * 1.15 * 100) / 100
+            ? Math.round(item.inputItem.unitCost * 1.04 * 100) / 100
             : undefined
         }))
 
@@ -649,6 +731,59 @@ export default function CreatePurchasePage() {
       setIsMatching(false)
     }
   }, [])
+
+  // Handle currency confirmation from modal
+  const handleCurrencyConfirm = useCallback(async (selectedCurrency: SupportedCurrency) => {
+    if (!pendingOcrData) return
+
+    setShowCurrencyModal(false)
+    setIsScanning(true)
+
+    try {
+      let processedData = pendingOcrData.data
+
+      if (selectedCurrency !== 'USD') {
+        console.log('[Purchase AI] User selected currency:', selectedCurrency, '- Converting to USD')
+        const rates = { USD_CUP, USD_MLC }
+        const convertedItems = convertOcrItemsToUSD(pendingOcrData.data.items, selectedCurrency, rates)
+        const totalConversion = convertToUSD(pendingOcrData.data.total, selectedCurrency, rates)
+        const subtotalConversion = convertToUSD(pendingOcrData.data.subtotal, selectedCurrency, rates)
+        const taxConversion = convertToUSD(pendingOcrData.data.tax, selectedCurrency, rates)
+
+        processedData = {
+          ...pendingOcrData.data,
+          items: convertedItems,
+          total: totalConversion.convertedAmount,
+          subtotal: subtotalConversion.convertedAmount,
+          tax: taxConversion.convertedAmount,
+          originalCurrency: selectedCurrency,
+          originalTotal: pendingOcrData.data.total,
+          conversionRate: totalConversion.rate
+        }
+        console.log('[Purchase AI] Converted totals:', {
+          original: pendingOcrData.data.total,
+          converted: processedData.total,
+          currency: selectedCurrency,
+          rate: totalConversion.rate
+        })
+      }
+
+      setScannedData(processedData)
+
+      // Now match the products
+      if (processedData.items && processedData.items.length > 0) {
+        await matchScannedProducts(processedData.items)
+      } else {
+        setMatchedProducts([])
+      }
+
+      // Move to review-scan step
+      setCurrentStep('review-scan')
+    } finally {
+      setIsScanning(false)
+      setPendingOcrData(null)
+    }
+  }, [pendingOcrData, USD_CUP, USD_MLC, matchScannedProducts])
 
   // Handle product action change
   const handleProductAction = useCallback((itemId: string, action: MatchedItem['action'], linkedProductId?: number) => {
@@ -673,8 +808,8 @@ export default function CreatePurchasePage() {
         } else if (field === 'unitCost') {
           const newCost = typeof value === 'string' ? parseFloat(value) || 0 : value
           const newTotal = newCost * item.quantity
-          // Recalcular precio de venta sugerido (15% arriba del nuevo costo)
-          const newSellingPrice = Math.round(newCost * 1.15 * 100) / 100
+          // Recalcular precio de venta sugerido (4% arriba del nuevo costo)
+          const newSellingPrice = Math.round(newCost * 1.04 * 100) / 100
           return {
             ...item,
             unitCost: newCost,
@@ -981,8 +1116,8 @@ export default function CreatePurchasePage() {
         }
       } else if (item.action === 'create_new') {
         // Producto nuevo - crear producto temporal para agregar a la orden
-        // Usar precio de venta editado o calcular 15% arriba del costo
-        const sellingPrice = item.suggestedSellingPrice || Math.round(item.unitCost * 1.15 * 100) / 100
+        // Usar precio de venta editado o calcular 4% arriba del costo
+        const sellingPrice = item.suggestedSellingPrice || Math.round(item.unitCost * 1.04 * 100) / 100
         const tempProduct: Product = {
           id: -Date.now() - newLines.length,
           name: item.name,
@@ -1312,7 +1447,7 @@ export default function CreatePurchasePage() {
         sku: l.product.sku || null,
         barcode: l.product.barcode || null,
         unitCost: l.unitPrice,
-        sellingPrice: l.product.sellingPrice || l.unitPrice * 1.15,
+        sellingPrice: l.product.sellingPrice || l.unitPrice * 1.04,
         category: 'General',
         imageBase64: l.generatedImageBase64 || l.product.generatedImageBase64 || null
       }))
@@ -1321,7 +1456,7 @@ export default function CreatePurchasePage() {
       for (const [baseName, variants] of variantGroups) {
         // Calcular precio promedio para el producto base
         const avgCost = variants.reduce((sum, v) => sum + v.unitPrice, 0) / variants.length
-        const avgSellingPrice = variants.reduce((sum, v) => sum + (v.product.sellingPrice || v.unitPrice * 1.15), 0) / variants.length
+        const avgSellingPrice = variants.reduce((sum, v) => sum + (v.product.sellingPrice || v.unitPrice * 1.04), 0) / variants.length
 
         // Crear producto base con variantes
         const baseProduct = {
@@ -1340,7 +1475,7 @@ export default function CreatePurchasePage() {
             sku: v.product.sku || null,
             barcode: v.product.barcode || null,
             unitCost: v.unitPrice,
-            sellingPrice: v.product.sellingPrice || v.unitPrice * 1.15
+            sellingPrice: v.product.sellingPrice || v.unitPrice * 1.04
           }))
         }
 
@@ -1408,6 +1543,82 @@ export default function CreatePurchasePage() {
       setLoading(false)
     }
   }
+
+  // Check margin before submitting
+  const handleCheckMarginAndSubmit = useCallback(() => {
+    // Get all items that will be created as new products
+    const itemsToCheck = purchaseLines.filter(l => l.isNewProduct && l.productId < 0)
+
+    // Also check matched products that will be created
+    const matchedItemsToCheck = matchedProducts.filter(item => item.action === 'create_new')
+
+    const lowMargin: Array<{
+      name: string
+      costPrice: number
+      sellingPrice: number
+      margin: number
+      suggestedPrice: number
+    }> = []
+
+    // Check purchase lines
+    for (const line of itemsToCheck) {
+      const costPrice = line.unitPrice
+      const sellingPrice = line.product.sellingPrice || costPrice * 1.04
+      const margin = calculateMargin(costPrice, sellingPrice)
+
+      if (isLowMargin(costPrice, sellingPrice, 40)) {
+        lowMargin.push({
+          name: line.product.name,
+          costPrice,
+          sellingPrice,
+          margin,
+          suggestedPrice: calculateHealthyPrice(costPrice)
+        })
+      }
+    }
+
+    // Check matched products that will become new products
+    for (const item of matchedItemsToCheck) {
+      const costPrice = item.unitCost
+      const sellingPrice = item.suggestedSellingPrice || costPrice * 1.04
+      const margin = calculateMargin(costPrice, sellingPrice)
+
+      if (isLowMargin(costPrice, sellingPrice, 40)) {
+        lowMargin.push({
+          name: item.name,
+          costPrice,
+          sellingPrice,
+          margin,
+          suggestedPrice: calculateHealthyPrice(costPrice)
+        })
+      }
+    }
+
+    if (lowMargin.length > 0) {
+      setLowMarginItems(lowMargin)
+      setPendingSaveAction(() => handleSubmit)
+      setShowMarginWarning(true)
+    } else {
+      handleSubmit()
+    }
+  }, [purchaseLines, matchedProducts, handleSubmit])
+
+  // Handle margin warning confirmation - proceed with save
+  const handleMarginWarningConfirm = useCallback(() => {
+    setShowMarginWarning(false)
+    if (pendingSaveAction) {
+      pendingSaveAction()
+    }
+  }, [pendingSaveAction])
+
+  // Handle margin warning adjust - close modal and let user adjust prices
+  const handleMarginWarningAdjust = useCallback(() => {
+    setShowMarginWarning(false)
+    // Go back to products step if in review
+    if (currentStep === 'review') {
+      setCurrentStep('products')
+    }
+  }, [currentStep])
 
   return (
     <div className={cn(
@@ -2443,7 +2654,7 @@ export default function CreatePurchasePage() {
                                         <span className={cn('absolute left-2 top-1/2 -translate-y-1/2 text-sm', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>$</span>
                                         <input
                                           type="number"
-                                          value={item.suggestedSellingPrice || Math.round(item.unitCost * 1.15 * 100) / 100}
+                                          value={item.suggestedSellingPrice || Math.round(item.unitCost * 1.04 * 100) / 100}
                                           onChange={(e) => handleUpdateMatchedProduct(item.id, 'suggestedSellingPrice', e.target.value)}
                                           disabled={item.action === 'ignore' || item.action === 'link_to'}
                                           min="0"
@@ -3274,7 +3485,7 @@ export default function CreatePurchasePage() {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={handleSubmit}
+                    onClick={handleCheckMarginAndSubmit}
                     disabled={loading}
                     className={cn(
                       "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
@@ -3766,6 +3977,29 @@ export default function CreatePurchasePage() {
             mode="purchase"
             showOutOfStock={true}
             currency={currency}
+          />
+
+          {/* Currency Detection Modal */}
+          <CurrencyDetectionModal
+            isOpen={showCurrencyModal}
+            onConfirm={(currency) => {
+              setShowCurrencyModal(false)
+              handleCurrencyConfirm(currency)
+            }}
+            detectedHints={pendingOcrData?.currencyHints}
+            total={pendingOcrData?.data.total || 0}
+            rates={{ USD_CUP, USD_MLC }}
+            ratesTimestamp={ratesTimestamp}
+          />
+
+          {/* Margin Warning Modal */}
+          <MarginWarningModal
+            isOpen={showMarginWarning}
+            onClose={() => setShowMarginWarning(false)}
+            onConfirm={handleMarginWarningConfirm}
+            onAdjustPrices={handleMarginWarningAdjust}
+            items={lowMarginItems}
+            recommendedMargin={40}
           />
     </div>
   )

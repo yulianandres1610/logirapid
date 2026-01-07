@@ -27,6 +27,12 @@ import {
 import { useRouter } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import { CurrencyDetectionModal } from '@/components/market/CurrencyDetectionModal'
+import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
+import {
+  convertToUSD,
+  type SupportedCurrency
+} from '@/lib/currency-conversion'
 
 type Step = 'method' | 'input' | 'review'
 type EntryMethod = 'ocr' | 'manual' | null
@@ -83,6 +89,17 @@ export default function CreateExpensePage() {
   const [categoriesLoaded, setCategoriesLoaded] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showCancelModal, setShowCancelModal] = useState(false)
+
+  // Exchange rates for currency conversion
+  const { USD_CUP, USD_MLC, timestamp: ratesTimestamp } = useMarketExchangeRates()
+
+  // Currency detection modal state
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false)
+  const [pendingOcrData, setPendingOcrData] = useState<{
+    data: NonNullable<typeof ocrResult>
+    detectedCurrency: SupportedCurrency | null
+    currencyHints: string | null
+  } | null>(null)
 
   // Form data
   const [formData, setFormData] = useState({
@@ -308,31 +325,63 @@ export default function CreateExpensePage() {
       console.log('[OCR] API Response:', result)
 
       if (response.ok && result.success && result.data) {
-        setOcrResult(result.data)
+        console.log('[Expenses OCR] Currency detection:', {
+          detected: result.data.detectedCurrency,
+          confidence: result.data.currencyConfidence,
+          hints: result.data.currencyHints
+        })
 
-        // Verificar si hay múltiples items
-        const items = result.data.items || []
-        const hasMultiple = items.length > 1
+        // Check if currency was detected
+        const detectedCurrency = result.data.detectedCurrency as SupportedCurrency | null
+        const currencyConfidence = result.data.currencyConfidence || 0
 
-        setHasMultipleItems(hasMultiple)
-        setExtractedItems(items)
-
-        // Auto-fill form with OCR results (datos compartidos)
-        setFormData(prev => ({
-          ...prev,
-          vendorName: result.data.vendorName || prev.vendorName,
-          expenseDate: result.data.date || prev.expenseDate,
-          description: hasMultiple ? `${items.length} items detectados` : (result.data.description || prev.description),
-          amount: hasMultiple ? String(result.data.total || 0) : (result.data.amount ? String(result.data.amount) : prev.amount)
-        }))
-
-        if (hasMultiple && items.length > 0) {
-          // Categorizar items y agrupar por categoría
-          await categorizeAndGroupItems(items, result.data.subtotal || 0, result.data.tax || 0)
-        } else if (result.data.description) {
-          // Flujo original para un solo item
-          await categorizeWithAI(result.data.description, result.data.amount, result.data.vendorName)
+        // If currency not detected or low confidence, show modal
+        if (!detectedCurrency || currencyConfidence < 0.7) {
+          console.log('[Expenses OCR] Currency not detected or low confidence, showing modal')
+          setPendingOcrData({
+            data: result.data,
+            detectedCurrency,
+            currencyHints: result.data.currencyHints
+          })
+          setShowCurrencyModal(true)
+          setProcessingOCR(false)
+          return
         }
+
+        // If currency is not USD, convert automatically
+        let processedData = result.data
+        if (detectedCurrency !== 'USD') {
+          console.log('[Expenses OCR] Auto-converting from', detectedCurrency, 'to USD')
+          const rates = { USD_CUP, USD_MLC }
+          const totalConversion = convertToUSD(result.data.total || result.data.amount || 0, detectedCurrency, rates)
+          const subtotalConversion = convertToUSD(result.data.subtotal || 0, detectedCurrency, rates)
+          const taxConversion = convertToUSD(result.data.tax || 0, detectedCurrency, rates)
+          const amountConversion = result.data.amount ? convertToUSD(result.data.amount, detectedCurrency, rates) : null
+
+          // Convert items if present
+          const convertedItems = (result.data.items || []).map((item: ExtractedItem) => ({
+            ...item,
+            amount: convertToUSD(item.amount, detectedCurrency, rates).convertedAmount
+          }))
+
+          processedData = {
+            ...result.data,
+            items: convertedItems,
+            total: totalConversion.convertedAmount,
+            subtotal: subtotalConversion.convertedAmount,
+            tax: taxConversion.convertedAmount,
+            amount: amountConversion?.convertedAmount || totalConversion.convertedAmount
+          }
+          console.log('[Expenses OCR] Converted totals:', {
+            original: result.data.total,
+            converted: processedData.total,
+            currency: detectedCurrency,
+            rate: totalConversion.rate
+          })
+        }
+
+        // Continue with normal processing
+        await processOcrResult(processedData)
       } else {
         // Show error from API
         const errorMsg = result.error || 'Error al procesar el recibo'
@@ -345,6 +394,82 @@ export default function CreateExpensePage() {
     }
     setProcessingOCR(false)
   }
+
+  // Process OCR result after currency is determined
+  const processOcrResult = async (data: NonNullable<typeof ocrResult>) => {
+    setOcrResult(data)
+
+    // Verificar si hay múltiples items
+    const items = data.items || []
+    const hasMultiple = items.length > 1
+
+    setHasMultipleItems(hasMultiple)
+    setExtractedItems(items)
+
+    // Auto-fill form with OCR results (datos compartidos)
+    setFormData(prev => ({
+      ...prev,
+      vendorName: data.vendorName || prev.vendorName,
+      expenseDate: data.date || prev.expenseDate,
+      description: hasMultiple ? `${items.length} items detectados` : (data.description || prev.description),
+      amount: hasMultiple ? String(data.total || 0) : (data.amount ? String(data.amount) : prev.amount)
+    }))
+
+    if (hasMultiple && items.length > 0) {
+      // Categorizar items y agrupar por categoría
+      await categorizeAndGroupItems(items, data.subtotal || 0, data.tax || 0)
+    } else if (data.description) {
+      // Flujo original para un solo item
+      await categorizeWithAI(data.description, data.amount, data.vendorName)
+    }
+  }
+
+  // Handle currency confirmation from modal
+  const handleCurrencyConfirm = useCallback(async (selectedCurrency: SupportedCurrency) => {
+    if (!pendingOcrData) return
+
+    setShowCurrencyModal(false)
+    setProcessingOCR(true)
+
+    try {
+      let processedData = pendingOcrData.data
+
+      if (selectedCurrency !== 'USD') {
+        console.log('[Expenses OCR] User selected currency:', selectedCurrency, '- Converting to USD')
+        const rates = { USD_CUP, USD_MLC }
+        const totalConversion = convertToUSD(pendingOcrData.data.total || pendingOcrData.data.amount || 0, selectedCurrency, rates)
+        const subtotalConversion = convertToUSD(pendingOcrData.data.subtotal || 0, selectedCurrency, rates)
+        const taxConversion = convertToUSD(pendingOcrData.data.tax || 0, selectedCurrency, rates)
+        const amountConversion = pendingOcrData.data.amount ? convertToUSD(pendingOcrData.data.amount, selectedCurrency, rates) : null
+
+        // Convert items if present
+        const convertedItems = (pendingOcrData.data.items || []).map((item: ExtractedItem) => ({
+          ...item,
+          amount: convertToUSD(item.amount, selectedCurrency, rates).convertedAmount
+        }))
+
+        processedData = {
+          ...pendingOcrData.data,
+          items: convertedItems,
+          total: totalConversion.convertedAmount,
+          subtotal: subtotalConversion.convertedAmount,
+          tax: taxConversion.convertedAmount,
+          amount: amountConversion?.convertedAmount || totalConversion.convertedAmount
+        }
+        console.log('[Expenses OCR] Converted totals:', {
+          original: pendingOcrData.data.total,
+          converted: processedData.total,
+          currency: selectedCurrency,
+          rate: totalConversion.rate
+        })
+      }
+
+      await processOcrResult(processedData)
+    } finally {
+      setProcessingOCR(false)
+      setPendingOcrData(null)
+    }
+  }, [pendingOcrData, USD_CUP, USD_MLC])
 
   const categorizeWithAI = async (description: string, amount?: number, vendorName?: string) => {
     if (!description) return
@@ -1797,6 +1922,18 @@ export default function CreateExpensePage() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Currency Detection Modal */}
+        <CurrencyDetectionModal
+          isOpen={showCurrencyModal}
+          onConfirm={(currency) => {
+            handleCurrencyConfirm(currency)
+          }}
+          detectedHints={pendingOcrData?.currencyHints}
+          total={pendingOcrData?.data.total || pendingOcrData?.data.amount || 0}
+          rates={{ USD_CUP, USD_MLC }}
+          ratesTimestamp={ratesTimestamp}
+        />
     </div>
   )
 }

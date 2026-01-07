@@ -164,13 +164,28 @@ EJEMPLO DE RESPUESTA CON VARIANTES:
   "confidence": 0.95
 }
 
+DETECCIÓN DE MONEDA (MUY IMPORTANTE PARA CUBA):
+Analiza el documento para identificar la moneda de los precios:
+- Busca símbolos: "$" (puede ser USD o CUP), "€" (EUR), "MLC", "CUP", "USD"
+- Busca palabras: "pesos", "dólares", "dollars", "moneda libremente convertible", "MN", "CUP", "USD"
+- CONTEXTO CUBA: Si ves precios MUY ALTOS (ej: 40,000, 15,000) probablemente es CUP (peso cubano)
+- Si ves precios bajos con formato típico americano (ej: 10.50, 25.00) probablemente es USD
+- MLC generalmente tiene precios similares a USD pero con indicador "MLC" o "tarjeta"
+- Si no puedes determinar la moneda con certeza, usa null
+
+Incluir en tu respuesta JSON:
+- "detectedCurrency": "USD" | "CUP" | "MLC" | null
+- "currencyConfidence": número de 0.0 a 1.0 indicando certeza de la moneda detectada
+- "currencyHints": breve explicación de por qué detectaste esa moneda
+
 REGLAS CRÍTICAS:
 - El array "items" DEBE contener todos los productos de la factura
 - Si ves una lista de productos, cada línea es un item separado
 - Los números deben ser sin símbolos de moneda (1.50 no $1.50)
 - Si no puedes leer un campo, usa null para texto y 0 para números
 - SIEMPRE analiza si hay productos que son variantes y asigna isVariantOf correctamente
-- El campo confidence indica tu certeza (0.0 a 1.0)
+- El campo confidence indica tu certeza general (0.0 a 1.0)
+- SIEMPRE intenta detectar la moneda del documento
 
 RESPONDE ÚNICAMENTE CON EL JSON. Sin explicaciones, sin markdown, sin \`\`\`.`
 
@@ -286,6 +301,14 @@ RESPONDE ÚNICAMENTE CON EL JSON. Sin explicaciones, sin markdown, sin \`\`\`.`
 
       console.log('[Consignment OCR] Final processed items:', items.length, items)
 
+      // Extract currency detection fields
+      const detectedCurrency = extractedData.detectedCurrency || null
+      const currencyConfidence = typeof extractedData.currencyConfidence === 'number'
+        ? extractedData.currencyConfidence : 0
+      const currencyHints = extractedData.currencyHints || null
+
+      console.log('[Consignment OCR] Currency detection:', { detectedCurrency, currencyConfidence, currencyHints })
+
       return NextResponse.json({
         success: true,
         data: {
@@ -297,7 +320,11 @@ RESPONDE ÚNICAMENTE CON EL JSON. Sin explicaciones, sin markdown, sin \`\`\`.`
           tax: typeof extractedData.tax === 'number' ? extractedData.tax : 0,
           total: typeof extractedData.total === 'number' ? extractedData.total : 0,
           confidence: extractedData.confidence || 0.5,
-          itemCount: items.length
+          itemCount: items.length,
+          // Currency detection fields
+          detectedCurrency,
+          currencyConfidence,
+          currencyHints
         }
       })
     } catch (parseError) {

@@ -127,8 +127,23 @@ Responde ÚNICAMENTE en formato JSON con esta estructura:
   "confidence": 0.95
 }
 
+DETECCIÓN DE MONEDA (MUY IMPORTANTE PARA CUBA):
+Analiza el documento para identificar la moneda de los precios:
+- Busca símbolos: "$" (puede ser USD o CUP), "€" (EUR), "MLC", "CUP", "USD"
+- Busca palabras: "pesos", "dólares", "dollars", "moneda libremente convertible", "MN", "CUP", "USD"
+- CONTEXTO CUBA: Si ves precios MUY ALTOS (ej: 40,000, 15,000) probablemente es CUP (peso cubano)
+- Si ves precios bajos con formato típico americano (ej: 10.50, 25.00) probablemente es USD
+- MLC generalmente tiene precios similares a USD pero con indicador "MLC" o "tarjeta"
+- Si no puedes determinar la moneda con certeza, usa null
+
+Incluir en tu respuesta JSON:
+- "detectedCurrency": "USD" | "CUP" | "MLC" | null
+- "currencyConfidence": número de 0.0 a 1.0 indicando certeza de la moneda detectada
+- "currencyHints": breve explicación de por qué detectaste esa moneda
+
 Si no puedes identificar algún campo, usa null para strings y 0 para números.
 El campo "confidence" indica qué tan seguro estás de la extracción (0 a 1).
+SIEMPRE intenta detectar la moneda del documento.
 
 IMPORTANTE: Solo responde con el JSON, sin texto adicional, sin markdown.`
 
@@ -173,6 +188,14 @@ IMPORTANTE: Solo responde con el JSON, sin texto adicional, sin markdown.`
         })
       }
 
+      // Extract currency detection fields
+      const detectedCurrency = extractedData.detectedCurrency || null
+      const currencyConfidence = typeof extractedData.currencyConfidence === 'number'
+        ? extractedData.currencyConfidence : 0
+      const currencyHints = extractedData.currencyHints || null
+
+      console.log('[Expenses OCR] Currency detection:', { detectedCurrency, currencyConfidence, currencyHints })
+
       return NextResponse.json({
         success: true,
         data: {
@@ -185,7 +208,11 @@ IMPORTANTE: Solo responde con el JSON, sin texto adicional, sin markdown.`
           confidence: extractedData.confidence || 0.5,
           // Mantener compatibilidad con formato anterior
           description: items.length === 1 ? items[0].description : `${items.length} items detectados`,
-          amount: extractedData.total || items.reduce((sum: number, i: { amount: number }) => sum + i.amount, 0)
+          amount: extractedData.total || items.reduce((sum: number, i: { amount: number }) => sum + i.amount, 0),
+          // Currency detection fields
+          detectedCurrency,
+          currencyConfidence,
+          currencyHints
         }
       })
     } catch (parseError) {

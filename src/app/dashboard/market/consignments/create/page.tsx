@@ -41,6 +41,17 @@ import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 import { VariantSelectorModal, Variant } from '@/components/market/VariantSelectorModal'
 import { InvoiceUploader, InvoiceFile } from '@/components/orders/InvoiceUploader'
+import { CurrencyDetectionModal } from '@/components/market/CurrencyDetectionModal'
+import { MarginWarningModal } from '@/components/market/MarginWarningModal'
+import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
+import {
+  convertToUSD,
+  convertOcrItemsToUSD,
+  calculateMargin,
+  isLowMargin,
+  calculateHealthyPrice,
+  type SupportedCurrency
+} from '@/lib/currency-conversion'
 
 interface ProductVariant {
   id: number
@@ -108,6 +119,10 @@ interface ScannedInvoice {
   tax: number
   total: number
   confidence: number
+  // Currency conversion fields (optional)
+  originalCurrency?: SupportedCurrency
+  originalTotal?: number
+  conversionRate?: number
 }
 
 // Interface para productos con match
@@ -216,6 +231,28 @@ export default function CreateConsignmentOrderPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const pathname = usePathname()
+
+  // Exchange rates for currency conversion
+  const { USD_CUP, USD_MLC, timestamp: ratesTimestamp } = useMarketExchangeRates()
+
+  // Currency detection modal state
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false)
+  const [pendingOcrData, setPendingOcrData] = useState<{
+    data: ScannedInvoice
+    detectedCurrency: SupportedCurrency | null
+    currencyHints: string | null
+  } | null>(null)
+
+  // Margin warning modal state
+  const [showMarginWarning, setShowMarginWarning] = useState(false)
+  const [lowMarginItems, setLowMarginItems] = useState<Array<{
+    name: string
+    costPrice: number
+    sellingPrice: number
+    margin: number
+    suggestedPrice: number
+  }>>([])
+  const [pendingSaveAction, setPendingSaveAction] = useState<(() => void) | null>(null)
 
   // Read initial step from URL
   const initialStep = (searchParams.get('step') as Step) || 'method'
@@ -545,13 +582,63 @@ export default function CreateConsignmentOrderPage() {
       const data = await response.json()
 
       if (data.success) {
-        setScannedData(data.data)
         console.log('[Consignment AI] OCR result:', data.data)
         console.log('[Consignment AI] Items received:', data.data.items)
         console.log('[Consignment AI] Items count:', data.data.items?.length || 0)
+        console.log('[Consignment AI] Currency detection:', {
+          detected: data.data.detectedCurrency,
+          confidence: data.data.currencyConfidence,
+          hints: data.data.currencyHints
+        })
 
-        if (data.data.items && data.data.items.length > 0) {
-          await matchScannedProducts(data.data.items)
+        // Check if currency was detected
+        const detectedCurrency = data.data.detectedCurrency as SupportedCurrency | null
+        const currencyConfidence = data.data.currencyConfidence || 0
+
+        // If currency not detected or low confidence, show modal
+        if (!detectedCurrency || currencyConfidence < 0.7) {
+          console.log('[Consignment AI] Currency not detected or low confidence, showing modal')
+          setPendingOcrData({
+            data: data.data,
+            detectedCurrency,
+            currencyHints: data.data.currencyHints
+          })
+          setShowCurrencyModal(true)
+          return
+        }
+
+        // If currency is not USD, convert automatically
+        let processedData = data.data
+        if (detectedCurrency !== 'USD') {
+          console.log('[Consignment AI] Auto-converting from', detectedCurrency, 'to USD')
+          const rates = { USD_CUP, USD_MLC }
+          const convertedItems = convertOcrItemsToUSD(data.data.items, detectedCurrency, rates)
+          const totalConversion = convertToUSD(data.data.total, detectedCurrency, rates)
+          const subtotalConversion = convertToUSD(data.data.subtotal, detectedCurrency, rates)
+          const taxConversion = convertToUSD(data.data.tax, detectedCurrency, rates)
+
+          processedData = {
+            ...data.data,
+            items: convertedItems,
+            total: totalConversion.convertedAmount,
+            subtotal: subtotalConversion.convertedAmount,
+            tax: taxConversion.convertedAmount,
+            originalCurrency: detectedCurrency,
+            originalTotal: data.data.total,
+            conversionRate: totalConversion.rate
+          }
+          console.log('[Consignment AI] Converted totals:', {
+            original: data.data.total,
+            converted: processedData.total,
+            currency: detectedCurrency,
+            rate: totalConversion.rate
+          })
+        }
+
+        setScannedData(processedData)
+
+        if (processedData.items && processedData.items.length > 0) {
+          await matchScannedProducts(processedData.items)
         } else {
           console.warn('[Consignment AI] No items received from OCR!')
           setMatchedProducts([])
@@ -576,7 +663,7 @@ export default function CreateConsignmentOrderPage() {
     } finally {
       setIsScanning(false)
     }
-  }, [invoiceFileBase64, aiContext])
+  }, [invoiceFileBase64, aiContext, USD_CUP, USD_MLC])
 
   // Match scanned products against database
   const matchScannedProducts = useCallback(async (items: ScannedItem[]) => {
@@ -611,7 +698,7 @@ export default function CreateConsignmentOrderPage() {
           action: item.matchType !== 'none' ? 'use_existing' : 'create_new',
           // Precio de venta sugerido: 15% arriba del costo para productos nuevos
           suggestedSellingPrice: item.matchType === 'none'
-            ? Math.round(item.inputItem.unitCost * 1.15 * 100) / 100
+            ? Math.round(item.inputItem.unitCost * 1.04 * 100) / 100
             : undefined
         }))
 
@@ -626,6 +713,59 @@ export default function CreateConsignmentOrderPage() {
       setIsMatching(false)
     }
   }, [])
+
+  // Handle currency confirmation from modal
+  const handleCurrencyConfirm = useCallback(async (selectedCurrency: SupportedCurrency) => {
+    if (!pendingOcrData) return
+
+    setShowCurrencyModal(false)
+    setIsScanning(true)
+
+    try {
+      let processedData = pendingOcrData.data
+
+      if (selectedCurrency !== 'USD') {
+        console.log('[Consignment AI] User selected currency:', selectedCurrency, '- Converting to USD')
+        const rates = { USD_CUP, USD_MLC }
+        const convertedItems = convertOcrItemsToUSD(pendingOcrData.data.items, selectedCurrency, rates)
+        const totalConversion = convertToUSD(pendingOcrData.data.total, selectedCurrency, rates)
+        const subtotalConversion = convertToUSD(pendingOcrData.data.subtotal, selectedCurrency, rates)
+        const taxConversion = convertToUSD(pendingOcrData.data.tax, selectedCurrency, rates)
+
+        processedData = {
+          ...pendingOcrData.data,
+          items: convertedItems,
+          total: totalConversion.convertedAmount,
+          subtotal: subtotalConversion.convertedAmount,
+          tax: taxConversion.convertedAmount,
+          originalCurrency: selectedCurrency,
+          originalTotal: pendingOcrData.data.total,
+          conversionRate: totalConversion.rate
+        }
+        console.log('[Consignment AI] Converted totals:', {
+          original: pendingOcrData.data.total,
+          converted: processedData.total,
+          currency: selectedCurrency,
+          rate: totalConversion.rate
+        })
+      }
+
+      setScannedData(processedData)
+
+      // Now match the products
+      if (processedData.items && processedData.items.length > 0) {
+        await matchScannedProducts(processedData.items)
+      } else {
+        setMatchedProducts([])
+      }
+
+      // Move to review-scan step
+      setCurrentStep('review-scan')
+    } finally {
+      setIsScanning(false)
+      setPendingOcrData(null)
+    }
+  }, [pendingOcrData, USD_CUP, USD_MLC, matchScannedProducts])
 
   // Handle product action change
   const handleProductAction = useCallback((itemId: string, action: MatchedItem['action'], linkedProductId?: number) => {
@@ -651,7 +791,7 @@ export default function CreateConsignmentOrderPage() {
           const newCost = typeof value === 'string' ? parseFloat(value) || 0 : value
           const newTotal = newCost * item.quantity
           // Recalcular precio de venta sugerido (15% arriba del nuevo costo)
-          const newSellingPrice = Math.round(newCost * 1.15 * 100) / 100
+          const newSellingPrice = Math.round(newCost * 1.04 * 100) / 100
           return {
             ...item,
             unitCost: newCost,
@@ -954,7 +1094,7 @@ export default function CreateConsignmentOrderPage() {
         // Producto nuevo - crear producto temporal para agregar a la orden
         // El usuario podrá crearlo en el inventario después o durante el proceso
         // Usar precio de venta editado o calcular 15% arriba del costo
-        const sellingPrice = item.suggestedSellingPrice || Math.round(item.unitCost * 1.15 * 100) / 100
+        const sellingPrice = item.suggestedSellingPrice || Math.round(item.unitCost * 1.04 * 100) / 100
         const tempProduct: Product = {
           id: -Date.now() - newLines.length, // ID temporal negativo
           name: item.name,
@@ -1265,7 +1405,7 @@ export default function CreateConsignmentOrderPage() {
         sku: l.product.sku || null,
         barcode: l.product.barcode || null,
         unitCost: l.unitCost,
-        sellingPrice: l.product.sellingPrice || l.unitCost * 1.15,
+        sellingPrice: l.product.sellingPrice || l.unitCost * 1.04,
         category: 'General',
         imageBase64: l.generatedImageBase64 || l.product.generatedImageBase64 || null
       }))
@@ -1274,7 +1414,7 @@ export default function CreateConsignmentOrderPage() {
       for (const [baseName, variants] of variantGroups) {
         // Calcular precio promedio para el producto base
         const avgCost = variants.reduce((sum, v) => sum + v.unitCost, 0) / variants.length
-        const avgSellingPrice = variants.reduce((sum, v) => sum + (v.product.sellingPrice || v.unitCost * 1.15), 0) / variants.length
+        const avgSellingPrice = variants.reduce((sum, v) => sum + (v.product.sellingPrice || v.unitCost * 1.04), 0) / variants.length
 
         // Crear producto base con variantes
         const baseProduct = {
@@ -1293,7 +1433,7 @@ export default function CreateConsignmentOrderPage() {
             sku: v.product.sku || null,
             barcode: v.product.barcode || null,
             unitCost: v.unitCost,
-            sellingPrice: v.product.sellingPrice || v.unitCost * 1.15
+            sellingPrice: v.product.sellingPrice || v.unitCost * 1.04
           }))
         }
 
@@ -1494,6 +1634,82 @@ export default function CreateConsignmentOrderPage() {
       return false
     })
   }, [suppliers, supplierSearch])
+
+  // Check margin before submitting
+  const handleCheckMarginAndSubmit = useCallback(() => {
+    // Get all items that will be created as new products
+    const itemsToCheck = orderLines.filter(l => l.isNewProduct && l.productId < 0)
+
+    // Also check matched products that will be created
+    const matchedItemsToCheck = matchedProducts.filter(item => item.action === 'create_new')
+
+    const lowMargin: Array<{
+      name: string
+      costPrice: number
+      sellingPrice: number
+      margin: number
+      suggestedPrice: number
+    }> = []
+
+    // Check order lines
+    for (const line of itemsToCheck) {
+      const costPrice = line.unitCost
+      const sellingPrice = line.product.sellingPrice || costPrice * 1.04
+      const margin = calculateMargin(costPrice, sellingPrice)
+
+      if (isLowMargin(costPrice, sellingPrice, 40)) {
+        lowMargin.push({
+          name: line.product.name,
+          costPrice,
+          sellingPrice,
+          margin,
+          suggestedPrice: calculateHealthyPrice(costPrice)
+        })
+      }
+    }
+
+    // Check matched products that will become new products
+    for (const item of matchedItemsToCheck) {
+      const costPrice = item.unitCost
+      const sellingPrice = item.suggestedSellingPrice || costPrice * 1.04
+      const margin = calculateMargin(costPrice, sellingPrice)
+
+      if (isLowMargin(costPrice, sellingPrice, 40)) {
+        lowMargin.push({
+          name: item.name,
+          costPrice,
+          sellingPrice,
+          margin,
+          suggestedPrice: calculateHealthyPrice(costPrice)
+        })
+      }
+    }
+
+    if (lowMargin.length > 0) {
+      setLowMarginItems(lowMargin)
+      setPendingSaveAction(() => handleSubmitOrder)
+      setShowMarginWarning(true)
+    } else {
+      handleSubmitOrder()
+    }
+  }, [orderLines, matchedProducts, handleSubmitOrder])
+
+  // Handle margin warning confirmation - proceed with save
+  const handleMarginWarningConfirm = useCallback(() => {
+    setShowMarginWarning(false)
+    if (pendingSaveAction) {
+      pendingSaveAction()
+    }
+  }, [pendingSaveAction])
+
+  // Handle margin warning adjust - close modal and let user adjust prices
+  const handleMarginWarningAdjust = useCallback(() => {
+    setShowMarginWarning(false)
+    // Go back to products step if in review
+    if (currentStep === 'review') {
+      setCurrentStep('products')
+    }
+  }, [currentStep])
 
   return (
     
@@ -2135,7 +2351,7 @@ export default function CreateConsignmentOrderPage() {
                                         <span className={cn('absolute left-2 top-1/2 -translate-y-1/2 text-sm', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>$</span>
                                         <input
                                           type="number"
-                                          value={item.suggestedSellingPrice || Math.round(item.unitCost * 1.15 * 100) / 100}
+                                          value={item.suggestedSellingPrice || Math.round(item.unitCost * 1.04 * 100) / 100}
                                           onChange={(e) => handleUpdateMatchedProduct(item.id, 'suggestedSellingPrice', e.target.value)}
                                           disabled={item.action === 'ignore' || item.action === 'link_to'}
                                           min="0"
@@ -3073,7 +3289,7 @@ export default function CreateConsignmentOrderPage() {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={handleSubmitOrder}
+                    onClick={handleCheckMarginAndSubmit}
                     disabled={submitting}
                     className={cn(
                       "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
@@ -3534,8 +3750,31 @@ export default function CreateConsignmentOrderPage() {
             showOutOfStock={true}
             currency="USD"
           />
+
+          {/* Currency Detection Modal */}
+          <CurrencyDetectionModal
+            isOpen={showCurrencyModal}
+            onConfirm={(currency) => {
+              setShowCurrencyModal(false)
+              handleCurrencyConfirm(currency)
+            }}
+            detectedHints={pendingOcrData?.currencyHints}
+            total={pendingOcrData?.data.total || 0}
+            rates={{ USD_CUP, USD_MLC }}
+            ratesTimestamp={ratesTimestamp}
+          />
+
+          {/* Margin Warning Modal */}
+          <MarginWarningModal
+            isOpen={showMarginWarning}
+            onClose={() => setShowMarginWarning(false)}
+            onConfirm={handleMarginWarningConfirm}
+            onAdjustPrices={handleMarginWarningAdjust}
+            items={lowMarginItems}
+            recommendedMargin={40}
+          />
         </div>
-      
-    
+
+
   )
 }
