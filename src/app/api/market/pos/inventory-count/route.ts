@@ -504,7 +504,7 @@ export async function POST(request: NextRequest) {
           completed_at = NOW(),
           adjustment_operation_id = $2,
           auto_approved = $3,
-          approved_by = CASE WHEN $3 THEN $4 ELSE NULL END,
+          approved_by = CASE WHEN $3 THEN $4::integer ELSE NULL END,
           approved_at = CASE WHEN $3 THEN NOW() ELSE NULL END,
           updated_at = NOW()
         WHERE id = $5
