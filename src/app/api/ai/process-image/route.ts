@@ -137,7 +137,8 @@ export async function POST(request: NextRequest) {
           contentType = 'image/webp'
         }
 
-        // Obtener el siguiente índice disponible
+        // Obtener el siguiente índice disponible y subir en una sola operación
+        // Pasar el índice a uploadProductImageWithIndex para evitar doble llamada a getNextImageIndex
         const imageIndex = await getNextImageIndex(barcode)
         const isPrimary = imageIndex === 1
 
@@ -146,105 +147,47 @@ export async function POST(request: NextRequest) {
         const { url, path, index } = await uploadProductImageWithIndex(
           barcode,
           imageBuffer,
-          contentType
+          contentType,
+          imageIndex // Pasar índice para evitar recalcular
         )
 
-        // Asegurar que la tabla tiene las columnas necesarias (migración automática)
-        try {
-          await db.query(`ALTER TABLE product_images ADD COLUMN IF NOT EXISTS image_index INTEGER DEFAULT 1`)
-          await db.query(`ALTER TABLE product_images ADD COLUMN IF NOT EXISTS is_primary BOOLEAN DEFAULT false`)
-          // Eliminar constraint único antiguo (solo barcode) y crear nuevo (barcode + image_index)
-          try {
-            await db.query(`ALTER TABLE product_images DROP CONSTRAINT IF EXISTS product_images_barcode_key`)
-            await db.query(`ALTER TABLE product_images DROP CONSTRAINT IF EXISTS product_images_barcode_unique`)
-          } catch { /* constraint may not exist */ }
-          try {
-            await db.query(`
-              CREATE UNIQUE INDEX IF NOT EXISTS product_images_barcode_index_unique
-              ON product_images (barcode, image_index)
-            `)
-          } catch { /* index may already exist */ }
-        } catch (migrationError) {
-          console.log('[AI Process Image] Migration columns may already exist')
-        }
-
-        // Guardar en base de datos
-        // Intentar INSERT con UPSERT, si falla intentar INSERT simple
-        try {
-          // Primero intentar con ON CONFLICT usando el índice (barcode, image_index)
-          await db.query(`
-            INSERT INTO product_images (
-              barcode, image_index, storage_path, image_url, is_primary,
-              processed_with_ai, ai_model, content_type, file_size, created_by, company_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            ON CONFLICT (barcode, image_index) DO UPDATE SET
-              storage_path = EXCLUDED.storage_path,
-              image_url = EXCLUDED.image_url,
-              is_primary = EXCLUDED.is_primary,
-              processed_with_ai = true,
-              ai_model = EXCLUDED.ai_model,
-              updated_at = NOW()
-          `, [
-            barcode,
-            index,
-            path,
-            url,
-            isPrimary,
-            true,
-            'gemini-2.0-flash-exp',
-            contentType,
-            imageBuffer.length,
-            payload.userId,
-            payload.companyId
-          ])
-        } catch (dbError: any) {
-          console.log('[AI Process Image] First INSERT failed:', dbError.message)
-          // Si falla, puede ser por constraint antiguo - intentar INSERT simple con image_index
-          try {
-            await db.query(`
-              INSERT INTO product_images (
-                barcode, image_index, storage_path, image_url, is_primary,
-                processed_with_ai, ai_model, content_type, file_size, created_by, company_id
-              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            `, [
-              barcode,
-              index,
-              path,
-              url,
-              isPrimary,
-              true,
-              'gemini-2.0-flash-exp',
-              contentType,
-              imageBuffer.length,
-              payload.userId,
-              payload.companyId
-            ])
-          } catch (dbError2: any) {
-            console.log('[AI Process Image] Second INSERT failed:', dbError2.message)
-            // Último intento: INSERT mínimo sin image_index
-            await db.query(`
-              INSERT INTO product_images (
-                barcode, storage_path, image_url, processed_with_ai, ai_model,
-                content_type, file_size, created_by, company_id
-              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            `, [
-              barcode,
-              path,
-              url,
-              true,
-              'gemini-2.0-flash-exp',
-              contentType,
-              imageBuffer.length,
-              payload.userId,
-              payload.companyId
-            ])
-          }
-        }
+        // Guardar en base de datos - una sola query optimizada
+        // Usar INSERT simple que funciona con cualquier schema
+        await db.query(`
+          INSERT INTO product_images (
+            barcode, storage_path, image_url, processed_with_ai, ai_model,
+            content_type, file_size, created_by, company_id
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `, [
+          barcode,
+          path,
+          url,
+          true,
+          'gemini-2.0-flash-exp',
+          contentType,
+          imageBuffer.length,
+          payload.userId,
+          payload.companyId
+        ])
 
         savedImage = { url, path, index, isPrimary }
         console.log(`[AI Process Image] Saved to storage: ${url}, index: ${index}`)
       } catch (saveError: any) {
         console.error('[AI Process Image] Error saving image:', saveError)
+        // Si el error es de conexión, no fallar - devolver la imagen sin guardar en BD
+        if (saveError.message?.includes('MaxClients') || saveError.message?.includes('max clients')) {
+          console.log('[AI Process Image] DB connection issue - returning image without DB save')
+          // Devolver éxito parcial con la imagen generada pero sin guardar en BD
+          return NextResponse.json({
+            success: true,
+            action,
+            barcode: barcode || null,
+            data: {
+              imageBase64: `data:image/png;base64,${result.imageBase64}`,
+              warning: 'Imagen generada pero no se pudo guardar en la base de datos. Por favor intente guardarla manualmente.'
+            }
+          })
+        }
         // Devolver el error para que el frontend sepa que falló
         return NextResponse.json({
           success: false,
@@ -270,6 +213,8 @@ export async function POST(request: NextRequest) {
         response.data = {
           description: result.description,
           imageUrl: savedImage?.url || null,
+          // Si no se guardó, devolver base64 para preview
+          imageBase64: !savedImage && result.imageBase64 ? `data:image/png;base64,${result.imageBase64}` : null,
           wasProcessed: !!result.imageBase64
         }
         break
