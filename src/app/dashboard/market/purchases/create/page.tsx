@@ -609,13 +609,14 @@ export default function CreatePurchasePage() {
         console.log('[Purchase AI] Items count:', data.data.items?.length || 0)
         console.log('[Purchase AI] Currency detection:', data.data.detectedCurrency, data.data.currencyConfidence, data.data.currencyHints)
 
-        // Check if currency was detected
+        // Check if currency was detected with sufficient confidence
         const detectedCurrency = data.data.detectedCurrency as SupportedCurrency | null
+        const currencyConfidence = data.data.currencyConfidence || 0
         const currencyHints = data.data.currencyHints
 
-        if (detectedCurrency === null) {
-          // Currency not detected - show modal to ask user
-          console.log('[Purchase AI] Currency not detected, showing modal')
+        // If currency not detected or low confidence, show modal to ask user
+        if (!detectedCurrency || currencyConfidence < 0.7) {
+          console.log('[Purchase AI] Currency not detected or low confidence:', { detectedCurrency, currencyConfidence })
           setPendingOcrData({
             data: data.data,
             detectedCurrency: null,
