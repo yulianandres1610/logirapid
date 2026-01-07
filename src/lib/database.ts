@@ -3,7 +3,12 @@ import { Pool } from 'pg';
 // Configuración de conexión a PostgreSQL (Supabase)
 // IMPORTANTE: Usar DATABASE_URL_TRANSACTION (puerto 6543) para Transaction mode
 // Transaction mode permite más conexiones concurrentes que Session mode
-const connectionString = process.env.DATABASE_URL_TRANSACTION || process.env.DATABASE_URL;
+let connectionString = process.env.DATABASE_URL_TRANSACTION || process.env.DATABASE_URL;
+
+// Remover sslmode de la URL si existe - lo manejamos en la configuración del pool
+if (connectionString) {
+  connectionString = connectionString.replace(/[?&]sslmode=[^&]*/g, '').replace(/\?$/, '');
+}
 
 // Lazy initialization to avoid build-time errors
 let pool: Pool | null = null;

@@ -172,6 +172,7 @@ interface MatchedItem extends ScannedItem {
   generatedDescription?: string
   isGeneratingImage?: boolean
   isCleaningImage?: boolean
+  isAutoCompleting?: boolean
   // Campos editables para productos nuevos
   editableDescription?: string
   editableCategoryId?: number
@@ -987,6 +988,67 @@ export default function CreatePurchasePage() {
       ))
     }
   }, [matchedProducts])
+
+  // Auto-complete product fields with AI (description and category)
+  const autoCompleteWithAI = useCallback(async (itemId: string) => {
+    const item = matchedProducts.find(p => p.id === itemId)
+    if (!item) return
+
+    // Mark as auto-completing
+    setMatchedProducts(prev => prev.map(p =>
+      p.id === itemId ? { ...p, isAutoCompleting: true } : p
+    ))
+
+    try {
+      console.log('[Purchase] Auto-completing with AI for:', item.name)
+
+      const response = await fetch('/api/ai/product-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productName: item.name
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.data) {
+        console.log('[Purchase] AI suggestion received:', data.data)
+
+        // Find matching category by name
+        let categoryId: number | undefined = undefined
+        if (data.data.category) {
+          const matchedCat = categories.find(c =>
+            c.name.toLowerCase().includes(data.data.category.toLowerCase()) ||
+            data.data.category.toLowerCase().includes(c.name.toLowerCase())
+          )
+          if (matchedCat) {
+            categoryId = matchedCat.id
+          }
+        }
+
+        setMatchedProducts(prev => prev.map(p =>
+          p.id === itemId ? {
+            ...p,
+            editableDescription: data.data.description || p.editableDescription,
+            editableCategoryId: categoryId || p.editableCategoryId,
+            editableCategoryName: categoryId ? categories.find(c => c.id === categoryId)?.name : p.editableCategoryName,
+            isAutoCompleting: false
+          } : p
+        ))
+      } else {
+        console.error('[Purchase] AI suggestion failed:', data.error)
+        setMatchedProducts(prev => prev.map(p =>
+          p.id === itemId ? { ...p, isAutoCompleting: false } : p
+        ))
+      }
+    } catch (error) {
+      console.error('[Purchase] Error auto-completing with AI:', error)
+      setMatchedProducts(prev => prev.map(p =>
+        p.id === itemId ? { ...p, isAutoCompleting: false } : p
+      ))
+    }
+  }, [matchedProducts, categories])
 
   // Search products for linking
   useEffect(() => {
@@ -2794,10 +2856,30 @@ export default function CreatePurchasePage() {
                                     )}>
                                       {/* Descripcion */}
                                       <div className="sm:col-span-2">
-                                        <label className={cn('text-xs font-medium flex items-center gap-1 mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                                          <AlignLeft className="w-3 h-3" />
-                                          Descripcion
-                                        </label>
+                                        <div className="flex items-center justify-between mb-1">
+                                          <label className={cn('text-xs font-medium flex items-center gap-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                            <AlignLeft className="w-3 h-3" />
+                                            Descripcion
+                                          </label>
+                                          <button
+                                            onClick={() => autoCompleteWithAI(item.id)}
+                                            disabled={item.isAutoCompleting}
+                                            className={cn(
+                                              'p-1 px-2 rounded-md text-xs flex items-center gap-1 transition-colors',
+                                              item.isAutoCompleting
+                                                ? 'bg-purple-500/20 text-purple-400 cursor-wait'
+                                                : 'bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 hover:text-purple-400'
+                                            )}
+                                            title="Auto-completar descripcion y categoria con IA"
+                                          >
+                                            {item.isAutoCompleting ? (
+                                              <Loader2 className="w-3 h-3 animate-spin" />
+                                            ) : (
+                                              <Sparkles className="w-3 h-3" />
+                                            )}
+                                            <span>Auto IA</span>
+                                          </button>
+                                        </div>
                                         <textarea
                                           value={item.editableDescription || item.generatedDescription || ''}
                                           onChange={(e) => handleUpdateMatchedProduct(item.id, 'editableDescription', e.target.value)}
