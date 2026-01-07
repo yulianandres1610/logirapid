@@ -43,8 +43,9 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
-    // Get user from database
-    const result = await db.query(`
+    // Get user from database (with 30s cache)
+    const cacheKey = `user_me_${payload.userId}`
+    const result = await db.queryCached(cacheKey, `
       SELECT
         u.id,
         u.firstname as "firstName",

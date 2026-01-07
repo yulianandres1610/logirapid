@@ -44,8 +44,10 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
-    // Verificar que el usuario existe en la base de datos
-    const result = await db.query(
+    // Verificar que el usuario existe en la base de datos (con caché de 30s)
+    const cacheKey = `user_session_${payload.userId}`
+    const result = await db.queryCached(
+      cacheKey,
       'SELECT id, email, status, isactive FROM users WHERE id = $1',
       [payload.userId]
     )

@@ -1,10 +1,38 @@
 import { Pool } from 'pg';
 
 // Configuración de conexión a PostgreSQL (Supabase)
-const connectionString = process.env.DATABASE_URL;
+// IMPORTANTE: Usar DATABASE_URL_TRANSACTION (puerto 6543) para Transaction mode
+// Transaction mode permite más conexiones concurrentes que Session mode
+const connectionString = process.env.DATABASE_URL_TRANSACTION || process.env.DATABASE_URL;
 
 // Lazy initialization to avoid build-time errors
 let pool: Pool | null = null;
+
+// Simple in-memory cache for frequently accessed data
+const queryCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 30000; // 30 seconds cache
+
+function getCachedResult(key: string): any | null {
+  const cached = queryCache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+  queryCache.delete(key);
+  return null;
+}
+
+function setCachedResult(key: string, data: any): void {
+  // Limit cache size to prevent memory issues
+  if (queryCache.size > 1000) {
+    // Clear oldest entries
+    const entries = Array.from(queryCache.entries());
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+    for (let i = 0; i < 500; i++) {
+      queryCache.delete(entries[i][0]);
+    }
+  }
+  queryCache.set(key, { data, timestamp: Date.now() });
+}
 
 function getPool(): Pool {
   if (!connectionString) {
@@ -12,22 +40,26 @@ function getPool(): Pool {
   }
 
   if (!pool) {
-    // Para serverless (Vercel), usar pool mínimo ya que cada instancia crea su propio pool
-    // Supabase en modo Session tiene límite estricto de conexiones (pool_size del servidor)
-    // IMPORTANTE: Usar pool_size=1 para evitar MaxClientsInSessionMode
+    // Para serverless (Vercel), usar pool mínimo
+    // RECOMENDACIÓN: Usar DATABASE_URL_TRANSACTION (puerto 6543) para Transaction mode
+    // Transaction mode libera conexiones inmediatamente después de cada query
+    const isTransactionMode = connectionString.includes(':6543');
+
+    console.log(`[DB] Initializing pool - Mode: ${isTransactionMode ? 'TRANSACTION' : 'SESSION'}`);
+
     pool = new Pool({
       connectionString,
       ssl: {
         rejectUnauthorized: false
       },
-      max: 2, // Mínimo posible para serverless - evita MaxClientsInSessionMode
-      min: 0, // No mantener conexiones idle en serverless
-      idleTimeoutMillis: 5000, // Liberar conexiones idle MUY rápidamente
-      connectionTimeoutMillis: 15000, // Más tiempo para esperar conexión disponible
+      // Transaction mode permite más conexiones, Session mode necesita menos
+      max: isTransactionMode ? 5 : 1,
+      min: 0,
+      idleTimeoutMillis: isTransactionMode ? 10000 : 1000, // Liberar muy rápido en Session mode
+      connectionTimeoutMillis: 20000, // Más tiempo para esperar
       query_timeout: 30000,
       statement_timeout: 30000,
-      keepAlive: false, // No keepalive en serverless
-      // Permitir que las conexiones se cierren cuando no hay queries
+      keepAlive: false,
       allowExitOnIdle: true,
     });
 
@@ -76,6 +108,31 @@ class DatabaseWrapper {
   // Get a dedicated client from the pool for transactions
   async getClient() {
     return await getPool().connect()
+  }
+
+  /**
+   * Query with caching - use for frequently accessed, rarely changing data
+   * @param cacheKey - Unique key for this query result
+   * @param text - SQL query
+   * @param params - Query parameters
+   * @param ttl - Cache TTL in ms (default 30s)
+   */
+  async queryCached(cacheKey: string, text: string, params?: any[], ttl: number = CACHE_TTL) {
+    // Check cache first
+    const cached = getCachedResult(cacheKey);
+    if (cached) {
+      console.log(`[DB] Cache HIT for: ${cacheKey}`);
+      return cached;
+    }
+
+    // Execute query
+    const result = await this.query(text, params);
+
+    // Cache result
+    setCachedResult(cacheKey, result);
+    console.log(`[DB] Cache MISS, stored: ${cacheKey}`);
+
+    return result;
   }
 
   async query(text: string, params?: any[], retries = 3) {
