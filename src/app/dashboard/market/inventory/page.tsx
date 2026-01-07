@@ -102,11 +102,6 @@ export default function MarketInventoryPage() {
   // USD_CUP = ElToque (costo), USD_CUP_BCC = Banco Central (venta)
   const { USD_CUP, USD_CUP_BCC, USD_MLC } = useMarketExchangeRates()
 
-  // Debug: Log exchange rates
-  useEffect(() => {
-    console.log('[Inventory] Tasas de cambio:', { USD_CUP, USD_CUP_BCC, USD_MLC })
-  }, [USD_CUP, USD_CUP_BCC, USD_MLC])
-
   useEffect(() => {
     fetchProducts()
   }, [pagination.page, selectedCategory, stockFilter])
