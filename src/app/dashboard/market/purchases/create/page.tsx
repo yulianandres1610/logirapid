@@ -35,7 +35,13 @@ import {
   Users,
   Wand2,
   ImageIcon,
-  DollarSign
+  DollarSign,
+  ChevronDown,
+  ChevronUp,
+  Barcode,
+  Tag,
+  FileCode,
+  AlignLeft
 } from 'lucide-react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import Link from 'next/link'
@@ -166,6 +172,14 @@ interface MatchedItem extends ScannedItem {
   generatedDescription?: string
   isGeneratingImage?: boolean
   isCleaningImage?: boolean
+  // Campos editables para productos nuevos
+  editableDescription?: string
+  editableCategoryId?: number
+  editableCategoryName?: string
+  editableBarcode?: string
+  editableSku?: string
+  // Control de UI expandido
+  isExpanded?: boolean
 }
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -308,6 +322,7 @@ export default function CreatePurchasePage() {
   // Step: Supplier & Warehouse (same as consignments)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [warehouses, setWarehouses] = useState<{ id: number; code: string; name: string }[]>([])
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>([])
   const [loadingSuppliers, setLoadingSuppliers] = useState(true)
   const [supplierSearch, setSupplierSearch] = useState('')
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
@@ -344,14 +359,15 @@ export default function CreatePurchasePage() {
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
 
-  // Load suppliers and warehouses on mount (same as consignments)
+  // Load suppliers, warehouses and categories on mount (same as consignments)
   useEffect(() => {
     const fetchData = async () => {
       setLoadingSuppliers(true)
       try {
-        const [suppliersRes, warehousesRes] = await Promise.all([
+        const [suppliersRes, warehousesRes, categoriesRes] = await Promise.all([
           fetch('/api/market/suppliers?limit=100'),
-          fetch('/api/market/warehouses')
+          fetch('/api/market/warehouses'),
+          fetch('/api/market/categories')
         ])
 
         if (suppliersRes.ok) {
@@ -380,6 +396,13 @@ export default function CreatePurchasePage() {
         if (warehousesRes.ok) {
           const data = await warehousesRes.json()
           if (data.success) setWarehouses(data.data.warehouses || data.data || [])
+        }
+
+        if (categoriesRes.ok) {
+          const data = await categoriesRes.json()
+          if (data.success) {
+            setCategories(data.data.categories || data.data || [])
+          }
         }
       } catch (error) {
         console.error('Error loading data:', error)
@@ -800,17 +823,17 @@ export default function CreatePurchasePage() {
   // Update matched product fields (name, unitCost, suggestedSellingPrice)
   const handleUpdateMatchedProduct = useCallback((
     itemId: string,
-    field: 'name' | 'unitCost' | 'suggestedSellingPrice' | 'quantity',
-    value: string | number
+    field: 'name' | 'unitCost' | 'suggestedSellingPrice' | 'quantity' | 'editableDescription' | 'editableBarcode' | 'editableSku' | 'editableCategoryId' | 'isExpanded',
+    value: string | number | boolean
   ) => {
     setMatchedProducts(prev => prev.map(item => {
       if (item.id === itemId) {
         if (field === 'name') {
           return { ...item, name: value as string }
         } else if (field === 'unitCost') {
-          const newCost = typeof value === 'string' ? parseFloat(value) || 0 : value
+          const newCost = typeof value === 'string' ? parseFloat(value) || 0 : value as number
           const newTotal = newCost * item.quantity
-          // Recalcular precio de venta sugerido (4% arriba del nuevo costo)
+          // Recalcular precio de venta sugerido (40% arriba del nuevo costo)
           const newSellingPrice = Math.round(newCost * 1.40 * 100) / 100
           return {
             ...item,
@@ -819,17 +842,29 @@ export default function CreatePurchasePage() {
             suggestedSellingPrice: newSellingPrice
           }
         } else if (field === 'suggestedSellingPrice') {
-          const newPrice = typeof value === 'string' ? parseFloat(value) || 0 : value
+          const newPrice = typeof value === 'string' ? parseFloat(value) || 0 : value as number
           return { ...item, suggestedSellingPrice: newPrice }
         } else if (field === 'quantity') {
-          const newQty = typeof value === 'string' ? parseFloat(value) || 0 : value
+          const newQty = typeof value === 'string' ? parseFloat(value) || 0 : value as number
           const newTotal = item.unitCost * newQty
           return { ...item, quantity: newQty, totalCost: newTotal }
+        } else if (field === 'editableDescription') {
+          return { ...item, editableDescription: value as string }
+        } else if (field === 'editableBarcode') {
+          return { ...item, editableBarcode: value as string }
+        } else if (field === 'editableSku') {
+          return { ...item, editableSku: value as string }
+        } else if (field === 'editableCategoryId') {
+          const catId = typeof value === 'string' ? parseInt(value) || undefined : value as number
+          const category = categories.find(c => c.id === catId)
+          return { ...item, editableCategoryId: catId, editableCategoryName: category?.name }
+        } else if (field === 'isExpanded') {
+          return { ...item, isExpanded: value as boolean }
         }
       }
       return item
     }))
-  }, [])
+  }, [categories])
 
   // Generate image and description with AI for a product
   const generateImageWithAI = useCallback(async (itemId: string) => {
@@ -2671,9 +2706,10 @@ export default function CreatePurchasePage() {
                                       </div>
                                     </div>
                                   </div>
-                                  {item.generatedDescription && (
+                                  {/* Descripcion (generada o editable) */}
+                                  {(item.generatedDescription || item.editableDescription) && (
                                     <p className={cn('text-xs truncate', theme === 'dark' ? 'text-purple-400' : 'text-purple-600')}>
-                                      {item.generatedDescription}
+                                      {item.editableDescription || item.generatedDescription}
                                     </p>
                                   )}
                                 </div>
@@ -2690,6 +2726,19 @@ export default function CreatePurchasePage() {
                                       total
                                     </span>
                                   </div>
+                                  {/* Expand button */}
+                                  <button
+                                    onClick={() => handleUpdateMatchedProduct(item.id, 'isExpanded', !item.isExpanded)}
+                                    disabled={item.action === 'ignore'}
+                                    className={cn(
+                                      'p-2 rounded-lg transition-colors',
+                                      item.isExpanded ? 'text-blue-500 bg-blue-500/10' : 'text-gray-400 hover:text-blue-500 hover:bg-blue-500/10',
+                                      item.action === 'ignore' && 'opacity-50 cursor-not-allowed'
+                                    )}
+                                    title={item.isExpanded ? 'Contraer detalles' : 'Expandir detalles'}
+                                  >
+                                    {item.isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                  </button>
                                   {/* Link button */}
                                   <button
                                     onClick={() => {
@@ -2728,6 +2777,119 @@ export default function CreatePurchasePage() {
                                   </button>
                                 </div>
                               </div>
+
+                              {/* Expanded form for new product details */}
+                              <AnimatePresence>
+                                {item.isExpanded && item.action !== 'ignore' && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="overflow-hidden"
+                                  >
+                                    <div className={cn(
+                                      'mt-3 pt-3 border-t grid grid-cols-1 sm:grid-cols-2 gap-3',
+                                      theme === 'dark' ? 'border-blue-800/50' : 'border-blue-200'
+                                    )}>
+                                      {/* Descripcion */}
+                                      <div className="sm:col-span-2">
+                                        <label className={cn('text-xs font-medium flex items-center gap-1 mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                          <AlignLeft className="w-3 h-3" />
+                                          Descripcion
+                                        </label>
+                                        <textarea
+                                          value={item.editableDescription || item.generatedDescription || ''}
+                                          onChange={(e) => handleUpdateMatchedProduct(item.id, 'editableDescription', e.target.value)}
+                                          placeholder="Descripcion del producto..."
+                                          rows={2}
+                                          className={cn(
+                                            'w-full px-3 py-2 rounded-lg text-sm border resize-none',
+                                            theme === 'dark'
+                                              ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500'
+                                              : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                          )}
+                                        />
+                                      </div>
+                                      {/* Categoria */}
+                                      <div>
+                                        <label className={cn('text-xs font-medium flex items-center gap-1 mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                          <Tag className="w-3 h-3" />
+                                          Categoria
+                                        </label>
+                                        <select
+                                          value={item.editableCategoryId || ''}
+                                          onChange={(e) => handleUpdateMatchedProduct(item.id, 'editableCategoryId', e.target.value)}
+                                          className={cn(
+                                            'w-full px-3 py-2 rounded-lg text-sm border',
+                                            theme === 'dark'
+                                              ? 'bg-gray-800 border-gray-700 text-white'
+                                              : 'bg-white border-gray-300 text-gray-900'
+                                          )}
+                                        >
+                                          <option value="">Sin categoria</option>
+                                          {categories.map(cat => (
+                                            <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                      {/* Codigo de barras */}
+                                      <div>
+                                        <label className={cn('text-xs font-medium flex items-center gap-1 mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                          <Barcode className="w-3 h-3" />
+                                          Codigo de Barras
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={item.editableBarcode || item.barcode || ''}
+                                          onChange={(e) => handleUpdateMatchedProduct(item.id, 'editableBarcode', e.target.value)}
+                                          placeholder="Escanear o escribir..."
+                                          className={cn(
+                                            'w-full px-3 py-2 rounded-lg text-sm border',
+                                            theme === 'dark'
+                                              ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500'
+                                              : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                          )}
+                                        />
+                                      </div>
+                                      {/* SKU */}
+                                      <div>
+                                        <label className={cn('text-xs font-medium flex items-center gap-1 mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                          <FileCode className="w-3 h-3" />
+                                          SKU
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={item.editableSku || item.sku || ''}
+                                          onChange={(e) => handleUpdateMatchedProduct(item.id, 'editableSku', e.target.value)}
+                                          placeholder="Codigo interno..."
+                                          className={cn(
+                                            'w-full px-3 py-2 rounded-lg text-sm border',
+                                            theme === 'dark'
+                                              ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500'
+                                              : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                          )}
+                                        />
+                                      </div>
+                                      {/* Unidad de medida (readonly info) */}
+                                      <div>
+                                        <label className={cn('text-xs font-medium flex items-center gap-1 mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                          <Package className="w-3 h-3" />
+                                          Unidad de Medida
+                                        </label>
+                                        <div className={cn(
+                                          'w-full px-3 py-2 rounded-lg text-sm border',
+                                          theme === 'dark'
+                                            ? 'bg-gray-800/50 border-gray-700 text-gray-400'
+                                            : 'bg-gray-50 border-gray-200 text-gray-600'
+                                        )}>
+                                          {item.unitOfMeasure || 'unidad'}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                               {/* Suggested matches */}
                               {item.action !== 'ignore' && item.action !== 'link_to' && item.suggestedMatches.length > 0 && (
                                 <div className={cn(
