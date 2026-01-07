@@ -119,6 +119,7 @@ export default function CreateProductPage() {
     imageUrl?: string | null
   } | null>(null)
   const [showAiSuggestion, setShowAiSuggestion] = useState(false)
+  const [generatingDescription, setGeneratingDescription] = useState(false)
 
   // Barcode image lookup states - soporta múltiples imágenes por barcode
   interface ExistingImageItem {
@@ -223,6 +224,41 @@ export default function CreateProductPage() {
   const applyAiDescription = () => {
     if (aiSuggestion?.description) {
       setFormData(prev => ({ ...prev, description: aiSuggestion.description }))
+    }
+  }
+
+  // Generar descripción directamente con IA
+  const generateDescriptionWithAI = async () => {
+    if (!formData.name.trim() || formData.name.trim().length < 2) {
+      return
+    }
+
+    setGeneratingDescription(true)
+
+    try {
+      const response = await fetch('/api/ai/product-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productName: formData.name.trim() })
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.data?.description) {
+        setFormData(prev => ({ ...prev, description: data.data.description }))
+        // También guardar la sugerencia completa por si quiere usarla después
+        setAiSuggestion({
+          category: data.data.category,
+          description: data.data.description,
+          imageUrl: data.data.imageUrl || null
+        })
+      } else {
+        console.error('AI Description error:', data.error)
+      }
+    } catch (error) {
+      console.error('AI Description fetch error:', error)
+    } finally {
+      setGeneratingDescription(false)
     }
   }
 
@@ -570,16 +606,34 @@ export default function CreateProductPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
+      // Validar tamaño
       if (file.size > 5 * 1024 * 1024) {
         setErrors({ ...errors, image: 'El archivo es muy grande (máx. 5MB)' })
         return
       }
+
+      // Validar tipo de archivo
+      const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif']
+      if (!allowedTypes.includes(file.type)) {
+        setErrors({ ...errors, image: 'Tipo de archivo no permitido. Solo se aceptan PNG, JPG, WEBP y GIF' })
+        return
+      }
+
+      // Crear URL del objeto y actualizar estado
+      const objectUrl = URL.createObjectURL(file)
+      console.log('[Image Upload] File selected:', { name: file.name, type: file.type, size: file.size, url: objectUrl })
+
       setFormData(prev => ({
         ...prev,
         imageFile: file,
-        imageUrl: URL.createObjectURL(file)
+        imageUrl: objectUrl
       }))
       setErrors({ ...errors, image: '' })
+
+      // Limpiar imágenes existentes si las había
+      setExistingImages([])
+      setSelectedExistingImage(null)
+      setUseExistingImage(false)
     }
   }
 
@@ -627,6 +681,8 @@ export default function CreateProductPage() {
     if (!formData.imageFile) return null
 
     setUploadingImage(true)
+    console.log('[Image Upload] Starting upload to server...')
+
     try {
       const uploadFormData = new FormData()
       uploadFormData.append('file', formData.imageFile)
@@ -637,14 +693,19 @@ export default function CreateProductPage() {
         body: uploadFormData
       })
 
+      const data = await response.json()
+
       if (!response.ok) {
-        throw new Error('Error uploading image')
+        console.error('[Image Upload] Server error:', data)
+        setErrors(prev => ({ ...prev, image: data.error || 'Error al subir la imagen' }))
+        return null
       }
 
-      const data = await response.json()
+      console.log('[Image Upload] Upload successful:', data.url)
       return data.url || null
-    } catch (error) {
-      console.error('Error uploading image:', error)
+    } catch (error: any) {
+      console.error('[Image Upload] Error:', error)
+      setErrors(prev => ({ ...prev, image: error.message || 'Error al subir la imagen' }))
       return null
     } finally {
       setUploadingImage(false)
@@ -1310,16 +1371,44 @@ export default function CreateProductPage() {
                       </div>
 
                       <div className="md:col-span-2">
-                        <label className={cn(
-                          "block text-sm font-medium mb-2",
-                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                        )}>
-                          Descripción
-                        </label>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className={cn(
+                            "block text-sm font-medium",
+                            theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                          )}>
+                            Descripción
+                          </label>
+                          <motion.button
+                            type="button"
+                            onClick={generateDescriptionWithAI}
+                            disabled={generatingDescription || !formData.name.trim() || formData.name.trim().length < 2}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className={cn(
+                              "px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5",
+                              "disabled:opacity-50 disabled:cursor-not-allowed",
+                              theme === 'dark'
+                                ? 'bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white shadow-lg shadow-violet-500/25'
+                                : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-lg shadow-violet-400/25'
+                            )}
+                          >
+                            {generatingDescription ? (
+                              <>
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                Generando...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-3 h-3" />
+                                Generar con IA
+                              </>
+                            )}
+                          </motion.button>
+                        </div>
                         <textarea
                           value={formData.description}
                           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                          placeholder="Describe el producto..."
+                          placeholder="Describe el producto o usa el botón de IA para generar automáticamente..."
                           rows={3}
                           className={cn(
                             'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all resize-none',
@@ -1328,6 +1417,14 @@ export default function CreateProductPage() {
                               : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
                           )}
                         />
+                        {!formData.name.trim() && (
+                          <p className={cn(
+                            "text-xs mt-1",
+                            theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                          )}>
+                            Ingresa el nombre del producto para usar la generación con IA
+                          </p>
+                        )}
                       </div>
 
                       <div>
@@ -1633,12 +1730,24 @@ export default function CreateProductPage() {
                                 src={formData.imageUrl}
                                 alt="Preview"
                                 className="max-w-xs max-h-48 rounded-xl mx-auto object-contain shadow-lg"
+                                onError={(e) => {
+                                  console.error('[Image Preview] Error loading image:', formData.imageUrl)
+                                  setErrors(prev => ({ ...prev, image: 'Error al cargar la vista previa de la imagen' }))
+                                }}
+                                onLoad={() => {
+                                  console.log('[Image Preview] Image loaded successfully')
+                                  setErrors(prev => ({ ...prev, image: '' }))
+                                }}
                               />
                               <motion.button
                                 whileHover={{ scale: 1.1 }}
                                 whileTap={{ scale: 0.9 }}
                                 onClick={(e) => {
                                   e.stopPropagation()
+                                  // Revocar blob URL si existe para liberar memoria
+                                  if (formData.imageUrl.startsWith('blob:')) {
+                                    URL.revokeObjectURL(formData.imageUrl)
+                                  }
                                   setFormData({ ...formData, imageUrl: '', imageFile: null })
                                   setUseExistingImage(false)
                                 }}

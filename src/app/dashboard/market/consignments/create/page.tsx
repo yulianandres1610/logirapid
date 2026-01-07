@@ -172,6 +172,7 @@ interface MatchedItem extends ScannedItem {
   generatedDescription?: string
   isGeneratingImage?: boolean
   isCleaningImage?: boolean
+  isAutoCompleting?: boolean
   // Campos editables para productos nuevos
   editableDescription?: string
   editableCategoryId?: number
@@ -960,6 +961,127 @@ export default function CreateConsignmentOrderPage() {
       ))
     }
   }, [matchedProducts])
+
+  // Auto-complete product fields with AI (description and category)
+  const autoCompleteWithAI = useCallback(async (itemId: string) => {
+    const item = matchedProducts.find(p => p.id === itemId)
+    if (!item) return
+
+    // Mark as auto-completing
+    setMatchedProducts(prev => prev.map(p =>
+      p.id === itemId ? { ...p, isAutoCompleting: true } : p
+    ))
+
+    try {
+      console.log('[Consignment] Auto-completing with AI for:', item.name)
+
+      const response = await fetch('/api/ai/product-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productName: item.name
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.data) {
+        console.log('[Consignment] AI suggestion received:', data.data)
+
+        // Find matching category by name
+        let categoryId: number | undefined = undefined
+        if (data.data.category) {
+          const matchedCat = categories.find(c =>
+            c.name.toLowerCase().includes(data.data.category.toLowerCase()) ||
+            data.data.category.toLowerCase().includes(c.name.toLowerCase())
+          )
+          if (matchedCat) {
+            categoryId = matchedCat.id
+          }
+        }
+
+        setMatchedProducts(prev => prev.map(p =>
+          p.id === itemId ? {
+            ...p,
+            editableDescription: data.data.description || p.editableDescription,
+            editableCategoryId: categoryId || p.editableCategoryId,
+            editableCategoryName: categoryId ? categories.find(c => c.id === categoryId)?.name : p.editableCategoryName,
+            isAutoCompleting: false
+          } : p
+        ))
+      } else {
+        console.error('[Consignment] AI suggestion failed:', data.error)
+        setMatchedProducts(prev => prev.map(p =>
+          p.id === itemId ? { ...p, isAutoCompleting: false } : p
+        ))
+      }
+    } catch (error) {
+      console.error('[Consignment] Error auto-completing with AI:', error)
+      setMatchedProducts(prev => prev.map(p =>
+        p.id === itemId ? { ...p, isAutoCompleting: false } : p
+      ))
+    }
+  }, [matchedProducts, categories])
+
+  // Auto-complete ALL new products with AI
+  const [isAutoCompletingAll, setIsAutoCompletingAll] = useState(false)
+  const autoCompleteAllWithAI = useCallback(async () => {
+    const newProducts = matchedProducts.filter(p => p.action === 'create_new' && !p.editableDescription && !p.generatedDescription)
+    if (newProducts.length === 0) return
+
+    setIsAutoCompletingAll(true)
+    console.log('[Consignment] Auto-completing', newProducts.length, 'products with AI')
+
+    for (const item of newProducts) {
+      try {
+        setMatchedProducts(prev => prev.map(p =>
+          p.id === item.id ? { ...p, isAutoCompleting: true } : p
+        ))
+
+        const response = await fetch('/api/ai/product-suggest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productName: item.name })
+        })
+
+        const data = await response.json()
+
+        if (data.success && data.data) {
+          let categoryId: number | undefined = undefined
+          if (data.data.category) {
+            const matchedCat = categories.find(c =>
+              c.name.toLowerCase().includes(data.data.category.toLowerCase()) ||
+              data.data.category.toLowerCase().includes(c.name.toLowerCase())
+            )
+            if (matchedCat) {
+              categoryId = matchedCat.id
+            }
+          }
+
+          setMatchedProducts(prev => prev.map(p =>
+            p.id === item.id ? {
+              ...p,
+              editableDescription: data.data.description || p.editableDescription,
+              editableCategoryId: categoryId || p.editableCategoryId,
+              editableCategoryName: categoryId ? categories.find(c => c.id === categoryId)?.name : p.editableCategoryName,
+              isAutoCompleting: false
+            } : p
+          ))
+        } else {
+          setMatchedProducts(prev => prev.map(p =>
+            p.id === item.id ? { ...p, isAutoCompleting: false } : p
+          ))
+        }
+      } catch (error) {
+        console.error('[Consignment] Error auto-completing:', error)
+        setMatchedProducts(prev => prev.map(p =>
+          p.id === item.id ? { ...p, isAutoCompleting: false } : p
+        ))
+      }
+    }
+
+    setIsAutoCompletingAll(false)
+  }, [matchedProducts, categories])
 
   // Generate images for all new products
   const [isGeneratingAllImages, setIsGeneratingAllImages] = useState(false)
@@ -2218,34 +2340,62 @@ export default function CreateConsignmentOrderPage() {
 
                     {matchedProducts.filter(p => p.matchType === 'none').length > 0 && (
                       <div>
-                        <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                           <h3 className={cn("font-bold flex items-center gap-2", theme === 'dark' ? 'text-blue-400' : 'text-blue-600')}>
                             <Package className="w-5 h-5" />Productos Nuevos ({matchedProducts.filter(p => p.matchType === 'none').length})
                           </h3>
-                          {matchedProducts.filter(p => p.action === 'create_new' && !p.generatedImageBase64).length > 0 && (
-                            <button
-                              onClick={generateAllImages}
-                              disabled={isGeneratingAllImages}
-                              className={cn(
-                                'px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors',
-                                theme === 'dark'
-                                  ? 'bg-purple-600 hover:bg-purple-700 text-white disabled:bg-purple-800'
-                                  : 'bg-purple-500 hover:bg-purple-600 text-white disabled:bg-purple-300'
-                              )}
-                            >
-                              {isGeneratingAllImages ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                  Generando...
-                                </>
-                              ) : (
-                                <>
-                                  <Wand2 className="w-4 h-4" />
-                                  Generar todas las imagenes
-                                </>
-                              )}
-                            </button>
-                          )}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {/* Botón para autocompletar todas las descripciones */}
+                            {matchedProducts.filter(p => p.action === 'create_new' && !p.editableDescription && !p.generatedDescription).length > 0 && (
+                              <button
+                                onClick={autoCompleteAllWithAI}
+                                disabled={isAutoCompletingAll}
+                                className={cn(
+                                  'px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors',
+                                  theme === 'dark'
+                                    ? 'bg-violet-600 hover:bg-violet-700 text-white disabled:bg-violet-800'
+                                    : 'bg-violet-500 hover:bg-violet-600 text-white disabled:bg-violet-300'
+                                )}
+                              >
+                                {isAutoCompletingAll ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Generando...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Brain className="w-4 h-4" />
+                                    Autocompletar descripciones
+                                  </>
+                                )}
+                              </button>
+                            )}
+                            {/* Botón para generar todas las imágenes */}
+                            {matchedProducts.filter(p => p.action === 'create_new' && !p.generatedImageBase64).length > 0 && (
+                              <button
+                                onClick={generateAllImages}
+                                disabled={isGeneratingAllImages}
+                                className={cn(
+                                  'px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors',
+                                  theme === 'dark'
+                                    ? 'bg-purple-600 hover:bg-purple-700 text-white disabled:bg-purple-800'
+                                    : 'bg-purple-500 hover:bg-purple-600 text-white disabled:bg-purple-300'
+                                )}
+                              >
+                                {isGeneratingAllImages ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Generando...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Wand2 className="w-4 h-4" />
+                                    Generar imagenes
+                                  </>
+                                )}
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <div className="space-y-3">
                           {matchedProducts.filter(p => p.matchType === 'none').map((item) => (
@@ -2414,6 +2564,25 @@ export default function CreateConsignmentOrderPage() {
                                     <span className={cn('font-bold block', theme === 'dark' ? 'text-white' : 'text-gray-900')}>${item.totalCost.toFixed(2)}</span>
                                     <span className={cn('text-xs', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>total</span>
                                   </div>
+                                  {/* Auto IA button - Visible sin expandir */}
+                                  <button
+                                    onClick={() => autoCompleteWithAI(item.id)}
+                                    disabled={item.isAutoCompleting || item.action === 'ignore'}
+                                    className={cn(
+                                      'p-2 rounded-lg transition-colors',
+                                      item.isAutoCompleting
+                                        ? 'text-purple-500 bg-purple-500/20 cursor-wait'
+                                        : 'text-purple-500 hover:bg-purple-500/10',
+                                      item.action === 'ignore' && 'opacity-50 cursor-not-allowed'
+                                    )}
+                                    title="Auto-completar descripción con IA"
+                                  >
+                                    {item.isAutoCompleting ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <Sparkles className="w-4 h-4" />
+                                    )}
+                                  </button>
                                   {/* Expand button */}
                                   <button
                                     onClick={() => handleUpdateMatchedProduct(item.id, 'isExpanded', !item.isExpanded)}
@@ -2452,10 +2621,30 @@ export default function CreateConsignmentOrderPage() {
                                     )}>
                                       {/* Descripcion */}
                                       <div className="sm:col-span-2">
-                                        <label className={cn('text-xs font-medium flex items-center gap-1 mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                                          <AlignLeft className="w-3 h-3" />
-                                          Descripcion
-                                        </label>
+                                        <div className="flex items-center justify-between mb-1">
+                                          <label className={cn('text-xs font-medium flex items-center gap-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                            <AlignLeft className="w-3 h-3" />
+                                            Descripcion
+                                          </label>
+                                          <button
+                                            onClick={() => autoCompleteWithAI(item.id)}
+                                            disabled={item.isAutoCompleting}
+                                            className={cn(
+                                              'p-1 px-2 rounded-md text-xs flex items-center gap-1 transition-colors',
+                                              item.isAutoCompleting
+                                                ? 'bg-purple-500/20 text-purple-400 cursor-wait'
+                                                : 'bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 hover:text-purple-400'
+                                            )}
+                                            title="Auto-completar descripcion y categoria con IA"
+                                          >
+                                            {item.isAutoCompleting ? (
+                                              <Loader2 className="w-3 h-3 animate-spin" />
+                                            ) : (
+                                              <Sparkles className="w-3 h-3" />
+                                            )}
+                                            <span>Auto IA</span>
+                                          </button>
+                                        </div>
                                         <textarea
                                           value={item.editableDescription || item.generatedDescription || ''}
                                           onChange={(e) => handleUpdateMatchedProduct(item.id, 'editableDescription', e.target.value)}
