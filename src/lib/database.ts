@@ -12,21 +12,21 @@ function getPool(): Pool {
   }
 
   if (!pool) {
-    // Para serverless (Vercel), usar pool pequeño ya que cada instancia crea su propio pool
-    // Supabase en modo Session tiene límite de conexiones
+    // Para serverless (Vercel), usar pool mínimo ya que cada instancia crea su propio pool
+    // Supabase en modo Session tiene límite estricto de conexiones (pool_size del servidor)
+    // IMPORTANTE: Usar pool_size=1 para evitar MaxClientsInSessionMode
     pool = new Pool({
       connectionString,
       ssl: {
         rejectUnauthorized: false
       },
-      max: 5, // Reducido para serverless - evita MaxClientsInSessionMode
+      max: 2, // Mínimo posible para serverless - evita MaxClientsInSessionMode
       min: 0, // No mantener conexiones idle en serverless
-      idleTimeoutMillis: 10000, // Liberar conexiones idle rápidamente
-      connectionTimeoutMillis: 10000,
+      idleTimeoutMillis: 5000, // Liberar conexiones idle MUY rápidamente
+      connectionTimeoutMillis: 15000, // Más tiempo para esperar conexión disponible
       query_timeout: 30000,
       statement_timeout: 30000,
-      keepAlive: true,
-      keepAliveInitialDelayMillis: 10000,
+      keepAlive: false, // No keepalive en serverless
       // Permitir que las conexiones se cierren cuando no hay queries
       allowExitOnIdle: true,
     });
@@ -78,17 +78,28 @@ class DatabaseWrapper {
     return await getPool().connect()
   }
 
-  async query(text: string, params?: any[], retries = 2) {
+  async query(text: string, params?: any[], retries = 3) {
     try {
       const result = await getPool().query(text, params);
       return result;
     } catch (error: any) {
-      console.error('❌ [DB Query Error]:', {
-        message: error.message,
-        code: error.code || 'N/A',
-        query: text.substring(0, 100),
-        retries
-      });
+      // Check if it's a max clients error - these need special handling
+      const isMaxClientsError =
+        error.message?.includes('MaxClientsInSessionMode') ||
+        error.message?.includes('max clients') ||
+        error.code === 'XX000';
+
+      // Only log as error if not a simple retry situation
+      if (!isMaxClientsError || retries <= 1) {
+        console.error('❌ [DB Query Error]:', {
+          message: error.message,
+          code: error.code || 'N/A',
+          query: text.substring(0, 100),
+          retries
+        });
+      } else {
+        console.log('⏳ [DB] Max clients reached, waiting for connection...');
+      }
 
       // Check if error is recoverable
       const isRecoverableError =
@@ -97,9 +108,7 @@ class DatabaseWrapper {
         error.message?.includes('ECONNREFUSED') ||
         error.message?.includes('ENOTFOUND') ||
         error.message?.includes('Connection terminated') ||
-        error.message?.includes('MaxClientsInSessionMode') || // Supabase max clients
-        error.message?.includes('max clients') ||
-        error.code === 'XX000' || // Internal error
+        isMaxClientsError ||
         error.code === '57P01' || // Admin shutdown
         error.code === '57P03' || // Cannot connect now
         error.code === '08006' || // Connection failure
@@ -107,11 +116,19 @@ class DatabaseWrapper {
         error.code === '08000'; // Connection exception
 
       if (retries > 0 && isRecoverableError) {
-        console.log(`🔄 [DB] Recoverable error detected, retrying (${retries} attempts left)...`);
-        pool = null; // Reset pool to force reconnection
-        const delay = (3 - retries) * 1000; // Progressive delay: 1s, 2s
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return this.query(text, params, retries - 1);
+        // For max clients error, wait longer and don't reset pool
+        if (isMaxClientsError) {
+          const delay = (4 - retries) * 2000; // Progressive delay: 2s, 4s, 6s
+          console.log(`🔄 [DB] Waiting ${delay}ms before retry (${retries} attempts left)...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return this.query(text, params, retries - 1);
+        } else {
+          console.log(`🔄 [DB] Recoverable error detected, retrying (${retries} attempts left)...`);
+          pool = null; // Reset pool to force reconnection
+          const delay = (4 - retries) * 1000; // Progressive delay: 1s, 2s, 3s
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return this.query(text, params, retries - 1);
+        }
       }
 
       throw error;
