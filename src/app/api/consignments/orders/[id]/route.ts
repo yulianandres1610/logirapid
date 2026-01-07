@@ -44,14 +44,19 @@ export async function GET(
     const orderResult = await db.query(`
       SELECT
         o.*,
-        s.code as supplier_code,
+        s.supplier_code as supplier_code,
         s.name as supplier_name,
         s.contact_name as supplier_contact,
         s.email as supplier_email,
         s.phone as supplier_phone,
         w.name as warehouse_name,
         w.code as warehouse_code,
-        u.firstname || ' ' || u.lastname as created_by_name
+        u.firstname || ' ' || u.lastname as created_by_name,
+        COALESCE((
+          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          FROM consignment_order_lines ol
+          WHERE ol.order_id = o.id
+        ), 0) as calculated_total_sold
       FROM consignment_orders o
       JOIN market_suppliers s ON s.id = o.supplier_id
       JOIN market_warehouses w ON w.id = o.warehouse_id
@@ -122,7 +127,7 @@ export async function GET(
       totalItems: parseInt(o.total_items) || 0,
       totalUnits: parseInt(o.total_units) || 0,
       totalCost: parseFloat(o.total_cost) || 0,
-      totalSold: parseFloat(o.total_sold) || 0,
+      totalSold: parseFloat(o.calculated_total_sold) || parseFloat(o.total_sold) || 0,
       totalPaid: parseFloat(o.total_paid) || 0,
       totalReturned: parseFloat(o.total_returned) || 0,
       consignmentDate: o.consignment_date,
