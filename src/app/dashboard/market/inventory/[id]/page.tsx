@@ -38,6 +38,7 @@ import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 import { PrintLabelModal } from '@/components/print/PrintLabelModal'
+import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
 
 interface VariantOption {
   type: string
@@ -196,7 +197,7 @@ const TABS: { id: TabType; label: string; icon: React.ElementType }[] = [
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$',
-  CUP: '₱',
+  CUP: '$',
   EUR: '€',
   MLC: '$'
 }
@@ -205,6 +206,7 @@ export default function ProductDetailPage() {
   const params = useParams()
   const productId = params.id as string
   const { theme } = useTheme()
+  const { USD_CUP, USD_MLC } = useMarketExchangeRates()
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
@@ -663,6 +665,14 @@ export default function ProductDetailPage() {
                   >
                     <p className="text-xs text-emerald-600 dark:text-emerald-400 uppercase tracking-wide mb-1">Precio Venta</p>
                     <p className="text-3xl font-bold text-emerald-600">{symbol}{Number(product.sellingPrice).toFixed(2)}</p>
+                    <div className="mt-2 pt-2 border-t border-emerald-200/30 dark:border-emerald-800/30 space-y-1">
+                      <p className="text-sm text-blue-600 font-medium">
+                        ${Math.round(product.sellingPrice * USD_CUP).toLocaleString()} CUP
+                      </p>
+                      <p className="text-sm text-purple-600 font-medium">
+                        ${(product.sellingPrice * USD_MLC).toFixed(2)} MLC
+                      </p>
+                    </div>
                   </motion.div>
 
                   {/* Cost Price */}
@@ -677,6 +687,10 @@ export default function ProductDetailPage() {
                   >
                     <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Precio Costo</p>
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">{symbol}{Number(product.costPrice).toFixed(2)}</p>
+                    <div className="text-xs mt-1.5 space-y-0.5">
+                      <p className="text-blue-600">${Math.round(product.costPrice * USD_CUP).toLocaleString()} CUP</p>
+                      <p className="text-purple-600">${(product.costPrice * USD_MLC).toFixed(2)} MLC</p>
+                    </div>
                   </motion.div>
 
                   {/* Margin */}
@@ -828,8 +842,12 @@ export default function ProductDetailPage() {
                         <p className="text-lg font-bold text-emerald-600">
                           {symbol}{Number(variant.sellingPrice).toFixed(2)}
                         </p>
+                        <div className="text-[10px] space-y-0">
+                          <p className="text-blue-600">${Math.round(variant.sellingPrice * USD_CUP).toLocaleString()} CUP</p>
+                          <p className="text-purple-600">${(variant.sellingPrice * USD_MLC).toFixed(2)} MLC</p>
+                        </div>
                         <p className={cn(
-                          'text-sm',
+                          'text-sm mt-1',
                           variant.quantityOnHand === 0 ? 'text-red-500' :
                           variant.quantityOnHand <= product.minimumStock ? 'text-amber-500' :
                           'text-gray-500'

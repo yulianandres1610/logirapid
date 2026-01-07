@@ -56,6 +56,7 @@ import {
 } from '@/lib/pos-db'
 import { usePOSOffline } from '@/hooks/usePOSOffline'
 import { useBarcodeScan } from '@/hooks/useBarcodeScan'
+import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
 import { VariantSelectorModal, Variant } from '@/components/market/VariantSelectorModal'
 
 interface ProductVariant {
@@ -141,6 +142,7 @@ interface WarehouseStock {
 export default function POSTerminalPage() {
   const { theme } = useTheme()
   const { user } = useAuth()
+  const { USD_CUP, USD_MLC } = useMarketExchangeRates()
   const router = useRouter()
   const params = useParams()
   const searchParams = useSearchParams()
@@ -1518,6 +1520,12 @@ export default function POSTerminalPage() {
                       ${product.price.toFixed(2)}
                     </p>
 
+                    {/* Precios en otras monedas */}
+                    <div className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 space-y-0">
+                      <p className="text-blue-600">${Math.round(product.price * USD_CUP).toLocaleString()} CUP</p>
+                      <p className="text-purple-600">${(product.price * USD_MLC).toFixed(2)} MLC</p>
+                    </div>
+
                     {/* Stock indicator - hidden on smallest screens */}
                     {product.trackInventory && (
                       <p className={cn(
@@ -2042,6 +2050,11 @@ export default function POSTerminalPage() {
                   <p className="text-xl font-bold text-blue-500 mt-1">
                     ${selectedProductForDetails.price.toFixed(2)}
                   </p>
+                  {/* Precios en otras monedas */}
+                  <div className="flex gap-3 mt-1 text-sm">
+                    <span className="text-blue-600">${Math.round(selectedProductForDetails.price * USD_CUP).toLocaleString()} CUP</span>
+                    <span className="text-purple-600">${(selectedProductForDetails.price * USD_MLC).toFixed(2)} MLC</span>
+                  </div>
                 </div>
                 <button
                   onClick={() => setShowProductDetailsModal(false)}
