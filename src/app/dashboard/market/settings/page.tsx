@@ -1706,23 +1706,40 @@ function PrintServicesTab({ theme }: { theme: string }) {
                   Descargar LogiRapid Print Service
                 </h3>
                 <p className={cn("text-sm mt-1", theme === 'dark' ? 'text-green-300' : 'text-green-700')}>
-                  Aplicación para Windows que permite imprimir recibos y etiquetas automáticamente
+                  Aplicación para Windows y Mac que permite imprimir recibos y etiquetas automáticamente
                 </p>
-                <a
-                  href="https://github.com/anthropics/claude-code/releases"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={cn(
-                    "inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-                    theme === 'dark'
-                      ? 'bg-green-600 hover:bg-green-500 text-white'
-                      : 'bg-green-600 hover:bg-green-700 text-white'
-                  )}
-                >
-                  <Download className="w-4 h-4" />
-                  Descargar para Windows
-                  <ExternalLink className="w-3 h-3" />
-                </a>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <a
+                    href="https://github.com/yulianandres1610/logirapid/releases/latest"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={cn(
+                      "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                      theme === 'dark'
+                        ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    )}
+                  >
+                    <Download className="w-4 h-4" />
+                    Windows (.exe)
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                  <a
+                    href="https://github.com/yulianandres1610/logirapid/releases/latest"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={cn(
+                      "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                      theme === 'dark'
+                        ? 'bg-gray-600 hover:bg-gray-500 text-white'
+                        : 'bg-gray-700 hover:bg-gray-800 text-white'
+                    )}
+                  >
+                    <Download className="w-4 h-4" />
+                    macOS (.dmg)
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
               </div>
             </div>
           </div>
