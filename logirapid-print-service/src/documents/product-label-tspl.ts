@@ -50,65 +50,70 @@ export function generateProductLabelTspl(data: ProductLabelData): Buffer {
   tspl.push('DENSITY 8') // Print darkness (0-15)
   tspl.push('CLS') // Clear buffer
 
-  // Truncate product name for label
-  const maxNameLength = 20
-  const productName = data.productName.length > maxNameLength
-    ? data.productName.substring(0, maxNameLength - 2) + '..'
-    : data.productName
-
-  // Layout for 2x1 inch label (51mm x 25mm = 408 x 200 dots)
-  // ┌─────────────────────────────────────┐
-  // │ Nombre del Producto                 │  <- Row 1: Product name
-  // │  |||||||||||| $15.99                │  <- Row 2: Barcode + Price (close)
-  // │  7501234567890                      │  <- Row 3: Barcode number
-  // └─────────────────────────────────────┘
-
-  const barcodeX = 30 // More margin from left edge
-
-  // Row 1: Product name (full width at top)
-  tspl.push(`TEXT 10,8,"2",0,1,1,"${escapeTspl(productName)}"`)
-
-  // Row 2: Barcode - better positioned away from edge
-  const barcodeY = 50 // Start below the text row
-  const barcodeHeight = 75 // Height of barcode bars
-  const barcodeType = getTsplBarcodeType(data.barcode, data.barcodeType)
-
-  // Barcode with better positioning - more to the right
-  // BARCODE X,Y,"type",height,human_readable,rotation,narrow,wide,"content"
-  tspl.push(`BARCODE ${barcodeX},${barcodeY},"${barcodeType}",${barcodeHeight},1,0,2,3,"${data.barcode}"`)
-
-  // Price - bigger and closer to barcode (only if includePrice is not false)
+  // Check if we should include price
   const shouldIncludePrice = data.includePrice !== false && (data.priceCUP !== undefined || data.price !== undefined)
-  if (shouldIncludePrice) {
-    // Use priceCUP if available, otherwise use price
+
+  if (!shouldIncludePrice) {
+    // === LABEL WITHOUT PRICE ===
+    // Bigger name at top, barcode spans full width
+
+    const maxNameLength = 24
+    const productName = data.productName.length > maxNameLength
+      ? data.productName.substring(0, maxNameLength - 2) + '..'
+      : data.productName
+
+    // Row 1: Product name (bigger font "3")
+    tspl.push(`TEXT 10,5,"3",0,1,1,"${escapeTspl(productName)}"`)
+
+    // Barcode - full width
+    const barcodeY = 45
+    const barcodeHeight = 95 // Taller barcode
+    const barcodeType = getTsplBarcodeType(data.barcode, data.barcodeType)
+
+    // BARCODE X,Y,"type",height,human_readable,rotation,narrow,wide,"content"
+    tspl.push(`BARCODE 15,${barcodeY},"${barcodeType}",${barcodeHeight},1,0,2,4,"${data.barcode}"`)
+
+  } else {
+    // === LABEL WITH PRICE ===
+    const maxNameLength = 20
+    const productName = data.productName.length > maxNameLength
+      ? data.productName.substring(0, maxNameLength - 2) + '..'
+      : data.productName
+
+    // Row 1: Product name (full width at top)
+    tspl.push(`TEXT 10,8,"2",0,1,1,"${escapeTspl(productName)}"`)
+
+    // Row 2: Barcode - better positioned away from edge
+    const barcodeX = 30
+    const barcodeY = 50
+    const barcodeHeight = 75
+    const barcodeType = getTsplBarcodeType(data.barcode, data.barcodeType)
+
+    tspl.push(`BARCODE ${barcodeX},${barcodeY},"${barcodeType}",${barcodeHeight},1,0,2,3,"${data.barcode}"`)
+
+    // Price - format with price on top, CUP below
     const priceValue = data.priceCUP !== undefined ? data.priceCUP : data.price!
     const isCUP = data.priceCUP !== undefined
-
-    // Format price: CUP uses integer format, others use 2 decimals
     const formattedPrice = isCUP ? Math.round(priceValue).toLocaleString() : priceValue.toFixed(2)
-    const currencyLabel = isCUP ? ' CUP' : ''
 
-    // Convert currency code to symbol (only for non-CUP)
-    let currencySymbol = '$'
-    if (!isCUP && data.currency) {
+    if (isCUP) {
+      // Precio arriba, CUP abajo
+      const priceX = 250
+      const priceY = barcodeY + 10
+      tspl.push(`TEXT ${priceX},${priceY},"4",0,1,1,"${formattedPrice}"`)
+      tspl.push(`TEXT ${priceX + 10},${priceY + 35},"2",0,1,1,"CUP"`)
+    } else {
       const symbolMap: Record<string, string> = {
-        'USD': '$', 'usd': '$',
-        'EUR': '€', 'eur': '€',
-        'GBP': '£', 'gbp': '£',
-        'MXN': '$', 'mxn': '$',
-        'COP': '$', 'cop': '$',
-        '$': '$', '€': '€', '£': '£'
+        'USD': '$', 'usd': '$', 'EUR': '€', 'eur': '€',
+        'GBP': '£', 'gbp': '£', 'MXN': '$', 'mxn': '$',
+        'COP': '$', 'cop': '$', '$': '$', '€': '€', '£': '£'
       }
-      currencySymbol = symbolMap[data.currency] || '$'
+      const currencySymbol = (data.currency && symbolMap[data.currency]) || '$'
+      const priceText = `${currencySymbol}${formattedPrice}`
+      const priceX = 255
+      const priceY = barcodeY + 20
+      tspl.push(`TEXT ${priceX},${priceY},"4",0,1,1,"${priceText}"`)
     }
-
-    const priceText = `${currencySymbol}${formattedPrice}${currencyLabel}`
-    // Position price closer to barcode (adjust for CUP which is longer)
-    const priceX = isCUP ? 220 : 255
-    const priceY = barcodeY + 20 // Vertically centered with barcode
-    // TEXT x,y,"font",rotation,x-mult,y-mult,"content"
-    // Font "4" is bigger, multiplier 1,1 for clean look
-    tspl.push(`TEXT ${priceX},${priceY},"4",0,1,1,"${priceText}"`)
   }
 
   // Print command

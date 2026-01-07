@@ -61,95 +61,164 @@ export async function generateProductLabel(
 
   if (isCompact) {
     // Compact layout for 2x1 inch labels
-    // Layout: [Product Name] [Price] on top row, barcode below
-
-    // Product name (top left, truncated)
-    const maxNameWidth = width * 0.65
-    const nameSize = 8
-    const truncatedName = truncateText(data.productName, 18)
-    page.drawText(truncatedName, {
-      x: margin,
-      y: height - margin - nameSize,
-      size: nameSize,
-      font: boldFont
-    })
-
-    // Price (top right, large and bold) - only if includePrice is not false
     const shouldIncludePrice = data.includePrice !== false && (data.priceCUP !== undefined || data.price !== undefined)
-    if (shouldIncludePrice) {
-      // Use priceCUP if available, otherwise use price
+
+    if (!shouldIncludePrice) {
+      // === LABEL WITHOUT PRICE ===
+      // Bigger name at top, barcode spans full width
+
+      const nameSize = 10 // Bigger font
+      const truncatedName = truncateText(data.productName, 22)
+      page.drawText(truncatedName, {
+        x: margin,
+        y: height - margin - nameSize,
+        size: nameSize,
+        font: boldFont
+      })
+
+      // Barcode (full width)
+      const barcodeY = margin + 2
+      const barcodeMaxHeight = height - 18
+
+      try {
+        const barcodeType = data.barcodeType || detectBarcodeType(data.barcode)
+        const isQR = barcodeType === 'qrcode'
+
+        const barcodeBuffer = await bwipjs.toBuffer({
+          bcid: barcodeType,
+          text: data.barcode,
+          scale: 3, // Higher scale for full width
+          height: isQR ? 18 : 10,
+          includetext: !isQR,
+          textxalign: 'center',
+          textsize: 7
+        })
+
+        const barcodeImage = await pdfDoc.embedPng(barcodeBuffer)
+        const barcodeAspect = barcodeImage.width / barcodeImage.height
+        let barcodeWidth = width - margin * 2 // Full width
+        let finalBarcodeHeight = barcodeWidth / barcodeAspect
+
+        if (finalBarcodeHeight > barcodeMaxHeight) {
+          finalBarcodeHeight = barcodeMaxHeight
+          barcodeWidth = finalBarcodeHeight * barcodeAspect
+        }
+
+        const barcodeX = (width - barcodeWidth) / 2
+        page.drawImage(barcodeImage, {
+          x: barcodeX,
+          y: barcodeY,
+          width: barcodeWidth,
+          height: finalBarcodeHeight
+        })
+      } catch (error) {
+        console.error('Barcode generation failed:', error)
+        page.drawText(data.barcode, {
+          x: margin,
+          y: barcodeY + 5,
+          size: 8,
+          font: boldFont
+        })
+      }
+    } else {
+      // === LABEL WITH PRICE ===
+      // Product name (top left, truncated)
+      const nameSize = 8
+      const truncatedName = truncateText(data.productName, 18)
+      page.drawText(truncatedName, {
+        x: margin,
+        y: height - margin - nameSize,
+        size: nameSize,
+        font: boldFont
+      })
+
+      // Price (top right, large and bold)
       const priceValue = data.priceCUP !== undefined ? data.priceCUP : data.price!
       const isCUP = data.priceCUP !== undefined
 
       // Format price: CUP uses integer format, others use 2 decimals
       const formattedPrice = isCUP ? Math.round(priceValue).toLocaleString() : priceValue.toFixed(2)
-      const currencyLabel = isCUP ? ' CUP' : ''
 
-      // Convert currency code to symbol (only for non-CUP prices)
-      let currencySymbol = '$'
-      if (!isCUP && data.currency) {
+      if (isCUP) {
+        // Precio arriba, CUP abajo
+        const priceSize = 10
+        const priceWidth = boldFont.widthOfTextAtSize(formattedPrice, priceSize)
+        page.drawText(formattedPrice, {
+          x: width - margin - priceWidth,
+          y: height - margin - priceSize,
+          size: priceSize,
+          font: boldFont
+        })
+        const cupSize = 7
+        const cupWidth = boldFont.widthOfTextAtSize('CUP', cupSize)
+        page.drawText('CUP', {
+          x: width - margin - cupWidth,
+          y: height - margin - priceSize - cupSize - 1,
+          size: cupSize,
+          font: boldFont
+        })
+      } else {
         const symbolMap: Record<string, string> = {
           'USD': '$', 'usd': '$', 'EUR': '€', 'eur': '€',
           'GBP': '£', 'gbp': '£', 'MXN': '$', 'mxn': '$',
           'COP': '$', 'cop': '$', '$': '$', '€': '€', '£': '£'
         }
-        currencySymbol = symbolMap[data.currency] || '$'
+        const currencySymbol = (data.currency && symbolMap[data.currency]) || '$'
+        const priceText = `${currencySymbol}${formattedPrice}`
+        const priceSize = 10
+        const priceWidth = boldFont.widthOfTextAtSize(priceText, priceSize)
+        page.drawText(priceText, {
+          x: width - margin - priceWidth,
+          y: height - margin - priceSize,
+          size: priceSize,
+          font: boldFont
+        })
       }
 
-      const priceText = `${currencySymbol}${formattedPrice}${currencyLabel}`
-      const priceSize = 10
-      const priceWidth = boldFont.widthOfTextAtSize(priceText, priceSize)
-      page.drawText(priceText, {
-        x: width - margin - priceWidth,
-        y: height - margin - priceSize,
-        size: priceSize,
-        font: boldFont
-      })
-    }
+      // Barcode (bottom, centered)
+      const barcodeY = margin + 2
+      const barcodeMaxHeight = height - 22
 
-    // Barcode (bottom, centered)
-    const barcodeY = margin + 2
-    const barcodeMaxHeight = height - 22 // Leave space for name/price row
+      try {
+        const barcodeType = data.barcodeType || detectBarcodeType(data.barcode)
+        const isQR = barcodeType === 'qrcode'
 
-    try {
-      const barcodeType = data.barcodeType || detectBarcodeType(data.barcode)
-      const isQR = barcodeType === 'qrcode'
+        const barcodeBuffer = await bwipjs.toBuffer({
+          bcid: barcodeType,
+          text: data.barcode,
+          scale: 2,
+          height: isQR ? 15 : 8,
+          includetext: !isQR,
+          textxalign: 'center',
+          textsize: 6
+        })
 
-      const barcodeBuffer = await bwipjs.toBuffer({
-        bcid: barcodeType,
-        text: data.barcode,
-        scale: 2,
-        height: isQR ? 15 : 8,
-        includetext: !isQR,
-        textxalign: 'center',
-        textsize: 6
-      })
+        const barcodeImage = await pdfDoc.embedPng(barcodeBuffer)
+        const barcodeAspect = barcodeImage.width / barcodeImage.height
+        let barcodeWidth = width - margin * 2
+        let finalBarcodeHeight = barcodeWidth / barcodeAspect
 
-      const barcodeImage = await pdfDoc.embedPng(barcodeBuffer)
-      const barcodeAspect = barcodeImage.width / barcodeImage.height
-      let barcodeWidth = width - margin * 2
-      let finalBarcodeHeight = barcodeWidth / barcodeAspect
+        if (finalBarcodeHeight > barcodeMaxHeight) {
+          finalBarcodeHeight = barcodeMaxHeight
+          barcodeWidth = finalBarcodeHeight * barcodeAspect
+        }
 
-      if (finalBarcodeHeight > barcodeMaxHeight) {
-        finalBarcodeHeight = barcodeMaxHeight
-        barcodeWidth = finalBarcodeHeight * barcodeAspect
+        const barcodeX = (width - barcodeWidth) / 2
+        page.drawImage(barcodeImage, {
+          x: barcodeX,
+          y: barcodeY,
+          width: barcodeWidth,
+          height: finalBarcodeHeight
+        })
+      } catch (error) {
+        console.error('Barcode generation failed:', error)
+        page.drawText(data.barcode, {
+          x: margin,
+          y: barcodeY + 5,
+          size: 7,
+          font
+        })
       }
-
-      const barcodeX = (width - barcodeWidth) / 2
-      page.drawImage(barcodeImage, {
-        x: barcodeX,
-        y: barcodeY,
-        width: barcodeWidth,
-        height: finalBarcodeHeight
-      })
-    } catch (error) {
-      console.error('Barcode generation failed:', error)
-      page.drawText(data.barcode, {
-        x: margin,
-        y: barcodeY + 5,
-        size: 7,
-        font
-      })
     }
   } else {
     // Standard layout for larger labels
@@ -187,17 +256,32 @@ export async function generateProductLabel(
 
       // Format price: CUP uses integer format, others use 2 decimals
       const formattedPrice = isCUP ? Math.round(priceValue).toLocaleString() : priceValue.toFixed(2)
-      const currencyLabel = isCUP ? ' CUP' : ''
-      const currencySymbol = isCUP ? '$' : (data.currency || '$')
 
-      const priceText = `${currencySymbol}${formattedPrice}${currencyLabel}`
-      page.drawText(priceText, {
-        x: margin,
-        y: y - 12,
-        size: 12,
-        font: boldFont
-      })
-      y -= 16
+      if (isCUP) {
+        // Precio arriba, CUP abajo
+        page.drawText(formattedPrice, {
+          x: margin,
+          y: y - 12,
+          size: 12,
+          font: boldFont
+        })
+        page.drawText('CUP', {
+          x: margin,
+          y: y - 22,
+          size: 9,
+          font: boldFont
+        })
+        y -= 26
+      } else {
+        const priceText = `${data.currency || '$'}${formattedPrice}`
+        page.drawText(priceText, {
+          x: margin,
+          y: y - 12,
+          size: 12,
+          font: boldFont
+        })
+        y -= 16
+      }
     }
 
     // Calculate space for barcode
@@ -334,13 +418,29 @@ export async function generateProductLabelSheet(
           const priceValue = item.priceCUP !== undefined ? item.priceCUP : item.price!
           const isCUP = item.priceCUP !== undefined
           const formattedPrice = isCUP ? Math.round(priceValue).toLocaleString() : priceValue.toFixed(2)
-          const priceText = isCUP ? `$${formattedPrice} CUP` : `$${formattedPrice}`
-          page.drawText(priceText, {
-            x: x + labelWidth - (isCUP ? 50 : 30),
-            y: y + labelHeight - 14,
-            size: 8,
-            font: boldFont
-          })
+          if (isCUP) {
+            // Precio arriba, CUP abajo
+            page.drawText(formattedPrice, {
+              x: x + labelWidth - 35,
+              y: y + labelHeight - 12,
+              size: 8,
+              font: boldFont
+            })
+            page.drawText('CUP', {
+              x: x + labelWidth - 28,
+              y: y + labelHeight - 20,
+              size: 6,
+              font: boldFont
+            })
+          } else {
+            const priceText = `$${formattedPrice}`
+            page.drawText(priceText, {
+              x: x + labelWidth - 30,
+              y: y + labelHeight - 14,
+              size: 8,
+              font: boldFont
+            })
+          }
         }
 
         // Barcode text (simplified - full barcode would need embedded image)

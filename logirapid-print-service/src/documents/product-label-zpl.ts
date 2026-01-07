@@ -59,39 +59,58 @@ export function generateProductLabelZpl(data: ProductLabelData): Buffer {
 
   if (isCompact) {
     // Compact layout for 2x1 inch labels
-    // Row 1: Product name (left) + Price (right)
-    // Row 2: Barcode (centered)
-
-    // Product name (top left)
-    zpl.push(`^FO${margin},${margin}^A0N,20,20^FD${escapeZpl(productName)}^FS`)
-
-    // Price (top right) - only if includePrice is not false
     const shouldIncludePrice = data.includePrice !== false && (data.priceCUP !== undefined || data.price !== undefined)
-    if (shouldIncludePrice) {
-      // Use priceCUP if available, otherwise use price
+
+    if (!shouldIncludePrice) {
+      // === LABEL WITHOUT PRICE ===
+      // Bigger name at top, barcode spans full width
+
+      // Product name (bigger font, allow more chars)
+      const noPriceProductName = data.productName.length > 24
+        ? data.productName.substring(0, 22) + '..'
+        : data.productName
+      zpl.push(`^FO${margin},${margin}^A0N,26,26^FD${escapeZpl(noPriceProductName)}^FS`)
+
+      // Barcode (full width, taller)
+      const barcodeY = 50
+      const barcodeHeight = 50
+
+      const barcodeCmd = getBarcodeCommand(data.barcode, data.barcodeType)
+
+      // Full width barcode
+      zpl.push(`^FO${margin},${barcodeY}^BY2`) // Wider bars
+      zpl.push(`${barcodeCmd},${barcodeHeight},Y,N,N^FD${data.barcode}^FS`)
+
+    } else {
+      // === LABEL WITH PRICE ===
+      // Product name (top left)
+      zpl.push(`^FO${margin},${margin}^A0N,20,20^FD${escapeZpl(productName)}^FS`)
+
+      // Price (top right) - format with price on top, CUP below
       const priceValue = data.priceCUP !== undefined ? data.priceCUP : data.price!
       const isCUP = data.priceCUP !== undefined
-
-      // Format price: CUP uses integer format, others use 2 decimals
       const formattedPrice = isCUP ? Math.round(priceValue).toLocaleString() : priceValue.toFixed(2)
-      const currencyLabel = isCUP ? ' CUP' : ''
-      const currencySymbol = isCUP ? '$' : (data.currency || '$')
 
-      const priceText = `${currencySymbol}${formattedPrice}${currencyLabel}`
-      // Position price at right side (wider for CUP)
-      const priceOffset = isCUP ? 130 : 100
-      zpl.push(`^FO${labelWidth - priceOffset},${margin}^A0N,24,24^FD${priceText}^FS`)
+      if (isCUP) {
+        // Precio arriba, CUP abajo
+        const priceOffset = 90
+        zpl.push(`^FO${labelWidth - priceOffset},${margin}^A0N,24,24^FD${formattedPrice}^FS`)
+        zpl.push(`^FO${labelWidth - priceOffset + 10},${margin + 22}^A0N,16,16^FDCUP^FS`)
+      } else {
+        const priceText = `${data.currency || '$'}${formattedPrice}`
+        const priceOffset = 100
+        zpl.push(`^FO${labelWidth - priceOffset},${margin}^A0N,24,24^FD${priceText}^FS`)
+      }
+
+      // Barcode (bottom, centered) - smaller for compact label
+      const barcodeY = 55
+      const barcodeHeight = 35
+
+      const barcodeCmd = getBarcodeCommand(data.barcode, data.barcodeType)
+
+      zpl.push(`^FO${margin + 20},${barcodeY}^BY1.5`) // Narrower bars for compact
+      zpl.push(`${barcodeCmd},${barcodeHeight},Y,N,N^FD${data.barcode}^FS`)
     }
-
-    // Barcode (bottom, centered) - smaller for compact label
-    const barcodeY = 55 // Start barcode below header
-    const barcodeHeight = 35
-
-    const barcodeCmd = getBarcodeCommand(data.barcode, data.barcodeType)
-
-    // Center barcode
-    zpl.push(`^FO${margin + 20},${barcodeY}^BY1.5`) // Narrower bars for compact
-    zpl.push(`${barcodeCmd},${barcodeHeight},Y,N,N^FD${data.barcode}^FS`)
 
   } else {
     // Standard layout for larger labels
@@ -116,12 +135,18 @@ export function generateProductLabelZpl(data: ProductLabelData): Buffer {
 
       // Format price: CUP uses integer format, others use 2 decimals
       const formattedPrice = isCUP ? Math.round(priceValue).toLocaleString() : priceValue.toFixed(2)
-      const currencyLabel = isCUP ? ' CUP' : ''
-      const currencySymbol = isCUP ? '$' : (data.currency || '$')
 
-      const priceText = `${currencySymbol}${formattedPrice}${currencyLabel}`
-      zpl.push(`^FO${margin},${y}^A0N,28,28^FD${priceText}^FS`)
-      y += 32
+      if (isCUP) {
+        // Precio arriba, CUP abajo
+        zpl.push(`^FO${margin},${y}^A0N,28,28^FD${formattedPrice}^FS`)
+        y += 28
+        zpl.push(`^FO${margin},${y}^A0N,18,18^FDCUP^FS`)
+        y += 22
+      } else {
+        const priceText = `${data.currency || '$'}${formattedPrice}`
+        zpl.push(`^FO${margin},${y}^A0N,28,28^FD${priceText}^FS`)
+        y += 32
+      }
     }
 
     // Category
