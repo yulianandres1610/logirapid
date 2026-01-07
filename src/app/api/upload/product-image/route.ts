@@ -144,12 +144,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Subir a Supabase Storage con índice
+    // Subir a Supabase Storage con índice (usar el ya calculado para evitar race condition)
     const { url, path, index } = await uploadProductImageWithIndex(
       barcode,
       imageBuffer,
       file.type,
-      replaceIndex // Usar índice específico si se proporciona
+      imageIndex // Usar el índice ya calculado, no replaceIndex
     )
 
     console.log('[Product Image Upload] Uploaded to storage:', { url, path, index })
