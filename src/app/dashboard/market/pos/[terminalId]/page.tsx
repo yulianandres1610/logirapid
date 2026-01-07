@@ -1523,7 +1523,7 @@ export default function POSTerminalPage() {
 
                     {/* Precios en otras monedas (tasa BCC para venta) */}
                     <div className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 space-y-0">
-                      <p className="text-blue-600">${Math.round(product.price * USD_CUP_BCC).toLocaleString()} CUP</p>
+                      <p className="text-green-600">${Math.round(product.price * USD_CUP_BCC).toLocaleString()} CUP</p>
                       <p className="text-purple-600">${(product.price * USD_MLC).toFixed(2)} MLC</p>
                     </div>
 
@@ -2053,7 +2053,7 @@ export default function POSTerminalPage() {
                   </p>
                   {/* Precios en otras monedas (tasa BCC para venta) */}
                   <div className="flex gap-3 mt-1 text-sm">
-                    <span className="text-blue-600">${Math.round(selectedProductForDetails.price * USD_CUP_BCC).toLocaleString()} CUP</span>
+                    <span className="text-green-600">${Math.round(selectedProductForDetails.price * USD_CUP_BCC).toLocaleString()} CUP <span className="text-gray-400 text-xs">(BCC)</span></span>
                     <span className="text-purple-600">${(selectedProductForDetails.price * USD_MLC).toFixed(2)} MLC</span>
                   </div>
                 </div>
