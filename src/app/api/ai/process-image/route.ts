@@ -151,24 +151,57 @@ export async function POST(request: NextRequest) {
           imageIndex // Pasar índice para evitar recalcular
         )
 
-        // Guardar en base de datos - una sola query optimizada
-        // Usar INSERT simple que funciona con cualquier schema
-        await db.query(`
-          INSERT INTO product_images (
-            barcode, storage_path, image_url, processed_with_ai, ai_model,
-            content_type, file_size, created_by, company_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        `, [
-          barcode,
-          path,
-          url,
-          true,
-          'gemini-2.0-flash-exp',
-          contentType,
-          imageBuffer.length,
-          payload.userId,
-          payload.companyId
-        ])
+        // Guardar en base de datos - verificar si existe primero
+        const existingImage = await db.query(
+          'SELECT id FROM product_images WHERE barcode = $1 AND image_index = $2',
+          [barcode, index]
+        )
+
+        if (existingImage.rows.length > 0) {
+          // Actualizar registro existente
+          await db.query(`
+            UPDATE product_images SET
+              storage_path = $1,
+              image_url = $2,
+              is_primary = $3,
+              processed_with_ai = $4,
+              ai_model = $5,
+              content_type = $6,
+              file_size = $7,
+              updated_at = NOW()
+            WHERE barcode = $8 AND image_index = $9
+          `, [
+            path,
+            url,
+            isPrimary,
+            true,
+            'gemini-2.0-flash-exp',
+            contentType,
+            imageBuffer.length,
+            barcode,
+            index
+          ])
+        } else {
+          // Insertar nuevo registro con image_index
+          await db.query(`
+            INSERT INTO product_images (
+              barcode, image_index, storage_path, image_url, is_primary,
+              processed_with_ai, ai_model, content_type, file_size, created_by, company_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          `, [
+            barcode,
+            index,
+            path,
+            url,
+            isPrimary,
+            true,
+            'gemini-2.0-flash-exp',
+            contentType,
+            imageBuffer.length,
+            payload.userId,
+            payload.companyId
+          ])
+        }
 
         savedImage = { url, path, index, isPrimary }
         console.log(`[AI Process Image] Saved to storage: ${url}, index: ${index}`)
