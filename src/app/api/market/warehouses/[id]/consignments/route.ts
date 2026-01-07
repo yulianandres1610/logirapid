@@ -60,11 +60,11 @@ export async function GET(
     const result = await db.query(`
       SELECT
         o.*,
-        s.code as supplier_code,
+        s.supplier_code as supplier_code,
         s.name as supplier_name,
         (SELECT COUNT(*) FROM consignment_order_lines WHERE order_id = o.id) as line_count
       FROM consignment_orders o
-      JOIN consignment_suppliers s ON s.id = o.supplier_id
+      JOIN market_suppliers s ON s.id = o.supplier_id
       WHERE o.warehouse_id = $1 AND o.company_id = $2 AND o.status = $3
       ORDER BY o.created_at DESC
     `, [warehouseId, payload.companyId, status])

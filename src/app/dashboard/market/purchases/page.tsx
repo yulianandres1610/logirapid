@@ -15,7 +15,6 @@ import {
   Eye,
   Calendar,
   DollarSign,
-  Truck,
   Printer,
   X,
   ChevronLeft,
@@ -754,18 +753,6 @@ export default function MarketPurchasesPage() {
                                     <Eye className="w-4 h-4 text-blue-500" />
                                   </motion.button>
                                 </Link>
-                                {(purchase.status === 'confirmed' || purchase.status === 'comprada' || purchase.status === 'pendiente') && (
-                                  <Link href={`/dashboard/market/purchases/${purchase.id}/receive`}>
-                                    <motion.button
-                                      whileHover={{ scale: 1.1 }}
-                                      whileTap={{ scale: 0.9 }}
-                                      className="p-2 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
-                                      title="Recibir compra"
-                                    >
-                                      <Truck className="w-4 h-4 text-blue-500" />
-                                    </motion.button>
-                                  </Link>
-                                )}
                                 {purchase.status === 'draft' && (
                                   <motion.button
                                     whileHover={{ scale: 1.1 }}

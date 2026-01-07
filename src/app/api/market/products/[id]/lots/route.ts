@@ -75,7 +75,7 @@ export async function GET(
         FROM consignment_lot_inventory cli
         LEFT JOIN consignment_order_lines col ON col.id = cli.order_line_id
         LEFT JOIN consignment_orders co ON co.id = col.order_id
-        LEFT JOIN consignment_suppliers cs ON cs.id = cli.supplier_id
+        LEFT JOIN market_suppliers cs ON cs.id = cli.supplier_id
         LEFT JOIN market_warehouses mw ON mw.id = cli.warehouse_id
         WHERE cli.product_id = $1 AND cli.company_id = $2
         ORDER BY cli.received_at DESC

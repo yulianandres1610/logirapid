@@ -56,33 +56,33 @@ export async function GET(
       ? `
         SELECT
           cli.supplier_id,
-          cs.code as supplier_code,
+          cs.supplier_code as supplier_code,
           cs.name as supplier_name,
           cli.unit_cost,
           SUM(cli.quantity_available) as total_available
         FROM consignment_lot_inventory cli
-        JOIN consignment_suppliers cs ON cs.id = cli.supplier_id
+        JOIN market_suppliers cs ON cs.id = cli.supplier_id
         WHERE cli.warehouse_id = $1
           AND cli.product_id = $2
           AND cli.quantity_available > 0
           AND cli.supplier_id != $3
           AND cli.company_id = $4
-        GROUP BY cli.supplier_id, cs.code, cs.name, cli.unit_cost
+        GROUP BY cli.supplier_id, cs.supplier_code, cs.name, cli.unit_cost
       `
       : `
         SELECT
           cli.supplier_id,
-          cs.code as supplier_code,
+          cs.supplier_code as supplier_code,
           cs.name as supplier_name,
           cli.unit_cost,
           SUM(cli.quantity_available) as total_available
         FROM consignment_lot_inventory cli
-        JOIN consignment_suppliers cs ON cs.id = cli.supplier_id
+        JOIN market_suppliers cs ON cs.id = cli.supplier_id
         WHERE cli.warehouse_id = $1
           AND cli.product_id = $2
           AND cli.quantity_available > 0
           AND cli.company_id = $3
-        GROUP BY cli.supplier_id, cs.code, cs.name, cli.unit_cost
+        GROUP BY cli.supplier_id, cs.supplier_code, cs.name, cli.unit_cost
       `
 
     const queryParams = supplierId

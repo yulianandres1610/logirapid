@@ -145,7 +145,7 @@ export async function GET(request: NextRequest) {
         co.consignment_date,
         cs.name as supplier_name
       FROM consignment_orders co
-      LEFT JOIN consignment_suppliers cs ON co.supplier_id = cs.id
+      LEFT JOIN market_suppliers cs ON co.supplier_id = cs.id
       WHERE co.company_id = $1
       ORDER BY co.created_at DESC
       LIMIT 5
@@ -217,7 +217,7 @@ export async function GET(request: NextRequest) {
         COALESCE(SUM(co.total_sold), 0) as total_sold,
         COALESCE(SUM(co.total_returned), 0) as total_returned,
         COALESCE(SUM(co.total_cost - co.total_sold - COALESCE(co.total_returned, 0)), 0) as pending_to_pay
-      FROM consignment_suppliers cs
+      FROM market_suppliers cs
       LEFT JOIN consignment_orders co ON cs.id = co.supplier_id AND co.status != 'cancelled'
       WHERE cs.company_id = $1
       GROUP BY cs.id, cs.name
