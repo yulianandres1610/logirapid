@@ -91,9 +91,9 @@ export async function POST(
     if (orderType === 'consignment') {
       // Process consignment reception
       const orderResult = await db.query(`
-        SELECT o.*, s.code as supplier_code, s.name as supplier_name
+        SELECT o.*, s.supplier_code as supplier_code, s.name as supplier_name
         FROM consignment_orders o
-        JOIN consignment_suppliers s ON s.id = o.supplier_id
+        JOIN market_suppliers s ON s.id = o.supplier_id
         WHERE o.id = $1 AND o.company_id = $2
       `, [orderId, payload.companyId])
 
@@ -124,17 +124,17 @@ export async function POST(
         const conflictCheck = await db.query(`
           SELECT
             cli.supplier_id,
-            cs.code as supplier_code,
+            cs.supplier_code as supplier_code,
             cs.name as supplier_name,
             cli.unit_cost,
             SUM(cli.quantity_available) as total_available
           FROM consignment_lot_inventory cli
-          JOIN consignment_suppliers cs ON cs.id = cli.supplier_id
+          JOIN market_suppliers cs ON cs.id = cli.supplier_id
           WHERE cli.warehouse_id = $1
             AND cli.product_id = $2
             AND cli.quantity_available > 0
             AND cli.supplier_id != $3
-          GROUP BY cli.supplier_id, cs.code, cs.name, cli.unit_cost
+          GROUP BY cli.supplier_id, cs.supplier_code, cs.name, cli.unit_cost
         `, [warehouseId, parseInt(String(line.productId)), supplierId])
 
         if (conflictCheck.rows.length > 0) {

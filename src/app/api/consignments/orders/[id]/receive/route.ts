@@ -60,9 +60,9 @@ export async function POST(
 
     // Verify order exists and is pending
     const orderResult = await db.query(`
-      SELECT o.*, s.code as supplier_code
+      SELECT o.*, s.supplier_code as supplier_code
       FROM consignment_orders o
-      JOIN consignment_suppliers s ON s.id = o.supplier_id
+      JOIN market_suppliers s ON s.id = o.supplier_id
       WHERE o.id = $1 AND o.company_id = $2
     `, [orderId, payload.companyId])
 

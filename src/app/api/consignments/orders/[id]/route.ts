@@ -53,7 +53,7 @@ export async function GET(
         w.code as warehouse_code,
         u.firstname || ' ' || u.lastname as created_by_name
       FROM consignment_orders o
-      JOIN consignment_suppliers s ON s.id = o.supplier_id
+      JOIN market_suppliers s ON s.id = o.supplier_id
       JOIN market_warehouses w ON w.id = o.warehouse_id
       LEFT JOIN users u ON u.id = o.created_by
       WHERE o.id = $1 AND o.company_id = $2

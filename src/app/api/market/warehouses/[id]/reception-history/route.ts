@@ -51,20 +51,20 @@ export async function GET(
         'consignment' as order_type,
         o.status,
         o.received_at,
-        s.code as supplier_code,
+        s.supplier_code as supplier_code,
         s.name as supplier_name,
         u.name as received_by_name,
         COALESCE(SUM(ol.quantity_received), 0) as total_units,
         COUNT(DISTINCT ol.id) as total_lines
       FROM consignment_orders o
-      JOIN consignment_suppliers s ON s.id = o.supplier_id
+      JOIN market_suppliers s ON s.id = o.supplier_id
       LEFT JOIN users u ON u.id = o.received_by
       LEFT JOIN consignment_order_lines ol ON ol.order_id = o.id
       WHERE o.company_id = $1
         AND o.warehouse_id = $2
         AND o.status IN ('received', 'partial')
         AND o.received_at IS NOT NULL
-      GROUP BY o.id, o.order_number, o.status, o.received_at, s.code, s.name, u.name
+      GROUP BY o.id, o.order_number, o.status, o.received_at, s.supplier_code, s.name, u.name
       ORDER BY o.received_at DESC
       LIMIT $3
     `, [payload.companyId, warehouseId, limit])).rows

@@ -98,9 +98,9 @@ export async function GET(
       const consignmentResult = await db.query(`
         SELECT
           o.id, o.order_number, o.status, o.warehouse_id,
-          s.id as supplier_id, s.code as supplier_code, s.name as supplier_name
+          s.id as supplier_id, s.supplier_code as supplier_code, s.name as supplier_name
         FROM consignment_orders o
-        JOIN consignment_suppliers s ON s.id = o.supplier_id
+        JOIN market_suppliers s ON s.id = o.supplier_id
         WHERE (o.order_number = $1 OR o.order_number ILIKE $2)
           AND o.company_id = $3
           AND o.status IN ('pending', 'partial')

@@ -61,13 +61,13 @@ export async function GET(
           o.received_at,
           o.created_at,
           s.id as supplier_id,
-          s.code as supplier_code,
+          s.supplier_code as supplier_code,
           s.name as supplier_name,
           w.name as warehouse_name,
           w.code as warehouse_code,
           u.name as received_by_name
         FROM consignment_orders o
-        JOIN consignment_suppliers s ON s.id = o.supplier_id
+        JOIN market_suppliers s ON s.id = o.supplier_id
         LEFT JOIN market_warehouses w ON w.id = o.warehouse_id
         LEFT JOIN users u ON u.id = o.received_by
         WHERE o.id = $1 AND o.company_id = $2 AND o.warehouse_id = $3
