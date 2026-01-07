@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Settings,
@@ -110,6 +111,8 @@ const TABS: { id: TabType; label: string; icon: React.ElementType }[] = [
 
 export default function MarketSettingsPage() {
   const { theme } = useTheme()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<TabType>('general')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -144,6 +147,20 @@ export default function MarketSettingsPage() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null)
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([])
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // Sync tab with URL
+  useEffect(() => {
+    const tabParam = searchParams.get('tab') as TabType | null
+    if (tabParam && TABS.some(t => t.id === tabParam)) {
+      setActiveTab(tabParam)
+    }
+  }, [searchParams])
+
+  // Handle tab change with URL update
+  const handleTabChange = (tabId: TabType) => {
+    setActiveTab(tabId)
+    router.push(`/dashboard/market/settings?tab=${tabId}`, { scroll: false })
+  }
 
   // Fetch configuration
   useEffect(() => {
@@ -426,7 +443,7 @@ export default function MarketSettingsPage() {
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => handleTabChange(tab.id)}
                     className={cn(
                       "flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium text-sm transition-all",
                       activeTab === tab.id
