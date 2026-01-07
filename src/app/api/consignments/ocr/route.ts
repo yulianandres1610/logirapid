@@ -164,19 +164,32 @@ EJEMPLO DE RESPUESTA CON VARIANTES:
   "confidence": 0.95
 }
 
-DETECCIÓN DE MONEDA (MUY IMPORTANTE PARA CUBA):
-Analiza el documento para identificar la moneda de los precios:
-- Busca símbolos: "$" (puede ser USD o CUP), "€" (EUR), "MLC", "CUP", "USD"
-- Busca palabras: "pesos", "dólares", "dollars", "moneda libremente convertible", "MN", "CUP", "USD"
-- CONTEXTO CUBA: Si ves precios MUY ALTOS (ej: 40,000, 15,000) probablemente es CUP (peso cubano)
-- Si ves precios bajos con formato típico americano (ej: 10.50, 25.00) probablemente es USD
-- MLC generalmente tiene precios similares a USD pero con indicador "MLC" o "tarjeta"
-- Si no puedes determinar la moneda con certeza, usa null
+DETECCIÓN DE MONEDA (CRÍTICO - SER MUY CONSERVADOR):
+Este sistema es para Cuba donde coexisten USD, CUP y MLC. DEBES ser MUY CUIDADOSO:
+
+INDICADORES EXPLÍCITOS (alta confianza 0.8+):
+- Texto "USD", "US$", "dólares", "dollars" → USD
+- Texto "CUP", "MN", "pesos cubanos", "moneda nacional" → CUP
+- Texto "MLC", "moneda libremente convertible", "tarjeta MLC" → MLC
+
+INDICADORES POR CONTEXTO DE PRECIOS (confianza media 0.5-0.7):
+- Precios unitarios > 100 (ej: 450, 1200, 5000) → probablemente CUP
+- Precios con formato X,XXX o XX,XXX (miles) → muy probablemente CUP
+- Totales > 1000 para pocos productos → probablemente CUP
+
+CUÁNDO USAR NULL (sin confianza):
+- Solo ves "$" sin especificar USD/CUP → usar NULL
+- No hay texto que indique la moneda → usar NULL
+- Precios ambiguos que podrían ser cualquier moneda → usar NULL
+- Formato de factura genérico sin indicadores claros → usar NULL
+
+REGLA DE ORO: Si tienes CUALQUIER duda, usa detectedCurrency: null y currencyConfidence: 0
+Es mejor preguntar al usuario que asumir incorrectamente.
 
 Incluir en tu respuesta JSON:
-- "detectedCurrency": "USD" | "CUP" | "MLC" | null
-- "currencyConfidence": número de 0.0 a 1.0 indicando certeza de la moneda detectada
-- "currencyHints": breve explicación de por qué detectaste esa moneda
+- "detectedCurrency": "USD" | "CUP" | "MLC" | null (usar null si hay duda)
+- "currencyConfidence": 0.0 a 1.0 (usar 0 si no estás seguro)
+- "currencyHints": explicación de por qué detectaste esa moneda o "No se encontraron indicadores claros de moneda"
 
 REGLAS CRÍTICAS:
 - El array "items" DEBE contener todos los productos de la factura
