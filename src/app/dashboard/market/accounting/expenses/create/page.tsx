@@ -127,6 +127,10 @@ export default function CreateExpensePage() {
     subtotal?: number
     tax?: number
     total?: number
+    // Currency conversion info
+    originalCurrency?: SupportedCurrency
+    originalTotal?: number
+    conversionRate?: number
   } | null>(null)
   const [categorizing, setCategorizing] = useState(false)
 
@@ -370,7 +374,11 @@ export default function CreateExpensePage() {
             total: totalConversion.convertedAmount,
             subtotal: subtotalConversion.convertedAmount,
             tax: taxConversion.convertedAmount,
-            amount: amountConversion?.convertedAmount || totalConversion.convertedAmount
+            amount: amountConversion?.convertedAmount || totalConversion.convertedAmount,
+            // Save conversion info for display
+            originalCurrency: detectedCurrency,
+            originalTotal: result.data.total || result.data.amount || 0,
+            conversionRate: totalConversion.rate
           }
           console.log('[Expenses OCR] Converted totals:', {
             original: result.data.total,
@@ -454,7 +462,11 @@ export default function CreateExpensePage() {
           total: totalConversion.convertedAmount,
           subtotal: subtotalConversion.convertedAmount,
           tax: taxConversion.convertedAmount,
-          amount: amountConversion?.convertedAmount || totalConversion.convertedAmount
+          amount: amountConversion?.convertedAmount || totalConversion.convertedAmount,
+          // Save conversion info for display
+          originalCurrency: selectedCurrency,
+          originalTotal: pendingOcrData.data.total || pendingOcrData.data.amount || 0,
+          conversionRate: totalConversion.rate
         }
         console.log('[Expenses OCR] Converted totals:', {
           original: pendingOcrData.data.total,
@@ -1336,6 +1348,28 @@ export default function CreateExpensePage() {
                                   </div>
                                   <Sparkles className="w-5 h-5 text-green-500 animate-pulse" />
                                 </div>
+                                {/* Currency conversion breakdown */}
+                                {ocrResult.originalCurrency && ocrResult.originalCurrency !== 'USD' && (
+                                  <div className="mt-3 pt-3 border-t border-green-200 dark:border-green-700">
+                                    <p className="text-xs font-medium text-green-700 dark:text-green-400 mb-1">
+                                      Conversión de moneda:
+                                    </p>
+                                    <div className="flex items-center justify-between text-sm">
+                                      <span className="text-green-600 dark:text-green-500">
+                                        Original: ${ocrResult.originalTotal?.toLocaleString('es-CU', { minimumFractionDigits: 2 })} {ocrResult.originalCurrency}
+                                      </span>
+                                      <span className="text-green-500 dark:text-green-400">→</span>
+                                      <span className="font-semibold text-green-700 dark:text-green-300">
+                                        ${(ocrResult.total || ocrResult.amount || 0).toFixed(2)} USD
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-green-500 dark:text-green-500 mt-1">
+                                      Tasa: 1 USD = {ocrResult.originalCurrency === 'CUP'
+                                        ? ocrResult.conversionRate?.toLocaleString()
+                                        : ocrResult.conversionRate?.toFixed(2)} {ocrResult.originalCurrency}
+                                    </p>
+                                  </div>
+                                )}
                               </motion.div>
                             )}
 

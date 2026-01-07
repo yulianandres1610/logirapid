@@ -33,7 +33,8 @@ import {
   Brain,
   Zap,
   Wand2,
-  ImageIcon
+  ImageIcon,
+  DollarSign
 } from 'lucide-react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import Link from 'next/link'
@@ -2412,6 +2413,41 @@ export default function CreateConsignmentOrderPage() {
                         ${matchedProducts.filter(p => p.action !== 'ignore').reduce((sum, p) => sum + p.totalCost, 0).toFixed(2)}
                       </p>
                     </div>
+
+                    {/* Currency conversion breakdown */}
+                    {scannedData?.originalCurrency && scannedData.originalCurrency !== 'USD' && (
+                      <div className={cn(
+                        'p-4 rounded-xl border',
+                        theme === 'dark' ? 'bg-amber-900/20 border-amber-700/50' : 'bg-amber-50 border-amber-200'
+                      )}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <DollarSign className="w-4 h-4 text-amber-500" />
+                          <p className={cn(
+                            'text-sm font-medium',
+                            theme === 'dark' ? 'text-amber-400' : 'text-amber-700'
+                          )}>
+                            Conversion de moneda aplicada
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className={theme === 'dark' ? 'text-amber-300' : 'text-amber-600'}>
+                            Original: ${scannedData.originalTotal?.toLocaleString('es-CU', { minimumFractionDigits: 2 })} {scannedData.originalCurrency}
+                          </span>
+                          <span className={theme === 'dark' ? 'text-amber-400' : 'text-amber-500'}>→</span>
+                          <span className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                            ${scannedData.total?.toFixed(2)} USD
+                          </span>
+                        </div>
+                        <p className={cn(
+                          'text-xs mt-2',
+                          theme === 'dark' ? 'text-amber-500' : 'text-amber-600'
+                        )}>
+                          Tasa ElToque: 1 USD = {scannedData.originalCurrency === 'CUP'
+                            ? scannedData.conversionRate?.toLocaleString()
+                            : scannedData.conversionRate?.toFixed(2)} {scannedData.originalCurrency}
+                        </p>
+                      </div>
+                    )}
 
                     {scanError && (
                       <div className="p-4 rounded-xl flex items-center gap-3 bg-red-500/10 border border-red-500/30">
