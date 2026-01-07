@@ -79,43 +79,58 @@ export function getStoragePathWithIndex(barcode: string, index: number, extensio
 
 /**
  * Obtiene el siguiente índice disponible para un barcode
+ * Consulta tanto el storage como la base de datos para evitar conflictos
  */
 export async function getNextImageIndex(barcode: string): Promise<number> {
   const supabase = getSupabaseClient()
   const safeBarcode = barcode.replace(/[^a-zA-Z0-9-_]/g, '')
 
-  // Buscar archivos existentes con formato {barcode}-{index}
+  let maxIndexFromStorage = 0
+  let maxIndexFromDB = 0
+
+  // 1. Buscar en Supabase Storage
   const { data } = await supabase.storage
     .from(BUCKET)
     .list(FOLDER, {
       search: safeBarcode
     })
 
-  if (!data || data.length === 0) {
-    return 1
-  }
+  if (data && data.length > 0) {
+    const indexPattern = new RegExp(`^${safeBarcode}-(\\d+)\\.`)
 
-  // Encontrar el índice más alto
-  let maxIndex = 0
-  const indexPattern = new RegExp(`^${safeBarcode}-(\\d+)\\.`)
-
-  for (const file of data) {
-    const match = file.name.match(indexPattern)
-    if (match) {
-      const index = parseInt(match[1], 10)
-      if (index > maxIndex) {
-        maxIndex = index
+    for (const file of data) {
+      const match = file.name.match(indexPattern)
+      if (match) {
+        const index = parseInt(match[1], 10)
+        if (index > maxIndexFromStorage) {
+          maxIndexFromStorage = index
+        }
       }
+    }
+
+    // También verificar si existe el formato antiguo sin índice
+    const oldFormatExists = data.some(f =>
+      f.name.startsWith(safeBarcode + '.') && !f.name.includes('-')
+    )
+    if (oldFormatExists && maxIndexFromStorage === 0) {
+      maxIndexFromStorage = 1
     }
   }
 
-  // También verificar si existe el formato antiguo sin índice
-  const oldFormatExists = data.some(f =>
-    f.name.startsWith(safeBarcode + '.') && !f.name.includes('-')
-  )
-  if (oldFormatExists && maxIndex === 0) {
-    maxIndex = 1 // El archivo antiguo cuenta como índice 1
+  // 2. Buscar en la base de datos PostgreSQL (para evitar conflictos de constraint)
+  try {
+    const { db } = await import('./database')
+    const dbResult = await db.query(
+      'SELECT COALESCE(MAX(image_index), 0) as max_index FROM product_images WHERE barcode = $1',
+      [barcode]
+    )
+    maxIndexFromDB = parseInt(dbResult.rows[0]?.max_index) || 0
+  } catch (error) {
+    console.warn('[getNextImageIndex] Error querying database:', error)
   }
+
+  // Usar el máximo entre storage y BD
+  const maxIndex = Math.max(maxIndexFromStorage, maxIndexFromDB)
 
   return maxIndex + 1
 }
