@@ -43,9 +43,7 @@ import {
   ClipboardList,
   Calculator,
   Receipt,
-  FileCheck,
-  Printer,
-  ArrowLeftRight
+  FileCheck
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -478,18 +476,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const marketMenuItems = [
     { icon: Home, label: "Dashboard", href: "/dashboard/market" },
     { icon: Package, label: "Inventario", href: "/dashboard/market/inventory" },
-    {
-      icon: Warehouse,
-      label: "Almacenes",
-      href: "/dashboard/market/warehouses",
-      hasSubmenu: true,
-      submenuItems: [
-        { icon: Warehouse, label: "Lista Almacenes", href: "/dashboard/market/warehouses" },
-        { icon: Package, label: "Recepciones", href: "/dashboard/market/warehouses/receptions" },
-        { icon: ArrowLeftRight, label: "Transferencias", href: "/dashboard/market/warehouses/transfers" },
-        { icon: Tag, label: "Etiquetas", href: "/dashboard/market/warehouses/products" },
-      ]
-    },
+    { icon: Warehouse, label: "Almacenes", href: "/dashboard/market/warehouses" },
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
     { icon: Store, label: "Marketplace", href: "/dashboard/market/marketplace" },
     {
@@ -531,16 +518,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Tag, label: "Listas de Precios", href: "/dashboard/market/pricelists" },
     { icon: Wallet, label: "Mi Wallet", href: "/dashboard/market/wallet" },
     { icon: Truck, label: "Entregas", href: "/dashboard/market/deliveries" },
-    {
-      icon: Settings,
-      label: "Configuración",
-      href: "/dashboard/market/settings",
-      hasSubmenu: true,
-      submenuItems: [
-        { icon: Settings, label: "General", href: "/dashboard/market/settings" },
-        { icon: Printer, label: "Impresión", href: "/dashboard/admin/print-config" },
-      ]
-    },
+    { icon: Settings, label: "Configuración", href: "/dashboard/market/settings" },
   ]
 
   // Hook para verificar servicios habilitados
