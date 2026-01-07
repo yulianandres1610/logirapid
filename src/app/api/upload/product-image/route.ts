@@ -154,34 +154,57 @@ export async function POST(request: NextRequest) {
 
     console.log('[Product Image Upload] Uploaded to storage:', { url, path, index })
 
-    // Guardar en base de datos (INSERT, no upsert para soportar múltiples imágenes)
-    await db.query(`
-      INSERT INTO product_images (
-        barcode, image_index, storage_path, image_url, is_primary,
-        processed_with_ai, ai_model, content_type, file_size, created_by, company_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      ON CONFLICT (barcode, image_index) DO UPDATE SET
-        storage_path = EXCLUDED.storage_path,
-        image_url = EXCLUDED.image_url,
-        is_primary = EXCLUDED.is_primary,
-        processed_with_ai = EXCLUDED.processed_with_ai,
-        ai_model = EXCLUDED.ai_model,
-        content_type = EXCLUDED.content_type,
-        file_size = EXCLUDED.file_size,
-        updated_at = NOW()
-    `, [
-      barcode,
-      index,
-      path,
-      url,
-      isPrimary,
-      wasProcessed,
-      wasProcessed ? 'gemini-2.0-flash-exp' : null,
-      file.type,
-      file.size,
-      payload.userId,
-      payload.companyId
-    ])
+    // Guardar en base de datos - verificar si existe primero
+    const existingImage = await db.query(
+      'SELECT id FROM product_images WHERE barcode = $1 AND image_index = $2',
+      [barcode, index]
+    )
+
+    if (existingImage.rows.length > 0) {
+      // Actualizar registro existente
+      await db.query(`
+        UPDATE product_images SET
+          storage_path = $1,
+          image_url = $2,
+          is_primary = $3,
+          processed_with_ai = $4,
+          ai_model = $5,
+          content_type = $6,
+          file_size = $7,
+          updated_at = NOW()
+        WHERE barcode = $8 AND image_index = $9
+      `, [
+        path,
+        url,
+        isPrimary,
+        wasProcessed,
+        wasProcessed ? 'gemini-2.0-flash-exp' : null,
+        file.type,
+        file.size,
+        barcode,
+        index
+      ])
+    } else {
+      // Insertar nuevo registro
+      await db.query(`
+        INSERT INTO product_images (
+          barcode, image_index, storage_path, image_url, is_primary,
+          processed_with_ai, ai_model, content_type, file_size, created_by, company_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `, [
+        barcode,
+        index,
+        path,
+        url,
+        isPrimary,
+        wasProcessed,
+        wasProcessed ? 'gemini-2.0-flash-exp' : null,
+        file.type,
+        file.size,
+        payload.userId,
+        payload.companyId
+      ])
+    }
 
     console.log('[Product Image Upload] Saved to database, index:', index)
 
