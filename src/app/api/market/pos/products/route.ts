@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
           p.selling_price as sale_price,
           p.cost_price,
           0 as tax_rate,
-          COALESCE(pi.image_url, p.image_url) as image_url,
+          COALESCE(p.image_url, pi.image_url) as image_url,
           p.is_active,
           true as track_inventory,
           COALESCE(ws.quantity_on_hand, p.quantity_on_hand, 0) as stock
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
           p.selling_price as sale_price,
           p.cost_price,
           0 as tax_rate,
-          COALESCE(pi.image_url, p.image_url) as image_url,
+          COALESCE(p.image_url, pi.image_url) as image_url,
           p.is_active,
           true as track_inventory,
           p.quantity_on_hand as stock
