@@ -104,8 +104,9 @@ export default function ProfilePage() {
     try {
       const response = await fetch('/api/auth/profile')
       const data = await response.json()
+      console.log('[Profile Page] API response:', data)
 
-      if (data.success) {
+      if (data.success && data.data) {
         setProfile(data.data)
         setFormData({
           firstName: data.data.firstName || '',
@@ -117,6 +118,9 @@ export default function ProfilePage() {
           country: data.data.country || '',
           zipcode: data.data.zipcode || ''
         })
+      } else {
+        console.error('[Profile Page] API error:', data.error)
+        setErrorMessage(data.error || 'Error al cargar el perfil')
       }
     } catch (error) {
       console.error('Error fetching profile:', error)
