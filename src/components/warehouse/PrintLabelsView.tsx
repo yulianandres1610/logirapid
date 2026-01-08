@@ -280,7 +280,7 @@ export default function PrintLabelsView({
                     </div>
                   )}
 
-                  {/* Prices */}
+                  {/* Prices - visible con 2 decimales, interno con 4 */}
                   <div className="flex items-center gap-2 mb-3">
                     <span className={cn(
                       'px-2 py-1 rounded text-sm font-medium',
@@ -288,7 +288,7 @@ export default function PrintLabelsView({
                         ? 'bg-blue-900/30 text-blue-400'
                         : 'bg-blue-100 text-blue-700'
                     )}>
-                      ${product.sellingPrice.toFixed(2)}
+                      ${(Math.round(product.sellingPrice * 100) / 100).toFixed(2)}
                     </span>
                     <span className={cn(
                       'px-2 py-1 rounded text-sm font-medium',
