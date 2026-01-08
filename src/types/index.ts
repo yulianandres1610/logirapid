@@ -21,6 +21,11 @@ export type UserRole =
   | 'BROKER'
   | 'DRIVER'
   | 'CUSTOMER'
+  // Roles MARKET
+  | 'MARKET_MANAGER'    // Manager de empresa MARKET (acceso completo)
+  | 'MARKET_COMERCIAL'  // Comercial (Compras, Marketplace, Inventario)
+  | 'MARKET_ALMACENERO' // Almacenero (solo su almacen asignado)
+  | 'MARKET_VENDEDOR'   // Vendedor (solo POS con terminales asignados)
 
 export interface Company {
   id: string
