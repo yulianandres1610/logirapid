@@ -898,6 +898,10 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                     <div className="p-2">
                       <Button
                         variant="ghost"
+                        onClick={() => {
+                          setShowUserMenu(false)
+                          router.push('/dashboard/profile')
+                        }}
                         className={cn(
                           "w-full justify-start gap-3 px-4 py-3 rounded-xl hover:bg-white/10 transition-all duration-200",
                           theme === 'dark'
