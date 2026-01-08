@@ -81,21 +81,63 @@ export default function MarketWarehousesPage() {
   const [deleteWarehouse, setDeleteWarehouse] = useState<WarehouseData | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [employeeWarehouseId, setEmployeeWarehouseId] = useState<number | null>(null)
+  const [loadingEmployee, setLoadingEmployee] = useState(true)
 
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
+  const isAlmacenero = user?.role === 'MARKET_ALMACENERO'
+
+  // Fetch employee warehouse ID for MARKET_ALMACENERO
+  useEffect(() => {
+    const fetchEmployeeWarehouse = async () => {
+      if (!isAlmacenero) {
+        setLoadingEmployee(false)
+        return
+      }
+
+      try {
+        const response = await fetch('/api/market/accounting/employees/me')
+        const data = await response.json()
+        if (data.success && data.data?.warehouseId) {
+          setEmployeeWarehouseId(data.data.warehouseId)
+        }
+      } catch (error) {
+        console.error('Error fetching employee warehouse:', error)
+      } finally {
+        setLoadingEmployee(false)
+      }
+    }
+
+    fetchEmployeeWarehouse()
+  }, [isAlmacenero])
 
   const fetchWarehouses = async () => {
+    // Wait for employee warehouse to load if almacenero
+    if (isAlmacenero && loadingEmployee) return
+
     setLoading(true)
     try {
       const params = new URLSearchParams()
       if (search) params.set('search', search)
       if (statusFilter) params.set('status', statusFilter)
 
+      // Filter by employee's warehouse if MARKET_ALMACENERO
+      if (isAlmacenero && employeeWarehouseId) {
+        params.set('warehouseId', employeeWarehouseId.toString())
+      }
+
       const response = await fetch(`/api/market/warehouses?${params}`)
       const data = await response.json()
 
       if (data.success) {
-        setWarehouses(data.data.warehouses)
+        // For almacenero, filter client-side as backup
+        let filteredWarehouses = data.data.warehouses
+        if (isAlmacenero && employeeWarehouseId) {
+          filteredWarehouses = filteredWarehouses.filter(
+            (w: WarehouseData) => w.id === employeeWarehouseId
+          )
+        }
+        setWarehouses(filteredWarehouses)
         setStats(data.data.stats)
       }
     } catch (error) {
@@ -106,8 +148,10 @@ export default function MarketWarehousesPage() {
   }
 
   useEffect(() => {
-    fetchWarehouses()
-  }, [statusFilter])
+    if (!loadingEmployee) {
+      fetchWarehouses()
+    }
+  }, [statusFilter, loadingEmployee, employeeWarehouseId])
 
   useEffect(() => {
     const debounce = setTimeout(() => {
@@ -458,17 +502,19 @@ export default function MarketWarehousesPage() {
                   <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
                 </motion.button>
 
-                {/* Nuevo Almacén */}
-                <Link href="/dashboard/market/warehouses/create">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/25"
-                  >
-                    <Plus className="w-5 h-5" />
-                    Nuevo Almacén
-                  </motion.button>
-                </Link>
+                {/* Nuevo Almacén - Hide for MARKET_ALMACENERO */}
+                {!isAlmacenero && (
+                  <Link href="/dashboard/market/warehouses/create">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/25"
+                    >
+                      <Plus className="w-5 h-5" />
+                      Nuevo Almacén
+                    </motion.button>
+                  </Link>
+                )}
               </div>
             </motion.div>
 
@@ -632,27 +678,34 @@ export default function MarketWarehousesPage() {
                                   Operar
                                 </motion.button>
                               )}
-                              <Link href={`/dashboard/market/warehouses/${warehouse.id}`}>
-                                <motion.button
-                                  whileHover={{ scale: 1.1 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                  title="Ver detalles"
-                                >
-                                  <Eye className="w-4 h-4 text-blue-500" />
-                                </motion.button>
-                              </Link>
-                              <Link href={`/dashboard/market/warehouses/${warehouse.id}/edit`}>
-                                <motion.button
-                                  whileHover={{ scale: 1.1 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                  title="Editar almacen"
-                                >
-                                  <Edit className="w-4 h-4 text-amber-500" />
-                                </motion.button>
-                              </Link>
-                              {isAdmin && (
+                              {/* Ver detalles - hide for almacenero */}
+                              {!isAlmacenero && (
+                                <Link href={`/dashboard/market/warehouses/${warehouse.id}`}>
+                                  <motion.button
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    title="Ver detalles"
+                                  >
+                                    <Eye className="w-4 h-4 text-blue-500" />
+                                  </motion.button>
+                                </Link>
+                              )}
+                              {/* Editar - hide for almacenero */}
+                              {!isAlmacenero && (
+                                <Link href={`/dashboard/market/warehouses/${warehouse.id}/edit`}>
+                                  <motion.button
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    title="Editar almacen"
+                                  >
+                                    <Edit className="w-4 h-4 text-amber-500" />
+                                  </motion.button>
+                                </Link>
+                              )}
+                              {/* Eliminar - solo admin */}
+                              {isAdmin && !isAlmacenero && (
                                 <motion.button
                                   whileHover={{ scale: 1.1 }}
                                   whileTap={{ scale: 0.9 }}

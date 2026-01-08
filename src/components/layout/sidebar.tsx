@@ -521,6 +521,23 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Settings, label: "Configuración", href: "/dashboard/market/settings" },
   ]
 
+  // Menu items para MARKET_COMERCIAL (solo Compras, Marketplace, Inventario - sin Dashboard)
+  const marketComercialMenuItems = [
+    { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
+    { icon: Store, label: "Marketplace", href: "/dashboard/market/marketplace" },
+    { icon: Package, label: "Inventario", href: "/dashboard/market/inventory" },
+  ]
+
+  // Menu items para MARKET_ALMACENERO (solo Almacenes - acceso a su almacén asignado)
+  const marketAlmaceneroMenuItems = [
+    { icon: Warehouse, label: "Almacenes", href: "/dashboard/market/warehouses" },
+  ]
+
+  // Menu items para MARKET_VENDEDOR (solo POS - acceso a terminales asignados)
+  const marketVendedorMenuItems = [
+    { icon: Monitor, label: "Punto de Venta", href: "/dashboard/market/pos" },
+  ]
+
   // Hook para verificar servicios habilitados
   const { hasService, hasSubmodule } = useEnabledServices()
 
@@ -562,9 +579,17 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const isBrokerCompany = user?.companyType === 'broker'
   const isMarketCompany = user?.companyType === 'market'
 
+  // Seleccionar menú para empresas MARKET según el rol del empleado
+  const getMarketMenu = () => {
+    if (user?.role === 'MARKET_COMERCIAL') return marketComercialMenuItems
+    if (user?.role === 'MARKET_ALMACENERO') return marketAlmaceneroMenuItems
+    if (user?.role === 'MARKET_VENDEDOR') return marketVendedorMenuItems
+    return marketMenuItems
+  }
+
   let baseMenuItems = user?.role === 'SUPER_ADMIN' ? superAdminMenuItems :
                       isBrokerCompany ? brokerMenuItems :  // Priorizar tipo de empresa broker
-                      isMarketCompany ? marketMenuItems :  // Priorizar tipo de empresa market
+                      isMarketCompany ? getMarketMenu() :  // Verificar rol MARKET
                       user?.role === 'ADMIN' ? adminMenuItems :
                       user?.role === 'MANAGER' ? managerMenuItems :
                       user?.role === 'BROKER' ? brokerMenuItems :

@@ -21,7 +21,8 @@ import {
   EyeOff,
   AlertCircle,
   Loader2,
-  X
+  X,
+  Warehouse as WarehouseIcon
 } from 'lucide-react'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
@@ -31,6 +32,12 @@ interface Terminal {
   name: string
   location: string
   status: string
+}
+
+interface Warehouse {
+  id: number
+  name: string
+  code: string
 }
 
 interface TerminalPermission {
@@ -69,6 +76,7 @@ export default function CreateEmployeePage() {
   const { theme } = useTheme()
   const [currentStep, setCurrentStep] = useState<string>('personal')
   const [terminals, setTerminals] = useState<Terminal[]>([])
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [showPassword, setShowPassword] = useState(false)
   const [showPin, setShowPin] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -93,6 +101,7 @@ export default function CreateEmployeePage() {
     currency: 'USD',
     hireDate: new Date().toISOString().split('T')[0],
     commissionRate: '',
+    warehouseId: '', // For MARKET_ALMACENERO
 
     // Step 3: POS Access
     posPin: '',
@@ -103,6 +112,7 @@ export default function CreateEmployeePage() {
 
   useEffect(() => {
     fetchTerminals()
+    fetchWarehouses()
   }, [])
 
   const fetchTerminals = async () => {
@@ -116,6 +126,20 @@ export default function CreateEmployeePage() {
       }
     } catch (error) {
       console.error('Error fetching terminals:', error)
+    }
+  }
+
+  const fetchWarehouses = async () => {
+    try {
+      const response = await fetch('/api/market/warehouses')
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          setWarehouses(result.data.warehouses || [])
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching warehouses:', error)
     }
   }
 
@@ -179,6 +203,10 @@ export default function CreateEmployeePage() {
           setError('La tarifa debe ser mayor a 0')
           return false
         }
+        if (formData.role === 'MARKET_ALMACENERO' && !formData.warehouseId) {
+          setError('Debe seleccionar un almacén para el rol Almacenero')
+          return false
+        }
         return true
 
       case 'pos':
@@ -236,6 +264,7 @@ export default function CreateEmployeePage() {
           commissionRate: formData.commissionRate ? parseFloat(formData.commissionRate) : 0,
           posPin: formData.posPin || null,
           badgeCode: formData.badgeCode || null,
+          warehouseId: formData.warehouseId ? parseInt(formData.warehouseId) : null,
           terminals: terminalPermissions.map(p => ({
             terminalId: p.terminalId,
             canOpenSession: p.canOpenSession,
@@ -269,6 +298,10 @@ export default function CreateEmployeePage() {
 
   const getPayTypeLabel = (payTypeValue: string) => {
     return PAY_TYPES.find(p => p.value === payTypeValue)?.label || payTypeValue
+  }
+
+  const getWarehouseName = (warehouseId: string) => {
+    return warehouses.find(w => w.id.toString() === warehouseId)?.name || 'No asignado'
   }
 
   return (
@@ -543,6 +576,49 @@ export default function CreateEmployeePage() {
                       ))}
                     </div>
                   </div>
+
+                  {/* Warehouse selector - only for MARKET_ALMACENERO */}
+                  {formData.role === 'MARKET_ALMACENERO' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        <WarehouseIcon className="w-4 h-4 inline mr-2" />
+                        Almacén Asignado *
+                      </label>
+                      {warehouses.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {warehouses.map(warehouse => (
+                            <div
+                              key={warehouse.id}
+                              onClick={() => updateFormData('warehouseId', warehouse.id.toString())}
+                              className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                                formData.warehouseId === warehouse.id.toString()
+                                  ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30'
+                                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <WarehouseIcon className={`w-5 h-5 ${
+                                  formData.warehouseId === warehouse.id.toString()
+                                    ? 'text-emerald-600'
+                                    : 'text-gray-400'
+                                }`} />
+                                <div>
+                                  <h4 className="font-medium text-gray-900 dark:text-white">{warehouse.name}</h4>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">{warehouse.code}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl">
+                          <p className="text-yellow-700 dark:text-yellow-400 text-sm">
+                            No hay almacenes configurados. Cree un almacén primero.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
@@ -852,6 +928,14 @@ export default function CreateEmployeePage() {
                             {new Date(formData.hireDate).toLocaleDateString('es-ES')}
                           </dd>
                         </div>
+                        {formData.role === 'MARKET_ALMACENERO' && formData.warehouseId && (
+                          <div>
+                            <dt className="text-gray-500">Almacén Asignado</dt>
+                            <dd className="font-medium text-emerald-600 dark:text-emerald-400">
+                              {getWarehouseName(formData.warehouseId)}
+                            </dd>
+                          </div>
+                        )}
                       </dl>
                     </div>
 

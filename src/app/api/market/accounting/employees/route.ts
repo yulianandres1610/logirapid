@@ -60,12 +60,14 @@ export async function GET(request: NextRequest) {
         e.currency,
         e.pos_badge_code,
         e.commission_rate,
+        e.warehouse_id,
         e.created_at,
         u.email,
         u.firstname,
         u.lastname,
         u.phone,
         u.role,
+        w.name as warehouse_name,
         CASE WHEN e.pos_pin IS NOT NULL THEN true ELSE false END as has_pin,
         (
           SELECT json_agg(json_build_object(
@@ -84,6 +86,7 @@ export async function GET(request: NextRequest) {
         ) as terminals
       FROM market_employees e
       JOIN users u ON e.user_id = u.id
+      LEFT JOIN market_warehouses w ON e.warehouse_id = w.id
       WHERE e.company_id = $1
     `
     const params: any[] = [companyId]
@@ -152,6 +155,8 @@ export async function GET(request: NextRequest) {
           hasPIN: row.has_pin,
           badgeCode: row.pos_badge_code,
           commissionRate: parseFloat(row.commission_rate) || 0,
+          warehouseId: row.warehouse_id,
+          warehouseName: row.warehouse_name,
           terminals: row.terminals || [],
           createdAt: row.created_at
         })),
@@ -215,6 +220,7 @@ export async function POST(request: NextRequest) {
       commissionRate,
       posPin,
       badgeCode,
+      warehouseId, // Required for MARKET_ALMACENERO
 
       // Terminals
       terminals // Array of { terminalId, permissions }
@@ -234,6 +240,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: false,
         error: 'Rol inválido'
+      }, { status: 400 })
+    }
+
+    // Validate warehouseId required for MARKET_ALMACENERO
+    if (role === 'MARKET_ALMACENERO' && !warehouseId) {
+      return NextResponse.json({
+        success: false,
+        error: 'Debe seleccionar un almacén para el rol Almacenero'
       }, { status: 400 })
     }
 
@@ -308,8 +322,8 @@ export async function POST(request: NextRequest) {
         INSERT INTO market_employees (
           user_id, company_id, employee_code, hire_date,
           pay_type, pay_rate, currency, commission_rate,
-          pos_pin, pos_badge_code, status, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active', NOW(), NOW())
+          pos_pin, pos_badge_code, warehouse_id, status, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active', NOW(), NOW())
         RETURNING id
       `, [
         userId,
@@ -321,7 +335,8 @@ export async function POST(request: NextRequest) {
         currency || 'USD',
         commissionRate || 0,
         hashedPin,
-        badgeCode || null
+        badgeCode || null,
+        warehouseId || null
       ])
 
       const employeeId = employeeResult.rows[0].id

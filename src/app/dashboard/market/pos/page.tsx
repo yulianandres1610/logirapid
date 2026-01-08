@@ -103,7 +103,8 @@ export default function MarketPOSPage() {
     }
   }, [denominationTotals.usd, denominationTotals.cup, denominationTotals.mlc, useDenominations])
 
-  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'MARKET_MANAGER'
+  const isVendedor = user?.role === 'MARKET_VENDEDOR'
 
   const fetchTerminals = async () => {
     setLoading(true)
@@ -136,6 +137,11 @@ export default function MarketPOSPage() {
           filteredTerminals = filteredTerminals.filter((t: Terminal) => !t.isActive)
         } else if (statusFilter === 'withSession') {
           filteredTerminals = filteredTerminals.filter((t: Terminal) => t.hasOpenSession)
+        }
+
+        // MARKET_VENDEDOR: Only show terminals with access
+        if (isVendedor) {
+          filteredTerminals = filteredTerminals.filter((t: Terminal) => t.userHasAccess)
         }
 
         setTerminals(filteredTerminals)
@@ -541,25 +547,27 @@ export default function MarketPOSPage() {
                   <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
                 </motion.button>
 
-                {/* Historial de Sesiones */}
-                <Link href="/dashboard/market/pos/sessions">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all',
-                      theme === 'dark'
-                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    <History className="w-5 h-5" />
-                    Historial
-                  </motion.button>
-                </Link>
+                {/* Historial de Sesiones - hide for MARKET_VENDEDOR */}
+                {!isVendedor && (
+                  <Link href="/dashboard/market/pos/sessions">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={cn(
+                        'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all',
+                        theme === 'dark'
+                          ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      )}
+                    >
+                      <History className="w-5 h-5" />
+                      Historial
+                    </motion.button>
+                  </Link>
+                )}
 
                 {/* Nuevo Terminal */}
-                {isAdmin && (
+                {isAdmin && !isVendedor && (
                   <Link href="/dashboard/market/pos/create">
                     <motion.button
                       whileHover={{ scale: 1.02 }}

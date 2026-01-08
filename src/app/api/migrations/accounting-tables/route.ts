@@ -218,6 +218,17 @@ export async function POST(request: NextRequest) {
       console.log('[Migration] employee_id column may already exist or table not found')
     }
 
+    // 9. Add warehouse_id to market_employees for MARKET_ALMACENERO role
+    try {
+      await db.query(`
+        ALTER TABLE market_employees
+        ADD COLUMN IF NOT EXISTS warehouse_id INTEGER REFERENCES market_warehouses(id)
+      `)
+      console.log('[Migration] Added warehouse_id to market_employees')
+    } catch (error) {
+      console.log('[Migration] warehouse_id column may already exist')
+    }
+
     // 9. Insert default expense categories for existing market companies
     const companies = await db.query(`
       SELECT id FROM companies WHERE companytype = 'market'
