@@ -40,41 +40,52 @@ export async function GET() {
     }
 
     const userId = payload.userId
+    console.log('[Profile GET] userId:', userId)
 
     // Get user data with company info (try both user_companies and market_employees for company)
-    const result = await db.query(`
-      SELECT
-        u.id,
-        u.email,
-        u.name,
-        u.firstname,
-        u.lastname,
-        u.phone,
-        u.address,
-        u.city,
-        u.state,
-        u.country,
-        u.zipcode,
-        u.avatar,
-        u.role,
-        u.createdat,
-        u.lastlogin,
-        COALESCE(c.id, c2.id) as company_id,
-        COALESCE(c.name, c2.name) as company_name,
-        COALESCE(c.type, c2.type) as company_type
-      FROM users u
-      LEFT JOIN user_companies uc ON u.id = uc.user_id
-      LEFT JOIN companies c ON uc.company_id = c.id
-      LEFT JOIN market_employees me ON u.id = me.user_id
-      LEFT JOIN companies c2 ON me.company_id = c2.id
-      WHERE u.id = $1
-      LIMIT 1
-    `, [userId])
+    let result
+    try {
+      result = await db.query(`
+        SELECT
+          u.id,
+          u.email,
+          u.name,
+          u.firstname,
+          u.lastname,
+          u.phone,
+          u.address,
+          u.city,
+          u.state,
+          u.country,
+          u.zipcode,
+          u.avatar,
+          u.role,
+          u.createdat,
+          u.lastlogin,
+          COALESCE(c.id, c2.id) as company_id,
+          COALESCE(c.name, c2.name) as company_name,
+          COALESCE(c.type, c2.type) as company_type
+        FROM users u
+        LEFT JOIN user_companies uc ON u.id = uc.user_id
+        LEFT JOIN companies c ON uc.company_id = c.id
+        LEFT JOIN market_employees me ON u.id = me.user_id
+        LEFT JOIN companies c2 ON me.company_id = c2.id
+        WHERE u.id = $1
+        LIMIT 1
+      `, [userId])
+      console.log('[Profile GET] Query result rows:', result.rows.length)
+    } catch (dbError) {
+      console.error('[Profile GET] DB Error:', dbError)
+      return NextResponse.json({
+        success: false,
+        error: 'Error de base de datos: ' + (dbError instanceof Error ? dbError.message : 'Unknown')
+      }, { status: 500 })
+    }
 
     if (result.rows.length === 0) {
       return NextResponse.json({
         success: false,
-        error: 'Usuario no encontrado'
+        error: `Usuario no encontrado (id: ${userId})`
       }, { status: 404 })
     }
 
