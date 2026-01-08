@@ -46,7 +46,7 @@ export async function GET(
         o.*,
         s.supplier_code as supplier_code,
         s.name as supplier_name,
-        s.contact_name as supplier_contact,
+        s.contact_person as supplier_contact,
         s.email as supplier_email,
         s.phone as supplier_phone,
         w.name as warehouse_name,
