@@ -1677,7 +1677,7 @@ export default function POSTerminalPage() {
                   <input
                     type="number"
                     min="0"
-                    step="0.01"
+                    step="0.0001"
                     value={amountTendered}
                     onChange={(e) => setAmountTendered(e.target.value)}
                     placeholder={cartTotals.total.toFixed(2)}

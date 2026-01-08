@@ -1144,7 +1144,7 @@ export default function CommissionsConfigPage() {
                       </label>
                       <input
                         type="number"
-                        step="0.01"
+                        step="0.0001"
                         min="0"
                         placeholder="Sin minimo"
                         value={formData.minAmount}
@@ -1167,7 +1167,7 @@ export default function CommissionsConfigPage() {
                       </label>
                       <input
                         type="number"
-                        step="0.01"
+                        step="0.0001"
                         min="0"
                         placeholder="Sin maximo"
                         value={formData.maxAmount}

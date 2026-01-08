@@ -878,7 +878,7 @@ export default function CreateMarketplaceListingPage() {
                             type="number"
                             value={priceMarketplace}
                             onChange={(e) => setPriceMarketplace(e.target.value)}
-                            step="0.01"
+                            step="0.0001"
                             min="0"
                             placeholder="0.00"
                             className={cn(

@@ -557,7 +557,7 @@ export default function ServicesManagement() {
                       </label>
                       <Input
                         type="number"
-                        step="0.01"
+                        step="0.0001"
                         value={serviceForm.basePrice}
                         onChange={(e) => setServiceForm({ ...serviceForm, basePrice: parseFloat(e.target.value) || 0 })}
                         className={theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white text-gray-900 border-gray-300'}
@@ -572,7 +572,7 @@ export default function ServicesManagement() {
                       </label>
                       <Input
                         type="number"
-                        step="0.01"
+                        step="0.0001"
                         value={serviceForm.pricePerUnit}
                         onChange={(e) => setServiceForm({ ...serviceForm, pricePerUnit: parseFloat(e.target.value) || 0 })}
                         className={theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white text-gray-900 border-gray-300'}

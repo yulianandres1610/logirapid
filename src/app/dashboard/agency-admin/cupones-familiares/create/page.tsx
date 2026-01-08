@@ -1091,7 +1091,7 @@ export default function CreateRemittancePage() {
                     updateWizardData({ sendAmount: isNaN(numValue) ? 0 : numValue })
                   }}
                   min="0"
-                  step="0.01"
+                  step="0.0001"
                   className={cn(
                     "pl-10 text-2xl font-bold h-14 rounded-xl border-2",
                     theme === 'dark'

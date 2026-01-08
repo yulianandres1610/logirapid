@@ -245,7 +245,7 @@ export default function CashoutModal({
                   </div>
                   <input
                     type="number"
-                    step="0.01"
+                    step="0.0001"
                     min={MIN_CASHOUT}
                     max={walletBalance}
                     value={amount}

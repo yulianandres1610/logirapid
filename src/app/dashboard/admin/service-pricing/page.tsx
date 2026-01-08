@@ -631,7 +631,7 @@ function PriceRow({
             </span>
             <input
               type="number"
-              step="0.01"
+              step="0.0001"
               min="0"
               value={currentProviderCost}
               onChange={(e) => onPriceChange(price.serviceId, 'providerCost', parseFloat(e.target.value) || 0)}
@@ -656,7 +656,7 @@ function PriceRow({
             </span>
             <input
               type="number"
-              step="0.01"
+              step="0.0001"
               min="0"
               value={currentPlatformPrice}
               onChange={(e) => onPriceChange(price.serviceId, 'platformPrice', parseFloat(e.target.value) || 0)}

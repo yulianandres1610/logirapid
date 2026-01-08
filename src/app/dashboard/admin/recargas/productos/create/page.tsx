@@ -439,7 +439,7 @@ export default function CreateProductoRecargaPage() {
                     />
                     <input
                       type="number"
-                      step="0.01"
+                      step="0.0001"
                       min="0"
                       value={costPrice}
                       onChange={(e) => setCostPrice(e.target.value)}
@@ -475,7 +475,7 @@ export default function CreateProductoRecargaPage() {
                     />
                     <input
                       type="number"
-                      step="0.01"
+                      step="0.0001"
                       min="0"
                       value={sellingPrice}
                       onChange={(e) => setSellingPrice(e.target.value)}

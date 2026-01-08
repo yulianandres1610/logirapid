@@ -404,7 +404,7 @@ export function BranchPricingModal({
                             <div className="relative group">
                               <input
                                 type="number"
-                                step="0.01"
+                                step="0.0001"
                                 min="0"
                                 value={value}
                                 onChange={(e) => handlePriceChange(

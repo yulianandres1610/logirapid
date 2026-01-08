@@ -2780,7 +2780,7 @@ export default function CompaniesPage() {
                                     <input
                                       type="number"
                                       min="0"
-                                      step="0.01"
+                                      step="0.0001"
                                       value={fee.fixed || 0}
                                       onChange={(e) => {
                                         setFormData({

@@ -2512,7 +2512,7 @@ export default function CreateConsignmentOrderPage() {
                                         onChange={(e) => handleUpdateMatchedProduct(item.id, 'quantity', e.target.value)}
                                         disabled={item.action === 'ignore'}
                                         min="0"
-                                        step="0.01"
+                                        step="0.0001"
                                         className={cn(
                                           'w-16 px-2 py-0.5 rounded text-sm border text-center',
                                           theme === 'dark'
@@ -2531,7 +2531,7 @@ export default function CreateConsignmentOrderPage() {
                                           onChange={(e) => handleUpdateMatchedProduct(item.id, 'unitCost', e.target.value)}
                                           disabled={item.action === 'ignore'}
                                           min="0"
-                                          step="0.01"
+                                          step="0.0001"
                                           className={cn(
                                             'w-20 pl-5 pr-2 py-0.5 rounded text-sm border text-right',
                                             theme === 'dark'
@@ -2551,7 +2551,7 @@ export default function CreateConsignmentOrderPage() {
                                           onChange={(e) => handleUpdateMatchedProduct(item.id, 'suggestedSellingPrice', e.target.value)}
                                           disabled={item.action === 'ignore' || item.action === 'link_to'}
                                           min="0"
-                                          step="0.01"
+                                          step="0.0001"
                                           className={cn(
                                             'w-20 pl-5 pr-2 py-0.5 rounded text-sm border text-right',
                                             theme === 'dark'
@@ -3332,7 +3332,7 @@ export default function CreateConsignmentOrderPage() {
                                     type="number"
                                     value={line.unitCost}
                                     onChange={(e) => updateLine(line.productId, line.variantId, 'unitCost', parseFloat(e.target.value) || 0)}
-                                    step="0.01"
+                                    step="0.0001"
                                     min={0}
                                     className={cn(
                                       'w-24 px-3 py-1.5 rounded-lg border text-right',
@@ -3348,7 +3348,7 @@ export default function CreateConsignmentOrderPage() {
                                     type="number"
                                     value={line.unitPrice}
                                     onChange={(e) => updateLine(line.productId, line.variantId, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                    step="0.01"
+                                    step="0.0001"
                                     min={0}
                                     className={cn(
                                       'w-24 px-3 py-1.5 rounded-lg border text-right',

@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { PrintLabelModal } from '@/components/print/PrintLabelModal'
+import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
 
 type Step = 'info' | 'image' | 'pricing' | 'variants' | 'review'
 
@@ -113,6 +114,9 @@ export default function EditProductPage() {
   const router = useRouter()
   const params = useParams()
   const productId = params.id as string
+
+  // Exchange rates for currency conversion
+  const { USD_CUP_BCC, USD_MLC } = useMarketExchangeRates()
 
   const [currentStep, setCurrentStep] = useState<Step>('info')
   const [loading, setLoading] = useState(true) // Start loading while fetching product
@@ -2031,8 +2035,8 @@ export default function EditProductPage() {
                             type="number"
                             value={formData.costPrice}
                             onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
-                            placeholder="0.00"
-                            step="0.01"
+                            placeholder="0.0000"
+                            step="0.0001"
                             min="0"
                             className={cn(
                               'w-full pl-8 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
@@ -2063,8 +2067,8 @@ export default function EditProductPage() {
                             type="number"
                             value={formData.sellingPrice}
                             onChange={(e) => setFormData({ ...formData, sellingPrice: e.target.value })}
-                            placeholder="0.00"
-                            step="0.01"
+                            placeholder="0.0000"
+                            step="0.0001"
                             min="0"
                             className={cn(
                               'w-full pl-8 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
@@ -2103,7 +2107,7 @@ export default function EditProductPage() {
                               "text-xs mt-1",
                               theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
                             )}>
-                              Ganancia: {symbol}{(parseFloat(formData.sellingPrice) - parseFloat(formData.costPrice)).toFixed(2)} por {selectedUnit?.abbr}
+                              Ganancia: {symbol}{(parseFloat(formData.sellingPrice) - parseFloat(formData.costPrice)).toFixed(4)} por {selectedUnit?.abbr}
                             </p>
                           </div>
                           <span className={cn(
@@ -2112,6 +2116,37 @@ export default function EditProductPage() {
                           )}>
                             {getMargin()}%
                           </span>
+                        </div>
+
+                        {/* Selling price in multiple currencies */}
+                        <div className={cn(
+                          "mt-4 pt-4 border-t",
+                          theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                        )}>
+                          <span className={cn(
+                            "text-xs font-medium",
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                          )}>Precio de Venta:</span>
+                          <div className="flex flex-wrap gap-3 mt-2">
+                            <span className={cn(
+                              "px-2 py-1 rounded-lg text-sm font-medium",
+                              theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'
+                            )}>
+                              ${parseFloat(formData.sellingPrice).toFixed(4)} USD
+                            </span>
+                            <span className={cn(
+                              "px-2 py-1 rounded-lg text-sm font-medium",
+                              theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
+                            )}>
+                              ${Math.round(parseFloat(formData.sellingPrice) * (USD_CUP_BCC || 411)).toLocaleString()} CUP
+                            </span>
+                            <span className={cn(
+                              "px-2 py-1 rounded-lg text-sm font-medium",
+                              theme === 'dark' ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'
+                            )}>
+                              ${(parseFloat(formData.sellingPrice) * (USD_MLC || 1.5)).toFixed(2)} MLC
+                            </span>
+                          </div>
                         </div>
 
                         {/* Progress bar */}

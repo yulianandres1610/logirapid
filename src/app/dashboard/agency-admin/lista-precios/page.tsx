@@ -839,7 +839,7 @@ export default function ListaPreciosEmpresaPage() {
                                       <td className="px-4 py-3 text-center">
                                         <input
                                           type="number"
-                                          step="0.01"
+                                          step="0.0001"
                                           value={tuPrecioBase}
                                           onChange={(e) => handleCompanyPriceChange(
                                             product.productId,
@@ -948,7 +948,7 @@ export default function ListaPreciosEmpresaPage() {
                                           <div className="relative">
                                             <input
                                               type="number"
-                                              step="0.01"
+                                              step="0.0001"
                                               value={precioSucursales ?? ''}
                                               onChange={(e) => handleCompanyPriceChange(
                                                 product.productId,
@@ -978,7 +978,7 @@ export default function ListaPreciosEmpresaPage() {
                                         <div className="relative">
                                           <input
                                             type="number"
-                                            step="0.01"
+                                            step="0.0001"
                                             value={precioClientes ?? ''}
                                             onChange={(e) => handleCompanyPriceChange(
                                               product.productId,

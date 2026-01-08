@@ -208,7 +208,7 @@ export default function PackageList({ orderId, empaques, onPackageUpdated }: Pac
                       <div className="flex items-center gap-2">
                         <input
                           type="number"
-                          step="0.01"
+                          step="0.0001"
                           min="0"
                           value={editWeight}
                           onChange={(e) => setEditWeight(e.target.value)}

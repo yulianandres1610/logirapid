@@ -354,7 +354,7 @@ export default function SupplierPaymentsPage() {
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       max={wallet.available}
-                      step="0.01"
+                      step="0.0001"
                       placeholder="0.00"
                       className="w-full pl-9 pr-4 py-3.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xl font-medium focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                     />

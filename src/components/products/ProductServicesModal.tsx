@@ -467,7 +467,7 @@ export default function ProductServicesModal({
                         </label>
                         <input
                           type="number"
-                          step="0.01"
+                          step="0.0001"
                           value={formData.costPrice || 0}
                           onChange={(e) => setFormData({ ...formData, costPrice: parseFloat(e.target.value) || 0 })}
                           className={cn(
@@ -489,7 +489,7 @@ export default function ProductServicesModal({
                         </label>
                         <input
                           type="number"
-                          step="0.01"
+                          step="0.0001"
                           value={formData.sellPrice || 0}
                           onChange={(e) => setFormData({ ...formData, sellPrice: parseFloat(e.target.value) || 0 })}
                           className={cn(

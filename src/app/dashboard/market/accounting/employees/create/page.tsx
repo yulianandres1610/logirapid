@@ -577,7 +577,7 @@ export default function CreateEmployeePage() {
                         value={formData.payRate}
                         onChange={(e) => updateFormData('payRate', e.target.value)}
                         placeholder="0.00"
-                        step="0.01"
+                        step="0.0001"
                         min="0"
                         className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900"
                       />

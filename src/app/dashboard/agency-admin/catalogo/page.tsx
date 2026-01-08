@@ -1649,7 +1649,7 @@ export default function CatalogoEmpresaPage() {
                                   }`}>$</span>
                                   <input
                                     type="number"
-                                    step="0.01"
+                                    step="0.0001"
                                     min={product.miCosto}
                                     value={branchPrice ?? ''}
                                     placeholder="—"
@@ -1947,7 +1947,7 @@ export default function CatalogoEmpresaPage() {
                                             <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`}>$</span>
                                             <input
                                               type="number"
-                                              step="0.01"
+                                              step="0.0001"
                                               min={service.costPrice}
                                               value={servicePrices[service.id] ?? service.sellPrice}
                                               onChange={(e) => {
@@ -2233,7 +2233,7 @@ export default function CatalogoEmpresaPage() {
                                   <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>$</span>
                                   <input
                                     type="number"
-                                    step="0.01"
+                                    step="0.0001"
                                     min="0"
                                     max={availableMargin > 0 ? availableMargin : undefined}
                                     value={commission.maxAmount ?? ''}
@@ -3265,7 +3265,7 @@ function ServiceModal({ isDark, product, services, editingService, onClose, onSa
                 </p>
                 <input
                   type="number"
-                  step="0.01"
+                  step="0.0001"
                   min="0"
                   value={formData.costPrice}
                   onChange={(e) => setFormData({ ...formData, costPrice: parseFloat(e.target.value) || 0 })}

@@ -411,7 +411,7 @@ export default function ProductPricingStep({
                                   product
                                 )}
                                 min={0}
-                                step="0.01"
+                                step="0.0001"
                                 className="w-24 px-2 py-1 text-right border-2 rounded dark:bg-amber-900/30 dark:border-amber-600 border-amber-400 bg-white"
                               />
                               <span className="text-gray-500 text-xs w-6 text-left">{unitLabel}</span>
@@ -555,7 +555,7 @@ export default function ProductPricingStep({
                                       product
                                     )}
                                     min={miCosto}
-                                    step="0.01"
+                                    step="0.0001"
                                     className={cn(
                                       "w-24 px-2 py-1 text-right border rounded dark:bg-gray-700 dark:border-gray-600",
                                       productErrors?.sucursales && "border-red-500 dark:border-red-500"
@@ -587,7 +587,7 @@ export default function ProductPricingStep({
                                 product
                               )}
                               min={miCosto}
-                              step="0.01"
+                              step="0.0001"
                               className={cn(
                                 "w-24 px-2 py-1 text-right border rounded dark:bg-gray-700 dark:border-gray-600",
                                 productErrors?.clientes && "border-red-500 dark:border-red-500"

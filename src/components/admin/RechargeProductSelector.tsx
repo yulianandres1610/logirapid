@@ -401,7 +401,7 @@ export function RechargeProductSelector({ onClose, onProductSelected }: Recharge
                     <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                       type="number"
-                      step="0.01"
+                      step="0.0001"
                       min="0"
                       value={costPrice}
                       onChange={(e) => setCostPrice(e.target.value)}
@@ -418,7 +418,7 @@ export function RechargeProductSelector({ onClose, onProductSelected }: Recharge
                     <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                       type="number"
-                      step="0.01"
+                      step="0.0001"
                       min="0"
                       value={sellingPrice}
                       onChange={(e) => setSellingPrice(e.target.value)}

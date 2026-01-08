@@ -413,7 +413,7 @@ export default function ProductModal({
                   )}>$</span>
                   <input
                     type="number"
-                    step="0.01"
+                    step="0.0001"
                     min="0"
                     value={formData.mi_costo}
                     onChange={e => handleChange('mi_costo', parseFloat(e.target.value) || 0)}
@@ -446,7 +446,7 @@ export default function ProductModal({
                   )}>$</span>
                   <input
                     type="number"
-                    step="0.01"
+                    step="0.0001"
                     min="0"
                     value={formData.precio_mayorista}
                     onChange={e => handleChange('precio_mayorista', parseFloat(e.target.value) || 0)}
@@ -479,7 +479,7 @@ export default function ProductModal({
                   )}>$</span>
                   <input
                     type="number"
-                    step="0.01"
+                    step="0.0001"
                     min="0"
                     value={formData.precio_publico}
                     onChange={e => handleChange('precio_publico', parseFloat(e.target.value) || 0)}

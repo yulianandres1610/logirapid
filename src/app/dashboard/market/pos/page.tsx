@@ -1108,7 +1108,7 @@ export default function MarketPOSPage() {
                               <input
                                 type="number"
                                 min="0"
-                                step="0.01"
+                                step="0.0001"
                                 value={openingCash.usd}
                                 onChange={(e) => setOpeningCash(prev => ({ ...prev, usd: parseFloat(e.target.value) || 0 }))}
                                 className={cn(
@@ -1140,7 +1140,7 @@ export default function MarketPOSPage() {
                               <input
                                 type="number"
                                 min="0"
-                                step="0.01"
+                                step="0.0001"
                                 value={openingCash.mlc}
                                 onChange={(e) => setOpeningCash(prev => ({ ...prev, mlc: parseFloat(e.target.value) || 0 }))}
                                 className={cn(

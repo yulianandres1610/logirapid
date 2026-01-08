@@ -593,7 +593,7 @@ export default function CreatePricelistPage() {
                                     )}
                                     <input
                                       type="number"
-                                      step="0.01"
+                                      step="0.0001"
                                       value={
                                         item.priceType === 'fixed' ? item.fixedPrice || '' :
                                         item.priceType === 'discount_percent' ? item.discountPercent || '' :

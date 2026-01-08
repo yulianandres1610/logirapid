@@ -574,7 +574,7 @@ export default function CreatePurchaseOrderPage() {
                             </span>
                             <Input
                               type="number"
-                              step="0.01"
+                              step="0.0001"
                               min="0"
                               value={item.unit_price}
                               onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}

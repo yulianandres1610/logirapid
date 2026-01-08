@@ -661,7 +661,7 @@ export default function CreatePayrollPage() {
                         <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <input
                           type="number"
-                          step="0.01"
+                          step="0.0001"
                           min="0"
                           value={formData.bonusAmount}
                           onChange={(e) => setFormData(prev => ({ ...prev, bonusAmount: e.target.value }))}
@@ -690,7 +690,7 @@ export default function CreatePayrollPage() {
                         <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <input
                           type="number"
-                          step="0.01"
+                          step="0.0001"
                           min="0"
                           value={formData.deductions}
                           onChange={(e) => setFormData(prev => ({ ...prev, deductions: e.target.value }))}

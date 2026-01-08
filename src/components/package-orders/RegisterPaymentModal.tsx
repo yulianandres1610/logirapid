@@ -143,7 +143,7 @@ export default function RegisterPaymentModal({
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
               <input
                 type="number"
-                step="0.01"
+                step="0.0001"
                 min="0.01"
                 max={remainingAmount}
                 value={amount}
@@ -165,7 +165,7 @@ export default function RegisterPaymentModal({
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
                 <input
                   type="number"
-                  step="0.01"
+                  step="0.0001"
                   min={amount}
                   value={cashReceived}
                   onChange={(e) => setCashReceived(e.target.value)}

@@ -184,7 +184,7 @@ export default function PackageScanInput({ orderId, orderNumber, onPackageAdded 
           </label>
           <input
             type="number"
-            step="0.01"
+            step="0.0001"
             min="0"
             value={pesoLb}
             onChange={(e) => setPesoLb(e.target.value)}

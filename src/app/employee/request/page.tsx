@@ -373,7 +373,7 @@ export default function EmployeeRequestPage() {
                       value={formData.amount}
                       onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
                       placeholder="0.00"
-                      step="0.01"
+                      step="0.0001"
                       min="0"
                       required
                       className="w-full pl-12 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900"

@@ -1127,7 +1127,7 @@ export default function SettingsPage() {
                             : 'bg-white border-gray-300'
                         )}
                         placeholder="15.00"
-                        step="0.01"
+                        step="0.0001"
                       />
                     </div>
                     <div className="col-span-2">

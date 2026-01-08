@@ -1369,7 +1369,7 @@ export default function ProductConfigPage() {
                                         }`}>+$</span>
                                         <input
                                           type="number"
-                                          step="0.01"
+                                          step="0.0001"
                                           min="0"
                                           value={customMargin?.marginValue ?? ''}
                                           placeholder={product.pricing?.marginValue?.toString() || '0'}
@@ -2048,7 +2048,7 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                             type="number"
                             value={univcellCostPrice}
                             onChange={(e) => setUnivcellCostPrice(e.target.value)}
-                            step="0.01"
+                            step="0.0001"
                             min="0"
                             placeholder="0.00"
                             className={`w-full pl-8 pr-3 py-2 rounded-lg text-sm ${
@@ -2070,7 +2070,7 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                             type="number"
                             value={univcellSellingPrice}
                             onChange={(e) => setUnivcellSellingPrice(e.target.value)}
-                            step="0.01"
+                            step="0.0001"
                             min="0"
                             placeholder="0.00"
                             className={`w-full pl-8 pr-3 py-2 rounded-lg text-sm ${
@@ -2292,7 +2292,7 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                       <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-amber-500' : 'text-amber-600'}`}>$</span>
                       <input
                         type="number"
-                        step="0.01"
+                        step="0.0001"
                         min="0"
                         value={formData.miCostoFijo}
                         onChange={(e) => setFormData({ ...formData, miCostoFijo: parseFloat(e.target.value) || 0 })}
@@ -2316,7 +2316,7 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
                       <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${isDark ? 'text-amber-400' : 'text-amber-500'}`}>$</span>
                       <input
                         type="number"
-                        step="0.01"
+                        step="0.0001"
                         min="0"
                         value={formData.precioMayoristaFijo}
                         onChange={(e) => setFormData({ ...formData, precioMayoristaFijo: parseFloat(e.target.value) || 0 })}

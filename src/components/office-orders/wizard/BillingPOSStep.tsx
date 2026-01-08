@@ -238,7 +238,7 @@ export default function BillingPOSStep({ wizardData, updateWizardData, setCanPro
                 </label>
                 <Input
                   type="number"
-                  step="0.01"
+                  step="0.0001"
                   value={newPayment.amount || ''}
                   onChange={(e) => setNewPayment({ ...newPayment, amount: parseFloat(e.target.value) || 0 })}
                   placeholder="0.00"
@@ -284,7 +284,7 @@ export default function BillingPOSStep({ wizardData, updateWizardData, setCanPro
                 </label>
                 <Input
                   type="number"
-                  step="0.01"
+                  step="0.0001"
                   value={newPayment.cashReceived || ''}
                   onChange={(e) => setNewPayment({ ...newPayment, cashReceived: parseFloat(e.target.value) || 0 })}
                   placeholder="0.00"
