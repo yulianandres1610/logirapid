@@ -57,8 +57,8 @@ export async function GET() {
         u.zipcode,
         u.avatar,
         u.role,
-        u.created_at,
-        u.last_login,
+        u.createdat,
+        u.lastlogin,
         COALESCE(c.id, c2.id) as company_id,
         COALESCE(c.name, c2.name) as company_name,
         COALESCE(c.type, c2.type) as company_type
@@ -107,8 +107,8 @@ export async function GET() {
         companyId: user.company_id,
         companyName: user.company_name || '',
         companyType: user.company_type || '',
-        createdAt: user.created_at,
-        lastLogin: user.last_login
+        createdAt: user.createdat,
+        lastLogin: user.lastlogin
       }
     })
 
@@ -241,8 +241,8 @@ export async function PUT(request: NextRequest) {
         u.zipcode,
         u.avatar,
         u.role,
-        u.created_at,
-        u.last_login,
+        u.createdat,
+        u.lastlogin,
         COALESCE(c.id, c2.id) as company_id,
         COALESCE(c.name, c2.name) as company_name,
         COALESCE(c.type, c2.type) as company_type
@@ -258,12 +258,12 @@ export async function PUT(request: NextRequest) {
     const user = result.rows[0]
 
     // Parse name if firstname/lastname are empty
-    let firstName = user.firstname || ''
-    let lastName = user.lastname || ''
-    if (!firstName && !lastName && user.name) {
+    let updatedFirstName = user.firstname || ''
+    let updatedLastName = user.lastname || ''
+    if (!updatedFirstName && !updatedLastName && user.name) {
       const nameParts = user.name.split(' ')
-      firstName = nameParts[0] || ''
-      lastName = nameParts.slice(1).join(' ') || ''
+      updatedFirstName = nameParts[0] || ''
+      updatedLastName = nameParts.slice(1).join(' ') || ''
     }
 
     // Update localStorage data via response
@@ -273,8 +273,8 @@ export async function PUT(request: NextRequest) {
       data: {
         id: user.id,
         email: user.email,
-        firstName,
-        lastName,
+        firstName: updatedFirstName,
+        lastName: updatedLastName,
         phone: user.phone || '',
         address: user.address || '',
         city: user.city || '',
@@ -286,8 +286,8 @@ export async function PUT(request: NextRequest) {
         companyId: user.company_id,
         companyName: user.company_name || '',
         companyType: user.company_type || '',
-        createdAt: user.created_at,
-        lastLogin: user.last_login
+        createdAt: user.createdat,
+        lastLogin: user.lastlogin
       }
     })
 
