@@ -309,24 +309,6 @@ export default function ProfilePage() {
             animate={{ opacity: 1, y: 0 }}
             className="max-w-4xl mx-auto space-y-6"
           >
-            {/* Header */}
-            <div className="flex items-center gap-3 mb-6">
-              <div className={cn(
-                'p-3 rounded-xl',
-                theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
-              )}>
-                <User className="w-6 h-6 text-blue-600" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  Mi Perfil
-                </h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Gestiona tu información personal y seguridad
-                </p>
-              </div>
-            </div>
-
             {/* Success/Error Messages */}
             <AnimatePresence>
               {successMessage && (

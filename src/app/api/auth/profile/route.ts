@@ -41,11 +41,12 @@ export async function GET() {
 
     const userId = payload.userId
 
-    // Get user data with company info
+    // Get user data with company info (try both user_companies and market_employees for company)
     const result = await db.query(`
       SELECT
         u.id,
         u.email,
+        u.name,
         u.firstname,
         u.lastname,
         u.phone,
@@ -56,14 +57,16 @@ export async function GET() {
         u.zipcode,
         u.avatar,
         u.role,
-        u.createdat,
-        u.lastlogin,
-        c.id as company_id,
-        c.name as company_name,
-        c.type as company_type
+        u.created_at,
+        u.last_login,
+        COALESCE(c.id, c2.id) as company_id,
+        COALESCE(c.name, c2.name) as company_name,
+        COALESCE(c.type, c2.type) as company_type
       FROM users u
       LEFT JOIN user_companies uc ON u.id = uc.user_id
       LEFT JOIN companies c ON uc.company_id = c.id
+      LEFT JOIN market_employees me ON u.id = me.user_id
+      LEFT JOIN companies c2 ON me.company_id = c2.id
       WHERE u.id = $1
       LIMIT 1
     `, [userId])
@@ -77,13 +80,22 @@ export async function GET() {
 
     const user = result.rows[0]
 
+    // Parse name if firstname/lastname are empty
+    let firstName = user.firstname || ''
+    let lastName = user.lastname || ''
+    if (!firstName && !lastName && user.name) {
+      const nameParts = user.name.split(' ')
+      firstName = nameParts[0] || ''
+      lastName = nameParts.slice(1).join(' ') || ''
+    }
+
     return NextResponse.json({
       success: true,
       data: {
         id: user.id,
         email: user.email,
-        firstName: user.firstname || '',
-        lastName: user.lastname || '',
+        firstName,
+        lastName,
         phone: user.phone || '',
         address: user.address || '',
         city: user.city || '',
@@ -95,8 +107,8 @@ export async function GET() {
         companyId: user.company_id,
         companyName: user.company_name || '',
         companyType: user.company_type || '',
-        createdAt: user.createdat,
-        lastLogin: user.lastlogin
+        createdAt: user.created_at,
+        lastLogin: user.last_login
       }
     })
 
@@ -218,6 +230,7 @@ export async function PUT(request: NextRequest) {
       SELECT
         u.id,
         u.email,
+        u.name,
         u.firstname,
         u.lastname,
         u.phone,
@@ -228,19 +241,30 @@ export async function PUT(request: NextRequest) {
         u.zipcode,
         u.avatar,
         u.role,
-        u.createdat,
-        u.lastlogin,
-        c.id as company_id,
-        c.name as company_name,
-        c.type as company_type
+        u.created_at,
+        u.last_login,
+        COALESCE(c.id, c2.id) as company_id,
+        COALESCE(c.name, c2.name) as company_name,
+        COALESCE(c.type, c2.type) as company_type
       FROM users u
       LEFT JOIN user_companies uc ON u.id = uc.user_id
       LEFT JOIN companies c ON uc.company_id = c.id
+      LEFT JOIN market_employees me ON u.id = me.user_id
+      LEFT JOIN companies c2 ON me.company_id = c2.id
       WHERE u.id = $1
       LIMIT 1
     `, [userId])
 
     const user = result.rows[0]
+
+    // Parse name if firstname/lastname are empty
+    let firstName = user.firstname || ''
+    let lastName = user.lastname || ''
+    if (!firstName && !lastName && user.name) {
+      const nameParts = user.name.split(' ')
+      firstName = nameParts[0] || ''
+      lastName = nameParts.slice(1).join(' ') || ''
+    }
 
     // Update localStorage data via response
     return NextResponse.json({
@@ -249,8 +273,8 @@ export async function PUT(request: NextRequest) {
       data: {
         id: user.id,
         email: user.email,
-        firstName: user.firstname || '',
-        lastName: user.lastname || '',
+        firstName,
+        lastName,
         phone: user.phone || '',
         address: user.address || '',
         city: user.city || '',
@@ -262,8 +286,8 @@ export async function PUT(request: NextRequest) {
         companyId: user.company_id,
         companyName: user.company_name || '',
         companyType: user.company_type || '',
-        createdAt: user.createdat,
-        lastLogin: user.lastlogin
+        createdAt: user.created_at,
+        lastLogin: user.last_login
       }
     })
 
