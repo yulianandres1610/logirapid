@@ -699,7 +699,7 @@ export default function MarketInventoryPage() {
                             <td className="py-4 px-4 text-right">
                               <div>
                                 <span className="text-sm text-gray-600 dark:text-gray-300">
-                                  {symbol}{product.costPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                  {symbol}{product.costPrice.toFixed(2)}
                                 </span>
                                 <div className="text-[10px] mt-0.5 space-y-0">
                                   <p className="text-orange-600">${Math.round(product.costPrice * USD_CUP).toLocaleString()} CUP <span className="text-gray-400">(ElToque)</span></p>
@@ -710,7 +710,7 @@ export default function MarketInventoryPage() {
                             <td className="py-4 px-4 text-right">
                               <div>
                                 <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                  {symbol}{product.sellingPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                  {symbol}{product.sellingPrice.toFixed(2)}
                                 </span>
                                 <div className="text-[10px] mt-0.5 space-y-0">
                                   <p className="text-green-600 font-medium">${Math.round(product.sellingPrice * USD_CUP_BCC).toLocaleString()} CUP <span className="text-gray-400">(BCC)</span></p>
