@@ -521,11 +521,23 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Settings, label: "Configuración", href: "/dashboard/market/settings" },
   ]
 
-  // Menu items para MARKET_COMERCIAL (solo Compras, Marketplace, Inventario - sin Dashboard)
+  // Menu items para MARKET_COMERCIAL (Compras, Marketplace, Inventario, Consignaciones - sin Dashboard)
   const marketComercialMenuItems = [
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
     { icon: Store, label: "Marketplace", href: "/dashboard/market/marketplace" },
     { icon: Package, label: "Inventario", href: "/dashboard/market/inventory" },
+    {
+      icon: Package,
+      label: "Consignaciones",
+      href: "/dashboard/market/consignments",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: ClipboardList, label: "Órdenes", href: "/dashboard/market/consignments" },
+        { icon: Users, label: "Proveedores", href: "/dashboard/market/consignments/suppliers" },
+        { icon: Wallet, label: "Pagos", href: "/dashboard/market/consignments/payments" },
+        { icon: BarChart3, label: "Reportes", href: "/dashboard/market/consignments/reports" },
+      ]
+    },
   ]
 
   // Menu items para MARKET_ALMACENERO (solo Almacenes - acceso a su almacén asignado)
