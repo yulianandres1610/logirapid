@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRightLeft, Trash2, Scale, PackageOpen, Package, RotateCcw } from 'lucide-react'
+import { ArrowRightLeft, Trash2, Scale, PackageOpen, Package, RotateCcw, Printer } from 'lucide-react'
 
-export type OperationType = 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer' | 'order_reception' | 'return'
+export type OperationType = 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer' | 'order_reception' | 'return' | 'print_labels'
 
 interface OperationTypeSelectorProps {
   onSelect: (type: OperationType) => void
@@ -71,6 +71,16 @@ const operationTypes = [
     hoverGradient: 'from-orange-600 to-red-700',
     bgLight: 'bg-orange-50',
     textColor: 'text-orange-600'
+  },
+  {
+    id: 'print_labels' as OperationType,
+    name: 'Etiquetas',
+    description: 'Imprimir etiquetas de productos',
+    icon: Printer,
+    gradient: 'from-emerald-500 to-green-600',
+    hoverGradient: 'from-emerald-600 to-green-700',
+    bgLight: 'bg-emerald-50',
+    textColor: 'text-emerald-600'
   }
 ]
 

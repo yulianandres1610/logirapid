@@ -30,6 +30,7 @@ import UnifiedReceptionView from '@/components/warehouse/UnifiedReceptionView'
 import ReturnTypeSelector, { type ReturnType } from '@/components/warehouse/ReturnTypeSelector'
 import SupplierReturnView from '@/components/warehouse/SupplierReturnView'
 import POSReturnReceiveView from '@/components/warehouse/POSReturnReceiveView'
+import PrintLabelsView from '@/components/warehouse/PrintLabelsView'
 import { PasswordConfirmModal } from '@/components/auth/PasswordConfirmModal'
 
 interface WarehouseData {
@@ -822,7 +823,8 @@ export default function WarehouseOperationsPage() {
                         operation.operationType === 'adjustment' ? 'Ajuste' :
                         operation.operationType === 'receive_transfer' ? 'Recibir Transferencia' :
                         operation.operationType === 'order_reception' ? 'Recibir Orden' :
-                        operation.operationType === 'return' ? (returnType === 'supplier' ? 'Devolucion a Proveedor' : returnType === 'pos' ? 'Devolucion desde POS' : 'Devoluciones') : 'Operacion'}`
+                        operation.operationType === 'return' ? (returnType === 'supplier' ? 'Devolucion a Proveedor' : returnType === 'pos' ? 'Devolucion desde POS' : 'Devoluciones') :
+                        operation.operationType === 'print_labels' ? 'Imprimir Etiquetas' : 'Operacion'}`
                     : 'Operaciones'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">{warehouse.name}</p>
@@ -953,6 +955,13 @@ export default function WarehouseOperationsPage() {
               }}
             />
           )
+        ) : operation.operationType === 'print_labels' ? (
+          /* Print Labels View */
+          <PrintLabelsView
+            warehouseId={warehouseId}
+            warehouseName={warehouse.name}
+            onBack={handleBack}
+          />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left Column: Scanner + Products */}
