@@ -3,14 +3,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  ArrowLeft,
   Search,
   Printer,
   Loader2,
   Package,
   Tag,
   Barcode,
-  DollarSign,
   Image as ImageIcon
 } from 'lucide-react'
 import { useTheme } from '@/contexts/theme-context'
@@ -150,20 +148,9 @@ export default function PrintLabelsView({
       )}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className={cn(
-                'p-2 rounded-lg transition-colors',
-                theme === 'dark'
-                  ? 'hover:bg-gray-700 text-gray-400'
-                  : 'hover:bg-gray-100 text-gray-600'
-              )}
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
+            <Printer className="w-6 h-6 text-emerald-500" />
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <Printer className="w-5 h-5 text-emerald-500" />
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                 Imprimir Etiquetas
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">
