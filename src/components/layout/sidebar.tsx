@@ -534,8 +534,6 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       submenuItems: [
         { icon: ClipboardList, label: "Órdenes", href: "/dashboard/market/consignments" },
         { icon: Users, label: "Proveedores", href: "/dashboard/market/consignments/suppliers" },
-        { icon: Wallet, label: "Pagos", href: "/dashboard/market/consignments/payments" },
-        { icon: BarChart3, label: "Reportes", href: "/dashboard/market/consignments/reports" },
       ]
     },
   ]
