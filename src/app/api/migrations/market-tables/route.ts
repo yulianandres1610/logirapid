@@ -47,9 +47,9 @@ export async function POST() {
         image_url TEXT,
         category VARCHAR(100),
 
-        -- Pricing
-        cost_price DECIMAL(10,2) NOT NULL,
-        selling_price DECIMAL(10,2) NOT NULL,
+        -- Pricing (4 decimales para precios precisos)
+        cost_price DECIMAL(10,4) NOT NULL,
+        selling_price DECIMAL(10,4) NOT NULL,
         currency VARCHAR(10) DEFAULT 'USD',
 
         -- Identifiers
@@ -359,8 +359,8 @@ export async function POST() {
         variant_name VARCHAR(100) NOT NULL,
         sku VARCHAR(100),
         barcode VARCHAR(100),
-        cost_price DECIMAL(10,2),
-        selling_price DECIMAL(10,2),
+        cost_price DECIMAL(10,4),
+        selling_price DECIMAL(10,4),
         quantity_on_hand INTEGER DEFAULT 0,
         image_url TEXT,
         is_active BOOLEAN DEFAULT true,
@@ -1071,6 +1071,27 @@ export async function POST() {
     } catch (e: any) {
       if (!e.message.includes('already exists')) {
         console.log(`[Migration] Note: quantity_validated - ${e.message}`)
+      }
+    }
+
+    // 31. Update price columns to support 4 decimals for precise pricing
+    const priceColumnUpdates = [
+      { table: 'market_products', column: 'cost_price' },
+      { table: 'market_products', column: 'selling_price' },
+      { table: 'market_product_variants', column: 'cost_price' },
+      { table: 'market_product_variants', column: 'selling_price' }
+    ]
+
+    for (const { table, column } of priceColumnUpdates) {
+      try {
+        await db.query(`
+          ALTER TABLE ${table}
+          ALTER COLUMN ${column} TYPE DECIMAL(10,4)
+        `)
+        console.log(`[Migration] Updated ${table}.${column} to DECIMAL(10,4)`)
+      } catch (e: any) {
+        // Ignore if already the correct type
+        console.log(`[Migration] Note: ${table}.${column} - ${e.message}`)
       }
     }
 
