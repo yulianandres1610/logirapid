@@ -327,7 +327,7 @@ export async function POST(request: NextRequest) {
 
     const orderId = orderResult.rows[0].id
 
-    // Insert order lines
+    // Insert order lines with FIFO consignment/purchase tracking
     for (const line of lines) {
       // Ensure numeric values are properly parsed
       const quantity = parseFloat(line.quantity) || 1
@@ -341,7 +341,231 @@ export async function POST(request: NextRequest) {
       const lineTotal = lineSubtotal - lineDiscount + taxAmount
 
       const variantId = line.variantId ? parseInt(line.variantId) : null
+      const productId = parseInt(line.productId) || null
 
+      // Variables for traceability
+      let supplierId: number | null = null
+      let lotId: number | null = null
+      let costPrice: number | null = null
+      let isConsignment = false
+
+      // Process inventory with FIFO if we have product and warehouse
+      if (productId && warehouseId) {
+        const quantityToReduce = quantity
+        let remainingQty = quantityToReduce
+
+        console.log('[POS Orders] Processing FIFO for product:', {
+          productId,
+          variantId,
+          quantity: quantityToReduce,
+          warehouseId
+        })
+
+        // Get current stock before update for movement tracking
+        const currentStockResult = await db.query(`
+          SELECT quantity_on_hand FROM market_products WHERE id = $1
+        `, [productId])
+        const quantityBefore = parseFloat(currentStockResult.rows[0]?.quantity_on_hand) || 0
+
+        // 1. First try FIFO from consignment lots
+        const consignmentLots = await db.query(`
+          SELECT
+            cli.id as lot_id,
+            cli.lot_number,
+            cli.quantity_available,
+            cli.unit_cost,
+            cli.supplier_id,
+            cli.order_line_id
+          FROM consignment_lot_inventory cli
+          WHERE cli.warehouse_id = $1
+            AND cli.product_id = $2
+            AND cli.company_id = $3
+            AND cli.quantity_available > 0
+            ${variantId ? 'AND cli.variant_id = $4' : 'AND cli.variant_id IS NULL'}
+          ORDER BY cli.received_at ASC
+          FOR UPDATE
+        `, variantId
+          ? [warehouseId, productId, companyId, variantId]
+          : [warehouseId, productId, companyId])
+
+        // Process consignment lots FIFO
+        for (const lot of consignmentLots.rows) {
+          if (remainingQty <= 0) break
+
+          const availableQty = parseInt(lot.quantity_available)
+          const toDeduct = Math.min(remainingQty, availableQty)
+          const unitCost = parseFloat(lot.unit_cost)
+
+          // Deduct from consignment lot
+          await db.query(`
+            UPDATE consignment_lot_inventory
+            SET
+              quantity_available = quantity_available - $1,
+              quantity_sold = quantity_sold + $1
+            WHERE id = $2
+          `, [toDeduct, lot.lot_id])
+
+          // Update consignment order line sold quantity
+          if (lot.order_line_id) {
+            await db.query(`
+              UPDATE consignment_order_lines
+              SET quantity_sold = quantity_sold + $1
+              WHERE id = $2
+            `, [toDeduct, lot.order_line_id])
+          }
+
+          // Update supplier wallet with earnings (at cost price)
+          const walletResult = await db.query(
+            'SELECT id FROM consignment_supplier_wallets WHERE supplier_id = $1',
+            [lot.supplier_id]
+          )
+
+          if (walletResult.rows.length > 0) {
+            const walletId = walletResult.rows[0].id
+            const earnings = toDeduct * unitCost
+
+            // Update wallet balance
+            await db.query(`
+              UPDATE consignment_supplier_wallets
+              SET
+                balance_available = balance_available + $1,
+                total_earned = total_earned + $1,
+                updated_at = NOW()
+              WHERE id = $2
+            `, [earnings, walletId])
+
+            // Create wallet transaction
+            await db.query(`
+              INSERT INTO consignment_wallet_transactions (
+                wallet_id, transaction_type, amount, pos_order_id, pos_order_number, notes, created_by
+              ) VALUES ($1, 'sale', $2, $3, $4, $5, $6)
+            `, [
+              walletId,
+              earnings,
+              orderId,
+              orderNumber,
+              `Venta POS: ${toDeduct} unidades @ $${unitCost.toFixed(2)}`,
+              userId
+            ])
+
+            console.log('[POS Orders] Consignment wallet updated:', { supplierId: lot.supplier_id, earnings })
+          }
+
+          // Track traceability (use first lot's data for the line)
+          if (!supplierId) {
+            supplierId = parseInt(lot.supplier_id)
+            lotId = parseInt(lot.lot_id)
+            costPrice = unitCost
+            isConsignment = true
+          }
+
+          remainingQty -= toDeduct
+        }
+
+        // 2. If not fully satisfied, try purchase lots
+        if (remainingQty > 0) {
+          const purchaseLots = await db.query(`
+            SELECT
+              pli.id as lot_id,
+              pli.lot_number,
+              pli.quantity_available,
+              pli.unit_cost,
+              pli.supplier_id,
+              pli.purchase_line_id
+            FROM purchase_lot_inventory pli
+            WHERE pli.warehouse_id = $1
+              AND pli.product_id = $2
+              AND pli.company_id = $3
+              AND pli.quantity_available > 0
+              ${variantId ? 'AND pli.variant_id = $4' : 'AND pli.variant_id IS NULL'}
+            ORDER BY pli.received_at ASC
+            FOR UPDATE
+          `, variantId
+            ? [warehouseId, productId, companyId, variantId]
+            : [warehouseId, productId, companyId])
+
+          for (const lot of purchaseLots.rows) {
+            if (remainingQty <= 0) break
+
+            const availableQty = parseInt(lot.quantity_available)
+            const toDeduct = Math.min(remainingQty, availableQty)
+            const unitCost = parseFloat(lot.unit_cost)
+
+            // Deduct from purchase lot
+            await db.query(`
+              UPDATE purchase_lot_inventory
+              SET
+                quantity_available = quantity_available - $1,
+                quantity_sold = quantity_sold + $1
+              WHERE id = $2
+            `, [toDeduct, lot.lot_id])
+
+            // Track cost price if not already set from consignment
+            if (!costPrice) {
+              costPrice = unitCost
+              lotId = parseInt(lot.lot_id)
+            }
+
+            remainingQty -= toDeduct
+          }
+        }
+
+        // 3. Update warehouse stock (covers both consignment and purchase deductions)
+        if (variantId) {
+          // Update variant stock in market_product_variants
+          await db.query(`
+            UPDATE market_product_variants
+            SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
+            WHERE id = $2
+          `, [quantityToReduce, variantId])
+
+          // Update warehouse stock for variant
+          await db.query(`
+            UPDATE market_warehouse_stock
+            SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
+            WHERE product_id = $2 AND variant_id = $3 AND warehouse_id = $4
+          `, [quantityToReduce, productId, variantId, warehouseId])
+        } else {
+          // Update warehouse stock for product without variant
+          await db.query(`
+            UPDATE market_warehouse_stock
+            SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
+            WHERE product_id = $2 AND warehouse_id = $3 AND variant_id IS NULL
+          `, [quantityToReduce, productId, warehouseId])
+        }
+
+        // ALWAYS update main product stock
+        const productResult = await db.query(`
+          UPDATE market_products
+          SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
+          WHERE id = $2
+          RETURNING id, quantity_on_hand
+        `, [quantityToReduce, productId])
+
+        const quantityAfter = parseFloat(productResult.rows[0]?.quantity_on_hand) || 0
+
+        // Register inventory movement for traceability
+        await db.query(`
+          INSERT INTO market_inventory_movements (
+            product_id, company_id, movement_type, quantity,
+            quantity_before, quantity_after, reference_type, reference_id, notes, created_at
+          )
+          SELECT $1, company_id, 'sale_out', $2, $3, $4, 'pos_order', $5, $6, NOW()
+          FROM market_products WHERE id = $1
+        `, [productId, -quantityToReduce, quantityBefore, quantityAfter, orderId,
+          `Venta POS: ${orderNumber}${isConsignment ? ' (Consignación)' : ''}`])
+
+        console.log('[POS Orders] Stock processed:', {
+          product: productId,
+          isConsignment,
+          supplierId,
+          costPrice,
+          quantityBefore,
+          quantityAfter
+        })
+      }
+
+      // Insert order line with traceability fields
       await db.query(`
         INSERT INTO market_pos_order_lines (
           order_id, product_id, variant_id, product_name, product_sku,
@@ -349,11 +573,12 @@ export async function POST(request: NextRequest) {
           discount_percent, discount_amount,
           subtotal, tax_amount, total,
           promotion_id, promotion_name,
+          supplier_id, lot_id, cost_price, is_consignment,
           created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW())
       `, [
         orderId,
-        parseInt(line.productId) || null,
+        productId,
         variantId,
         line.productName,
         line.productSku || null,
@@ -365,81 +590,12 @@ export async function POST(request: NextRequest) {
         taxAmount,
         lineTotal,
         line.promotionId ? parseInt(line.promotionId) : null,
-        line.promotionName || null
+        line.promotionName || null,
+        supplierId,
+        lotId,
+        costPrice,
+        isConsignment
       ])
-
-      // Update inventory - ALWAYS reduce stock when selling
-      if (line.productId) {
-        const quantityToReduce = quantity // Use the already parsed quantity from above
-
-        console.log('[POS Orders] Reducing stock for product:', {
-          productId: line.productId,
-          variantId: variantId,
-          quantity: quantityToReduce,
-          warehouseId
-        })
-
-        // Get current stock before update
-        const currentStockResult = await db.query(`
-          SELECT quantity_on_hand FROM market_products WHERE id = $1
-        `, [line.productId])
-
-        const quantityBefore = parseFloat(currentStockResult.rows[0]?.quantity_on_hand) || 0
-
-        // If variant specified, update variant stock
-        if (variantId) {
-          // Update variant stock in market_product_variants
-          await db.query(`
-            UPDATE market_product_variants
-            SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
-            WHERE id = $2
-          `, [quantityToReduce, variantId])
-
-          // If warehouse specified, update warehouse stock for variant
-          if (warehouseId) {
-            await db.query(`
-              UPDATE market_warehouse_stock
-              SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
-              WHERE product_id = $2 AND variant_id = $3 AND warehouse_id = $4
-            `, [quantityToReduce, line.productId, variantId, warehouseId])
-          }
-
-          console.log('[POS Orders] Variant stock updated:', variantId)
-        }
-
-        // If warehouse specified, also update warehouse stock (for product without variant)
-        if (warehouseId && !variantId) {
-          const warehouseStockResult = await db.query(`
-            UPDATE market_warehouse_stock
-            SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
-            WHERE product_id = $2 AND warehouse_id = $3 AND variant_id IS NULL
-            RETURNING id, quantity_on_hand
-          `, [quantityToReduce, line.productId, warehouseId])
-
-          console.log('[POS Orders] Warehouse stock update:', warehouseStockResult.rows)
-        }
-
-        // ALWAYS update main product stock
-        const productResult = await db.query(`
-          UPDATE market_products
-          SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
-          WHERE id = $2
-          RETURNING id, quantity_on_hand
-        `, [quantityToReduce, line.productId])
-
-        const quantityAfter = parseFloat(productResult.rows[0]?.quantity_on_hand) || 0
-        console.log('[POS Orders] Product stock update:', productResult.rows)
-
-        // Register inventory movement for traceability
-        await db.query(`
-          INSERT INTO market_inventory_movements (
-            product_id, company_id, movement_type, quantity,
-            quantity_before, quantity_after, reference_type, reference_id, notes, created_at
-          )
-          SELECT $1, company_id, 'sale_out', $2, $3, $4, 'pos_order', $5, $6, NOW()
-          FROM market_products WHERE id = $1
-        `, [line.productId, -quantityToReduce, quantityBefore, quantityAfter, orderId, `Venta POS: ${orderNumber}`])
-      }
     }
 
     // Insert payments if provided
