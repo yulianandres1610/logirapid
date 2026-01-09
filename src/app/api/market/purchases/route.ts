@@ -194,6 +194,10 @@ export async function GET(request: NextRequest) {
         mp.total_amount,
         mp.currency,
         mp.status,
+        mp.validation_status,
+        mp.validated_by,
+        mp.validated_at,
+        mp.rejection_reason,
         mp.purchase_date,
         mp.expected_date,
         mp.received_date,
@@ -206,6 +210,7 @@ export async function GET(request: NextRequest) {
         COALESCE(u1.firstname || ' ' || u1.lastname, u1.email) as created_by_name,
         COALESCE(u2.firstname || ' ' || u2.lastname, u2.email) as confirmed_by_name,
         COALESCE(u3.firstname || ' ' || u3.lastname, u3.email) as received_by_name,
+        COALESCE(u4.firstname || ' ' || u4.lastname, u4.email) as validated_by_name,
         (SELECT COUNT(*) FROM market_purchase_lines WHERE purchase_id = mp.id) as line_count,
         (SELECT COALESCE(SUM(quantity), 0) FROM market_purchase_lines WHERE purchase_id = mp.id) as total_items,
         (SELECT COALESCE(SUM(quantity_received), 0) FROM market_purchase_lines WHERE purchase_id = mp.id) as total_received
@@ -215,6 +220,7 @@ export async function GET(request: NextRequest) {
       LEFT JOIN users u1 ON mp.created_by = u1.id
       LEFT JOIN users u2 ON mp.confirmed_by = u2.id
       LEFT JOIN users u3 ON mp.received_by = u3.id
+      LEFT JOIN users u4 ON mp.validated_by = u4.id
       WHERE mp.company_id = $1
     `
 
@@ -246,6 +252,8 @@ export async function GET(request: NextRequest) {
         COUNT(*) FILTER (WHERE status = 'pendiente') as pendiente_count,
         COUNT(*) FILTER (WHERE status = 'recibido') as recibido_count,
         COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled_count,
+        COUNT(*) FILTER (WHERE validation_status = 'pending_validation') as pending_validation_count,
+        COUNT(*) FILTER (WHERE validation_status = 'rejected') as rejected_count,
         COALESCE(SUM(total_amount) FILTER (WHERE status = 'recibido'), 0) as total_received_amount
       FROM market_purchases
       WHERE company_id = $1
@@ -271,6 +279,11 @@ export async function GET(request: NextRequest) {
           totalAmount: parseFloat(row.total_amount) || 0,
           currency: row.currency || 'USD',
           status: row.status,
+          validationStatus: row.validation_status || 'confirmed',
+          validatedBy: row.validated_by,
+          validatedByName: row.validated_by_name,
+          validatedAt: row.validated_at,
+          rejectionReason: row.rejection_reason,
           purchaseDate: row.purchase_date,
           expectedDate: row.expected_date,
           receivedDate: row.received_date,
@@ -290,6 +303,8 @@ export async function GET(request: NextRequest) {
           pendiente: parseInt(stats.pendiente_count) || 0,
           recibido: parseInt(stats.recibido_count) || 0,
           cancelled: parseInt(stats.cancelled_count) || 0,
+          pendingValidation: parseInt(stats.pending_validation_count) || 0,
+          rejected: parseInt(stats.rejected_count) || 0,
           totalReceivedAmount: parseFloat(stats.total_received_amount) || 0
         },
         pagination: {
@@ -648,6 +663,11 @@ export async function POST(request: NextRequest) {
     // Determine initial status: 'draft' if saving as draft, 'comprada' otherwise
     const initialStatus = saveAsDraft ? 'draft' : 'comprada'
 
+    // Determine validation status based on user role
+    // MARKET_COMERCIAL: pending_validation (needs manager approval)
+    // Others (MARKET_MANAGER, etc.): confirmed
+    const validationStatus = payload.role === 'MARKET_COMERCIAL' ? 'pending_validation' : 'confirmed'
+
     // Create purchase and lines in transaction
     const result = await db.transaction(async (client) => {
       // Create purchase with new fields (supplier_id, warehouse_id)
@@ -665,13 +685,14 @@ export async function POST(request: NextRequest) {
           total_amount,
           currency,
           status,
+          validation_status,
           purchase_date,
           expected_date,
           notes,
           created_by,
           created_at,
           updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW(), NOW())
         RETURNING id
       `, [
         companyId,
@@ -686,6 +707,7 @@ export async function POST(request: NextRequest) {
         totalAmount,
         currency,
         initialStatus,
+        validationStatus,
         purchaseDate || new Date().toISOString().split('T')[0],
         expectedDate || null,
         notes || null,

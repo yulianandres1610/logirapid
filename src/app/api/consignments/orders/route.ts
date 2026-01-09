@@ -118,11 +118,13 @@ export async function GET(request: NextRequest) {
         w.name as warehouse_name,
         w.code as warehouse_code,
         u.firstname || ' ' || u.lastname as created_by_name,
+        uv.firstname || ' ' || uv.lastname as validated_by_name,
         (SELECT COUNT(*) FROM consignment_order_lines WHERE order_id = o.id) as line_count
       FROM consignment_orders o
       JOIN market_suppliers s ON s.id = o.supplier_id
       JOIN market_warehouses w ON w.id = o.warehouse_id
       LEFT JOIN users u ON u.id = o.created_by
+      LEFT JOIN users uv ON uv.id = o.validated_by
       WHERE o.company_id = $1
     `
     const params: (string | number)[] = [payload.companyId]
@@ -159,6 +161,7 @@ export async function GET(request: NextRequest) {
       JOIN market_suppliers s ON s.id = o.supplier_id
       JOIN market_warehouses w ON w.id = o.warehouse_id
       LEFT JOIN users u ON u.id = o.created_by
+      LEFT JOIN users uv ON uv.id = o.validated_by
       WHERE o.company_id = $1
     `
     const countParams: (string | number)[] = [payload.companyId]
@@ -204,28 +207,48 @@ export async function GET(request: NextRequest) {
       GROUP BY status
     `, [payload.companyId])
 
+    // Get validation stats
+    const validationStatsResult = await db.query(`
+      SELECT
+        validation_status,
+        COUNT(*) as count
+      FROM consignment_orders
+      WHERE company_id = $1
+      GROUP BY validation_status
+    `, [payload.companyId])
+
     const stats = {
       pending: { count: 0, totalCost: 0 },
       received: { count: 0, totalCost: 0 },
       selling: { count: 0, totalCost: 0, totalSold: 0 },
       paid: { count: 0, totalPaid: 0 },
       returned: { count: 0 },
-      liquidated: { count: 0 }
+      liquidated: { count: 0 },
+      pendingValidation: 0,
+      rejected: 0
     }
 
     for (const row of statsResult.rows) {
       const s = row.status as keyof typeof stats
-      if (stats[s]) {
-        stats[s].count = parseInt(row.count)
-        if ('totalCost' in stats[s]) {
+      if (stats[s] && typeof stats[s] === 'object') {
+        (stats[s] as { count: number }).count = parseInt(row.count)
+        if ('totalCost' in (stats[s] as object)) {
           (stats[s] as { totalCost: number }).totalCost = parseFloat(row.total_cost)
         }
-        if ('totalSold' in stats[s]) {
+        if ('totalSold' in (stats[s] as object)) {
           (stats[s] as { totalSold: number }).totalSold = parseFloat(row.total_sold)
         }
-        if ('totalPaid' in stats[s]) {
+        if ('totalPaid' in (stats[s] as object)) {
           (stats[s] as { totalPaid: number }).totalPaid = parseFloat(row.total_paid)
         }
+      }
+    }
+
+    for (const row of validationStatsResult.rows) {
+      if (row.validation_status === 'pending_validation') {
+        stats.pendingValidation = parseInt(row.count)
+      } else if (row.validation_status === 'rejected') {
+        stats.rejected = parseInt(row.count)
       }
     }
 
@@ -249,6 +272,11 @@ export async function GET(request: NextRequest) {
         name: o.warehouse_name
       },
       status: o.status,
+      validationStatus: o.validation_status || 'confirmed',
+      validatedBy: o.validated_by,
+      validatedByName: o.validated_by_name,
+      validatedAt: o.validated_at,
+      rejectionReason: o.rejection_reason,
       totalItems: parseInt(o.line_count) || 0,
       totalUnits: parseInt(o.total_units) || 0,
       totalCost: parseFloat(o.total_cost) || 0,
@@ -570,19 +598,25 @@ export async function POST(request: NextRequest) {
     // Redondear totalUnits si la columna es integer
     totalUnits = Math.round(totalUnits)
 
+    // Determine validation status based on user role
+    // MARKET_COMERCIAL: pending_validation (needs manager approval)
+    // Others (MARKET_MANAGER, etc.): confirmed
+    const validationStatus = payload.role === 'MARKET_COMERCIAL' ? 'pending_validation' : 'confirmed'
+
     // Crear orden
     const orderResult = await db.query(`
       INSERT INTO consignment_orders (
         company_id, order_number, supplier_id, warehouse_id,
-        status, total_items, total_units, total_cost,
+        status, validation_status, total_items, total_units, total_cost,
         consignment_date, notes, created_by
-      ) VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10)
+      ) VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10, $11)
       RETURNING id
     `, [
       payload.companyId,
       orderNumber,
       supplierId,
       warehouseId,
+      validationStatus,
       totalItems,
       totalUnits,
       totalCost,

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
   Package,
@@ -237,6 +238,7 @@ function StatCard({ label, value, color }: { label: string; value: number | stri
 }
 
 export default function MarketDashboardPage() {
+  const router = useRouter()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -244,6 +246,22 @@ export default function MarketDashboardPage() {
   const [companyName, setCompanyName] = useState('Mercado')
 
   useEffect(() => {
+    // Check if user is MARKET_COMERCIAL and redirect
+    try {
+      const cookies = document.cookie.split(';')
+      const roleCookie = cookies.find(c => c.trim().startsWith('user-role='))
+      if (roleCookie) {
+        const role = decodeURIComponent(roleCookie.split('=')[1])
+        if (role === 'MARKET_COMERCIAL') {
+          // Comerciales no tienen acceso al dashboard, redirigir a compras
+          router.replace('/dashboard/market/purchases')
+          return
+        }
+      }
+    } catch (e) {
+      console.error('Error checking role:', e)
+    }
+
     const hour = new Date().getHours()
     if (hour < 12) setGreeting('Buenos días')
     else if (hour < 18) setGreeting('Buenas tardes')
@@ -262,7 +280,7 @@ export default function MarketDashboardPage() {
     fetchDashboardData()
     const interval = setInterval(() => fetchDashboardData(true), 60000)
     return () => clearInterval(interval)
-  }, [])
+  }, [router])
 
   const fetchDashboardData = async (silent = false) => {
     if (!silent) setLoading(true)

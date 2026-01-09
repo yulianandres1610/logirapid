@@ -22,7 +22,10 @@ import {
   FileText,
   TrendingUp,
   Printer,
-  Loader2
+  Loader2,
+  AlertCircle,
+  ClipboardCheck,
+  XCircle
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -48,6 +51,8 @@ interface ConsignmentOrder {
   supplier: Supplier
   warehouse: WarehouseInfo
   status: string
+  validationStatus?: 'pending_validation' | 'confirmed' | 'rejected'
+  rejectionReason?: string
   totalItems: number
   totalUnits: number
   totalCost: number
@@ -69,6 +74,8 @@ interface Stats {
   paid: { count: number; totalPaid: number }
   returned: { count: number }
   liquidated: { count: number }
+  pendingValidation: number
+  rejected: number
 }
 
 interface Pagination {
@@ -119,7 +126,9 @@ export default function ConsignmentsPage() {
     selling: { count: 0, totalCost: 0, totalSold: 0 },
     paid: { count: 0, totalPaid: 0 },
     returned: { count: 0 },
-    liquidated: { count: 0 }
+    liquidated: { count: 0 },
+    pendingValidation: 0,
+    rejected: 0
   })
   const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 20, total: 0, totalPages: 0 })
   const [loading, setLoading] = useState(true)
@@ -131,6 +140,14 @@ export default function ConsignmentsPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
+  const [userRole, setUserRole] = useState<string>('')
+
+  // Validation state
+  const [showValidationModal, setShowValidationModal] = useState(false)
+  const [validationOrder, setValidationOrder] = useState<ConsignmentOrder | null>(null)
+  const [rejectionReason, setRejectionReason] = useState('')
+  const [validating, setValidating] = useState(false)
+
   // Print state
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [printOrder, setPrintOrder] = useState<ConsignmentOrder | null>(null)
@@ -140,6 +157,19 @@ export default function ConsignmentsPage() {
   const [copies, setCopies] = useState(1)
   const [loadingOrderLines, setLoadingOrderLines] = useState(false)
   const [orderLines, setOrderLines] = useState<OrderLine[]>([])
+
+  // Get user role from cookies
+  useEffect(() => {
+    try {
+      const cookies = document.cookie.split(';')
+      const roleCookie = cookies.find(c => c.trim().startsWith('user-role='))
+      if (roleCookie) {
+        setUserRole(decodeURIComponent(roleCookie.split('=')[1]))
+      }
+    } catch (e) {
+      console.error('Error getting user role:', e)
+    }
+  }, [])
 
   useEffect(() => {
     fetchOrders()
@@ -352,6 +382,52 @@ export default function ConsignmentsPage() {
       setPrintingWithService(false)
     }
   }
+
+  // Validation functions
+  const handleOpenValidation = (order: ConsignmentOrder) => {
+    setValidationOrder(order)
+    setRejectionReason('')
+    setShowValidationModal(true)
+  }
+
+  const handleValidateOrder = async (action: 'approve' | 'reject') => {
+    if (!validationOrder) return
+    if (action === 'reject' && !rejectionReason.trim()) {
+      alert('El motivo de rechazo es obligatorio')
+      return
+    }
+
+    setValidating(true)
+    try {
+      const response = await fetch('/api/market/orders/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: validationOrder.id,
+          orderType: 'consignment',
+          action,
+          reason: action === 'reject' ? rejectionReason : undefined
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setShowValidationModal(false)
+        setValidationOrder(null)
+        setRejectionReason('')
+        fetchOrders()
+      } else {
+        alert(data.error || 'Error al validar orden')
+      }
+    } catch (error) {
+      console.error('Error validating order:', error)
+      alert('Error al validar orden')
+    } finally {
+      setValidating(false)
+    }
+  }
+
+  const isManager = userRole === 'MARKET_MANAGER'
 
   return (
     <ProtectedRoute>
@@ -801,21 +877,48 @@ export default function ConsignmentsPage() {
                               </div>
                             </td>
                             <td className="py-4 px-4 text-center">
-                              <span className={cn(
-                                'inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium',
-                                statusConfig.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-                                statusConfig.color === 'blue' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-                                statusConfig.color === 'emerald' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-                                statusConfig.color === 'purple' && 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-                                statusConfig.color === 'red' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-                                statusConfig.color === 'gray' && 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
-                              )}>
-                                <StatusIcon className="w-3.5 h-3.5" />
-                                {statusConfig.label}
-                              </span>
+                              <div className="flex flex-col items-center gap-1">
+                                <span className={cn(
+                                  'inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium',
+                                  statusConfig.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                                  statusConfig.color === 'blue' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                                  statusConfig.color === 'emerald' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                                  statusConfig.color === 'purple' && 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+                                  statusConfig.color === 'red' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+                                  statusConfig.color === 'gray' && 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+                                )}>
+                                  <StatusIcon className="w-3.5 h-3.5" />
+                                  {statusConfig.label}
+                                </span>
+                                {/* Validation status indicator */}
+                                {order.validationStatus === 'pending_validation' && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                                    <Clock className="w-3 h-3" />
+                                    Pend. Aprobación
+                                  </span>
+                                )}
+                                {order.validationStatus === 'rejected' && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" title={order.rejectionReason}>
+                                    <AlertCircle className="w-3 h-3" />
+                                    Rechazada
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-4 px-4 text-center">
                               <div className="flex items-center justify-center gap-1">
+                                {/* Revisar button for managers - pending validation orders */}
+                                {isManager && order.validationStatus === 'pending_validation' && (
+                                  <motion.button
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={() => handleOpenValidation(order)}
+                                    className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/30 hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
+                                    title="Revisar y aprobar/rechazar"
+                                  >
+                                    <ClipboardCheck className="w-4 h-4 text-orange-600" />
+                                  </motion.button>
+                                )}
                                 <motion.button
                                   whileHover={{ scale: 1.1 }}
                                   whileTap={{ scale: 0.9 }}
@@ -1128,6 +1231,166 @@ export default function ConsignmentsPage() {
                         </motion.button>
                       </div>
                     )}
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+
+          {/* Validation Modal */}
+          <AnimatePresence>
+            {showValidationModal && validationOrder && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => {
+                    setShowValidationModal(false)
+                    setValidationOrder(null)
+                    setRejectionReason('')
+                  }}
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+                />
+
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                  transition={{ type: "spring", duration: 0.3 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                >
+                  <div
+                    className={cn(
+                      "w-full max-w-md rounded-2xl shadow-2xl border",
+                      theme === 'dark'
+                        ? 'bg-gray-800 border-gray-700'
+                        : 'bg-white border-gray-200'
+                    )}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className={cn(
+                      "px-6 py-4 border-b flex items-center justify-between",
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/30">
+                          <ClipboardCheck className="w-5 h-5 text-orange-600" />
+                        </div>
+                        <div>
+                          <h3 className={cn(
+                            "font-semibold",
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            Revisar Orden
+                          </h3>
+                          <p className="text-xs text-gray-500">#{validationOrder.orderNumber}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowValidationModal(false)
+                          setValidationOrder(null)
+                          setRejectionReason('')
+                        }}
+                        className={cn(
+                          "p-2 rounded-lg transition-colors",
+                          theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                        )}
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="p-6 space-y-4">
+                      {/* Order Summary */}
+                      <div className={cn(
+                        "p-4 rounded-xl",
+                        theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                      )}>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-sm text-gray-500">Proveedor</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{validationOrder.supplier.name}</span>
+                        </div>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-sm text-gray-500">Almacén</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{validationOrder.warehouse.name}</span>
+                        </div>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-sm text-gray-500">Costo Total</span>
+                          <span className="font-bold text-gray-900 dark:text-white">{formatCurrency(validationOrder.totalCost)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-500">Creado por</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{validationOrder.createdBy || 'Desconocido'}</span>
+                        </div>
+                      </div>
+
+                      {/* View Details Link */}
+                      <Link href={`/dashboard/market/consignments/${validationOrder.id}`}>
+                        <button className="w-full py-2 text-sm text-blue-500 hover:text-blue-600 hover:underline flex items-center justify-center gap-1">
+                          <Eye className="w-4 h-4" />
+                          Ver detalle completo
+                        </button>
+                      </Link>
+
+                      {/* Rejection Reason */}
+                      <div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Motivo de rechazo (solo si rechaza)
+                        </label>
+                        <textarea
+                          value={rejectionReason}
+                          onChange={(e) => setRejectionReason(e.target.value)}
+                          placeholder="Ingrese el motivo de rechazo..."
+                          rows={3}
+                          className={cn(
+                            'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all resize-none',
+                            theme === 'dark'
+                              ? 'bg-gray-800/50 border-gray-700 text-white focus:border-orange-500 focus:ring-orange-500/20'
+                              : 'bg-white border-gray-200 text-gray-900 focus:border-orange-500 focus:ring-orange-500/20'
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    <div className={cn(
+                      "flex gap-3 p-6 pt-4 border-t",
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => handleValidateOrder('reject')}
+                        disabled={validating || !rejectionReason.trim()}
+                        className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        <XCircle className="w-5 h-5" />
+                        Rechazar
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => handleValidateOrder('approve')}
+                        disabled={validating}
+                        className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {validating ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Procesando...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="w-5 h-5" />
+                            Aprobar
+                          </>
+                        )}
+                      </motion.button>
+                    </div>
                   </div>
                 </motion.div>
               </>
