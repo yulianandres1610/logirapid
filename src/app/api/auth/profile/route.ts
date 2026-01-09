@@ -61,12 +61,9 @@ export async function GET() {
           u.role,
           u.createdat,
           u.lastlogin,
-          me.company_id,
-          c.name as company_name,
-          c.type as company_type
+          me.company_id
         FROM users u
         LEFT JOIN market_employees me ON u.id = me.user_id
-        LEFT JOIN companies c ON me.company_id = c.id
         WHERE u.id = $1
         LIMIT 1
       `, [userId])
@@ -103,9 +100,9 @@ export async function GET() {
         zipcode: user.zipcode || '',
         avatar: user.avatar || null,
         role: user.role,
-        companyId: user.company_id,
-        companyName: user.company_name || '',
-        companyType: user.company_type || '',
+        companyId: user.company_id || null,
+        companyName: '',
+        companyType: '',
         createdAt: user.createdat,
         lastLogin: user.lastlogin
       }
@@ -241,12 +238,9 @@ export async function PUT(request: NextRequest) {
         u.role,
         u.createdat,
         u.lastlogin,
-        me.company_id,
-        c.name as company_name,
-        c.type as company_type
+        me.company_id
       FROM users u
       LEFT JOIN market_employees me ON u.id = me.user_id
-      LEFT JOIN companies c ON me.company_id = c.id
       WHERE u.id = $1
       LIMIT 1
     `, [userId])
@@ -270,9 +264,9 @@ export async function PUT(request: NextRequest) {
         zipcode: user.zipcode || '',
         avatar: user.avatar || null,
         role: user.role,
-        companyId: user.company_id,
-        companyName: user.company_name || '',
-        companyType: user.company_type || '',
+        companyId: user.company_id || null,
+        companyName: '',
+        companyType: '',
         createdAt: user.createdat,
         lastLogin: user.lastlogin
       }
