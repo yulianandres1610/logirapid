@@ -42,7 +42,7 @@ export async function GET() {
     const userId = payload.userId
     console.log('[Profile GET] userId:', userId)
 
-    // Get user data with company info (try both user_companies and market_employees for company)
+    // Get user data with company info from market_employees
     let result
     try {
       result = await db.query(`
@@ -62,14 +62,12 @@ export async function GET() {
           u.role,
           u.createdat,
           u.lastlogin,
-          COALESCE(c.id, c2.id) as company_id,
-          COALESCE(c.name, c2.name) as company_name,
-          COALESCE(c.type, c2.type) as company_type
+          me.company_id,
+          c.name as company_name,
+          c.type as company_type
         FROM users u
-        LEFT JOIN user_companies uc ON u.id = uc.user_id
-        LEFT JOIN companies c ON uc.company_id = c.id
         LEFT JOIN market_employees me ON u.id = me.user_id
-        LEFT JOIN companies c2 ON me.company_id = c2.id
+        LEFT JOIN companies c ON me.company_id = c.id
         WHERE u.id = $1
         LIMIT 1
       `, [userId])
@@ -254,14 +252,12 @@ export async function PUT(request: NextRequest) {
         u.role,
         u.createdat,
         u.lastlogin,
-        COALESCE(c.id, c2.id) as company_id,
-        COALESCE(c.name, c2.name) as company_name,
-        COALESCE(c.type, c2.type) as company_type
+        me.company_id,
+        c.name as company_name,
+        c.type as company_type
       FROM users u
-      LEFT JOIN user_companies uc ON u.id = uc.user_id
-      LEFT JOIN companies c ON uc.company_id = c.id
       LEFT JOIN market_employees me ON u.id = me.user_id
-      LEFT JOIN companies c2 ON me.company_id = c2.id
+      LEFT JOIN companies c ON me.company_id = c.id
       WHERE u.id = $1
       LIMIT 1
     `, [userId])
