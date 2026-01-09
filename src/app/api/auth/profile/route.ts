@@ -49,7 +49,6 @@ export async function GET() {
         SELECT
           u.id,
           u.email,
-          u.name,
           u.firstname,
           u.lastname,
           u.phone,
@@ -89,22 +88,13 @@ export async function GET() {
 
     const user = result.rows[0]
 
-    // Parse name if firstname/lastname are empty
-    let firstName = user.firstname || ''
-    let lastName = user.lastname || ''
-    if (!firstName && !lastName && user.name) {
-      const nameParts = user.name.split(' ')
-      firstName = nameParts[0] || ''
-      lastName = nameParts.slice(1).join(' ') || ''
-    }
-
     return NextResponse.json({
       success: true,
       data: {
         id: user.id,
         email: user.email,
-        firstName,
-        lastName,
+        firstName: user.firstname || '',
+        lastName: user.lastname || '',
         phone: user.phone || '',
         address: user.address || '',
         city: user.city || '',
@@ -239,7 +229,6 @@ export async function PUT(request: NextRequest) {
       SELECT
         u.id,
         u.email,
-        u.name,
         u.firstname,
         u.lastname,
         u.phone,
@@ -264,15 +253,6 @@ export async function PUT(request: NextRequest) {
 
     const user = result.rows[0]
 
-    // Parse name if firstname/lastname are empty
-    let updatedFirstName = user.firstname || ''
-    let updatedLastName = user.lastname || ''
-    if (!updatedFirstName && !updatedLastName && user.name) {
-      const nameParts = user.name.split(' ')
-      updatedFirstName = nameParts[0] || ''
-      updatedLastName = nameParts.slice(1).join(' ') || ''
-    }
-
     // Update localStorage data via response
     return NextResponse.json({
       success: true,
@@ -280,8 +260,8 @@ export async function PUT(request: NextRequest) {
       data: {
         id: user.id,
         email: user.email,
-        firstName: updatedFirstName,
-        lastName: updatedLastName,
+        firstName: user.firstname || '',
+        lastName: user.lastname || '',
         phone: user.phone || '',
         address: user.address || '',
         city: user.city || '',
