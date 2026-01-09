@@ -45,7 +45,6 @@ export async function GET() {
         w.balance_pending,
         w.total_earned,
         w.total_paid,
-        w.created_at,
         w.updated_at
       FROM consignment_supplier_wallets w
       JOIN market_suppliers cs ON cs.id = w.supplier_id
