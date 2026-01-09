@@ -1968,7 +1968,11 @@ export default function CreateProductPage() {
                           <input
                             type="number"
                             value={formData.costPrice}
-                            onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
+                            onChange={(e) => {
+                              const cost = e.target.value
+                              const sellingPrice = cost ? (parseFloat(cost) * 1.30).toFixed(4) : ''
+                              setFormData({ ...formData, costPrice: cost, sellingPrice })
+                            }}
                             placeholder="0.0000"
                             step="0.0001"
                             min="0"
