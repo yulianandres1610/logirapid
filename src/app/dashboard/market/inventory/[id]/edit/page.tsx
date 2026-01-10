@@ -668,8 +668,8 @@ export default function EditProductPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setErrors({ ...errors, image: 'El archivo es muy grande (máx. 5MB)' })
+      if (file.size > 100 * 1024 * 1024) {
+        setErrors({ ...errors, image: 'El archivo es muy grande (máx. 100MB)' })
         return
       }
       setFormData(prev => ({
@@ -1876,7 +1876,7 @@ export default function EditProductPage() {
                                 "text-sm mt-1",
                                 theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
                               )}>
-                                PNG, JPG o WEBP hasta 5MB
+                                PNG, JPG o WEBP hasta 100MB
                               </p>
                             </div>
                           </div>

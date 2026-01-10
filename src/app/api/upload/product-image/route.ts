@@ -29,7 +29,7 @@ async function getPayload(): Promise<JWTPayload | null> {
   }
 }
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif']
 
 /**
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json({
         success: false,
-        error: 'El archivo es demasiado grande. Tamaño maximo: 10MB'
+        error: 'El archivo es demasiado grande. Tamaño maximo: 100MB'
       }, { status: 400 })
     }
 

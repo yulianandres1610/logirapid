@@ -5,6 +5,11 @@
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import sharp from 'sharp'
+
+// Límite de tamaño para imágenes enviadas a Gemini (2MB en base64 ≈ 1.5MB original)
+const GEMINI_MAX_IMAGE_SIZE = 2 * 1024 * 1024 // 2MB en base64
+const GEMINI_TARGET_SIZE = 1024 // Redimensionar a max 1024px si es muy grande
 
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
@@ -20,6 +25,65 @@ function getGeminiClient() {
     throw new Error('GOOGLE_AI_API_KEY no esta configurado en las variables de entorno')
   }
   return new GoogleGenerativeAI(GOOGLE_AI_API_KEY)
+}
+
+/**
+ * Comprime/redimensiona una imagen si excede el límite de Gemini
+ * @param base64Data - Imagen en base64
+ * @returns Imagen comprimida en base64
+ */
+async function compressImageForGemini(base64Data: string): Promise<string> {
+  const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '')
+
+  // Si ya está dentro del límite, devolver sin cambios
+  if (cleanBase64.length <= GEMINI_MAX_IMAGE_SIZE) {
+    console.log('[Gemini] Image size OK:', Math.round(cleanBase64.length / 1024), 'KB')
+    return cleanBase64
+  }
+
+  console.log('[Gemini] Image too large:', Math.round(cleanBase64.length / 1024), 'KB, compressing...')
+
+  try {
+    const inputBuffer = Buffer.from(cleanBase64, 'base64')
+
+    // Obtener metadata para saber dimensiones actuales
+    const metadata = await sharp(inputBuffer).metadata()
+    const maxDimension = Math.max(metadata.width || 0, metadata.height || 0)
+
+    // Calcular ratio de redimensionamiento si es necesario
+    let resizeOptions = {}
+    if (maxDimension > GEMINI_TARGET_SIZE) {
+      resizeOptions = {
+        width: GEMINI_TARGET_SIZE,
+        height: GEMINI_TARGET_SIZE,
+        fit: 'inside' as const,
+        withoutEnlargement: true
+      }
+    }
+
+    // Comprimir con calidad reducida progresivamente hasta que quepa
+    let quality = 85
+    let outputBuffer: Buffer
+    let outputBase64: string
+
+    do {
+      outputBuffer = await sharp(inputBuffer)
+        .resize(resizeOptions)
+        .jpeg({ quality, mozjpeg: true })
+        .toBuffer()
+
+      outputBase64 = outputBuffer.toString('base64')
+      quality -= 10
+    } while (outputBase64.length > GEMINI_MAX_IMAGE_SIZE && quality > 20)
+
+    console.log('[Gemini] Compressed to:', Math.round(outputBase64.length / 1024), 'KB (quality:', quality + 10, ')')
+
+    return outputBase64
+  } catch (error) {
+    console.error('[Gemini] Compression error:', error)
+    // En caso de error, devolver original
+    return cleanBase64
+  }
 }
 
 /**
@@ -84,8 +148,8 @@ export async function cleanProductImage(imageBase64: string): Promise<{
   try {
     console.log('[Gemini Clean] Processing image to remove background...')
 
-    // Limpiar el base64 si tiene prefijo
-    const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '')
+    // Comprimir la imagen si es muy grande para Gemini
+    const cleanBase64 = await compressImageForGemini(imageBase64)
 
     // Usar Gemini para editar la imagen y remover el fondo
     // Prompt optimizado para generar imagenes del mismo tamano que las generadas (1024x1024)
@@ -363,6 +427,9 @@ export async function enhanceProductImage(imageBase64: string): Promise<{
   error?: string
 }> {
   try {
+    // Comprimir la imagen si es muy grande para Gemini
+    const compressedBase64 = await compressImageForGemini(imageBase64)
+
     const genAI = getGeminiClient()
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL })
 
@@ -389,7 +456,7 @@ Responde en JSON:
 
     const result = await model.generateContent([
       prompt,
-      base64ToGeminiPart(imageBase64)
+      base64ToGeminiPart(compressedBase64)
     ])
 
     const responseText = result.response.text()
@@ -407,7 +474,7 @@ Responde en JSON:
 
     return {
       success: true,
-      imageBase64: imageBase64,
+      imageBase64: compressedBase64,
       qualityScore: analysis.qualityScore,
       suggestions: analysis.suggestions
     }
@@ -435,6 +502,9 @@ export async function analyzeProductImage(imageBase64: string): Promise<{
   error?: string
 }> {
   try {
+    // Comprimir la imagen si es muy grande para Gemini
+    const compressedBase64 = await compressImageForGemini(imageBase64)
+
     const genAI = getGeminiClient()
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL })
 
@@ -457,7 +527,7 @@ Responde en JSON:
 
     const result = await model.generateContent([
       prompt,
-      base64ToGeminiPart(imageBase64)
+      base64ToGeminiPart(compressedBase64)
     ])
 
     const responseText = result.response.text()
