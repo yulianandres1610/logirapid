@@ -54,9 +54,9 @@ export async function GET(
 
     // Verify terminal belongs to company
     const terminalCheck = await db.query(`
-      SELECT id, terminal_name, code
+      SELECT id, name, code
       FROM market_pos_terminals
-      WHERE id = $1 AND company_id = $2 AND status = 'active'
+      WHERE id = $1 AND company_id = $2 AND is_active = true
     `, [terminalId, companyId])
 
     if (terminalCheck.rows.length === 0) {
@@ -117,7 +117,7 @@ export async function GET(
       data: {
         terminal: {
           id: terminal.id,
-          name: terminal.terminal_name,
+          name: terminal.name,
           code: terminal.code
         },
         employees
