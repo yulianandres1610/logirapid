@@ -1163,6 +1163,16 @@ export default function POSTerminalPage() {
               <User className="w-3 h-3 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline">{authenticatedEmployee.fullName}</span>
               <span className="sm:hidden">{authenticatedEmployee.employeeCode}</span>
+              <button
+                onClick={() => {
+                  sessionStorage.removeItem(`pos_employee_${terminalId}`)
+                  setAuthenticatedEmployee(null)
+                }}
+                className="ml-1 p-1 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+                title="Cerrar sesión de cajero"
+              >
+                <Lock className="w-3 h-3 sm:w-4 sm:h-4" />
+              </button>
             </div>
           )}
           {/* Online Status */}
@@ -1201,12 +1211,6 @@ export default function POSTerminalPage() {
             <span className="text-sm font-mono">
               {new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
             </span>
-          </div>
-
-          {/* User - Hidden on small screens */}
-          <div className="hidden lg:flex items-center gap-2">
-            <User className="w-4 h-4 text-gray-500" />
-            <span className="text-sm">{user?.email?.split('@')[0]}</span>
           </div>
 
           {/* Fullscreen - Hidden on mobile */}
