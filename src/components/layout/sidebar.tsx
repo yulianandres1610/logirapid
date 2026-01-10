@@ -43,7 +43,8 @@ import {
   ClipboardList,
   Calculator,
   Receipt,
-  FileCheck
+  FileCheck,
+  TrendingUp
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -513,6 +514,19 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: Receipt, label: "Gastos", href: "/dashboard/market/accounting/expenses" },
         { icon: Wallet, label: "Nomina", href: "/dashboard/market/accounting/payroll" },
         { icon: FileCheck, label: "Solicitudes", href: "/dashboard/market/accounting/requests" },
+      ]
+    },
+    {
+      icon: BarChart3,
+      label: "Reportes",
+      href: "/dashboard/market/reports",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: TrendingUp, label: "Ventas", href: "/dashboard/market/reports/sales" },
+        { icon: Percent, label: "Márgenes", href: "/dashboard/market/reports/margins" },
+        { icon: Receipt, label: "Gastos", href: "/dashboard/market/reports/expenses" },
+        { icon: Package, label: "Inventario", href: "/dashboard/market/reports/inventory" },
+        { icon: Monitor, label: "Terminales POS", href: "/dashboard/market/reports/pos-terminals" },
       ]
     },
     { icon: Tag, label: "Listas de Precios", href: "/dashboard/market/pricelists" },
