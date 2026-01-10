@@ -10,7 +10,6 @@ import { DollarSign, TrendingUp, TrendingDown, Receipt, ArrowRight } from 'lucid
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { ReportFilters } from '@/components/market/reports/ReportFilters'
-import { ReportHeader } from '@/components/market/reports/ReportHeader'
 import { ReportSummaryCards } from '@/components/market/reports/ReportSummaryCards'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
@@ -118,20 +117,16 @@ export default function ExpensesReportPage() {
     <ProtectedRoute>
       <DashboardLayout>
         <div className="p-6" ref={reportRef}>
-          <ReportHeader
-            title="Reporte de Gastos"
-        subtitle="Estado de resultados e ingresos vs gastos"
-        onRefresh={fetchData}
-        isLoading={loading}
-        reportRef={reportRef}
-      />
-
-      <ReportFilters
-        startDate={startDate}
-        endDate={endDate}
-        onStartDateChange={setStartDate}
-        onEndDateChange={setEndDate}
-      />
+          <ReportFilters
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={setStartDate}
+            onEndDateChange={setEndDate}
+            onRefresh={fetchData}
+            isLoading={loading}
+            reportRef={reportRef}
+            reportTitle="Reporte de Gastos"
+          />
 
       {data && (
         <>

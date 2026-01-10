@@ -6,13 +6,14 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts'
 import {
-  Package, AlertTriangle, Clock, DollarSign, TrendingDown, TrendingUp
+  Package, AlertTriangle, Clock, DollarSign, TrendingDown, TrendingUp, RefreshCw, Download, Printer
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
-import { ReportFilters } from '@/components/market/reports/ReportFilters'
-import { ReportHeader } from '@/components/market/reports/ReportHeader'
 import { ReportSummaryCards } from '@/components/market/reports/ReportSummaryCards'
+import { Button } from '@/components/ui/button'
+import html2canvas from 'html2canvas'
+import jsPDF from 'jspdf'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from '@/components/ui/table'
@@ -125,6 +126,36 @@ export default function InventoryReportPage() {
   const formatCurrency = (value: number) =>
     `$${value.toLocaleString('es', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
+  const handleExportPDF = async () => {
+    if (!reportRef?.current) return
+    try {
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      })
+      const imgData = canvas.toDataURL('image/png')
+      const pdf = new jsPDF({
+        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      })
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const imgWidth = pageWidth - 20
+      const imgHeight = (canvas.height * imgWidth) / canvas.width
+      pdf.setFontSize(16)
+      pdf.text('Análisis de Inventario', 10, 15)
+      pdf.setFontSize(10)
+      pdf.setTextColor(128)
+      pdf.text(`Generado: ${new Date().toLocaleString('es')}`, 10, 22)
+      pdf.addImage(imgData, 'PNG', 10, 30, imgWidth, imgHeight, undefined, 'FAST')
+      pdf.save(`analisis-inventario_${new Date().toISOString().split('T')[0]}.pdf`)
+    } catch (error) {
+      console.error('Error exporting PDF:', error)
+    }
+  }
+
   const getExpirationColor = (days: number) => {
     if (days < 0) return 'text-red-600 bg-red-50'
     if (days <= 7) return 'text-orange-600 bg-orange-50'
@@ -187,30 +218,34 @@ export default function InventoryReportPage() {
     <ProtectedRoute>
       <DashboardLayout>
         <div className="p-6" ref={reportRef}>
-          <ReportHeader
-            title="Análisis de Inventario"
-            subtitle="Expiración, rotación y valorización de productos"
-        onRefresh={fetchData}
-        isLoading={loading}
-        reportRef={reportRef}
-      />
-
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-500">Mostrar productos que vencen en:</span>
-          <select
-            value={expiringDays}
-            onChange={(e) => setExpiringDays(parseInt(e.target.value))}
-            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
-          >
-            <option value={7}>7 días</option>
-            <option value={15}>15 días</option>
-            <option value={30}>30 días</option>
-            <option value={60}>60 días</option>
-            <option value={90}>90 días</option>
-          </select>
-        </div>
-      </div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
+            <div className="flex flex-wrap gap-3 items-center justify-between">
+              <div className="flex items-center gap-4">
+                <select
+                  value={expiringDays}
+                  onChange={(e) => setExpiringDays(parseInt(e.target.value))}
+                  className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value={7}>Vence en 7 días</option>
+                  <option value={15}>Vence en 15 días</option>
+                  <option value={30}>Vence en 30 días</option>
+                  <option value={60}>Vence en 60 días</option>
+                  <option value={90}>Vence en 90 días</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2 no-print">
+                <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}>
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleExportPDF}>
+                  <Download className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => window.print()}>
+                  <Printer className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
 
       {data && (
         <>

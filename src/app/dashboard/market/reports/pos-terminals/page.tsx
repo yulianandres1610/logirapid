@@ -10,7 +10,6 @@ import { Monitor, DollarSign, ShoppingCart, TrendingUp, Clock } from 'lucide-rea
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { ReportFilters } from '@/components/market/reports/ReportFilters'
-import { ReportHeader } from '@/components/market/reports/ReportHeader'
 import { ReportSummaryCards } from '@/components/market/reports/ReportSummaryCards'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
@@ -148,20 +147,16 @@ export default function POSTerminalsReportPage() {
     <ProtectedRoute>
       <DashboardLayout>
         <div className="p-6" ref={reportRef}>
-          <ReportHeader
-            title="Reporte por Terminal POS"
-        subtitle="Rendimiento y comparativo entre terminales"
-        onRefresh={fetchData}
-        isLoading={loading}
-        reportRef={reportRef}
-      />
-
-      <ReportFilters
-        startDate={startDate}
-        endDate={endDate}
-        onStartDateChange={setStartDate}
-        onEndDateChange={setEndDate}
-      />
+          <ReportFilters
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={setStartDate}
+            onEndDateChange={setEndDate}
+            onRefresh={fetchData}
+            isLoading={loading}
+            reportRef={reportRef}
+            reportTitle="Reporte por Terminal POS"
+          />
 
       {data && (
         <>

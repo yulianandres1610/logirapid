@@ -10,7 +10,6 @@ import { DollarSign, ShoppingCart, TrendingUp, Users } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { ReportFilters } from '@/components/market/reports/ReportFilters'
-import { ReportHeader } from '@/components/market/reports/ReportHeader'
 import { ReportSummaryCards } from '@/components/market/reports/ReportSummaryCards'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
@@ -135,27 +134,23 @@ export default function SalesReportPage() {
     <ProtectedRoute>
       <DashboardLayout>
         <div className="p-6" ref={reportRef}>
-          <ReportHeader
-        title="Reporte de Ventas"
-        subtitle={`${startDate} - ${endDate}`}
-        onRefresh={fetchData}
-        isLoading={loading}
-        reportRef={reportRef}
-      />
-
-      <ReportFilters
-        startDate={startDate}
-        endDate={endDate}
-        onStartDateChange={setStartDate}
-        onEndDateChange={setEndDate}
-        period={period}
-        onPeriodChange={setPeriod}
-        showPeriodSelector
-        terminals={data?.byTerminal.map(t => ({ id: t.terminalId, name: t.terminalName })) || []}
-        selectedTerminalId={selectedTerminalId}
-        onTerminalChange={setSelectedTerminalId}
-        showTerminalSelector
-      />
+          <ReportFilters
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={setStartDate}
+            onEndDateChange={setEndDate}
+            period={period}
+            onPeriodChange={setPeriod}
+            showPeriodSelector
+            terminals={data?.byTerminal.map(t => ({ id: t.terminalId, name: t.terminalName })) || []}
+            selectedTerminalId={selectedTerminalId}
+            onTerminalChange={setSelectedTerminalId}
+            showTerminalSelector
+            onRefresh={fetchData}
+            isLoading={loading}
+            reportRef={reportRef}
+            reportTitle="Reporte de Ventas"
+          />
 
       {data && (
         <>
