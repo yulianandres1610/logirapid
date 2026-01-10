@@ -68,19 +68,12 @@ export async function GET(
 
     const terminal = terminalCheck.rows[0]
 
-    // Get employees with access to this terminal
-    console.log('[Terminal Employees] Querying with:', { companyId, terminalId })
+    // Get employees/users with access to this terminal
+    // First try market_employee_terminals, then fallback to market_pos_users
+    console.log('[Terminal Employees] Querying for terminal:', terminalId, 'company:', companyId)
 
-    // First check what's in market_employee_terminals for this terminal
-    const debugCheck = await db.query(`
-      SELECT et.*, e.employee_code, e.status as emp_status
-      FROM market_employee_terminals et
-      LEFT JOIN market_employees e ON et.employee_id = e.id
-      WHERE et.terminal_id = $1
-    `, [terminalId])
-    console.log('[Terminal Employees] Debug - employee_terminals rows:', debugCheck.rows)
-
-    const result = await db.query(`
+    // Try market_employee_terminals first (employees with specific permissions)
+    let result = await db.query(`
       SELECT
         e.id as employee_id,
         e.employee_code,
@@ -104,7 +97,34 @@ export async function GET(
       ORDER BY u.firstname, u.lastname
     `, [companyId, terminalId])
 
-    console.log('[Terminal Employees] Query result rows:', result.rows.length)
+    console.log('[Terminal Employees] From market_employee_terminals:', result.rows.length)
+
+    // If no employees found, try market_pos_users (users assigned to terminal)
+    if (result.rows.length === 0) {
+      console.log('[Terminal Employees] Trying market_pos_users...')
+      result = await db.query(`
+        SELECT
+          COALESCE(e.id, 0) as employee_id,
+          COALESCE(e.employee_code, 'USR-' || u.id) as employee_code,
+          u.id as user_id,
+          u.firstname,
+          u.lastname,
+          u.email,
+          COALESCE(e.pos_pin IS NOT NULL, false) as has_pin,
+          pu.can_open_session,
+          pu.can_close_session,
+          pu.can_void_orders,
+          pu.can_give_discount,
+          pu.can_refund,
+          0 as max_discount_percent
+        FROM market_pos_users pu
+        JOIN users u ON pu.user_id = u.id
+        LEFT JOIN market_employees e ON e.user_id = u.id AND e.company_id = $1
+        WHERE pu.pos_terminal_id = $2
+        ORDER BY u.firstname, u.lastname
+      `, [companyId, terminalId])
+      console.log('[Terminal Employees] From market_pos_users:', result.rows.length)
+    }
 
     const employees = result.rows.map(emp => ({
       employeeId: emp.employee_id,
