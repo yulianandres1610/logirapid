@@ -8,6 +8,8 @@ import {
   ArrowRight, BarChart3
 } from 'lucide-react'
 import Link from 'next/link'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { ProtectedRoute } from '@/components/protected-route'
 import { ReportSummaryCards, MetricCard } from '@/components/market/reports/ReportSummaryCards'
 
 interface DashboardData {
@@ -144,8 +146,10 @@ export default function ReportsDashboardPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center gap-3 mb-6">
+    <ProtectedRoute>
+      <DashboardLayout>
+        <div className="p-6">
+          <div className="flex items-center gap-3 mb-6">
         <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg">
           <BarChart3 className="w-6 h-6 text-white" />
         </div>
@@ -221,7 +225,9 @@ export default function ReportsDashboardPage() {
             </Link>
           </motion.div>
         ))}
-      </div>
-    </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
   )
 }

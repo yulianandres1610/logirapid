@@ -7,6 +7,8 @@ import {
   Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts'
 import { DollarSign, ShoppingCart, TrendingUp, Users } from 'lucide-react'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { ProtectedRoute } from '@/components/protected-route'
 import { ReportFilters } from '@/components/market/reports/ReportFilters'
 import { ReportHeader } from '@/components/market/reports/ReportHeader'
 import { ReportSummaryCards } from '@/components/market/reports/ReportSummaryCards'
@@ -130,8 +132,10 @@ export default function SalesReportPage() {
   }
 
   return (
-    <div className="p-6" ref={reportRef}>
-      <ReportHeader
+    <ProtectedRoute>
+      <DashboardLayout>
+        <div className="p-6" ref={reportRef}>
+          <ReportHeader
         title="Reporte de Ventas"
         subtitle={`${startDate} - ${endDate}`}
         onRefresh={fetchData}
@@ -383,6 +387,8 @@ export default function SalesReportPage() {
           </motion.div>
         </>
       )}
-    </div>
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
   )
 }

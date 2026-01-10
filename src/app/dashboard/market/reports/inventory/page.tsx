@@ -8,6 +8,8 @@ import {
 import {
   Package, AlertTriangle, Clock, DollarSign, TrendingDown, TrendingUp
 } from 'lucide-react'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { ProtectedRoute } from '@/components/protected-route'
 import { ReportFilters } from '@/components/market/reports/ReportFilters'
 import { ReportHeader } from '@/components/market/reports/ReportHeader'
 import { ReportSummaryCards } from '@/components/market/reports/ReportSummaryCards'
@@ -154,9 +156,11 @@ export default function InventoryReportPage() {
   }
 
   return (
-    <div className="p-6" ref={reportRef}>
-      <ReportHeader
-        title="Análisis de Inventario"
+    <ProtectedRoute>
+      <DashboardLayout>
+        <div className="p-6" ref={reportRef}>
+          <ReportHeader
+            title="Análisis de Inventario"
         subtitle="Expiración, rotación y valorización de productos"
         onRefresh={fetchData}
         isLoading={loading}
@@ -450,6 +454,8 @@ export default function InventoryReportPage() {
           </motion.div>
         </>
       )}
-    </div>
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
   )
 }

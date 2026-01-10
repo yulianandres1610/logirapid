@@ -7,6 +7,8 @@ import {
   Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts'
 import { Percent, DollarSign, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { ProtectedRoute } from '@/components/protected-route'
 import { ReportFilters } from '@/components/market/reports/ReportFilters'
 import { ReportHeader } from '@/components/market/reports/ReportHeader'
 import { ReportSummaryCards } from '@/components/market/reports/ReportSummaryCards'
@@ -122,9 +124,11 @@ export default function MarginsReportPage() {
   }
 
   return (
-    <div className="p-6" ref={reportRef}>
-      <ReportHeader
-        title="Reporte de Márgenes"
+    <ProtectedRoute>
+      <DashboardLayout>
+        <div className="p-6" ref={reportRef}>
+          <ReportHeader
+            title="Reporte de Márgenes"
         subtitle="Análisis de rentabilidad por producto y categoría"
         onRefresh={fetchData}
         isLoading={loading}
@@ -362,6 +366,8 @@ export default function MarginsReportPage() {
           </motion.div>
         </>
       )}
-    </div>
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
   )
 }

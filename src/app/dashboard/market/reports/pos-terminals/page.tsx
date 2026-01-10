@@ -7,6 +7,8 @@ import {
   ResponsiveContainer, LineChart, Line
 } from 'recharts'
 import { Monitor, DollarSign, ShoppingCart, TrendingUp, Clock } from 'lucide-react'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { ProtectedRoute } from '@/components/protected-route'
 import { ReportFilters } from '@/components/market/reports/ReportFilters'
 import { ReportHeader } from '@/components/market/reports/ReportHeader'
 import { ReportSummaryCards } from '@/components/market/reports/ReportSummaryCards'
@@ -143,9 +145,11 @@ export default function POSTerminalsReportPage() {
   }
 
   return (
-    <div className="p-6" ref={reportRef}>
-      <ReportHeader
-        title="Reporte por Terminal POS"
+    <ProtectedRoute>
+      <DashboardLayout>
+        <div className="p-6" ref={reportRef}>
+          <ReportHeader
+            title="Reporte por Terminal POS"
         subtitle="Rendimiento y comparativo entre terminales"
         onRefresh={fetchData}
         isLoading={loading}
@@ -389,6 +393,8 @@ export default function POSTerminalsReportPage() {
           </motion.div>
         </>
       )}
-    </div>
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
   )
 }

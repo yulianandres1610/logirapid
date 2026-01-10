@@ -7,6 +7,8 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, ComposedChart, Line
 } from 'recharts'
 import { DollarSign, TrendingUp, TrendingDown, Receipt, ArrowRight } from 'lucide-react'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { ProtectedRoute } from '@/components/protected-route'
 import { ReportFilters } from '@/components/market/reports/ReportFilters'
 import { ReportHeader } from '@/components/market/reports/ReportHeader'
 import { ReportSummaryCards } from '@/components/market/reports/ReportSummaryCards'
@@ -113,9 +115,11 @@ export default function ExpensesReportPage() {
   }
 
   return (
-    <div className="p-6" ref={reportRef}>
-      <ReportHeader
-        title="Reporte de Gastos"
+    <ProtectedRoute>
+      <DashboardLayout>
+        <div className="p-6" ref={reportRef}>
+          <ReportHeader
+            title="Reporte de Gastos"
         subtitle="Estado de resultados e ingresos vs gastos"
         onRefresh={fetchData}
         isLoading={loading}
@@ -323,6 +327,8 @@ export default function ExpensesReportPage() {
           </motion.div>
         </>
       )}
-    </div>
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
   )
 }
