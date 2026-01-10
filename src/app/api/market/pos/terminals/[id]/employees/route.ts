@@ -69,6 +69,17 @@ export async function GET(
     const terminal = terminalCheck.rows[0]
 
     // Get employees with access to this terminal
+    console.log('[Terminal Employees] Querying with:', { companyId, terminalId })
+
+    // First check what's in market_employee_terminals for this terminal
+    const debugCheck = await db.query(`
+      SELECT et.*, e.employee_code, e.status as emp_status
+      FROM market_employee_terminals et
+      LEFT JOIN market_employees e ON et.employee_id = e.id
+      WHERE et.terminal_id = $1
+    `, [terminalId])
+    console.log('[Terminal Employees] Debug - employee_terminals rows:', debugCheck.rows)
+
     const result = await db.query(`
       SELECT
         e.id as employee_id,
@@ -92,6 +103,8 @@ export async function GET(
         AND e.status = 'active'
       ORDER BY u.firstname, u.lastname
     `, [companyId, terminalId])
+
+    console.log('[Terminal Employees] Query result rows:', result.rows.length)
 
     const employees = result.rows.map(emp => ({
       employeeId: emp.employee_id,
