@@ -91,6 +91,7 @@ export default function InventoryReportPage() {
   const reportRef = useRef<HTMLDivElement>(null)
   const [data, setData] = useState<InventoryData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'expiring' | 'rotation' | 'valuation' | 'lowstock'>('expiring')
   const [expiringDays, setExpiringDays] = useState(30)
 
@@ -100,16 +101,22 @@ export default function InventoryReportPage() {
 
   const fetchData = async () => {
     setLoading(true)
+    setError(null)
     try {
       const params = new URLSearchParams({ expiringDays: String(expiringDays) })
       const response = await fetch(`/api/market/reports/inventory?${params}`)
       const result = await response.json()
 
+      console.log('[Inventory Report] API Response:', result)
+
       if (result.success) {
         setData(result.data)
+      } else {
+        setError(result.error || 'Error desconocido')
       }
     } catch (error) {
       console.error('Error fetching inventory report:', error)
+      setError(error instanceof Error ? error.message : 'Error de conexión')
     } finally {
       setLoading(false)
     }
@@ -155,13 +162,34 @@ export default function InventoryReportPage() {
     )
   }
 
+  if (error) {
+    return (
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="p-6">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <h3 className="text-red-800 dark:text-red-200 font-medium">Error al cargar el reporte</h3>
+              <p className="text-red-600 dark:text-red-300 text-sm mt-1">{error}</p>
+              <button
+                onClick={fetchData}
+                className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
+              >
+                Reintentar
+              </button>
+            </div>
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
+    )
+  }
+
   return (
     <ProtectedRoute>
       <DashboardLayout>
         <div className="p-6" ref={reportRef}>
           <ReportHeader
             title="Análisis de Inventario"
-        subtitle="Expiración, rotación y valorización de productos"
+            subtitle="Expiración, rotación y valorización de productos"
         onRefresh={fetchData}
         isLoading={loading}
         reportRef={reportRef}
