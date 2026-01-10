@@ -11,9 +11,9 @@ const buttonVariants = cva(
       variant: {
         default: "bg-exa-primary text-white hover:bg-exa-secondary hover:shadow-lg transition-colors",
         destructive: "bg-red-600 text-white hover:bg-red-700 hover:shadow-lg",
-        outline: "border border-gray-300 bg-white text-gray-900 hover:bg-gray-50 hover:shadow-md",
-        secondary: "bg-gray-100 text-gray-900 hover:bg-gray-200 hover:shadow-md",
-        ghost: "hover:bg-gray-100 text-gray-900 hover:shadow-sm",
+        outline: "border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 hover:shadow-md",
+        secondary: "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-600 hover:shadow-md",
+        ghost: "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100 hover:shadow-sm",
         link: "text-exa-primary underline-offset-4 hover:underline hover:text-exa-secondary",
       },
       size: {
