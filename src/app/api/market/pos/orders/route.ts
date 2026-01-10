@@ -3,6 +3,24 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
 
+// Ensure employee_id column exists (migration)
+let migrationRun = false
+async function ensureEmployeeIdColumn() {
+  if (migrationRun) return
+  try {
+    await db.query(`
+      ALTER TABLE market_pos_orders
+      ADD COLUMN IF NOT EXISTS employee_id INTEGER REFERENCES market_employees(id)
+    `)
+    console.log('[POS Orders] employee_id column ensured')
+    migrationRun = true
+  } catch (error) {
+    // Column might already exist or table structure issue
+    console.error('[POS Orders] Migration error (may be safe to ignore):', error)
+    migrationRun = true
+  }
+}
+
 interface JWTPayload {
   userId: number
   email: string
@@ -63,15 +81,20 @@ export async function GET(request: NextRequest) {
         o.status,
         o.offline_id,
         o.synced_at,
+        o.employee_id,
         o.created_by,
         o.created_at,
         COALESCE(u.firstname || ' ' || u.lastname, u.email) as created_by_name,
         t.name as terminal_name,
-        s.session_code
+        s.session_code,
+        e.employee_code,
+        COALESCE(eu.firstname || ' ' || eu.lastname, eu.email) as employee_name
       FROM market_pos_orders o
       LEFT JOIN users u ON o.created_by = u.id
       LEFT JOIN market_pos_terminals t ON o.pos_terminal_id = t.id
       LEFT JOIN market_pos_sessions s ON o.pos_session_id = s.id
+      LEFT JOIN market_employees e ON o.employee_id = e.id
+      LEFT JOIN users eu ON e.user_id = eu.id
       WHERE o.company_id = $1
     `
     const params: (number | string)[] = [companyId]
@@ -161,6 +184,9 @@ export async function GET(request: NextRequest) {
           status: row.status,
           offlineId: row.offline_id,
           syncedAt: row.synced_at,
+          employeeId: row.employee_id,
+          employeeCode: row.employee_code,
+          employeeName: row.employee_name,
           createdBy: row.created_by,
           createdByName: row.created_by_name,
           createdAt: row.created_at,
@@ -209,11 +235,15 @@ export async function POST(request: NextRequest) {
     const companyId = payload.companyId
     const userId = payload.userId
 
+    // Ensure employee_id column exists
+    await ensureEmployeeIdColumn()
+
     const body = await request.json()
     const {
       sessionId,
       terminalId,
       warehouseId,
+      employeeId, // Cashier who processed the sale
       customerId,
       customerName,
       lines,
@@ -303,8 +333,8 @@ export async function POST(request: NextRequest) {
         order_number, customer_id, customer_name,
         subtotal, discount_amount, tax_amount, total_amount,
         currency, status, offline_id, synced_at,
-        created_by, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW())
+        employee_id, created_by, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW(), NOW())
       RETURNING id
     `, [
       companyId,
@@ -322,6 +352,7 @@ export async function POST(request: NextRequest) {
       'draft',
       offlineId || null,
       offlineId ? new Date().toISOString() : null,
+      employeeId || null,
       userId
     ])
 

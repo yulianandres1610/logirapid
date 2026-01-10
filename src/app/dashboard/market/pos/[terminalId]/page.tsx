@@ -58,6 +58,7 @@ import { usePOSOffline } from '@/hooks/usePOSOffline'
 import { useBarcodeScan } from '@/hooks/useBarcodeScan'
 import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
 import { VariantSelectorModal, Variant } from '@/components/market/VariantSelectorModal'
+import { CashierLoginModal, AuthenticatedEmployee } from '@/components/market/pos/CashierLoginModal'
 
 interface ProductVariant {
   id: number
@@ -201,6 +202,41 @@ export default function POSTerminalPage() {
   const [selectedProductForDetails, setSelectedProductForDetails] = useState<Product | null>(null)
   const [warehouseStocks, setWarehouseStocks] = useState<WarehouseStock[]>([])
   const [loadingStocks, setLoadingStocks] = useState(false)
+
+  // Cashier authentication state
+  const [authenticatedEmployee, setAuthenticatedEmployee] = useState<AuthenticatedEmployee | null>(null)
+  const [checkingAuth, setCheckingAuth] = useState(true)
+
+  // Check for existing authenticated employee on mount
+  useEffect(() => {
+    const storedEmployee = sessionStorage.getItem(`pos_employee_${terminalId}`)
+    console.log('[POS Auth] Checking stored employee for terminal', terminalId, ':', storedEmployee ? 'found' : 'not found')
+    if (storedEmployee) {
+      try {
+        const parsed = JSON.parse(storedEmployee) as AuthenticatedEmployee
+        // Validate that the stored data has required fields
+        if (parsed && parsed.employeeId && parsed.fullName) {
+          setAuthenticatedEmployee(parsed)
+          console.log('[POS Auth] Restored employee:', parsed.fullName)
+        } else {
+          console.log('[POS Auth] Invalid stored data, clearing')
+          sessionStorage.removeItem(`pos_employee_${terminalId}`)
+        }
+      } catch {
+        console.log('[POS Auth] Failed to parse stored data, clearing')
+        sessionStorage.removeItem(`pos_employee_${terminalId}`)
+      }
+    }
+    setCheckingAuth(false)
+  }, [terminalId])
+
+  // Handle successful cashier authentication
+  const handleCashierAuthenticated = (employee: AuthenticatedEmployee) => {
+    setAuthenticatedEmployee(employee)
+    // Store in sessionStorage for persistence
+    sessionStorage.setItem(`pos_employee_${terminalId}`, JSON.stringify(employee))
+    console.log('[POS] Cashier authenticated:', employee.fullName, employee.employeeCode)
+  }
 
   // Initialize client-side state and fetch data
   useEffect(() => {
@@ -938,6 +974,7 @@ export default function POSTerminalPage() {
         sessionId: session.id,
         terminalId: parseInt(terminalId),
         warehouseId: terminal?.warehouseId,
+        employeeId: authenticatedEmployee?.employeeId,
         currency: paymentCurrency,
         lines: cart.map(item => ({
           productId: item.product.id,
@@ -985,15 +1022,60 @@ export default function POSTerminalPage() {
     }
   }
 
-  // Evitar parpadeo durante hidratación - mostrar loading inmediatamente
-  if (!mounted || loading) {
+  // Evitar parpadeo durante hidratación
+  if (!mounted) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900">
         <div className="text-center">
           <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-gray-800">
             <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
           </div>
-          <p className="text-sm font-medium text-gray-400">Cargando punto de venta...</p>
+          <p className="text-sm font-medium text-gray-400">Iniciando...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Debug log
+  console.log('[POS Render] State:', { mounted, checkingAuth, loading, hasTerminal: !!terminal, hasEmployee: !!authenticatedEmployee })
+
+  // Show loading while checking auth OR loading terminal data
+  if (checkingAuth || (loading && !terminal)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <div className="text-center">
+          <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-gray-800">
+            <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+          </div>
+          <p className="text-sm font-medium text-gray-400">
+            {checkingAuth ? 'Verificando sesión...' : 'Cargando terminal...'}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show cashier login modal if not authenticated (requires terminal to be loaded)
+  if (!authenticatedEmployee && terminal) {
+    return (
+      <CashierLoginModal
+        terminalId={parseInt(terminalId)}
+        terminalName={terminal.name}
+        onAuthenticated={handleCashierAuthenticated}
+        onCancel={() => router.push('/dashboard/market/pos')}
+      />
+    )
+  }
+
+  // Show loading while fetching remaining data (products, etc.)
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <div className="text-center">
+          <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-gray-800">
+            <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+          </div>
+          <p className="text-sm font-medium text-gray-400">Cargando productos...</p>
         </div>
       </div>
     )
@@ -1072,6 +1154,17 @@ export default function POSTerminalPage() {
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-3">
+          {/* Authenticated Cashier */}
+          {authenticatedEmployee && (
+            <div className={cn(
+              'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs sm:text-sm',
+              'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+            )}>
+              <User className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">{authenticatedEmployee.fullName}</span>
+              <span className="sm:hidden">{authenticatedEmployee.employeeCode}</span>
+            </div>
+          )}
           {/* Online Status */}
           <div className={cn(
             'flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm',
