@@ -9,7 +9,10 @@ import {
   ChevronDown,
   Delete,
   LogIn,
-  Lock
+  Lock,
+  ArrowLeft,
+  Eye,
+  EyeOff
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -67,6 +70,13 @@ export function CashierLoginModal({
   const [authenticating, setAuthenticating] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
 
+  // Exit confirmation state
+  const [showExitModal, setShowExitModal] = useState(false)
+  const [exitPassword, setExitPassword] = useState('')
+  const [showExitPassword, setShowExitPassword] = useState(false)
+  const [exitError, setExitError] = useState<string | null>(null)
+  const [verifyingExit, setVerifyingExit] = useState(false)
+
   // Fetch employees on mount
   useEffect(() => {
     fetchEmployees()
@@ -112,6 +122,46 @@ export function CashierLoginModal({
     setPin('')
     setAuthError(null)
   }, [])
+
+  // Handle exit with password verification
+  const handleExitRequest = () => {
+    setShowExitModal(true)
+    setExitPassword('')
+    setExitError(null)
+  }
+
+  const handleExitConfirm = async () => {
+    if (!exitPassword) {
+      setExitError('Ingresa tu contraseña')
+      return
+    }
+
+    setVerifyingExit(true)
+    setExitError(null)
+
+    try {
+      const response = await fetch('/api/auth/verify-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: exitPassword })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setShowExitModal(false)
+        onCancel?.()
+      } else {
+        setExitError(data.error || 'Contraseña incorrecta')
+        setExitPassword('')
+      }
+    } catch (err) {
+      console.error('[CashierLogin] Exit error:', err)
+      setExitError('Error de verificación')
+    } finally {
+      setVerifyingExit(false)
+    }
+  }
 
   const handleAuthenticate = async () => {
     if (!selectedEmployee) {
@@ -442,16 +492,107 @@ export function CashierLoginModal({
           )}
         </button>
 
-        {/* Cancel Button */}
+        {/* Back Button */}
         {onCancel && (
           <button
-            onClick={onCancel}
-            className="w-full mt-4 py-3 text-gray-400 hover:text-white transition-colors"
+            onClick={handleExitRequest}
+            className="w-full mt-4 py-3 text-gray-400 hover:text-white transition-colors flex items-center justify-center gap-2"
           >
-            Cancelar
+            <ArrowLeft className="w-5 h-5" />
+            Regresar
           </button>
         )}
       </motion.div>
+
+      {/* Exit Confirmation Modal */}
+      <AnimatePresence>
+        {showExitModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/80 flex items-center justify-center z-10"
+            onClick={() => setShowExitModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gray-800 rounded-2xl p-6 w-full max-w-sm mx-4"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-yellow-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Lock className="w-8 h-8 text-yellow-500" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">Confirmar Salida</h3>
+                <p className="text-gray-400 text-sm">
+                  Ingresa tu contraseña para regresar
+                </p>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Contraseña
+                </label>
+                <div className="relative">
+                  <input
+                    type={showExitPassword ? 'text' : 'password'}
+                    value={exitPassword}
+                    onChange={e => {
+                      setExitPassword(e.target.value)
+                      setExitError(null)
+                    }}
+                    onKeyDown={e => e.key === 'Enter' && handleExitConfirm()}
+                    placeholder="••••••••"
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowExitPassword(!showExitPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                  >
+                    {showExitPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+
+              {exitError && (
+                <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-xl flex items-center gap-2 text-red-400 text-sm">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  {exitError}
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowExitModal(false)}
+                  className="flex-1 py-3 bg-gray-700 text-white rounded-xl hover:bg-gray-600 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleExitConfirm}
+                  disabled={verifyingExit || !exitPassword}
+                  className={cn(
+                    "flex-1 py-3 rounded-xl font-medium transition-colors flex items-center justify-center gap-2",
+                    verifyingExit || !exitPassword
+                      ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                      : "bg-blue-600 text-white hover:bg-blue-500"
+                  )}
+                >
+                  {verifyingExit ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    'Confirmar'
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
