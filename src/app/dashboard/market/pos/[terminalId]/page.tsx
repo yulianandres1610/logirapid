@@ -1168,10 +1168,10 @@ export default function POSTerminalPage() {
                   sessionStorage.removeItem(`pos_employee_${terminalId}`)
                   setAuthenticatedEmployee(null)
                 }}
-                className="ml-1 p-1 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+                className="ml-2 p-2 sm:p-2.5 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors active:scale-95"
                 title="Cerrar sesión de cajero"
               >
-                <Lock className="w-3 h-3 sm:w-4 sm:h-4" />
+                <Lock className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </div>
           )}
