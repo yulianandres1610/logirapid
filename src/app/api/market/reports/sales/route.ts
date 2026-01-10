@@ -43,6 +43,8 @@ export async function GET(request: NextRequest) {
     const categoryId = searchParams.get('categoryId')
     const currency = searchParams.get('currency') || 'USD'
 
+    console.log('[Sales Report API] Filters:', { companyId, startDate, endDate, period, terminalId })
+
     // Build terminal filter
     const terminalFilter = terminalId ? 'AND o.pos_terminal_id = $4' : ''
     const params = terminalId
@@ -87,6 +89,13 @@ export async function GET(request: NextRequest) {
     const currentSales = parseFloat(summaryResult.rows[0]?.total_sales) || 0
     const prevSales = parseFloat(prevResult.rows[0]?.prev_sales) || 0
     const percentChange = prevSales > 0 ? ((currentSales - prevSales) / prevSales) * 100 : 0
+
+    console.log('[Sales Report API] Summary:', {
+      currentSales,
+      prevSales,
+      totalOrders: summaryResult.rows[0]?.total_orders,
+      summaryRow: summaryResult.rows[0]
+    })
 
     // Sales by period
     const byPeriodResult = await db.query(`
@@ -260,9 +269,11 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('[Sales Report API] Error:', error)
+    console.error('[Sales Report API] Stack:', error instanceof Error ? error.stack : 'No stack')
     return NextResponse.json({
       success: false,
-      error: error instanceof Error ? error.message : 'Error al obtener reporte de ventas'
+      error: error instanceof Error ? error.message : 'Error al obtener reporte de ventas',
+      details: process.env.NODE_ENV === 'development' ? String(error) : undefined
     }, { status: 500 })
   }
 }
