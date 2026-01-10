@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     const companyId = payload.companyId
 
     const body = await request.json()
-    const { terminalId, pin, badge } = body
+    const { terminalId, pin, badge, employeeId, userId } = body
 
     if (!terminalId) {
       return NextResponse.json({
@@ -89,43 +89,106 @@ export async function POST(request: NextRequest) {
       employee = result.rows[0]
 
     } else if (pin) {
-      // Authenticate by PIN - need to check all employees with PINs
-      const result = await db.query(`
-        SELECT
-          e.id as employee_id,
-          e.employee_code,
-          e.user_id,
-          e.pos_pin,
-          u.email,
-          u.firstname,
-          u.lastname,
-          e.status
-        FROM market_employees e
-        JOIN users u ON e.user_id = u.id
-        WHERE e.company_id = $1
-          AND e.pos_pin IS NOT NULL
-          AND e.status = 'active'
-      `, [companyId])
-
-      // Check each employee's PIN
-      for (const emp of result.rows) {
-        const isValidPin = await bcrypt.compare(pin, emp.pos_pin)
-        if (isValidPin) {
-          employee = emp
-          break
+      // If employeeId or userId provided, validate PIN for that specific employee
+      if (employeeId || userId) {
+        let result
+        if (employeeId && employeeId > 0) {
+          // Get specific employee by employeeId
+          result = await db.query(`
+            SELECT
+              e.id as employee_id,
+              e.employee_code,
+              e.user_id,
+              e.pos_pin,
+              u.email,
+              u.firstname,
+              u.lastname,
+              e.status
+            FROM market_employees e
+            JOIN users u ON e.user_id = u.id
+            WHERE e.id = $1 AND e.company_id = $2
+          `, [employeeId, companyId])
+        } else if (userId) {
+          // Get employee by userId
+          result = await db.query(`
+            SELECT
+              e.id as employee_id,
+              e.employee_code,
+              e.user_id,
+              e.pos_pin,
+              u.email,
+              u.firstname,
+              u.lastname,
+              e.status
+            FROM market_employees e
+            JOIN users u ON e.user_id = u.id
+            WHERE e.user_id = $1 AND e.company_id = $2
+          `, [userId, companyId])
         }
-      }
 
-      if (!employee) {
-        return NextResponse.json({
-          success: false,
-          error: 'PIN inválido'
-        }, { status: 401 })
+        if (result && result.rows.length > 0) {
+          const emp = result.rows[0]
+          if (emp.pos_pin) {
+            const isValidPin = await bcrypt.compare(pin, emp.pos_pin)
+            if (isValidPin) {
+              employee = emp
+            } else {
+              return NextResponse.json({
+                success: false,
+                error: 'PIN incorrecto'
+              }, { status: 401 })
+            }
+          } else {
+            return NextResponse.json({
+              success: false,
+              error: 'Este usuario no tiene PIN configurado'
+            }, { status: 400 })
+          }
+        } else {
+          return NextResponse.json({
+            success: false,
+            error: 'Empleado no encontrado'
+          }, { status: 404 })
+        }
+      } else {
+        // Fallback: check all employees with PINs (old behavior)
+        const result = await db.query(`
+          SELECT
+            e.id as employee_id,
+            e.employee_code,
+            e.user_id,
+            e.pos_pin,
+            u.email,
+            u.firstname,
+            u.lastname,
+            e.status
+          FROM market_employees e
+          JOIN users u ON e.user_id = u.id
+          WHERE e.company_id = $1
+            AND e.pos_pin IS NOT NULL
+            AND e.status = 'active'
+        `, [companyId])
+
+        for (const emp of result.rows) {
+          const isValidPin = await bcrypt.compare(pin, emp.pos_pin)
+          if (isValidPin) {
+            employee = emp
+            break
+          }
+        }
+
+        if (!employee) {
+          return NextResponse.json({
+            success: false,
+            error: 'PIN inválido'
+          }, { status: 401 })
+        }
       }
     }
 
     // Check employee has permissions on this terminal
-    const permissions = await db.query(`
+    // First try market_employee_terminals
+    let permissions = await db.query(`
       SELECT
         can_open_session,
         can_close_session,
@@ -136,6 +199,21 @@ export async function POST(request: NextRequest) {
       FROM market_employee_terminals
       WHERE employee_id = $1 AND terminal_id = $2
     `, [employee.employee_id, terminalId])
+
+    // If not found, try market_pos_users (by user_id)
+    if (permissions.rows.length === 0) {
+      permissions = await db.query(`
+        SELECT
+          can_open_session,
+          can_close_session,
+          can_void_orders,
+          can_give_discount,
+          can_refund,
+          0 as max_discount_percent
+        FROM market_pos_users
+        WHERE user_id = $1 AND pos_terminal_id = $2
+      `, [employee.user_id, terminalId])
+    }
 
     if (permissions.rows.length === 0) {
       return NextResponse.json({

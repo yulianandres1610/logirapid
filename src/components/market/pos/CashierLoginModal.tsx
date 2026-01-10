@@ -188,20 +188,15 @@ export function CashierLoginModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           terminalId,
-          pin
+          pin,
+          employeeId: selectedEmployee.employeeId,
+          userId: selectedEmployee.userId
         })
       })
 
       const data = await response.json()
 
       if (data.success) {
-        // Verify the authenticated employee matches the selected one
-        if (data.data.employeeId !== selectedEmployee.employeeId) {
-          setAuthError('PIN no corresponde al cajero seleccionado')
-          setPin('')
-          return
-        }
-
         onAuthenticated({
           employeeId: data.data.employeeId,
           employeeCode: data.data.employeeCode,
