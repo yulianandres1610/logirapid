@@ -97,7 +97,7 @@ export function CashierLoginModal({
   }
 
   const handlePinInput = useCallback((digit: string) => {
-    if (pin.length < 6) {
+    if (pin.length < 4) {
       setPin(prev => prev + digit)
       setAuthError(null)
     }
@@ -124,8 +124,8 @@ export function CashierLoginModal({
       return
     }
 
-    if (pin.length < 4) {
-      setAuthError('El PIN debe tener al menos 4 dígitos')
+    if (pin.length !== 4) {
+      setAuthError('El PIN debe tener 4 dígitos')
       return
     }
 
@@ -181,7 +181,7 @@ export function CashierLoginModal({
         handlePinDelete()
       } else if (e.key === 'Escape') {
         handlePinClear()
-      } else if (e.key === 'Enter' && pin.length >= 4) {
+      } else if (e.key === 'Enter' && pin.length === 4) {
         handleAuthenticate()
       }
     }
@@ -270,7 +270,7 @@ export function CashierLoginModal({
           <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
             <Lock className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">Iniciar Turno</h1>
+          <h1 className="text-2xl font-bold text-white mb-2">Iniciar Sesión</h1>
           <p className="text-gray-400">{terminalName}</p>
         </div>
 
@@ -359,18 +359,18 @@ export function CashierLoginModal({
             Ingresa tu PIN
           </label>
           <div className="flex justify-center gap-3">
-            {[0, 1, 2, 3, 4, 5].map(i => (
+            {[0, 1, 2, 3].map(i => (
               <div
                 key={i}
                 className={cn(
-                  "w-12 h-14 rounded-xl border-2 flex items-center justify-center transition-all",
+                  "w-14 h-16 rounded-xl border-2 flex items-center justify-center transition-all",
                   i < pin.length
                     ? "border-blue-500 bg-blue-500/20"
                     : "border-gray-700 bg-gray-800"
                 )}
               >
                 {i < pin.length && (
-                  <div className="w-3 h-3 rounded-full bg-blue-500" />
+                  <div className="w-4 h-4 rounded-full bg-blue-500" />
                 )}
               </div>
             ))}
@@ -421,10 +421,10 @@ export function CashierLoginModal({
         {/* Login Button */}
         <button
           onClick={handleAuthenticate}
-          disabled={!selectedEmployee || pin.length < 4 || authenticating}
+          disabled={!selectedEmployee || pin.length !== 4 || authenticating}
           className={cn(
             "w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all",
-            !selectedEmployee || pin.length < 4 || authenticating
+            !selectedEmployee || pin.length !== 4 || authenticating
               ? "bg-gray-700 text-gray-500 cursor-not-allowed"
               : "bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-500 hover:to-blue-600 shadow-lg shadow-blue-500/25"
           )}
