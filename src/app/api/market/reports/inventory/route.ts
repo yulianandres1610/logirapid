@@ -38,6 +38,8 @@ export async function GET(request: NextRequest) {
     const warehouseId = searchParams.get('warehouseId')
     const expiringDays = parseInt(searchParams.get('expiringDays') || '30')
 
+    console.log('[Inventory Report API] Params:', { companyId, warehouseId, expiringDays })
+
     // Helper for safe queries
     const safeQuery = async (query: string, params: any[]) => {
       try {
@@ -90,8 +92,10 @@ export async function GET(request: NextRequest) {
       ORDER BY lots.expiration_date ASC
     `, [companyId, expiringDays])
 
+    console.log('[Inventory Report API] Expiring products:', expiringResult.rows.length)
+
     // Inventory rotation (sales velocity)
-    const rotationResult = await db.query(`
+    const rotationResult = await safeQuery(`
       WITH daily_sales AS (
         SELECT
           ol.product_id,
@@ -153,8 +157,10 @@ export async function GET(request: NextRequest) {
         END ASC
     `, [companyId])
 
+    console.log('[Inventory Report API] Rotation products:', rotationResult.rows.length)
+
     // Stock valuation by warehouse
-    const valuationByWarehouse = await db.query(`
+    const valuationByWarehouse = await safeQuery(`
       SELECT
         w.id as warehouse_id,
         w.name as warehouse_name,
@@ -169,8 +175,10 @@ export async function GET(request: NextRequest) {
       ORDER BY total_value DESC
     `, [companyId])
 
+    console.log('[Inventory Report API] Valuation by warehouse:', valuationByWarehouse.rows.length)
+
     // Stock valuation by category
-    const valuationByCategory = await db.query(`
+    const valuationByCategory = await safeQuery(`
       SELECT
         COALESCE(p.category, 'Sin categoría') as category_name,
         COUNT(DISTINCT p.id) as product_count,
@@ -182,8 +190,10 @@ export async function GET(request: NextRequest) {
       ORDER BY total_value DESC
     `, [companyId])
 
+    console.log('[Inventory Report API] Valuation by category:', valuationByCategory.rows.length)
+
     // Summary statistics
-    const summaryResult = await db.query(`
+    const summaryResult = await safeQuery(`
       SELECT
         COUNT(*) as total_products,
         COUNT(*) FILTER (WHERE quantity_on_hand > 0) as products_in_stock,
@@ -194,8 +204,10 @@ export async function GET(request: NextRequest) {
       WHERE company_id = $1 AND is_active = true
     `, [companyId])
 
+    console.log('[Inventory Report API] Summary:', summaryResult.rows[0])
+
     // Low stock products
-    const lowStockResult = await db.query(`
+    const lowStockResult = await safeQuery(`
       SELECT
         p.id as product_id,
         p.name as product_name,
