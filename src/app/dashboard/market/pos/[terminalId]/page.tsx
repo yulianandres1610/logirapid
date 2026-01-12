@@ -47,6 +47,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
+import { ProductImage, ProductImageSquare } from '@/components/market/ProductImage'
 import {
   saveProducts,
   saveCategories,
@@ -1595,20 +1596,12 @@ export default function POSTerminalPage() {
                     )}
                   >
                     {/* Product image or placeholder */}
-                    <div className={cn(
-                      'w-full aspect-square rounded-md lg:rounded-lg mb-1.5 lg:mb-2 flex items-center justify-center overflow-hidden',
-                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                    )}>
-                      {product.imageUrl ? (
-                        <img
-                          src={product.imageUrl}
-                          alt={product.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <Package className="w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-gray-400" />
-                      )}
-                    </div>
+                    <ProductImageSquare
+                      src={product.imageUrl}
+                      alt={product.name}
+                      theme={theme}
+                      className="mb-1.5 lg:mb-2"
+                    />
 
                     {/* Product info */}
                     <h3 className="font-medium text-[10px] sm:text-xs lg:text-sm line-clamp-2 mb-0.5 lg:mb-1 leading-tight">
@@ -2124,20 +2117,13 @@ export default function POSTerminalPage() {
                 'px-6 py-4 border-b flex items-center gap-4 flex-shrink-0',
                 theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
               )}>
-                <div className={cn(
-                  'w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center',
-                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                )}>
-                  {selectedProductForDetails.imageUrl ? (
-                    <img
-                      src={selectedProductForDetails.imageUrl}
-                      alt={selectedProductForDetails.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <Package className="w-8 h-8 text-gray-400" />
-                  )}
-                </div>
+                <ProductImage
+                  src={selectedProductForDetails.imageUrl}
+                  alt={selectedProductForDetails.name}
+                  size="lg"
+                  theme={theme}
+                  containerClassName="flex-shrink-0"
+                />
                 <div className="flex-1 min-w-0">
                   <h3 className="font-bold text-lg text-gray-900 dark:text-white truncate">
                     {selectedProductForDetails.name}

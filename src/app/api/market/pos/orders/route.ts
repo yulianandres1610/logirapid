@@ -661,6 +661,83 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Calculate and record employee commissions if employee has commission_rate > 0
+    if (employeeId) {
+      const employeeResult = await db.query(`
+        SELECT id, commission_rate FROM market_employees
+        WHERE id = $1 AND company_id = $2
+      `, [employeeId, companyId])
+
+      const employee = employeeResult.rows[0]
+      const commissionRate = parseFloat(employee?.commission_rate) || 0
+
+      if (employee && commissionRate > 0) {
+        // Get order lines with cost price for commission calculation
+        const orderLinesResult = await db.query(`
+          SELECT
+            id, product_id, product_name, quantity, unit_price, cost_price
+          FROM market_pos_order_lines
+          WHERE order_id = $1
+        `, [orderId])
+
+        let totalCommission = 0
+
+        for (const line of orderLinesResult.rows) {
+          const quantity = parseFloat(line.quantity) || 0
+          const unitPrice = parseFloat(line.unit_price) || 0
+
+          // Get cost price from order line or fetch from product
+          let lineCostPrice = parseFloat(line.cost_price) || 0
+          if (lineCostPrice === 0 && line.product_id) {
+            const productCost = await db.query(`
+              SELECT cost_price FROM market_products WHERE id = $1
+            `, [line.product_id])
+            lineCostPrice = parseFloat(productCost.rows[0]?.cost_price) || 0
+          }
+
+          // Calculate gross margin (before any discounts)
+          // Margin = (selling_price - cost_price) * quantity
+          const marginAmount = (unitPrice - lineCostPrice) * quantity
+          // Commission = margin * commission_rate%
+          const commissionAmount = marginAmount * (commissionRate / 100)
+
+          if (commissionAmount > 0) {
+            // Insert commission record
+            await db.query(`
+              INSERT INTO market_employee_commissions (
+                company_id, employee_id, pos_order_id, pos_order_line_id,
+                product_id, product_name, quantity,
+                unit_price, cost_price, margin_amount,
+                commission_rate, commission_amount, status, created_at
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending', NOW())
+            `, [
+              companyId, employeeId, orderId, line.id,
+              line.product_id, line.product_name, quantity,
+              unitPrice, lineCostPrice, marginAmount,
+              commissionRate, commissionAmount
+            ])
+
+            totalCommission += commissionAmount
+          }
+        }
+
+        // Update employee's commission balance
+        if (totalCommission > 0) {
+          await db.query(`
+            UPDATE market_employees
+            SET commission_balance = COALESCE(commission_balance, 0) + $1
+            WHERE id = $2
+          `, [totalCommission, employeeId])
+
+          console.log('[POS Orders] Commission calculated:', {
+            employeeId,
+            commissionRate,
+            totalCommission: totalCommission.toFixed(2)
+          })
+        }
+      }
+    }
+
     console.log('[POS Orders] Created order:', orderNumber, 'ID:', orderId)
 
     return NextResponse.json({

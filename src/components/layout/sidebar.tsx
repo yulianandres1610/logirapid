@@ -254,6 +254,13 @@ interface BrandingData {
   secondaryColor: string
 }
 
+interface CommissionBalanceData {
+  isEmployee: boolean
+  balance: number
+  commissionRate: number
+  thisMonth?: number
+}
+
 export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -262,6 +269,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const [openSubmenus, setOpenSubmenus] = useState<{ [key: string]: boolean }>({})
   const [branding, setBranding] = useState<BrandingData | null>(null)
   const [isBranch, setIsBranch] = useState<boolean>(false)
+  const [commissionBalance, setCommissionBalance] = useState<CommissionBalanceData | null>(null)
 
   const toggleSubmenu = (key: string) => {
     setOpenSubmenus(prev => ({
@@ -334,6 +342,29 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
 
     fetchCompanyInfo()
   }, [user?.companyId])
+
+  // Fetch commission balance for market employees
+  const isMarketEmployee = user?.role?.startsWith('MARKET_') || user?.companyType === 'market'
+  useEffect(() => {
+    const fetchCommissionBalance = async () => {
+      if (!isMarketEmployee) return
+      try {
+        const response = await fetch('/api/market/my-commission-balance')
+        if (!response.ok) return
+        const data = await response.json()
+        if (data?.success && data.data) {
+          setCommissionBalance(data.data)
+        }
+      } catch (error) {
+        console.warn('Error fetching commission balance:', error)
+      }
+    }
+
+    fetchCommissionBalance()
+    // Refresh every 30 seconds to keep balance updated
+    const interval = setInterval(fetchCommissionBalance, 30000)
+    return () => clearInterval(interval)
+  }, [isMarketEmployee])
 
   // Menu items para SUPER_ADMIN (acceso completo a todo el sistema)
   const superAdminMenuItems = [
@@ -834,6 +865,64 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
             </motion.div>
           ))}
         </nav>
+
+        {/* Mi Saldo Personal - Commission Balance for Market Employees */}
+        {isMarketEmployee && commissionBalance?.isEmployee && commissionBalance.balance > 0 && !isCollapsed && (
+          <div className={cn(
+            "mx-3 my-2 p-3 rounded-xl cursor-pointer transition-all duration-200",
+            theme === 'dark'
+              ? "bg-gray-800/50 hover:bg-gray-800 border border-gray-700"
+              : "bg-gray-50 hover:bg-gray-100 border border-gray-200"
+          )}
+          onClick={() => router.push('/dashboard/market/my-commissions')}
+          >
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "w-10 h-10 rounded-full flex items-center justify-center",
+                theme === 'dark' ? "bg-green-500/20" : "bg-green-100"
+              )}>
+                <Wallet className={cn(
+                  "w-5 h-5",
+                  theme === 'dark' ? "text-green-400" : "text-green-600"
+                )} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={cn(
+                  "text-xs",
+                  theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                )}>Mi Saldo Personal</p>
+                <p className={cn(
+                  "text-lg font-bold",
+                  theme === 'dark' ? "text-green-400" : "text-green-600"
+                )}>
+                  ${commissionBalance.balance.toFixed(2)}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Collapsed version - just show icon with balance indicator */}
+        {isMarketEmployee && commissionBalance?.isEmployee && commissionBalance.balance > 0 && isCollapsed && (
+          <motion.div
+            className={cn(
+              "mx-3 my-2 p-2 rounded-xl cursor-pointer flex items-center justify-center relative",
+              theme === 'dark'
+                ? "bg-gray-800/50 hover:bg-gray-800 border border-gray-700"
+                : "bg-gray-50 hover:bg-gray-100 border border-gray-200"
+            )}
+            onClick={() => router.push('/dashboard/market/my-commissions')}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <Wallet className={cn(
+              "w-5 h-5",
+              theme === 'dark' ? "text-green-400" : "text-green-600"
+            )} />
+            {/* Balance indicator dot */}
+            <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          </motion.div>
+        )}
 
         {/* Bottom section - Support & Documentation */}
         <div className={cn(

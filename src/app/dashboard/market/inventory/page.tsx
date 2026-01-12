@@ -29,6 +29,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import { PrintLabelModal } from '@/components/print/PrintLabelModal'
 import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
+import { ProductImage } from '@/components/market/ProductImage'
 
 interface Product {
   id: number
@@ -661,20 +662,12 @@ export default function MarketInventoryPage() {
                           >
                             <td className="py-4 px-4">
                               <div className="flex items-center gap-3">
-                                <div className={cn(
-                                  'w-14 h-14 rounded-xl overflow-hidden flex items-center justify-center shadow-sm border',
-                                  theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-200'
-                                )}>
-                                  {product.imageUrl ? (
-                                    <img
-                                      src={product.imageUrl}
-                                      alt={product.name}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : (
-                                    <ImageIcon className="w-6 h-6 text-gray-400" />
-                                  )}
-                                </div>
+                                <ProductImage
+                                  src={product.imageUrl}
+                                  alt={product.name}
+                                  size="md"
+                                  theme={theme}
+                                />
                                 <div>
                                   <p className="font-medium text-gray-900 dark:text-white">{product.name}</p>
                                   {product.category && (
@@ -857,20 +850,13 @@ export default function MarketInventoryPage() {
                     )}
                   >
                     <div className="flex items-start gap-4 mb-4">
-                      <div className={cn(
-                        'w-20 h-20 rounded-xl overflow-hidden flex items-center justify-center shadow-lg border',
-                        theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-200'
-                      )}>
-                        {selectedProduct.imageUrl ? (
-                          <img
-                            src={selectedProduct.imageUrl}
-                            alt={selectedProduct.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <ImageIcon className="w-8 h-8 text-gray-400" />
-                        )}
-                      </div>
+                      <ProductImage
+                        src={selectedProduct.imageUrl}
+                        alt={selectedProduct.name}
+                        size="xl"
+                        theme={theme}
+                        containerClassName="shadow-lg"
+                      />
                       <div className="flex-1">
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">{selectedProduct.name}</h3>
                         {selectedProduct.category && (
@@ -1041,20 +1027,12 @@ export default function MarketInventoryPage() {
                       theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
                     )}>
                       <div className="flex items-center gap-3">
-                        <div className={cn(
-                          'w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center',
-                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                        )}>
-                          {deleteProduct.imageUrl ? (
-                            <img
-                              src={deleteProduct.imageUrl}
-                              alt={deleteProduct.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <ImageIcon className="w-5 h-5 text-gray-400" />
-                          )}
-                        </div>
+                        <ProductImage
+                          src={deleteProduct.imageUrl}
+                          alt={deleteProduct.name}
+                          size="sm"
+                          theme={theme}
+                        />
                         <div>
                           <p className="font-medium text-gray-900 dark:text-white">{deleteProduct.name}</p>
                           <p className="text-sm text-gray-500">SKU: {deleteProduct.sku}</p>
