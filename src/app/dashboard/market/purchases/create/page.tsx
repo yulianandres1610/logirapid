@@ -1438,7 +1438,7 @@ export default function CreatePurchasePage() {
 
   // Update line quantity
   const updateLineQuantity = (productId: number, variantId: number | null, quantity: number) => {
-    if (quantity < 1) return
+    if (quantity < 0 || isNaN(quantity)) return
     setPurchaseLines(prev => prev.map(l =>
       l.productId === productId && l.variantId === variantId
         ? { ...l, quantity, totalPrice: quantity * l.unitPrice }
@@ -3486,8 +3486,10 @@ export default function CreatePurchasePage() {
                                     <input
                                       type="number"
                                       value={line.quantity}
-                                      onChange={(e) => updateLineQuantity(line.productId, line.variantId, parseInt(e.target.value) || 1)}
-                                      className={cn('w-16 text-center rounded-lg py-2 border', theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-200')}
+                                      onChange={(e) => updateLineQuantity(line.productId, line.variantId, parseFloat(e.target.value))}
+                                      min="0"
+                                      step="any"
+                                      className={cn('w-20 text-center rounded-lg py-2 border', theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-200')}
                                     />
                                     <button
                                       onClick={() => updateLineQuantity(line.productId, line.variantId, line.quantity + 1)}
