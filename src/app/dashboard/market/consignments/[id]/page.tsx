@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, use } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package,
   ArrowLeft,
@@ -19,9 +19,22 @@ import {
   RotateCcw,
   Loader2,
   Printer,
-  FileUp
+  FileUp,
+  ShoppingCart,
+  CreditCard,
+  ArrowUpRight,
+  Box,
+  BarChart3,
+  Receipt,
+  Building2,
+  MapPin,
+  Hash,
+  Edit3,
+  Eye,
+  Percent
 } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
@@ -88,14 +101,64 @@ interface ConsignmentOrder {
   lines: OrderLine[]
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
-  pending: { label: 'Pendiente', color: 'amber', icon: Clock },
-  received: { label: 'Recibida', color: 'blue', icon: Truck },
-  selling: { label: 'En Venta', color: 'emerald', icon: TrendingUp },
-  paid: { label: 'Pagada', color: 'purple', icon: DollarSign },
-  returned: { label: 'Devuelta', color: 'red', icon: RotateCcw },
-  liquidated: { label: 'Liquidada', color: 'gray', icon: CheckCircle }
+const STATUS_CONFIG: Record<string, {
+  label: string
+  color: string
+  bgGradient: string
+  icon: React.ElementType
+  step: number
+}> = {
+  pending: {
+    label: 'Pendiente',
+    color: 'amber',
+    bgGradient: 'from-amber-500 to-orange-500',
+    icon: Clock,
+    step: 1
+  },
+  received: {
+    label: 'Recibida',
+    color: 'blue',
+    bgGradient: 'from-blue-500 to-cyan-500',
+    icon: Truck,
+    step: 2
+  },
+  selling: {
+    label: 'En Venta',
+    color: 'emerald',
+    bgGradient: 'from-emerald-500 to-teal-500',
+    icon: TrendingUp,
+    step: 3
+  },
+  paid: {
+    label: 'Pagada',
+    color: 'purple',
+    bgGradient: 'from-purple-500 to-pink-500',
+    icon: DollarSign,
+    step: 4
+  },
+  returned: {
+    label: 'Devuelta',
+    color: 'red',
+    bgGradient: 'from-red-500 to-rose-500',
+    icon: RotateCcw,
+    step: 0
+  },
+  liquidated: {
+    label: 'Liquidada',
+    color: 'gray',
+    bgGradient: 'from-gray-500 to-slate-500',
+    icon: CheckCircle,
+    step: 5
+  }
 }
+
+const LIFECYCLE_STEPS = [
+  { key: 'pending', label: 'Pendiente', icon: Clock },
+  { key: 'received', label: 'Recibida', icon: Truck },
+  { key: 'selling', label: 'En Venta', icon: ShoppingCart },
+  { key: 'paid', label: 'Pagada', icon: CreditCard },
+  { key: 'liquidated', label: 'Liquidada', icon: CheckCircle }
+]
 
 export default function ConsignmentOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)
@@ -105,6 +168,7 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
   const [error, setError] = useState<string | null>(null)
   const [invoices, setInvoices] = useState<InvoiceData[]>([])
   const [loadingInvoices, setLoadingInvoices] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<OrderLine | null>(null)
 
   useEffect(() => {
     fetchOrder()
@@ -183,12 +247,38 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
     })
   }
 
+  // Calculate metrics
+  const calculateMetrics = () => {
+    if (!order) return { salesProgress: 0, marginPercent: 0, pendingAmount: 0 }
+
+    const totalSalesValue = order.lines.reduce((sum, line) =>
+      sum + (line.quantitySold * line.unitPrice), 0)
+    const totalCostOfSold = order.lines.reduce((sum, line) =>
+      sum + (line.quantitySold * line.unitCost), 0)
+    const totalUnitsOrdered = order.lines.reduce((sum, line) => sum + line.quantityOrdered, 0)
+    const totalUnitsSold = order.lines.reduce((sum, line) => sum + line.quantitySold, 0)
+
+    const salesProgress = totalUnitsOrdered > 0 ? (totalUnitsSold / totalUnitsOrdered) * 100 : 0
+    const marginPercent = totalCostOfSold > 0 ? ((totalSalesValue - totalCostOfSold) / totalCostOfSold) * 100 : 0
+    const pendingAmount = order.totalSold - order.totalPaid
+
+    return { salesProgress, marginPercent, pendingAmount, totalSalesValue }
+  }
+
   if (loading) {
     return (
       <ProtectedRoute>
         <DashboardLayout>
           <div className="min-h-screen p-6 flex items-center justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+            <div className="text-center">
+              <div className={cn(
+                'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4',
+                theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+              )}>
+                <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+              </div>
+              <p className="text-gray-500">Cargando detalles...</p>
+            </div>
           </div>
         </DashboardLayout>
       </ProtectedRoute>
@@ -202,16 +292,30 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
           <div className="min-h-screen p-6">
             <div className={cn(
               'max-w-xl mx-auto text-center p-8 rounded-2xl',
-              theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+              theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-lg'
             )}>
-              <Package className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+              <div className={cn(
+                'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4',
+                theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
+              )}>
+                <Package className="w-8 h-8 text-red-500" />
+              </div>
+              <h2 className={cn(
+                'text-xl font-bold mb-2',
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>
                 {error || 'Orden no encontrada'}
               </h2>
+              <p className="text-gray-500 mb-6">No pudimos cargar los detalles de esta consignación.</p>
               <Link href="/dashboard/market/consignments">
-                <button className="text-blue-500 hover:text-blue-600">
-                  Volver a ordenes
-                </button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Volver a órdenes
+                </motion.button>
               </Link>
             </div>
           </div>
@@ -222,322 +326,709 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
 
   const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending
   const StatusIcon = statusConfig.icon
+  const metrics = calculateMetrics()
 
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="min-h-screen p-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="max-w-5xl mx-auto space-y-6"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
+        <div className="min-h-screen">
+          {/* Hero Header */}
+          <div className={cn(
+            'relative overflow-hidden',
+            `bg-gradient-to-r ${statusConfig.bgGradient}`
+          )}>
+            <div className="absolute inset-0 bg-black/10" />
+            <div className="absolute inset-0 bg-[url('/patterns/grid.svg')] opacity-10" />
+
+            <div className="relative max-w-6xl mx-auto px-6 py-8">
+              {/* Navigation */}
+              <div className="flex items-center justify-between mb-6">
                 <Link href="/dashboard/market/consignments">
+                  <motion.button
+                    whileHover={{ scale: 1.05, x: -4 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-white rounded-xl hover:bg-white/30 transition-colors"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span className="font-medium">Volver</span>
+                  </motion.button>
+                </Link>
+
+                <div className="flex items-center gap-3">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className={cn(
-                      'p-2 rounded-lg transition-colors',
-                      theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
-                    )}
+                    onClick={() => window.print()}
+                    className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-white rounded-xl hover:bg-white/30 transition-colors"
                   >
-                    <ArrowLeft className="w-5 h-5" />
+                    <Printer className="w-4 h-4" />
+                    <span className="font-medium">Imprimir</span>
                   </motion.button>
-                </Link>
-                <div>
-                  <div className="flex items-center gap-3">
-                    <h1 className={cn(
-                      'text-2xl font-bold font-mono',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>{order.orderNumber}</h1>
-                    <span className={cn(
-                      'inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium',
-                      statusConfig.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-                      statusConfig.color === 'blue' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-                      statusConfig.color === 'emerald' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-                      statusConfig.color === 'purple' && 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-                      statusConfig.color === 'red' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-                      statusConfig.color === 'gray' && 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                    )}>
-                      <StatusIcon className="w-4 h-4" />
-                      {statusConfig.label}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-500">Orden de consignacion</p>
                 </div>
               </div>
 
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => window.print()}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
-                  theme === 'dark'
-                    ? 'bg-gray-700 text-white hover:bg-gray-600'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                )}
-              >
-                <Printer className="w-4 h-4" />
-                Imprimir
-              </motion.button>
+              {/* Order Info */}
+              <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-white/20 backdrop-blur-sm rounded-xl">
+                      <Receipt className="w-6 h-6 text-white" />
+                    </div>
+                    <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white text-sm font-medium rounded-lg">
+                      Consignación
+                    </span>
+                  </div>
+                  <h1 className="text-3xl md:text-4xl font-bold text-white font-mono mb-2">
+                    {order.orderNumber}
+                  </h1>
+                  <div className="flex items-center gap-4 text-white/80">
+                    <span className="flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4" />
+                      {formatDate(order.consignmentDate)}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <User className="w-4 h-4" />
+                      {order.createdBy}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <p className="text-white/70 text-sm mb-1">Total Costo</p>
+                    <p className="text-3xl font-bold text-white">
+                      {formatCurrency(order.totalCost)}
+                    </p>
+                  </div>
+                  <div className="w-px h-12 bg-white/30" />
+                  <div className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-xl font-medium',
+                    'bg-white text-gray-900 shadow-lg'
+                  )}>
+                    <StatusIcon className="w-5 h-5" />
+                    {statusConfig.label}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+
+            {/* Lifecycle Progress */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                'p-6 rounded-2xl border',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <h3 className={cn(
+                'text-sm font-medium mb-6',
+                theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+              )}>
+                Ciclo de Vida
+              </h3>
+
+              <div className="relative">
+                {/* Progress line */}
+                <div className={cn(
+                  'absolute top-6 left-0 right-0 h-1 rounded-full',
+                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                )} />
+                <div
+                  className={cn('absolute top-6 left-0 h-1 rounded-full transition-all duration-500', `bg-gradient-to-r ${statusConfig.bgGradient}`)}
+                  style={{ width: `${Math.max(0, ((statusConfig.step - 1) / (LIFECYCLE_STEPS.length - 1)) * 100)}%` }}
+                />
+
+                {/* Steps */}
+                <div className="relative flex justify-between">
+                  {LIFECYCLE_STEPS.map((step, index) => {
+                    const isActive = statusConfig.step >= (index + 1)
+                    const isCurrent = statusConfig.step === (index + 1)
+                    const StepIcon = step.icon
+
+                    return (
+                      <div key={step.key} className="flex flex-col items-center">
+                        <motion.div
+                          initial={false}
+                          animate={{ scale: isCurrent ? 1.1 : 1 }}
+                          className={cn(
+                            'w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 z-10',
+                            isActive
+                              ? `bg-gradient-to-br ${statusConfig.bgGradient} text-white shadow-lg`
+                              : theme === 'dark'
+                                ? 'bg-gray-700 text-gray-500'
+                                : 'bg-gray-100 text-gray-400'
+                          )}
+                        >
+                          <StepIcon className="w-5 h-5" />
+                        </motion.div>
+                        <span className={cn(
+                          'mt-3 text-xs font-medium',
+                          isActive
+                            ? theme === 'dark' ? 'text-white' : 'text-gray-900'
+                            : 'text-gray-500'
+                        )}>
+                          {step.label}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                {
+                  label: 'Productos',
+                  value: order.totalItems,
+                  icon: Box,
+                  color: 'blue',
+                  suffix: 'items'
+                },
+                {
+                  label: 'Unidades',
+                  value: order.totalUnits,
+                  icon: Package,
+                  color: 'purple',
+                  suffix: 'uds'
+                },
+                {
+                  label: 'Vendido',
+                  value: formatCurrency(order.totalSold),
+                  icon: TrendingUp,
+                  color: 'emerald',
+                  highlight: true
+                },
+                {
+                  label: 'Pagado',
+                  value: formatCurrency(order.totalPaid),
+                  icon: CreditCard,
+                  color: 'amber'
+                }
+              ].map((stat, idx) => (
+                <motion.div
+                  key={stat.label}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.1 }}
+                  className={cn(
+                    'p-5 rounded-2xl border relative overflow-hidden group',
+                    theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm',
+                    stat.highlight && 'ring-2 ring-emerald-500/30'
+                  )}
+                >
+                  <div className={cn(
+                    'absolute -right-4 -top-4 w-20 h-20 rounded-full opacity-10 group-hover:opacity-20 transition-opacity',
+                    stat.color === 'blue' && 'bg-blue-500',
+                    stat.color === 'purple' && 'bg-purple-500',
+                    stat.color === 'emerald' && 'bg-emerald-500',
+                    stat.color === 'amber' && 'bg-amber-500'
+                  )} />
+
+                  <div className="relative">
+                    <div className={cn(
+                      'w-10 h-10 rounded-xl flex items-center justify-center mb-3',
+                      stat.color === 'blue' && (theme === 'dark' ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'),
+                      stat.color === 'purple' && (theme === 'dark' ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600'),
+                      stat.color === 'emerald' && (theme === 'dark' ? 'bg-emerald-900/50 text-emerald-400' : 'bg-emerald-100 text-emerald-600'),
+                      stat.color === 'amber' && (theme === 'dark' ? 'bg-amber-900/50 text-amber-400' : 'bg-amber-100 text-amber-600')
+                    )}>
+                      <stat.icon className="w-5 h-5" />
+                    </div>
+                    <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
+                    <p className={cn(
+                      'text-2xl font-bold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      {stat.value}
+                      {stat.suffix && <span className="text-sm font-normal text-gray-500 ml-1">{stat.suffix}</span>}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
             </div>
 
-            {/* Info Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Supplier */}
-              <div className={cn(
-                'p-5 rounded-2xl border',
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-              )}>
-                <h3 className="text-sm font-medium text-gray-500 mb-3">Proveedor</h3>
-                <div className="flex items-start gap-3">
+            {/* Sales Progress & Info Cards */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Sales Progress */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className={cn(
+                  'lg:col-span-1 p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className={cn(
+                    'font-semibold',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>Progreso de Ventas</h3>
+                  <span className={cn(
+                    'px-3 py-1 rounded-lg text-sm font-medium',
+                    theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
+                  )}>
+                    {metrics.salesProgress.toFixed(0)}%
+                  </span>
+                </div>
+
+                {/* Progress Bar */}
+                <div className={cn(
+                  'h-4 rounded-full overflow-hidden mb-6',
+                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                )}>
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${metrics.salesProgress}%` }}
+                    transition={{ duration: 1, ease: 'easeOut' }}
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full"
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">Margen estimado</span>
+                    <span className={cn(
+                      'flex items-center gap-1 text-sm font-medium',
+                      metrics.marginPercent >= 0 ? 'text-emerald-500' : 'text-red-500'
+                    )}>
+                      <Percent className="w-3 h-3" />
+                      {metrics.marginPercent.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">Pendiente cobrar</span>
+                    <span className={cn(
+                      'text-sm font-medium',
+                      metrics.pendingAmount > 0 ? 'text-amber-500' : 'text-emerald-500'
+                    )}>
+                      {formatCurrency(metrics.pendingAmount)}
+                    </span>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Supplier Card */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <div className="flex items-center gap-3 mb-4">
                   <div className={cn(
-                    'w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold',
-                    theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
+                  )}>
+                    <Building2 className="w-5 h-5 text-blue-500" />
+                  </div>
+                  <h3 className={cn(
+                    'font-semibold',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>Proveedor</h3>
+                </div>
+
+                <div className="flex items-start gap-4">
+                  <div className={cn(
+                    'w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0',
+                    theme === 'dark' ? 'bg-gradient-to-br from-blue-600 to-cyan-600 text-white' : 'bg-gradient-to-br from-blue-500 to-cyan-500 text-white'
                   )}>
                     {order.supplier.code}
                   </div>
-                  <div>
-                    <p className="font-semibold text-gray-900 dark:text-white">{order.supplier.name}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className={cn(
+                      'font-semibold truncate',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>{order.supplier.name}</p>
                     {order.supplier.contactName && (
-                      <p className="text-sm text-gray-500 flex items-center gap-1">
-                        <User className="w-3.5 h-3.5" />
-                        {order.supplier.contactName}
+                      <p className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                        <User className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{order.supplier.contactName}</span>
                       </p>
                     )}
                     {order.supplier.phone && (
-                      <p className="text-sm text-gray-500 flex items-center gap-1">
-                        <Phone className="w-3.5 h-3.5" />
-                        {order.supplier.phone}
+                      <p className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                        <Phone className="w-3.5 h-3.5 shrink-0" />
+                        <span>{order.supplier.phone}</span>
+                      </p>
+                    )}
+                    {order.supplier.email && (
+                      <p className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                        <Mail className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{order.supplier.email}</span>
                       </p>
                     )}
                   </div>
                 </div>
-              </div>
+              </motion.div>
 
-              {/* Warehouse */}
-              <div className={cn(
-                'p-5 rounded-2xl border',
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-              )}>
-                <h3 className="text-sm font-medium text-gray-500 mb-3">Almacen Destino</h3>
-                <div className="flex items-center gap-3">
+              {/* Warehouse Card */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <div className="flex items-center gap-3 mb-4">
                   <div className={cn(
-                    'p-3 rounded-xl',
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'
+                  )}>
+                    <Warehouse className="w-5 h-5 text-purple-500" />
+                  </div>
+                  <h3 className={cn(
+                    'font-semibold',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>Almacén Destino</h3>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className={cn(
+                    'w-14 h-14 rounded-2xl flex items-center justify-center shrink-0',
                     theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
                   )}>
-                    <Warehouse className="w-6 h-6 text-gray-500" />
+                    <MapPin className="w-6 h-6 text-gray-500" />
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-900 dark:text-white">{order.warehouse.name}</p>
-                    <p className="text-sm text-gray-500">{order.warehouse.code}</p>
+                    <p className={cn(
+                      'font-semibold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>{order.warehouse.name}</p>
+                    <p className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                      <Hash className="w-3.5 h-3.5" />
+                      {order.warehouse.code}
+                    </p>
                   </div>
                 </div>
-              </div>
 
-              {/* Dates */}
-              <div className={cn(
-                'p-5 rounded-2xl border',
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-              )}>
-                <h3 className="text-sm font-medium text-gray-500 mb-3">Fechas</h3>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">Consignacion:</span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {formatDate(order.consignmentDate)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">Creada:</span>
-                    <span className="text-sm text-gray-600 dark:text-gray-300">
-                      {formatDateTime(order.createdAt)}
-                    </span>
+                {/* Dates */}
+                <div className={cn(
+                  'mt-4 pt-4 border-t space-y-2',
+                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                )}>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Fecha consignación:</span>
+                    <span className={cn(
+                      'font-medium',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>{formatDate(order.consignmentDate)}</span>
                   </div>
                   {order.receivedAt && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500">Recibida:</span>
-                      <span className="text-sm text-gray-600 dark:text-gray-300">
-                        {formatDateTime(order.receivedAt)}
-                      </span>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Recibida:</span>
+                      <span className="text-gray-600">{formatDateTime(order.receivedAt)}</span>
+                    </div>
+                  )}
+                  {order.completedAt && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Completada:</span>
+                      <span className="text-gray-600">{formatDateTime(order.completedAt)}</span>
                     </div>
                   )}
                 </div>
-              </div>
+              </motion.div>
             </div>
 
-            {/* Totals */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {/* Products Table */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className={cn(
+                'rounded-2xl border overflow-hidden',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
               <div className={cn(
-                'p-4 rounded-xl',
-                theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-50'
+                'px-6 py-4 border-b flex items-center justify-between',
+                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
               )}>
-                <p className="text-sm text-gray-500 mb-1">Productos</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{order.totalItems}</p>
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                  )}>
+                    <Package className="w-5 h-5 text-gray-500" />
+                  </div>
+                  <div>
+                    <h3 className={cn(
+                      'font-semibold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>Productos</h3>
+                    <p className="text-sm text-gray-500">{order.lines.length} productos en esta orden</p>
+                  </div>
+                </div>
               </div>
-              <div className={cn(
-                'p-4 rounded-xl',
-                theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-50'
-              )}>
-                <p className="text-sm text-gray-500 mb-1">Unidades</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{order.totalUnits}</p>
-              </div>
-              <div className={cn(
-                'p-4 rounded-xl',
-                theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'
-              )}>
-                <p className="text-sm text-blue-600 mb-1">Total Costo</p>
-                <p className="text-2xl font-bold text-blue-600">{formatCurrency(order.totalCost)}</p>
-              </div>
-              <div className={cn(
-                'p-4 rounded-xl',
-                theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50'
-              )}>
-                <p className="text-sm text-emerald-600 mb-1">Vendido</p>
-                <p className="text-2xl font-bold text-emerald-600">{formatCurrency(order.totalSold)}</p>
-              </div>
-              <div className={cn(
-                'p-4 rounded-xl',
-                theme === 'dark' ? 'bg-purple-900/20' : 'bg-purple-50'
-              )}>
-                <p className="text-sm text-purple-600 mb-1">Pagado</p>
-                <p className="text-2xl font-bold text-purple-600">{formatCurrency(order.totalPaid)}</p>
-              </div>
-            </div>
 
-            {/* Lines Table */}
-            <div className={cn(
-              'rounded-2xl border overflow-hidden',
-              theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-            )}>
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                <h3 className="font-semibold text-gray-900 dark:text-white">Productos ({order.lines.length})</h3>
-              </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className={cn(
-                    theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                    theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
                   )}>
                     <tr>
-                      <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Producto</th>
-                      <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase">Ordenado</th>
-                      <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase">Recibido</th>
-                      <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase">Vendido</th>
-                      <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase">Costo</th>
-                      <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase">P.Venta</th>
-                      <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Lote</th>
+                      <th className="text-left py-4 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Producto</th>
+                      <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ordenado</th>
+                      <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Recibido</th>
+                      <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Vendido</th>
+                      <th className="text-right py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Costo</th>
+                      <th className="text-right py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">P.Venta</th>
+                      <th className="text-right py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Subtotal</th>
+                      <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Lote</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {order.lines.map(line => (
-                      <tr key={line.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                        <td className="py-3 px-4">
-                          <div>
-                            <p className="font-medium text-gray-900 dark:text-white">{line.product.name}</p>
-                            {line.variantName && (
-                              <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">
-                                Variante: {line.variantName}
-                              </p>
-                            )}
-                            <p className="text-xs text-gray-500">SKU: {line.variantSku || line.product.sku}</p>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-center font-medium text-gray-900 dark:text-white">
-                          {line.quantityOrdered}
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className={cn(
-                            'font-medium',
-                            line.quantityReceived > 0 ? 'text-blue-600' : 'text-gray-400'
-                          )}>
-                            {line.quantityReceived}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className={cn(
-                            'font-medium',
-                            line.quantitySold > 0 ? 'text-emerald-600' : 'text-gray-400'
-                          )}>
-                            {line.quantitySold}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-right text-gray-600 dark:text-gray-300">
-                          {formatCurrency(line.unitCost)}
-                        </td>
-                        <td className="py-3 px-4 text-right text-gray-600 dark:text-gray-300">
-                          {formatCurrency(line.unitPrice)}
-                        </td>
-                        <td className="py-3 px-4">
-                          {line.lotNumber ? (
-                            <div>
-                              <p className="text-sm font-mono text-gray-900 dark:text-white">{line.lotNumber}</p>
-                              {line.expirationDate && (
-                                <p className="text-xs text-gray-500">
-                                  Vence: {new Date(line.expirationDate).toLocaleDateString('es-ES')}
+                  <tbody className={cn(
+                    'divide-y',
+                    theme === 'dark' ? 'divide-gray-700' : 'divide-gray-100'
+                  )}>
+                    {order.lines.map((line, idx) => {
+                      const subtotal = line.quantityOrdered * line.unitCost
+                      const soldValue = line.quantitySold * line.unitPrice
+                      const sellProgress = line.quantityReceived > 0
+                        ? (line.quantitySold / line.quantityReceived) * 100
+                        : 0
+
+                      return (
+                        <motion.tr
+                          key={line.id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.05 * idx }}
+                          className={cn(
+                            'group transition-colors',
+                            theme === 'dark' ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50'
+                          )}
+                        >
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-4">
+                              <div className={cn(
+                                'w-12 h-12 rounded-xl overflow-hidden shrink-0',
+                                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                              )}>
+                                {line.product.imageUrl ? (
+                                  <Image
+                                    src={line.product.imageUrl}
+                                    alt={line.product.name}
+                                    width={48}
+                                    height={48}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <Package className="w-5 h-5 text-gray-400" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className={cn(
+                                  'font-medium truncate max-w-[200px]',
+                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                )}>{line.product.name}</p>
+                                {line.variantName && (
+                                  <p className="text-xs text-purple-500 font-medium mt-0.5">
+                                    {line.variantName}
+                                  </p>
+                                )}
+                                <p className="text-xs text-gray-500 font-mono">
+                                  SKU: {line.variantSku || line.product.sku}
                                 </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <span className={cn(
+                              'text-lg font-semibold',
+                              theme === 'dark' ? 'text-white' : 'text-gray-900'
+                            )}>{line.quantityOrdered}</span>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <span className={cn(
+                              'inline-flex items-center justify-center w-10 h-10 rounded-xl font-semibold',
+                              line.quantityReceived > 0
+                                ? theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
+                                : theme === 'dark' ? 'bg-gray-700 text-gray-500' : 'bg-gray-100 text-gray-400'
+                            )}>
+                              {line.quantityReceived}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              <span className={cn(
+                                'inline-flex items-center justify-center w-10 h-10 rounded-xl font-semibold',
+                                line.quantitySold > 0
+                                  ? theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
+                                  : theme === 'dark' ? 'bg-gray-700 text-gray-500' : 'bg-gray-100 text-gray-400'
+                              )}>
+                                {line.quantitySold}
+                              </span>
+                              {line.quantityReceived > 0 && (
+                                <div className={cn(
+                                  'w-full h-1 rounded-full max-w-[40px]',
+                                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                                )}>
+                                  <div
+                                    className="h-full bg-emerald-500 rounded-full transition-all"
+                                    style={{ width: `${Math.min(100, sellProgress)}%` }}
+                                  />
+                                </div>
                               )}
                             </div>
-                          ) : (
-                            <span className="text-xs text-gray-400">Sin lote</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <span className="text-gray-500">{formatCurrency(line.unitCost)}</span>
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <span className={cn(
+                              'font-medium',
+                              theme === 'dark' ? 'text-white' : 'text-gray-900'
+                            )}>{formatCurrency(line.unitPrice)}</span>
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <span className={cn(
+                              'font-semibold',
+                              theme === 'dark' ? 'text-white' : 'text-gray-900'
+                            )}>{formatCurrency(subtotal)}</span>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            {line.lotNumber ? (
+                              <div className="text-center">
+                                <p className={cn(
+                                  'text-sm font-mono',
+                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                )}>{line.lotNumber}</p>
+                                {line.expirationDate && (
+                                  <p className="text-xs text-amber-500">
+                                    Vence: {new Date(line.expirationDate).toLocaleDateString('es-ES')}
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <span className={cn(
+                                'text-xs px-2 py-1 rounded-lg',
+                                theme === 'dark' ? 'bg-gray-700 text-gray-500' : 'bg-gray-100 text-gray-400'
+                              )}>Sin lote</span>
+                            )}
+                          </td>
+                        </motion.tr>
+                      )
+                    })}
                   </tbody>
+                  {/* Table Footer */}
+                  <tfoot className={cn(
+                    'border-t-2',
+                    theme === 'dark' ? 'border-gray-600 bg-gray-900/50' : 'border-gray-200 bg-gray-50'
+                  )}>
+                    <tr>
+                      <td colSpan={6} className="py-4 px-6 text-right font-semibold text-gray-500">
+                        Total:
+                      </td>
+                      <td className="py-4 px-4 text-right">
+                        <span className={cn(
+                          'text-xl font-bold',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>{formatCurrency(order.totalCost)}</span>
+                      </td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
-            </div>
+            </motion.div>
 
-            {/* Notes */}
-            {order.notes && (
-              <div className={cn(
-                'p-5 rounded-2xl border',
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-              )}>
-                <h3 className="text-sm font-medium text-gray-500 mb-2 flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Notas
-                </h3>
-                <p className="text-gray-700 dark:text-gray-300">{order.notes}</p>
-              </div>
-            )}
-
-            {/* Invoices */}
-            <div className={cn(
-              'p-5 rounded-2xl border',
-              theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-            )}>
-              <h3 className="text-sm font-medium text-gray-500 mb-4 flex items-center gap-2">
-                <FileUp className="w-4 h-4" />
-                Facturas Originales
-                {invoices.length > 0 && (
-                  <span className={cn(
-                    'ml-2 px-2 py-0.5 rounded-full text-xs font-medium',
-                    theme === 'dark' ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-600'
-                  )}>
-                    {invoices.length}
-                  </span>
-                )}
-              </h3>
-              {loadingInvoices ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                </div>
-              ) : (
-                <InvoiceGrid
-                  invoices={invoices}
-                  onDelete={handleDeleteInvoice}
-                  showDelete={true}
-                  emptyMessage="No hay facturas adjuntas a esta orden"
-                />
+            {/* Notes & Invoices Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Notes */}
+              {order.notes && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6 }}
+                  className={cn(
+                    'p-6 rounded-2xl border',
+                    theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                  )}
+                >
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className={cn(
+                      'p-2 rounded-xl',
+                      theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100'
+                    )}>
+                      <FileText className="w-5 h-5 text-amber-500" />
+                    </div>
+                    <h3 className={cn(
+                      'font-semibold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>Notas</h3>
+                  </div>
+                  <p className={cn(
+                    'text-sm leading-relaxed',
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                  )}>{order.notes}</p>
+                </motion.div>
               )}
+
+              {/* Invoices */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.7 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm',
+                  !order.notes && 'lg:col-span-2'
+                )}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-2 rounded-xl',
+                      theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'
+                    )}>
+                      <FileUp className="w-5 h-5 text-purple-500" />
+                    </div>
+                    <h3 className={cn(
+                      'font-semibold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>Facturas Originales</h3>
+                  </div>
+                  {invoices.length > 0 && (
+                    <span className={cn(
+                      'px-3 py-1 rounded-xl text-sm font-medium',
+                      theme === 'dark' ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-600'
+                    )}>
+                      {invoices.length} {invoices.length === 1 ? 'archivo' : 'archivos'}
+                    </span>
+                  )}
+                </div>
+
+                {loadingInvoices ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-6 h-6 animate-spin text-purple-500" />
+                  </div>
+                ) : (
+                  <InvoiceGrid
+                    invoices={invoices}
+                    onDelete={handleDeleteInvoice}
+                    showDelete={true}
+                    emptyMessage="No hay facturas adjuntas a esta orden"
+                  />
+                )}
+              </motion.div>
             </div>
 
-          </motion.div>
+          </div>
         </div>
       </DashboardLayout>
     </ProtectedRoute>
