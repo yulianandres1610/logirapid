@@ -71,6 +71,83 @@ export async function middleware(request: NextRequest) {
   }
 
   // ============================================================
+  // MARKET SUBDOMAIN HANDLING - mercado.logirapid.com
+  // ============================================================
+  const isMarketSubdomain = host.startsWith('mercado.') || host.includes('mercado.logirapid')
+
+  if (isMarketSubdomain) {
+    // Allow static resources
+    if (pathname.startsWith('/_next') || pathname.startsWith('/images') || pathname === '/favicon.ico') {
+      return NextResponse.next()
+    }
+
+    // Allow market login page
+    if (pathname === '/market/login') {
+      return NextResponse.next()
+    }
+
+    // Allow market API routes
+    if (pathname.startsWith('/api/market') || pathname.startsWith('/api/auth')) {
+      return NextResponse.next()
+    }
+
+    // Check for auth-token on market dashboard routes
+    if (pathname.startsWith('/dashboard/market')) {
+      const authToken = request.cookies.get('auth-token')?.value
+
+      if (!authToken) {
+        console.log('[MIDDLEWARE] Market subdomain - no token, redirecting to login')
+        const loginUrl = new URL('/market/login', request.url)
+        return NextResponse.redirect(loginUrl)
+      }
+
+      // Validate JWT
+      try {
+        const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+        const secret = new TextEncoder().encode(jwtSecret)
+        const { payload } = await jwtVerify(authToken, secret)
+
+        // Verify user belongs to a market company
+        if (payload.companyType !== 'market') {
+          console.log('[MIDDLEWARE] User is not from market company, redirecting to login')
+          const loginUrl = new URL('/market/login', request.url)
+          return NextResponse.redirect(loginUrl)
+        }
+
+        console.log('[MIDDLEWARE] Market user authenticated:', payload.email)
+        return NextResponse.next()
+      } catch (error) {
+        console.error('[MIDDLEWARE] Invalid token on market subdomain:', error)
+        const loginUrl = new URL('/market/login', request.url)
+        return NextResponse.redirect(loginUrl)
+      }
+    }
+
+    // Redirect root to market login or dashboard
+    if (pathname === '/') {
+      const authToken = request.cookies.get('auth-token')?.value
+      if (authToken) {
+        try {
+          const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+          const secret = new TextEncoder().encode(jwtSecret)
+          const { payload } = await jwtVerify(authToken, secret)
+
+          if (payload.companyType === 'market') {
+            return NextResponse.redirect(new URL('/dashboard/market', request.url))
+          }
+        } catch {
+          // Token invalid, redirect to login
+        }
+      }
+      return NextResponse.redirect(new URL('/market/login', request.url))
+    }
+
+    // Block other routes on market subdomain
+    console.log('[MIDDLEWARE] Market subdomain - blocking route:', pathname)
+    return NextResponse.redirect(new URL('/market/login', request.url))
+  }
+
+  // ============================================================
   // EMPLOYEE SUBDOMAIN HANDLING - empleados.logirapid.com
   // ============================================================
   const isEmployeeSubdomain = host.startsWith('empleados.') || host.includes('empleados.logirapid')
@@ -155,6 +232,7 @@ export async function middleware(request: NextRequest) {
     '/developers/playground',
     '/supplier/login',  // Supplier login is also public on main domain
     '/employee/login',  // Employee login is also public on main domain
+    '/market/login',    // Market login is also public on main domain
   ]
 
   // Recursos estáticos (pero NO API)
