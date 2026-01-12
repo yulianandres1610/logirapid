@@ -86,11 +86,12 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
 
-    // Allow market API routes (including consignments, purchases, order-invoices)
+    // Allow market API routes (including consignments, purchases, order-invoices, migrations)
     if (pathname.startsWith('/api/market') ||
         pathname.startsWith('/api/auth') ||
         pathname.startsWith('/api/consignments') ||
-        pathname.startsWith('/api/order-invoices')) {
+        pathname.startsWith('/api/order-invoices') ||
+        pathname.startsWith('/api/migrations')) {
       return NextResponse.next()
     }
 
