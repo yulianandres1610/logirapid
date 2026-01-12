@@ -309,14 +309,15 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       try {
         const response = await fetch('/api/branding/current', { signal: controller.signal, cache: 'no-store' })
         if (!response.ok) return
+        // Check if response is JSON before parsing
+        const contentType = response.headers.get('content-type')
+        if (!contentType?.includes('application/json')) return
         const data = await response.json()
         if (data?.success) {
           setBranding(data.data)
         }
-      } catch (error) {
-        if ((error as any).name !== 'AbortError') {
-          console.warn('Branding no disponible (sidebar):', error)
-        }
+      } catch {
+        // Silently ignore branding errors - it's optional
       }
       return () => controller.abort()
     }
@@ -331,12 +332,15 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       try {
         const response = await fetch(`/api/companies/${user.companyId}`)
         if (!response.ok) return
+        // Check if response is JSON before parsing
+        const contentType = response.headers.get('content-type')
+        if (!contentType?.includes('application/json')) return
         const data = await response.json()
         if (data?.success && data.data) {
           setIsBranch(data.data.isBranch === true || data.data.parentCompanyId !== null)
         }
-      } catch (error) {
-        console.warn('Error fetching company info:', error)
+      } catch {
+        // Silently ignore - isBranch will just remain false
       }
     }
 

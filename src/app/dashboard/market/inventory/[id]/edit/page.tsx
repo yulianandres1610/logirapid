@@ -375,6 +375,20 @@ export default function EditProductPage() {
         setCheckingImage(true)
         try {
           const res = await fetch(`/api/products/image-by-barcode?barcode=${formData.barcode}`)
+          // Check if response is OK and is JSON before parsing
+          if (!res.ok) {
+            setExistingImages([])
+            setSelectedExistingImage(null)
+            setCheckingImage(false)
+            return
+          }
+          const contentType = res.headers.get('content-type')
+          if (!contentType?.includes('application/json')) {
+            setExistingImages([])
+            setSelectedExistingImage(null)
+            setCheckingImage(false)
+            return
+          }
           const data = await res.json()
           if (data.success && data.found && data.data.images && data.data.images.length > 0) {
             const images: ExistingImageItem[] = data.data.images.map((img: any) => ({
@@ -390,8 +404,8 @@ export default function EditProductPage() {
             setExistingImages([])
             setSelectedExistingImage(null)
           }
-        } catch (error) {
-          console.error('Error checking barcode image:', error)
+        } catch {
+          // Silently ignore - API may not exist
           setExistingImages([])
           setSelectedExistingImage(null)
         }
