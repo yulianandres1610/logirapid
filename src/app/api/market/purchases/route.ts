@@ -233,6 +233,20 @@ export async function GET(request: NextRequest) {
       paramIndex++
     }
 
+    // Filter by validation status (for receptions - only show approved orders)
+    const validationStatus = searchParams.get('validationStatus')
+    if (validationStatus && validationStatus !== 'all') {
+      query += ` AND mp.validation_status = $${paramIndex}`
+      queryParams.push(validationStatus)
+      paramIndex++
+    }
+
+    // Exclude rejected and pending_validation by default for reception purposes
+    const forReception = searchParams.get('forReception')
+    if (forReception === 'true') {
+      query += ` AND (mp.validation_status IS NULL OR mp.validation_status = 'confirmed')`
+    }
+
     // Count total
     const countQuery = query.replace(/SELECT[\s\S]+FROM market_purchases/, 'SELECT COUNT(*) as total FROM market_purchases')
     const countResult = await db.query(countQuery.replace(/LEFT JOIN[\s\S]+WHERE/, 'WHERE'), [companyId])

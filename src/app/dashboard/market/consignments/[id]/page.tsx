@@ -537,28 +537,6 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
               )}
             </div>
 
-            {/* Actions */}
-            {order.status === 'pending' && (
-              <div className={cn(
-                'p-5 rounded-2xl border',
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-              )}>
-                <h3 className="text-sm font-medium text-gray-500 mb-3">Acciones</h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Esta orden esta pendiente de recepcion en almacen. Valida la mercancia desde las operaciones del almacen.
-                </p>
-                <Link href={`/dashboard/market/warehouses/${order.warehouse.id}/operations`}>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors"
-                  >
-                    <Truck className="w-5 h-5" />
-                    Ir a Recepciones
-                  </motion.button>
-                </Link>
-              </div>
-            )}
           </motion.div>
         </div>
       </DashboardLayout>

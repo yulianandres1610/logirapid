@@ -127,12 +127,13 @@ export default function CreateReceptionPage() {
     fetchWarehouses()
   }, [])
 
-  // Fetch purchases (pending reception)
+  // Fetch purchases (only approved ones - ready for reception)
   useEffect(() => {
     const fetchPurchases = async () => {
       setLoadingPurchases(true)
       try {
-        const response = await fetch('/api/market/purchases?status=pending')
+        // Only fetch purchases that are approved by manager (forReception=true)
+        const response = await fetch('/api/market/purchases?status=pendiente&forReception=true')
         const data = await response.json()
         if (data.success) {
           setPurchases(data.data?.purchases || [])
