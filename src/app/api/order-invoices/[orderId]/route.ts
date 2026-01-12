@@ -88,15 +88,22 @@ export async function GET(
       result.rows.map(async (invoice) => {
         let signedUrl = null
         try {
-          const { data } = await supabase.storage
+          console.log(`[ORDER INVOICES] Generating signed URL for invoice ${invoice.id}, path: ${invoice.storage_path}`)
+
+          const { data, error } = await supabase.storage
             .from(BUCKET_NAME)
             .createSignedUrl(invoice.storage_path, URL_EXPIRATION_SECONDS)
 
-          if (data?.signedUrl) {
+          if (error) {
+            console.error(`[ORDER INVOICES] Supabase error for invoice ${invoice.id}:`, error.message)
+          } else if (data?.signedUrl) {
             signedUrl = data.signedUrl
+            console.log(`[ORDER INVOICES] Signed URL generated successfully for invoice ${invoice.id}`)
+          } else {
+            console.warn(`[ORDER INVOICES] No signed URL returned for invoice ${invoice.id}`)
           }
         } catch (error) {
-          console.error(`[ORDER INVOICES] Error generating signed URL for ${invoice.id}:`, error)
+          console.error(`[ORDER INVOICES] Exception generating signed URL for ${invoice.id}:`, error)
         }
 
         return {
@@ -106,6 +113,7 @@ export async function GET(
           fileType: invoice.file_type,
           fileSize: invoice.file_size,
           signedUrl,
+          storagePath: invoice.storage_path, // Include for debugging
           createdAt: invoice.created_at
         }
       })
