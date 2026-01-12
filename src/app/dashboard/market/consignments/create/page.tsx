@@ -334,7 +334,11 @@ export default function CreateConsignmentOrderPage() {
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([])
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
   const [selectedWarehouse, setSelectedWarehouse] = useState<WarehouseInfo | null>(null)
-  const [consignmentDate, setConsignmentDate] = useState(new Date().toISOString().split('T')[0])
+  // Use local date to avoid timezone issues (toISOString uses UTC which can be 1 day behind)
+  const [consignmentDate, setConsignmentDate] = useState(() => {
+    const today = new Date()
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  })
   const [notes, setNotes] = useState('')
   const [loadingSuppliers, setLoadingSuppliers] = useState(true)
   const [supplierSearch, setSupplierSearch] = useState('')

@@ -119,12 +119,15 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
     setLoadingInvoices(true)
     try {
       const response = await fetch(`/api/order-invoices/${resolvedParams.id}?type=purchase`)
+      if (!response.ok) return
+      const contentType = response.headers.get('content-type')
+      if (!contentType?.includes('application/json')) return
       const data = await response.json()
       if (data.success) {
         setInvoices(data.data.invoices || [])
       }
-    } catch (err) {
-      console.error('Error fetching invoices:', err)
+    } catch {
+      // Silently ignore - invoices are optional
     } finally {
       setLoadingInvoices(false)
     }

@@ -353,7 +353,11 @@ export default function CreatePurchasePage() {
   const [invoiceFiles, setInvoiceFiles] = useState<InvoiceFile[]>([])
 
   // Step 5: Review
-  const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0])
+  // Use local date to avoid timezone issues (toISOString uses UTC which can be 1 day behind)
+  const [purchaseDate, setPurchaseDate] = useState(() => {
+    const today = new Date()
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  })
   const [expectedDate, setExpectedDate] = useState('')
   const [notes, setNotes] = useState('')
   const [currency, setCurrency] = useState('USD')
