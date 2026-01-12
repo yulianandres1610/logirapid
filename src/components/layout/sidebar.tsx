@@ -521,6 +521,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       label: "Reportes",
       href: "/dashboard/market/reports",
       hasSubmenu: true,
+      requiredRole: 'MARKET_MANAGER', // Solo visible para managers
       submenuItems: [
         { icon: TrendingUp, label: "Ventas", href: "/dashboard/market/reports/sales" },
         { icon: Percent, label: "Márgenes", href: "/dashboard/market/reports/margins" },
@@ -608,7 +609,13 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     if (user?.role === 'MARKET_COMERCIAL') return marketComercialMenuItems
     if (user?.role === 'MARKET_ALMACENERO') return marketAlmaceneroMenuItems
     if (user?.role === 'MARKET_VENDEDOR') return marketVendedorMenuItems
-    return marketMenuItems
+    // Filtrar items que requieren rol específico
+    return marketMenuItems.filter(item => {
+      if (item.requiredRole && user?.role !== item.requiredRole) {
+        return false
+      }
+      return true
+    })
   }
 
   let baseMenuItems = user?.role === 'SUPER_ADMIN' ? superAdminMenuItems :
