@@ -40,6 +40,7 @@ import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 import { InvoiceGrid, InvoiceData } from '@/components/orders/InvoicePreviewCard'
+import { InvoiceUploader, InvoiceFile } from '@/components/orders/InvoiceUploader'
 
 interface Supplier {
   id: number
@@ -169,6 +170,9 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
   const [invoices, setInvoices] = useState<InvoiceData[]>([])
   const [loadingInvoices, setLoadingInvoices] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<OrderLine | null>(null)
+  const [showUploader, setShowUploader] = useState(false)
+  const [pendingInvoices, setPendingInvoices] = useState<InvoiceFile[]>([])
+  const [uploadingInvoices, setUploadingInvoices] = useState(false)
 
   useEffect(() => {
     fetchOrder()
@@ -222,6 +226,45 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
       }
     } catch (err) {
       console.error('Error deleting invoice:', err)
+    }
+  }
+
+  const handleUploadInvoices = async () => {
+    if (pendingInvoices.length === 0) return
+
+    setUploadingInvoices(true)
+    try {
+      const formData = new FormData()
+      formData.append('orderType', 'consignment')
+      formData.append('orderId', resolvedParams.id)
+
+      for (const invoice of pendingInvoices) {
+        if (invoice.file) {
+          formData.append('files', invoice.file)
+        }
+      }
+
+      const response = await fetch('/api/upload/order-invoices', {
+        method: 'POST',
+        body: formData
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Refresh invoices list
+        await fetchInvoices()
+        // Clear pending and hide uploader
+        setPendingInvoices([])
+        setShowUploader(false)
+      } else {
+        alert(data.error || 'Error al subir facturas')
+      }
+    } catch (err) {
+      console.error('Error uploading invoices:', err)
+      alert('Error al subir facturas')
+    } finally {
+      setUploadingInvoices(false)
     }
   }
 
@@ -331,90 +374,117 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="min-h-screen">
-          {/* Hero Header */}
-          <div className={cn(
-            'relative overflow-hidden',
-            `bg-gradient-to-r ${statusConfig.bgGradient}`
-          )}>
-            <div className="absolute inset-0 bg-black/10" />
-            <div className="absolute inset-0 bg-[url('/patterns/grid.svg')] opacity-10" />
+        <div className="min-h-screen p-6">
+          {/* Header Section */}
+          <div className="max-w-6xl mx-auto mb-8">
+            {/* Navigation */}
+            <div className="flex items-center justify-between mb-6">
+              <Link href="/dashboard/market/consignments">
+                <motion.button
+                  whileHover={{ scale: 1.02, x: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
+                    theme === 'dark'
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  )}
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span className="font-medium">Volver</span>
+                </motion.button>
+              </Link>
 
-            <div className="relative max-w-6xl mx-auto px-6 py-8">
-              {/* Navigation */}
-              <div className="flex items-center justify-between mb-6">
-                <Link href="/dashboard/market/consignments">
-                  <motion.button
-                    whileHover={{ scale: 1.05, x: -4 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-white rounded-xl hover:bg-white/30 transition-colors"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span className="font-medium">Volver</span>
-                  </motion.button>
-                </Link>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => window.print()}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
+                  theme === 'dark'
+                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                )}
+              >
+                <Printer className="w-4 h-4" />
+                <span className="font-medium">Imprimir</span>
+              </motion.button>
+            </div>
 
-                <div className="flex items-center gap-3">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => window.print()}
-                    className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-white rounded-xl hover:bg-white/30 transition-colors"
-                  >
-                    <Printer className="w-4 h-4" />
-                    <span className="font-medium">Imprimir</span>
-                  </motion.button>
-                </div>
-              </div>
-
-              {/* Order Info */}
-              <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
-                <div>
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="p-2 bg-white/20 backdrop-blur-sm rounded-xl">
-                      <Receipt className="w-6 h-6 text-white" />
+            {/* Order Header Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                'p-6 rounded-2xl border',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                {/* Left: Order Info */}
+                <div className="flex items-start gap-4">
+                  <div className={cn(
+                    'w-14 h-14 rounded-2xl flex items-center justify-center shrink-0',
+                    `bg-gradient-to-br ${statusConfig.bgGradient}`
+                  )}>
+                    <Receipt className="w-7 h-7 text-white" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-3 mb-1">
+                      <h1 className={cn(
+                        'text-2xl md:text-3xl font-bold font-mono',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        {order.orderNumber}
+                      </h1>
+                      <span className={cn(
+                        'inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium',
+                        statusConfig.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                        statusConfig.color === 'blue' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                        statusConfig.color === 'emerald' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                        statusConfig.color === 'purple' && 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+                        statusConfig.color === 'red' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+                        statusConfig.color === 'gray' && 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                      )}>
+                        <StatusIcon className="w-3.5 h-3.5" />
+                        {statusConfig.label}
+                      </span>
                     </div>
-                    <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white text-sm font-medium rounded-lg">
-                      Consignación
-                    </span>
-                  </div>
-                  <h1 className="text-3xl md:text-4xl font-bold text-white font-mono mb-2">
-                    {order.orderNumber}
-                  </h1>
-                  <div className="flex items-center gap-4 text-white/80">
-                    <span className="flex items-center gap-1.5">
-                      <Calendar className="w-4 h-4" />
-                      {formatDate(order.consignmentDate)}
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <User className="w-4 h-4" />
-                      {order.createdBy}
-                    </span>
+                    <p className="text-sm text-gray-500 mb-2">Orden de Consignación</p>
+                    <div className="flex items-center gap-4 text-sm text-gray-500">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4" />
+                        {formatDate(order.consignmentDate)}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <User className="w-4 h-4" />
+                        {order.createdBy}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
+                {/* Right: Total */}
+                <div className={cn(
+                  'flex items-center gap-4 p-4 rounded-xl',
+                  theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                )}>
                   <div className="text-right">
-                    <p className="text-white/70 text-sm mb-1">Total Costo</p>
-                    <p className="text-3xl font-bold text-white">
+                    <p className="text-sm text-gray-500 mb-1">Total Costo</p>
+                    <p className={cn(
+                      'text-3xl font-bold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
                       {formatCurrency(order.totalCost)}
                     </p>
                   </div>
-                  <div className="w-px h-12 bg-white/30" />
-                  <div className={cn(
-                    'flex items-center gap-2 px-4 py-2 rounded-xl font-medium',
-                    'bg-white text-gray-900 shadow-lg'
-                  )}>
-                    <StatusIcon className="w-5 h-5" />
-                    {statusConfig.label}
-                  </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
           </div>
 
           {/* Content */}
-          <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+          <div className="max-w-6xl mx-auto space-y-6">
 
             {/* Lifecycle Progress */}
             <motion.div
@@ -625,48 +695,63 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
                   theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
                 )}
               >
-                <div className="flex items-center gap-3 mb-4">
-                  <div className={cn(
-                    'p-2 rounded-xl',
-                    theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
-                  )}>
-                    <Building2 className="w-5 h-5 text-blue-500" />
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-2 rounded-xl',
+                      theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
+                    )}>
+                      <Building2 className="w-5 h-5 text-blue-500" />
+                    </div>
+                    <h3 className={cn(
+                      'font-semibold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>Proveedor</h3>
                   </div>
-                  <h3 className={cn(
-                    'font-semibold',
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>Proveedor</h3>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className={cn(
-                    'w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0',
-                    theme === 'dark' ? 'bg-gradient-to-br from-blue-600 to-cyan-600 text-white' : 'bg-gradient-to-br from-blue-500 to-cyan-500 text-white'
+                  <span className={cn(
+                    'px-2.5 py-1 rounded-lg text-xs font-mono font-medium',
+                    theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
                   )}>
                     {order.supplier.code}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className={cn(
-                      'font-semibold truncate',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>{order.supplier.name}</p>
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  <p className={cn(
+                    'font-semibold text-lg',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>{order.supplier.name}</p>
+
+                  <div className={cn(
+                    'pt-3 border-t space-y-2',
+                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                  )}>
                     {order.supplier.contactName && (
-                      <p className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                        <User className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate">{order.supplier.contactName}</span>
-                      </p>
+                      <div className="flex items-center gap-3">
+                        <User className="w-4 h-4 text-gray-400 shrink-0" />
+                        <span className={cn(
+                          'text-sm',
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                        )}>{order.supplier.contactName}</span>
+                      </div>
                     )}
                     {order.supplier.phone && (
-                      <p className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                        <Phone className="w-3.5 h-3.5 shrink-0" />
-                        <span>{order.supplier.phone}</span>
-                      </p>
+                      <div className="flex items-center gap-3">
+                        <Phone className="w-4 h-4 text-gray-400 shrink-0" />
+                        <span className={cn(
+                          'text-sm',
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                        )}>{order.supplier.phone}</span>
+                      </div>
                     )}
                     {order.supplier.email && (
-                      <p className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                        <Mail className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate">{order.supplier.email}</span>
-                      </p>
+                      <div className="flex items-center gap-3">
+                        <Mail className="w-4 h-4 text-gray-400 shrink-0" />
+                        <span className={cn(
+                          'text-sm truncate',
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                        )}>{order.supplier.email}</span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -998,20 +1083,87 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
                     )}>
                       <FileUp className="w-5 h-5 text-purple-500" />
                     </div>
-                    <h3 className={cn(
-                      'font-semibold',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>Facturas Originales</h3>
+                    <div>
+                      <h3 className={cn(
+                        'font-semibold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>Facturas Originales</h3>
+                      {invoices.length > 0 && (
+                        <p className="text-sm text-gray-500">{invoices.length} {invoices.length === 1 ? 'archivo' : 'archivos'}</p>
+                      )}
+                    </div>
                   </div>
-                  {invoices.length > 0 && (
-                    <span className={cn(
-                      'px-3 py-1 rounded-xl text-sm font-medium',
-                      theme === 'dark' ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-600'
-                    )}>
-                      {invoices.length} {invoices.length === 1 ? 'archivo' : 'archivos'}
-                    </span>
-                  )}
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowUploader(!showUploader)}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors',
+                      showUploader
+                        ? theme === 'dark'
+                          ? 'bg-gray-700 text-gray-300'
+                          : 'bg-gray-200 text-gray-700'
+                        : 'bg-purple-600 text-white hover:bg-purple-700'
+                    )}
+                  >
+                    <FileUp className="w-4 h-4" />
+                    {showUploader ? 'Cancelar' : 'Subir Facturas'}
+                  </motion.button>
                 </div>
+
+                {/* Uploader Section */}
+                <AnimatePresence>
+                  {showUploader && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className={cn(
+                        'mb-6 p-4 rounded-xl border',
+                        theme === 'dark' ? 'bg-gray-900/50 border-gray-700' : 'bg-gray-50 border-gray-200'
+                      )}>
+                        <InvoiceUploader
+                          invoices={pendingInvoices}
+                          onInvoicesChange={setPendingInvoices}
+                          orderType="consignment"
+                          disabled={uploadingInvoices}
+                        />
+
+                        {pendingInvoices.length > 0 && (
+                          <div className="flex justify-end mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                            <motion.button
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={handleUploadInvoices}
+                              disabled={uploadingInvoices}
+                              className={cn(
+                                'flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium transition-colors',
+                                uploadingInvoices
+                                  ? 'bg-purple-400 cursor-not-allowed'
+                                  : 'bg-purple-600 hover:bg-purple-700',
+                                'text-white'
+                              )}
+                            >
+                              {uploadingInvoices ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Subiendo...
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="w-4 h-4" />
+                                  Guardar {pendingInvoices.length} {pendingInvoices.length === 1 ? 'factura' : 'facturas'}
+                                </>
+                              )}
+                            </motion.button>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 {loadingInvoices ? (
                   <div className="flex items-center justify-center py-12">
