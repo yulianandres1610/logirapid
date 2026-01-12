@@ -850,6 +850,7 @@ export async function sendWhatsApp(to: string, message: string): Promise<SMSResu
 
 /**
  * Generates OTP message for WhatsApp (with emojis and formatting)
+ * Used as fallback when template is not configured
  */
 export function generateCashDeliveryOTPWhatsAppMessage(
   otpCode: string,
@@ -872,6 +873,14 @@ _Entrega este código al broker para confirmar la recepción del efectivo._`
 
 /**
  * Sends OTP via WhatsApp for cash delivery verification
+ * Uses Twilio Content Template for production (required by WhatsApp Business API)
+ * Falls back to free-form message if template not configured
+ *
+ * Template variables:
+ * {{1}} - OTP Code (6 digits)
+ * {{2}} - Currency (CUP, USD, EUR)
+ * {{3}} - Amount (formatted number)
+ * {{4}} - Broker name
  */
 export async function sendCashDeliveryOTPWhatsApp(
   deliveryPersonPhone: string,
@@ -880,8 +889,93 @@ export async function sendCashDeliveryOTPWhatsApp(
   currency: string,
   brokerName: string
 ): Promise<SMSResult> {
-  const message = generateCashDeliveryOTPWhatsAppMessage(otpCode, amount, currency, brokerName)
-  return sendWhatsApp(deliveryPersonPhone, message)
+  try {
+    const contentSid = process.env.TWILIO_CONTENT_SID_CASH_OTP
+    const twilioPhone = process.env.TWILIO_PHONE_NUMBER
+    const whatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER ||
+      (twilioPhone ? `whatsapp:${twilioPhone}` : null)
+
+    // If no template configured, fall back to free-form message
+    if (!contentSid) {
+      console.log('[WhatsApp OTP] No template configured, using free-form message')
+      const message = generateCashDeliveryOTPWhatsAppMessage(otpCode, amount, currency, brokerName)
+      return sendWhatsApp(deliveryPersonPhone, message)
+    }
+
+    if (!whatsappNumber) {
+      console.error('[WhatsApp OTP] WhatsApp number not configured')
+      return {
+        success: false,
+        error: 'WhatsApp service not configured'
+      }
+    }
+
+    // Format and validate destination number
+    const formattedPhone = formatPhoneNumber(deliveryPersonPhone)
+
+    if (!isValidPhoneNumber(formattedPhone)) {
+      console.warn(`[WhatsApp OTP] Invalid phone number: ${deliveryPersonPhone}`)
+      return {
+        success: false,
+        error: `Invalid phone number: ${deliveryPersonPhone}`,
+        to: formattedPhone
+      }
+    }
+
+    // Get Twilio client
+    const client = await getClient()
+
+    // Sanitize function for template variables
+    const sanitize = (value: string | null | undefined, defaultVal: string): string => {
+      if (!value) return defaultVal
+      return String(value)
+        .replace(/[\n\r\t]/g, ' ')
+        .replace(/\s{4,}/g, '   ')
+        .trim() || defaultVal
+    }
+
+    // Prepare template variables
+    // Template: 🔐 Código de Verificación LogiRapid
+    // Tu código OTP es: *{{1}}*
+    // 📦 Entrega de efectivo:
+    // 💵 Monto: {{2}} {{3}}
+    // 🏢 Broker: {{4}}
+    const contentVars = {
+      "1": sanitize(otpCode, '000000'),
+      "2": sanitize(currency, 'USD'),
+      "3": sanitize(amount, '0.00'),
+      "4": sanitize(brokerName, 'Broker')
+    }
+
+    console.log(`[WhatsApp OTP] Sending OTP to delivery person ${formattedPhone}`)
+    console.log(`[WhatsApp OTP] Using ContentSid: ${contentSid}`)
+    console.log(`[WhatsApp OTP] OTP Code: ${otpCode}, Amount: ${currency} ${amount}`)
+
+    // Send message using Content Template
+    const result = await client.messages.create({
+      contentSid,
+      contentVariables: JSON.stringify(contentVars),
+      from: whatsappNumber.startsWith('whatsapp:') ? whatsappNumber : `whatsapp:${whatsappNumber}`,
+      to: `whatsapp:${formattedPhone}`
+    })
+
+    console.log(`[WhatsApp OTP] OTP sent successfully. SID: ${result.sid}`)
+
+    return {
+      success: true,
+      messageId: result.sid,
+      to: formattedPhone
+    }
+
+  } catch (error: any) {
+    console.error('[WhatsApp OTP] Error sending OTP:', error)
+
+    return {
+      success: false,
+      error: error.message || 'Unknown error sending WhatsApp OTP',
+      to: deliveryPersonPhone
+    }
+  }
 }
 
 /**
