@@ -245,7 +245,9 @@ export async function PUT(
       supplierContact,
       supplierReference,
       minimumStock,
-      isActive
+      isActive,
+      hasVariants = false,
+      variants = []
     } = body
 
     if (!name) {
@@ -378,10 +380,177 @@ export async function PUT(
       )
     }
 
+    // Handle variants
+    const savedVariants: { id: number; name: string; barcode: string; sku: string }[] = []
+
+    if (hasVariants && variants.length > 0) {
+      console.log('[Product Update] Processing', variants.length, 'variants')
+
+      // Get existing variant IDs for this product
+      const existingVariantsResult = await db.query(
+        'SELECT id FROM market_product_variants WHERE product_id = $1',
+        [productId]
+      )
+      const existingVariantIds = new Set<number>(existingVariantsResult.rows.map(r => r.id))
+      const processedVariantIds = new Set<number>()
+
+      for (const v of variants) {
+        try {
+          // Generate barcode if empty
+          const variantBarcode = v.barcode || `${barcode || sku || productId}-V${Date.now()}`
+          // Generate SKU if empty
+          const variantSku = v.sku || `${sku || `PRD${productId}`}-${v.name?.replace(/\s+/g, '-').substring(0, 10) || 'VAR'}`
+          const variantImageUrl = v.imageUrl || imageUrl || null
+
+          // Check if this variant has a valid existing ID (not a temp ID like 'var-xxx')
+          const isExistingVariant = v.id && typeof v.id === 'number' && existingVariantIds.has(v.id)
+
+          if (isExistingVariant) {
+            // Update existing variant
+            await db.query(`
+              UPDATE market_product_variants SET
+                variant_name = $1,
+                sku = $2,
+                barcode = $3,
+                cost_price = $4,
+                selling_price = $5,
+                image_url = $6,
+                updated_at = NOW()
+              WHERE id = $7 AND product_id = $8
+            `, [
+              v.name,
+              variantSku,
+              variantBarcode,
+              v.costPrice || costPrice || 0,
+              v.sellingPrice || sellingPrice || 0,
+              variantImageUrl,
+              v.id,
+              productId
+            ])
+
+            processedVariantIds.add(v.id)
+            savedVariants.push({
+              id: v.id,
+              name: v.name,
+              barcode: variantBarcode,
+              sku: variantSku
+            })
+            console.log('[Product Update] Updated variant:', v.id, v.name)
+          } else {
+            // Insert new variant
+            const insertResult = await db.query(`
+              INSERT INTO market_product_variants (
+                product_id, variant_name, sku, barcode, cost_price, selling_price,
+                quantity_on_hand, image_url, is_active, created_at, updated_at
+              ) VALUES ($1, $2, $3, $4, $5, $6, 0, $7, true, NOW(), NOW())
+              RETURNING id
+            `, [
+              productId,
+              v.name,
+              variantSku,
+              variantBarcode,
+              v.costPrice || costPrice || 0,
+              v.sellingPrice || sellingPrice || 0,
+              variantImageUrl
+            ])
+
+            const newVariantId = insertResult.rows[0].id
+            savedVariants.push({
+              id: newVariantId,
+              name: v.name,
+              barcode: variantBarcode,
+              sku: variantSku
+            })
+            console.log('[Product Update] Inserted new variant:', newVariantId, v.name)
+
+            // Save variant options if provided
+            if (v.options && Array.isArray(v.options) && v.options.length > 0) {
+              for (const opt of v.options) {
+                if (opt.type && opt.value) {
+                  await db.query(`
+                    INSERT INTO market_variant_options (variant_id, option_type, option_value)
+                    VALUES ($1, $2, $3)
+                  `, [newVariantId, opt.type, opt.value])
+                }
+              }
+            }
+          }
+        } catch (variantError) {
+          console.error('[Product Update] Error processing variant:', v.name, variantError)
+        }
+      }
+
+      // Delete variants that are no longer in the list
+      const variantsToDelete = [...existingVariantIds].filter(id => !processedVariantIds.has(id))
+      if (variantsToDelete.length > 0) {
+        console.log('[Product Update] Deleting removed variants:', variantsToDelete)
+        // First delete variant options
+        await db.query(
+          'DELETE FROM market_variant_options WHERE variant_id = ANY($1)',
+          [variantsToDelete]
+        )
+        // Then delete variants
+        await db.query(
+          'DELETE FROM market_product_variants WHERE id = ANY($1)',
+          [variantsToDelete]
+        )
+      }
+
+      // Log variant changes
+      await logProductChange(
+        productId,
+        parseInt(companyId),
+        'variants_updated',
+        'variants',
+        `${existingVariantIds.size} variantes`,
+        `${savedVariants.length} variantes`,
+        userId,
+        userName,
+        userEmail
+      )
+    } else if (!hasVariants) {
+      // If product no longer has variants, delete all existing variants
+      const existingVariantsResult = await db.query(
+        'SELECT id FROM market_product_variants WHERE product_id = $1',
+        [productId]
+      )
+
+      if (existingVariantsResult.rows.length > 0) {
+        const variantIds = existingVariantsResult.rows.map(r => r.id)
+        console.log('[Product Update] Removing all variants:', variantIds)
+
+        // Delete variant options first
+        await db.query(
+          'DELETE FROM market_variant_options WHERE variant_id = ANY($1)',
+          [variantIds]
+        )
+        // Then delete variants
+        await db.query(
+          'DELETE FROM market_product_variants WHERE product_id = $1',
+          [productId]
+        )
+
+        await logProductChange(
+          productId,
+          parseInt(companyId),
+          'variants_removed',
+          'variants',
+          `${variantIds.length} variantes`,
+          null,
+          userId,
+          userName,
+          userEmail
+        )
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      message: 'Producto actualizado correctamente',
-      changedFields
+      message: hasVariants
+        ? `Producto actualizado con ${savedVariants.length} variantes`
+        : 'Producto actualizado correctamente',
+      changedFields,
+      variants: savedVariants
     })
   } catch (error) {
     console.error('Error updating product:', error)
