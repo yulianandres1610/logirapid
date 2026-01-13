@@ -25,8 +25,10 @@ import {
   ChevronRight,
   Eye,
   DollarSign,
-  TrendingUp,
-  X
+  X,
+  ChevronDown,
+  Navigation,
+  Calendar
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -75,13 +77,13 @@ interface Stats {
   pendingAmount: number
 }
 
-const STATUSES: Record<string, { label: string; color: string; icon: typeof Clock }> = {
-  pending: { label: 'Pendiente', color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400', icon: Clock },
-  confirmed: { label: 'Confirmada', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400', icon: CheckCircle },
-  in_delivery: { label: 'En Entrega', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400', icon: Truck },
-  delivered: { label: 'Entregada', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400', icon: CheckCircle },
-  cancelled: { label: 'Cancelada', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: XCircle },
-  rejected: { label: 'Rechazada', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: XCircle }
+const STATUSES: Record<string, { label: string; color: string; bgColor: string; icon: typeof Clock }> = {
+  pending: { label: 'Pendiente', color: 'text-amber-600 dark:text-amber-400', bgColor: 'bg-amber-500', icon: Clock },
+  confirmed: { label: 'Confirmada', color: 'text-blue-600 dark:text-blue-400', bgColor: 'bg-blue-500', icon: CheckCircle },
+  in_delivery: { label: 'En Entrega', color: 'text-purple-600 dark:text-purple-400', bgColor: 'bg-purple-500', icon: Truck },
+  delivered: { label: 'Entregada', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'bg-emerald-500', icon: CheckCircle },
+  cancelled: { label: 'Cancelada', color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-500', icon: XCircle },
+  rejected: { label: 'Rechazada', color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-500', icon: XCircle }
 }
 
 export default function BrokerOrdersPage() {
@@ -94,6 +96,7 @@ export default function BrokerOrdersPage() {
   const [loading, setLoading] = useState(true)
   const [selectedStatus, setSelectedStatus] = useState<string>('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [showSearch, setShowSearch] = useState(false)
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
@@ -106,6 +109,9 @@ export default function BrokerOrdersPage() {
   const [selectedReason, setSelectedReason] = useState<string>('')
   const [rejectNotes, setRejectNotes] = useState('')
   const [rejectLoading, setRejectLoading] = useState(false)
+
+  // Order detail modal
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
   // Success message
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -165,7 +171,6 @@ export default function BrokerOrdersPage() {
       const data = await response.json()
       if (data.success) {
         if (action === 'accept') {
-          // After accepting, go to delivery wizard
           router.push(`/dashboard/broker/orders/${orderId}/deliver`)
         } else {
           fetchOrders()
@@ -183,18 +188,17 @@ export default function BrokerOrdersPage() {
     if (currency === 'CUP') {
       return `${amount.toLocaleString()} CUP`
     }
-    return `$${amount.toFixed(2)} ${currency}`
+    return `$${amount.toFixed(2)}`
   }
 
-  // Open reject modal
   const openRejectModal = (order: Order) => {
     setRejectingOrder(order)
     setSelectedReason('')
     setRejectNotes('')
     setRejectModalOpen(true)
+    setSelectedOrder(null)
   }
 
-  // Handle reject submission
   const handleReject = async () => {
     if (!rejectingOrder || !selectedReason) return
     if (selectedReason === 'other' && !rejectNotes.trim()) {
@@ -217,7 +221,7 @@ export default function BrokerOrdersPage() {
 
       const data = await response.json()
       if (data.success) {
-        setSuccessMessage('Orden rechazada. Los fondos han sido liberados.')
+        setSuccessMessage('Orden rechazada')
         setRejectModalOpen(false)
         fetchOrders()
         setTimeout(() => setSuccessMessage(null), 5000)
@@ -232,7 +236,6 @@ export default function BrokerOrdersPage() {
     }
   }
 
-  // Navigate to delivery wizard
   const goToDeliveryWizard = (orderId: number) => {
     router.push(`/dashboard/broker/orders/${orderId}/deliver`)
   }
@@ -248,44 +251,347 @@ export default function BrokerOrdersPage() {
   })
 
   const statusTabs = [
-    { value: '', label: 'Todas', count: (stats?.pendingCount || 0) + (stats?.confirmedCount || 0) + (stats?.inDeliveryCount || 0) + (stats?.deliveredCount || 0) },
-    { value: 'pending', label: 'Pendientes', count: stats?.pendingCount || 0 },
-    { value: 'confirmed', label: 'Confirmadas', count: stats?.confirmedCount || 0 },
-    { value: 'in_delivery', label: 'En Entrega', count: stats?.inDeliveryCount || 0 },
-    { value: 'delivered', label: 'Entregadas', count: stats?.deliveredCount || 0 }
+    { value: '', label: 'Todas', count: (stats?.pendingCount || 0) + (stats?.confirmedCount || 0) + (stats?.inDeliveryCount || 0) + (stats?.deliveredCount || 0), color: 'bg-gray-500' },
+    { value: 'pending', label: 'Nuevas', count: stats?.pendingCount || 0, color: 'bg-amber-500' },
+    { value: 'confirmed', label: 'Listas', count: stats?.confirmedCount || 0, color: 'bg-blue-500' },
+    { value: 'in_delivery', label: 'En ruta', count: stats?.inDeliveryCount || 0, color: 'bg-purple-500' },
+    { value: 'delivered', label: 'Completadas', count: stats?.deliveredCount || 0, color: 'bg-emerald-500' }
   ]
 
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="min-h-screen p-2 sm:p-6 space-y-3 sm:space-y-6">
-          {/* Stats - Simple inline on mobile, cards on desktop */}
+        {/* Mobile Layout - App-like design */}
+        <div className="md:hidden min-h-screen -m-3 flex flex-col">
+          {/* Fixed Header */}
           <div className={cn(
-            'flex items-center justify-between p-3 sm:hidden rounded-xl border',
-            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+            'sticky top-0 z-30 px-4 pt-2 pb-3 space-y-3',
+            theme === 'dark' ? 'bg-gray-900' : 'bg-white'
           )}>
-            <div className="flex items-center gap-4 text-center">
-              <div>
-                <p className={cn('text-lg font-bold text-amber-600')}>{stats?.pendingCount || 0}</p>
-                <p className={cn('text-[10px]', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Pend.</p>
+            {/* Stats Row */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1">
+                <div className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-full',
+                  theme === 'dark' ? 'bg-emerald-900/30' : 'bg-emerald-50'
+                )}>
+                  <DollarSign className="w-4 h-4 text-emerald-500" />
+                  <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                    ${(stats?.pendingAmount || 0).toLocaleString()}
+                  </span>
+                </div>
               </div>
-              <div>
-                <p className={cn('text-lg font-bold text-blue-600')}>{stats?.confirmedCount || 0}</p>
-                <p className={cn('text-[10px]', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Conf.</p>
-              </div>
-              <div>
-                <p className={cn('text-lg font-bold text-purple-600')}>{stats?.inDeliveryCount || 0}</p>
-                <p className={cn('text-[10px]', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Entrega</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowSearch(!showSearch)}
+                  className={cn(
+                    'p-2 rounded-full transition-colors',
+                    showSearch
+                      ? 'bg-blue-600 text-white'
+                      : theme === 'dark' ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'
+                  )}
+                >
+                  <Search className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={fetchOrders}
+                  disabled={loading}
+                  className={cn(
+                    'p-2 rounded-full transition-colors',
+                    theme === 'dark' ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'
+                  )}
+                >
+                  <RefreshCw className={cn('w-5 h-5', loading && 'animate-spin')} />
+                </button>
               </div>
             </div>
-            <div className="text-right">
-              <p className={cn('text-lg font-bold text-emerald-600')}>${(stats?.pendingAmount || 0).toLocaleString()}</p>
-              <p className={cn('text-[10px]', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Por entregar</p>
+
+            {/* Search Input - Expandable */}
+            <AnimatePresence>
+              {showSearch && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por nombre, telefono u orden..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      autoFocus
+                      className={cn(
+                        'w-full h-10 pl-10 pr-10 rounded-xl text-sm',
+                        'focus:outline-none focus:ring-2 focus:ring-blue-500',
+                        theme === 'dark'
+                          ? 'bg-gray-800 text-white placeholder-gray-500'
+                          : 'bg-gray-100 text-gray-900 placeholder-gray-500'
+                      )}
+                    />
+                    {searchTerm && (
+                      <button
+                        onClick={() => setSearchTerm('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1"
+                      >
+                        <X className="w-4 h-4 text-gray-400" />
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Status Tabs - Scrollable */}
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-4 px-4">
+              {statusTabs.map(tab => (
+                <button
+                  key={tab.value}
+                  onClick={() => setSelectedStatus(tab.value)}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all',
+                    selectedStatus === tab.value
+                      ? cn(tab.color, 'text-white shadow-lg')
+                      : theme === 'dark'
+                        ? 'bg-gray-800 text-gray-400'
+                        : 'bg-gray-100 text-gray-600'
+                  )}
+                >
+                  <span>{tab.label}</span>
+                  <span className={cn(
+                    'px-1.5 py-0.5 rounded-full text-xs font-bold min-w-[20px] text-center',
+                    selectedStatus === tab.value
+                      ? 'bg-white/20'
+                      : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                  )}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Desktop Stats Cards - Hidden on mobile */}
-          <div className="hidden sm:grid grid-cols-4 gap-4">
+          {/* Orders List */}
+          <div className="flex-1 px-4 py-3 space-y-3">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mb-3" />
+                <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                  Cargando ordenes...
+                </p>
+              </div>
+            ) : filteredOrders.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <div className={cn(
+                  'w-16 h-16 rounded-full flex items-center justify-center mb-4',
+                  theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+                )}>
+                  <Package className="w-8 h-8 text-gray-400" />
+                </div>
+                <p className={cn('font-medium', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                  No hay ordenes
+                </p>
+                <p className={cn('text-sm mt-1', theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
+                  {selectedStatus ? 'Prueba otro filtro' : 'Las ordenes apareceran aqui'}
+                </p>
+              </div>
+            ) : (
+              filteredOrders.map((order) => {
+                const statusConfig = STATUSES[order.status] || STATUSES.pending
+
+                return (
+                  <motion.div
+                    key={order.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={cn(
+                      'rounded-2xl overflow-hidden',
+                      theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
+                    )}
+                  >
+                    {/* Main Card Content - Tappable */}
+                    <button
+                      onClick={() => setSelectedOrder(order)}
+                      className="w-full text-left p-4 active:bg-black/5 dark:active:bg-white/5"
+                    >
+                      {/* Top Row: Amount + Status */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <p className={cn(
+                            'text-2xl font-bold',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            {formatCurrency(order.receiveAmount, order.receiveCurrency)}
+                          </p>
+                          <p className={cn(
+                            'text-xs mt-0.5',
+                            theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                          )}>
+                            {order.orderNumber}
+                          </p>
+                        </div>
+                        <div className={cn(
+                          'px-3 py-1.5 rounded-full flex items-center gap-1.5',
+                          statusConfig.bgColor
+                        )}>
+                          <statusConfig.icon className="w-3.5 h-3.5 text-white" />
+                          <span className="text-xs font-semibold text-white">
+                            {statusConfig.label}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Recipient Info */}
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className={cn(
+                            'font-medium truncate',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            {order.recipientName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className={cn(
+                            'text-sm truncate',
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                          )}>
+                            {order.recipientMunicipality}, {order.recipientProvince}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Bottom Row: Date + Company */}
+                      <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                        <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                          <Calendar className="w-3.5 h-3.5" />
+                          {new Date(order.createdAt).toLocaleDateString('es-ES', {
+                            day: '2-digit',
+                            month: 'short'
+                          })}
+                        </div>
+                        {order.sellingCompanyName && (
+                          <span className="text-xs text-blue-500 font-medium truncate max-w-[150px]">
+                            {order.sellingCompanyName}
+                          </span>
+                        )}
+                        <ChevronDown className="w-4 h-4 text-gray-400 -rotate-90" />
+                      </div>
+                    </button>
+
+                    {/* Quick Actions Bar */}
+                    {(order.status === 'pending' || order.status === 'confirmed' || order.status === 'in_delivery') && (
+                      <div className={cn(
+                        'px-4 py-3 flex gap-2 border-t',
+                        theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-100 bg-gray-50/50'
+                      )}>
+                        {order.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => handleAction(order.id, 'accept')}
+                              className="flex-1 py-3 bg-blue-600 active:bg-blue-700 text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                              Aceptar
+                            </button>
+                            <button
+                              onClick={() => openRejectModal(order)}
+                              className={cn(
+                                'py-3 px-5 rounded-xl text-sm font-medium',
+                                theme === 'dark'
+                                  ? 'bg-gray-700 text-gray-300 active:bg-gray-600'
+                                  : 'bg-gray-200 text-gray-700 active:bg-gray-300'
+                              )}
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+
+                        {order.status === 'confirmed' && (
+                          <>
+                            <button
+                              onClick={() => goToDeliveryWizard(order.id)}
+                              className="flex-1 py-3 bg-emerald-600 active:bg-emerald-700 text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2"
+                            >
+                              <Navigation className="w-4 h-4" />
+                              Iniciar Entrega
+                            </button>
+                            <button
+                              onClick={() => openRejectModal(order)}
+                              className={cn(
+                                'py-3 px-5 rounded-xl',
+                                theme === 'dark'
+                                  ? 'bg-gray-700 text-gray-400 active:bg-gray-600'
+                                  : 'bg-gray-200 text-gray-500 active:bg-gray-300'
+                              )}
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+
+                        {order.status === 'in_delivery' && (
+                          <button
+                            onClick={() => goToDeliveryWizard(order.id)}
+                            className="flex-1 py-3 bg-purple-600 active:bg-purple-700 text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            Completar Entrega
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </motion.div>
+                )
+              })
+            )}
+
+            {/* Pagination - Mobile */}
+            {totalOrders > ORDERS_PER_PAGE && !loading && (
+              <div className="flex items-center justify-center gap-3 py-4">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className={cn(
+                    'p-3 rounded-full disabled:opacity-30',
+                    theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+                  )}
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <span className={cn(
+                  'text-sm font-medium',
+                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                )}>
+                  {currentPage} / {Math.ceil(totalOrders / ORDERS_PER_PAGE)}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(Math.ceil(totalOrders / ORDERS_PER_PAGE), p + 1))}
+                  disabled={currentPage >= Math.ceil(totalOrders / ORDERS_PER_PAGE)}
+                  className={cn(
+                    'p-3 rounded-full disabled:opacity-30',
+                    theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+                  )}
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            )}
+
+            {/* Bottom Spacer */}
+            <div className="h-6" />
+          </div>
+        </div>
+
+        {/* Desktop Layout - Original design */}
+        <div className="hidden md:block min-h-screen p-6 space-y-6">
+          {/* Desktop Stats Cards */}
+          <div className="grid grid-cols-4 gap-4">
             {[
               { label: 'Pendientes', count: stats?.pendingCount || 0, icon: Clock, color: 'amber' },
               { label: 'Confirmadas', count: stats?.confirmedCount || 0, icon: CheckCircle, color: 'blue' },
@@ -317,22 +623,21 @@ export default function BrokerOrdersPage() {
             ))}
           </div>
 
-          {/* Search + Filters - Compact on mobile */}
+          {/* Desktop Search + Filters */}
           <div className={cn(
-            'p-2 sm:p-4 rounded-xl border space-y-2',
+            'p-4 rounded-xl border space-y-3',
             theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
           )}>
-            {/* Search row */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
                   type="text"
                   placeholder="Buscar orden..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className={cn(
-                    'w-full h-9 pl-8 pr-2 rounded-lg border text-sm',
+                    'w-full h-10 pl-10 pr-4 rounded-lg border text-sm',
                     'focus:outline-none focus:ring-2 focus:ring-blue-500',
                     theme === 'dark'
                       ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400'
@@ -342,25 +647,25 @@ export default function BrokerOrdersPage() {
               </div>
               <button
                 onClick={fetchOrders}
-                className="h-9 w-9 flex items-center justify-center rounded-lg bg-blue-600 text-white flex-shrink-0"
+                className="h-10 px-4 flex items-center gap-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
               >
                 <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+                Actualizar
               </button>
             </div>
 
-            {/* Status pills */}
-            <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
+            <div className="flex gap-2 overflow-x-auto">
               {statusTabs.map(tab => (
                 <button
                   key={tab.value}
                   onClick={() => setSelectedStatus(tab.value)}
                   className={cn(
-                    'px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0',
+                    'px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors',
                     selectedStatus === tab.value
                       ? 'bg-blue-600 text-white'
                       : theme === 'dark'
-                        ? 'bg-gray-700 text-gray-300'
-                        : 'bg-gray-100 text-gray-600'
+                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   )}
                 >
                   {tab.label} ({tab.count})
@@ -369,614 +674,600 @@ export default function BrokerOrdersPage() {
             </div>
           </div>
 
-          {/* Orders List */}
+          {/* Desktop Table */}
           <div className={cn(
-            'rounded-xl md:border overflow-hidden',
-            theme === 'dark' ? 'md:bg-gray-800 md:border-gray-700' : 'md:bg-white md:border-gray-200'
+            'rounded-xl border overflow-hidden',
+            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
           )}>
             {loading ? (
               <div className="p-8 text-center">
-                  <RefreshCw className="w-8 h-8 animate-spin mx-auto text-blue-600 mb-4" />
-                  <p className={cn(theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                    Cargando ordenes...
-                  </p>
-                </div>
-              ) : filteredOrders.length === 0 ? (
-                <div className="p-12 text-center">
-                  <Package className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                  <p className={cn('text-lg font-medium', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                    No hay ordenes
-                  </p>
-                  <p className={cn('text-sm mt-1', theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
-                    {selectedStatus ? 'No hay ordenes con este estado' : 'No tienes ordenes asignadas'}
-                  </p>
-                </div>
-              ) : (
-                <>
-                  {/* Mobile Cards View - Full info cards */}
-                  <div className="md:hidden space-y-3 p-3">
-                    {filteredOrders.map((order) => {
-                      const statusConfig = STATUSES[order.status] || STATUSES.pending
-                      const StatusIcon = statusConfig.icon
+                <RefreshCw className="w-8 h-8 animate-spin mx-auto text-blue-600 mb-4" />
+                <p className={cn(theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                  Cargando ordenes...
+                </p>
+              </div>
+            ) : filteredOrders.length === 0 ? (
+              <div className="p-12 text-center">
+                <Package className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+                <p className={cn('text-lg font-medium', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                  No hay ordenes
+                </p>
+                <p className={cn('text-sm mt-1', theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
+                  {selectedStatus ? 'No hay ordenes con este estado' : 'No tienes ordenes asignadas'}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className={cn(
+                      'border-b',
+                      theme === 'dark' ? 'bg-gray-900/50 border-gray-700' : 'bg-gray-50 border-gray-200'
+                    )}>
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Orden</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Destinatario</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ubicacion</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Monto</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Accion</th>
+                      </tr>
+                    </thead>
+                    <tbody className={cn('divide-y', theme === 'dark' ? 'divide-gray-700' : 'divide-gray-200')}>
+                      {filteredOrders.map((order) => {
+                        const statusConfig = STATUSES[order.status] || STATUSES.pending
 
-                      return (
-                        <div
-                          key={order.id}
-                          className={cn(
-                            'rounded-xl border overflow-hidden',
-                            theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
-                          )}
-                        >
-                          {/* Card Header - Status color bar */}
-                          <div className={cn(
-                            'h-1',
-                            order.status === 'pending' && 'bg-amber-500',
-                            order.status === 'confirmed' && 'bg-blue-500',
-                            order.status === 'in_delivery' && 'bg-purple-500',
-                            order.status === 'delivered' && 'bg-green-500',
-                            (order.status === 'cancelled' || order.status === 'rejected') && 'bg-red-500'
-                          )} />
-
-                          <div className="p-4 space-y-3">
-                            {/* Row 1: Order # + Status + Amount */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className={cn('font-bold text-base', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                                  {order.orderNumber}
-                                </span>
-                                <span className={cn(
-                                  'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium',
-                                  statusConfig.color
-                                )}>
-                                  <StatusIcon className="w-3 h-3" />
-                                  {statusConfig.label}
-                                </span>
+                        return (
+                          <tr
+                            key={order.id}
+                            className={cn(
+                              'transition-colors',
+                              theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'
+                            )}
+                          >
+                            <td className="px-4 py-4">
+                              <div className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                {order.orderNumber}
                               </div>
-                              <div className={cn('font-bold text-lg', theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600')}>
-                                {formatCurrency(order.receiveAmount, order.receiveCurrency)}
-                              </div>
-                            </div>
-
-                            {/* Row 2: Recipient info */}
-                            <div className={cn(
-                              'rounded-lg p-3 space-y-2',
-                              theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
-                            )}>
-                              {/* Name */}
-                              <div className="flex items-center gap-2">
-                                <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                <span className={cn('font-medium text-sm', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                                  {order.recipientName}
-                                </span>
-                              </div>
-
-                              {/* Phone - Clickable */}
-                              <div className="flex items-center gap-2">
-                                <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                <a
-                                  href={`tel:${order.recipientPhone}`}
-                                  className="text-sm text-blue-500 font-medium"
-                                >
-                                  {order.recipientPhone}
-                                </a>
-                              </div>
-
-                              {/* Address */}
-                              <div className="flex items-start gap-2">
-                                <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                                <div className={cn('text-sm', theme === 'dark' ? 'text-gray-300' : 'text-gray-600')}>
-                                  <div className="font-medium">{order.recipientMunicipality}, {order.recipientProvince}</div>
-                                  {order.recipientAddress && (
-                                    <div className="text-xs text-gray-500 mt-0.5">{order.recipientAddress}</div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Row 3: Date */}
-                            <div className="flex items-center justify-between text-xs text-gray-500">
-                              <span>
+                              <div className="text-xs text-gray-500 mt-1">
                                 {new Date(order.createdAt).toLocaleDateString('es-ES', {
                                   day: '2-digit',
                                   month: 'short',
-                                  year: 'numeric'
+                                  hour: '2-digit',
+                                  minute: '2-digit'
                                 })}
+                              </div>
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                {order.recipientName}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">{order.recipientPhone}</div>
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className={cn('text-sm', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                                {order.recipientMunicipality}, {order.recipientProvince}
+                              </div>
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className={cn('font-bold text-lg', theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600')}>
+                                {formatCurrency(order.receiveAmount, order.receiveCurrency)}
+                              </div>
+                            </td>
+                            <td className="px-4 py-4">
+                              <span className={cn(
+                                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium',
+                                statusConfig.bgColor, 'text-white'
+                              )}>
+                                <statusConfig.icon className="w-3 h-3" />
+                                {statusConfig.label}
                               </span>
-                              {order.sellingCompanyName && (
-                                <span className="text-blue-500">{order.sellingCompanyName}</span>
-                              )}
-                            </div>
-
-                            {/* Row 4: Action buttons */}
-                            <div className="flex gap-2 pt-1">
-                              {order.status === 'pending' && (
-                                <>
-                                  <button
-                                    onClick={() => handleAction(order.id, 'accept')}
-                                    className="flex-1 py-3 bg-blue-600 active:bg-blue-700 text-white text-sm font-semibold rounded-xl min-h-[48px] touch-manipulation"
-                                  >
-                                    Aceptar Orden
-                                  </button>
-                                  <button
-                                    onClick={() => openRejectModal(order)}
-                                    className="py-3 px-4 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm font-semibold rounded-xl min-h-[48px] touch-manipulation"
-                                  >
-                                    Rechazar
-                                  </button>
-                                </>
-                              )}
-
-                              {order.status === 'confirmed' && (
-                                <>
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className="flex items-center justify-end gap-2">
+                                {order.status === 'pending' && (
+                                  <>
+                                    <button
+                                      onClick={() => handleAction(order.id, 'accept')}
+                                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg"
+                                    >
+                                      Aceptar
+                                    </button>
+                                    <button
+                                      onClick={() => openRejectModal(order)}
+                                      className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg"
+                                    >
+                                      Rechazar
+                                    </button>
+                                  </>
+                                )}
+                                {order.status === 'confirmed' && (
                                   <button
                                     onClick={() => goToDeliveryWizard(order.id)}
-                                    className="flex-1 py-3 bg-emerald-600 active:bg-emerald-700 text-white text-sm font-semibold rounded-xl min-h-[48px] touch-manipulation flex items-center justify-center gap-2"
+                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg"
                                   >
-                                    <Truck className="w-4 h-4" />
-                                    Iniciar Entrega
+                                    Entregar
                                   </button>
+                                )}
+                                {order.status === 'in_delivery' && (
                                   <button
-                                    onClick={() => openRejectModal(order)}
+                                    onClick={() => goToDeliveryWizard(order.id)}
+                                    className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg"
+                                  >
+                                    Completar
+                                  </button>
+                                )}
+                                {(order.status === 'delivered' || order.status === 'cancelled' || order.status === 'rejected') && (
+                                  <button
+                                    onClick={() => router.push(`/dashboard/broker/orders/${order.id}`)}
                                     className={cn(
-                                      'py-3 px-4 text-sm font-medium rounded-xl min-h-[48px] touch-manipulation',
-                                      theme === 'dark'
-                                        ? 'bg-gray-700 text-gray-300'
-                                        : 'bg-gray-100 text-gray-600'
+                                      'p-2 rounded-lg',
+                                      theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
                                     )}
                                   >
-                                    Cancelar
+                                    <Eye className="w-4 h-4 text-gray-400" />
                                   </button>
-                                </>
-                              )}
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
 
-                              {order.status === 'in_delivery' && (
-                                <button
-                                  onClick={() => goToDeliveryWizard(order.id)}
-                                  className="flex-1 py-3 bg-purple-600 active:bg-purple-700 text-white text-sm font-semibold rounded-xl min-h-[48px] touch-manipulation flex items-center justify-center gap-2"
-                                >
-                                  <CheckCircle className="w-4 h-4" />
-                                  Completar Entrega
-                                </button>
-                              )}
+                {/* Desktop Pagination */}
+                {totalOrders > ORDERS_PER_PAGE && (
+                  <div className={cn(
+                    'p-4 border-t flex items-center justify-between',
+                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                  )}>
+                    <div className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                      {((currentPage - 1) * ORDERS_PER_PAGE) + 1}-{Math.min(currentPage * ORDERS_PER_PAGE, totalOrders)} de {totalOrders}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                        Anterior
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(currentPage + 1)}
+                        disabled={currentPage >= Math.ceil(totalOrders / ORDERS_PER_PAGE)}
+                      >
+                        Siguiente
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
 
-                              {order.status === 'delivered' && (
-                                <button
-                                  onClick={() => router.push(`/dashboard/broker/orders/${order.id}`)}
-                                  className={cn(
-                                    'flex-1 py-3 flex items-center justify-center gap-2 rounded-xl min-h-[48px] touch-manipulation font-medium',
-                                    theme === 'dark'
-                                      ? 'bg-gray-700 text-white'
-                                      : 'bg-gray-100 text-gray-700'
-                                  )}
-                                >
-                                  <Eye className="w-4 h-4" />
-                                  Ver Detalles
-                                </button>
-                              )}
+        {/* Order Detail Bottom Sheet - Mobile */}
+        <AnimatePresence>
+          {selectedOrder && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 z-50 md:hidden"
+              onClick={() => setSelectedOrder(null)}
+            >
+              <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  'absolute bottom-0 left-0 right-0 rounded-t-3xl max-h-[85vh] overflow-y-auto',
+                  theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+                )}
+                style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+              >
+                {/* Handle */}
+                <div className="sticky top-0 flex justify-center pt-3 pb-2 bg-inherit">
+                  <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+                </div>
 
-                              {(order.status === 'cancelled' || order.status === 'rejected') && (
-                                <button
-                                  onClick={() => router.push(`/dashboard/broker/orders/${order.id}`)}
-                                  className={cn(
-                                    'flex-1 py-3 flex items-center justify-center gap-2 rounded-xl min-h-[48px] touch-manipulation font-medium',
-                                    theme === 'dark'
-                                      ? 'bg-gray-700 text-gray-400'
-                                      : 'bg-gray-100 text-gray-500'
-                                  )}
-                                >
-                                  <Eye className="w-4 h-4" />
-                                  Ver Detalles
-                                </button>
-                              )}
-                            </div>
-                          </div>
+                <div className="px-5 pb-6 space-y-5">
+                  {/* Header */}
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className={cn(
+                        'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold mb-2',
+                        STATUSES[selectedOrder.status]?.bgColor || 'bg-gray-500',
+                        'text-white'
+                      )}>
+                        {(() => {
+                          const Icon = STATUSES[selectedOrder.status]?.icon || Clock
+                          return <Icon className="w-3.5 h-3.5" />
+                        })()}
+                        {STATUSES[selectedOrder.status]?.label || 'Pendiente'}
+                      </div>
+                      <p className={cn(
+                        'text-3xl font-bold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        {formatCurrency(selectedOrder.receiveAmount, selectedOrder.receiveCurrency)}
+                      </p>
+                      <p className={cn(
+                        'text-sm mt-1',
+                        theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                      )}>
+                        {selectedOrder.orderNumber}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedOrder(null)}
+                      className={cn(
+                        'p-2 rounded-full',
+                        theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+                      )}
+                    >
+                      <X className="w-5 h-5 text-gray-400" />
+                    </button>
+                  </div>
+
+                  {/* Recipient Card */}
+                  <div className={cn(
+                    'rounded-2xl p-4 space-y-4',
+                    theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
+                  )}>
+                    <h3 className={cn(
+                      'text-xs font-semibold uppercase tracking-wider',
+                      theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                    )}>
+                      Destinatario
+                    </h3>
+
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'w-12 h-12 rounded-full flex items-center justify-center',
+                        theme === 'dark' ? 'bg-gray-700' : 'bg-white'
+                      )}>
+                        <User className="w-6 h-6 text-gray-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={cn(
+                          'font-semibold truncate',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>
+                          {selectedOrder.recipientName}
+                        </p>
+                        <a
+                          href={`tel:${selectedOrder.recipientPhone}`}
+                          className="text-blue-500 font-medium text-sm"
+                        >
+                          {selectedOrder.recipientPhone}
+                        </a>
+                      </div>
+                      <a
+                        href={`tel:${selectedOrder.recipientPhone}`}
+                        className={cn(
+                          'p-3 rounded-full',
+                          theme === 'dark' ? 'bg-blue-600' : 'bg-blue-500'
+                        )}
+                      >
+                        <Phone className="w-5 h-5 text-white" />
+                      </a>
+                    </div>
+
+                    <div className={cn(
+                      'pt-4 border-t space-y-2',
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <div className="flex items-start gap-3">
+                        <MapPin className="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className={cn(
+                            'font-medium',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            {selectedOrder.recipientMunicipality}, {selectedOrder.recipientProvince}
+                          </p>
+                          {selectedOrder.recipientAddress && (
+                            <p className={cn(
+                              'text-sm mt-1',
+                              theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                            )}>
+                              {selectedOrder.recipientAddress}
+                            </p>
+                          )}
+                          {selectedOrder.recipientNeighborhood && (
+                            <p className={cn(
+                              'text-sm',
+                              theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                            )}>
+                              {selectedOrder.recipientNeighborhood}
+                            </p>
+                          )}
                         </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Info Cards */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className={cn(
+                      'rounded-xl p-3',
+                      theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
+                    )}>
+                      <p className={cn(
+                        'text-xs',
+                        theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                      )}>
+                        Fecha
+                      </p>
+                      <p className={cn(
+                        'font-medium mt-0.5',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        {new Date(selectedOrder.createdAt).toLocaleDateString('es-ES', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric'
+                        })}
+                      </p>
+                    </div>
+                    {selectedOrder.sellingCompanyName && (
+                      <div className={cn(
+                        'rounded-xl p-3',
+                        theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
+                      )}>
+                        <p className={cn(
+                          'text-xs',
+                          theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                        )}>
+                          Agencia
+                        </p>
+                        <p className={cn(
+                          'font-medium mt-0.5 truncate',
+                          theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                        )}>
+                          {selectedOrder.sellingCompanyName}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="space-y-3 pt-2">
+                    {selectedOrder.status === 'pending' && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setSelectedOrder(null)
+                            handleAction(selectedOrder.id, 'accept')
+                          }}
+                          className="w-full py-4 bg-blue-600 active:bg-blue-700 text-white font-semibold rounded-2xl flex items-center justify-center gap-2"
+                        >
+                          <CheckCircle className="w-5 h-5" />
+                          Aceptar Orden
+                        </button>
+                        <button
+                          onClick={() => openRejectModal(selectedOrder)}
+                          className={cn(
+                            'w-full py-4 font-medium rounded-2xl flex items-center justify-center gap-2',
+                            theme === 'dark'
+                              ? 'bg-red-900/30 text-red-400'
+                              : 'bg-red-50 text-red-600'
+                          )}
+                        >
+                          <XCircle className="w-5 h-5" />
+                          Rechazar
+                        </button>
+                      </>
+                    )}
+
+                    {selectedOrder.status === 'confirmed' && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setSelectedOrder(null)
+                            goToDeliveryWizard(selectedOrder.id)
+                          }}
+                          className="w-full py-4 bg-emerald-600 active:bg-emerald-700 text-white font-semibold rounded-2xl flex items-center justify-center gap-2"
+                        >
+                          <Navigation className="w-5 h-5" />
+                          Iniciar Entrega
+                        </button>
+                        <button
+                          onClick={() => openRejectModal(selectedOrder)}
+                          className={cn(
+                            'w-full py-4 font-medium rounded-2xl',
+                            theme === 'dark'
+                              ? 'bg-gray-800 text-gray-400'
+                              : 'bg-gray-100 text-gray-600'
+                          )}
+                        >
+                          Cancelar Orden
+                        </button>
+                      </>
+                    )}
+
+                    {selectedOrder.status === 'in_delivery' && (
+                      <button
+                        onClick={() => {
+                          setSelectedOrder(null)
+                          goToDeliveryWizard(selectedOrder.id)
+                        }}
+                        className="w-full py-4 bg-purple-600 active:bg-purple-700 text-white font-semibold rounded-2xl flex items-center justify-center gap-2"
+                      >
+                        <CheckCircle className="w-5 h-5" />
+                        Completar Entrega
+                      </button>
+                    )}
+
+                    {(selectedOrder.status === 'delivered' || selectedOrder.status === 'cancelled' || selectedOrder.status === 'rejected') && (
+                      <button
+                        onClick={() => {
+                          setSelectedOrder(null)
+                          router.push(`/dashboard/broker/orders/${selectedOrder.id}`)
+                        }}
+                        className={cn(
+                          'w-full py-4 font-medium rounded-2xl flex items-center justify-center gap-2',
+                          theme === 'dark'
+                            ? 'bg-gray-800 text-white'
+                            : 'bg-gray-100 text-gray-900'
+                        )}
+                      >
+                        <Eye className="w-5 h-5" />
+                        Ver Detalles Completos
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Success Toast */}
+        <AnimatePresence>
+          {successMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.9 }}
+              className="fixed bottom-6 left-4 right-4 md:left-auto md:right-6 md:w-auto bg-emerald-600 text-white px-5 py-4 rounded-2xl shadow-xl flex items-center gap-3 z-50"
+              style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}
+            >
+              <CheckCircle className="w-5 h-5 flex-shrink-0" />
+              <span className="font-medium">{successMessage}</span>
+              <button onClick={() => setSuccessMessage(null)} className="p-1 ml-2">
+                <X className="w-4 h-4" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Reject Modal */}
+        <AnimatePresence>
+          {rejectModalOpen && rejectingOrder && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 z-50 flex items-end md:items-center md:justify-center"
+              onClick={() => setRejectModalOpen(false)}
+            >
+              <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  'w-full md:max-w-lg md:rounded-2xl rounded-t-3xl max-h-[90vh] overflow-y-auto',
+                  theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+                )}
+                style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+              >
+                {/* Handle - Mobile */}
+                <div className="md:hidden flex justify-center pt-3 pb-2">
+                  <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+                </div>
+
+                <div className="p-5 space-y-5">
+                  {/* Header */}
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-3 rounded-xl',
+                      theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
+                    )}>
+                      <AlertTriangle className="w-6 h-6 text-red-500" />
+                    </div>
+                    <div>
+                      <h3 className={cn(
+                        'text-lg font-semibold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        Rechazar Orden
+                      </h3>
+                      <p className={cn(
+                        'text-sm',
+                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                      )}>
+                        {rejectingOrder.orderNumber}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Reasons */}
+                  <div className="space-y-2">
+                    {REJECTION_REASONS.map((reason) => {
+                      const Icon = reason.icon
+                      return (
+                        <button
+                          key={reason.value}
+                          onClick={() => setSelectedReason(reason.value)}
+                          className={cn(
+                            'w-full flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left',
+                            selectedReason === reason.value
+                              ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                              : theme === 'dark'
+                                ? 'border-gray-700 active:border-gray-600'
+                                : 'border-gray-200 active:border-gray-300'
+                          )}
+                        >
+                          <Icon className={cn(
+                            'w-5 h-5 flex-shrink-0',
+                            selectedReason === reason.value ? 'text-red-500' : 'text-gray-400'
+                          )} />
+                          <div className="min-w-0">
+                            <p className={cn(
+                              'font-medium',
+                              selectedReason === reason.value
+                                ? 'text-red-600 dark:text-red-400'
+                                : theme === 'dark' ? 'text-white' : 'text-gray-900'
+                            )}>
+                              {reason.label}
+                            </p>
+                          </div>
+                        </button>
                       )
                     })}
                   </div>
 
-                  {/* Desktop Table View */}
-                  <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full">
-                      <thead className={cn(
-                        'border-b',
-                        theme === 'dark' ? 'bg-gray-900/50 border-gray-700' : 'bg-gray-50 border-gray-200'
-                      )}>
-                        <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Orden
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Destinatario
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Ubicacion
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Monto
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Estado
-                          </th>
-                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Accion
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className={cn('divide-y', theme === 'dark' ? 'divide-gray-700' : 'divide-gray-200')}>
-                        {filteredOrders.map((order) => {
-                          const statusConfig = STATUSES[order.status] || STATUSES.pending
-                          const StatusIcon = statusConfig.icon
-
-                          return (
-                            <motion.tr
-                              key={order.id}
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              className={cn(
-                                'transition-colors',
-                                theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'
-                              )}
-                            >
-                              {/* Orden */}
-                              <td className="px-4 py-4">
-                                <div className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                                  {order.orderNumber}
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                  {new Date(order.createdAt).toLocaleDateString('es-ES', {
-                                    day: '2-digit',
-                                    month: 'short',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })}
-                                </div>
-                                {order.sellingCompanyName && (
-                                  <div className="text-xs text-blue-500 mt-1">
-                                    {order.sellingCompanyName}
-                                  </div>
-                                )}
-                              </td>
-
-                              {/* Destinatario */}
-                              <td className="px-4 py-4">
-                                <div className="flex items-center gap-2">
-                                  <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                  <div>
-                                    <div className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                                      {order.recipientName}
-                                    </div>
-                                    <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
-                                      <Phone className="w-3 h-3" />
-                                      {order.recipientPhone}
-                                    </div>
-                                  </div>
-                                </div>
-                              </td>
-
-                              {/* Ubicacion */}
-                              <td className="px-4 py-4">
-                                <div className="flex items-start gap-2">
-                                  <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                                  <div className="max-w-xs">
-                                    <div className={cn('text-sm', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                                      {order.recipientMunicipality}, {order.recipientProvince}
-                                    </div>
-                                    {order.recipientAddress && (
-                                      <div className="text-xs text-gray-500 mt-0.5 truncate">
-                                        {order.recipientAddress}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </td>
-
-                              {/* Monto */}
-                              <td className="px-4 py-4">
-                                <div className={cn('font-bold text-lg', theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600')}>
-                                  {formatCurrency(order.receiveAmount, order.receiveCurrency)}
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                  {order.estimatedDelivery}
-                                </div>
-                              </td>
-
-                              {/* Estado */}
-                              <td className="px-4 py-4">
-                                <span className={cn(
-                                  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium',
-                                  statusConfig.color
-                                )}>
-                                  <StatusIcon className="w-3 h-3" />
-                                  {statusConfig.label}
-                                </span>
-                              </td>
-
-                              {/* Accion */}
-                              <td className="px-4 py-4">
-                                <div className="flex items-center justify-end gap-2">
-                                  {order.status === 'pending' && (
-                                    <>
-                                      <button
-                                        onClick={() => handleAction(order.id, 'accept')}
-                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-                                      >
-                                        Aceptar
-                                      </button>
-                                      <button
-                                        onClick={() => openRejectModal(order)}
-                                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
-                                      >
-                                        Rechazar
-                                      </button>
-                                    </>
-                                  )}
-
-                                  {order.status === 'confirmed' && (
-                                    <>
-                                      <button
-                                        onClick={() => goToDeliveryWizard(order.id)}
-                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors"
-                                      >
-                                        Entregar
-                                      </button>
-                                      <button
-                                        onClick={() => openRejectModal(order)}
-                                        className={cn(
-                                          'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors',
-                                          theme === 'dark'
-                                            ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                                            : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                                        )}
-                                      >
-                                        Rechazar
-                                      </button>
-                                    </>
-                                  )}
-
-                                  {order.status === 'in_delivery' && (
-                                    <button
-                                      onClick={() => goToDeliveryWizard(order.id)}
-                                      className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors"
-                                    >
-                                      Completar Entrega
-                                    </button>
-                                  )}
-
-                                  {order.status === 'delivered' && (
-                                    <button
-                                      onClick={() => router.push(`/dashboard/broker/orders/${order.id}`)}
-                                      className={cn(
-                                        'p-2 rounded-lg transition-colors',
-                                        theme === 'dark'
-                                          ? 'text-gray-400 hover:bg-gray-700'
-                                          : 'text-gray-600 hover:bg-gray-100'
-                                      )}
-                                      title="Ver detalles"
-                                    >
-                                      <Eye className="w-4 h-4" />
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-                            </motion.tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-
-              {/* Pagination */}
-              {totalOrders > ORDERS_PER_PAGE && (
-                <div className={cn(
-                  'p-3 sm:p-4 border-t flex flex-col sm:flex-row items-center justify-between gap-3',
-                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                )}>
-                  <div className={cn('text-xs sm:text-sm text-center sm:text-left', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                    {((currentPage - 1) * ORDERS_PER_PAGE) + 1}-{Math.min(currentPage * ORDERS_PER_PAGE, totalOrders)} de {totalOrders}
-                  </div>
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(currentPage - 1)}
-                      disabled={currentPage === 1}
-                      className="flex-1 sm:flex-none min-h-[44px] sm:min-h-0"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                      <span className="hidden sm:inline">Anterior</span>
-                    </Button>
-                    <span className={cn(
-                      'px-3 py-1.5 rounded-lg text-sm font-medium',
-                      theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-900'
-                    )}>
-                      {currentPage}/{Math.ceil(totalOrders / ORDERS_PER_PAGE)}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(currentPage + 1)}
-                      disabled={currentPage >= Math.ceil(totalOrders / ORDERS_PER_PAGE)}
-                      className="flex-1 sm:flex-none min-h-[44px] sm:min-h-0"
-                    >
-                      <span className="hidden sm:inline">Siguiente</span>
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-          </div>
-
-          {/* Success Message */}
-          <AnimatePresence>
-            {successMessage && (
-              <motion.div
-                initial={{ opacity: 0, y: 50 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 50 }}
-                className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:bottom-6 bg-emerald-600 text-white px-4 sm:px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 z-50"
-                style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
-              >
-                <CheckCircle className="w-5 h-5 flex-shrink-0" />
-                <span className="flex-1 text-sm sm:text-base">{successMessage}</span>
-                <button
-                  onClick={() => setSuccessMessage(null)}
-                  className="p-1 hover:bg-white/20 rounded-full transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Reject Modal - Bottom sheet on mobile */}
-          <AnimatePresence>
-            {rejectModalOpen && rejectingOrder && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 z-50 md:flex md:items-center md:justify-center md:p-4"
-                onClick={() => setRejectModalOpen(false)}
-              >
-                <motion.div
-                  initial={{ y: '100%', opacity: 1 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: '100%', opacity: 1 }}
-                  transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                  onClick={(e) => e.stopPropagation()}
-                  className={cn(
-                    'absolute bottom-0 left-0 right-0 md:relative md:bottom-auto rounded-t-3xl md:rounded-xl shadow-xl md:max-w-lg w-full max-h-[90vh] overflow-y-auto',
-                    theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-                  )}
-                  style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-                >
-                  {/* Handle bar - mobile only */}
-                  <div className="md:hidden flex justify-center pt-3 pb-1">
-                    <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
-                  </div>
-                  {/* Modal Header */}
-                  <div className={cn(
-                    'p-4 md:p-6 border-b',
-                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                  )}>
-                    <div className="flex items-center gap-2 md:gap-3">
-                      <div className={cn(
-                        'p-2 rounded-lg flex-shrink-0',
-                        theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
-                      )}>
-                        <AlertTriangle className={cn(
-                          'w-5 h-5 md:w-6 md:h-6',
-                          theme === 'dark' ? 'text-red-400' : 'text-red-600'
-                        )} />
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className={cn(
-                          'text-base md:text-lg font-semibold',
-                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                        )}>
-                          Rechazar Orden
-                        </h3>
-                        <p className={cn(
-                          'text-xs md:text-sm truncate',
-                          theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                        )}>
-                          {rejectingOrder.orderNumber} - {rejectingOrder.recipientName}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Modal Body */}
-                  <div className="p-4 md:p-6 space-y-3 md:space-y-4">
-                    <p className={cn(
-                      'text-xs md:text-sm',
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-                    )}>
-                      Seleccione el motivo del rechazo. Los fondos reservados seran liberados automaticamente.
-                    </p>
-
-                    {/* Rejection Reasons */}
-                    <div className="space-y-1.5 md:space-y-2">
-                      {REJECTION_REASONS.map((reason) => {
-                        const Icon = reason.icon
-                        return (
-                          <button
-                            key={reason.value}
-                            onClick={() => setSelectedReason(reason.value)}
-                            className={cn(
-                              'w-full flex items-start gap-2 md:gap-3 p-2.5 md:p-3 rounded-lg border-2 transition-colors text-left touch-manipulation',
-                              selectedReason === reason.value
-                                ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                                : theme === 'dark'
-                                  ? 'border-gray-700 active:border-gray-600'
-                                  : 'border-gray-200 active:border-gray-300'
-                            )}
-                          >
-                            <Icon className={cn(
-                              'w-4 h-4 md:w-5 md:h-5 mt-0.5 flex-shrink-0',
-                              selectedReason === reason.value
-                                ? 'text-red-500'
-                                : 'text-gray-400'
-                            )} />
-                            <div className="min-w-0">
-                              <p className={cn(
-                                'font-medium text-sm md:text-base',
-                                selectedReason === reason.value
-                                  ? theme === 'dark' ? 'text-red-300' : 'text-red-700'
-                                  : theme === 'dark' ? 'text-white' : 'text-gray-900'
-                              )}>
-                                {reason.label}
-                              </p>
-                              <p className={cn(
-                                'text-xs md:text-sm truncate',
-                                theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                              )}>
-                                {reason.description}
-                              </p>
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-
-                    {/* Notes */}
+                  {/* Notes */}
+                  {selectedReason === 'other' && (
                     <div>
-                      <label className={cn(
-                        'block text-xs md:text-sm font-medium mb-1',
-                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                      )}>
-                        Notas adicionales {selectedReason === 'other' && <span className="text-red-500">*</span>}
-                      </label>
                       <textarea
                         value={rejectNotes}
                         onChange={(e) => setRejectNotes(e.target.value)}
-                        rows={2}
-                        placeholder={selectedReason === 'other' ? 'Especifique el motivo...' : 'Opcional...'}
+                        rows={3}
+                        placeholder="Especifique el motivo..."
                         className={cn(
-                          'w-full px-3 py-2.5 md:py-2 rounded-lg border focus:ring-2 focus:ring-red-500 text-base',
+                          'w-full px-4 py-3 rounded-xl border text-base',
+                          'focus:outline-none focus:ring-2 focus:ring-red-500',
                           theme === 'dark'
-                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
-                            : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                            ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500'
+                            : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400'
                         )}
                       />
                     </div>
-                  </div>
+                  )}
 
-                  {/* Modal Footer */}
-                  <div className={cn(
-                    'p-4 md:p-6 border-t flex gap-3',
-                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                  )}>
+                  {/* Actions */}
+                  <div className="flex gap-3 pt-2">
                     <button
                       onClick={() => setRejectModalOpen(false)}
                       className={cn(
-                        'flex-1 md:flex-none px-4 py-3 md:py-2 rounded-xl transition-colors font-medium min-h-[48px] touch-manipulation',
+                        'flex-1 py-4 rounded-xl font-medium',
                         theme === 'dark'
-                          ? 'text-gray-300 hover:bg-gray-700 bg-gray-700/50'
-                          : 'text-gray-700 hover:bg-gray-100 bg-gray-100'
+                          ? 'bg-gray-800 text-gray-300'
+                          : 'bg-gray-100 text-gray-700'
                       )}
                     >
                       Cancelar
@@ -984,26 +1275,23 @@ export default function BrokerOrdersPage() {
                     <button
                       onClick={handleReject}
                       disabled={!selectedReason || rejectLoading}
-                      className="flex-1 md:flex-none px-4 py-3 md:py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium min-h-[48px] touch-manipulation"
+                      className="flex-1 py-4 bg-red-600 text-white rounded-xl font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {rejectLoading ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span className="hidden md:inline">Procesando...</span>
-                        </>
+                        <RefreshCw className="w-5 h-5 animate-spin" />
                       ) : (
                         <>
-                          <X className="w-4 h-4" />
-                          <span>Confirmar</span>
+                          <XCircle className="w-5 h-5" />
+                          Confirmar
                         </>
                       )}
                     </button>
                   </div>
-                </motion.div>
+                </div>
               </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </DashboardLayout>
     </ProtectedRoute>
   )
