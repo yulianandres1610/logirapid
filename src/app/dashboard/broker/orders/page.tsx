@@ -253,7 +253,7 @@ export default function BrokerOrdersPage() {
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
+        <div className="space-y-4 sm:space-y-6 min-h-full">
           {/* Stats */}
           <div className="grid grid-cols-3 gap-2 sm:gap-4">
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-2.5 sm:p-4">
