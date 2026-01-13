@@ -28,13 +28,14 @@ import {
   X,
   Navigation,
   Calendar,
-  Loader2
+  Loader2,
+  ChevronDown,
+  Building2
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
-import { Button } from '@/components/ui/button'
 
 const REJECTION_REASONS = [
   { value: 'insufficient_funds', label: 'Sin fondos suficientes', icon: Banknote },
@@ -72,13 +73,13 @@ interface Stats {
   pendingAmount: number
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: any }> = {
-  pending: { label: 'Pendiente', color: 'text-yellow-600 dark:text-yellow-400', bgColor: 'bg-yellow-100 dark:bg-yellow-900/30', icon: Clock },
-  confirmed: { label: 'Confirmada', color: 'text-blue-600 dark:text-blue-400', bgColor: 'bg-blue-100 dark:bg-blue-900/30', icon: CheckCircle },
-  in_delivery: { label: 'En Entrega', color: 'text-purple-600 dark:text-purple-400', bgColor: 'bg-purple-100 dark:bg-purple-900/30', icon: Truck },
-  delivered: { label: 'Entregada', color: 'text-green-600 dark:text-green-400', bgColor: 'bg-green-100 dark:bg-green-900/30', icon: CheckCircle },
-  cancelled: { label: 'Cancelada', color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-100 dark:bg-red-900/30', icon: XCircle },
-  rejected: { label: 'Rechazada', color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-100 dark:bg-red-900/30', icon: XCircle }
+const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: any; gradient: string }> = {
+  pending: { label: 'Pendiente', color: 'text-amber-600 dark:text-amber-400', bgColor: 'bg-amber-100 dark:bg-amber-900/30', icon: Clock, gradient: 'from-amber-500 to-orange-500' },
+  confirmed: { label: 'Confirmada', color: 'text-blue-600 dark:text-blue-400', bgColor: 'bg-blue-100 dark:bg-blue-900/30', icon: CheckCircle, gradient: 'from-blue-500 to-cyan-500' },
+  in_delivery: { label: 'En Entrega', color: 'text-purple-600 dark:text-purple-400', bgColor: 'bg-purple-100 dark:bg-purple-900/30', icon: Truck, gradient: 'from-purple-500 to-pink-500' },
+  delivered: { label: 'Entregada', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'bg-emerald-100 dark:bg-emerald-900/30', icon: CheckCircle, gradient: 'from-emerald-500 to-teal-500' },
+  cancelled: { label: 'Cancelada', color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-100 dark:bg-red-900/30', icon: XCircle, gradient: 'from-red-500 to-rose-500' },
+  rejected: { label: 'Rechazada', color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-100 dark:bg-red-900/30', icon: XCircle, gradient: 'from-red-500 to-rose-500' }
 }
 
 export default function BrokerOrdersPage() {
@@ -243,248 +244,229 @@ export default function BrokerOrdersPage() {
   const completedOrders = filteredOrders.filter(o => ['delivered', 'cancelled', 'rejected'].includes(o.status))
 
   const statusTabs = [
-    { value: '', label: 'Todas' },
-    { value: 'pending', label: 'Pendientes' },
-    { value: 'confirmed', label: 'Confirmadas' },
-    { value: 'in_delivery', label: 'En Entrega' },
-    { value: 'delivered', label: 'Completadas' }
+    { value: '', label: 'Todas', count: filteredOrders.length },
+    { value: 'pending', label: 'Nuevas', count: stats?.pendingCount || 0 },
+    { value: 'confirmed', label: 'Listas', count: stats?.confirmedCount || 0 },
+    { value: 'in_delivery', label: 'En Entrega', count: stats?.inDeliveryCount || 0 },
+    { value: 'delivered', label: 'Completadas', count: stats?.deliveredCount || 0 }
   ]
 
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="space-y-4 sm:space-y-6 min-h-full">
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-4">
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-2.5 sm:p-4">
-              <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3">
-                <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-amber-500">
-                  <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+        <div className="min-h-full">
+          {/* Mobile Header with Stats */}
+          <div className={cn(
+            "sticky top-0 z-10 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-2 pb-3",
+            theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+          )}>
+            {/* Stats Row */}
+            <div className="flex gap-2 mb-3">
+              <div className={cn(
+                "flex-1 p-3 rounded-xl",
+                theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-50 border border-amber-200'
+              )}>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-amber-500" />
+                  <span className="text-lg font-bold text-amber-600 dark:text-amber-400">{stats?.pendingCount || 0}</span>
                 </div>
-                <div className="text-center sm:text-left">
-                  <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{stats?.pendingCount || 0}</p>
-                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Pendientes</p>
+                <p className="text-[10px] text-amber-600/70 dark:text-amber-400/70 mt-0.5">Pendientes</p>
+              </div>
+              <div className={cn(
+                "flex-1 p-3 rounded-xl",
+                theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-50 border border-blue-200'
+              )}>
+                <div className="flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-blue-500" />
+                  <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{(stats?.confirmedCount || 0) + (stats?.inDeliveryCount || 0)}</span>
                 </div>
+                <p className="text-[10px] text-blue-600/70 dark:text-blue-400/70 mt-0.5">En Proceso</p>
+              </div>
+              <div className={cn(
+                "flex-1 p-3 rounded-xl",
+                theme === 'dark' ? 'bg-emerald-900/30' : 'bg-emerald-50 border border-emerald-200'
+              )}>
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-emerald-500" />
+                  <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">${(stats?.pendingAmount || 0).toLocaleString()}</span>
+                </div>
+                <p className="text-[10px] text-emerald-600/70 dark:text-emerald-400/70 mt-0.5">Por Entregar</p>
               </div>
             </div>
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-2.5 sm:p-4">
-              <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3">
-                <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-blue-500">
-                  <Truck className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-                </div>
-                <div className="text-center sm:text-left">
-                  <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{(stats?.confirmedCount || 0) + (stats?.inDeliveryCount || 0)}</p>
-                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">En Proceso</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-2.5 sm:p-4">
-              <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3">
-                <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-emerald-500">
-                  <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-                </div>
-                <div className="text-center sm:text-left">
-                  <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">${(stats?.pendingAmount || 0).toLocaleString()}</p>
-                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Por Entregar</p>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Search and Filters */}
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 sm:p-4 space-y-3">
+            {/* Search */}
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Buscar orden..."
+                  placeholder="Buscar orden, nombre o telefono..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={cn(
+                    "w-full h-10 pl-10 pr-4 rounded-xl border text-sm",
+                    theme === 'dark'
+                      ? 'bg-gray-800 border-gray-700 text-white placeholder:text-gray-500'
+                      : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-400',
+                    'focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                  )}
                 />
               </div>
               <button
                 onClick={fetchOrders}
                 disabled={loading}
-                className="h-10 px-4 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                className={cn(
+                  "h-10 w-10 rounded-xl flex items-center justify-center",
+                  theme === 'dark' ? 'bg-gray-800 text-gray-300' : 'bg-white border border-gray-200 text-gray-600'
+                )}
               >
                 <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
-                <span className="hidden sm:inline">Actualizar</span>
               </button>
             </div>
 
-            {/* Status Tabs */}
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {/* Status Tabs - Horizontal scroll */}
+            <div className="flex gap-1.5 mt-3 overflow-x-auto pb-1 -mx-3 px-3 scrollbar-hide">
               {statusTabs.map(tab => (
                 <button
                   key={tab.value}
                   onClick={() => setSelectedStatus(tab.value)}
                   className={cn(
-                    'px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors',
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all',
                     selectedStatus === tab.value
                       ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      : theme === 'dark'
+                        ? 'bg-gray-800 text-gray-400'
+                        : 'bg-white border border-gray-200 text-gray-600'
                   )}
                 >
                   {tab.label}
+                  {tab.count > 0 && (
+                    <span className={cn(
+                      "px-1.5 py-0.5 rounded-full text-[10px] font-bold",
+                      selectedStatus === tab.value
+                        ? 'bg-white/20 text-white'
+                        : theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                    )}>
+                      {tab.count}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
           </div>
 
           {/* Orders List */}
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-            </div>
-          ) : filteredOrders.length === 0 ? (
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-12 text-center">
-              <Package className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-              <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">
-                No hay ordenes
-              </h3>
-              <p className="text-gray-500 dark:text-gray-400">
-                {selectedStatus ? 'No hay ordenes con este estado' : 'Las ordenes apareceran aqui cuando sean asignadas'}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Pending Orders */}
-              {pendingOrders.length > 0 && !selectedStatus && (
-                <div>
-                  <h2 className="text-base sm:text-lg font-semibold mb-2 sm:mb-3 text-gray-900 dark:text-white flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                    Nuevas Ordenes ({pendingOrders.length})
-                  </h2>
-                  <div className="space-y-2 sm:space-y-3">
-                    {pendingOrders.map((order, index) => (
-                      <OrderCard
-                        key={order.id}
-                        order={order}
-                        index={index}
-                        theme={theme}
-                        formatCurrency={formatCurrency}
-                        onAccept={() => handleAction(order.id, 'accept')}
-                        onReject={() => openRejectModal(order)}
-                        onDetails={() => setSelectedOrder(order)}
-                      />
-                    ))}
+          <div className="py-3">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-3" />
+                <p className="text-sm text-gray-500">Cargando ordenes...</p>
+              </div>
+            ) : filteredOrders.length === 0 ? (
+              <div className={cn(
+                "rounded-2xl p-8 text-center",
+                theme === 'dark' ? 'bg-gray-800' : 'bg-white border border-gray-200'
+              )}>
+                <div className={cn(
+                  "w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4",
+                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                )}>
+                  <Package className="h-8 w-8 text-gray-400" />
+                </div>
+                <h3 className={cn(
+                  "text-lg font-semibold mb-2",
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                )}>
+                  No hay ordenes
+                </h3>
+                <p className="text-sm text-gray-500">
+                  {selectedStatus ? 'No hay ordenes con este estado' : 'Las ordenes apareceran aqui cuando sean asignadas'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Section Headers only when not filtering */}
+                {!selectedStatus && pendingOrders.length > 0 && (
+                  <div className="flex items-center gap-2 px-1">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    <span className={cn(
+                      "text-sm font-semibold",
+                      theme === 'dark' ? 'text-amber-400' : 'text-amber-600'
+                    )}>
+                      Nuevas Ordenes ({pendingOrders.length})
+                    </span>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Confirmed Orders */}
-              {confirmedOrders.length > 0 && !selectedStatus && (
-                <div>
-                  <h2 className="text-base sm:text-lg font-semibold mb-2 sm:mb-3 text-gray-900 dark:text-white flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                    Listas para Entregar ({confirmedOrders.length})
-                  </h2>
-                  <div className="space-y-2 sm:space-y-3">
-                    {confirmedOrders.map((order, index) => (
-                      <OrderCard
-                        key={order.id}
-                        order={order}
-                        index={index}
-                        theme={theme}
-                        formatCurrency={formatCurrency}
-                        onDeliver={() => goToDeliveryWizard(order.id)}
-                        onReject={() => openRejectModal(order)}
-                        onDetails={() => setSelectedOrder(order)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
+                {/* Orders */}
+                {(selectedStatus ? filteredOrders : [...pendingOrders, ...confirmedOrders, ...inDeliveryOrders]).map((order, index) => {
+                  // Section dividers
+                  const showConfirmedHeader = !selectedStatus && index === pendingOrders.length && confirmedOrders.length > 0
+                  const showInDeliveryHeader = !selectedStatus && index === pendingOrders.length + confirmedOrders.length && inDeliveryOrders.length > 0
 
-              {/* In Delivery Orders */}
-              {inDeliveryOrders.length > 0 && !selectedStatus && (
-                <div>
-                  <h2 className="text-base sm:text-lg font-semibold mb-2 sm:mb-3 text-gray-900 dark:text-white flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                    En Entrega ({inDeliveryOrders.length})
-                  </h2>
-                  <div className="space-y-2 sm:space-y-3">
-                    {inDeliveryOrders.map((order, index) => (
-                      <OrderCard
-                        key={order.id}
-                        order={order}
-                        index={index}
-                        theme={theme}
-                        formatCurrency={formatCurrency}
-                        onComplete={() => goToDeliveryWizard(order.id)}
-                        onDetails={() => setSelectedOrder(order)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Filtered Results (when status is selected) */}
-              {selectedStatus && (
-                <div className="space-y-2 sm:space-y-3">
-                  {filteredOrders.map((order, index) => (
-                    <OrderCard
-                      key={order.id}
-                      order={order}
-                      index={index}
-                      theme={theme}
-                      formatCurrency={formatCurrency}
-                      onAccept={order.status === 'pending' ? () => handleAction(order.id, 'accept') : undefined}
-                      onReject={['pending', 'confirmed'].includes(order.status) ? () => openRejectModal(order) : undefined}
-                      onDeliver={order.status === 'confirmed' ? () => goToDeliveryWizard(order.id) : undefined}
-                      onComplete={order.status === 'in_delivery' ? () => goToDeliveryWizard(order.id) : undefined}
-                      onDetails={() => setSelectedOrder(order)}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {/* Completed Orders */}
-              {completedOrders.length > 0 && !selectedStatus && (
-                <div className="mt-8">
-                  <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
-                    Completadas Recientemente
-                  </h2>
-                  <div className="space-y-3">
-                    {completedOrders.slice(0, 5).map((order) => {
-                      const statusConfig = STATUS_CONFIG[order.status]
-                      const StatusIcon = statusConfig?.icon || CheckCircle
-
-                      return (
-                        <div
-                          key={order.id}
-                          onClick={() => setSelectedOrder(order)}
-                          className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 opacity-70 cursor-pointer hover:opacity-100 transition-opacity"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="flex items-center gap-3 mb-1">
-                                <span className="font-semibold text-gray-900 dark:text-white">
-                                  {order.orderNumber}
-                                </span>
-                                <span className={cn(
-                                  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium',
-                                  statusConfig?.bgColor, statusConfig?.color
-                                )}>
-                                  <StatusIcon className="h-3 w-3" />
-                                  {statusConfig?.label}
-                                </span>
-                              </div>
-                              <p className="text-sm text-gray-500 dark:text-gray-400">
-                                {formatCurrency(order.receiveAmount, order.receiveCurrency)} • {order.recipientName}
-                              </p>
-                            </div>
-                          </div>
+                  return (
+                    <div key={order.id}>
+                      {showConfirmedHeader && (
+                        <div className="flex items-center gap-2 px-1 mt-6 mb-3">
+                          <span className="w-2 h-2 rounded-full bg-blue-500" />
+                          <span className={cn(
+                            "text-sm font-semibold",
+                            theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                          )}>
+                            Listas para Entregar ({confirmedOrders.length})
+                          </span>
                         </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+                      )}
+                      {showInDeliveryHeader && (
+                        <div className="flex items-center gap-2 px-1 mt-6 mb-3">
+                          <span className="w-2 h-2 rounded-full bg-purple-500" />
+                          <span className={cn(
+                            "text-sm font-semibold",
+                            theme === 'dark' ? 'text-purple-400' : 'text-purple-600'
+                          )}>
+                            En Entrega ({inDeliveryOrders.length})
+                          </span>
+                        </div>
+                      )}
+
+                      <MobileOrderCard
+                        order={order}
+                        theme={theme}
+                        formatCurrency={formatCurrency}
+                        onAccept={order.status === 'pending' ? () => handleAction(order.id, 'accept') : undefined}
+                        onReject={['pending', 'confirmed'].includes(order.status) ? () => openRejectModal(order) : undefined}
+                        onDeliver={order.status === 'confirmed' ? () => goToDeliveryWizard(order.id) : undefined}
+                        onComplete={order.status === 'in_delivery' ? () => goToDeliveryWizard(order.id) : undefined}
+                        onDetails={() => setSelectedOrder(order)}
+                      />
+                    </div>
+                  )
+                })}
+
+                {/* Completed Orders */}
+                {!selectedStatus && completedOrders.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-2 px-1 mt-6 mb-3">
+                      <span className="w-2 h-2 rounded-full bg-gray-400" />
+                      <span className="text-sm font-semibold text-gray-500">
+                        Completadas Recientemente
+                      </span>
+                    </div>
+                    {completedOrders.slice(0, 5).map((order) => (
+                      <MobileOrderCard
+                        key={order.id}
+                        order={order}
+                        theme={theme}
+                        formatCurrency={formatCurrency}
+                        onDetails={() => setSelectedOrder(order)}
+                        isCompleted
+                      />
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Pagination */}
           {totalOrders > ORDERS_PER_PAGE && !loading && (
@@ -492,17 +474,23 @@ export default function BrokerOrdersPage() {
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="p-3 rounded-lg bg-gray-100 dark:bg-gray-800 disabled:opacity-30"
+                className={cn(
+                  "p-3 rounded-xl disabled:opacity-30",
+                  theme === 'dark' ? 'bg-gray-800' : 'bg-white border border-gray-200'
+                )}
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
-              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <span className="text-sm font-medium text-gray-500">
                 {currentPage} / {Math.ceil(totalOrders / ORDERS_PER_PAGE)}
               </span>
               <button
                 onClick={() => setCurrentPage(p => Math.min(Math.ceil(totalOrders / ORDERS_PER_PAGE), p + 1))}
                 disabled={currentPage >= Math.ceil(totalOrders / ORDERS_PER_PAGE)}
-                className="p-3 rounded-lg bg-gray-100 dark:bg-gray-800 disabled:opacity-30"
+                className={cn(
+                  "p-3 rounded-xl disabled:opacity-30",
+                  theme === 'dark' ? 'bg-gray-800' : 'bg-white border border-gray-200'
+                )}
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
@@ -510,98 +498,146 @@ export default function BrokerOrdersPage() {
           )}
         </div>
 
-        {/* Order Detail Modal */}
+        {/* Order Detail Bottom Sheet */}
         <AnimatePresence>
           {selectedOrder && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 sm:flex sm:items-center sm:justify-center sm:p-4 bg-black/50 backdrop-blur-sm"
+              className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
               onClick={(e) => e.target === e.currentTarget && setSelectedOrder(null)}
             >
               <motion.div
-                initial={{ y: '100%', opacity: 1 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: '100%', opacity: 1 }}
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="absolute bottom-0 left-0 right-0 sm:relative sm:bottom-auto bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto"
+                className={cn(
+                  "absolute bottom-0 left-0 right-0 rounded-t-3xl shadow-2xl max-h-[90vh] overflow-y-auto",
+                  theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+                )}
                 style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
               >
-                {/* Handle bar - mobile only */}
-                <div className="sm:hidden flex justify-center pt-3 pb-1">
-                  <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
+                {/* Handle */}
+                <div className="flex justify-center pt-3 pb-2">
+                  <div className={cn(
+                    "w-10 h-1 rounded-full",
+                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-300'
+                  )} />
                 </div>
 
-                {/* Modal Header */}
-                <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold text-lg text-gray-900 dark:text-white">
-                        {selectedOrder.orderNumber}
-                      </span>
-                      <span className={cn(
-                        'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
-                        STATUS_CONFIG[selectedOrder.status]?.bgColor,
-                        STATUS_CONFIG[selectedOrder.status]?.color
-                      )}>
-                        {STATUS_CONFIG[selectedOrder.status]?.label}
-                      </span>
-                    </div>
-                    <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                      {formatCurrency(selectedOrder.receiveAmount, selectedOrder.receiveCurrency)}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setSelectedOrder(null)}
-                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    <X className="w-5 h-5 text-gray-500" />
-                  </button>
-                </div>
-
-                {/* Modal Content */}
-                <div className="p-4 sm:p-5 space-y-4">
-                  {/* Recipient Info */}
-                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 space-y-3">
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                      Destinatario
-                    </h4>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
-                        <User className="w-5 h-5 text-gray-500" />
+                {/* Header */}
+                <div className={cn(
+                  "px-4 pb-4 border-b",
+                  theme === 'dark' ? 'border-gray-800' : 'border-gray-100'
+                )}>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={cn(
+                          "font-bold text-lg",
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>
+                          {selectedOrder.orderNumber}
+                        </span>
+                        <span className={cn(
+                          'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
+                          STATUS_CONFIG[selectedOrder.status]?.bgColor,
+                          STATUS_CONFIG[selectedOrder.status]?.color
+                        )}>
+                          {STATUS_CONFIG[selectedOrder.status]?.label}
+                        </span>
                       </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-gray-900 dark:text-white">{selectedOrder.recipientName}</p>
-                        <a href={`tel:${selectedOrder.recipientPhone}`} className="text-blue-500 text-sm">
+                      <p className="text-2xl font-bold text-emerald-500">
+                        {formatCurrency(selectedOrder.receiveAmount, selectedOrder.receiveCurrency)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedOrder(null)}
+                      className={cn(
+                        "p-2 rounded-xl",
+                        theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
+                      )}
+                    >
+                      <X className="w-5 h-5 text-gray-500" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="p-4 space-y-4">
+                  {/* Recipient */}
+                  <div className={cn(
+                    "rounded-2xl p-4",
+                    theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
+                  )}>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">
+                      Destinatario
+                    </p>
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className={cn(
+                        "w-12 h-12 rounded-xl flex items-center justify-center",
+                        theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                      )}>
+                        <User className="w-6 h-6 text-gray-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={cn(
+                          "font-semibold text-base truncate",
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>
+                          {selectedOrder.recipientName}
+                        </p>
+                        <a href={`tel:${selectedOrder.recipientPhone}`} className="text-blue-500 text-sm font-medium">
                           {selectedOrder.recipientPhone}
                         </a>
                       </div>
                       <a
                         href={`tel:${selectedOrder.recipientPhone}`}
-                        className="p-2.5 rounded-full bg-blue-500 text-white"
+                        className="p-3 rounded-xl bg-blue-500 text-white"
                       >
                         <Phone className="w-5 h-5" />
                       </a>
                     </div>
-                    <div className="flex items-start gap-2 pt-2 border-t border-gray-200 dark:border-gray-600">
-                      <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-white">
-                          {selectedOrder.recipientMunicipality}, {selectedOrder.recipientProvince}
-                        </p>
-                        {selectedOrder.recipientAddress && (
-                          <p className="text-sm text-gray-500 dark:text-gray-400">{selectedOrder.recipientAddress}</p>
-                        )}
+
+                    <div className={cn(
+                      "pt-3 border-t",
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <div className="flex items-start gap-2">
+                        <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className={cn(
+                            "font-medium",
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            {selectedOrder.recipientMunicipality}, {selectedOrder.recipientProvince}
+                          </p>
+                          {selectedOrder.recipientAddress && (
+                            <p className="text-sm text-gray-500 mt-0.5">
+                              {selectedOrder.recipientAddress}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Date and Company */}
+                  {/* Info Grid */}
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Fecha</p>
-                      <p className="font-medium text-gray-900 dark:text-white mt-0.5">
+                    <div className={cn(
+                      "rounded-xl p-3",
+                      theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
+                    )}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Calendar className="w-4 h-4 text-gray-400" />
+                        <span className="text-xs text-gray-500">Fecha</span>
+                      </div>
+                      <p className={cn(
+                        "font-semibold text-sm",
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
                         {new Date(selectedOrder.createdAt).toLocaleDateString('es-ES', {
                           day: '2-digit',
                           month: 'short',
@@ -610,16 +646,22 @@ export default function BrokerOrdersPage() {
                       </p>
                     </div>
                     {selectedOrder.sellingCompanyName && (
-                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Agencia</p>
-                        <p className="font-medium text-blue-600 dark:text-blue-400 mt-0.5 truncate">
+                      <div className={cn(
+                        "rounded-xl p-3",
+                        theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
+                      )}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Building2 className="w-4 h-4 text-gray-400" />
+                          <span className="text-xs text-gray-500">Agencia</span>
+                        </div>
+                        <p className="font-semibold text-sm text-blue-500 truncate">
                           {selectedOrder.sellingCompanyName}
                         </p>
                       </div>
                     )}
                   </div>
 
-                  {/* Action Buttons */}
+                  {/* Actions */}
                   <div className="space-y-2 pt-2">
                     {selectedOrder.status === 'pending' && (
                       <>
@@ -628,14 +670,19 @@ export default function BrokerOrdersPage() {
                             setSelectedOrder(null)
                             handleAction(selectedOrder.id, 'accept')
                           }}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors min-h-[48px]"
+                          className="w-full flex items-center justify-center gap-2 px-4 py-4 rounded-2xl font-semibold text-white bg-blue-600 active:bg-blue-700"
                         >
                           <CheckCircle className="w-5 h-5" />
                           Aceptar Orden
                         </button>
                         <button
                           onClick={() => openRejectModal(selectedOrder)}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl font-medium text-red-600 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors min-h-[48px]"
+                          className={cn(
+                            "w-full flex items-center justify-center gap-2 px-4 py-4 rounded-2xl font-medium",
+                            theme === 'dark'
+                              ? 'bg-red-900/30 text-red-400'
+                              : 'bg-red-50 text-red-600'
+                          )}
                         >
                           <XCircle className="w-5 h-5" />
                           Rechazar
@@ -650,14 +697,17 @@ export default function BrokerOrdersPage() {
                             setSelectedOrder(null)
                             goToDeliveryWizard(selectedOrder.id)
                           }}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors min-h-[48px]"
+                          className="w-full flex items-center justify-center gap-2 px-4 py-4 rounded-2xl font-semibold text-white bg-emerald-600 active:bg-emerald-700"
                         >
                           <Navigation className="w-5 h-5" />
                           Iniciar Entrega
                         </button>
                         <button
                           onClick={() => openRejectModal(selectedOrder)}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors min-h-[48px]"
+                          className={cn(
+                            "w-full flex items-center justify-center gap-2 px-4 py-4 rounded-2xl font-medium",
+                            theme === 'dark' ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-700'
+                          )}
                         >
                           Cancelar Orden
                         </button>
@@ -670,7 +720,7 @@ export default function BrokerOrdersPage() {
                           setSelectedOrder(null)
                           goToDeliveryWizard(selectedOrder.id)
                         }}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl font-semibold text-white bg-purple-600 hover:bg-purple-700 transition-colors min-h-[48px]"
+                        className="w-full flex items-center justify-center gap-2 px-4 py-4 rounded-2xl font-semibold text-white bg-purple-600 active:bg-purple-700"
                       >
                         <CheckCircle className="w-5 h-5" />
                         Completar Entrega
@@ -683,7 +733,10 @@ export default function BrokerOrdersPage() {
                           setSelectedOrder(null)
                           router.push(`/dashboard/broker/orders/${selectedOrder.id}`)
                         }}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors min-h-[48px]"
+                        className={cn(
+                          "w-full flex items-center justify-center gap-2 px-4 py-4 rounded-2xl font-medium",
+                          theme === 'dark' ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-700'
+                        )}
                       >
                         <Eye className="w-5 h-5" />
                         Ver Detalles Completos
@@ -703,43 +756,52 @@ export default function BrokerOrdersPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 sm:flex sm:items-center sm:justify-center sm:p-4 bg-black/50 backdrop-blur-sm"
+              className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
               onClick={(e) => e.target === e.currentTarget && !rejectLoading && setRejectModalOpen(false)}
             >
               <motion.div
-                initial={{ y: '100%', opacity: 1 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: '100%', opacity: 1 }}
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="absolute bottom-0 left-0 right-0 sm:relative sm:bottom-auto bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto"
+                className={cn(
+                  "absolute bottom-0 left-0 right-0 rounded-t-3xl shadow-2xl max-h-[90vh] overflow-y-auto",
+                  theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+                )}
                 style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
               >
-                <div className="sm:hidden flex justify-center pt-3 pb-1">
-                  <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
+                <div className="flex justify-center pt-3 pb-2">
+                  <div className={cn(
+                    "w-10 h-1 rounded-full",
+                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-300'
+                  )} />
                 </div>
 
-                <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700">
+                <div className={cn(
+                  "px-4 pb-4 border-b",
+                  theme === 'dark' ? 'border-gray-800' : 'border-gray-100'
+                )}>
                   <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-xl bg-red-100 dark:bg-red-900/30">
-                      <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                    <div className={cn(
+                      "p-3 rounded-xl",
+                      theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
+                    )}>
+                      <AlertTriangle className="w-5 h-5 text-red-500" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Rechazar Orden</h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{rejectingOrder.orderNumber}</p>
+                      <h3 className={cn(
+                        "text-lg font-bold",
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        Rechazar Orden
+                      </h3>
+                      <p className="text-sm text-gray-500">{rejectingOrder.orderNumber}</p>
                     </div>
                   </div>
-                  {!rejectLoading && (
-                    <button
-                      onClick={() => setRejectModalOpen(false)}
-                      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <X className="w-5 h-5 text-gray-500" />
-                    </button>
-                  )}
                 </div>
 
-                <div className="p-4 sm:p-5 space-y-4">
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                <div className="p-4 space-y-4">
+                  <p className="text-sm text-gray-500">
                     Seleccione el motivo del rechazo:
                   </p>
 
@@ -751,10 +813,12 @@ export default function BrokerOrdersPage() {
                           key={reason.value}
                           onClick={() => setSelectedReason(reason.value)}
                           className={cn(
-                            'w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left',
+                            'w-full flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left',
                             selectedReason === reason.value
                               ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                              : 'border-gray-200 dark:border-gray-600 hover:border-gray-300'
+                              : theme === 'dark'
+                                ? 'border-gray-700 bg-gray-800'
+                                : 'border-gray-200 bg-white'
                           )}
                         >
                           <Icon className={cn(
@@ -765,7 +829,7 @@ export default function BrokerOrdersPage() {
                             'font-medium',
                             selectedReason === reason.value
                               ? 'text-red-600 dark:text-red-400'
-                              : 'text-gray-700 dark:text-gray-300'
+                              : theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                           )}>
                             {reason.label}
                           </span>
@@ -780,7 +844,13 @@ export default function BrokerOrdersPage() {
                       onChange={(e) => setRejectNotes(e.target.value)}
                       rows={3}
                       placeholder="Especifique el motivo..."
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      className={cn(
+                        "w-full px-4 py-3 rounded-xl border text-sm",
+                        theme === 'dark'
+                          ? 'bg-gray-800 border-gray-700 text-white placeholder:text-gray-500'
+                          : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-400',
+                        'focus:ring-2 focus:ring-red-500 focus:border-transparent'
+                      )}
                     />
                   )}
 
@@ -788,14 +858,17 @@ export default function BrokerOrdersPage() {
                     <button
                       onClick={() => setRejectModalOpen(false)}
                       disabled={rejectLoading}
-                      className="flex-1 px-4 py-3.5 rounded-xl font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+                      className={cn(
+                        "flex-1 px-4 py-4 rounded-xl font-medium disabled:opacity-50",
+                        theme === 'dark' ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-700'
+                      )}
                     >
                       Cancelar
                     </button>
                     <button
                       onClick={handleReject}
                       disabled={!selectedReason || rejectLoading}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-50"
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-4 rounded-xl font-semibold text-white bg-red-600 disabled:opacity-50"
                     >
                       {rejectLoading ? (
                         <Loader2 className="w-5 h-5 animate-spin" />
@@ -820,12 +893,12 @@ export default function BrokerOrdersPage() {
               initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
-              className="fixed bottom-6 left-4 right-4 sm:left-auto sm:right-6 sm:w-auto bg-emerald-600 text-white px-5 py-4 rounded-xl shadow-xl flex items-center gap-3 z-50"
-              style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}
+              className="fixed bottom-6 left-4 right-4 bg-emerald-600 text-white px-5 py-4 rounded-2xl shadow-xl flex items-center gap-3 z-50"
+              style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
             >
               <CheckCircle className="w-5 h-5 flex-shrink-0" />
-              <span className="font-medium">{successMessage}</span>
-              <button onClick={() => setSuccessMessage(null)} className="p-1 ml-2">
+              <span className="font-medium flex-1">{successMessage}</span>
+              <button onClick={() => setSuccessMessage(null)} className="p-1">
                 <X className="w-4 h-4" />
               </button>
             </motion.div>
@@ -836,20 +909,19 @@ export default function BrokerOrdersPage() {
   )
 }
 
-// Order Card Component
-function OrderCard({
+// Mobile-First Order Card Component
+function MobileOrderCard({
   order,
-  index,
   theme,
   formatCurrency,
   onAccept,
   onReject,
   onDeliver,
   onComplete,
-  onDetails
+  onDetails,
+  isCompleted = false
 }: {
   order: Order
-  index: number
   theme: string
   formatCurrency: (amount: number, currency: string) => string
   onAccept?: () => void
@@ -857,114 +929,173 @@ function OrderCard({
   onDeliver?: () => void
   onComplete?: () => void
   onDetails: () => void
+  isCompleted?: boolean
 }) {
   const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending
   const StatusIcon = statusConfig.icon
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
-      className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 sm:p-5"
+      className={cn(
+        "rounded-2xl overflow-hidden",
+        theme === 'dark' ? 'bg-gray-800' : 'bg-white border border-gray-200',
+        isCompleted && 'opacity-60'
+      )}
     >
-      <div className="flex flex-col gap-3 sm:gap-4">
-        {/* Header: Order number + Status + Amount */}
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-bold text-sm sm:text-base text-gray-900 dark:text-white">
-                {order.orderNumber}
-              </span>
-              <span className={cn(
-                'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
-                statusConfig.bgColor, statusConfig.color
-              )}>
-                <StatusIcon className="h-3 w-3" />
-                {statusConfig.label}
-              </span>
-            </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              {order.recipientName} • {order.recipientMunicipality}
-            </p>
-          </div>
-          <div className="text-right">
-            <span className="font-bold text-base sm:text-lg text-emerald-600 dark:text-emerald-400">
-              {formatCurrency(order.receiveAmount, order.receiveCurrency)}
+      {/* Top colored bar based on status */}
+      <div className={cn(
+        "h-1 bg-gradient-to-r",
+        statusConfig.gradient
+      )} />
+
+      <div className="p-4">
+        {/* Row 1: Order # + Amount */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className={cn(
+              "font-bold",
+              theme === 'dark' ? 'text-white' : 'text-gray-900'
+            )}>
+              {order.orderNumber}
             </span>
+            <span className={cn(
+              'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold',
+              statusConfig.bgColor, statusConfig.color
+            )}>
+              <StatusIcon className="w-3 h-3" />
+              {statusConfig.label}
+            </span>
+          </div>
+          <span className="text-lg font-bold text-emerald-500">
+            {formatCurrency(order.receiveAmount, order.receiveCurrency)}
+          </span>
+        </div>
+
+        {/* Row 2: Recipient Info */}
+        <div className={cn(
+          "rounded-xl p-3 mb-3",
+          theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+        )}>
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
+              theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+            )}>
+              <User className="w-5 h-5 text-gray-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className={cn(
+                "font-semibold truncate",
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>
+                {order.recipientName}
+              </p>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <MapPin className="w-3 h-3 flex-shrink-0" />
+                <span className="truncate">{order.recipientMunicipality}, {order.recipientProvince}</span>
+              </div>
+            </div>
+            <a
+              href={`tel:${order.recipientPhone}`}
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                "p-2.5 rounded-xl flex-shrink-0",
+                theme === 'dark' ? 'bg-blue-600' : 'bg-blue-500',
+                'text-white'
+              )}
+            >
+              <Phone className="w-4 h-4" />
+            </a>
           </div>
         </div>
 
-        {/* Details - Only visible on larger screens */}
-        <div className="hidden sm:grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-          <div className="flex items-center gap-2">
-            <Phone className="h-4 w-4 text-gray-400 flex-shrink-0" />
-            <a href={`tel:${order.recipientPhone}`} className="text-blue-500 truncate">
-              {order.recipientPhone}
-            </a>
-          </div>
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-gray-400 flex-shrink-0" />
-            <span className="text-gray-500 dark:text-gray-400">
+        {/* Row 3: Meta info */}
+        <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
+          <div className="flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5" />
+            <span>
               {new Date(order.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
             </span>
           </div>
           {order.sellingCompanyName && (
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-gray-400 flex-shrink-0" />
-              <span className="text-blue-500 truncate">{order.sellingCompanyName}</span>
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+              <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="truncate text-blue-500">{order.sellingCompanyName}</span>
             </div>
           )}
         </div>
 
-        {/* Action buttons */}
-        <div className="flex gap-2">
-          {onAccept && (
-            <button
-              onClick={onAccept}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors min-h-[44px]"
-            >
-              <CheckCircle className="w-4 h-4" />
-              <span>Aceptar</span>
-            </button>
-          )}
+        {/* Row 4: Actions */}
+        {!isCompleted && (
+          <div className="flex gap-2">
+            {onAccept && (
+              <button
+                onClick={onAccept}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-white bg-blue-600 active:bg-blue-700"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Aceptar
+              </button>
+            )}
 
-          {onDeliver && (
-            <button
-              onClick={onDeliver}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors min-h-[44px]"
-            >
-              <Navigation className="w-4 h-4" />
-              <span>Entregar</span>
-            </button>
-          )}
+            {onDeliver && (
+              <button
+                onClick={onDeliver}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-white bg-emerald-600 active:bg-emerald-700"
+              >
+                <Navigation className="w-4 h-4" />
+                Entregar
+              </button>
+            )}
 
-          {onComplete && (
-            <button
-              onClick={onComplete}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-white bg-purple-600 hover:bg-purple-700 transition-colors min-h-[44px]"
-            >
-              <CheckCircle className="w-4 h-4" />
-              <span>Completar</span>
-            </button>
-          )}
+            {onComplete && (
+              <button
+                onClick={onComplete}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-white bg-purple-600 active:bg-purple-700"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Completar
+              </button>
+            )}
 
-          {onReject && (
-            <button
-              onClick={onReject}
-              className="p-2.5 sm:p-3 rounded-xl text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors min-h-[44px]"
-            >
-              <XCircle className="w-5 h-5" />
-            </button>
-          )}
+            {onReject && (
+              <button
+                onClick={onReject}
+                className={cn(
+                  "p-3 rounded-xl",
+                  theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+                )}
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            )}
 
+            <button
+              onClick={onDetails}
+              className={cn(
+                "p-3 rounded-xl",
+                theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+              )}
+            >
+              <Eye className="w-5 h-5" />
+            </button>
+          </div>
+        )}
+
+        {isCompleted && (
           <button
             onClick={onDetails}
-            className="p-2.5 sm:p-3 rounded-xl text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors min-h-[44px] sm:hidden"
+            className={cn(
+              "w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium",
+              theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+            )}
           >
-            <Eye className="w-5 h-5" />
+            <Eye className="w-4 h-4" />
+            Ver Detalles
           </button>
-        </div>
+        )}
       </div>
     </motion.div>
   )
