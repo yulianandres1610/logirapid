@@ -326,28 +326,28 @@ export default function BrokerOrdersPage() {
                 )}
               >
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
+                <div className="p-3 sm:p-6">
+                  <div className="flex items-start justify-between mb-2 sm:mb-4">
+                    <div className="flex items-center gap-2 sm:gap-3">
                       <div className={cn(
-                        'p-3 rounded-xl shadow-sm',
+                        'p-2 sm:p-3 rounded-lg sm:rounded-xl shadow-sm',
                         theme === 'dark'
                           ? 'bg-blue-900/30 border border-blue-800/50'
                           : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
                       )}>
-                        <CheckCircle className="w-6 h-6 text-blue-600" />
+                        <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
                       </div>
                       <div>
-                        <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-black')}>
+                        <p className={cn('text-xs sm:text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-black')}>
                           Confirmadas
                         </p>
-                        <p className={cn('text-3xl font-bold mt-1', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+                        <p className={cn('text-2xl sm:text-3xl font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
                           {stats?.confirmedCount || 0}
                         </p>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="hidden sm:flex items-center gap-2">
                     <div className="flex items-center gap-1">
                       <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
                       <span className={cn('text-xs font-medium', theme === 'dark' ? 'text-gray-500' : 'text-black')}>
@@ -372,28 +372,28 @@ export default function BrokerOrdersPage() {
                 )}
               >
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-purple-600"></div>
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
+                <div className="p-3 sm:p-6">
+                  <div className="flex items-start justify-between mb-2 sm:mb-4">
+                    <div className="flex items-center gap-2 sm:gap-3">
                       <div className={cn(
-                        'p-3 rounded-xl shadow-sm',
+                        'p-2 sm:p-3 rounded-lg sm:rounded-xl shadow-sm',
                         theme === 'dark'
                           ? 'bg-purple-900/30 border border-purple-800/50'
                           : 'bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200'
                       )}>
-                        <Truck className="w-6 h-6 text-purple-600" />
+                        <Truck className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
                       </div>
                       <div>
-                        <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-black')}>
+                        <p className={cn('text-xs sm:text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-black')}>
                           En Entrega
                         </p>
-                        <p className={cn('text-3xl font-bold mt-1', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+                        <p className={cn('text-2xl sm:text-3xl font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
                           {stats?.inDeliveryCount || 0}
                         </p>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="hidden sm:flex items-center gap-2">
                     <div className="flex items-center gap-1">
                       <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
                       <span className={cn('text-xs font-medium', theme === 'dark' ? 'text-gray-500' : 'text-black')}>
@@ -418,28 +418,28 @@ export default function BrokerOrdersPage() {
                 )}
               >
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-600"></div>
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
+                <div className="p-3 sm:p-6">
+                  <div className="flex items-start justify-between mb-2 sm:mb-4">
+                    <div className="flex items-center gap-2 sm:gap-3">
                       <div className={cn(
-                        'p-3 rounded-xl shadow-sm',
+                        'p-2 sm:p-3 rounded-lg sm:rounded-xl shadow-sm',
                         theme === 'dark'
                           ? 'bg-emerald-900/30 border border-emerald-800/50'
                           : 'bg-gradient-to-br from-emerald-50 to-green-100 border border-emerald-200'
                       )}>
-                        <DollarSign className="w-6 h-6 text-emerald-600" />
+                        <DollarSign className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
                       </div>
                       <div>
-                        <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-black')}>
+                        <p className={cn('text-xs sm:text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-black')}>
                           Por Entregar
                         </p>
-                        <p className={cn('text-3xl font-bold mt-1', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+                        <p className={cn('text-2xl sm:text-3xl font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
                           ${(stats?.pendingAmount || 0).toLocaleString()}
                         </p>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="hidden sm:flex items-center gap-2">
                     <div className="flex items-center gap-1">
                       <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
                       <span className={cn('text-xs font-medium', theme === 'dark' ? 'text-gray-500' : 'text-black')}>
@@ -927,50 +927,56 @@ export default function BrokerOrdersPage() {
             )}
           </AnimatePresence>
 
-          {/* Reject Modal */}
+          {/* Reject Modal - Bottom sheet on mobile */}
           <AnimatePresence>
             {rejectModalOpen && rejectingOrder && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                className="fixed inset-0 bg-black/50 z-50 md:flex md:items-center md:justify-center md:p-4"
                 onClick={() => setRejectModalOpen(false)}
               >
                 <motion.div
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.9, opacity: 0 }}
+                  initial={{ y: '100%', opacity: 1 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: '100%', opacity: 1 }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 300 }}
                   onClick={(e) => e.stopPropagation()}
                   className={cn(
-                    'rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto',
+                    'absolute bottom-0 left-0 right-0 md:relative md:bottom-auto rounded-t-3xl md:rounded-xl shadow-xl md:max-w-lg w-full max-h-[90vh] overflow-y-auto',
                     theme === 'dark' ? 'bg-gray-800' : 'bg-white'
                   )}
+                  style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
                 >
+                  {/* Handle bar - mobile only */}
+                  <div className="md:hidden flex justify-center pt-3 pb-1">
+                    <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
+                  </div>
                   {/* Modal Header */}
                   <div className={cn(
-                    'p-6 border-b',
+                    'p-4 md:p-6 border-b',
                     theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                   )}>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 md:gap-3">
                       <div className={cn(
-                        'p-2 rounded-lg',
+                        'p-2 rounded-lg flex-shrink-0',
                         theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
                       )}>
                         <AlertTriangle className={cn(
-                          'w-6 h-6',
+                          'w-5 h-5 md:w-6 md:h-6',
                           theme === 'dark' ? 'text-red-400' : 'text-red-600'
                         )} />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <h3 className={cn(
-                          'text-lg font-semibold',
+                          'text-base md:text-lg font-semibold',
                           theme === 'dark' ? 'text-white' : 'text-gray-900'
                         )}>
                           Rechazar Orden
                         </h3>
                         <p className={cn(
-                          'text-sm',
+                          'text-xs md:text-sm truncate',
                           theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
                         )}>
                           {rejectingOrder.orderNumber} - {rejectingOrder.recipientName}
@@ -980,16 +986,16 @@ export default function BrokerOrdersPage() {
                   </div>
 
                   {/* Modal Body */}
-                  <div className="p-6 space-y-4">
+                  <div className="p-4 md:p-6 space-y-3 md:space-y-4">
                     <p className={cn(
-                      'text-sm',
+                      'text-xs md:text-sm',
                       theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
                     )}>
                       Seleccione el motivo del rechazo. Los fondos reservados seran liberados automaticamente.
                     </p>
 
                     {/* Rejection Reasons */}
-                    <div className="space-y-2">
+                    <div className="space-y-1.5 md:space-y-2">
                       {REJECTION_REASONS.map((reason) => {
                         const Icon = reason.icon
                         return (
@@ -997,23 +1003,23 @@ export default function BrokerOrdersPage() {
                             key={reason.value}
                             onClick={() => setSelectedReason(reason.value)}
                             className={cn(
-                              'w-full flex items-start gap-3 p-3 rounded-lg border-2 transition-colors text-left',
+                              'w-full flex items-start gap-2 md:gap-3 p-2.5 md:p-3 rounded-lg border-2 transition-colors text-left touch-manipulation',
                               selectedReason === reason.value
                                 ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
                                 : theme === 'dark'
-                                  ? 'border-gray-700 hover:border-gray-600'
-                                  : 'border-gray-200 hover:border-gray-300'
+                                  ? 'border-gray-700 active:border-gray-600'
+                                  : 'border-gray-200 active:border-gray-300'
                             )}
                           >
                             <Icon className={cn(
-                              'w-5 h-5 mt-0.5 flex-shrink-0',
+                              'w-4 h-4 md:w-5 md:h-5 mt-0.5 flex-shrink-0',
                               selectedReason === reason.value
                                 ? 'text-red-500'
                                 : 'text-gray-400'
                             )} />
-                            <div>
+                            <div className="min-w-0">
                               <p className={cn(
-                                'font-medium',
+                                'font-medium text-sm md:text-base',
                                 selectedReason === reason.value
                                   ? theme === 'dark' ? 'text-red-300' : 'text-red-700'
                                   : theme === 'dark' ? 'text-white' : 'text-gray-900'
@@ -1021,7 +1027,7 @@ export default function BrokerOrdersPage() {
                                 {reason.label}
                               </p>
                               <p className={cn(
-                                'text-sm',
+                                'text-xs md:text-sm truncate',
                                 theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
                               )}>
                                 {reason.description}
@@ -1035,7 +1041,7 @@ export default function BrokerOrdersPage() {
                     {/* Notes */}
                     <div>
                       <label className={cn(
-                        'block text-sm font-medium mb-1',
+                        'block text-xs md:text-sm font-medium mb-1',
                         theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                       )}>
                         Notas adicionales {selectedReason === 'other' && <span className="text-red-500">*</span>}
@@ -1043,10 +1049,10 @@ export default function BrokerOrdersPage() {
                       <textarea
                         value={rejectNotes}
                         onChange={(e) => setRejectNotes(e.target.value)}
-                        rows={3}
+                        rows={2}
                         placeholder={selectedReason === 'other' ? 'Especifique el motivo...' : 'Opcional...'}
                         className={cn(
-                          'w-full px-3 py-2 rounded-lg border focus:ring-2 focus:ring-red-500',
+                          'w-full px-3 py-2.5 md:py-2 rounded-lg border focus:ring-2 focus:ring-red-500 text-base',
                           theme === 'dark'
                             ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
                             : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
@@ -1057,16 +1063,16 @@ export default function BrokerOrdersPage() {
 
                   {/* Modal Footer */}
                   <div className={cn(
-                    'p-6 border-t flex gap-3 justify-end',
+                    'p-4 md:p-6 border-t flex gap-3',
                     theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                   )}>
                     <button
                       onClick={() => setRejectModalOpen(false)}
                       className={cn(
-                        'px-4 py-2 rounded-lg transition-colors',
+                        'flex-1 md:flex-none px-4 py-3 md:py-2 rounded-xl transition-colors font-medium min-h-[48px] touch-manipulation',
                         theme === 'dark'
-                          ? 'text-gray-300 hover:bg-gray-700'
-                          : 'text-gray-700 hover:bg-gray-100'
+                          ? 'text-gray-300 hover:bg-gray-700 bg-gray-700/50'
+                          : 'text-gray-700 hover:bg-gray-100 bg-gray-100'
                       )}
                     >
                       Cancelar
@@ -1074,17 +1080,17 @@ export default function BrokerOrdersPage() {
                     <button
                       onClick={handleReject}
                       disabled={!selectedReason || rejectLoading}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      className="flex-1 md:flex-none px-4 py-3 md:py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium min-h-[48px] touch-manipulation"
                     >
                       {rejectLoading ? (
                         <>
                           <RefreshCw className="w-4 h-4 animate-spin" />
-                          Procesando...
+                          <span className="hidden md:inline">Procesando...</span>
                         </>
                       ) : (
                         <>
                           <X className="w-4 h-4" />
-                          Confirmar Rechazo
+                          <span>Confirmar</span>
                         </>
                       )}
                     </button>

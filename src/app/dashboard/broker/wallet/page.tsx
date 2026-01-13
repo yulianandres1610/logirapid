@@ -347,28 +347,28 @@ export default function BrokerWalletPage() {
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="p-6 space-y-6">
+        <div className="p-4 md:p-6 space-y-4 md:space-y-6">
           {/* Header */}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">
                 Mi Wallet
               </h1>
-              <p className="text-gray-500 dark:text-gray-400 mt-1">
+              <p className="text-sm md:text-base text-gray-500 dark:text-gray-400 mt-0.5 md:mt-1">
                 Gestiona tus balances y movimientos
               </p>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={fetchWalletData}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                className="flex items-center justify-center gap-2 px-3 md:px-4 py-2.5 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors min-h-[44px] touch-manipulation"
               >
                 <RefreshCw className="w-4 h-4" />
-                Actualizar
+                <span className="hidden sm:inline">Actualizar</span>
               </button>
               <button
                 onClick={() => setShowDepositModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-[#cc0a46] dark:bg-[#2a5caa] text-white rounded-lg hover:opacity-90 transition-colors"
+                className="flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-[#cc0a46] dark:bg-[#2a5caa] text-white rounded-xl hover:opacity-90 transition-colors min-h-[44px] touch-manipulation font-medium"
               >
                 <Plus className="w-4 h-4" />
                 Depositar
@@ -380,37 +380,37 @@ export default function BrokerWalletPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-gradient-to-br from-[#cc0a46] to-[#a50837] dark:from-[#2a5caa] dark:to-[#1e4387] rounded-2xl p-8 text-white shadow-lg"
+            className="bg-gradient-to-br from-[#cc0a46] to-[#a50837] dark:from-[#2a5caa] dark:to-[#1e4387] rounded-2xl p-5 md:p-8 text-white shadow-lg"
           >
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-white/80 text-sm mb-2">Balance Disponible</p>
-                <div className="text-4xl md:text-5xl font-bold mb-4">
+                <p className="text-white/80 text-xs md:text-sm mb-1 md:mb-2">Balance Disponible</p>
+                <div className="text-3xl md:text-5xl font-bold mb-2 md:mb-4">
                   <AnimatedCounter value={mainBalance} currency={mainCurrency} />
                 </div>
-                <div className="flex items-center gap-4 text-sm text-white/70">
+                <div className="flex items-center gap-4 text-xs md:text-sm text-white/70">
                   <div className="flex items-center gap-1">
-                    <TrendingUp className="w-4 h-4" />
+                    <TrendingUp className="w-3.5 h-3.5 md:w-4 md:h-4" />
                     <span>{stats.totalTransactions} transacciones</span>
                   </div>
                 </div>
               </div>
-              <div className="p-4 bg-white/20 rounded-xl backdrop-blur-sm">
-                <DollarSign className="w-8 h-8" />
+              <div className="p-2.5 md:p-4 bg-white/20 rounded-xl backdrop-blur-sm">
+                <DollarSign className="w-6 h-6 md:w-8 md:h-8" />
               </div>
             </div>
 
             {/* Stats Row */}
-            <div className="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-white/20">
+            <div className="grid grid-cols-2 gap-3 md:gap-4 mt-4 md:mt-6 pt-4 md:pt-6 border-t border-white/20">
               <div>
-                <p className="text-white/60 text-xs uppercase">Total Depósitos</p>
-                <p className="text-xl font-semibold">
+                <p className="text-white/60 text-[10px] md:text-xs uppercase">Total Depósitos</p>
+                <p className="text-lg md:text-xl font-semibold">
                   <AnimatedCounter value={stats.totalDeposits} currency={mainCurrency} />
                 </p>
               </div>
               <div>
-                <p className="text-white/60 text-xs uppercase">Total Retiros</p>
-                <p className="text-xl font-semibold">
+                <p className="text-white/60 text-[10px] md:text-xs uppercase">Total Retiros</p>
+                <p className="text-lg md:text-xl font-semibold">
                   <AnimatedCounter value={stats.totalWithdrawals} currency={mainCurrency} />
                 </p>
               </div>
@@ -418,7 +418,7 @@ export default function BrokerWalletPage() {
           </motion.div>
 
           {/* Currency Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             {CURRENCIES.map((currency, index) => {
               const balance = balances.find(b => b.currency === currency.code)
               const available = balance?.available || 0
@@ -431,22 +431,21 @@ export default function BrokerWalletPage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
                   onClick={() => fetchCurrencyDetail(currency.code)}
-                  whileHover={{ scale: 1.02, y: -2 }}
                   whileTap={{ scale: 0.98 }}
-                  className={`bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border transition-all cursor-pointer hover:shadow-md ${
+                  className={`bg-white dark:bg-gray-800 rounded-xl p-3 md:p-4 shadow-sm border transition-all cursor-pointer active:bg-gray-50 dark:active:bg-gray-700 touch-manipulation ${
                     available > 0
-                      ? 'border-[#cc0a46]/30 dark:border-[#2a5caa]/30 hover:border-[#cc0a46] dark:hover:border-[#2a5caa]'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                      ? 'border-[#cc0a46]/30 dark:border-[#2a5caa]/30'
+                      : 'border-gray-200 dark:border-gray-700'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl">{currency.flag}</span>
-                      <span className="font-medium text-gray-700 dark:text-gray-300">{currency.code}</span>
+                  <div className="flex items-center justify-between mb-2 md:mb-3">
+                    <div className="flex items-center gap-1.5 md:gap-2">
+                      <span className="text-lg md:text-xl">{currency.flag}</span>
+                      <span className="font-medium text-sm md:text-base text-gray-700 dark:text-gray-300">{currency.code}</span>
                     </div>
-                    <ArrowUpRight className="w-4 h-4 text-gray-400 group-hover:text-[#cc0a46] dark:group-hover:text-[#2a5caa]" />
+                    <ArrowUpRight className="w-3.5 h-3.5 md:w-4 md:h-4 text-gray-400" />
                   </div>
-                  <p className="text-lg font-bold text-gray-900 dark:text-white">
+                  <p className="text-base md:text-lg font-bold text-gray-900 dark:text-white">
                     {available > 0 ? (
                       <AnimatedCounter value={available} currency={currency.code} />
                     ) : (
@@ -454,12 +453,12 @@ export default function BrokerWalletPage() {
                     )}
                   </p>
                   {reserved > 0 && (
-                    <p className="text-xs text-orange-500 mt-1 flex items-center gap-1">
+                    <p className="text-[10px] md:text-xs text-orange-500 mt-1 flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       Reservado: {formatCurrency(reserved, currency.code)}
                     </p>
                   )}
-                  <p className="text-xs text-gray-400 mt-2">Click para ver detalles</p>
+                  <p className="text-[10px] md:text-xs text-gray-400 mt-1.5 md:mt-2">Toca para ver detalles</p>
                 </motion.div>
               )
             })}
@@ -472,9 +471,9 @@ export default function BrokerWalletPage() {
             transition={{ delay: 0.4 }}
             className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700"
           >
-            <div className="p-5 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <History className="w-5 h-5" />
+            <div className="p-4 md:p-5 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-base md:text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <History className="w-4 h-4 md:w-5 md:h-5" />
                 Historial de Movimientos
               </h2>
             </div>
@@ -488,40 +487,40 @@ export default function BrokerWalletPage() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.5 + index * 0.03 }}
                     onClick={() => setSelectedTransaction(tx)}
-                    className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                    className="p-3 md:p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 active:bg-gray-100 dark:active:bg-gray-700 transition-colors cursor-pointer touch-manipulation"
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2.5 rounded-full ${
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 md:gap-3 min-w-0">
+                        <div className={`p-2 md:p-2.5 rounded-full flex-shrink-0 ${
                           tx.isCashDelivery
                             ? 'bg-green-100 dark:bg-green-900/30'
                             : 'bg-gray-100 dark:bg-gray-700'
                         }`}>
                           {getTransactionIcon(tx)}
                         </div>
-                        <div>
-                          <p className="font-medium text-gray-900 dark:text-white">
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm md:text-base text-gray-900 dark:text-white truncate">
                             {tx.typeLabel}
                           </p>
                           {tx.isCashDelivery && tx.cashDelivery ? (
-                            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                              <User className="w-3 h-3" />
-                              <span>{tx.cashDelivery.deliveryUserName}</span>
+                            <div className="flex items-center gap-1.5 md:gap-2 text-xs md:text-sm text-gray-500 dark:text-gray-400">
+                              <User className="w-3 h-3 flex-shrink-0" />
+                              <span className="truncate">{tx.cashDelivery.deliveryUserName}</span>
                               {tx.cashDelivery.orderNumber && (
-                                <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700">
+                                <span className="hidden sm:inline text-[10px] md:text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700">
                                   {tx.cashDelivery.orderNumber}
                                 </span>
                               )}
                             </div>
                           ) : (
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                            <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 truncate">
                               {tx.description || tx.notes || tx.referenceType}
                             </p>
                           )}
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className={`font-semibold ${
+                      <div className="text-right flex-shrink-0">
+                        <p className={`font-semibold text-sm md:text-base ${
                           tx.type === 'deposit' || tx.type === 'release'
                             ? 'text-green-600 dark:text-green-400'
                             : 'text-red-600 dark:text-red-400'
@@ -529,7 +528,7 @@ export default function BrokerWalletPage() {
                           {tx.type === 'deposit' || tx.type === 'release' ? '+' : '-'}
                           {formatCurrency(Math.abs(tx.amount), tx.currency)}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                        <p className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400">
                           {new Date(tx.createdAt).toLocaleDateString('es-ES', {
                             day: 'numeric',
                             month: 'short',
@@ -543,48 +542,55 @@ export default function BrokerWalletPage() {
                 ))}
               </div>
             ) : (
-              <div className="p-12 text-center">
-                <History className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-500 dark:text-gray-400">
+              <div className="p-8 md:p-12 text-center">
+                <History className="w-10 h-10 md:w-12 md:h-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-sm md:text-base text-gray-500 dark:text-gray-400">
                   No hay movimientos registrados
                 </p>
               </div>
             )}
           </motion.div>
 
-          {/* Transaction Detail Modal */}
+          {/* Transaction Detail Modal - Bottom sheet on mobile */}
           <AnimatePresence>
             {selectedTransaction && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                className="fixed inset-0 bg-black/50 z-50 md:flex md:items-center md:justify-center md:p-4"
                 onClick={() => setSelectedTransaction(null)}
               >
                 <motion.div
-                  initial={{ scale: 0.95, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.95, opacity: 0 }}
+                  initial={{ y: '100%', opacity: 1 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: '100%', opacity: 1 }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 300 }}
                   onClick={e => e.stopPropagation()}
-                  className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md"
+                  className="absolute bottom-0 left-0 right-0 md:relative md:bottom-auto bg-white dark:bg-gray-800 rounded-t-3xl md:rounded-2xl shadow-xl w-full md:max-w-md max-h-[90vh] overflow-y-auto"
+                  style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
                 >
-                  <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {/* Handle bar - mobile only */}
+                  <div className="md:hidden flex justify-center pt-3 pb-1">
+                    <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
+                  </div>
+
+                  <div className="p-4 md:p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                    <h3 className="text-base md:text-lg font-semibold text-gray-900 dark:text-white">
                       Detalle de Transacción
                     </h3>
                     <button
                       onClick={() => setSelectedTransaction(null)}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors touch-manipulation"
                     >
                       <X className="w-5 h-5" />
                     </button>
                   </div>
 
-                  <div className="p-5 space-y-4">
+                  <div className="p-4 md:p-5 space-y-4">
                     {/* Amount */}
-                    <div className="text-center py-4">
-                      <p className={`text-3xl font-bold ${
+                    <div className="text-center py-3 md:py-4">
+                      <p className={`text-2xl md:text-3xl font-bold ${
                         selectedTransaction.type === 'deposit'
                           ? 'text-green-600 dark:text-green-400'
                           : 'text-red-600 dark:text-red-400'
@@ -592,26 +598,26 @@ export default function BrokerWalletPage() {
                         {selectedTransaction.type === 'deposit' ? '+' : '-'}
                         {formatCurrency(selectedTransaction.amount, selectedTransaction.currency)}
                       </p>
-                      <p className="text-gray-500 dark:text-gray-400 mt-1">
+                      <p className="text-sm md:text-base text-gray-500 dark:text-gray-400 mt-1">
                         {selectedTransaction.typeLabel}
                       </p>
                     </div>
 
                     {/* Details */}
-                    <div className="space-y-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-                      <div className="flex justify-between">
+                    <div className="space-y-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 md:p-4">
+                      <div className="flex justify-between text-sm md:text-base">
                         <span className="text-gray-500 dark:text-gray-400">Fecha</span>
-                        <span className="font-medium text-gray-900 dark:text-white">
+                        <span className="font-medium text-gray-900 dark:text-white text-right">
                           {new Date(selectedTransaction.createdAt).toLocaleDateString('es-ES', {
                             day: 'numeric',
-                            month: 'long',
+                            month: 'short',
                             year: 'numeric',
                             hour: '2-digit',
                             minute: '2-digit'
                           })}
                         </span>
                       </div>
-                      <div className="flex justify-between">
+                      <div className="flex justify-between text-sm md:text-base">
                         <span className="text-gray-500 dark:text-gray-400">Moneda</span>
                         <span className="font-medium text-gray-900 dark:text-white">
                           {selectedTransaction.currency}
@@ -621,12 +627,12 @@ export default function BrokerWalletPage() {
 
                     {/* Cash Delivery Info */}
                     {selectedTransaction.isCashDelivery && selectedTransaction.cashDelivery && (
-                      <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 space-y-3">
-                        <p className="font-semibold text-green-800 dark:text-green-300 flex items-center gap-2">
+                      <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 md:p-4 space-y-2 md:space-y-3">
+                        <p className="font-semibold text-sm md:text-base text-green-800 dark:text-green-300 flex items-center gap-2">
                           <Banknote className="w-4 h-4" />
                           Entrega de Efectivo
                         </p>
-                        <div className="space-y-2 text-sm">
+                        <div className="space-y-2 text-xs md:text-sm">
                           <div className="flex justify-between">
                             <span className="text-green-700 dark:text-green-400">Orden</span>
                             <span className="font-medium text-green-900 dark:text-green-200">
@@ -668,18 +674,18 @@ export default function BrokerWalletPage() {
                     {/* Notes */}
                     {(selectedTransaction.description || selectedTransaction.notes) && (
                       <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Descripción</p>
-                        <p className="text-gray-900 dark:text-white">
+                        <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 mb-1">Descripción</p>
+                        <p className="text-sm md:text-base text-gray-900 dark:text-white">
                           {selectedTransaction.description || selectedTransaction.notes}
                         </p>
                       </div>
                     )}
                   </div>
 
-                  <div className="p-5 border-t border-gray-200 dark:border-gray-700">
+                  <div className="p-4 md:p-5 border-t border-gray-200 dark:border-gray-700">
                     <button
                       onClick={() => setSelectedTransaction(null)}
-                      className="w-full py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium"
+                      className="w-full py-3 md:py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium min-h-[48px] touch-manipulation"
                     >
                       Cerrar
                     </button>
@@ -689,36 +695,43 @@ export default function BrokerWalletPage() {
             )}
           </AnimatePresence>
 
-          {/* Deposit Modal */}
+          {/* Deposit Modal - Bottom sheet on mobile */}
           <AnimatePresence>
             {showDepositModal && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                className="fixed inset-0 bg-black/50 z-50 md:flex md:items-center md:justify-center md:p-4"
                 onClick={() => setShowDepositModal(false)}
               >
                 <motion.div
-                  initial={{ scale: 0.95, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.95, opacity: 0 }}
+                  initial={{ y: '100%', opacity: 1 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: '100%', opacity: 1 }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 300 }}
                   onClick={e => e.stopPropagation()}
-                  className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md"
+                  className="absolute bottom-0 left-0 right-0 md:relative md:bottom-auto bg-white dark:bg-gray-800 rounded-t-3xl md:rounded-2xl shadow-xl w-full md:max-w-md max-h-[90vh] overflow-y-auto"
+                  style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
                 >
-                  <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {/* Handle bar - mobile only */}
+                  <div className="md:hidden flex justify-center pt-3 pb-1">
+                    <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
+                  </div>
+
+                  <div className="p-4 md:p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                    <h3 className="text-base md:text-lg font-semibold text-gray-900 dark:text-white">
                       Depositar Fondos
                     </h3>
                     <button
                       onClick={() => setShowDepositModal(false)}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors touch-manipulation"
                     >
                       <X className="w-5 h-5" />
                     </button>
                   </div>
 
-                  <div className="p-5 space-y-4">
+                  <div className="p-4 md:p-5 space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Moneda
@@ -728,14 +741,14 @@ export default function BrokerWalletPage() {
                           <button
                             key={currency.code}
                             onClick={() => setDepositCurrency(currency.code)}
-                            className={`p-3 rounded-lg border-2 text-center transition-colors ${
+                            className={`p-2.5 md:p-3 rounded-xl border-2 text-center transition-colors touch-manipulation ${
                               depositCurrency === currency.code
                                 ? 'border-[#cc0a46] dark:border-[#2a5caa] bg-[#cc0a46]/10 dark:bg-[#2a5caa]/10'
-                                : 'border-gray-200 dark:border-gray-600 hover:border-gray-300'
+                                : 'border-gray-200 dark:border-gray-600 active:border-gray-300'
                             }`}
                           >
-                            <span className="text-xl">{currency.flag}</span>
-                            <p className="text-xs font-medium mt-1">{currency.code}</p>
+                            <span className="text-lg md:text-xl">{currency.flag}</span>
+                            <p className="text-[10px] md:text-xs font-medium mt-1">{currency.code}</p>
                           </button>
                         ))}
                       </div>
@@ -749,10 +762,11 @@ export default function BrokerWalletPage() {
                         <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <input
                           type="number"
+                          inputMode="decimal"
                           value={depositAmount}
                           onChange={e => setDepositAmount(e.target.value)}
                           placeholder="0.00"
-                          className="w-full pl-10 pr-16 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#cc0a46] dark:focus:ring-[#2a5caa] focus:border-transparent"
+                          className="w-full pl-10 pr-16 py-3 md:py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#cc0a46] dark:focus:ring-[#2a5caa] focus:border-transparent text-base"
                         />
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-500">
                           {depositCurrency}
@@ -769,22 +783,22 @@ export default function BrokerWalletPage() {
                         onChange={e => setDepositNotes(e.target.value)}
                         placeholder="Referencia o descripcion del deposito..."
                         rows={2}
-                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#cc0a46] dark:focus:ring-[#2a5caa] focus:border-transparent resize-none"
+                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#cc0a46] dark:focus:ring-[#2a5caa] focus:border-transparent resize-none text-base"
                       />
                     </div>
                   </div>
 
-                  <div className="p-5 border-t border-gray-200 dark:border-gray-700 flex gap-3">
+                  <div className="p-4 md:p-5 border-t border-gray-200 dark:border-gray-700 flex gap-3">
                     <button
                       onClick={() => setShowDepositModal(false)}
-                      className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                      className="flex-1 px-4 py-3 md:py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium min-h-[48px] touch-manipulation"
                     >
                       Cancelar
                     </button>
                     <button
                       onClick={handleDeposit}
                       disabled={depositLoading || !depositAmount}
-                      className="flex-1 px-4 py-2 bg-[#cc0a46] dark:bg-[#2a5caa] text-white rounded-lg hover:opacity-90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="flex-1 px-4 py-3 md:py-2.5 bg-[#cc0a46] dark:bg-[#2a5caa] text-white rounded-xl hover:opacity-90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 font-medium min-h-[48px] touch-manipulation"
                     >
                       {depositLoading ? (
                         <RefreshCw className="w-4 h-4 animate-spin" />
@@ -799,41 +813,48 @@ export default function BrokerWalletPage() {
             )}
           </AnimatePresence>
 
-          {/* Currency Detail Modal */}
+          {/* Currency Detail Modal - Bottom sheet on mobile */}
           <AnimatePresence>
             {selectedCurrency && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                className="fixed inset-0 bg-black/50 z-50 md:flex md:items-center md:justify-center md:p-4"
                 onClick={closeCurrencyDetail}
               >
                 <motion.div
-                  initial={{ scale: 0.95, opacity: 0, y: 20 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                  initial={{ y: '100%', opacity: 1 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: '100%', opacity: 1 }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 300 }}
                   onClick={e => e.stopPropagation()}
-                  className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+                  className="absolute bottom-0 left-0 right-0 md:relative md:bottom-auto bg-white dark:bg-gray-800 rounded-t-3xl md:rounded-2xl shadow-xl w-full md:max-w-2xl max-h-[90vh] md:max-h-[85vh] flex flex-col"
+                  style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
                 >
+                  {/* Handle bar - mobile only */}
+                  <div className="md:hidden flex justify-center pt-3 pb-1">
+                    <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
+                  </div>
+
                   {/* Header */}
-                  <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#cc0a46] to-[#a50837] dark:from-[#2a5caa] dark:to-[#1e4387] flex items-center justify-center text-2xl">
+                  <div className="p-4 md:p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
+                    <div className="flex items-center gap-2.5 md:gap-3">
+                      <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-[#cc0a46] to-[#a50837] dark:from-[#2a5caa] dark:to-[#1e4387] flex items-center justify-center text-xl md:text-2xl">
                         {CURRENCIES.find(c => c.code === selectedCurrency)?.flag}
                       </div>
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                        <h3 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white">
                           {CURRENCIES.find(c => c.code === selectedCurrency)?.name}
                         </h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">
                           Detalles de {selectedCurrency}
                         </p>
                       </div>
                     </div>
                     <button
                       onClick={closeCurrencyDetail}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors touch-manipulation"
                     >
                       <X className="w-5 h-5" />
                     </button>
@@ -841,48 +862,48 @@ export default function BrokerWalletPage() {
 
                   {/* Content */}
                   {loadingCurrencyDetail ? (
-                    <div className="p-12 flex items-center justify-center">
+                    <div className="p-8 md:p-12 flex items-center justify-center">
                       <RefreshCw className="w-8 h-8 animate-spin text-[#cc0a46] dark:text-[#2a5caa]" />
                     </div>
                   ) : currencyDetail ? (
                     <div className="flex-1 overflow-y-auto">
                       {/* Balance Summary */}
-                      <div className="p-5 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-white dark:bg-gray-700 rounded-xl p-4 shadow-sm">
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Disponible</p>
-                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                      <div className="p-4 md:p-5 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
+                        <div className="grid grid-cols-2 gap-3 md:gap-4">
+                          <div className="bg-white dark:bg-gray-700 rounded-xl p-3 md:p-4 shadow-sm">
+                            <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 mb-1">Disponible</p>
+                            <p className="text-xl md:text-2xl font-bold text-green-600 dark:text-green-400">
                               {formatCurrency(currencyDetail.available, selectedCurrency)}
                             </p>
                           </div>
-                          <div className="bg-white dark:bg-gray-700 rounded-xl p-4 shadow-sm">
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Reservado</p>
-                            <p className="text-2xl font-bold text-orange-500">
+                          <div className="bg-white dark:bg-gray-700 rounded-xl p-3 md:p-4 shadow-sm">
+                            <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 mb-1">Reservado</p>
+                            <p className="text-xl md:text-2xl font-bold text-orange-500">
                               {formatCurrency(currencyDetail.reserved, selectedCurrency)}
                             </p>
                           </div>
                         </div>
 
                         {/* Stats */}
-                        <div className="grid grid-cols-2 gap-4 mt-4">
-                          <div className="flex items-center gap-3 bg-white dark:bg-gray-700 rounded-xl p-4 shadow-sm">
-                            <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                              <ArrowDownLeft className="w-5 h-5 text-green-600 dark:text-green-400" />
+                        <div className="grid grid-cols-2 gap-3 md:gap-4 mt-3 md:mt-4">
+                          <div className="flex items-center gap-2 md:gap-3 bg-white dark:bg-gray-700 rounded-xl p-3 md:p-4 shadow-sm">
+                            <div className="p-1.5 md:p-2 bg-green-100 dark:bg-green-900/30 rounded-lg flex-shrink-0">
+                              <ArrowDownLeft className="w-4 h-4 md:w-5 md:h-5 text-green-600 dark:text-green-400" />
                             </div>
-                            <div>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">Total Depósitos</p>
-                              <p className="font-bold text-gray-900 dark:text-white">
+                            <div className="min-w-0">
+                              <p className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400">Total Depósitos</p>
+                              <p className="font-bold text-sm md:text-base text-gray-900 dark:text-white truncate">
                                 {formatCurrency(currencyDetail.totalDeposits, selectedCurrency)}
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3 bg-white dark:bg-gray-700 rounded-xl p-4 shadow-sm">
-                            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
-                              <ArrowUpRight className="w-5 h-5 text-red-600 dark:text-red-400" />
+                          <div className="flex items-center gap-2 md:gap-3 bg-white dark:bg-gray-700 rounded-xl p-3 md:p-4 shadow-sm">
+                            <div className="p-1.5 md:p-2 bg-red-100 dark:bg-red-900/30 rounded-lg flex-shrink-0">
+                              <ArrowUpRight className="w-4 h-4 md:w-5 md:h-5 text-red-600 dark:text-red-400" />
                             </div>
-                            <div>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">Total Retiros</p>
-                              <p className="font-bold text-gray-900 dark:text-white">
+                            <div className="min-w-0">
+                              <p className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400">Total Retiros</p>
+                              <p className="font-bold text-sm md:text-base text-gray-900 dark:text-white truncate">
                                 {formatCurrency(currencyDetail.totalWithdrawals, selectedCurrency)}
                               </p>
                             </div>
@@ -891,9 +912,9 @@ export default function BrokerWalletPage() {
                       </div>
 
                       {/* Transactions List */}
-                      <div className="p-5">
-                        <h4 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                          <History className="w-5 h-5" />
+                      <div className="p-4 md:p-5">
+                        <h4 className="font-semibold text-sm md:text-base text-gray-900 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
+                          <History className="w-4 h-4 md:w-5 md:h-5" />
                           Movimientos en {selectedCurrency}
                         </h4>
 
@@ -905,25 +926,25 @@ export default function BrokerWalletPage() {
                                 initial={{ opacity: 0, x: -10 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: index * 0.03 }}
-                                className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                className="flex items-center justify-between p-2.5 md:p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 active:bg-gray-100 dark:active:bg-gray-700 transition-colors touch-manipulation"
                               >
-                                <div className="flex items-center gap-3">
-                                  <div className={`p-2 rounded-full ${
+                                <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                                  <div className={`p-1.5 md:p-2 rounded-full flex-shrink-0 ${
                                     tx.direction === 'in' || tx.type === 'deposit'
                                       ? 'bg-green-100 dark:bg-green-900/30'
                                       : 'bg-red-100 dark:bg-red-900/30'
                                   }`}>
                                     {tx.direction === 'in' || tx.type === 'deposit' ? (
-                                      <ArrowDownLeft className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                      <ArrowDownLeft className="w-3.5 h-3.5 md:w-4 md:h-4 text-green-600 dark:text-green-400" />
                                     ) : (
-                                      <ArrowUpRight className="w-4 h-4 text-red-600 dark:text-red-400" />
+                                      <ArrowUpRight className="w-3.5 h-3.5 md:w-4 md:h-4 text-red-600 dark:text-red-400" />
                                     )}
                                   </div>
-                                  <div>
-                                    <p className="font-medium text-sm text-gray-900 dark:text-white">
+                                  <div className="min-w-0">
+                                    <p className="font-medium text-xs md:text-sm text-gray-900 dark:text-white truncate">
                                       {tx.typeLabel}
                                     </p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    <p className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400">
                                       {new Date(tx.createdAt).toLocaleDateString('es-ES', {
                                         day: 'numeric',
                                         month: 'short',
@@ -933,7 +954,7 @@ export default function BrokerWalletPage() {
                                     </p>
                                   </div>
                                 </div>
-                                <p className={`font-bold ${
+                                <p className={`font-bold text-sm md:text-base flex-shrink-0 ${
                                   tx.direction === 'in' || tx.type === 'deposit'
                                     ? 'text-green-600 dark:text-green-400'
                                     : 'text-red-600 dark:text-red-400'
@@ -945,9 +966,9 @@ export default function BrokerWalletPage() {
                             ))}
                           </div>
                         ) : (
-                          <div className="py-12 text-center">
-                            <History className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                            <p className="text-gray-500 dark:text-gray-400">
+                          <div className="py-8 md:py-12 text-center">
+                            <History className="w-10 h-10 md:w-12 md:h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                            <p className="text-sm md:text-base text-gray-500 dark:text-gray-400">
                               No hay movimientos en {selectedCurrency}
                             </p>
                           </div>
@@ -957,10 +978,10 @@ export default function BrokerWalletPage() {
                   ) : null}
 
                   {/* Footer */}
-                  <div className="p-5 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+                  <div className="p-4 md:p-5 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
                     <button
                       onClick={closeCurrencyDetail}
-                      className="w-full py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium"
+                      className="w-full py-3 md:py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium min-h-[48px] touch-manipulation"
                     >
                       Cerrar
                     </button>
