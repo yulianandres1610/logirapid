@@ -38,6 +38,7 @@ import Image from 'next/image'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
+import { useNotifications } from '@/contexts/NotificationContext'
 import { cn } from '@/lib/utils'
 import { InvoiceGrid, InvoiceData } from '@/components/orders/InvoicePreviewCard'
 import { InvoiceUploader, InvoiceFile } from '@/components/orders/InvoiceUploader'
@@ -164,6 +165,7 @@ const LIFECYCLE_STEPS = [
 export default function ConsignmentOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)
   const { theme } = useTheme()
+  const { showNotification } = useNotifications()
   const [order, setOrder] = useState<ConsignmentOrder | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -257,12 +259,13 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
         // Clear pending and hide uploader
         setPendingInvoices([])
         setShowUploader(false)
+        showNotification('success', 'Facturas subidas', `Se subieron ${pendingInvoices.length} ${pendingInvoices.length === 1 ? 'factura' : 'facturas'} correctamente`)
       } else {
-        alert(data.error || 'Error al subir facturas')
+        showNotification('error', 'Error', data.error || 'Error al subir facturas')
       }
     } catch (err) {
       console.error('Error uploading invoices:', err)
-      alert('Error al subir facturas')
+      showNotification('error', 'Error de conexión', 'No se pudieron subir las facturas. Intenta de nuevo.')
     } finally {
       setUploadingInvoices(false)
     }
