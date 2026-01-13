@@ -52,6 +52,10 @@ export async function GET(
         w.name as warehouse_name,
         w.code as warehouse_code,
         u.firstname || ' ' || u.lastname as created_by_name,
+        u.role as created_by_role,
+        COALESCE(u2.firstname || ' ' || u2.lastname, u2.email) as accepted_by_name,
+        o.accepted_by,
+        o.accepted_at,
         COALESCE((
           SELECT SUM(ol.quantity_sold * ol.unit_price)
           FROM consignment_order_lines ol
@@ -61,6 +65,7 @@ export async function GET(
       JOIN market_suppliers s ON s.id = o.supplier_id
       JOIN market_warehouses w ON w.id = o.warehouse_id
       LEFT JOIN users u ON u.id = o.created_by
+      LEFT JOIN users u2 ON u2.id = o.accepted_by
       WHERE o.id = $1 AND o.company_id = $2
     `, [orderId, payload.companyId])
 
@@ -135,6 +140,10 @@ export async function GET(
       completedAt: o.completed_at,
       notes: o.notes,
       createdBy: o.created_by_name,
+      createdByRole: o.created_by_role || null,
+      acceptedByName: o.accepted_by_name || null,
+      acceptedAt: o.accepted_at || null,
+      needsAcceptance: o.created_by_role === 'MARKET_COMERCIAL' && !o.accepted_by,
       createdAt: o.created_at,
       lines: linesResult.rows.map(l => ({
         id: l.id,
@@ -190,11 +199,11 @@ export async function PUT(
     const { id } = await params
     const orderId = parseInt(id)
     const body = await request.json()
-    const { status, notes } = body
+    const { status, notes, action } = body
 
     // Verify order exists
     const existing = await db.query(
-      'SELECT id, status FROM consignment_orders WHERE id = $1 AND company_id = $2',
+      'SELECT id, status, accepted_by FROM consignment_orders WHERE id = $1 AND company_id = $2',
       [orderId, payload.companyId]
     )
     if (existing.rows.length === 0) {
@@ -202,6 +211,39 @@ export async function PUT(
         success: false,
         error: 'Orden no encontrada'
       }, { status: 404 })
+    }
+
+    // Handle accept action
+    if (action === 'accept') {
+      // Only MARKET_ADMIN, MARKET_MANAGER, MANAGER, ADMIN, SUPER_ADMIN can accept
+      const canAccept = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKET_ADMIN', 'MARKET_MANAGER'].includes(payload.role)
+      if (!canAccept) {
+        return NextResponse.json({
+          success: false,
+          error: 'No tiene permisos para aceptar órdenes'
+        }, { status: 403 })
+      }
+
+      if (existing.rows[0].accepted_by) {
+        return NextResponse.json({
+          success: false,
+          error: 'Esta orden ya fue aceptada'
+        }, { status: 400 })
+      }
+
+      // Update order with acceptance
+      await db.query(`
+        UPDATE consignment_orders
+        SET accepted_by = $1,
+            accepted_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $2
+      `, [payload.userId, orderId])
+
+      return NextResponse.json({
+        success: true,
+        message: 'Orden de consignación aceptada exitosamente'
+      })
     }
 
     let query = 'UPDATE consignment_orders SET updated_at = NOW()'

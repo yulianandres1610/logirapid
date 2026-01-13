@@ -31,7 +31,9 @@ import {
   Hash,
   Edit3,
   Eye,
-  Percent
+  Percent,
+  AlertCircle,
+  CheckCircle2
 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -99,6 +101,10 @@ interface ConsignmentOrder {
   completedAt: string | null
   notes: string | null
   createdBy: string
+  createdByRole: string | null
+  acceptedByName: string | null
+  acceptedAt: string | null
+  needsAcceptance: boolean
   createdAt: string
   lines: OrderLine[]
 }
@@ -175,6 +181,7 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
   const [showUploader, setShowUploader] = useState(false)
   const [pendingInvoices, setPendingInvoices] = useState<InvoiceFile[]>([])
   const [uploadingInvoices, setUploadingInvoices] = useState(false)
+  const [accepting, setAccepting] = useState(false)
 
   useEffect(() => {
     fetchOrder()
@@ -268,6 +275,33 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
       showNotification('error', 'Error de conexión', 'No se pudieron subir las facturas. Intenta de nuevo.')
     } finally {
       setUploadingInvoices(false)
+    }
+  }
+
+  const handleAcceptOrder = async () => {
+    if (!order) return
+
+    setAccepting(true)
+    try {
+      const response = await fetch(`/api/consignments/orders/${order.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'accept' })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        showNotification('success', 'Orden aceptada', 'La orden de consignación ha sido aceptada exitosamente')
+        fetchOrder() // Refresh order data
+      } else {
+        showNotification('error', 'Error', data.error || 'Error al aceptar la orden')
+      }
+    } catch (err) {
+      console.error('Error accepting order:', err)
+      showNotification('error', 'Error de conexión', 'No se pudo aceptar la orden. Intenta de nuevo.')
+    } finally {
+      setAccepting(false)
     }
   }
 
@@ -433,7 +467,7 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
                     <Receipt className="w-7 h-7 text-white" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-3 mb-1">
+                    <div className="flex items-center gap-3 mb-1 flex-wrap">
                       <h1 className={cn(
                         'text-2xl md:text-3xl font-bold font-mono',
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
@@ -452,6 +486,18 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
                         <StatusIcon className="w-3.5 h-3.5" />
                         {statusConfig.label}
                       </span>
+                      {order.needsAcceptance && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                          <AlertCircle className="w-3.5 h-3.5" />
+                          Pendiente Aceptación
+                        </span>
+                      )}
+                      {order.acceptedByName && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Aceptada
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-gray-500 mb-2">Orden de Consignación</p>
                     <div className="flex items-center gap-4 text-sm text-gray-500">
@@ -467,12 +513,39 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
                   </div>
                 </div>
 
-                {/* Right: Total */}
-                <div className={cn(
-                  'flex items-center gap-4 p-4 rounded-xl',
-                  theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
-                )}>
-                  <div className="text-right">
+                {/* Right: Total + Accept Button */}
+                <div className="flex items-center gap-4">
+                  {order.needsAcceptance && (
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleAcceptOrder}
+                      disabled={accepting}
+                      className={cn(
+                        'flex items-center gap-2 px-5 py-3 rounded-xl font-medium transition-colors',
+                        accepting
+                          ? 'bg-green-400 cursor-not-allowed'
+                          : 'bg-green-600 hover:bg-green-700',
+                        'text-white'
+                      )}
+                    >
+                      {accepting ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Aceptando...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-5 h-5" />
+                          Aceptar Orden
+                        </>
+                      )}
+                    </motion.button>
+                  )}
+                  <div className={cn(
+                    'p-4 rounded-xl',
+                    theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                  )}>
                     <p className="text-sm text-gray-500 mb-1">Total Costo</p>
                     <p className={cn(
                       'text-3xl font-bold',

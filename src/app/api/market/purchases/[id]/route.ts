@@ -73,14 +73,19 @@ export async function GET(
         mw.name as warehouse_name,
         mw.address as warehouse_address,
         COALESCE(u1.firstname || ' ' || u1.lastname, u1.email) as created_by_name,
+        u1.role as created_by_role,
         COALESCE(u2.firstname || ' ' || u2.lastname, u2.email) as confirmed_by_name,
-        COALESCE(u3.firstname || ' ' || u3.lastname, u3.email) as received_by_name
+        COALESCE(u3.firstname || ' ' || u3.lastname, u3.email) as received_by_name,
+        COALESCE(u4.firstname || ' ' || u4.lastname, u4.email) as accepted_by_name,
+        mp.accepted_by,
+        mp.accepted_at
       FROM market_purchases mp
       LEFT JOIN market_suppliers ms ON mp.supplier_id = ms.id
       LEFT JOIN market_warehouses mw ON mp.warehouse_id = mw.id
       LEFT JOIN users u1 ON mp.created_by = u1.id
       LEFT JOIN users u2 ON mp.confirmed_by = u2.id
       LEFT JOIN users u3 ON mp.received_by = u3.id
+      LEFT JOIN users u4 ON mp.accepted_by = u4.id
       WHERE mp.id = $1 AND mp.company_id = $2
     `, [purchaseId, companyId])
 
@@ -147,8 +152,13 @@ export async function GET(
         createdAt: purchase.created_at,
         updatedAt: purchase.updated_at,
         createdByName: purchase.created_by_name,
+        createdByRole: purchase.created_by_role || null,
         confirmedByName: purchase.confirmed_by_name,
         receivedByName: purchase.received_by_name,
+        acceptedByName: purchase.accepted_by_name || null,
+        acceptedAt: purchase.accepted_at || null,
+        // Indica si la orden necesita aceptación (creada por comercial y aún no aceptada)
+        needsAcceptance: purchase.created_by_role === 'MARKET_COMERCIAL' && !purchase.accepted_by,
         lines: linesResult.rows.map(line => ({
           id: line.id,
           productId: line.product_id,
@@ -265,6 +275,54 @@ export async function PUT(
       return NextResponse.json({
         success: true,
         message: 'Compra confirmada exitosamente'
+      })
+    }
+
+    // Accept order (for orders created by MARKET_COMERCIAL)
+    if (action === 'accept') {
+      // Only MARKET_ADMIN, MARKET_MANAGER, MANAGER, ADMIN, SUPER_ADMIN can accept
+      const canAccept = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKET_ADMIN', 'MARKET_MANAGER'].includes(payload.role)
+      if (!canAccept) {
+        return NextResponse.json({
+          success: false,
+          error: 'No tiene permisos para aceptar órdenes'
+        }, { status: 403 })
+      }
+
+      // Check if order was created by a comercial
+      const creatorCheck = await db.query(`
+        SELECT u.role as creator_role, mp.accepted_by
+        FROM market_purchases mp
+        JOIN users u ON mp.created_by = u.id
+        WHERE mp.id = $1
+      `, [purchaseId])
+
+      if (creatorCheck.rows.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Orden no encontrada'
+        }, { status: 404 })
+      }
+
+      if (creatorCheck.rows[0].accepted_by) {
+        return NextResponse.json({
+          success: false,
+          error: 'Esta orden ya fue aceptada'
+        }, { status: 400 })
+      }
+
+      // Update purchase with acceptance
+      await db.query(`
+        UPDATE market_purchases
+        SET accepted_by = $1,
+            accepted_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $2
+      `, [userId, purchaseId])
+
+      return NextResponse.json({
+        success: true,
+        message: 'Orden de compra aceptada exitosamente'
       })
     }
 
