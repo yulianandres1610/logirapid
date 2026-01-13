@@ -371,8 +371,8 @@ export default function BrokerOrdersPage() {
 
           {/* Orders List */}
           <div className={cn(
-            'rounded-xl border overflow-hidden',
-            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+            'rounded-xl md:border overflow-hidden',
+            theme === 'dark' ? 'md:bg-gray-800 md:border-gray-700' : 'md:bg-white md:border-gray-200'
           )}>
             {loading ? (
               <div className="p-8 text-center">
@@ -393,8 +393,8 @@ export default function BrokerOrdersPage() {
                 </div>
               ) : (
                 <>
-                  {/* Mobile Cards View */}
-                  <div className="md:hidden divide-y divide-gray-200 dark:divide-gray-700">
+                  {/* Mobile Cards View - Full info cards */}
+                  <div className="md:hidden space-y-3 p-3">
                     {filteredOrders.map((order) => {
                       const statusConfig = STATUSES[order.status] || STATUSES.pending
                       const StatusIcon = statusConfig.icon
@@ -402,98 +402,173 @@ export default function BrokerOrdersPage() {
                       return (
                         <div
                           key={order.id}
-                          className="p-3 space-y-2.5"
+                          className={cn(
+                            'rounded-xl border overflow-hidden',
+                            theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                          )}
                         >
-                          {/* Header: Order number + Amount + Status */}
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className={cn('font-semibold text-sm', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          {/* Card Header - Status color bar */}
+                          <div className={cn(
+                            'h-1',
+                            order.status === 'pending' && 'bg-amber-500',
+                            order.status === 'confirmed' && 'bg-blue-500',
+                            order.status === 'in_delivery' && 'bg-purple-500',
+                            order.status === 'delivered' && 'bg-green-500',
+                            (order.status === 'cancelled' || order.status === 'rejected') && 'bg-red-500'
+                          )} />
+
+                          <div className="p-4 space-y-3">
+                            {/* Row 1: Order # + Status + Amount */}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className={cn('font-bold text-base', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
                                   {order.orderNumber}
                                 </span>
                                 <span className={cn(
-                                  'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium',
+                                  'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium',
                                   statusConfig.color
                                 )}>
-                                  <StatusIcon className="w-2.5 h-2.5" />
+                                  <StatusIcon className="w-3 h-3" />
                                   {statusConfig.label}
                                 </span>
                               </div>
-                              <p className={cn('text-xs mt-0.5 truncate', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                                {order.recipientName} • {order.recipientMunicipality}
-                              </p>
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              <div className={cn('font-bold text-base', theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600')}>
+                              <div className={cn('font-bold text-lg', theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600')}>
                                 {formatCurrency(order.receiveAmount, order.receiveCurrency)}
                               </div>
                             </div>
-                          </div>
 
-                          {/* Actions - Full width buttons */}
-                          <div className="flex gap-2">
-                            {order.status === 'pending' && (
-                              <>
-                                <button
-                                  onClick={() => handleAction(order.id, 'accept')}
-                                  className="flex-1 py-2.5 bg-blue-600 active:bg-blue-700 text-white text-sm font-medium rounded-lg min-h-[44px] touch-manipulation"
-                                >
-                                  Aceptar
-                                </button>
-                                <button
-                                  onClick={() => openRejectModal(order)}
-                                  className="flex-1 py-2.5 bg-red-600 active:bg-red-700 text-white text-sm font-medium rounded-lg min-h-[44px] touch-manipulation"
-                                >
-                                  Rechazar
-                                </button>
-                              </>
-                            )}
+                            {/* Row 2: Recipient info */}
+                            <div className={cn(
+                              'rounded-lg p-3 space-y-2',
+                              theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                            )}>
+                              {/* Name */}
+                              <div className="flex items-center gap-2">
+                                <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                <span className={cn('font-medium text-sm', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                  {order.recipientName}
+                                </span>
+                              </div>
 
-                            {order.status === 'confirmed' && (
-                              <>
+                              {/* Phone - Clickable */}
+                              <div className="flex items-center gap-2">
+                                <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                <a
+                                  href={`tel:${order.recipientPhone}`}
+                                  className="text-sm text-blue-500 font-medium"
+                                >
+                                  {order.recipientPhone}
+                                </a>
+                              </div>
+
+                              {/* Address */}
+                              <div className="flex items-start gap-2">
+                                <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                                <div className={cn('text-sm', theme === 'dark' ? 'text-gray-300' : 'text-gray-600')}>
+                                  <div className="font-medium">{order.recipientMunicipality}, {order.recipientProvince}</div>
+                                  {order.recipientAddress && (
+                                    <div className="text-xs text-gray-500 mt-0.5">{order.recipientAddress}</div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Row 3: Date */}
+                            <div className="flex items-center justify-between text-xs text-gray-500">
+                              <span>
+                                {new Date(order.createdAt).toLocaleDateString('es-ES', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric'
+                                })}
+                              </span>
+                              {order.sellingCompanyName && (
+                                <span className="text-blue-500">{order.sellingCompanyName}</span>
+                              )}
+                            </div>
+
+                            {/* Row 4: Action buttons */}
+                            <div className="flex gap-2 pt-1">
+                              {order.status === 'pending' && (
+                                <>
+                                  <button
+                                    onClick={() => handleAction(order.id, 'accept')}
+                                    className="flex-1 py-3 bg-blue-600 active:bg-blue-700 text-white text-sm font-semibold rounded-xl min-h-[48px] touch-manipulation"
+                                  >
+                                    Aceptar Orden
+                                  </button>
+                                  <button
+                                    onClick={() => openRejectModal(order)}
+                                    className="py-3 px-4 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm font-semibold rounded-xl min-h-[48px] touch-manipulation"
+                                  >
+                                    Rechazar
+                                  </button>
+                                </>
+                              )}
+
+                              {order.status === 'confirmed' && (
+                                <>
+                                  <button
+                                    onClick={() => goToDeliveryWizard(order.id)}
+                                    className="flex-1 py-3 bg-emerald-600 active:bg-emerald-700 text-white text-sm font-semibold rounded-xl min-h-[48px] touch-manipulation flex items-center justify-center gap-2"
+                                  >
+                                    <Truck className="w-4 h-4" />
+                                    Iniciar Entrega
+                                  </button>
+                                  <button
+                                    onClick={() => openRejectModal(order)}
+                                    className={cn(
+                                      'py-3 px-4 text-sm font-medium rounded-xl min-h-[48px] touch-manipulation',
+                                      theme === 'dark'
+                                        ? 'bg-gray-700 text-gray-300'
+                                        : 'bg-gray-100 text-gray-600'
+                                    )}
+                                  >
+                                    Cancelar
+                                  </button>
+                                </>
+                              )}
+
+                              {order.status === 'in_delivery' && (
                                 <button
                                   onClick={() => goToDeliveryWizard(order.id)}
-                                  className="flex-1 py-2.5 bg-emerald-600 active:bg-emerald-700 text-white text-sm font-medium rounded-lg min-h-[44px] touch-manipulation"
+                                  className="flex-1 py-3 bg-purple-600 active:bg-purple-700 text-white text-sm font-semibold rounded-xl min-h-[48px] touch-manipulation flex items-center justify-center gap-2"
                                 >
-                                  Entregar
+                                  <CheckCircle className="w-4 h-4" />
+                                  Completar Entrega
                                 </button>
+                              )}
+
+                              {order.status === 'delivered' && (
                                 <button
-                                  onClick={() => openRejectModal(order)}
+                                  onClick={() => router.push(`/dashboard/broker/orders/${order.id}`)}
                                   className={cn(
-                                    'py-2.5 px-4 text-sm font-medium rounded-lg min-h-[44px] touch-manipulation',
+                                    'flex-1 py-3 flex items-center justify-center gap-2 rounded-xl min-h-[48px] touch-manipulation font-medium',
                                     theme === 'dark'
-                                      ? 'bg-gray-700 active:bg-gray-600 text-gray-300'
-                                      : 'bg-gray-200 active:bg-gray-300 text-gray-700'
+                                      ? 'bg-gray-700 text-white'
+                                      : 'bg-gray-100 text-gray-700'
                                   )}
                                 >
-                                  Rechazar
+                                  <Eye className="w-4 h-4" />
+                                  Ver Detalles
                                 </button>
-                              </>
-                            )}
+                              )}
 
-                            {order.status === 'in_delivery' && (
-                              <button
-                                onClick={() => goToDeliveryWizard(order.id)}
-                                className="flex-1 py-2.5 bg-emerald-600 active:bg-emerald-700 text-white text-sm font-medium rounded-lg min-h-[44px] touch-manipulation"
-                              >
-                                Completar Entrega
-                              </button>
-                            )}
-
-                            {order.status === 'delivered' && (
-                              <button
-                                onClick={() => router.push(`/dashboard/broker/orders/${order.id}`)}
-                                className={cn(
-                                  'flex-1 py-2.5 flex items-center justify-center gap-2 rounded-lg min-h-[44px] touch-manipulation',
-                                  theme === 'dark'
-                                    ? 'bg-gray-700 active:bg-gray-600 text-gray-300'
-                                    : 'bg-gray-100 active:bg-gray-200 text-gray-700'
-                                )}
-                              >
-                                <Eye className="w-4 h-4" />
-                                Ver detalles
-                              </button>
-                            )}
+                              {(order.status === 'cancelled' || order.status === 'rejected') && (
+                                <button
+                                  onClick={() => router.push(`/dashboard/broker/orders/${order.id}`)}
+                                  className={cn(
+                                    'flex-1 py-3 flex items-center justify-center gap-2 rounded-xl min-h-[48px] touch-manipulation font-medium',
+                                    theme === 'dark'
+                                      ? 'bg-gray-700 text-gray-400'
+                                      : 'bg-gray-100 text-gray-500'
+                                  )}
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  Ver Detalles
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       )
