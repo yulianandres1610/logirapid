@@ -264,234 +264,168 @@ export default function BrokerOrdersPage() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
-            {/* Stats Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-5">
+            {/* Stats Cards - Compact on mobile */}
+            <div className="grid grid-cols-4 gap-2 sm:gap-4">
               {/* Pendientes */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className={cn(
-                  'relative overflow-hidden',
-                  theme === 'dark'
-                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
-                  'rounded-2xl border shadow-xl'
-                )}
-              >
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600"></div>
-                <div className="p-3 sm:p-6">
-                  <div className="flex items-start justify-between mb-2 sm:mb-4">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <div className={cn(
-                        'p-2 sm:p-3 rounded-lg sm:rounded-xl shadow-sm',
-                        theme === 'dark'
-                          ? 'bg-amber-900/30 border border-amber-800/50'
-                          : 'bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200'
-                      )}>
-                        <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600" />
-                      </div>
-                      <div>
-                        <p className={cn('text-xs sm:text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-black')}>
-                          Pendientes
-                        </p>
-                        <p className={cn('text-2xl sm:text-3xl font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-                          {stats?.pendingCount || 0}
-                        </p>
-                      </div>
-                    </div>
+              <div className={cn(
+                'relative overflow-hidden rounded-xl border',
+                theme === 'dark'
+                  ? 'bg-gray-800 border-gray-700'
+                  : 'bg-white border-gray-200'
+              )}>
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-500"></div>
+                <div className="p-2 sm:p-4 flex flex-col items-center sm:flex-row sm:items-center sm:gap-3">
+                  <div className={cn(
+                    'p-1.5 sm:p-2.5 rounded-lg mb-1 sm:mb-0',
+                    theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100'
+                  )}>
+                    <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
                   </div>
-                  <div className="hidden sm:flex items-center gap-2">
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
-                      <span className={cn('text-xs font-medium', theme === 'dark' ? 'text-gray-500' : 'text-black')}>
-                        Por aceptar
-                      </span>
-                    </div>
+                  <div className="text-center sm:text-left">
+                    <p className={cn('text-lg sm:text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      {stats?.pendingCount || 0}
+                    </p>
+                    <p className={cn('text-[10px] sm:text-xs', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                      Pendientes
+                    </p>
                   </div>
                 </div>
-              </motion.div>
+              </div>
 
               {/* Confirmadas */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className={cn(
-                  'relative overflow-hidden',
-                  theme === 'dark'
-                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
-                  'rounded-2xl border shadow-xl'
-                )}
-              >
+              <div className={cn(
+                'relative overflow-hidden rounded-xl border',
+                theme === 'dark'
+                  ? 'bg-gray-800 border-gray-700'
+                  : 'bg-white border-gray-200'
+              )}>
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
-                <div className="p-3 sm:p-6">
-                  <div className="flex items-start justify-between mb-2 sm:mb-4">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <div className={cn(
-                        'p-2 sm:p-3 rounded-lg sm:rounded-xl shadow-sm',
-                        theme === 'dark'
-                          ? 'bg-blue-900/30 border border-blue-800/50'
-                          : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
-                      )}>
-                        <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
-                      </div>
-                      <div>
-                        <p className={cn('text-xs sm:text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-black')}>
-                          Confirmadas
-                        </p>
-                        <p className={cn('text-2xl sm:text-3xl font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-                          {stats?.confirmedCount || 0}
-                        </p>
-                      </div>
-                    </div>
+                <div className="p-2 sm:p-4 flex flex-col items-center sm:flex-row sm:items-center sm:gap-3">
+                  <div className={cn(
+                    'p-1.5 sm:p-2.5 rounded-lg mb-1 sm:mb-0',
+                    theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
+                  )}>
+                    <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                   </div>
-                  <div className="hidden sm:flex items-center gap-2">
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                      <span className={cn('text-xs font-medium', theme === 'dark' ? 'text-gray-500' : 'text-black')}>
-                        Listas para entregar
-                      </span>
-                    </div>
+                  <div className="text-center sm:text-left">
+                    <p className={cn('text-lg sm:text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      {stats?.confirmedCount || 0}
+                    </p>
+                    <p className={cn('text-[10px] sm:text-xs', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                      Confirmadas
+                    </p>
                   </div>
                 </div>
-              </motion.div>
+              </div>
 
               {/* En Entrega */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className={cn(
-                  'relative overflow-hidden',
-                  theme === 'dark'
-                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
-                  'rounded-2xl border shadow-xl'
-                )}
-              >
+              <div className={cn(
+                'relative overflow-hidden rounded-xl border',
+                theme === 'dark'
+                  ? 'bg-gray-800 border-gray-700'
+                  : 'bg-white border-gray-200'
+              )}>
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-purple-600"></div>
-                <div className="p-3 sm:p-6">
-                  <div className="flex items-start justify-between mb-2 sm:mb-4">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <div className={cn(
-                        'p-2 sm:p-3 rounded-lg sm:rounded-xl shadow-sm',
-                        theme === 'dark'
-                          ? 'bg-purple-900/30 border border-purple-800/50'
-                          : 'bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200'
-                      )}>
-                        <Truck className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
-                      </div>
-                      <div>
-                        <p className={cn('text-xs sm:text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-black')}>
-                          En Entrega
-                        </p>
-                        <p className={cn('text-2xl sm:text-3xl font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-                          {stats?.inDeliveryCount || 0}
-                        </p>
-                      </div>
-                    </div>
+                <div className="p-2 sm:p-4 flex flex-col items-center sm:flex-row sm:items-center sm:gap-3">
+                  <div className={cn(
+                    'p-1.5 sm:p-2.5 rounded-lg mb-1 sm:mb-0',
+                    theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'
+                  )}>
+                    <Truck className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
                   </div>
-                  <div className="hidden sm:flex items-center gap-2">
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
-                      <span className={cn('text-xs font-medium', theme === 'dark' ? 'text-gray-500' : 'text-black')}>
-                        En proceso
-                      </span>
-                    </div>
+                  <div className="text-center sm:text-left">
+                    <p className={cn('text-lg sm:text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      {stats?.inDeliveryCount || 0}
+                    </p>
+                    <p className={cn('text-[10px] sm:text-xs', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                      En Entrega
+                    </p>
                   </div>
                 </div>
-              </motion.div>
+              </div>
 
-              {/* Monto Pendiente */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className={cn(
-                  'relative overflow-hidden',
-                  theme === 'dark'
-                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
-                  'rounded-2xl border shadow-xl'
-                )}
-              >
+              {/* Monto */}
+              <div className={cn(
+                'relative overflow-hidden rounded-xl border',
+                theme === 'dark'
+                  ? 'bg-gray-800 border-gray-700'
+                  : 'bg-white border-gray-200'
+              )}>
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-600"></div>
-                <div className="p-3 sm:p-6">
-                  <div className="flex items-start justify-between mb-2 sm:mb-4">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <div className={cn(
-                        'p-2 sm:p-3 rounded-lg sm:rounded-xl shadow-sm',
-                        theme === 'dark'
-                          ? 'bg-emerald-900/30 border border-emerald-800/50'
-                          : 'bg-gradient-to-br from-emerald-50 to-green-100 border border-emerald-200'
-                      )}>
-                        <DollarSign className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
-                      </div>
-                      <div>
-                        <p className={cn('text-xs sm:text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-black')}>
-                          Por Entregar
-                        </p>
-                        <p className={cn('text-2xl sm:text-3xl font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-                          ${(stats?.pendingAmount || 0).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
+                <div className="p-2 sm:p-4 flex flex-col items-center sm:flex-row sm:items-center sm:gap-3">
+                  <div className={cn(
+                    'p-1.5 sm:p-2.5 rounded-lg mb-1 sm:mb-0',
+                    theme === 'dark' ? 'bg-emerald-900/30' : 'bg-emerald-100'
+                  )}>
+                    <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
                   </div>
-                  <div className="hidden sm:flex items-center gap-2">
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
-                      <span className={cn('text-xs font-medium', theme === 'dark' ? 'text-gray-500' : 'text-black')}>
-                        Monto total activo
-                      </span>
-                    </div>
+                  <div className="text-center sm:text-left">
+                    <p className={cn('text-sm sm:text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      <span className="sm:hidden">${((stats?.pendingAmount || 0) / 1000).toFixed(0)}k</span>
+                      <span className="hidden sm:inline">${(stats?.pendingAmount || 0).toLocaleString()}</span>
+                    </p>
+                    <p className={cn('text-[10px] sm:text-xs', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                      Por Entregar
+                    </p>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             </div>
 
             {/* Filters Bar */}
             <div className={cn(
-              'space-y-3 py-3 sm:py-4 px-3 sm:px-4 rounded-xl border',
+              'space-y-2 sm:space-y-3 p-2 sm:p-4 rounded-xl border',
               theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
             )}>
-              {/* Search - Full width on mobile */}
-              <div className="relative w-full">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Buscar por orden, nombre o telefono..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+              {/* Search + Refresh button row */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Buscar..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className={cn(
+                      'w-full h-10 pl-9 pr-3 rounded-lg border transition-colors text-sm',
+                      'focus:outline-none focus:ring-2 focus:ring-blue-500',
+                      theme === 'dark'
+                        ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400'
+                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                    )}
+                  />
+                </div>
+                <button
+                  onClick={fetchOrders}
                   className={cn(
-                    'w-full h-11 pl-10 pr-4 rounded-lg border transition-colors text-base',
-                    'focus:outline-none focus:ring-2 focus:ring-blue-500',
+                    'h-10 w-10 flex items-center justify-center rounded-lg flex-shrink-0 touch-manipulation',
                     theme === 'dark'
-                      ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400'
-                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
                   )}
-                />
+                >
+                  <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+                </button>
               </div>
 
-              {/* Status tabs - Scrollable on mobile */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+              {/* Status tabs - Scrollable horizontal */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
                 {statusTabs.map(tab => (
                   <button
                     key={tab.value}
                     onClick={() => setSelectedStatus(tab.value)}
                     className={cn(
-                      'px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0',
+                      'px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 touch-manipulation min-h-[36px]',
                       selectedStatus === tab.value
                         ? 'bg-blue-600 text-white'
                         : theme === 'dark'
-                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? 'bg-gray-700 text-gray-300 active:bg-gray-600'
+                          : 'bg-gray-100 text-gray-700 active:bg-gray-200'
                     )}
                   >
                     {tab.label}
                     <span className={cn(
-                      'ml-1.5 px-1.5 py-0.5 rounded-full text-xs',
+                      'ml-1 px-1.5 py-0.5 rounded-full text-[10px] sm:text-xs',
                       selectedStatus === tab.value
                         ? 'bg-blue-500 text-white'
                         : theme === 'dark' ? 'bg-gray-600' : 'bg-gray-200'
@@ -500,20 +434,6 @@ export default function BrokerOrdersPage() {
                     </span>
                   </button>
                 ))}
-
-                <Button
-                  onClick={fetchOrders}
-                  size="sm"
-                  className={cn(
-                    'h-9 px-3 gap-1.5 flex-shrink-0 ml-auto',
-                    theme === 'dark'
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
-                  )}
-                >
-                  <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
-                  <span className="hidden sm:inline">Actualizar</span>
-                </Button>
               </div>
             </div>
 
@@ -548,82 +468,49 @@ export default function BrokerOrdersPage() {
                       const StatusIcon = statusConfig.icon
 
                       return (
-                        <motion.div
+                        <div
                           key={order.id}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          className="p-4 space-y-3"
+                          className="p-3 space-y-2.5"
                         >
-                          {/* Header: Order number, status, amount */}
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <div className={cn('font-semibold text-base', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                                {order.orderNumber}
+                          {/* Header: Order number + Amount + Status */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={cn('font-semibold text-sm', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                  {order.orderNumber}
+                                </span>
+                                <span className={cn(
+                                  'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium',
+                                  statusConfig.color
+                                )}>
+                                  <StatusIcon className="w-2.5 h-2.5" />
+                                  {statusConfig.label}
+                                </span>
                               </div>
-                              <div className="text-xs text-gray-500 mt-0.5">
-                                {new Date(order.createdAt).toLocaleDateString('es-ES', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </div>
+                              <p className={cn('text-xs mt-0.5 truncate', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                {order.recipientName} • {order.recipientMunicipality}
+                              </p>
                             </div>
-                            <div className="text-right">
-                              <div className={cn('font-bold text-lg', theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600')}>
+                            <div className="text-right flex-shrink-0">
+                              <div className={cn('font-bold text-base', theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600')}>
                                 {formatCurrency(order.receiveAmount, order.receiveCurrency)}
                               </div>
-                              <span className={cn(
-                                'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium mt-1',
-                                statusConfig.color
-                              )}>
-                                <StatusIcon className="w-3 h-3" />
-                                {statusConfig.label}
-                              </span>
                             </div>
                           </div>
 
-                          {/* Recipient info */}
-                          <div className={cn(
-                            'p-3 rounded-lg space-y-2',
-                            theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                          )}>
-                            <div className="flex items-center gap-2">
-                              <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              <span className={cn('font-medium text-sm', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                                {order.recipientName}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              <a href={`tel:${order.recipientPhone}`} className="text-sm text-blue-500">
-                                {order.recipientPhone}
-                              </a>
-                            </div>
-                            <div className="flex items-start gap-2">
-                              <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                              <div className="text-sm text-gray-500">
-                                <div>{order.recipientMunicipality}, {order.recipientProvince}</div>
-                                {order.recipientAddress && (
-                                  <div className="text-xs mt-0.5">{order.recipientAddress}</div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Actions */}
-                          <div className="flex gap-2 pt-1">
+                          {/* Actions - Full width buttons */}
+                          <div className="flex gap-2">
                             {order.status === 'pending' && (
                               <>
                                 <button
                                   onClick={() => handleAction(order.id, 'accept')}
-                                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                                  className="flex-1 py-2.5 bg-blue-600 active:bg-blue-700 text-white text-sm font-medium rounded-lg min-h-[44px] touch-manipulation"
                                 >
                                   Aceptar
                                 </button>
                                 <button
                                   onClick={() => openRejectModal(order)}
-                                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+                                  className="flex-1 py-2.5 bg-red-600 active:bg-red-700 text-white text-sm font-medium rounded-lg min-h-[44px] touch-manipulation"
                                 >
                                   Rechazar
                                 </button>
@@ -634,17 +521,17 @@ export default function BrokerOrdersPage() {
                               <>
                                 <button
                                   onClick={() => goToDeliveryWizard(order.id)}
-                                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors"
+                                  className="flex-1 py-2.5 bg-emerald-600 active:bg-emerald-700 text-white text-sm font-medium rounded-lg min-h-[44px] touch-manipulation"
                                 >
                                   Entregar
                                 </button>
                                 <button
                                   onClick={() => openRejectModal(order)}
                                   className={cn(
-                                    'py-2.5 px-4 text-sm font-medium rounded-lg transition-colors',
+                                    'py-2.5 px-4 text-sm font-medium rounded-lg min-h-[44px] touch-manipulation',
                                     theme === 'dark'
-                                      ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                                      : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                                      ? 'bg-gray-700 active:bg-gray-600 text-gray-300'
+                                      : 'bg-gray-200 active:bg-gray-300 text-gray-700'
                                   )}
                                 >
                                   Rechazar
@@ -655,7 +542,7 @@ export default function BrokerOrdersPage() {
                             {order.status === 'in_delivery' && (
                               <button
                                 onClick={() => goToDeliveryWizard(order.id)}
-                                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors"
+                                className="flex-1 py-2.5 bg-emerald-600 active:bg-emerald-700 text-white text-sm font-medium rounded-lg min-h-[44px] touch-manipulation"
                               >
                                 Completar Entrega
                               </button>
@@ -665,10 +552,10 @@ export default function BrokerOrdersPage() {
                               <button
                                 onClick={() => router.push(`/dashboard/broker/orders/${order.id}`)}
                                 className={cn(
-                                  'flex-1 py-2.5 flex items-center justify-center gap-2 rounded-lg transition-colors',
+                                  'flex-1 py-2.5 flex items-center justify-center gap-2 rounded-lg min-h-[44px] touch-manipulation',
                                   theme === 'dark'
-                                    ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                                    ? 'bg-gray-700 active:bg-gray-600 text-gray-300'
+                                    : 'bg-gray-100 active:bg-gray-200 text-gray-700'
                                 )}
                               >
                                 <Eye className="w-4 h-4" />
@@ -676,7 +563,7 @@ export default function BrokerOrdersPage() {
                               </button>
                             )}
                           </div>
-                        </motion.div>
+                        </div>
                       )
                     })}
                   </div>
