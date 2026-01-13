@@ -4,7 +4,6 @@ import { useEffect, useState, useRef } from 'react'
 import { motion, AnimatePresence, useSpring, useTransform } from 'framer-motion'
 import {
   DollarSign,
-  Plus,
   Clock,
   CheckCircle,
   AlertCircle,
@@ -122,13 +121,6 @@ export default function BrokerWalletPage() {
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({ totalDeposits: 0, totalWithdrawals: 0, totalTransactions: 0 })
 
-  // Deposit modal state
-  const [showDepositModal, setShowDepositModal] = useState(false)
-  const [depositCurrency, setDepositCurrency] = useState('USD')
-  const [depositAmount, setDepositAmount] = useState('')
-  const [depositNotes, setDepositNotes] = useState('')
-  const [depositLoading, setDepositLoading] = useState(false)
-
   // Transaction detail modal
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
 
@@ -206,42 +198,6 @@ export default function BrokerWalletPage() {
       console.error('Error fetching wallet:', error)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleDeposit = async () => {
-    if (!depositAmount || parseFloat(depositAmount) <= 0) {
-      alert('Ingrese un monto valido')
-      return
-    }
-
-    setDepositLoading(true)
-    try {
-      const response = await fetch('/api/broker/wallet', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'deposit',
-          amount: parseFloat(depositAmount),
-          notes: depositNotes || `Deposito de ${depositAmount} ${depositCurrency}`,
-          paymentMethod: 'wire'
-        })
-      })
-
-      const data = await response.json()
-      if (data.success) {
-        setShowDepositModal(false)
-        setDepositAmount('')
-        setDepositNotes('')
-        fetchWalletData()
-      } else {
-        alert(data.error || 'Error al depositar')
-      }
-    } catch (error) {
-      console.error('Error:', error)
-      alert('Error al procesar el deposito')
-    } finally {
-      setDepositLoading(false)
     }
   }
 
@@ -349,33 +305,6 @@ export default function BrokerWalletPage() {
       <DashboardLayout>
         <div className="p-4 md:p-6 space-y-4 md:space-y-6">
           {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">
-                Mi Wallet
-              </h1>
-              <p className="text-sm md:text-base text-gray-500 dark:text-gray-400 mt-0.5 md:mt-1">
-                Gestiona tus balances y movimientos
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={fetchWalletData}
-                className="flex items-center justify-center gap-2 px-3 md:px-4 py-2.5 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors min-h-[44px] touch-manipulation"
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span className="hidden sm:inline">Actualizar</span>
-              </button>
-              <button
-                onClick={() => setShowDepositModal(true)}
-                className="flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-[#cc0a46] dark:bg-[#2a5caa] text-white rounded-xl hover:opacity-90 transition-colors min-h-[44px] touch-manipulation font-medium"
-              >
-                <Plus className="w-4 h-4" />
-                Depositar
-              </button>
-            </div>
-          </div>
-
           {/* Main Balance Card with Counting Effect */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -688,124 +617,6 @@ export default function BrokerWalletPage() {
                       className="w-full py-3 md:py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium min-h-[48px] touch-manipulation"
                     >
                       Cerrar
-                    </button>
-                  </div>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Deposit Modal - Bottom sheet on mobile */}
-          <AnimatePresence>
-            {showDepositModal && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 z-50 md:flex md:items-center md:justify-center md:p-4"
-                onClick={() => setShowDepositModal(false)}
-              >
-                <motion.div
-                  initial={{ y: '100%', opacity: 1 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: '100%', opacity: 1 }}
-                  transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                  onClick={e => e.stopPropagation()}
-                  className="absolute bottom-0 left-0 right-0 md:relative md:bottom-auto bg-white dark:bg-gray-800 rounded-t-3xl md:rounded-2xl shadow-xl w-full md:max-w-md max-h-[90vh] overflow-y-auto"
-                  style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-                >
-                  {/* Handle bar - mobile only */}
-                  <div className="md:hidden flex justify-center pt-3 pb-1">
-                    <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
-                  </div>
-
-                  <div className="p-4 md:p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                    <h3 className="text-base md:text-lg font-semibold text-gray-900 dark:text-white">
-                      Depositar Fondos
-                    </h3>
-                    <button
-                      onClick={() => setShowDepositModal(false)}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors touch-manipulation"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <div className="p-4 md:p-5 space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Moneda
-                      </label>
-                      <div className="grid grid-cols-4 gap-2">
-                        {CURRENCIES.map(currency => (
-                          <button
-                            key={currency.code}
-                            onClick={() => setDepositCurrency(currency.code)}
-                            className={`p-2.5 md:p-3 rounded-xl border-2 text-center transition-colors touch-manipulation ${
-                              depositCurrency === currency.code
-                                ? 'border-[#cc0a46] dark:border-[#2a5caa] bg-[#cc0a46]/10 dark:bg-[#2a5caa]/10'
-                                : 'border-gray-200 dark:border-gray-600 active:border-gray-300'
-                            }`}
-                          >
-                            <span className="text-lg md:text-xl">{currency.flag}</span>
-                            <p className="text-[10px] md:text-xs font-medium mt-1">{currency.code}</p>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Monto
-                      </label>
-                      <div className="relative">
-                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          value={depositAmount}
-                          onChange={e => setDepositAmount(e.target.value)}
-                          placeholder="0.00"
-                          className="w-full pl-10 pr-16 py-3 md:py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#cc0a46] dark:focus:ring-[#2a5caa] focus:border-transparent text-base"
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-500">
-                          {depositCurrency}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Notas (opcional)
-                      </label>
-                      <textarea
-                        value={depositNotes}
-                        onChange={e => setDepositNotes(e.target.value)}
-                        placeholder="Referencia o descripcion del deposito..."
-                        rows={2}
-                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#cc0a46] dark:focus:ring-[#2a5caa] focus:border-transparent resize-none text-base"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="p-4 md:p-5 border-t border-gray-200 dark:border-gray-700 flex gap-3">
-                    <button
-                      onClick={() => setShowDepositModal(false)}
-                      className="flex-1 px-4 py-3 md:py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium min-h-[48px] touch-manipulation"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleDeposit}
-                      disabled={depositLoading || !depositAmount}
-                      className="flex-1 px-4 py-3 md:py-2.5 bg-[#cc0a46] dark:bg-[#2a5caa] text-white rounded-xl hover:opacity-90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 font-medium min-h-[48px] touch-manipulation"
-                    >
-                      {depositLoading ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Plus className="w-4 h-4" />
-                      )}
-                      Depositar
                     </button>
                   </div>
                 </motion.div>

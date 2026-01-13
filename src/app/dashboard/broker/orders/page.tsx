@@ -877,30 +877,37 @@ export default function BrokerOrdersPage() {
               {/* Pagination */}
               {totalOrders > ORDERS_PER_PAGE && (
                 <div className={cn(
-                  'p-4 border-t flex items-center justify-between',
+                  'p-3 sm:p-4 border-t flex flex-col sm:flex-row items-center justify-between gap-3',
                   theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                 )}>
-                  <div className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                    Mostrando {((currentPage - 1) * ORDERS_PER_PAGE) + 1} a{' '}
-                    {Math.min(currentPage * ORDERS_PER_PAGE, totalOrders)} de {totalOrders}
+                  <div className={cn('text-xs sm:text-sm text-center sm:text-left', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                    {((currentPage - 1) * ORDERS_PER_PAGE) + 1}-{Math.min(currentPage * ORDERS_PER_PAGE, totalOrders)} de {totalOrders}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setCurrentPage(currentPage - 1)}
                       disabled={currentPage === 1}
+                      className="flex-1 sm:flex-none min-h-[44px] sm:min-h-0"
                     >
                       <ChevronLeft className="w-4 h-4" />
-                      Anterior
+                      <span className="hidden sm:inline">Anterior</span>
                     </Button>
+                    <span className={cn(
+                      'px-3 py-1.5 rounded-lg text-sm font-medium',
+                      theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-900'
+                    )}>
+                      {currentPage}/{Math.ceil(totalOrders / ORDERS_PER_PAGE)}
+                    </span>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setCurrentPage(currentPage + 1)}
                       disabled={currentPage >= Math.ceil(totalOrders / ORDERS_PER_PAGE)}
+                      className="flex-1 sm:flex-none min-h-[44px] sm:min-h-0"
                     >
-                      Siguiente
+                      <span className="hidden sm:inline">Siguiente</span>
                       <ChevronRight className="w-4 h-4" />
                     </Button>
                   </div>
@@ -916,11 +923,15 @@ export default function BrokerOrdersPage() {
                 initial={{ opacity: 0, y: 50 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 50 }}
-                className="fixed bottom-6 right-6 bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 z-50"
+                className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:bottom-6 bg-emerald-600 text-white px-4 sm:px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 z-50"
+                style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
               >
-                <CheckCircle className="w-5 h-5" />
-                <span>{successMessage}</span>
-                <button onClick={() => setSuccessMessage(null)}>
+                <CheckCircle className="w-5 h-5 flex-shrink-0" />
+                <span className="flex-1 text-sm sm:text-base">{successMessage}</span>
+                <button
+                  onClick={() => setSuccessMessage(null)}
+                  className="p-1 hover:bg-white/20 rounded-full transition-colors"
+                >
                   <X className="w-4 h-4" />
                 </button>
               </motion.div>

@@ -341,60 +341,39 @@ export default function BrokerCashDeliveriesPage() {
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="p-6 space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Entregas de Efectivo
-              </h1>
-              <p className="text-gray-500 dark:text-gray-400">
-                Recibe efectivo de los repartidores
-              </p>
-            </div>
-
-            <button
-              onClick={loadDeliveries}
-              disabled={isLoading}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-white transition-colors"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-              Actualizar
-            </button>
-          </div>
-
+        <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
           {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-[#cc0a46] dark:bg-[#2a5caa]">
-                  <Clock className="h-5 w-5 text-white" />
+          <div className="grid grid-cols-3 gap-2 sm:gap-4">
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-2.5 sm:p-4">
+              <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3">
+                <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-[#cc0a46] dark:bg-[#2a5caa]">
+                  <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{pendingDeliveries.length}</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Pendientes</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-[#cc0a46] dark:bg-[#2a5caa]">
-                  <Shield className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{inProgressDeliveries.length}</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">En Proceso</p>
+                <div className="text-center sm:text-left">
+                  <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{pendingDeliveries.length}</p>
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Pendientes</p>
                 </div>
               </div>
             </div>
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-[#cc0a46] dark:bg-[#2a5caa]">
-                  <CheckCircle className="h-5 w-5 text-white" />
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-2.5 sm:p-4">
+              <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3">
+                <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-[#cc0a46] dark:bg-[#2a5caa]">
+                  <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{completedDeliveries.length}</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Completadas</p>
+                <div className="text-center sm:text-left">
+                  <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{inProgressDeliveries.length}</p>
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">En Proceso</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-2.5 sm:p-4">
+              <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3">
+                <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-[#cc0a46] dark:bg-[#2a5caa]">
+                  <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                </div>
+                <div className="text-center sm:text-left">
+                  <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{completedDeliveries.length}</p>
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Completadas</p>
                 </div>
               </div>
             </div>
@@ -427,11 +406,11 @@ export default function BrokerCashDeliveriesPage() {
               {/* Pending/In Progress Section */}
               {[...inProgressDeliveries, ...pendingDeliveries].length > 0 && (
                 <div>
-                  <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white flex items-center gap-2">
+                  <h2 className="text-base sm:text-lg font-semibold mb-2 sm:mb-3 text-gray-900 dark:text-white flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-[#cc0a46] dark:bg-[#2a5caa] animate-pulse"></span>
                     Pendientes de Recibir
                   </h2>
-                  <div className="space-y-3">
+                  <div className="space-y-2 sm:space-y-3">
                     <AnimatePresence>
                       {[...inProgressDeliveries, ...pendingDeliveries].map((delivery, index) => {
                         const statusConfig = STATUS_CONFIG[delivery.status] || STATUS_CONFIG.pending
@@ -446,47 +425,55 @@ export default function BrokerCashDeliveriesPage() {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -20 }}
                             transition={{ delay: index * 0.05 }}
-                            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5"
+                            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 sm:p-5"
                           >
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-3 mb-2">
-                                  <span className="font-bold text-gray-900 dark:text-white">
-                                    {delivery.order_number}
-                                  </span>
-                                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig.bgColor} ${statusConfig.color}`}>
-                                    <StatusIcon className="h-3 w-3" />
-                                    {statusConfig.label}
-                                  </span>
+                            <div className="flex flex-col gap-3 sm:gap-4">
+                              {/* Header: Order number + Status + Amount */}
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-bold text-sm sm:text-base text-gray-900 dark:text-white">
+                                      {delivery.order_number}
+                                    </span>
+                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.bgColor} ${statusConfig.color}`}>
+                                      <StatusIcon className="h-3 w-3" />
+                                      {statusConfig.label}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                    {delivery.delivery_user_name}
+                                  </p>
                                 </div>
-
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                                  <div className="flex items-center gap-2">
-                                    <User className="h-4 w-4 text-gray-400" />
-                                    <span className="text-gray-600 dark:text-gray-300">{delivery.delivery_user_name}</span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Phone className="h-4 w-4 text-gray-400" />
-                                    <span className="text-gray-600 dark:text-gray-300">{delivery.delivery_user_phone}</span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <DollarSign className="h-4 w-4 text-gray-400" />
-                                    <span className="font-bold text-gray-900 dark:text-white">
-                                      {delivery.currency} ${parseFloat(String(delivery.total_amount)).toLocaleString()}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Calendar className="h-4 w-4 text-gray-400" />
-                                    <span className="text-gray-500 dark:text-gray-400">
-                                      {new Date(delivery.deadline_date).toLocaleDateString('es-ES')}
-                                    </span>
-                                  </div>
+                                <div className="text-right">
+                                  <span className="font-bold text-base sm:text-lg text-emerald-600 dark:text-emerald-400">
+                                    ${parseFloat(String(delivery.total_amount)).toLocaleString()}
+                                  </span>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    {delivery.currency}
+                                  </p>
                                 </div>
                               </div>
 
+                              {/* Details - Only visible on larger screens */}
+                              <div className="hidden sm:grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                                <div className="flex items-center gap-2">
+                                  <Phone className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                  <a href={`tel:${delivery.delivery_user_phone}`} className="text-blue-500 truncate">
+                                    {delivery.delivery_user_phone}
+                                  </a>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Calendar className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                  <span className="text-gray-500 dark:text-gray-400">
+                                    {new Date(delivery.deadline_date).toLocaleDateString('es-ES')}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Action button */}
                               <button
                                 onClick={() => handleStartReception(delivery)}
-                                className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all whitespace-nowrap ${
+                                className={`w-full sm:w-auto sm:self-end flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold transition-all whitespace-nowrap min-h-[44px] touch-manipulation ${
                                   isValidating
                                     ? 'bg-purple-600 hover:bg-purple-700 text-white'
                                     : isReceiving
@@ -562,26 +549,33 @@ export default function BrokerCashDeliveriesPage() {
           )}
         </div>
 
-        {/* Modal */}
+        {/* Modal - Bottom sheet on mobile */}
         <AnimatePresence>
           {selectedDelivery && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+              className="fixed inset-0 z-50 sm:flex sm:items-center sm:justify-center sm:p-4 bg-black/50 backdrop-blur-sm"
               onClick={(e) => e.target === e.currentTarget && !isProcessing && closeModal()}
             >
               <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+                initial={{ y: '100%', opacity: 1 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: '100%', opacity: 1 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                className="absolute bottom-0 left-0 right-0 sm:relative sm:bottom-auto bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto"
+                style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
               >
+                {/* Handle bar - mobile only */}
+                <div className="sm:hidden flex justify-center pt-3 pb-1">
+                  <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
+                </div>
+
                 {/* Modal Header */}
-                <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700">
                   <div>
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                    <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
                       {modalStep === 'bills' && 'Contar Billetes'}
                       {modalStep === 'otp' && 'Verificar Código OTP'}
                       {modalStep === 'success' && 'Recepción Completada'}
@@ -601,7 +595,7 @@ export default function BrokerCashDeliveriesPage() {
                 </div>
 
                 {/* Modal Content */}
-                <div className="p-5">
+                <div className="p-4 sm:p-5">
                   {/* Error Message */}
                   {modalError && (
                     <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm">
