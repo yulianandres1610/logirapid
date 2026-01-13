@@ -11,6 +11,19 @@ interface JWTPayload {
   companyId: number
 }
 
+// CORS headers for API calls
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie',
+  'Access-Control-Allow-Credentials': 'true',
+}
+
+// Handle CORS preflight requests
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders })
+}
+
 async function getPayload(): Promise<JWTPayload | null> {
   const cookieStore = await cookies()
   const token = cookieStore.get('auth-token')?.value
