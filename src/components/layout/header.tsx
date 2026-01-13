@@ -83,10 +83,12 @@ interface SearchResult {
 
 interface HeaderProps {
   onToggleSidebar: () => void
+  onToggleMobileMenu?: () => void
   sidebarCollapsed: boolean
+  mobileMenuOpen?: boolean
 }
 
-export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
+export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, mobileMenuOpen }: HeaderProps) {
   const router = useRouter()
   const { user } = useAuth()
   const { theme, toggleTheme } = useTheme()
@@ -325,16 +327,33 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
         )}
       </div>
 
-      <div className="relative z-10 px-6 py-4">
+      <div className="relative z-10 px-3 md:px-6 py-3 md:py-4">
         <div className="flex items-center justify-between">
           {/* Left section */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 md:gap-4">
+            {/* Mobile menu toggle button */}
+            {onToggleMobileMenu && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onToggleMobileMenu}
+                className={cn(
+                  "md:hidden flex-shrink-0 rounded-xl transition-all duration-200",
+                  theme === 'dark'
+                    ? "text-gray-400 hover:text-white hover:bg-gray-800"
+                    : "text-gray-600 hover:text-exa-primary hover:bg-gray-100"
+                )}
+              >
+                <Menu className="w-6 h-6" />
+              </Button>
+            )}
             {/* Search bar */}
             <div ref={searchRef} className="relative">
               <form onSubmit={handleSearchSubmit}>
                 <motion.div
                   className={cn(
-                    "relative flex items-center border rounded-2xl transition-all duration-300",
+                    "relative flex items-center border rounded-xl md:rounded-2xl transition-all duration-300",
+                    "w-[180px] md:w-[280px]",
                     theme === 'dark'
                       ? "bg-gray-800/50 border-gray-700"
                       : "bg-white/80 border-gray-200 shadow-sm backdrop-blur-sm",
@@ -343,16 +362,14 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                           theme === 'dark'
                             ? 'border-exa-secondary ring-exa-secondary/30 bg-gray-800/70'
                             : 'border-exa-primary ring-exa-primary/20 bg-white shadow-md'
-                        }`
+                        } w-[220px] md:w-[380px]`
                       : theme === 'dark'
                         ? "hover:border-gray-600"
                         : "hover:border-exa-primary/40 hover:shadow-md"
                   )}
-                  animate={{ width: searchFocused ? 380 : 300 }}
-                  transition={{ duration: 0.3 }}
                 >
                   <Search className={cn(
-                    "absolute left-4 w-5 h-5 transition-all duration-300",
+                    "absolute left-3 md:left-4 w-4 md:w-5 h-4 md:h-5 transition-all duration-300",
                     searchFocused
                       ? theme === 'dark' ? "text-exa-secondary scale-110" : "text-exa-primary scale-110"
                       : theme === 'dark'
@@ -366,9 +383,9 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onFocus={handleSearchFocus}
                     onBlur={handleSearchBlur}
-                    placeholder="Buscar ordenes, vistas..."
+                    placeholder="Buscar..."
                     className={cn(
-                      "w-full pl-12 pr-4 py-3 bg-transparent rounded-2xl focus:outline-none transition-all duration-300",
+                      "w-full pl-9 md:pl-12 pr-3 md:pr-4 py-2 md:py-3 bg-transparent rounded-xl md:rounded-2xl focus:outline-none transition-all duration-300 text-sm md:text-base",
                       theme === 'dark'
                         ? "text-white placeholder-gray-400"
                         : "text-black placeholder-gray-500"
@@ -538,9 +555,9 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
           </div>
 
           {/* Right section */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 md:gap-3">
 
-            {/* Company Wallet Balance - Hidden for MARKET companies */}
+            {/* Company Wallet Balance - Hidden for MARKET companies and on mobile */}
             {user?.companyType !== 'market' && !user?.role?.startsWith('MARKET_') && (
               <motion.div
                 onClick={handleWalletClick}
@@ -549,7 +566,7 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 className={cn(
-                  "flex items-center gap-2 px-3 py-2 rounded-xl border transition-all duration-300 cursor-pointer",
+                  "hidden sm:flex items-center gap-2 px-2 md:px-3 py-1.5 md:py-2 rounded-lg md:rounded-xl border transition-all duration-300 cursor-pointer",
                   theme === 'dark'
                     ? "bg-green-500/10 border-green-500/20 hover:bg-green-500/15"
                     : "bg-green-50 border-green-200 hover:bg-green-100"
@@ -562,7 +579,7 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                 )} />
                 {walletLoading ? (
                   <span className={cn(
-                    "text-sm font-semibold",
+                    "text-xs md:text-sm font-semibold",
                     theme === 'dark' ? "text-green-400" : "text-green-600"
                   )}>
                     $...
@@ -575,7 +592,7 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                     prefix="$"
                     decimals={2}
                     className={cn(
-                      "text-sm font-semibold",
+                      "text-xs md:text-sm font-semibold",
                       theme === 'dark' ? "text-green-400" : "text-green-600"
                     )}
                     showChangeIndicator={true}
@@ -584,13 +601,13 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
               </motion.div>
             )}
 
-            {/* Theme toggle */}
+            {/* Theme toggle - Hidden on very small screens */}
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleTheme}
               className={cn(
-                "relative hover:bg-white/10 transition-all duration-300 rounded-xl",
+                "hidden sm:flex relative hover:bg-white/10 transition-all duration-300 rounded-lg md:rounded-xl w-9 h-9 md:w-10 md:h-10",
                 theme === 'dark'
                   ? "text-gray-400 hover:text-white"
                   : "text-gray-600 hover:text-exa-primary hover:bg-exa-primary/5"
@@ -601,9 +618,9 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                 transition={{ duration: 0.5 }}
               >
                 {theme === 'dark' ? (
-                  <Moon className="w-5 h-5" />
+                  <Moon className="w-4 md:w-5 h-4 md:h-5" />
                 ) : (
-                  <Sun className="w-5 h-5" />
+                  <Sun className="w-4 md:w-5 h-4 md:h-5" />
                 )}
               </motion.div>
             </Button>
@@ -615,13 +632,13 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                 size="icon"
                 onClick={() => setShowNotifications(!showNotifications)}
                 className={cn(
-                  "relative hover:bg-white/10 transition-all duration-300 rounded-xl border border-transparent",
+                  "relative hover:bg-white/10 transition-all duration-300 rounded-lg md:rounded-xl border border-transparent w-9 h-9 md:w-10 md:h-10",
                   theme === 'dark'
                     ? "text-gray-400 hover:text-white hover:border-exa-secondary/30"
                     : "text-gray-600 hover:text-exa-primary hover:bg-exa-primary/5 hover:border-exa-primary/30"
                 )}
               >
-                <Bell className="w-5 h-5" />
+                <Bell className="w-4 md:w-5 h-4 md:h-5" />
                 {unreadCount > 0 && (
                   <motion.div
                     className={cn(
@@ -772,7 +789,7 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
                 variant="ghost"
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-2.5 rounded-2xl hover:bg-white/10 transition-all duration-300",
+                  "flex items-center gap-2 md:gap-3 px-2 md:px-4 py-1.5 md:py-2.5 rounded-xl md:rounded-2xl hover:bg-white/10 transition-all duration-300",
                   theme === 'dark'
                     ? "text-gray-400 hover:text-white border border-transparent hover:border-exa-secondary/20"
                     : "text-gray-700 hover:text-exa-primary hover:bg-exa-primary/5 border border-transparent hover:border-exa-primary/20"
@@ -780,14 +797,14 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
               >
                 <div className="relative">
                   <div className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center",
+                    "w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center",
                     theme === 'dark' ? "bg-gradient-exa" : "bg-exa-primary"
                   )}>
-                    <User className="w-4 h-4 text-white" />
+                    <User className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
                   </div>
                   <motion.div
                     className={cn(
-                      "absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full border",
+                      "absolute bottom-0 right-0 w-1.5 h-1.5 md:w-2 md:h-2 bg-green-500 rounded-full border",
                       theme === 'dark' ? "border-gray-900" : "border-white"
                     )}
                     animate={{ scale: [1, 1.3, 1] }}
