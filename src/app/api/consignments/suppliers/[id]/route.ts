@@ -151,14 +151,28 @@ export async function PUT(
 
     console.log('[Supplier PUT] Attempting update for supplier:', supplierId, 'user companyId:', payload.companyId, 'role:', payload.role)
 
-    // Verificar que el proveedor existe y pertenece a la empresa (SUPER_ADMIN puede editar cualquiera)
+    // Roles que pueden editar proveedores de cualquier empresa
+    const superRoles = ['SUPER_ADMIN', 'ADMIN']
+    // Roles que pueden editar proveedores de su empresa
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKET_ADMIN', 'MARKET_MANAGER', 'USER']
+
+    if (!allowedRoles.includes(payload.role)) {
+      return NextResponse.json({
+        success: false,
+        error: 'No tiene permisos para editar proveedores'
+      }, { status: 403 })
+    }
+
+    // Verificar que el proveedor existe y pertenece a la empresa
     let existing
-    if (payload.role === 'SUPER_ADMIN') {
+    if (superRoles.includes(payload.role)) {
+      // SUPER_ADMIN y ADMIN pueden editar proveedores de cualquier empresa
       existing = await db.query(
         'SELECT id, username, company_id FROM consignment_suppliers WHERE id = $1',
         [supplierId]
       )
     } else {
+      // Otros roles solo pueden editar proveedores de su empresa
       existing = await db.query(
         'SELECT id, username, company_id FROM consignment_suppliers WHERE id = $1 AND company_id = $2',
         [supplierId, payload.companyId]
