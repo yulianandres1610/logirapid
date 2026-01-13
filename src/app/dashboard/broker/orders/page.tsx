@@ -258,192 +258,124 @@ export default function BrokerOrdersPage() {
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="min-h-screen p-3 sm:p-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            {/* Stats Cards - Compact on mobile */}
-            <div className="grid grid-cols-4 gap-2 sm:gap-4">
-              {/* Pendientes */}
-              <div className={cn(
-                'relative overflow-hidden rounded-xl border',
-                theme === 'dark'
-                  ? 'bg-gray-800 border-gray-700'
-                  : 'bg-white border-gray-200'
-              )}>
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-500"></div>
-                <div className="p-2 sm:p-4 flex flex-col items-center sm:flex-row sm:items-center sm:gap-3">
-                  <div className={cn(
-                    'p-1.5 sm:p-2.5 rounded-lg mb-1 sm:mb-0',
-                    theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100'
-                  )}>
-                    <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
-                  </div>
-                  <div className="text-center sm:text-left">
-                    <p className={cn('text-lg sm:text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                      {stats?.pendingCount || 0}
-                    </p>
-                    <p className={cn('text-[10px] sm:text-xs', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                      Pendientes
-                    </p>
-                  </div>
-                </div>
+        <div className="min-h-screen p-2 sm:p-6 space-y-3 sm:space-y-6">
+          {/* Stats - Simple inline on mobile, cards on desktop */}
+          <div className={cn(
+            'flex items-center justify-between p-3 sm:hidden rounded-xl border',
+            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+          )}>
+            <div className="flex items-center gap-4 text-center">
+              <div>
+                <p className={cn('text-lg font-bold text-amber-600')}>{stats?.pendingCount || 0}</p>
+                <p className={cn('text-[10px]', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Pend.</p>
               </div>
-
-              {/* Confirmadas */}
-              <div className={cn(
-                'relative overflow-hidden rounded-xl border',
-                theme === 'dark'
-                  ? 'bg-gray-800 border-gray-700'
-                  : 'bg-white border-gray-200'
-              )}>
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
-                <div className="p-2 sm:p-4 flex flex-col items-center sm:flex-row sm:items-center sm:gap-3">
-                  <div className={cn(
-                    'p-1.5 sm:p-2.5 rounded-lg mb-1 sm:mb-0',
-                    theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
-                  )}>
-                    <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-                  </div>
-                  <div className="text-center sm:text-left">
-                    <p className={cn('text-lg sm:text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                      {stats?.confirmedCount || 0}
-                    </p>
-                    <p className={cn('text-[10px] sm:text-xs', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                      Confirmadas
-                    </p>
-                  </div>
-                </div>
+              <div>
+                <p className={cn('text-lg font-bold text-blue-600')}>{stats?.confirmedCount || 0}</p>
+                <p className={cn('text-[10px]', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Conf.</p>
               </div>
-
-              {/* En Entrega */}
-              <div className={cn(
-                'relative overflow-hidden rounded-xl border',
-                theme === 'dark'
-                  ? 'bg-gray-800 border-gray-700'
-                  : 'bg-white border-gray-200'
-              )}>
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-purple-600"></div>
-                <div className="p-2 sm:p-4 flex flex-col items-center sm:flex-row sm:items-center sm:gap-3">
-                  <div className={cn(
-                    'p-1.5 sm:p-2.5 rounded-lg mb-1 sm:mb-0',
-                    theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'
-                  )}>
-                    <Truck className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
-                  </div>
-                  <div className="text-center sm:text-left">
-                    <p className={cn('text-lg sm:text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                      {stats?.inDeliveryCount || 0}
-                    </p>
-                    <p className={cn('text-[10px] sm:text-xs', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                      En Entrega
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Monto */}
-              <div className={cn(
-                'relative overflow-hidden rounded-xl border',
-                theme === 'dark'
-                  ? 'bg-gray-800 border-gray-700'
-                  : 'bg-white border-gray-200'
-              )}>
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-600"></div>
-                <div className="p-2 sm:p-4 flex flex-col items-center sm:flex-row sm:items-center sm:gap-3">
-                  <div className={cn(
-                    'p-1.5 sm:p-2.5 rounded-lg mb-1 sm:mb-0',
-                    theme === 'dark' ? 'bg-emerald-900/30' : 'bg-emerald-100'
-                  )}>
-                    <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
-                  </div>
-                  <div className="text-center sm:text-left">
-                    <p className={cn('text-sm sm:text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                      <span className="sm:hidden">${((stats?.pendingAmount || 0) / 1000).toFixed(0)}k</span>
-                      <span className="hidden sm:inline">${(stats?.pendingAmount || 0).toLocaleString()}</span>
-                    </p>
-                    <p className={cn('text-[10px] sm:text-xs', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                      Por Entregar
-                    </p>
-                  </div>
-                </div>
+              <div>
+                <p className={cn('text-lg font-bold text-purple-600')}>{stats?.inDeliveryCount || 0}</p>
+                <p className={cn('text-[10px]', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Entrega</p>
               </div>
             </div>
+            <div className="text-right">
+              <p className={cn('text-lg font-bold text-emerald-600')}>${(stats?.pendingAmount || 0).toLocaleString()}</p>
+              <p className={cn('text-[10px]', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Por entregar</p>
+            </div>
+          </div>
 
-            {/* Filters Bar */}
-            <div className={cn(
-              'space-y-2 sm:space-y-3 p-2 sm:p-4 rounded-xl border',
-              theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-            )}>
-              {/* Search + Refresh button row */}
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <input
-                    type="text"
-                    placeholder="Buscar..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className={cn(
-                      'w-full h-10 pl-9 pr-3 rounded-lg border transition-colors text-sm',
-                      'focus:outline-none focus:ring-2 focus:ring-blue-500',
-                      theme === 'dark'
-                        ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400'
-                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
-                    )}
-                  />
+          {/* Desktop Stats Cards - Hidden on mobile */}
+          <div className="hidden sm:grid grid-cols-4 gap-4">
+            {[
+              { label: 'Pendientes', count: stats?.pendingCount || 0, icon: Clock, color: 'amber' },
+              { label: 'Confirmadas', count: stats?.confirmedCount || 0, icon: CheckCircle, color: 'blue' },
+              { label: 'En Entrega', count: stats?.inDeliveryCount || 0, icon: Truck, color: 'purple' },
+              { label: 'Por Entregar', count: `$${(stats?.pendingAmount || 0).toLocaleString()}`, icon: DollarSign, color: 'emerald' }
+            ].map((stat, i) => (
+              <div key={i} className={cn(
+                'relative overflow-hidden rounded-xl border p-4',
+                theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+              )}>
+                <div className={`absolute top-0 left-0 w-full h-1 bg-${stat.color}-500`}></div>
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    'p-2.5 rounded-lg',
+                    theme === 'dark' ? `bg-${stat.color}-900/30` : `bg-${stat.color}-100`
+                  )}>
+                    <stat.icon className={`w-5 h-5 text-${stat.color}-600`} />
+                  </div>
+                  <div>
+                    <p className={cn('text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      {stat.count}
+                    </p>
+                    <p className={cn('text-xs', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                      {stat.label}
+                    </p>
+                  </div>
                 </div>
-                <button
-                  onClick={fetchOrders}
+              </div>
+            ))}
+          </div>
+
+          {/* Search + Filters - Compact on mobile */}
+          <div className={cn(
+            'p-2 sm:p-4 rounded-xl border space-y-2',
+            theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
+          )}>
+            {/* Search row */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Buscar orden..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   className={cn(
-                    'h-10 w-10 flex items-center justify-center rounded-lg flex-shrink-0 touch-manipulation',
+                    'w-full h-9 pl-8 pr-2 rounded-lg border text-sm',
+                    'focus:outline-none focus:ring-2 focus:ring-blue-500',
                     theme === 'dark'
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400'
+                      : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400'
+                  )}
+                />
+              </div>
+              <button
+                onClick={fetchOrders}
+                className="h-9 w-9 flex items-center justify-center rounded-lg bg-blue-600 text-white flex-shrink-0"
+              >
+                <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+              </button>
+            </div>
+
+            {/* Status pills */}
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
+              {statusTabs.map(tab => (
+                <button
+                  key={tab.value}
+                  onClick={() => setSelectedStatus(tab.value)}
+                  className={cn(
+                    'px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0',
+                    selectedStatus === tab.value
+                      ? 'bg-blue-600 text-white'
+                      : theme === 'dark'
+                        ? 'bg-gray-700 text-gray-300'
+                        : 'bg-gray-100 text-gray-600'
                   )}
                 >
-                  <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+                  {tab.label} ({tab.count})
                 </button>
-              </div>
-
-              {/* Status tabs - Scrollable horizontal */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
-                {statusTabs.map(tab => (
-                  <button
-                    key={tab.value}
-                    onClick={() => setSelectedStatus(tab.value)}
-                    className={cn(
-                      'px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 touch-manipulation min-h-[36px]',
-                      selectedStatus === tab.value
-                        ? 'bg-blue-600 text-white'
-                        : theme === 'dark'
-                          ? 'bg-gray-700 text-gray-300 active:bg-gray-600'
-                          : 'bg-gray-100 text-gray-700 active:bg-gray-200'
-                    )}
-                  >
-                    {tab.label}
-                    <span className={cn(
-                      'ml-1 px-1.5 py-0.5 rounded-full text-[10px] sm:text-xs',
-                      selectedStatus === tab.value
-                        ? 'bg-blue-500 text-white'
-                        : theme === 'dark' ? 'bg-gray-600' : 'bg-gray-200'
-                    )}>
-                      {tab.count}
-                    </span>
-                  </button>
-                ))}
-              </div>
+              ))}
             </div>
+          </div>
 
-            {/* Orders Table */}
-            <div className={cn(
-              'rounded-xl border overflow-hidden',
-              theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-            )}>
-              {loading ? (
-                <div className="p-12 text-center">
+          {/* Orders List */}
+          <div className={cn(
+            'rounded-xl border overflow-hidden',
+            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+          )}>
+            {loading ? (
+              <div className="p-8 text-center">
                   <RefreshCw className="w-8 h-8 animate-spin mx-auto text-blue-600 mb-4" />
                   <p className={cn(theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
                     Cargando ordenes...
@@ -800,8 +732,7 @@ export default function BrokerOrdersPage() {
                   </div>
                 </div>
               )}
-            </div>
-          </motion.div>
+          </div>
 
           {/* Success Message */}
           <AnimatePresence>
