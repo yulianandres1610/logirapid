@@ -124,7 +124,6 @@ export default function CreateProductPage() {
     imageUrl?: string | null
   } | null>(null)
   const [showAiSuggestion, setShowAiSuggestion] = useState(false)
-  const [generatingDescription, setGeneratingDescription] = useState(false)
 
   // Barcode image lookup states - soporta múltiples imágenes por barcode
   interface ExistingImageItem {
@@ -229,41 +228,6 @@ export default function CreateProductPage() {
   const applyAiDescription = () => {
     if (aiSuggestion?.description) {
       setFormData(prev => ({ ...prev, description: aiSuggestion.description }))
-    }
-  }
-
-  // Generar descripción directamente con IA
-  const generateDescriptionWithAI = async () => {
-    if (!formData.name.trim() || formData.name.trim().length < 2) {
-      return
-    }
-
-    setGeneratingDescription(true)
-
-    try {
-      const response = await fetch('/api/ai/product-suggest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productName: formData.name.trim() })
-      })
-
-      const data = await response.json()
-
-      if (data.success && data.data?.description) {
-        setFormData(prev => ({ ...prev, description: data.data.description }))
-        // También guardar la sugerencia completa por si quiere usarla después
-        setAiSuggestion({
-          category: data.data.category,
-          description: data.data.description,
-          imageUrl: data.data.imageUrl || null
-        })
-      } else {
-        console.error('AI Description error:', data.error)
-      }
-    } catch (error) {
-      console.error('AI Description fetch error:', error)
-    } finally {
-      setGeneratingDescription(false)
     }
   }
 
@@ -1390,40 +1354,12 @@ export default function CreateProductPage() {
                       </div>
 
                       <div className="md:col-span-2">
-                        <div className="flex items-center justify-between mb-2">
-                          <label className={cn(
-                            "block text-sm font-medium",
-                            theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                          )}>
-                            Descripción
-                          </label>
-                          <motion.button
-                            type="button"
-                            onClick={generateDescriptionWithAI}
-                            disabled={generatingDescription || !formData.name.trim() || formData.name.trim().length < 2}
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            className={cn(
-                              "px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5",
-                              "disabled:opacity-50 disabled:cursor-not-allowed",
-                              theme === 'dark'
-                                ? 'bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white shadow-lg shadow-violet-500/25'
-                                : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-lg shadow-violet-400/25'
-                            )}
-                          >
-                            {generatingDescription ? (
-                              <>
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                                Generando...
-                              </>
-                            ) : (
-                              <>
-                                <Sparkles className="w-3 h-3" />
-                                Generar con IA
-                              </>
-                            )}
-                          </motion.button>
-                        </div>
+                        <label className={cn(
+                          "block text-sm font-medium mb-2",
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Descripción
+                        </label>
                         <textarea
                           value={formData.description}
                           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
