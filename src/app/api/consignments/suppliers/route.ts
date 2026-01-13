@@ -130,12 +130,21 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/consignments/suppliers
  * Crear proveedor - UNIFICADO con market_suppliers
+ * MARKET_COMERCIAL no puede crear proveedores
  */
 export async function POST(request: NextRequest) {
   try {
     const payload = await getPayload()
     if (!payload) {
       return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
+    }
+
+    // Comerciales no pueden crear proveedores
+    if (payload.role === 'MARKET_COMERCIAL') {
+      return NextResponse.json({
+        success: false,
+        error: 'No tiene permisos para crear proveedores'
+      }, { status: 403 })
     }
 
     const body = await request.json()

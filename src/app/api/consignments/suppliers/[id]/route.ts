@@ -151,6 +151,14 @@ export async function PUT(
 
     console.log('[Supplier PUT] Attempting update for supplier:', supplierId, 'user companyId:', payload.companyId, 'role:', payload.role)
 
+    // MARKET_COMERCIAL no puede editar proveedores
+    if (payload.role === 'MARKET_COMERCIAL') {
+      return NextResponse.json({
+        success: false,
+        error: 'No tiene permisos para editar proveedores'
+      }, { status: 403 })
+    }
+
     // Roles que pueden editar proveedores de cualquier empresa
     const superRoles = ['SUPER_ADMIN', 'ADMIN']
     // Roles que pueden editar proveedores de su empresa
@@ -287,6 +295,7 @@ export async function PUT(
 /**
  * DELETE /api/consignments/suppliers/[id]
  * Eliminar proveedor (solo si no tiene ordenes)
+ * MARKET_COMERCIAL no puede eliminar proveedores
  */
 export async function DELETE(
   request: NextRequest,
@@ -296,6 +305,14 @@ export async function DELETE(
     const payload = await getPayload()
     if (!payload) {
       return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
+    }
+
+    // MARKET_COMERCIAL no puede eliminar proveedores
+    if (payload.role === 'MARKET_COMERCIAL') {
+      return NextResponse.json({
+        success: false,
+        error: 'No tiene permisos para eliminar proveedores'
+      }, { status: 403 })
     }
 
     const { id } = await params

@@ -572,20 +572,12 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   ]
 
   // Menu items para MARKET_COMERCIAL (Compras, Marketplace, Inventario, Consignaciones - sin Dashboard)
+  // NO tienen acceso a gestión de proveedores, solo pueden seleccionarlos en órdenes
   const marketComercialMenuItems = [
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
     { icon: Store, label: "Marketplace", href: "/dashboard/market/marketplace" },
     { icon: Package, label: "Inventario", href: "/dashboard/market/inventory" },
-    {
-      icon: Package,
-      label: "Consignaciones",
-      href: "/dashboard/market/consignments",
-      hasSubmenu: true,
-      submenuItems: [
-        { icon: ClipboardList, label: "Órdenes", href: "/dashboard/market/consignments" },
-        { icon: Users, label: "Proveedores", href: "/dashboard/market/consignments/suppliers" },
-      ]
-    },
+    { icon: ClipboardList, label: "Consignaciones", href: "/dashboard/market/consignments" },
   ]
 
   // Menu items para MARKET_ALMACENERO (solo Almacenes - acceso a su almacén asignado)
