@@ -486,6 +486,30 @@ export async function middleware(request: NextRequest) {
   console.log('[MIDDLEWARE] User info:', { userRole, companyId, companyType, isBrokerCompany, isMarketCompany, pathname })
 
   // ============================================================
+  // REDIRECT /dashboard TO APPROPRIATE DASHBOARD BASED ON ROLE
+  // ============================================================
+  if (pathname === '/dashboard' || pathname === '/dashboard/') {
+    let targetDashboard = '/dashboard/admin' // Default for SUPER_ADMIN
+
+    if (userRole === 'SUPER_ADMIN') {
+      targetDashboard = '/dashboard/admin'
+    } else if (isMarketCompany) {
+      targetDashboard = '/dashboard/market'
+    } else if (isBrokerCompany) {
+      targetDashboard = '/dashboard/broker'
+    } else if (userRole === 'ADMIN' || userRole === 'DRIVER') {
+      targetDashboard = '/dashboard/agency-admin'
+    } else if (userRole === 'MANAGER') {
+      targetDashboard = '/dashboard/manager'
+    } else if (userRole === 'USER') {
+      targetDashboard = '/dashboard/user'
+    }
+
+    console.log(`[MIDDLEWARE] Redirecting ${userRole} from /dashboard to ${targetDashboard}`)
+    return NextResponse.redirect(new URL(targetDashboard, request.url))
+  }
+
+  // ============================================================
   // BROKER COMPANY HANDLING - Usuarios de empresas tipo broker
   // NOTA: SUPER_ADMIN siempre puede acceder a cualquier ruta
   // ============================================================
