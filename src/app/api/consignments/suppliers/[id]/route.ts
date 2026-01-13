@@ -149,17 +149,32 @@ export async function PUT(
     const body = await request.json()
     const { name, legalName, taxId, contactName, email, phone, address, username, password, isActive, userId } = body
 
-    // Verificar que el proveedor existe y pertenece a la empresa
-    const existing = await db.query(
-      'SELECT id, username FROM consignment_suppliers WHERE id = $1 AND company_id = $2',
-      [supplierId, payload.companyId]
-    )
+    console.log('[Supplier PUT] Attempting update for supplier:', supplierId, 'user companyId:', payload.companyId, 'role:', payload.role)
+
+    // Verificar que el proveedor existe y pertenece a la empresa (SUPER_ADMIN puede editar cualquiera)
+    let existing
+    if (payload.role === 'SUPER_ADMIN') {
+      existing = await db.query(
+        'SELECT id, username, company_id FROM consignment_suppliers WHERE id = $1',
+        [supplierId]
+      )
+    } else {
+      existing = await db.query(
+        'SELECT id, username, company_id FROM consignment_suppliers WHERE id = $1 AND company_id = $2',
+        [supplierId, payload.companyId]
+      )
+    }
+
     if (existing.rows.length === 0) {
+      console.log('[Supplier PUT] Supplier not found. ID:', supplierId, 'Company:', payload.companyId)
       return NextResponse.json({
         success: false,
         error: 'Proveedor no encontrado'
       }, { status: 404 })
     }
+
+    // Use supplier's actual company_id for the update
+    const supplierCompanyId = existing.rows[0].company_id
 
     // Si cambia el username, verificar que sea único
     if (username && username !== existing.rows[0].username) {
@@ -229,13 +244,14 @@ export async function PUT(
     ]
 
     // Si hay nueva contraseña, incluirla
+    // Use supplierCompanyId for the WHERE clause (allows SUPER_ADMIN to update any supplier)
     if (password) {
       const passwordHash = await bcrypt.hash(password, 10)
       query += `, password_hash = $11 WHERE id = $12 AND company_id = $13`
-      params_arr.push(passwordHash, supplierId, payload.companyId)
+      params_arr.push(passwordHash, supplierId, supplierCompanyId)
     } else {
       query += ` WHERE id = $11 AND company_id = $12`
-      params_arr.push(supplierId, payload.companyId)
+      params_arr.push(supplierId, supplierCompanyId)
     }
 
     await db.query(query, params_arr)
