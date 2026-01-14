@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Search, User, Phone, Mail, Loader2, MapPin, Plus } from 'lucide-react'
+import { Search, User, Phone, Mail, Loader2, MapPin, Plus, Edit2, Key, FileText } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -141,6 +141,8 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
     email: '',
     idType: '',
     idNumber: '',
+    entryPin: '',
+    entryInstructions: '',
     hasAlternateContact: false,
     alternateContactName: '',
     alternateContactPhone: '',
@@ -154,6 +156,9 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
     } as AddressData,
     coordinates: null as { latitude: number; longitude: number } | null
   })
+
+  // Estado para modo edición
+  const [isEditing, setIsEditing] = useState(false)
 
   const searchCustomer = async () => {
     if (!searchPhone.trim()) return
@@ -438,6 +443,8 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
           email: newSender.email,
           idType: newSender.idType || null,
           idNumber: newSender.idNumber || null,
+          entryPin: newSender.entryPin || null,
+          entryInstructions: newSender.entryInstructions || null,
           hasAlternateContact: newSender.hasAlternateContact,
           alternateContactName: newSender.alternateContactName || null,
           alternateContactPhone: newSender.alternateContactPhone || null,
@@ -489,6 +496,8 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
         updateWizardData('sender', {
           ...createdCustomer,
           ...newSender.address,
+          entryPin: newSender.entryPin || null,
+          entryInstructions: newSender.entryInstructions || null,
           latitude: newSender.coordinates?.latitude || null,
           longitude: newSender.coordinates?.longitude || null
         })
@@ -645,7 +654,7 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
                 "text-xl font-bold mb-6 text-center",
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               )}>
-                Crear Nuevo Remitente
+                {isEditing ? 'Editar Remitente' : 'Crear Nuevo Remitente'}
               </h3>
 
               {/* Personal Info */}
@@ -697,8 +706,7 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
                 >
                   <option value="">Tipo de Documento</option>
                   <option value="passport">Pasaporte</option>
-                  <option value="license">Licencia de Conducir</option>
-                  <option value="id_card">Carnet de Identidad</option>
+                  <option value="license">Licencia de Conducir / ID</option>
                 </select>
                 <Input
                   placeholder="Número de Documento"
@@ -710,6 +718,37 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
                   )}
                   disabled={!newSender.idType}
                 />
+              </div>
+
+              {/* Entry Information Section */}
+              <div className="mb-6">
+                <h4 className={cn(
+                  "text-sm font-semibold mb-3 flex items-center gap-2",
+                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                )}>
+                  <Key className="w-4 h-4" />
+                  Acceso al Edificio (opcional)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    placeholder="PIN de entrada"
+                    value={newSender.entryPin}
+                    onChange={(e) => setNewSender({ ...newSender, entryPin: e.target.value })}
+                    className={cn(
+                      "rounded-xl",
+                      theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : ''
+                    )}
+                  />
+                  <Input
+                    placeholder="Instrucciones de entrada"
+                    value={newSender.entryInstructions}
+                    onChange={(e) => setNewSender({ ...newSender, entryInstructions: e.target.value })}
+                    className={cn(
+                      "rounded-xl",
+                      theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : ''
+                    )}
+                  />
+                </div>
               </div>
 
               {/* Alternate Contact Section */}
@@ -773,7 +812,10 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
               <div className="flex gap-3">
                 <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="flex-1">
                   <Button
-                    onClick={() => setShowCreateForm(false)}
+                    onClick={() => {
+                      setShowCreateForm(false)
+                      setIsEditing(false)
+                    }}
                     className={cn(
                       "w-full rounded-xl font-medium py-3",
                       theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-200 hover:bg-gray-300',
@@ -788,7 +830,7 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
                     onClick={createSender}
                     className="w-full rounded-xl font-medium py-3 bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/30"
                   >
-                    Crear Remitente
+                    {isEditing ? 'Guardar Cambios' : 'Crear Remitente'}
                   </Button>
                 </motion.div>
               </div>
@@ -880,26 +922,99 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
                     </span>
                   </div>
                 )}
+                {/* Mostrar PIN e instrucciones de entrada */}
+                {(wizardData.sender.entryPin || wizardData.sender.entryInstructions) && (
+                  <div className="flex flex-wrap items-center gap-4 mt-2">
+                    {wizardData.sender.entryPin && (
+                      <div className="flex items-center gap-1.5">
+                        <Key className="w-3.5 h-3.5 text-green-600" />
+                        <span className={cn(
+                          "text-sm",
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>
+                          PIN: {wizardData.sender.entryPin}
+                        </span>
+                      </div>
+                    )}
+                    {wizardData.sender.entryInstructions && (
+                      <div className="flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-green-600" />
+                        <span className={cn(
+                          "text-sm",
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>
+                          {wizardData.sender.entryInstructions}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button
-                onClick={() => {
-                  updateWizardData('sender', null)
-                  setCanProceed(false)
-                  setCustomers([])
-                  setCustomerAddresses([])
-                  setSelectedAddressId(null)
-                }}
-                variant="outline"
-                className={cn(
-                  "rounded-xl font-medium px-6 py-2.5",
-                  theme === 'dark' ? 'border-gray-600 hover:bg-gray-700' : 'hover:bg-gray-100'
-                )}
-              >
-                Cambiar
-              </Button>
-            </motion.div>
+            <div className="flex gap-2">
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button
+                  onClick={() => {
+                    // Cargar datos del cliente en el formulario para editar
+                    setNewSender({
+                      firstName: wizardData.sender.firstName || '',
+                      lastName: wizardData.sender.lastName || '',
+                      phone: wizardData.sender.phone || '',
+                      email: wizardData.sender.email || '',
+                      idType: wizardData.sender.idType || '',
+                      idNumber: wizardData.sender.idNumber || '',
+                      entryPin: wizardData.sender.entryPin || '',
+                      entryInstructions: wizardData.sender.entryInstructions || '',
+                      hasAlternateContact: wizardData.sender.hasAlternateContact || false,
+                      alternateContactName: wizardData.sender.alternateContactName || '',
+                      alternateContactPhone: wizardData.sender.alternateContactPhone || '',
+                      address: {
+                        street: wizardData.sender.street || '',
+                        apartment: wizardData.sender.apartment || '',
+                        city: wizardData.sender.city || '',
+                        state: wizardData.sender.state || '',
+                        zipCode: wizardData.sender.zipCode || '',
+                        country: wizardData.sender.country || 'US'
+                      },
+                      coordinates: wizardData.sender.latitude && wizardData.sender.longitude
+                        ? { latitude: wizardData.sender.latitude, longitude: wizardData.sender.longitude }
+                        : null
+                    })
+                    setIsEditing(true)
+                    setShowCreateForm(true)
+                    updateWizardData('sender', null)
+                    setCanProceed(false)
+                  }}
+                  variant="outline"
+                  className={cn(
+                    "rounded-xl font-medium px-4 py-2.5 flex items-center gap-2",
+                    theme === 'dark' ? 'border-blue-600 text-blue-400 hover:bg-blue-900/30' : 'border-blue-500 text-blue-600 hover:bg-blue-50'
+                  )}
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Editar
+                </Button>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button
+                  onClick={() => {
+                    updateWizardData('sender', null)
+                    setCanProceed(false)
+                    setCustomers([])
+                    setCustomerAddresses([])
+                    setSelectedAddressId(null)
+                    setIsEditing(false)
+                  }}
+                  variant="outline"
+                  className={cn(
+                    "rounded-xl font-medium px-4 py-2.5",
+                    theme === 'dark' ? 'border-gray-600 hover:bg-gray-700' : 'hover:bg-gray-100'
+                  )}
+                >
+                  Cambiar
+                </Button>
+              </motion.div>
+            </div>
           </div>
 
           {/* Lista de direcciones inline */}

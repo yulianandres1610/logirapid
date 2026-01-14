@@ -8,34 +8,21 @@ import {
   ArrowRight,
   Check,
   Search,
-  Package,
-  Settings as SettingsIcon,
-  CreditCard,
   FileCheck,
   X,
   MapPin,
-  Clock,
-  Truck,
-  PackagePlus,
-  RotateCcw
+  Clock
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { Button } from '@/components/ui/button'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 
-// Importar los pasos del wizard (reutilizando componentes de office-orders)
+// Importar los pasos del wizard
 import SenderSearchStep from '@/components/office-orders/wizard/SenderSearchStep'
 import RecipientSearchStep from '@/components/office-orders/wizard/RecipientSearchStep'
-import BillingPOSStep from '@/components/office-orders/wizard/BillingPOSStep'
-
-// Importar pasos específicos de pickup-orders
-import OrderTypeSelectionStep from '@/components/pickup-orders/wizard/OrderTypeSelectionStep'
 import PickupSchedulingStep from '@/components/pickup-orders/wizard/PickupSchedulingStep'
-import PickupServiceConfigurationStep from '@/components/pickup-orders/wizard/PickupServiceConfigurationStep'
-import EmpaqueSelectionStep from '@/components/pickup-orders/wizard/EmpaqueSelectionStep'
 import PickupOrderConfirmationStep from '@/components/pickup-orders/wizard/PickupOrderConfirmationStep'
-import ReturnOrderStep from '@/components/pickup-orders/wizard/ReturnOrderStep'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -63,158 +50,67 @@ export default function CreatePickupOrderPage() {
     ? '/dashboard/agency-admin/pickup-orders'
     : '/dashboard/admin/pickup-orders'
 
-  // Estado compartido del wizard
+  // Estado compartido del wizard - Simplificado para recogida a domicilio
   const [wizardData, setWizardData] = useState({
-    // Paso 0: Tipo de orden
-    orderType: null as 'recogida' | 'entrega' | 'retorno' | null,
-
-    // Paso 1: Remitente (Cliente que solicita la recogida o entrega)
+    // Paso 1: Remitente (Cliente en USA que solicita la recogida)
     sender: null as any,
 
-    // Paso 2: Destinatario
+    // Paso 2: Destinatario (Quien recibe en Cuba)
     recipient: null as any,
 
-    // Paso 3: Servicios seleccionados (solo para recogida)
-    selectedServices: [] as any[],
+    // Paso 3: Programación
+    scheduledDate: null as string | null,
+    timeSlot: null as string | null,
+    pickupInstructions: '' as string,
 
-    // Paso 4: Configuración de servicios (solo para recogida)
-    serviceConfigs: [] as any[],
-
-    // Paso 5: Información de pago (solo para recogida)
-    payments: [] as any[],
-    totalAmount: 0,
-
-    // Empaques seleccionados (solo para entrega)
-    selectedEmpaques: [] as any[],
-
-    // Paso final: Orden creada
+    // Paso 4: Confirmación
     orderId: null as number | null,
-    orderNumber: null as string | null,
-
-    // Datos específicos de programación
-    scheduledDate: null as string | null, // Fecha programada
-    timeSlot: null as string | null, // Franja horaria (ej: "9:00 AM - 12:00 PM")
-    pickupInstructions: '' as string, // Instrucciones especiales para recogida
-    deliveryInstructions: '' as string // Instrucciones especiales para entrega
+    orderNumber: null as string | null
   })
 
-  // Definir pasos dinámicamente según el tipo de orden
-  const getSteps = (): WizardStep[] => {
-    const baseSteps: WizardStep[] = [
-      {
-        id: 1,
-        title: 'Tipo de Orden',
-        description: 'Recogida o Entrega',
-        icon: wizardData.orderType === 'entrega' ? PackagePlus : Truck,
-        component: OrderTypeSelectionStep
-      }
-    ]
-
-    // Si no se ha seleccionado el tipo, solo mostrar el paso 1
-    if (!wizardData.orderType) {
-      return baseSteps
+  // 4 pasos fijos para recogida a domicilio
+  const steps: WizardStep[] = [
+    {
+      id: 1,
+      title: 'Remitente',
+      description: 'Cliente en USA',
+      icon: Search,
+      component: SenderSearchStep
+    },
+    {
+      id: 2,
+      title: 'Destinatario',
+      description: 'Quien recibe en Cuba',
+      icon: MapPin,
+      component: RecipientSearchStep
+    },
+    {
+      id: 3,
+      title: 'Programación',
+      description: 'Fecha y horario',
+      icon: Clock,
+      component: PickupSchedulingStep
+    },
+    {
+      id: 4,
+      title: 'Confirmación',
+      description: 'Crear orden',
+      icon: FileCheck,
+      component: PickupOrderConfirmationStep
     }
-
-    // Pasos comunes para ambos tipos
-    const commonSteps: WizardStep[] = [
-      {
-        id: 2,
-        title: 'Cliente',
-        description: 'Buscar o crear cliente',
-        icon: Search,
-        component: SenderSearchStep
-      },
-      {
-        id: 3,
-        title: 'Destinatario',
-        description: 'Buscar o crear destinatario',
-        icon: MapPin,
-        component: RecipientSearchStep
-      },
-      {
-        id: 4,
-        title: 'Programación',
-        description: 'Fecha y horario',
-        icon: Clock,
-        component: PickupSchedulingStep
-      }
-    ]
-
-    if (wizardData.orderType === 'recogida') {
-      // Flujo de RECOGIDA: 7 pasos totales
-      return [
-        ...baseSteps,
-        ...commonSteps,
-        {
-          id: 5,
-          title: 'Configuración',
-          description: 'Configurar envíos',
-          icon: SettingsIcon,
-          component: PickupServiceConfigurationStep
-        },
-        {
-          id: 6,
-          title: 'Pago',
-          description: 'Procesar pago',
-          icon: CreditCard,
-          component: BillingPOSStep
-        },
-        {
-          id: 7,
-          title: 'Confirmación',
-          description: 'Completar orden',
-          icon: FileCheck,
-          component: PickupOrderConfirmationStep
-        }
-      ]
-    } else if (wizardData.orderType === 'entrega') {
-      // Flujo de ENTREGA: 6 pasos totales
-      return [
-        ...baseSteps,
-        ...commonSteps,
-        {
-          id: 5,
-          title: 'Empaques',
-          description: 'Seleccionar empaques',
-          icon: Package,
-          component: EmpaqueSelectionStep
-        },
-        {
-          id: 6,
-          title: 'Confirmación',
-          description: 'Completar orden',
-          icon: FileCheck,
-          component: PickupOrderConfirmationStep
-        }
-      ]
-    } else {
-      // Flujo de RETORNO: 2 pasos (tipo + wizard de retorno integrado)
-      return [
-        ...baseSteps,
-        {
-          id: 2,
-          title: 'Crear Retorno',
-          description: 'Wizard de retorno',
-          icon: RotateCcw,
-          component: ReturnOrderStep
-        }
-      ]
-    }
-  }
-
-  const steps = getSteps()
+  ]
 
   const handleNext = () => {
     if (currentStep < steps.length && canProceed) {
       setCurrentStep(currentStep + 1)
-      setCanProceed(false) // Reset for next step
+      setCanProceed(false)
     }
   }
 
   const handlePrevious = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1)
-      setCanProceed(true) // Allow going back
+      setCanProceed(true)
     }
   }
 
@@ -248,7 +144,7 @@ export default function CreatePickupOrderPage() {
         {/* Main Container */}
         <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-6 sm:space-y-8 relative">
 
-        {/* Close Button - Minimalista */}
+        {/* Close Button */}
         <motion.button
           onClick={handleCancel}
           whileHover={{ scale: 1.05 }}
@@ -271,7 +167,6 @@ export default function CreatePickupOrderPage() {
               <React.Fragment key={step.id}>
                 <div className="flex flex-col items-center">
                   <div className="relative w-14 h-14">
-                    {/* Pulsing ring for active step */}
                     {currentStep === step.id && (
                       <motion.div
                         className="absolute inset-0 rounded-full"
@@ -286,8 +181,8 @@ export default function CreatePickupOrderPage() {
                         }}
                         style={{
                           background: theme === 'dark'
-                            ? 'rgba(59, 130, 246, 0.5)' // blue-500
-                            : 'rgba(37, 99, 235, 0.5)' // blue-600
+                            ? 'rgba(59, 130, 246, 0.5)'
+                            : 'rgba(37, 99, 235, 0.5)'
                         }}
                       />
                     )}
@@ -298,7 +193,7 @@ export default function CreatePickupOrderPage() {
                       scale: currentStep === step.id ? 1.1 : 1,
                       rotate: currentStep === step.id ? 360 : 0,
                       backgroundColor: currentStep === step.id
-                        ? theme === 'dark' ? '#3B82F6' : '#2563EB' // blue colors
+                        ? theme === 'dark' ? '#3B82F6' : '#2563EB'
                         : currentStep > step.id
                         ? theme === 'dark' ? '#10B981' : '#059669'
                         : theme === 'dark' ? '#374151' : '#E5E7EB'
@@ -472,11 +367,10 @@ export default function CreatePickupOrderPage() {
         </div>
         </div>
 
-        {/* Modal de confirmación para cancelar */}
+        {/* Modal de confirmacion para cancelar */}
         <AnimatePresence>
           {showCancelModal && (
             <>
-              {/* Backdrop */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -485,7 +379,6 @@ export default function CreatePickupOrderPage() {
                 className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
               />
 
-              {/* Modal */}
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -502,7 +395,6 @@ export default function CreatePickupOrderPage() {
                   )}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {/* Header */}
                   <div className="p-6 pb-4">
                     <div className="flex items-start gap-4">
                       <div className={cn(
@@ -521,19 +413,18 @@ export default function CreatePickupOrderPage() {
                           "text-xl font-bold mb-2",
                           theme === 'dark' ? 'text-white' : 'text-gray-900'
                         )}>
-                          ¿Cancelar orden?
+                          Cancelar orden?
                         </h3>
                         <p className={cn(
                           "text-sm",
                           theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
                         )}>
-                          Se perderá toda la información ingresada y no podrás recuperarla.
+                          Se perdera toda la informacion ingresada y no podras recuperarla.
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Actions */}
                   <div className={cn(
                     "flex gap-3 p-6 pt-4 border-t",
                     theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
@@ -562,7 +453,7 @@ export default function CreatePickupOrderPage() {
                           : 'bg-red-500 hover:bg-red-600'
                       )}
                     >
-                      Sí, cancelar
+                      Si, cancelar
                     </motion.button>
                   </div>
                 </div>

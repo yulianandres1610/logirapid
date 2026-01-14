@@ -1,13 +1,12 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Search, User, Phone, Mail, Loader2, MapPin, Plus } from 'lucide-react'
+import { Search, User, Phone, Mail, Loader2, MapPin, Plus, Edit2, FileText } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
-import MapboxAddressAutofill from '@/components/ui/MapboxAddressAutofill'
 
 interface Props {
   wizardData: any
@@ -16,13 +15,27 @@ interface Props {
   onNext: () => void
 }
 
-interface AddressData {
+interface CubaAddressData {
   street: string
-  apartment: string
-  city: string
-  state: string
-  zipCode: string
-  country: string
+  number: string
+  reparto: string
+  floor: string
+  provinceId: number | null
+  provinceName: string
+  municipalityId: number | null
+  municipalityName: string
+  deliveryInstructions: string
+}
+
+interface Province {
+  id: number
+  name: string
+}
+
+interface Municipality {
+  id: number
+  name: string
+  stateId: number
 }
 
 export default function RecipientSearchStep({ wizardData, updateWizardData, setCanProceed }: Props) {
@@ -31,10 +44,12 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
   const [searching, setSearching] = useState(false)
   const [customers, setCustomers] = useState<any[]>([])
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null)
-  const [customerAddresses, setCustomerAddresses] = useState<any[]>([])
-  const [loadingAddresses, setLoadingAddresses] = useState(false)
-  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+
+  // Provincias y municipios de Cuba
+  const [provinces, setProvinces] = useState<Province[]>([])
+  const [municipalities, setMunicipalities] = useState<Municipality[]>([])
+  const [loadingLocations, setLoadingLocations] = useState(false)
 
   // Estado para nuevo destinatario
   const [newRecipient, setNewRecipient] = useState({
@@ -49,34 +64,42 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
     alternateContactPhone: '',
     address: {
       street: '',
-      apartment: '',
-      city: '',
-      state: '',
-      zipCode: '',
-      country: 'US'
-    } as AddressData,
-    coordinates: null as { latitude: number; longitude: number } | null
+      number: '',
+      reparto: '',
+      floor: '',
+      provinceId: null,
+      provinceName: '',
+      municipalityId: null,
+      municipalityName: '',
+      deliveryInstructions: ''
+    } as CubaAddressData
   })
 
-  const geocodeAddress = async (addressText: string): Promise<{ latitude: number; longitude: number } | null> => {
+  // Cargar provincias y municipios al montar
+  useEffect(() => {
+    loadProvincesMunicipalities()
+  }, [])
+
+  const loadProvincesMunicipalities = async () => {
+    setLoadingLocations(true)
     try {
-      const mapboxToken = 'pk.eyJ1IjoieXVsaWFuYW5kcmVzMTYxMCIsImEiOiJjbWgycTlsZGsxM200YnNvbnN2d2wwcHJ5In0.wlU7-bazAs2eYjknx7H97Q'
-      const encodedAddress = encodeURIComponent(addressText)
-      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedAddress}.json?access_token=${mapboxToken}&country=US&limit=1`
-
-      const response = await fetch(url)
+      const response = await fetch('/api/apacargo/municipalities?includeStates=true')
       const data = await response.json()
-
-      if (data.features && data.features.length > 0) {
-        const [longitude, latitude] = data.features[0].center
-        return { latitude, longitude }
+      if (data.success && data.data) {
+        setProvinces(data.data.states || [])
+        setMunicipalities(data.data.municipalities || [])
       }
-      return null
     } catch (error) {
-      console.error('Error geocoding address:', error)
-      return null
+      console.error('Error loading provinces/municipalities:', error)
+    } finally {
+      setLoadingLocations(false)
     }
   }
+
+  // Filtrar municipios por provincia seleccionada
+  const filteredMunicipalities = newRecipient.address.provinceId
+    ? municipalities.filter(m => m.stateId === newRecipient.address.provinceId)
+    : []
 
   const searchCustomer = async () => {
     if (!searchPhone.trim()) return
@@ -103,144 +126,65 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
     }
   }
 
-  const loadCustomerAddresses = async (customer: any) => {
-    setLoadingAddresses(true)
-    try {
-      const response = await fetch(`/api/customer-addresses?customerId=${customer.id}`)
-      const data = await response.json()
-      if (data.success) {
-        const addresses = data.data || []
-        setCustomerAddresses(addresses)
-
-        // Si solo tiene una dirección, auto-seleccionarla
-        if (addresses.length === 1) {
-          selectAddress(addresses[0], customer)
-        } else if (addresses.length > 1) {
-          // Mostrar direcciones inline en el formulario
-          // Actualizar wizardData para que la UI cambie al estado "seleccionado"
-          updateWizardData('recipient', customer)
-          setCanProceed(false) // Usuario debe seleccionar una dirección manualmente
-        } else {
-          // No tiene direcciones guardadas, usar la dirección legacy del customer
-          // Ensure structured address fields are present
-          const recipientWithFields = { ...customer }
-          if (!recipientWithFields.street && recipientWithFields.address) {
-            // Parse the address string to extract components
-            const addressParts = recipientWithFields.address.split(',').map((p: string) => p.trim())
-
-            if (addressParts.length >= 4) {
-              // Format: "street, city, state zipcode, country"
-              recipientWithFields.street = addressParts[0]
-              recipientWithFields.city = addressParts[1]
-
-              // Parse "state zipcode" part
-              const stateZip = addressParts[2].split(' ').filter(Boolean)
-              if (stateZip.length >= 2) {
-                recipientWithFields.state = stateZip[0]
-                recipientWithFields.zipCode = stateZip[1]
-              }
-
-              // Country is the last part
-              if (addressParts[3]) {
-                recipientWithFields.country = addressParts[3]
-              }
-            } else {
-              // Fallback: just use the address as street
-              recipientWithFields.street = recipientWithFields.address
-            }
-          }
-          if (!recipientWithFields.city) {
-            recipientWithFields.city = ''
-          }
-          if (!recipientWithFields.state) {
-            recipientWithFields.state = ''
-          }
-          if (!recipientWithFields.zipCode && !recipientWithFields.zipcode) {
-            recipientWithFields.zipCode = recipientWithFields.zipcode || ''
-          }
-          if (!recipientWithFields.country) {
-            recipientWithFields.country = 'US'
-          }
-          updateWizardData('recipient', recipientWithFields)
-          setCanProceed(true)
-        }
-      }
-    } catch (error) {
-      console.error('Error loading addresses:', error)
-      // Si falla, usar dirección legacy
-      const recipientWithFields = { ...customer }
-      if (!recipientWithFields.street && recipientWithFields.address) {
-        // Parse the address string to extract components
-        const addressParts = recipientWithFields.address.split(',').map((p: string) => p.trim())
-
-        if (addressParts.length >= 4) {
-          // Format: "street, city, state zipcode, country"
-          recipientWithFields.street = addressParts[0]
-          recipientWithFields.city = addressParts[1]
-
-          // Parse "state zipcode" part
-          const stateZip = addressParts[2].split(' ').filter(Boolean)
-          if (stateZip.length >= 2) {
-            recipientWithFields.state = stateZip[0]
-            recipientWithFields.zipCode = stateZip[1]
-          }
-
-          // Country is the last part
-          if (addressParts[3]) {
-            recipientWithFields.country = addressParts[3]
-          }
-        } else {
-          // Fallback: just use the address as street
-          recipientWithFields.street = recipientWithFields.address
-        }
-      }
-      if (!recipientWithFields.city) {
-        recipientWithFields.city = ''
-      }
-      if (!recipientWithFields.state) {
-        recipientWithFields.state = ''
-      }
-      if (!recipientWithFields.zipCode && !recipientWithFields.zipcode) {
-        recipientWithFields.zipCode = recipientWithFields.zipcode || ''
-      }
-      if (!recipientWithFields.country) {
-        recipientWithFields.country = 'US'
-      }
-      updateWizardData('recipient', recipientWithFields)
-      setCanProceed(true)
-    } finally {
-      setLoadingAddresses(false)
-    }
-  }
-
   const selectCustomer = (customer: any) => {
-    setSelectedCustomer(customer)
-    loadCustomerAddresses(customer)
-  }
-
-  const selectAddress = (address: any, customer?: any) => {
-    // Usar el customer pasado como parámetro o el selectedCustomer del estado
-    const customerToUse = customer || selectedCustomer
-    console.log('📍 [RecipientSearchStep] selectAddress called with:', { address, customer: customerToUse })
-
-    // Construir la dirección completa para el campo address legacy
-    const fullAddress = `${address.street}${address.apartment ? ', ' + address.apartment : ''}, ${address.city}, ${address.state} ${address.zipCode}, ${address.country || 'US'}`
+    // Construir dirección para mostrar
+    const addressDisplay = buildAddressDisplay(customer)
 
     const recipientData = {
-      ...customerToUse,
-      street: address.street,
-      apartment: address.apartment || '',
-      city: address.city,
-      state: address.state,
-      zipCode: address.zipCode,
-      country: address.country,
-      addressId: address.id,
-      address: fullAddress
+      ...customer,
+      address: addressDisplay,
+      // Campos estructurados de Cuba
+      street: customer.street || '',
+      number: customer.number || '',
+      reparto: customer.reparto || '',
+      floor: customer.floor || '',
+      provinceId: customer.provinceId || null,
+      provinceName: customer.provinceName || '',
+      municipalityId: customer.municipalityId || null,
+      municipalityName: customer.municipalityName || '',
+      deliveryInstructions: customer.deliveryInstructions || ''
     }
-    console.log('📍 [RecipientSearchStep] Final recipientData:', recipientData)
-    setSelectedAddressId(address.id)
+
     updateWizardData('recipient', recipientData)
     setCanProceed(true)
+  }
+
+  const buildAddressDisplay = (data: any): string => {
+    const parts = []
+    if (data.street) parts.push(data.street)
+    if (data.number) parts.push(`#${data.number}`)
+    if (data.floor) parts.push(data.floor)
+    if (data.reparto) parts.push(data.reparto)
+    if (data.municipalityName) parts.push(data.municipalityName)
+    if (data.provinceName) parts.push(data.provinceName)
+    parts.push('Cuba')
+    return parts.join(', ')
+  }
+
+  const handleProvinceChange = (provinceId: number) => {
+    const province = provinces.find(p => p.id === provinceId)
+    setNewRecipient({
+      ...newRecipient,
+      address: {
+        ...newRecipient.address,
+        provinceId,
+        provinceName: province?.name || '',
+        municipalityId: null,
+        municipalityName: ''
+      }
+    })
+  }
+
+  const handleMunicipalityChange = (municipalityId: number) => {
+    const municipality = municipalities.find(m => m.id === municipalityId)
+    setNewRecipient({
+      ...newRecipient,
+      address: {
+        ...newRecipient.address,
+        municipalityId,
+        municipalityName: municipality?.name || ''
+      }
+    })
   }
 
   const createRecipient = async () => {
@@ -249,24 +193,9 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
       return
     }
 
-    if (!newRecipient.address.street || !newRecipient.address.city) {
-      alert('Dirección completa es requerida')
+    if (!newRecipient.address.street || !newRecipient.address.provinceId || !newRecipient.address.municipalityId) {
+      alert('Calle, provincia y municipio son requeridos')
       return
-    }
-
-    // Si no tiene coordenadas, intentar geocodificar automáticamente
-    if (!newRecipient.coordinates) {
-      const fullAddress = `${newRecipient.address.street}${newRecipient.address.apartment ? ', ' + newRecipient.address.apartment : ''}, ${newRecipient.address.city}, ${newRecipient.address.state} ${newRecipient.address.zipCode}, ${newRecipient.address.country || 'US'}`
-      console.log('📍 Intentando geocodificar dirección automáticamente:', fullAddress)
-
-      const coords = await geocodeAddress(fullAddress)
-      if (coords) {
-        newRecipient.coordinates = coords
-        console.log('✅ Dirección geocodificada exitosamente:', coords)
-      } else {
-        console.warn('⚠️ No se pudo geocodificar automáticamente, continuando sin coordenadas')
-        // Permitir continuar sin coordenadas - se geocodificarán posteriormente
-      }
     }
 
     // Validar contacto alternativo si está activado
@@ -277,7 +206,7 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
 
     try {
       // Construir dirección completa para el campo address legacy
-      const fullAddress = `${newRecipient.address.street}${newRecipient.address.apartment ? ', ' + newRecipient.address.apartment : ''}, ${newRecipient.address.city}, ${newRecipient.address.state} ${newRecipient.address.zipCode}, ${newRecipient.address.country}`
+      const fullAddress = buildAddressDisplay(newRecipient.address)
 
       // Crear el cliente con todos los campos de dirección estructurados
       const response = await fetch('/api/customers', {
@@ -295,12 +224,17 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
           alternateContactPhone: newRecipient.alternateContactPhone || null,
           // Dirección completa (legacy)
           address: fullAddress,
-          // Campos estructurados de dirección
-          city: newRecipient.address.city || null,
-          state: newRecipient.address.state || null,
-          zipCode: newRecipient.address.zipCode || null,
-          country: newRecipient.address.country || 'US',
-          apartment: newRecipient.address.apartment || null
+          // Campos estructurados de dirección Cuba
+          street: newRecipient.address.street || null,
+          number: newRecipient.address.number || null,
+          reparto: newRecipient.address.reparto || null,
+          floor: newRecipient.address.floor || null,
+          provinceId: newRecipient.address.provinceId || null,
+          provinceName: newRecipient.address.provinceName || null,
+          municipalityId: newRecipient.address.municipalityId || null,
+          municipalityName: newRecipient.address.municipalityName || null,
+          deliveryInstructions: newRecipient.address.deliveryInstructions || null,
+          country: 'CU'
         })
       })
 
@@ -308,43 +242,15 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
       if (data.success) {
         const createdCustomer = data.data
 
-        // Guardar dirección en customer_addresses
-        try {
-          const addressResponse = await fetch('/api/customer-addresses', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              customerId: createdCustomer.id,
-              street: newRecipient.address.street,
-              apartment: newRecipient.address.apartment || '',
-              city: newRecipient.address.city,
-              state: newRecipient.address.state,
-              zipCode: newRecipient.address.zipCode,
-              country: newRecipient.address.country,
-              isPrimary: true,
-              notes: newRecipient.coordinates
-                ? `Coordenadas: ${newRecipient.coordinates.latitude}, ${newRecipient.coordinates.longitude}`
-                : ''
-            })
-          })
-
-          const addressData = await addressResponse.json()
-          if (addressData.success) {
-            console.log('Dirección guardada en customer_addresses:', addressData.data)
-          }
-        } catch (addressError) {
-          console.error('Error guardando dirección:', addressError)
-          // Continuar aunque falle el guardado de la dirección
-        }
-
-        // Guardar el destinatario con coordenadas y dirección estructurada
+        // Guardar el destinatario con dirección estructurada
         updateWizardData('recipient', {
           ...createdCustomer,
           ...newRecipient.address,
-          coordinates: newRecipient.coordinates
+          address: fullAddress
         })
         setCanProceed(true)
         setShowCreateForm(false)
+        setIsEditing(false)
       } else {
         alert(data.error || 'Error al crear destinatario')
       }
@@ -388,7 +294,7 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
             "text-base",
             theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
           )}>
-            Busca al destinatario o crea uno nuevo con su dirección
+            Busca al destinatario en Cuba o crea uno nuevo
           </p>
         </div>
       </div>
@@ -482,7 +388,7 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
             </motion.div>
           )}
 
-          {/* Create Form with MapboxAddressAutofill */}
+          {/* Create Form for Cuba Address */}
           {showCreateForm && (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -496,7 +402,7 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
                 "text-xl font-bold mb-6 text-center",
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               )}>
-                Crear Nuevo Destinatario
+                {isEditing ? 'Editar Destinatario' : 'Crear Nuevo Destinatario'}
               </h3>
 
               {/* Personal Info */}
@@ -548,8 +454,7 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
                 >
                   <option value="">Tipo de Documento</option>
                   <option value="passport">Pasaporte</option>
-                  <option value="license">Licencia de Conducir</option>
-                  <option value="id_card">Carnet de Identidad</option>
+                  <option value="carnet">Carnet de Identidad</option>
                 </select>
                 <Input
                   placeholder="Número de Documento"
@@ -601,30 +506,146 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
                 )}
               </div>
 
-              {/* Address Section with Mapbox */}
+              {/* Cuba Address Section */}
               <div className="mb-6">
                 <h4 className={cn(
                   "text-sm font-semibold mb-3 flex items-center gap-2",
                   theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                 )}>
                   <MapPin className="w-4 h-4" />
-                  Dirección de Entrega *
+                  Dirección en Cuba *
                 </h4>
-                <MapboxAddressAutofill
-                  value={newRecipient.address}
-                  onChange={(addressData) => {
-                    setNewRecipient({ ...newRecipient, address: addressData })
-                  }}
-                  onCoordinatesChange={(coordinates) => {
-                    setNewRecipient({ ...newRecipient, coordinates })
-                  }}
-                />
+
+                {loadingLocations ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-purple-600 mr-2" />
+                    <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                      Cargando provincias y municipios...
+                    </span>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Calle y Número */}
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="col-span-2">
+                        <Input
+                          placeholder="Calle *"
+                          value={newRecipient.address.street}
+                          onChange={(e) => setNewRecipient({
+                            ...newRecipient,
+                            address: { ...newRecipient.address, street: e.target.value }
+                          })}
+                          className={cn(
+                            "rounded-xl",
+                            theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : ''
+                          )}
+                        />
+                      </div>
+                      <Input
+                        placeholder="Número"
+                        value={newRecipient.address.number}
+                        onChange={(e) => setNewRecipient({
+                          ...newRecipient,
+                          address: { ...newRecipient.address, number: e.target.value }
+                        })}
+                        className={cn(
+                          "rounded-xl",
+                          theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : ''
+                        )}
+                      />
+                    </div>
+
+                    {/* Reparto y Piso */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <Input
+                        placeholder="Reparto / Barrio"
+                        value={newRecipient.address.reparto}
+                        onChange={(e) => setNewRecipient({
+                          ...newRecipient,
+                          address: { ...newRecipient.address, reparto: e.target.value }
+                        })}
+                        className={cn(
+                          "rounded-xl",
+                          theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : ''
+                        )}
+                      />
+                      <Input
+                        placeholder="Piso / Apt"
+                        value={newRecipient.address.floor}
+                        onChange={(e) => setNewRecipient({
+                          ...newRecipient,
+                          address: { ...newRecipient.address, floor: e.target.value }
+                        })}
+                        className={cn(
+                          "rounded-xl",
+                          theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : ''
+                        )}
+                      />
+                    </div>
+
+                    {/* Provincia y Municipio */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <select
+                        value={newRecipient.address.provinceId || ''}
+                        onChange={(e) => handleProvinceChange(Number(e.target.value))}
+                        className={cn(
+                          "rounded-xl px-3 py-2 border",
+                          theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'border-gray-300'
+                        )}
+                      >
+                        <option value="">Provincia *</option>
+                        {provinces.map(province => (
+                          <option key={province.id} value={province.id}>
+                            {province.name}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={newRecipient.address.municipalityId || ''}
+                        onChange={(e) => handleMunicipalityChange(Number(e.target.value))}
+                        disabled={!newRecipient.address.provinceId}
+                        className={cn(
+                          "rounded-xl px-3 py-2 border",
+                          theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'border-gray-300',
+                          !newRecipient.address.provinceId && 'opacity-50 cursor-not-allowed'
+                        )}
+                      >
+                        <option value="">Municipio *</option>
+                        {filteredMunicipalities.map(municipality => (
+                          <option key={municipality.id} value={municipality.id}>
+                            {municipality.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Instrucciones de entrega */}
+                    <div>
+                      <textarea
+                        placeholder="Instrucciones de entrega (opcional)"
+                        value={newRecipient.address.deliveryInstructions}
+                        onChange={(e) => setNewRecipient({
+                          ...newRecipient,
+                          address: { ...newRecipient.address, deliveryInstructions: e.target.value }
+                        })}
+                        rows={2}
+                        className={cn(
+                          "w-full rounded-xl px-3 py-2 border resize-none",
+                          theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'border-gray-300'
+                        )}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3">
                 <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="flex-1">
                   <Button
-                    onClick={() => setShowCreateForm(false)}
+                    onClick={() => {
+                      setShowCreateForm(false)
+                      setIsEditing(false)
+                    }}
                     className={cn(
                       "w-full rounded-xl font-medium py-3",
                       theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-200 hover:bg-gray-300',
@@ -639,7 +660,7 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
                     onClick={createRecipient}
                     className="w-full rounded-xl font-medium py-3 bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/30"
                   >
-                    Crear Destinatario
+                    {isEditing ? 'Guardar Cambios' : 'Crear Destinatario'}
                   </Button>
                 </motion.div>
               </div>
@@ -656,26 +677,6 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
             theme === 'dark' ? 'bg-purple-900/20 border-purple-700 backdrop-blur-sm' : 'bg-purple-50 border-purple-200'
           )}
         >
-          {/* Loading overlay mientras se cargan direcciones */}
-          {loadingAddresses && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className={cn(
-                "absolute inset-0 rounded-2xl flex flex-col items-center justify-center backdrop-blur-sm z-10",
-                theme === 'dark' ? 'bg-gray-800/90' : 'bg-white/90'
-              )}
-            >
-              <Loader2 className="w-10 h-10 animate-spin text-purple-600 mb-3" />
-              <span className={cn(
-                "text-sm font-medium",
-                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-              )}>
-                Cargando direcciones...
-              </span>
-            </motion.div>
-          )}
-
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-4 sm:gap-6">
               <motion.div
@@ -728,23 +729,74 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
                       </span>
                     </div>
                   )}
+                  {wizardData.recipient.deliveryInstructions && (
+                    <div className="flex items-start gap-2 mt-1">
+                      <FileText className="w-4 h-4 text-purple-600 mt-0.5" />
+                      <span className={cn(
+                        "text-sm italic",
+                        theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                      )}>
+                        {wizardData.recipient.deliveryInstructions}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button
+                  onClick={() => {
+                    // Cargar datos del cliente en el formulario para editar
+                    setNewRecipient({
+                      firstName: wizardData.recipient.firstName || '',
+                      lastName: wizardData.recipient.lastName || '',
+                      phone: wizardData.recipient.phone || '',
+                      email: wizardData.recipient.email || '',
+                      idType: wizardData.recipient.idType || '',
+                      idNumber: wizardData.recipient.idNumber || '',
+                      hasAlternateContact: wizardData.recipient.hasAlternateContact || false,
+                      alternateContactName: wizardData.recipient.alternateContactName || '',
+                      alternateContactPhone: wizardData.recipient.alternateContactPhone || '',
+                      address: {
+                        street: wizardData.recipient.street || '',
+                        number: wizardData.recipient.number || '',
+                        reparto: wizardData.recipient.reparto || '',
+                        floor: wizardData.recipient.floor || '',
+                        provinceId: wizardData.recipient.provinceId || null,
+                        provinceName: wizardData.recipient.provinceName || '',
+                        municipalityId: wizardData.recipient.municipalityId || null,
+                        municipalityName: wizardData.recipient.municipalityName || '',
+                        deliveryInstructions: wizardData.recipient.deliveryInstructions || ''
+                      }
+                    })
+                    setIsEditing(true)
+                    setShowCreateForm(true)
+                    updateWizardData('recipient', null)
+                    setCanProceed(false)
+                  }}
+                  variant="outline"
+                  className={cn(
+                    "rounded-xl font-medium px-4 py-2.5 flex items-center gap-2",
+                    theme === 'dark' ? 'border-blue-600 text-blue-400 hover:bg-blue-900/30' : 'border-blue-500 text-blue-600 hover:bg-blue-50'
+                  )}
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Editar
+                </Button>
+              </motion.div>
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Button
                   onClick={() => {
                     updateWizardData('recipient', null)
                     setCanProceed(false)
                     setCustomers([])
-                    setCustomerAddresses([])
-                    setSelectedAddressId(null)
+                    setIsEditing(false)
                   }}
                   variant="outline"
                   className={cn(
-                    "rounded-xl font-medium px-6 py-2.5",
+                    "rounded-xl font-medium px-4 py-2.5",
                     theme === 'dark' ? 'border-gray-600 hover:bg-gray-700' : 'hover:bg-gray-100'
                   )}
                 >
@@ -753,103 +805,6 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
               </motion.div>
             </div>
           </div>
-
-          {/* Lista de direcciones inline */}
-          {selectedCustomer && customerAddresses.length > 1 && (
-            <div className={cn(
-              "mt-6 pt-6 border-t",
-              theme === 'dark' ? 'border-purple-700/50' : 'border-purple-200'
-            )}>
-              <h4 className={cn(
-                "text-lg font-semibold mb-4",
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              )}>
-                Selecciona una dirección de entrega:
-              </h4>
-
-              {loadingAddresses ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
-                </div>
-              ) : (
-                <div className="grid gap-3">
-                  {customerAddresses.map((address) => (
-                    <motion.button
-                      key={address.id}
-                      onClick={() => selectAddress(address)}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={cn(
-                        "w-full text-left p-4 rounded-xl border-2 transition-all",
-                        selectedAddressId === address.id
-                          ? theme === 'dark'
-                            ? 'border-purple-500 bg-purple-900/30'
-                            : 'border-purple-500 bg-purple-50'
-                          : theme === 'dark'
-                            ? 'border-gray-600 hover:border-purple-500 hover:bg-gray-700'
-                            : 'border-gray-300 hover:border-purple-500 hover:bg-purple-50'
-                      )}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-3 flex-1">
-                          <MapPin className={cn(
-                            "w-5 h-5 mt-1",
-                            selectedAddressId === address.id
-                              ? 'text-purple-600'
-                              : theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                          )} />
-                          <div className="flex-1">
-                            <div className={cn(
-                              "font-semibold mb-1",
-                              theme === 'dark' ? 'text-white' : 'text-gray-900'
-                            )}>
-                              {address.street}{address.apartment && `, ${address.apartment}`}
-                            </div>
-                            <div className={cn(
-                              "text-sm",
-                              theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-                            )}>
-                              {address.city}, {address.state} {address.zipCode}
-                            </div>
-                            {address.country && address.country !== 'US' && (
-                              <div className={cn(
-                                "text-sm",
-                                theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                              )}>
-                                {address.country}
-                              </div>
-                            )}
-                            {address.notes && (
-                              <div className={cn(
-                                "text-xs mt-1 italic",
-                                theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
-                              )}>
-                                {address.notes}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {address.isPrimary && (
-                            <span className="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200">
-                              Principal
-                            </span>
-                          )}
-                          {selectedAddressId === address.id && (
-                            <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center">
-                              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </motion.button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </motion.div>
       )}
     </div>
