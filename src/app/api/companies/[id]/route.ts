@@ -69,6 +69,7 @@ export async function GET(
         c.broker_contact_phone as "broker_contact_phone",
         c.broker_alternate_phone as "broker_alternate_phone",
         c.broker_bank_accounts as "broker_bank_accounts",
+        c.broker_coverage_area as "broker_coverage_area",
         parent.legalname as "parentCompanyName"
       FROM companies c
       LEFT JOIN companies parent ON c.parent_company_id = parent.id
@@ -201,7 +202,8 @@ export async function PUT(
       broker_delivery_hours: 'broker_delivery_hours',
       broker_contact_phone: 'broker_contact_phone',
       broker_alternate_phone: 'broker_alternate_phone',
-      broker_bank_accounts: 'broker_bank_accounts'
+      broker_bank_accounts: 'broker_bank_accounts',
+      broker_coverage_municipalities: 'broker_coverage_area'
     }
 
     // Construir query dinámicamente
@@ -213,7 +215,7 @@ export async function PUT(
         let value = body[frontendKey]
 
         // Convertir arrays y objetos a JSON para PostgreSQL
-        if (['secondaryCurrencies', 'enabledServices', 'serviceFees', 'prices', 'providerCategories', 'providerServices', 'broker_bank_accounts'].includes(frontendKey)) {
+        if (['secondaryCurrencies', 'enabledServices', 'serviceFees', 'prices', 'providerCategories', 'providerServices', 'broker_bank_accounts', 'broker_coverage_municipalities'].includes(frontendKey)) {
           value = JSON.stringify(value)
         }
 

@@ -636,6 +636,7 @@ export default function CompaniesPage() {
     broker_delivery_end: '18:00',
     broker_contact_phone: '',
     broker_alternate_phone: '',
+    broker_coverage_municipalities: [] as string[],
     // Cuentas bancarias del broker
     broker_bank_accounts: [] as Array<{
       id: string
@@ -764,6 +765,7 @@ export default function CompaniesPage() {
       broker_delivery_end: '18:00',
       broker_contact_phone: '',
       broker_alternate_phone: '',
+      broker_coverage_municipalities: [],
       broker_bank_accounts: [],
       // Campos de mercado
       market_province: '',
@@ -1222,6 +1224,7 @@ export default function CompaniesPage() {
         broker_delivery_end: brokerDeliveryEnd,
         broker_contact_phone: company.broker_contact_phone || '',
         broker_alternate_phone: company.broker_alternate_phone || '',
+        broker_coverage_municipalities: parseJsonArray(company.broker_coverage_area),
         broker_bank_accounts: parseJsonArray(company.broker_bank_accounts),
         editMode: true,
         editId: companyId
@@ -1727,7 +1730,9 @@ export default function CompaniesPage() {
                                 [provinceField]: e.target.value,
                                 [municipalityField]: '',
                                 latitude: province?.coords[1] || null,
-                                longitude: province?.coords[0] || null
+                                longitude: province?.coords[0] || null,
+                                // Limpiar municipios de cobertura al cambiar provincia (solo aplica para brokers)
+                                broker_coverage_municipalities: formData.companyType === 'broker' ? [] : formData.broker_coverage_municipalities
                               })
                               if (formErrors.broker_province) setFormErrors({...formErrors, broker_province: false})
                               if (formErrors.market_province) setFormErrors({...formErrors, market_province: false})
@@ -1765,11 +1770,19 @@ export default function CompaniesPage() {
                               const province = BROKER_PROVINCES.find(p => p.id === currentProvince)
                               const municipality = province?.municipalities.find(m => m.id === e.target.value)
                               const municipalityField = formData.companyType === 'broker' ? 'broker_municipality' : 'market_municipality'
+
+                              // Para brokers: agregar el municipio de residencia a la cobertura automáticamente
+                              let newCoverageMunis = formData.broker_coverage_municipalities
+                              if (formData.companyType === 'broker' && e.target.value && !formData.broker_coverage_municipalities.includes(e.target.value)) {
+                                newCoverageMunis = [...formData.broker_coverage_municipalities, e.target.value]
+                              }
+
                               setFormData({
                                 ...formData,
                                 [municipalityField]: e.target.value,
                                 latitude: municipality?.coords?.[1] || formData.latitude,
-                                longitude: municipality?.coords?.[0] || formData.longitude
+                                longitude: municipality?.coords?.[0] || formData.longitude,
+                                broker_coverage_municipalities: newCoverageMunis
                               })
                               if (formErrors.broker_municipality) setFormErrors({...formErrors, broker_municipality: false})
                               if (formErrors.market_municipality) setFormErrors({...formErrors, market_municipality: false})
@@ -1919,6 +1932,88 @@ export default function CompaniesPage() {
                                 Coordenadas: {Number(formData.latitude).toFixed(6)}, {Number(formData.longitude).toFixed(6)}
                               </p>
                             )}
+                          </div>
+                        )}
+
+                        {/* Municipios de Cobertura - Solo para Brokers */}
+                        {formData.companyType === 'broker' && formData.broker_province && (
+                          <div className="md:col-span-2 mt-4">
+                            <div className={cn(
+                              "p-4 rounded-xl border",
+                              theme === 'dark'
+                                ? "border-blue-500/30 bg-blue-500/5"
+                                : "border-blue-200 bg-blue-50"
+                            )}>
+                              <label className={cn(
+                                "block text-sm font-medium mb-2 flex items-center gap-2",
+                                theme === 'dark' ? "text-white" : "text-gray-900"
+                              )}>
+                                <MapPin className="w-4 h-4 text-blue-400" />
+                                Municipios que Atenderá *
+                              </label>
+                              <p className={cn(
+                                "text-xs mb-3",
+                                theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                              )}>
+                                Selecciona todos los municipios de {BROKER_PROVINCES.find(p => p.id === formData.broker_province)?.name || formData.broker_province} donde este broker puede entregar remesas
+                              </p>
+                              <div className={cn(
+                                "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-64 overflow-y-auto p-3 rounded-xl",
+                                theme === 'dark' ? "bg-gray-800/50" : "bg-white"
+                              )}>
+                                {BROKER_PROVINCES
+                                  .find(p => p.id === formData.broker_province)
+                                  ?.municipalities
+                                  .map(muni => (
+                                    <label
+                                      key={muni.id}
+                                      className={cn(
+                                        "flex items-center gap-2 cursor-pointer p-2 rounded-lg transition-colors",
+                                        theme === 'dark'
+                                          ? "hover:bg-gray-700/50"
+                                          : "hover:bg-gray-100"
+                                      )}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={formData.broker_coverage_municipalities.includes(muni.id)}
+                                        onChange={(e) => {
+                                          const newMunis = e.target.checked
+                                            ? [...formData.broker_coverage_municipalities, muni.id]
+                                            : formData.broker_coverage_municipalities.filter(m => m !== muni.id)
+                                          setFormData({ ...formData, broker_coverage_municipalities: newMunis })
+                                        }}
+                                        className="rounded border-gray-600 text-blue-500 focus:ring-blue-500"
+                                      />
+                                      <span className={cn(
+                                        "text-sm",
+                                        theme === 'dark' ? "text-gray-200" : "text-gray-700"
+                                      )}>
+                                        {muni.name}
+                                        {muni.id === formData.broker_municipality && (
+                                          <span className="text-xs text-blue-400 ml-1">(Residencia)</span>
+                                        )}
+                                      </span>
+                                    </label>
+                                  ))
+                                }
+                              </div>
+                              {formData.broker_coverage_municipalities.length > 0 ? (
+                                <p className={cn(
+                                  "text-xs mt-2",
+                                  theme === 'dark' ? "text-green-400" : "text-green-600"
+                                )}>
+                                  ✓ {formData.broker_coverage_municipalities.length} municipio(s) seleccionado(s)
+                                </p>
+                              ) : (
+                                <p className={cn(
+                                  "text-xs mt-2",
+                                  theme === 'dark' ? "text-yellow-400" : "text-yellow-600"
+                                )}>
+                                  ⚠ Selecciona al menos un municipio
+                                </p>
+                              )}
+                            </div>
                           </div>
                         )}
                       </>

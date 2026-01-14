@@ -143,6 +143,7 @@ export async function POST(request: NextRequest) {
       broker_contact_phone,
       broker_alternate_phone,
       broker_bank_accounts,
+      broker_coverage_municipalities,
       // Campos para Mercados
       market_province,
       market_municipality,
@@ -281,7 +282,7 @@ export async function POST(request: NextRequest) {
         parent_company_id, is_branch,
         is_provider, provider_type, provider_categories, provider_services,
         latitude, longitude, broker_province, broker_municipality, broker_address,
-        broker_delivery_hours, broker_contact_phone, broker_alternate_phone, broker_bank_accounts,
+        broker_delivery_hours, broker_contact_phone, broker_alternate_phone, broker_bank_accounts, broker_coverage_area,
         market_province, market_municipality, market_address, market_contact_phone, market_alternate_phone,
         market_delivery_hours, market_is_active, market_categories,
         odoo_url, odoo_database, odoo_api_key, odoo_enabled,
@@ -294,10 +295,10 @@ export async function POST(request: NextRequest) {
         $27, $28,
         $29, $30, $31, $32,
         $33, $34, $35, $36, $37,
-        $38, $39, $40, $41,
-        $42, $43, $44, $45, $46,
-        $47, $48, $49,
-        $50, $51, $52, $53,
+        $38, $39, $40, $41, $42,
+        $43, $44, $45, $46, $47,
+        $48, $49, $50,
+        $51, $52, $53, $54,
         'active', NOW(), 0, 0, 0
       ) RETURNING
         id,
@@ -381,6 +382,7 @@ export async function POST(request: NextRequest) {
       broker_contact_phone || null,
       broker_alternate_phone || null,
       JSON.stringify(broker_bank_accounts || []),
+      JSON.stringify(broker_coverage_municipalities || []),
       // Campos para Mercados
       market_province || null,
       market_municipality || null,
