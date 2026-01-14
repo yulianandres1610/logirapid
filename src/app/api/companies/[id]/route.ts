@@ -153,12 +153,19 @@ export async function PUT(
       })
     }
 
+    // Obtener el walletNumber actual de la empresa para evitar conflictos de unicidad
+    const currentWalletNumber = (await db.query(
+      'SELECT walletnumber FROM companies WHERE id = $1',
+      [companyId]
+    )).rows[0]?.walletnumber
+
     // Actualización completa de la empresa
     const updateFields: string[] = []
     const values: any[] = []
     let paramCounter = 1
 
     // Mapeo de campos del frontend a columnas de la BD
+    // NOTA: walletNumber se excluye porque tiene restricción UNIQUE y se maneja por separado
     const fieldMapping: Record<string, string> = {
       legalName: 'legalname',
       einNumber: 'einnumber',
@@ -171,7 +178,6 @@ export async function PUT(
       state: 'state',
       country: 'country',
       zipCode: 'zipcode',
-      walletNumber: 'walletnumber',
       currency: 'currency',
       isMultiCurrency: 'ismulticurrency',
       secondaryCurrencies: 'secondarycurrencies',
@@ -222,6 +228,23 @@ export async function PUT(
         values.push(value)
         paramCounter++
       }
+    }
+
+    // Manejar walletNumber de forma especial para evitar conflictos de unicidad
+    // Solo actualizar si:
+    // 1. La empresa NO tiene walletNumber actual (o está vacío)
+    // 2. Se proporciona un nuevo walletNumber válido
+    if (body.walletNumber !== undefined) {
+      const newWalletNumber = body.walletNumber?.trim()
+      const hasCurrentWallet = currentWalletNumber && currentWalletNumber.trim() !== ''
+
+      if (!hasCurrentWallet && newWalletNumber) {
+        // La empresa no tiene wallet y se proporciona uno nuevo válido
+        updateFields.push(`walletnumber = $${paramCounter}`)
+        values.push(newWalletNumber)
+        paramCounter++
+      }
+      // Si ya tiene wallet, ignoramos el campo para evitar conflictos de unicidad
     }
 
     if (updateFields.length === 0) {
