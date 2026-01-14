@@ -6,7 +6,6 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
-import ServicesManagement from '@/components/settings/ServicesManagement'
 import ContentTypesManagement from '@/components/settings/ContentTypesManagement'
 import CompanySelector from '@/components/settings/CompanySelector'
 import { PaymentSettings } from '@/components/settings/PaymentSettings'
@@ -557,7 +556,6 @@ export default function SettingsPage() {
         const packageSubTabs = [
           { id: 'zones', label: 'Zonas', icon: MapPin },
           { id: 'sizes', label: 'Tamaños', icon: Ruler },
-          { id: 'services', label: 'Servicios', icon: Package },
           { id: 'content-types', label: 'Tipos de Contenido', icon: Tag }
         ]
 
@@ -595,13 +593,6 @@ export default function SettingsPage() {
                 })}
               </div>
             </div>
-
-            {/* Services Tab */}
-            {packageSubTab === 'services' && (
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm">
-                <ServicesManagement />
-              </div>
-            )}
 
             {/* Content Types Tab */}
             {packageSubTab === 'content-types' && (

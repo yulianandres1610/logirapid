@@ -9,7 +9,6 @@ import {
   CheckCircle,
   Clock,
   XCircle,
-  Plus,
   Camera,
   PenLine,
   ChevronDown,
@@ -19,7 +18,6 @@ import {
 } from 'lucide-react'
 import ClientInfoCard from './ClientInfoCard'
 import EmpaqueAssignment from './EmpaqueAssignment'
-import AddServiceModal from './AddServiceModal'
 import DeliveryProofForm from './DeliveryProofForm'
 import DeliveryProofViewer from './DeliveryProofViewer'
 import { useAuth } from '@/hooks/useAuth'
@@ -130,7 +128,6 @@ export default function StopDetailPage({
   onRefresh
 }: StopDetailPageProps) {
   const [expandedOrders, setExpandedOrders] = useState<number[]>(stop.orders.map(o => o.id))
-  const [addServiceOrderId, setAddServiceOrderId] = useState<number | null>(null)
   const [proofOrderId, setProofOrderId] = useState<number | null>(null)
   const [viewProofOrderId, setViewProofOrderId] = useState<number | null>(null)
 
@@ -147,11 +144,6 @@ export default function StopDetailPage({
 
   const handleProofSuccess = () => {
     setProofOrderId(null)
-    onRefresh()
-  }
-
-  const handleServiceAdded = () => {
-    setAddServiceOrderId(null)
     onRefresh()
   }
 
@@ -243,19 +235,6 @@ export default function StopDetailPage({
                         Comprobante
                       </span>
                     )}
-
-                    {/* Botón agregar servicio */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setAddServiceOrderId(order.id)
-                      }}
-                      className="p-1.5 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 rounded transition-colors"
-                      title="Agregar servicio"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
 
                     {isExpanded ? (
                       <ChevronUp className="w-5 h-5 text-gray-400" />
@@ -383,17 +362,6 @@ export default function StopDetailPage({
           })}
         </div>
       </section>
-
-      {/* Modal: Agregar Servicio */}
-      {addServiceOrderId && (
-        <AddServiceModal
-          orderId={addServiceOrderId}
-          orderNumber={stop.orders.find(o => o.id === addServiceOrderId)?.orderNumber || ''}
-          companyId={companyId}
-          onClose={() => setAddServiceOrderId(null)}
-          onSuccess={handleServiceAdded}
-        />
-      )}
 
       {/* Modal: Agregar Comprobante */}
       {proofOrderId && (

@@ -8,7 +8,6 @@ import {
   ArrowRight,
   Check,
   Search,
-  Package,
   Settings as SettingsIcon,
   Printer,
   CreditCard,
@@ -23,7 +22,6 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 // Importar los pasos del wizard
 import SenderSearchStep from '@/components/office-orders/wizard/SenderSearchStep'
 import RecipientSearchStep from '@/components/office-orders/wizard/RecipientSearchStep'
-import ServiceSelectionStep from '@/components/office-orders/wizard/ServiceSelectionStep'
 import ServiceConfigurationStep from '@/components/office-orders/wizard/ServiceConfigurationStep'
 import LabelGenerationStep from '@/components/office-orders/wizard/LabelGenerationStep'
 import BillingPOSStep from '@/components/office-orders/wizard/BillingPOSStep'
@@ -91,34 +89,27 @@ export default function CreateOfficeOrderPage() {
     },
     {
       id: 3,
-      title: 'Servicios',
-      description: 'Seleccionar servicios',
-      icon: Package,
-      component: ServiceSelectionStep
-    },
-    {
-      id: 4,
       title: 'Configuración',
       description: 'Configurar envíos',
       icon: SettingsIcon,
       component: ServiceConfigurationStep
     },
     {
-      id: 5,
+      id: 4,
       title: 'Etiquetas',
       description: 'Generar etiquetas',
       icon: Printer,
       component: LabelGenerationStep
     },
     {
-      id: 6,
+      id: 5,
       title: 'Pago',
       description: 'Procesar pago',
       icon: CreditCard,
       component: BillingPOSStep
     },
     {
-      id: 7,
+      id: 6,
       title: 'Confirmación',
       description: 'Completar orden',
       icon: FileCheck,

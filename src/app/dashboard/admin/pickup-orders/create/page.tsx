@@ -27,7 +27,6 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 // Importar los pasos del wizard (reutilizando componentes de office-orders)
 import SenderSearchStep from '@/components/office-orders/wizard/SenderSearchStep'
 import RecipientSearchStep from '@/components/office-orders/wizard/RecipientSearchStep'
-import ServiceSelectionStep from '@/components/office-orders/wizard/ServiceSelectionStep'
 import BillingPOSStep from '@/components/office-orders/wizard/BillingPOSStep'
 
 // Importar pasos específicos de pickup-orders
@@ -142,33 +141,26 @@ export default function CreatePickupOrderPage() {
     ]
 
     if (wizardData.orderType === 'recogida') {
-      // Flujo de RECOGIDA: 8 pasos totales
+      // Flujo de RECOGIDA: 7 pasos totales
       return [
         ...baseSteps,
         ...commonSteps,
         {
           id: 5,
-          title: 'Servicios',
-          description: 'Seleccionar servicios',
-          icon: Package,
-          component: ServiceSelectionStep
-        },
-        {
-          id: 6,
           title: 'Configuración',
           description: 'Configurar envíos',
           icon: SettingsIcon,
           component: PickupServiceConfigurationStep
         },
         {
-          id: 7,
+          id: 6,
           title: 'Pago',
           description: 'Procesar pago',
           icon: CreditCard,
           component: BillingPOSStep
         },
         {
-          id: 8,
+          id: 7,
           title: 'Confirmación',
           description: 'Completar orden',
           icon: FileCheck,
