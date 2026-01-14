@@ -24,21 +24,29 @@ export default function RegisterVehiclePage() {
     try {
       setIsCreating(true);
 
+      // Use direct values from form data, falling back to vin_data for VIN-decoded vehicles
       const response = await createVehicle({
         vin: data.vin,
-        make: data.vin_data?.make || 'Unknown',
-        model: data.vin_data?.model || 'Unknown',
-        year: data.vin_data?.model_year || new Date().getFullYear(),
-        body_type: data.vin_data?.body_type || 'Unknown',
-        color: data.vin_data?.color || 'Unknown',
-        nickname: (data as any).nickname || `${data.vin_data?.make || 'Unknown'} ${data.vin_data?.model || 'Unknown'}`,
+        make: (data as any).make || data.vin_data?.make || 'Unknown',
+        model: (data as any).model || data.vin_data?.model || 'Unknown',
+        year: (data as any).year || data.vin_data?.model_year || new Date().getFullYear(),
+        body_type: (data as any).body_type || data.vin_data?.body_type || 'Unknown',
+        color: (data as any).color || data.vin_data?.color || 'Unknown',
+        nickname: (data as any).nickname || `${(data as any).make || data.vin_data?.make || 'Unknown'} ${(data as any).model || data.vin_data?.model || 'Unknown'}`,
         photo_url: data.photo_url,
+        license_plate: (data as any).license_plate,
+        empty_boxes: (data as any).capacity?.empty_boxes || 0,
+        full_boxes: (data as any).capacity?.full_boxes || 0,
         capacity: {
           weight_lbs: data.capacity_weight_lbs,
           weight_kg: data.capacity_weight_kg,
           volume_cubic_ft: data.capacity_volume_cubic_ft,
           volume_cubic_m: data.capacity_volume_cubic_m,
         },
+        mileage: (data as any).mileage || 0,
+        insurance_expiry: (data as any).insurance_expiry,
+        oil_change_frequency: (data as any).oil_change_frequency || 5000,
+        can_collect_durable: (data as any).can_collect_durable || false,
         status: 'ACTIVE' as const,
         availability: 'AVAILABLE' as const,
         vin_data: data.vin_data,

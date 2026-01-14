@@ -16,6 +16,7 @@ interface Props {
 }
 
 interface CubaAddressData {
+  id?: number
   street: string
   number: string
   reparto: string
@@ -25,6 +26,7 @@ interface CubaAddressData {
   municipalityId: number | null
   municipalityName: string
   deliveryInstructions: string
+  isPrimary?: boolean
 }
 
 interface Province {
@@ -45,6 +47,14 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
   const [customers, setCustomers] = useState<any[]>([])
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const [editingCustomerId, setEditingCustomerId] = useState<number | null>(null)
+
+  // Estado para direcciones del cliente seleccionado
+  const [customerAddresses, setCustomerAddresses] = useState<CubaAddressData[]>([])
+  const [loadingAddresses, setLoadingAddresses] = useState(false)
+  const [showAddressSelector, setShowAddressSelector] = useState(false)
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
+  const [showNewAddressForm, setShowNewAddressForm] = useState(false)
 
   // Provincias y municipios de Cuba
   const [provinces, setProvinces] = useState<Province[]>([])
@@ -126,27 +136,122 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
     }
   }
 
-  const selectCustomer = (customer: any) => {
-    // Construir dirección para mostrar
-    const addressDisplay = buildAddressDisplay(customer)
+  const selectCustomer = async (customer: any) => {
+    setSelectedCustomer(customer)
+    setLoadingAddresses(true)
+
+    try {
+      // Cargar direcciones del cliente
+      const response = await fetch(`/api/customer-addresses?customerId=${customer.id}&addressType=cuba`)
+      const data = await response.json()
+
+      if (data.success && data.data && data.data.length > 0) {
+        setCustomerAddresses(data.data)
+        // Si tiene múltiples direcciones, mostrar selector
+        if (data.data.length > 1) {
+          setShowAddressSelector(true)
+        } else {
+          // Si solo tiene una dirección, seleccionarla automáticamente
+          selectAddressForCustomer(customer, data.data[0])
+        }
+      } else {
+        // Si no tiene direcciones de Cuba, mostrar formulario para agregar una
+        setShowAddressSelector(true)
+        setShowNewAddressForm(true)
+        setCustomerAddresses([])
+      }
+    } catch (error) {
+      console.error('Error loading customer addresses:', error)
+      // En caso de error, permitir crear nueva dirección
+      setShowAddressSelector(true)
+      setShowNewAddressForm(true)
+      setCustomerAddresses([])
+    } finally {
+      setLoadingAddresses(false)
+    }
+  }
+
+  const selectAddressForCustomer = (customer: any, address: CubaAddressData) => {
+    const addressDisplay = buildAddressDisplay(address)
 
     const recipientData = {
       ...customer,
       address: addressDisplay,
+      addressId: address.id,
       // Campos estructurados de Cuba
-      street: customer.street || '',
-      number: customer.number || '',
-      reparto: customer.reparto || '',
-      floor: customer.floor || '',
-      provinceId: customer.provinceId || null,
-      provinceName: customer.provinceName || '',
-      municipalityId: customer.municipalityId || null,
-      municipalityName: customer.municipalityName || '',
-      deliveryInstructions: customer.deliveryInstructions || ''
+      street: address.street || '',
+      number: address.number || '',
+      reparto: address.reparto || '',
+      floor: address.floor || '',
+      provinceId: address.provinceId || null,
+      provinceName: address.provinceName || '',
+      municipalityId: address.municipalityId || null,
+      municipalityName: address.municipalityName || '',
+      deliveryInstructions: address.deliveryInstructions || ''
     }
 
     updateWizardData('recipient', recipientData)
     setCanProceed(true)
+    setShowAddressSelector(false)
+    setSelectedCustomer(null)
+    setCustomerAddresses([])
+  }
+
+  const createAddressForExistingCustomer = async () => {
+    if (!selectedCustomer) return
+
+    if (!newRecipient.address.street || !newRecipient.address.provinceId || !newRecipient.address.municipalityId) {
+      alert('Calle, provincia y municipio son requeridos')
+      return
+    }
+
+    try {
+      const response = await fetch('/api/customer-addresses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: selectedCustomer.id,
+          street: newRecipient.address.street,
+          number: newRecipient.address.number,
+          reparto: newRecipient.address.reparto,
+          floor: newRecipient.address.floor,
+          provinceId: newRecipient.address.provinceId,
+          provinceName: newRecipient.address.provinceName,
+          municipalityId: newRecipient.address.municipalityId,
+          municipalityName: newRecipient.address.municipalityName,
+          deliveryInstructions: newRecipient.address.deliveryInstructions,
+          addressType: 'cuba',
+          country: 'Cuba',
+          isPrimary: customerAddresses.length === 0 // Primera dirección es primaria
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        selectAddressForCustomer(selectedCustomer, data.data)
+        // Reset form
+        setNewRecipient(prev => ({
+          ...prev,
+          address: {
+            street: '',
+            number: '',
+            reparto: '',
+            floor: '',
+            provinceId: null,
+            provinceName: '',
+            municipalityId: null,
+            municipalityName: '',
+            deliveryInstructions: ''
+          }
+        }))
+        setShowNewAddressForm(false)
+      } else {
+        alert(data.error || 'Error al crear dirección')
+      }
+    } catch (error) {
+      console.error('Error creating address:', error)
+      alert('Error al crear dirección')
+    }
   }
 
   const buildAddressDisplay = (data: any): string => {
@@ -208,49 +313,84 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
       // Construir dirección completa para el campo address legacy
       const fullAddress = buildAddressDisplay(newRecipient.address)
 
-      // Crear el cliente con todos los campos de dirección estructurados
+      // Si estamos editando, usar PUT en lugar de POST
+      const method = isEditing && editingCustomerId ? 'PUT' : 'POST'
+      const customerData: any = {
+        firstName: newRecipient.firstName,
+        lastName: newRecipient.lastName,
+        phone: newRecipient.phone,
+        email: newRecipient.email,
+        idType: newRecipient.idType || null,
+        idNumber: newRecipient.idNumber || null,
+        hasAlternateContact: newRecipient.hasAlternateContact,
+        alternateContactName: newRecipient.alternateContactName || null,
+        alternateContactPhone: newRecipient.alternateContactPhone || null,
+        // Dirección completa (legacy)
+        address: fullAddress,
+        country: 'CU'
+      }
+
+      if (isEditing && editingCustomerId) {
+        customerData.id = editingCustomerId
+      }
+
       const response = await fetch('/api/customers', {
-        method: 'POST',
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firstName: newRecipient.firstName,
-          lastName: newRecipient.lastName,
-          phone: newRecipient.phone,
-          email: newRecipient.email,
-          idType: newRecipient.idType || null,
-          idNumber: newRecipient.idNumber || null,
-          hasAlternateContact: newRecipient.hasAlternateContact,
-          alternateContactName: newRecipient.alternateContactName || null,
-          alternateContactPhone: newRecipient.alternateContactPhone || null,
-          // Dirección completa (legacy)
-          address: fullAddress,
-          // Campos estructurados de dirección Cuba
-          street: newRecipient.address.street || null,
-          number: newRecipient.address.number || null,
-          reparto: newRecipient.address.reparto || null,
-          floor: newRecipient.address.floor || null,
-          provinceId: newRecipient.address.provinceId || null,
-          provinceName: newRecipient.address.provinceName || null,
-          municipalityId: newRecipient.address.municipalityId || null,
-          municipalityName: newRecipient.address.municipalityName || null,
-          deliveryInstructions: newRecipient.address.deliveryInstructions || null,
-          country: 'CU'
-        })
+        body: JSON.stringify(customerData)
       })
 
       const data = await response.json()
       if (data.success) {
+        const customerId = isEditing && editingCustomerId ? editingCustomerId : data.data.id
         const createdCustomer = data.data
+
+        // Crear la dirección en customer_addresses
+        const addressResponse = await fetch('/api/customer-addresses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerId: customerId,
+            street: newRecipient.address.street,
+            number: newRecipient.address.number,
+            reparto: newRecipient.address.reparto,
+            floor: newRecipient.address.floor,
+            provinceId: newRecipient.address.provinceId,
+            provinceName: newRecipient.address.provinceName,
+            municipalityId: newRecipient.address.municipalityId,
+            municipalityName: newRecipient.address.municipalityName,
+            deliveryInstructions: newRecipient.address.deliveryInstructions,
+            addressType: 'cuba',
+            country: 'Cuba',
+            isPrimary: true
+          })
+        })
+
+        const addressData = await addressResponse.json()
+        let addressId = null
+        if (addressData.success) {
+          addressId = addressData.data.id
+        }
 
         // Guardar el destinatario con dirección estructurada
         updateWizardData('recipient', {
           ...createdCustomer,
-          ...newRecipient.address,
+          addressId,
+          street: newRecipient.address.street,
+          number: newRecipient.address.number,
+          reparto: newRecipient.address.reparto,
+          floor: newRecipient.address.floor,
+          provinceId: newRecipient.address.provinceId,
+          provinceName: newRecipient.address.provinceName,
+          municipalityId: newRecipient.address.municipalityId,
+          municipalityName: newRecipient.address.municipalityName,
+          deliveryInstructions: newRecipient.address.deliveryInstructions,
           address: fullAddress
         })
         setCanProceed(true)
         setShowCreateForm(false)
         setIsEditing(false)
+        setEditingCustomerId(null)
       } else {
         alert(data.error || 'Error al crear destinatario')
       }
@@ -338,7 +478,7 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
           </div>
 
           {/* Search Results */}
-          {customers.length > 0 && (
+          {customers.length > 0 && !showAddressSelector && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -385,6 +525,316 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
                   </div>
                 </motion.div>
               ))}
+            </motion.div>
+          )}
+
+          {/* Address Selector for Existing Customer */}
+          {showAddressSelector && selectedCustomer && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className={cn(
+                "p-6 sm:p-8 rounded-2xl border shadow-lg",
+                theme === 'dark' ? 'bg-gray-700/50 border-gray-600 backdrop-blur-sm' : 'bg-gray-50 border-gray-200'
+              )}
+            >
+              {/* Customer Info Header */}
+              <div className="flex items-center gap-4 mb-6 pb-4 border-b border-gray-600">
+                <div className={cn(
+                  "w-14 h-14 rounded-full flex items-center justify-center",
+                  theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'
+                )}>
+                  <User className="w-7 h-7 text-purple-600" />
+                </div>
+                <div className="flex-1">
+                  <p className={cn(
+                    "font-bold text-lg",
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>
+                    {selectedCustomer.firstName} {selectedCustomer.lastName}
+                  </p>
+                  <p className={cn(
+                    "text-sm",
+                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                  )}>
+                    {selectedCustomer.phone}
+                  </p>
+                </div>
+                <Button
+                  onClick={() => {
+                    setShowAddressSelector(false)
+                    setSelectedCustomer(null)
+                    setCustomerAddresses([])
+                    setShowNewAddressForm(false)
+                  }}
+                  variant="ghost"
+                  className={cn(
+                    "text-sm",
+                    theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
+                  )}
+                >
+                  Cancelar
+                </Button>
+              </div>
+
+              {loadingAddresses ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-purple-600 mr-2" />
+                  <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                    Cargando direcciones...
+                  </span>
+                </div>
+              ) : !showNewAddressForm ? (
+                <>
+                  {/* Existing Addresses */}
+                  {customerAddresses.length > 0 && (
+                    <div className="mb-6">
+                      <h4 className={cn(
+                        "text-sm font-semibold mb-3",
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                      )}>
+                        Selecciona una dirección existente:
+                      </h4>
+                      <div className="space-y-3">
+                        {customerAddresses.map((addr, index) => (
+                          <motion.div
+                            key={addr.id || index}
+                            whileHover={{ scale: 1.01 }}
+                            whileTap={{ scale: 0.99 }}
+                            onClick={() => selectAddressForCustomer(selectedCustomer, addr)}
+                            className={cn(
+                              "p-4 rounded-xl border cursor-pointer transition-all",
+                              theme === 'dark'
+                                ? 'bg-gray-600/50 border-gray-500 hover:bg-gray-600 hover:border-purple-500'
+                                : 'bg-white border-gray-200 hover:bg-purple-50 hover:border-purple-300'
+                            )}
+                          >
+                            <div className="flex items-start gap-3">
+                              <MapPin className={cn(
+                                "w-5 h-5 mt-0.5 flex-shrink-0",
+                                theme === 'dark' ? 'text-purple-400' : 'text-purple-600'
+                              )} />
+                              <div className="flex-1">
+                                <p className={cn(
+                                  "font-medium",
+                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                )}>
+                                  {buildAddressDisplay(addr)}
+                                </p>
+                                {addr.deliveryInstructions && (
+                                  <p className={cn(
+                                    "text-sm mt-1 italic",
+                                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                                  )}>
+                                    {addr.deliveryInstructions}
+                                  </p>
+                                )}
+                                {addr.isPrimary && (
+                                  <span className={cn(
+                                    "inline-block mt-2 px-2 py-0.5 text-xs rounded-full",
+                                    theme === 'dark' ? 'bg-purple-900/50 text-purple-300' : 'bg-purple-100 text-purple-700'
+                                  )}>
+                                    Principal
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Add New Address Button */}
+                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                    <Button
+                      onClick={() => setShowNewAddressForm(true)}
+                      className={cn(
+                        "w-full rounded-xl font-medium py-3 flex items-center justify-center gap-2",
+                        theme === 'dark' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-purple-500 hover:bg-purple-600',
+                        'text-white'
+                      )}
+                    >
+                      <Plus className="w-5 h-5" />
+                      Agregar Nueva Dirección
+                    </Button>
+                  </motion.div>
+                </>
+              ) : (
+                /* New Address Form for Existing Customer */
+                <div>
+                  <h4 className={cn(
+                    "text-sm font-semibold mb-4 flex items-center gap-2",
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                  )}>
+                    <MapPin className="w-4 h-4" />
+                    Nueva Dirección en Cuba
+                  </h4>
+
+                  {loadingLocations ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-purple-600 mr-2" />
+                      <span className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                        Cargando provincias y municipios...
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Calle y Número */}
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="col-span-2">
+                          <Input
+                            placeholder="Calle *"
+                            value={newRecipient.address.street}
+                            onChange={(e) => setNewRecipient({
+                              ...newRecipient,
+                              address: { ...newRecipient.address, street: e.target.value }
+                            })}
+                            className={cn(
+                              "rounded-xl",
+                              theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : ''
+                            )}
+                          />
+                        </div>
+                        <Input
+                          placeholder="Número"
+                          value={newRecipient.address.number}
+                          onChange={(e) => setNewRecipient({
+                            ...newRecipient,
+                            address: { ...newRecipient.address, number: e.target.value }
+                          })}
+                          className={cn(
+                            "rounded-xl",
+                            theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : ''
+                          )}
+                        />
+                      </div>
+
+                      {/* Reparto y Piso */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <Input
+                          placeholder="Reparto / Barrio"
+                          value={newRecipient.address.reparto}
+                          onChange={(e) => setNewRecipient({
+                            ...newRecipient,
+                            address: { ...newRecipient.address, reparto: e.target.value }
+                          })}
+                          className={cn(
+                            "rounded-xl",
+                            theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : ''
+                          )}
+                        />
+                        <Input
+                          placeholder="Piso / Apt"
+                          value={newRecipient.address.floor}
+                          onChange={(e) => setNewRecipient({
+                            ...newRecipient,
+                            address: { ...newRecipient.address, floor: e.target.value }
+                          })}
+                          className={cn(
+                            "rounded-xl",
+                            theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : ''
+                          )}
+                        />
+                      </div>
+
+                      {/* Provincia y Municipio */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <select
+                          value={newRecipient.address.provinceId || ''}
+                          onChange={(e) => handleProvinceChange(Number(e.target.value))}
+                          className={cn(
+                            "rounded-xl px-3 py-2 border",
+                            theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'border-gray-300'
+                          )}
+                        >
+                          <option value="">Provincia *</option>
+                          {provinces.map(province => (
+                            <option key={province.id} value={province.id}>
+                              {province.name}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={newRecipient.address.municipalityId || ''}
+                          onChange={(e) => handleMunicipalityChange(Number(e.target.value))}
+                          disabled={!newRecipient.address.provinceId}
+                          className={cn(
+                            "rounded-xl px-3 py-2 border",
+                            theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'border-gray-300',
+                            !newRecipient.address.provinceId && 'opacity-50 cursor-not-allowed'
+                          )}
+                        >
+                          <option value="">Municipio *</option>
+                          {filteredMunicipalities.map(municipality => (
+                            <option key={municipality.id} value={municipality.id}>
+                              {municipality.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Instrucciones de entrega */}
+                      <div>
+                        <textarea
+                          placeholder="Instrucciones de entrega (opcional)"
+                          value={newRecipient.address.deliveryInstructions}
+                          onChange={(e) => setNewRecipient({
+                            ...newRecipient,
+                            address: { ...newRecipient.address, deliveryInstructions: e.target.value }
+                          })}
+                          rows={2}
+                          className={cn(
+                            "w-full rounded-xl px-3 py-2 border resize-none",
+                            theme === 'dark' ? 'bg-gray-600 text-white border-gray-500' : 'border-gray-300'
+                          )}
+                        />
+                      </div>
+
+                      {/* Buttons */}
+                      <div className="flex gap-3 pt-2">
+                        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="flex-1">
+                          <Button
+                            onClick={() => {
+                              setShowNewAddressForm(false)
+                              // Reset address form
+                              setNewRecipient(prev => ({
+                                ...prev,
+                                address: {
+                                  street: '',
+                                  number: '',
+                                  reparto: '',
+                                  floor: '',
+                                  provinceId: null,
+                                  provinceName: '',
+                                  municipalityId: null,
+                                  municipalityName: '',
+                                  deliveryInstructions: ''
+                                }
+                              }))
+                            }}
+                            className={cn(
+                              "w-full rounded-xl font-medium py-3",
+                              theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-200 hover:bg-gray-300',
+                              theme === 'dark' ? 'text-white' : 'text-gray-900'
+                            )}
+                          >
+                            Cancelar
+                          </Button>
+                        </motion.div>
+                        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="flex-1">
+                          <Button
+                            onClick={createAddressForExistingCustomer}
+                            className="w-full rounded-xl font-medium py-3 bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/30"
+                          >
+                            Guardar Dirección
+                          </Button>
+                        </motion.div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -772,6 +1222,7 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
                       }
                     })
                     setIsEditing(true)
+                    setEditingCustomerId(wizardData.recipient.id || null)
                     setShowCreateForm(true)
                     updateWizardData('recipient', null)
                     setCanProceed(false)
