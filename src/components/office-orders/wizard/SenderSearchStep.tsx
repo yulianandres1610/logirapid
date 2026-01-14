@@ -159,6 +159,7 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
 
   // Estado para modo edición
   const [isEditing, setIsEditing] = useState(false)
+  const [editingCustomerId, setEditingCustomerId] = useState<number | null>(null)
 
   const searchCustomer = async () => {
     if (!searchPhone.trim()) return
@@ -432,31 +433,38 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
       // Construir dirección completa para el campo address legacy
       const fullAddress = `${newSender.address.street}${newSender.address.apartment ? ', ' + newSender.address.apartment : ''}, ${newSender.address.city}, ${newSender.address.state} ${newSender.address.zipCode}, ${newSender.address.country}`
 
-      // Crear el cliente con todos los campos de dirección estructurados
+      // Crear o actualizar el cliente con todos los campos de dirección estructurados
+      const customerData = {
+        firstName: newSender.firstName,
+        lastName: newSender.lastName,
+        phone: newSender.phone,
+        email: newSender.email,
+        idType: newSender.idType || null,
+        idNumber: newSender.idNumber || null,
+        entryPin: newSender.entryPin || null,
+        entryInstructions: newSender.entryInstructions || null,
+        hasAlternateContact: newSender.hasAlternateContact,
+        alternateContactName: newSender.alternateContactName || null,
+        alternateContactPhone: newSender.alternateContactPhone || null,
+        // Dirección completa (legacy)
+        address: fullAddress,
+        // Campos estructurados de dirección
+        city: newSender.address.city || null,
+        state: newSender.address.state || null,
+        zipCode: newSender.address.zipCode || null,
+        country: newSender.address.country || 'US',
+        apartment: newSender.address.apartment || null
+      }
+
+      // Si estamos editando, agregar el ID y usar PUT
+      if (isEditing && editingCustomerId) {
+        (customerData as any).id = editingCustomerId
+      }
+
       const response = await fetch('/api/customers', {
-        method: 'POST',
+        method: isEditing && editingCustomerId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firstName: newSender.firstName,
-          lastName: newSender.lastName,
-          phone: newSender.phone,
-          email: newSender.email,
-          idType: newSender.idType || null,
-          idNumber: newSender.idNumber || null,
-          entryPin: newSender.entryPin || null,
-          entryInstructions: newSender.entryInstructions || null,
-          hasAlternateContact: newSender.hasAlternateContact,
-          alternateContactName: newSender.alternateContactName || null,
-          alternateContactPhone: newSender.alternateContactPhone || null,
-          // Dirección completa (legacy)
-          address: fullAddress,
-          // Campos estructurados de dirección
-          city: newSender.address.city || null,
-          state: newSender.address.state || null,
-          zipCode: newSender.address.zipCode || null,
-          country: newSender.address.country || 'US',
-          apartment: newSender.address.apartment || null
-        })
+        body: JSON.stringify(customerData)
       })
 
       const data = await response.json()
@@ -503,8 +511,10 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
         })
         setCanProceed(true)
         setShowCreateForm(false)
+        setIsEditing(false)
+        setEditingCustomerId(null)
       } else {
-        alert(data.error || 'Error al crear remitente')
+        alert(data.error || (isEditing ? 'Error al actualizar remitente' : 'Error al crear remitente'))
       }
     } catch (error) {
       console.error('Error creating sender:', error)
@@ -815,6 +825,7 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
                     onClick={() => {
                       setShowCreateForm(false)
                       setIsEditing(false)
+                      setEditingCustomerId(null)
                     }}
                     className={cn(
                       "w-full rounded-xl font-medium py-3",
@@ -981,6 +992,7 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
                         : null
                     })
                     setIsEditing(true)
+                    setEditingCustomerId(wizardData.sender.id)
                     setShowCreateForm(true)
                     updateWizardData('sender', null)
                     setCanProceed(false)
@@ -1004,6 +1016,7 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
                     setCustomerAddresses([])
                     setSelectedAddressId(null)
                     setIsEditing(false)
+                    setEditingCustomerId(null)
                   }}
                   variant="outline"
                   className={cn(
