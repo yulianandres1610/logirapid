@@ -280,7 +280,9 @@ export default function PickupLocationMap({ order, zone, route, className }: Pic
 
         // Ajustar bounds para mostrar toda la ruta
         const bounds = new mapboxgl.LngLatBounds()
-        bounds.extend([lng, lat])
+        if (coordinates) {
+          bounds.extend([coordinates.lng, coordinates.lat])
+        }
         route.stops.forEach((stop: any) => {
           if (stop.latitude && stop.longitude) {
             const stopLat = parseFloat(stop.latitude.toString())

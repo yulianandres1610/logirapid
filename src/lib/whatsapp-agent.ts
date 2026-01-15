@@ -976,47 +976,60 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
   try {
     console.log('[WhatsApp Agent] ===== CREANDO ORDEN DE RECOGIDA =====')
     console.log('[WhatsApp Agent] Datos recibidos:', JSON.stringify(data, null, 2))
+    console.log('[WhatsApp Agent] senderAddress:', data.senderAddress)
+    console.log('[WhatsApp Agent] scheduledDate:', data.scheduledDate)
+    console.log('[WhatsApp Agent] timeSlot:', data.timeSlot)
 
-    // 1. Geocodificar la dirección para obtener coordenadas
-    let fullAddress = String(data.senderAddress || '')
-    let street = fullAddress
-    let city = ''
-    let state = ''
+    // 1. Preparar dirección - usar la dirección del cliente tal como la dio
+    const rawAddress = String(data.senderAddress || '').trim()
+    let fullAddress = rawAddress
+    let street = rawAddress
+    let city = 'Miami'  // Default
+    let state = 'FL'    // Default
     let zipcode = ''
     let latitude: number | null = null
     let longitude: number | null = null
 
-    if (data.senderAddress) {
-      console.log('[WhatsApp Agent] Geocodificando dirección:', data.senderAddress)
-      const geoResult = await geocodeUSAddress(String(data.senderAddress))
+    // Solo geocodificar si hay dirección
+    if (rawAddress && rawAddress.length > 5) {
+      console.log('[WhatsApp Agent] Geocodificando dirección:', rawAddress)
+      const geoResult = await geocodeUSAddress(rawAddress)
 
       if (geoResult) {
         console.log('[WhatsApp Agent] Geocodificación exitosa:', geoResult)
         // Guardar la dirección formateada completa
         fullAddress = geoResult.formattedAddress
-        street = geoResult.street || ''
-        city = geoResult.city || ''
-        state = geoResult.state || ''
+        street = geoResult.street || rawAddress
+        city = geoResult.city || 'Miami'
+        state = geoResult.state || 'FL'
         zipcode = geoResult.zipcode || ''
         latitude = geoResult.latitude
         longitude = geoResult.longitude
       } else {
-        console.log('[WhatsApp Agent] No se pudo geocodificar, usando dirección original')
+        console.log('[WhatsApp Agent] No se pudo geocodificar, parseando manualmente')
         // Intentar parsear la dirección manualmente
-        const addressParts = fullAddress.split(',').map(p => p.trim())
-        if (addressParts.length >= 3) {
-          street = addressParts[0] || ''
-          city = addressParts[1] || ''
-          // El último puede ser "FL 33125" o "Florida 33125"
-          const lastPart = addressParts[addressParts.length - 1] || ''
-          const stateZipMatch = lastPart.match(/([A-Za-z]+)\s*(\d{5})?/)
-          if (stateZipMatch) {
-            state = stateZipMatch[1] || ''
-            zipcode = stateZipMatch[2] || ''
+        fullAddress = rawAddress  // Mantener la dirección original
+        const addressParts = rawAddress.split(',').map(p => p.trim())
+        if (addressParts.length >= 2) {
+          street = addressParts[0] || rawAddress
+          city = addressParts[1] || 'Miami'
+          if (addressParts.length >= 3) {
+            // El último puede ser "FL 33125" o "Florida 33125"
+            const lastPart = addressParts[addressParts.length - 1] || ''
+            const stateZipMatch = lastPart.match(/([A-Za-z]{2,})\s*(\d{5})?/)
+            if (stateZipMatch) {
+              state = stateZipMatch[1] || 'FL'
+              zipcode = stateZipMatch[2] || ''
+            }
           }
         }
       }
+    } else {
+      console.log('[WhatsApp Agent] Sin dirección válida, usando valores por defecto')
+      fullAddress = 'Dirección pendiente'
     }
+
+    console.log('[WhatsApp Agent] Dirección final:', { fullAddress, street, city, state, zipcode, latitude, longitude })
 
     // 2. Obtener o crear cliente
     const { customerId } = await getOrCreateCustomer(
@@ -1071,23 +1084,54 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
 
     // 6. Determinar fecha y horario
     let scheduledDate: string | null = null
-    if (data.scheduledDate) {
-      // Convertir fecha de formato "16/1" a formato ISO "YYYY-MM-DD"
-      const dateParts = String(data.scheduledDate).split('/')
-      if (dateParts.length === 2) {
-        const day = parseInt(dateParts[0])
-        const month = parseInt(dateParts[1])
-        const year = new Date().getFullYear()
-        // Si el mes es menor al actual, puede ser del próximo año
-        const currentMonth = new Date().getMonth() + 1
-        const actualYear = month < currentMonth ? year + 1 : year
-        scheduledDate = `${actualYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-      } else {
-        scheduledDate = String(data.scheduledDate)
+    const rawDate = data.scheduledDate ? String(data.scheduledDate).trim() : ''
+
+    console.log('[WhatsApp Agent] Procesando fecha raw:', rawDate)
+
+    if (rawDate) {
+      // Verificar si ya está en formato ISO (YYYY-MM-DD)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+        scheduledDate = rawDate
+      }
+      // Convertir fecha de formato "16/1" o "16/01" a formato ISO "YYYY-MM-DD"
+      else if (rawDate.includes('/')) {
+        const dateParts = rawDate.split('/')
+        if (dateParts.length === 2) {
+          const day = parseInt(dateParts[0])
+          const month = parseInt(dateParts[1])
+          const year = new Date().getFullYear()
+          // Si el mes es menor al actual, puede ser del próximo año
+          const currentMonth = new Date().getMonth() + 1
+          const actualYear = month < currentMonth ? year + 1 : year
+          scheduledDate = `${actualYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+        }
+      }
+      // Si no se pudo convertir, intentar parsear como fecha
+      else {
+        try {
+          const parsed = new Date(rawDate)
+          if (!isNaN(parsed.getTime())) {
+            scheduledDate = parsed.toISOString().split('T')[0]
+          }
+        } catch {
+          console.log('[WhatsApp Agent] No se pudo parsear fecha:', rawDate)
+        }
       }
     }
-    const timeSlot = data.timeSlot ? String(data.timeSlot) : '8:00 AM - 12:00 PM'
-    console.log('[WhatsApp Agent] Fecha convertida:', scheduledDate, 'Horario:', timeSlot)
+
+    // Si no hay fecha, usar mañana por defecto
+    if (!scheduledDate) {
+      const tomorrow = new Date()
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      scheduledDate = tomorrow.toISOString().split('T')[0]
+      console.log('[WhatsApp Agent] Sin fecha, usando mañana:', scheduledDate)
+    }
+
+    // Horario - asegurar que siempre tenga un valor
+    const rawTimeSlot = data.timeSlot ? String(data.timeSlot).trim() : ''
+    const timeSlot = rawTimeSlot || '8:00 AM - 12:00 PM'
+
+    console.log('[WhatsApp Agent] Fecha final:', scheduledDate, 'Horario final:', timeSlot)
 
     // Obtener company_id
     const companyResult = await db.query(`SELECT id FROM companies ORDER BY id LIMIT 1`)
