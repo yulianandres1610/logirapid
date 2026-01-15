@@ -26,6 +26,51 @@ export interface AgentResponse {
 // Comision por defecto para remesas (5%)
 const REMITTANCE_FEE_PERCENTAGE = 5
 
+// Campos requeridos para cada tipo de orden
+const PICKUP_REQUIRED_FIELDS = [
+  'senderName',
+  'senderAddress',
+  'recipientName',
+  'recipientProvince',
+  'recipientMunicipality',
+  'recipientAddress'
+]
+
+const REMITTANCE_REQUIRED_FIELDS = [
+  'amount',
+  'senderName',
+  'recipientName',
+  'province',
+  'municipality',
+  'address'
+]
+
+/**
+ * Valida si los datos de recogida estan completos
+ */
+function validatePickupData(data: Record<string, unknown>): { valid: boolean; missing: string[] } {
+  const missing: string[] = []
+  for (const field of PICKUP_REQUIRED_FIELDS) {
+    if (!data[field] || (typeof data[field] === 'string' && data[field].toString().trim() === '')) {
+      missing.push(field)
+    }
+  }
+  return { valid: missing.length === 0, missing }
+}
+
+/**
+ * Valida si los datos de remesa estan completos
+ */
+function validateRemittanceData(data: Record<string, unknown>): { valid: boolean; missing: string[] } {
+  const missing: string[] = []
+  for (const field of REMITTANCE_REQUIRED_FIELDS) {
+    if (!data[field] || (typeof data[field] === 'string' && data[field].toString().trim() === '')) {
+      missing.push(field)
+    }
+  }
+  return { valid: missing.length === 0, missing }
+}
+
 /**
  * Busca un cliente existente por numero de telefono
  */
@@ -494,8 +539,14 @@ export async function handleIncomingMessage(
   messageSid?: string
 ): Promise<AgentResponse> {
   try {
+    console.log('[WhatsApp Agent] ========== NUEVO MENSAJE ==========')
+    console.log('[WhatsApp Agent] De:', phoneNumber)
+    console.log('[WhatsApp Agent] Mensaje:', messageBody)
+
     // 1. Obtener o crear conversacion
     const conversation = await getOrCreateConversation(phoneNumber)
+    console.log('[WhatsApp Agent] Conversacion ID:', conversation.id, 'Flow:', conversation.current_flow)
+    console.log('[WhatsApp Agent] Datos previos:', JSON.stringify(conversation.collected_data))
 
     // 2. Guardar mensaje entrante
     await saveMessage(conversation.id, 'inbound', messageBody, messageSid)
@@ -508,10 +559,9 @@ export async function handleIncomingMessage(
 
     // 4. Verificar si es primera interaccion
     if (conversation.current_flow === 'idle' && conversation.messages_history.length === 0) {
-      // Enviar saludo inicial (personalizado si conocemos al cliente)
+      console.log('[WhatsApp Agent] Primera interaccion - enviando saludo')
       const greeting = await generateGreeting(conversation.customer_name)
 
-      // Actualizar historial con respuesta
       updatedHistory.push({ role: 'assistant', content: greeting })
 
       await updateConversationState(
@@ -530,12 +580,19 @@ export async function handleIncomingMessage(
     // 5. Procesar con GPT
     let gptResponse: GPTResponse
     try {
+      console.log('[WhatsApp Agent] Procesando con GPT...')
       gptResponse = await processMessage(
         messageBody,
         updatedHistory,
         conversation.current_flow || undefined,
         conversation.collected_data
       )
+      console.log('[WhatsApp Agent] GPT Response:', {
+        intent: gptResponse.intent,
+        extractedData: gptResponse.extractedData,
+        readyToCreateOrder: gptResponse.readyToCreateOrder,
+        flowComplete: gptResponse.flowComplete
+      })
     } catch (error) {
       console.error('[WhatsApp Agent] GPT Error:', error)
       const errorMsg = getErrorMessage()
@@ -543,19 +600,24 @@ export async function handleIncomingMessage(
       return { message: errorMsg }
     }
 
-    // 6. Actualizar datos recopilados
+    // 6. Actualizar datos recopilados (ACUMULAR datos)
     const newCollectedData = {
       ...conversation.collected_data,
       ...(gptResponse.extractedData || {})
     }
+    // Eliminar allDataComplete de los datos guardados
+    delete newCollectedData.allDataComplete
+    console.log('[WhatsApp Agent] Datos acumulados:', JSON.stringify(newCollectedData))
 
     // 7. Determinar nuevo flujo
     let newFlow = conversation.current_flow
     if (gptResponse.intent && conversation.current_flow === 'idle') {
       if (gptResponse.intent === 'pickup_order') {
         newFlow = 'pickup_order'
+        console.log('[WhatsApp Agent] Nuevo flujo: pickup_order')
       } else if (gptResponse.intent === 'remittance_order') {
         newFlow = 'remittance_order'
+        console.log('[WhatsApp Agent] Nuevo flujo: remittance_order')
       }
     }
 
@@ -567,38 +629,66 @@ export async function handleIncomingMessage(
     let paymentLink: string | undefined
 
     if (gptResponse.readyToCreateOrder && newFlow) {
-      if (newFlow === 'pickup_order') {
-        const result = await createPickupOrder(newCollectedData, phoneNumber)
-        if (result.success) {
-          orderCreated = true
-          orderId = result.orderId
-          orderNumber = result.orderNumber
-          response += `\n\n✅ Orden creada: ${orderNumber}\nTe contactaremos para confirmar la recogida.`
+      console.log('[WhatsApp Agent] GPT dice readyToCreateOrder=true, validando datos...')
 
-          // Resetear conversacion
-          await resetConversation(conversation.id)
+      if (newFlow === 'pickup_order') {
+        // Validar datos antes de crear
+        const validation = validatePickupData(newCollectedData)
+        console.log('[WhatsApp Agent] Validacion pickup:', validation)
+
+        if (validation.valid) {
+          console.log('[WhatsApp Agent] Creando orden de recogida...')
+          const result = await createPickupOrder(newCollectedData, phoneNumber)
+          console.log('[WhatsApp Agent] Resultado createPickupOrder:', result)
+
+          if (result.success) {
+            orderCreated = true
+            orderId = result.orderId
+            orderNumber = result.orderNumber
+            response = `Listo! Ya quedo registrado, tu numero de orden es ${orderNumber}. Te llamamos para coordinar la recogida ok?`
+            await resetConversation(conversation.id)
+          } else {
+            console.error('[WhatsApp Agent] Error creando orden:', result.error)
+            response = 'Uy perdon, se me trabo el sistema. Puedes decirme los datos otra vez?'
+          }
+        } else {
+          console.log('[WhatsApp Agent] Datos incompletos, faltan:', validation.missing)
+          // No crear orden, seguir recopilando
         }
       } else if (newFlow === 'remittance_order') {
-        const result = await createRemittanceOrder(newCollectedData, phoneNumber)
-        if (result.success && result.orderId && result.orderNumber && result.totalAmount) {
-          orderCreated = true
-          orderId = result.orderId
-          orderNumber = result.orderNumber
+        // Validar datos antes de crear
+        const validation = validateRemittanceData(newCollectedData)
+        console.log('[WhatsApp Agent] Validacion remesa:', validation)
 
-          // Crear link de pago
-          paymentLink = await createPaymentLink(
-            'remittance',
-            result.orderId,
-            result.orderNumber,
-            result.totalAmount,
-            phoneNumber,
-            String(newCollectedData.senderName || '')
-          )
+        if (validation.valid) {
+          console.log('[WhatsApp Agent] Creando orden de remesa...')
+          const result = await createRemittanceOrder(newCollectedData, phoneNumber)
+          console.log('[WhatsApp Agent] Resultado createRemittanceOrder:', result)
 
-          response += `\n\n💳 Total a pagar: $${result.totalAmount.toFixed(2)} USD\n\nPaga aqui: ${paymentLink}\n\nEl link expira en 24 horas.`
+          if (result.success && result.orderId && result.orderNumber && result.totalAmount) {
+            orderCreated = true
+            orderId = result.orderId
+            orderNumber = result.orderNumber
 
-          // Resetear conversacion
-          await resetConversation(conversation.id)
+            // Crear link de pago
+            paymentLink = await createPaymentLink(
+              'remittance',
+              result.orderId,
+              result.orderNumber,
+              result.totalAmount,
+              phoneNumber,
+              String(newCollectedData.senderName || '')
+            )
+            console.log('[WhatsApp Agent] Payment link creado:', paymentLink)
+
+            response = `Perfecto! Ya quedo tu orden ${orderNumber}. El total con la comision es $${result.totalAmount.toFixed(2)}\n\nPaga por aqui: ${paymentLink}\n\nCuando pagues te aviso y se lo llevamos a tu familia`
+            await resetConversation(conversation.id)
+          } else {
+            console.error('[WhatsApp Agent] Error creando remesa:', result.error)
+            response = 'Uy perdon, se me trabo. Puedes decirme los datos otra vez?'
+          }
+        } else {
+          console.log('[WhatsApp Agent] Datos remesa incompletos, faltan:', validation.missing)
         }
       }
     } else {

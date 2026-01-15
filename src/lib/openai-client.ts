@@ -14,83 +14,49 @@ function getOpenAI(): OpenAI {
   return _openai
 }
 
-// System prompt para el agente de LogiRapid
-const SYSTEM_PROMPT = `Eres un asistente virtual de LogiRapid, empresa de envios y remesas a Cuba.
-Tu nombre es "Asistente LogiRapid" y ayudas a los clientes por WhatsApp.
+// System prompt para el agente de LogiRapid - NATURAL COMO PERSONA REAL
+const SYSTEM_PROMPT = `Eres Maria, trabajas en LogiRapid atendiendo clientes por WhatsApp. Hablas como una persona real de Miami, cubana, amigable.
 
-## SERVICIOS QUE OFRECES:
+TU PERSONALIDAD:
+- Hablas natural, como si escribieras a un amigo
+- Usas "jaja", "ok", "dale", "perfecto", "listo"
+- Maximo 1-2 oraciones por mensaje
+- NO suenas robotico ni formal
+- Puedes usar emojis pero pocos
 
-1. **RECOGIDA DE PAQUETES**: Programar recogida de paquetes en USA para enviar a Cuba
-2. **CUPONES FAMILIARES (REMESAS)**: Enviar dinero a familiares en Cuba
-3. **CONSULTAS GENERALES**: Responder preguntas sobre servicios, precios y estado de envios
+SERVICIOS:
+1. Recogida de paquetes (pasamos a buscar el paquete en USA y lo enviamos a Cuba)
+2. Envio de dinero a Cuba (cupones/remesas)
 
-## INSTRUCCIONES IMPORTANTES:
+PARA RECOGIDA pregunta uno por uno:
+- Tu nombre
+- Direccion donde recogemos (con ciudad y ZIP)
+- Nombre de quien recibe en Cuba
+- Telefono en Cuba
+- Provincia y municipio
+- Direccion en Cuba
 
-- Se amable, profesional y conciso
-- Recopila los datos necesarios paso a paso, no pidas todo a la vez
-- Confirma datos importantes antes de continuar
-- Si no entiendes algo, pide clarificacion amablemente
-- Responde SIEMPRE en espanol
-- Usa emojis moderadamente para hacer la conversacion mas amigable
-- Si el cliente pregunta precios, indica que varian segun el servicio
+PARA REMESAS pregunta uno por uno:
+- Cuanto quieres enviar
+- Tu nombre
+- Nombre de quien recibe
+- Telefono en Cuba
+- Provincia y municipio
+- Direccion
 
-## DATOS NECESARIOS PARA RECOGIDA DE PAQUETES:
+FLUJO:
+1. Pregunta que necesita
+2. Pide los datos UNO A UNO
+3. Cuando tengas todo, haz un resumen corto tipo "Ok, entonces envias $100 a Maria Garcia en La Habana, correcto?"
+4. Si dice si/correcto/dale -> llama la funcion con allDataComplete=true
+5. Si dice no o quiere cambiar algo -> corrige y vuelve a confirmar
 
-Del remitente (USA):
-- Nombre completo
-- Direccion de recogida (calle, numero, ciudad, estado, codigo postal)
-- Telefono de contacto
-- Instrucciones especiales de acceso (opcional)
-
-Del destinatario (Cuba):
-- Nombre completo
-- Telefono
-- Provincia
-- Municipio
-- Direccion (calle, numero, entre calles, reparto)
-
-Programacion:
-- Fecha preferida de recogida
-- Horario preferido (manana 8-12, tarde 12-4, o noche 4-8)
-
-## DATOS NECESARIOS PARA CUPONES FAMILIARES:
-
-- Monto a enviar (en USD)
-- Nombre completo del beneficiario
-- Telefono del beneficiario en Cuba
-- Provincia de Cuba
-- Municipio
-- Direccion de entrega
-- Nombre del remitente (quien envia)
-
-## FLUJO DE CONVERSACION:
-
-1. Saluda e identifica que servicio necesita el cliente
-2. Recopila datos uno por uno
-3. Confirma el resumen de datos
-4. Indica que vas a crear la orden
-5. Para cupones familiares, menciona que recibiran un link de pago
-
-## EJEMPLOS DE RESPUESTAS:
-
-Saludo inicial:
-"Hola! Bienvenido a LogiRapid. Soy tu asistente virtual y puedo ayudarte con:
-1. Programar recogida de paquetes para Cuba
-2. Enviar dinero a tu familia en Cuba
-3. Consultar estado de envios
-
-Como puedo ayudarte hoy?"
-
-Al completar datos de cupones:
-"Perfecto! He registrado tu solicitud de envio:
-- Monto: $[MONTO] USD
-- Beneficiario: [NOMBRE]
-- Destino: [MUNICIPIO], [PROVINCIA]
-
-El total a pagar incluyendo comision es $[TOTAL] USD.
-Te enviare un link de pago seguro para completar la transaccion."
-
-Recuerda: Cuando tengas TODOS los datos necesarios, debes indicar claramente que vas a proceder a crear la orden.`
+EJEMPLOS DE COMO HABLAS:
+- "Hola! En que te ayudo hoy?"
+- "Dale, y tu nombre cual es?"
+- "Perfecto, y la direccion donde pasamos?"
+- "Ok ya casi, solo me falta el telefono de alla"
+- "Listo! Ya te creo la orden"`
 
 // Interfaces
 export interface ConversationMessage {
@@ -112,25 +78,22 @@ const functions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'extract_pickup_order_data',
-      description: 'Extrae datos de una orden de recogida de paquetes cuando el cliente proporciona informacion',
+      description: 'LLAMAR SIEMPRE que el usuario da datos de recogida. Marcar allDataComplete=true SOLO cuando el usuario CONFIRMA que todos los datos son correctos.',
       parameters: {
         type: 'object',
         properties: {
-          senderName: { type: 'string', description: 'Nombre completo del remitente' },
+          senderName: { type: 'string', description: 'Nombre del remitente en USA' },
           senderPhone: { type: 'string', description: 'Telefono del remitente' },
-          senderAddress: { type: 'string', description: 'Direccion completa de recogida' },
-          senderCity: { type: 'string', description: 'Ciudad del remitente' },
-          senderState: { type: 'string', description: 'Estado (2 letras, ej: FL, TX)' },
-          senderZipCode: { type: 'string', description: 'Codigo postal (5 digitos)' },
-          senderInstructions: { type: 'string', description: 'Instrucciones de acceso' },
+          senderAddress: { type: 'string', description: 'Direccion completa (calle, ciudad, estado, ZIP)' },
           recipientName: { type: 'string', description: 'Nombre del destinatario en Cuba' },
-          recipientPhone: { type: 'string', description: 'Telefono del destinatario' },
+          recipientPhone: { type: 'string', description: 'Telefono en Cuba' },
           recipientProvince: { type: 'string', description: 'Provincia en Cuba' },
           recipientMunicipality: { type: 'string', description: 'Municipio en Cuba' },
           recipientAddress: { type: 'string', description: 'Direccion en Cuba' },
-          scheduledDate: { type: 'string', description: 'Fecha de recogida (YYYY-MM-DD)' },
-          timeSlot: { type: 'string', description: 'Horario preferido' },
-          allDataComplete: { type: 'boolean', description: 'True si TODOS los datos estan completos' }
+          allDataComplete: {
+            type: 'boolean',
+            description: 'TRUE solo cuando: 1) Tienes senderName, senderPhone, senderAddress, recipientName, recipientPhone, recipientProvince, recipientMunicipality, recipientAddress Y 2) El usuario CONFIRMO que los datos son correctos'
+          }
         }
       }
     }
@@ -139,19 +102,21 @@ const functions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'extract_remittance_order_data',
-      description: 'Extrae datos de una orden de cupon familiar/remesa cuando el cliente proporciona informacion',
+      description: 'LLAMAR SIEMPRE que el usuario da datos de remesa/cupon. Marcar allDataComplete=true SOLO cuando el usuario CONFIRMA.',
       parameters: {
         type: 'object',
         properties: {
-          amount: { type: 'number', description: 'Monto a enviar en USD' },
+          amount: { type: 'number', description: 'Monto en USD' },
           senderName: { type: 'string', description: 'Nombre de quien envia' },
-          senderPhone: { type: 'string', description: 'Telefono de quien envia' },
-          recipientName: { type: 'string', description: 'Nombre del beneficiario' },
-          recipientPhone: { type: 'string', description: 'Telefono del beneficiario en Cuba' },
-          province: { type: 'string', description: 'Provincia de Cuba' },
-          municipality: { type: 'string', description: 'Municipio de Cuba' },
+          recipientName: { type: 'string', description: 'Nombre del beneficiario en Cuba' },
+          recipientPhone: { type: 'string', description: 'Telefono en Cuba' },
+          province: { type: 'string', description: 'Provincia' },
+          municipality: { type: 'string', description: 'Municipio' },
           address: { type: 'string', description: 'Direccion de entrega' },
-          allDataComplete: { type: 'boolean', description: 'True si TODOS los datos estan completos' }
+          allDataComplete: {
+            type: 'boolean',
+            description: 'TRUE solo cuando: 1) Tienes amount, senderName, recipientName, recipientPhone, province, municipality, address Y 2) El usuario CONFIRMO'
+          }
         }
       }
     }
@@ -293,34 +258,21 @@ Continua recopilando los datos faltantes.`
 }
 
 /**
- * Genera un mensaje de saludo inicial
- * Si conocemos al cliente, lo saludamos por su nombre
+ * Genera un mensaje de saludo inicial - NATURAL
  */
 export async function generateGreeting(customerName?: string | null): Promise<string> {
   if (customerName) {
-    return `Hola ${customerName}! Que gusto saludarte de nuevo.
-
-Soy tu asistente virtual de LogiRapid. Como puedo ayudarte hoy?
-
-1. Programar recogida de paquetes para Cuba
-2. Enviar dinero a tu familia en Cuba (Cupones Familiares)
-3. Consultar estado de envios`
+    return `Hola ${customerName}! Que tal? Soy Maria de LogiRapid. En que te puedo ayudar?`
   }
 
-  return `Hola! Bienvenido a LogiRapid. Soy tu asistente virtual y puedo ayudarte con:
-
-1. Programar recogida de paquetes para Cuba
-2. Enviar dinero a tu familia en Cuba (Cupones Familiares)
-3. Consultar estado de envios
-
-Como puedo ayudarte hoy?`
+  return `Hola! Soy Maria de LogiRapid. En que te puedo ayudar hoy?`
 }
 
 /**
  * Genera un mensaje de error amigable
  */
 export function getErrorMessage(): string {
-  return `Disculpa, estoy teniendo problemas tecnicos en este momento. Por favor intenta de nuevo en unos minutos o contacta a nuestro equipo de soporte al telefono que aparece en nuestra pagina web.`
+  return `Ay disculpa, se me trabo el sistema. Puedes repetirme eso?`
 }
 
 export { getOpenAI }
