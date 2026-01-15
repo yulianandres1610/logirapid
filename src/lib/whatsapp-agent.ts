@@ -115,6 +115,7 @@ interface CustomerSearchResult {
     state?: string
     zipcode?: string
     entryPin?: string
+    entryInstructions?: string
     isDefault?: boolean
   }>
 }
@@ -215,9 +216,9 @@ async function searchSenderByPhone(phoneNumber: string): Promise<CustomerSearchR
   const customerResult = await db.query(`
     SELECT
       c.id, c.firstname, c.lastname, c.phone,
-      c.idtype, c.idnumber, c.entry_pin as customer_entry_pin,
+      c.idtype, c.idnumber,
       ca.id as address_id, ca.street, ca.city, ca.state, ca.zipcode,
-      ca.isprimary
+      ca.entry_pin, ca.entry_instructions, ca.isprimary
     FROM customers c
     LEFT JOIN customer_addresses ca ON ca.customerid = c.id
     WHERE c.phone LIKE $1
@@ -234,7 +235,8 @@ async function searchSenderByPhone(phoneNumber: string): Promise<CustomerSearchR
         city: r.city,
         state: r.state,
         zipcode: r.zipcode,
-        entryPin: first.customer_entry_pin, // Usar entry_pin del customer
+        entryPin: r.entry_pin, // PIN de cada direccion
+        entryInstructions: r.entry_instructions,
         isDefault: r.isprimary
       }))
 
