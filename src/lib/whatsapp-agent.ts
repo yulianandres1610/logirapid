@@ -299,6 +299,43 @@ async function generateOrderNumber(prefix: string): Promise<string> {
 }
 
 /**
+ * Obtiene o crea un cliente por numero de telefono
+ */
+async function getOrCreateCustomer(
+  phoneNumber: string,
+  name: string,
+  address?: string
+): Promise<{ customerId: number; isNew: boolean }> {
+  const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10)
+
+  // Buscar cliente existente por telefono
+  const existingResult = await db.query(`
+    SELECT id FROM customers
+    WHERE phone LIKE $1 OR phone LIKE $2
+    LIMIT 1
+  `, [`%${cleanPhone}%`, `%${cleanPhone}%`])
+
+  if (existingResult.rows.length > 0) {
+    console.log('[WhatsApp Agent] Cliente existente encontrado:', existingResult.rows[0].id)
+    return { customerId: existingResult.rows[0].id, isNew: false }
+  }
+
+  // Crear nuevo cliente
+  const nameParts = (name || 'Cliente WhatsApp').split(' ')
+  const firstName = nameParts[0] || 'Cliente'
+  const lastName = nameParts.slice(1).join(' ') || 'WhatsApp'
+
+  const insertResult = await db.query(`
+    INSERT INTO customers (firstname, lastname, phone, address, createdat, updatedat)
+    VALUES ($1, $2, $3, $4, NOW(), NOW())
+    RETURNING id
+  `, [firstName, lastName, phoneNumber, address || ''])
+
+  console.log('[WhatsApp Agent] Nuevo cliente creado:', insertResult.rows[0].id)
+  return { customerId: insertResult.rows[0].id, isNew: true }
+}
+
+/**
  * Crea una orden de recogida de paquetes
  */
 async function createPickupOrder(data: Record<string, unknown>, phoneNumber: string): Promise<{
@@ -308,9 +345,22 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
   error?: string
 }> {
   try {
-    const orderNumber = await generateOrderNumber('PICKUP')
+    console.log('[WhatsApp Agent] ===== CREANDO ORDEN DE RECOGIDA =====')
+    console.log('[WhatsApp Agent] Datos recibidos:', JSON.stringify(data, null, 2))
 
-    // Construir datos de office_order_data
+    // 1. Obtener o crear cliente
+    const { customerId } = await getOrCreateCustomer(
+      phoneNumber,
+      String(data.senderName || 'Cliente'),
+      String(data.senderAddress || '')
+    )
+    console.log('[WhatsApp Agent] Customer ID:', customerId)
+
+    // 2. Generar numero de orden
+    const orderNumber = await generateOrderNumber('PICKUP')
+    console.log('[WhatsApp Agent] Order Number:', orderNumber)
+
+    // 3. Preparar datos del destinatario en Cuba
     const officeOrderData = {
       senderName: data.senderName,
       senderPhone: data.senderPhone || phoneNumber,
@@ -323,19 +373,28 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
         municipalityName: data.recipientMunicipality,
         fullAddress: data.recipientAddress,
         country: 'Cuba'
-      },
-      scheduledDate: data.scheduledDate || null,
-      timeSlot: data.timeSlot || '8:00 AM - 12:00 PM'
+      }
     }
 
-    // Insertar orden
+    // 4. Preparar servicios (formato que espera el API)
+    const services = [{
+      name: 'Recogida a Domicilio',
+      type: 'pickup',
+      quantity: 1,
+      unitPrice: 0,
+      subtotal: 0
+    }]
+
+    // 5. Insertar orden con todos los campos requeridos
     const result = await db.query(`
       INSERT INTO package_orders (
+        customerid,
         ordernumber,
         order_type,
         customername,
         firstname,
         lastname,
+        phone,
         customeraddress,
         city,
         state,
@@ -352,29 +411,34 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
         payment_status,
         status,
         office_order_data,
+        createdby,
         createdat,
         updatedat
       ) VALUES (
-        $1, 'recogida', $2, $3, $4, $5, $6, $7, $8, 'US',
-        $9, $10, 0, 0, 0, $11, $12, 'cod', 'pending_payment', 'pending',
-        $13, NOW(), NOW()
+        $1, $2, 'recogida', $3, $4, $5, $6, $7, $8, $9, $10, 'US',
+        $11, $12, 0, 0, 0, NULL, '8:00 AM - 12:00 PM', 'cod', 'pending_payment', 'pending',
+        $13, 'whatsapp-agent', NOW(), NOW()
       )
       RETURNING id, ordernumber
     `, [
+      customerId,
       orderNumber,
-      data.senderName,
-      (data.senderName as string)?.split(' ')[0] || '',
-      (data.senderName as string)?.split(' ').slice(1).join(' ') || '',
-      data.senderAddress,
-      data.senderCity || 'Miami',
-      data.senderState || 'FL',
-      data.senderZipCode || '33186',
-      JSON.stringify(['Recogida a Domicilio']),
-      data.senderInstructions || '',
-      data.scheduledDate || null,
-      data.timeSlot || '8:00 AM - 12:00 PM',
+      data.senderName || 'Cliente WhatsApp',
+      String(data.senderName || '').split(' ')[0] || 'Cliente',
+      String(data.senderName || '').split(' ').slice(1).join(' ') || '',
+      phoneNumber,
+      data.senderAddress || '',
+      'Miami', // Default city
+      'FL', // Default state
+      '33186', // Default ZIP
+      JSON.stringify(services),
+      `Destinatario Cuba: ${data.recipientName} - ${data.recipientProvince}, ${data.recipientMunicipality}`,
       JSON.stringify(officeOrderData)
     ])
+
+    console.log('[WhatsApp Agent] ===== ORDEN CREADA EXITOSAMENTE =====')
+    console.log('[WhatsApp Agent] Order ID:', result.rows[0].id)
+    console.log('[WhatsApp Agent] Order Number:', result.rows[0].ordernumber)
 
     return {
       success: true,
@@ -382,7 +446,8 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
       orderNumber: result.rows[0].ordernumber
     }
   } catch (error) {
-    console.error('[WhatsApp Agent] Error creating pickup order:', error)
+    console.error('[WhatsApp Agent] ===== ERROR CREANDO ORDEN =====')
+    console.error('[WhatsApp Agent] Error:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'
