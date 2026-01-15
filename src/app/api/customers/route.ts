@@ -14,10 +14,37 @@ export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
 
+// Ensure entry columns exist
+async function ensureEntryColumns() {
+  const alterStatements = [
+    "ALTER TABLE customers ADD COLUMN IF NOT EXISTS entry_pin VARCHAR(50)",
+    "ALTER TABLE customers ADD COLUMN IF NOT EXISTS entry_instructions TEXT"
+  ]
+
+  for (const stmt of alterStatements) {
+    try {
+      await db.query(stmt)
+    } catch (error: any) {
+      if (!error.message?.includes('already exists')) {
+        console.error('Error adding column:', error.message)
+      }
+    }
+  }
+}
+
+// Initialize columns on first request
+let columnsInitialized = false
+
 
 // GET: Endpoint global para consulta de clientes desde cualquier vista
 export async function GET(request: NextRequest) {
   try {
+    // Ensure entry columns exist
+    if (!columnsInitialized) {
+      await ensureEntryColumns()
+      columnsInitialized = true
+    }
+
     const { searchParams } = new URL(request.url)
     const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
     const phone = searchParams.get('phone')
@@ -155,7 +182,9 @@ export async function GET(request: NextRequest) {
           apartment,
           has_alternate_contact as "hasAlternateContact",
           alternate_contact_name as "alternateContactName",
-          alternate_contact_phone as "alternateContactPhone"
+          alternate_contact_phone as "alternateContactPhone",
+          entry_pin as "entryPin",
+          entry_instructions as "entryInstructions"
         FROM customers
         WHERE id = $1`
 
@@ -199,7 +228,9 @@ export async function GET(request: NextRequest) {
           apartment,
           has_alternate_contact as "hasAlternateContact",
           alternate_contact_name as "alternateContactName",
-          alternate_contact_phone as "alternateContactPhone"
+          alternate_contact_phone as "alternateContactPhone",
+          entry_pin as "entryPin",
+          entry_instructions as "entryInstructions"
         FROM customers
         WHERE phone = $1`
 
@@ -244,7 +275,9 @@ export async function GET(request: NextRequest) {
           apartment,
           has_alternate_contact as "hasAlternateContact",
           alternate_contact_name as "alternateContactName",
-          alternate_contact_phone as "alternateContactPhone"
+          alternate_contact_phone as "alternateContactPhone",
+          entry_pin as "entryPin",
+          entry_instructions as "entryInstructions"
         FROM customers
         WHERE
           (firstname ILIKE $1 OR
@@ -296,7 +329,9 @@ export async function GET(request: NextRequest) {
         apartment,
         has_alternate_contact as "hasAlternateContact",
         alternate_contact_name as "alternateContactName",
-        alternate_contact_phone as "alternateContactPhone"
+        alternate_contact_phone as "alternateContactPhone",
+        entry_pin as "entryPin",
+        entry_instructions as "entryInstructions"
       FROM customers`
 
     const queryParams: any[] = []
@@ -345,6 +380,12 @@ export async function GET(request: NextRequest) {
 // POST: Crear nuevo cliente
 export async function POST(request: NextRequest) {
   try {
+    // Ensure entry columns exist
+    if (!columnsInitialized) {
+      await ensureEntryColumns()
+      columnsInitialized = true
+    }
+
     const body = await request.json()
     const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
 
@@ -395,9 +436,10 @@ export async function POST(request: NextRequest) {
         address, city, state, country, notes, createdby,
         createdat, zipcode, apartment,
         has_alternate_contact, alternate_contact_name, alternate_contact_phone,
+        entry_pin, entry_instructions,
         company_id, wallet_number, wallet_balance
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), $13, $14, $15, $16, $17, $18, $19, 0.00
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), $13, $14, $15, $16, $17, $18, $19, $20, $21, 0.00
       )
       RETURNING
         id,
@@ -419,6 +461,8 @@ export async function POST(request: NextRequest) {
         has_alternate_contact as "hasAlternateContact",
         alternate_contact_name as "alternateContactName",
         alternate_contact_phone as "alternateContactPhone",
+        entry_pin as "entryPin",
+        entry_instructions as "entryInstructions",
         company_id as "companyId",
         wallet_number as "walletNumber",
         wallet_balance as "walletBalance"
@@ -442,6 +486,8 @@ export async function POST(request: NextRequest) {
       body.hasAlternateContact || false,
       body.alternateContactName || null,
       body.alternateContactPhone || null,
+      body.entryPin || null,
+      body.entryInstructions || null,
       companyIdToUse,
       walletNumber
     ]
@@ -539,7 +585,9 @@ export async function PUT(request: NextRequest) {
       apartment: 'apartment',
       hasAlternateContact: 'has_alternate_contact',
       alternateContactName: 'alternate_contact_name',
-      alternateContactPhone: 'alternate_contact_phone'
+      alternateContactPhone: 'alternate_contact_phone',
+      entryPin: 'entry_pin',
+      entryInstructions: 'entry_instructions'
     }
 
     for (const [key, value] of Object.entries(updateData)) {
@@ -582,7 +630,9 @@ export async function PUT(request: NextRequest) {
         apartment,
         has_alternate_contact as "hasAlternateContact",
         alternate_contact_name as "alternateContactName",
-        alternate_contact_phone as "alternateContactPhone"
+        alternate_contact_phone as "alternateContactPhone",
+        entry_pin as "entryPin",
+        entry_instructions as "entryInstructions"
     `
 
     const result = await db.query(updateQuery, values)

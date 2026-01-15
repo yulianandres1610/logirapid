@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
 
-// Ensure Cuba-specific columns exist
+// Ensure Cuba-specific and entry columns exist
 async function ensureCubaColumns() {
   const alterStatements = [
     "ALTER TABLE customer_addresses ADD COLUMN IF NOT EXISTS number VARCHAR(50)",
@@ -19,7 +19,9 @@ async function ensureCubaColumns() {
     "ALTER TABLE customer_addresses ADD COLUMN IF NOT EXISTS delivery_instructions TEXT",
     "ALTER TABLE customer_addresses ADD COLUMN IF NOT EXISTS address_type VARCHAR(20) DEFAULT 'usa'",
     "ALTER TABLE customer_addresses ADD COLUMN IF NOT EXISTS latitude DECIMAL(10, 8)",
-    "ALTER TABLE customer_addresses ADD COLUMN IF NOT EXISTS longitude DECIMAL(11, 8)"
+    "ALTER TABLE customer_addresses ADD COLUMN IF NOT EXISTS longitude DECIMAL(11, 8)",
+    "ALTER TABLE customer_addresses ADD COLUMN IF NOT EXISTS entry_pin VARCHAR(50)",
+    "ALTER TABLE customer_addresses ADD COLUMN IF NOT EXISTS entry_instructions TEXT"
   ]
 
   for (const stmt of alterStatements) {
@@ -89,6 +91,8 @@ export async function GET(request: NextRequest) {
       address_type as "addressType",
       latitude,
       longitude,
+      entry_pin as "entryPin",
+      entry_instructions as "entryInstructions",
       notes,
       isprimary as "isPrimary",
       createdat as "createdAt"
@@ -203,9 +207,10 @@ export async function POST(request: NextRequest) {
         city, state, zipcode, country,
         province_id, province_name, municipality_id, municipality_name,
         delivery_instructions, address_type, latitude, longitude,
+        entry_pin, entry_instructions,
         notes, isprimary, createdat
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW()
       )
       RETURNING
         id,
@@ -227,6 +232,8 @@ export async function POST(request: NextRequest) {
         address_type as "addressType",
         latitude,
         longitude,
+        entry_pin as "entryPin",
+        entry_instructions as "entryInstructions",
         notes,
         isprimary as "isPrimary",
         createdat as "createdAt"
@@ -251,6 +258,8 @@ export async function POST(request: NextRequest) {
       addressType,
       body.latitude || null,
       body.longitude || null,
+      body.entryPin || null,
+      body.entryInstructions || null,
       body.notes || null,
       body.isPrimary || false
     ]
@@ -329,6 +338,8 @@ export async function PUT(request: NextRequest) {
       addressType: 'address_type',
       latitude: 'latitude',
       longitude: 'longitude',
+      entryPin: 'entry_pin',
+      entryInstructions: 'entry_instructions',
       notes: 'notes',
       isPrimary: 'isprimary'
     }
@@ -374,6 +385,8 @@ export async function PUT(request: NextRequest) {
         address_type as "addressType",
         latitude,
         longitude,
+        entry_pin as "entryPin",
+        entry_instructions as "entryInstructions",
         notes,
         isprimary as "isPrimary",
         createdat as "createdAt"

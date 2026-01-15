@@ -484,6 +484,11 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
               state: newSender.address.state,
               zipCode: newSender.address.zipCode,
               country: newSender.address.country,
+              addressType: 'usa',
+              entryPin: newSender.entryPin || null,
+              entryInstructions: newSender.entryInstructions || null,
+              latitude: newSender.coordinates?.latitude || null,
+              longitude: newSender.coordinates?.longitude || null,
               isPrimary: true,
               notes: newSender.coordinates
                 ? `Coordenadas: ${newSender.coordinates.latitude}, ${newSender.coordinates.longitude}`
