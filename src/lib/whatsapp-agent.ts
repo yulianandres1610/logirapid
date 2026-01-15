@@ -129,6 +129,7 @@ function formatAvailableDatesMessage(dates: { date: string; dayName: string; slo
 
 /**
  * Geocodifica una dirección USA usando el API de address-lookup
+ * Preserva números de apartamento/suite que Mapbox podría omitir
  */
 async function geocodeUSAddress(address: string): Promise<{
   formattedAddress: string
@@ -143,15 +144,27 @@ async function geocodeUSAddress(address: string): Promise<{
     // Usar Mapbox Geocoding API directamente
     const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoieXVsaWFuYW5kcmVzMTYxMCIsImEiOiJjbWgycTlsZGsxM200YnNvbnN2d2wwcHJ5In0.wlU7-bazAs2eYjknx7H97Q'
 
-    // Limpiar la dirección
+    // Extraer suite/apartamento antes de limpiar (Mapbox no los geocodifica bien)
+    const suiteMatch = address.match(/(?:suite|ste|apt|apartment|unit|#)\s*([a-zA-Z0-9-]+)/i)
+    const suiteNumber = suiteMatch ? suiteMatch[0].trim() : null
+
+    // Limpiar la dirección (remover suite para mejor geocoding)
     let cleanAddress = address.trim()
       .replace(/,\s*us$/i, '')
       .replace(/,\s*usa$/i, '')
       .replace(/,\s*united states$/i, '')
 
-    const encodedAddress = encodeURIComponent(cleanAddress)
+    // Para geocoding, remover temporalmente el suite (causa problemas)
+    const addressForGeocode = cleanAddress
+      .replace(/(?:suite|ste|apt|apartment|unit|#)\s*[a-zA-Z0-9-]+,?\s*/i, '')
+      .trim()
 
-    console.log('[WhatsApp Agent] Geocodificando con Mapbox:', cleanAddress)
+    const encodedAddress = encodeURIComponent(addressForGeocode)
+
+    console.log('[WhatsApp Agent] Geocodificando con Mapbox:', addressForGeocode)
+    if (suiteNumber) {
+      console.log('[WhatsApp Agent] Suite/Apt detectado:', suiteNumber)
+    }
 
     // Primer intento: buscar como dirección exacta
     let response = await fetch(
@@ -241,6 +254,24 @@ async function geocodeUSAddress(address: string): Promise<{
         if (state) formattedAddress += formattedAddress ? `, ${state}` : state
         if (zipcode) formattedAddress += ` ${zipcode}`
         formattedAddress = formattedAddress.trim()
+      }
+
+      // Agregar suite/apartamento si lo teníamos originalmente y no está en la dirección formateada
+      if (suiteNumber && !formattedAddress.toLowerCase().includes('suite') &&
+          !formattedAddress.toLowerCase().includes('apt') &&
+          !formattedAddress.toLowerCase().includes('unit')) {
+        // Insertar suite después del número de calle
+        const parts = formattedAddress.split(',')
+        if (parts.length >= 2) {
+          parts[0] = `${parts[0].trim()} ${suiteNumber}`
+          formattedAddress = parts.join(',')
+        } else {
+          formattedAddress = `${formattedAddress} ${suiteNumber}`
+        }
+        // También agregar a street
+        if (street && !street.toLowerCase().includes('suite') && !street.toLowerCase().includes('apt')) {
+          street = `${street} ${suiteNumber}`
+        }
       }
 
       // Verificar que no sea solo ciudad/estado
@@ -1720,6 +1751,7 @@ export async function handleIncomingMessage(
 
     // 8. Manejar busquedas de cliente si GPT lo solicita
     let response = gptResponse.response
+    let responseOverridden = false  // Flag para indicar que nuestra respuesta tiene prioridad
 
     // Buscar remitente por telefono
     if (gptResponse.searchSender) {
@@ -1754,9 +1786,33 @@ export async function handleIncomingMessage(
         }
         response = foundMsg
       } else {
-        // Cliente no encontrado
+        // Cliente no encontrado - guardar telefono y marcar para crear después
         newCollectedData.senderPhone = gptResponse.searchSender
+        newCollectedData._needsCustomerCreation = true
         response = 'No te tengo en el sistema. Como te llamas?'
+      }
+    }
+
+    // Crear cliente en CRM inmediatamente cuando tenemos nombre y teléfono (cliente nuevo)
+    if (newCollectedData._needsCustomerCreation &&
+        newCollectedData.senderPhone &&
+        (newCollectedData.senderName || gptResponse.extractedData?.senderName)) {
+      const customerName = String(newCollectedData.senderName || gptResponse.extractedData?.senderName || '')
+      if (customerName && customerName.length > 2) {
+        console.log('[WhatsApp Agent] Creando cliente nuevo en CRM:', customerName, newCollectedData.senderPhone)
+        try {
+          const { customerId, isNew } = await getOrCreateCustomer(
+            String(newCollectedData.senderPhone),
+            customerName
+          )
+          if (isNew) {
+            console.log('[WhatsApp Agent] ✅ Cliente creado en CRM con ID:', customerId)
+            newCollectedData._customerId = customerId
+          }
+          delete newCollectedData._needsCustomerCreation
+        } catch (error) {
+          console.error('[WhatsApp Agent] Error creando cliente:', error)
+        }
       }
     }
 
@@ -1892,6 +1948,7 @@ export async function handleIncomingMessage(
         response = 'Perfecto! Destinatario confirmado.\n\n' + formatAvailableDatesMessage(availableDates)
         newCollectedData._availableDates = availableDates
         gptResponse.getAvailableDates = false // Ya mostramos las fechas
+        responseOverridden = true  // Usar nuestra respuesta, no la de GPT
       } else if (denied) {
         // Usuario quiere corregir datos del destinatario
         delete newCollectedData._recipientComplete
@@ -1929,9 +1986,11 @@ export async function handleIncomingMessage(
           newCollectedData.timeSlot = dateResult.selectedSlot
           const slotName = dateResult.selectedSlot.includes('8:00 AM') ? 'en la mañana' :
                            dateResult.selectedSlot.includes('12:00 PM') ? 'en la tarde' : 'en la noche'
-          response = `Perfecto! Pasamos ${dateResult.dayName.toLowerCase()} (${dateResult.date}) ${slotName}. Dejame confirmar los datos...`
+          const displayDate = formatDateForDisplay(dateResult.date)
+          response = `Perfecto! Pasamos ${dateResult.dayName.toLowerCase()} (${displayDate}) ${slotName}. Dejame confirmar los datos...`
           // Solicitar mostrar resumen
           gptResponse.requestSummary = true
+          responseOverridden = true  // Usar nuestra respuesta
         } else if (dateResult.slots) {
           // Fecha seleccionada pero falta horario
           response = formatSlotSelectionMessage(dateResult.dayName, dateResult.date, dateResult.slots)
@@ -2083,8 +2142,19 @@ export async function handleIncomingMessage(
       }
     }
 
+    // Auto-crear orden si tenemos todos los datos (remitente confirmado, destinatario confirmado, fecha seleccionada)
+    if (newCollectedData._recipientConfirmed &&
+        newCollectedData.scheduledDate &&
+        newCollectedData.timeSlot &&
+        newCollectedData.senderAddress &&
+        newCollectedData.recipientName) {
+      console.log('[WhatsApp Agent] Todos los datos completos (destinatario confirmado + fecha), creando orden automáticamente')
+      gptResponse.readyToCreateOrder = true
+      gptResponse.requestSummary = false  // No mostrar resumen, crear directamente
+    }
+
     // Mostrar resumen si GPT lo solicita O si tenemos todos los datos
-    if (gptResponse.requestSummary && newFlow) {
+    if (gptResponse.requestSummary && newFlow && !responseOverridden) {
       if (newFlow === 'pickup_order') {
         const validation = validatePickupData(newCollectedData)
 
@@ -2093,20 +2163,30 @@ export async function handleIncomingMessage(
           console.log('[WhatsApp Agent] Mostrando resumen con datos minimos OK')
           response = generateDataSummary(newCollectedData, newFlow)
         } else {
-          console.log('[WhatsApp Agent] Faltan datos minimos para resumen:', validation.missing)
-          // Pedir el primer dato faltante (solo minimos)
-          const fieldNames: Record<string, string> = {
-            senderName: 'tu nombre completo',
-            senderAddress: 'la direccion de recogida',
-            recipientName: 'el nombre de quien recibe en Cuba',
-            recipientPhone: 'el telefono del destinatario en Cuba',
-            recipientProvince: 'la provincia en Cuba',
-            recipientMunicipality: 'el municipio',
-            scheduledDate: 'que dia quieres que pasemos',
-            timeSlot: 'a que hora prefieres'
+          // Si el destinatario fue confirmado, no pedir datos del destinatario
+          const missingNonRecipient = validation.missing.filter(f =>
+            !f.startsWith('recipient') || f === 'recipientName' || f === 'recipientPhone'
+          )
+
+          if (missingNonRecipient.length === 0 && newCollectedData._recipientConfirmed) {
+            console.log('[WhatsApp Agent] Destinatario confirmado, todos los datos OK')
+            response = generateDataSummary(newCollectedData, newFlow)
+          } else {
+            console.log('[WhatsApp Agent] Faltan datos minimos para resumen:', validation.missing)
+            // Pedir el primer dato faltante (solo minimos)
+            const fieldNames: Record<string, string> = {
+              senderName: 'tu nombre completo',
+              senderAddress: 'la direccion de recogida',
+              recipientName: 'el nombre de quien recibe en Cuba',
+              recipientPhone: 'el telefono del destinatario en Cuba',
+              recipientProvince: 'la provincia en Cuba',
+              recipientMunicipality: 'el municipio',
+              scheduledDate: 'que dia quieres que pasemos',
+              timeSlot: 'a que hora prefieres'
+            }
+            const firstMissing = validation.missing[0]
+            response = `Me falta ${fieldNames[firstMissing] || firstMissing}. Me lo puedes dar?`
           }
-          const firstMissing = validation.missing[0]
-          response = `Me falta ${fieldNames[firstMissing] || firstMissing}. Me lo puedes dar?`
         }
       } else if (newFlow === 'remittance_order') {
         // Solo validar remesa si estamos explícitamente en ese flujo
