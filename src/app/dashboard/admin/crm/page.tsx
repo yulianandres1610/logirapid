@@ -38,7 +38,8 @@ import {
   DollarSign,
   ChevronFirst,
   ChevronLast,
-  Filter
+  Filter,
+  Send
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -173,7 +174,7 @@ export default function CRMPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'orders' | 'notes' | 'transactions'>('orders')
+  const [activeTab, setActiveTab] = useState<'orders' | 'notes' | 'transactions' | 'whatsapp'>('orders')
   const [customerNotes, setCustomerNotes] = useState<CallCenterNote[]>([])
   const [customerOrders, setCustomerOrders] = useState<Order[]>([])
   const [showNoteForm, setShowNoteForm] = useState(false)
@@ -193,6 +194,32 @@ export default function CRMPage() {
     postalCode: '',    // Código postal
     country: ''
   })
+
+  // Estados para WhatsApp
+  const [whatsappData, setWhatsappData] = useState<{
+    conversation: {
+      id: number
+      phone_number: string
+      current_flow: string
+      collected_data: Record<string, unknown>
+      conversation_status: string
+      completed_order_id?: number
+      completed_order_type?: string
+      last_message_at: string
+    } | null
+    messages: Array<{
+      id: number
+      direction: string
+      content: string
+      detected_intent: string | null
+      delivery_status: string | null
+      created_at: string
+    }>
+    status: { label: string; color: string }
+  } | null>(null)
+  const [whatsappLoading, setWhatsappLoading] = useState(false)
+  const [newWhatsappMessage, setNewWhatsappMessage] = useState('')
+  const [sendingWhatsapp, setSendingWhatsapp] = useState(false)
 
   // Estados para autocompletado de direcciones
   const [addressSuggestions, setAddressSuggestions] = useState([])
@@ -726,6 +753,55 @@ export default function CRMPage() {
     }
   }
 
+  // Funciones para WhatsApp
+  const loadWhatsappData = async (customerId: number) => {
+    setWhatsappLoading(true)
+    try {
+      const response = await fetch(`/api/crm/customers/${customerId}/whatsapp`)
+      const result = await response.json()
+
+      if (result.success) {
+        setWhatsappData(result.data)
+      } else {
+        console.error('Error loading WhatsApp data:', result.error)
+        setWhatsappData(null)
+      }
+    } catch (error) {
+      console.error('Error loading WhatsApp data:', error)
+      setWhatsappData(null)
+    } finally {
+      setWhatsappLoading(false)
+    }
+  }
+
+  const sendWhatsappMessage = async () => {
+    if (!selectedCustomer || !newWhatsappMessage.trim()) return
+
+    setSendingWhatsapp(true)
+    try {
+      const response = await fetch(`/api/crm/customers/${selectedCustomer.id}/whatsapp/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: newWhatsappMessage.trim() })
+      })
+      const result = await response.json()
+
+      if (result.success) {
+        showNotification('success', 'Enviado', 'Mensaje de WhatsApp enviado correctamente')
+        setNewWhatsappMessage('')
+        // Recargar datos de WhatsApp
+        await loadWhatsappData(selectedCustomer.id)
+      } else {
+        showNotification('error', 'Error', result.error || 'Error al enviar mensaje')
+      }
+    } catch (error) {
+      console.error('Error sending WhatsApp:', error)
+      showNotification('error', 'Error', 'Error al enviar mensaje de WhatsApp')
+    } finally {
+      setSendingWhatsapp(false)
+    }
+  }
+
   const handleViewCustomer = async (customer: Customer) => {
     setSelectedCustomer(customer)
     setViewMode('detail')
@@ -735,6 +811,8 @@ export default function CRMPage() {
     await loadCustomerOrders(customer.id)
     // Cargar historial de cambios
     await loadCustomerHistory(customer.id)
+    // Cargar datos de WhatsApp
+    await loadWhatsappData(customer.id)
   }
 
   const handleEditCustomer = () => {
@@ -2234,6 +2312,29 @@ export default function CRMPage() {
                   >
                     Historial de Transacciones
                   </button>
+                  <button
+                    onClick={() => setActiveTab('whatsapp')}
+                    className={cn(
+                      "py-2 px-1 border-b-2 font-medium text-sm transition-colors flex items-center gap-2",
+                      activeTab === 'whatsapp'
+                        ? "border-green-500 text-green-600"
+                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    )}
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    WhatsApp
+                    {whatsappData?.status && (
+                      <span className={cn(
+                        "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
+                        whatsappData.status.color === 'green' && "bg-green-100 text-green-800",
+                        whatsappData.status.color === 'yellow' && "bg-yellow-100 text-yellow-800",
+                        whatsappData.status.color === 'red' && "bg-red-100 text-red-800",
+                        whatsappData.status.color === 'gray' && "bg-gray-100 text-gray-800"
+                      )}>
+                        {whatsappData.status.label}
+                      </span>
+                    )}
+                  </button>
                 </nav>
               </div>
 
@@ -2595,6 +2696,247 @@ export default function CRMPage() {
                     customerId={selectedCustomer.id}
                     companyId="1"
                   />
+                )}
+
+                {/* WhatsApp Tab Content */}
+                {activeTab === 'whatsapp' && (
+                  <div className="space-y-6">
+                    {whatsappLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+                        <span className="ml-3 text-gray-500">Cargando historial de WhatsApp...</span>
+                      </div>
+                    ) : !whatsappData?.conversation ? (
+                      <div className="text-center py-12">
+                        <MessageSquare className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+                        <p className={cn(
+                          "text-lg font-medium mb-2",
+                          theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                        )}>
+                          Sin conversaciones de WhatsApp
+                        </p>
+                        <p className="text-gray-500 mb-6">
+                          Este cliente no tiene historial de chat con el agente de WhatsApp
+                        </p>
+                        {/* Input para enviar mensaje inicial */}
+                        <div className="max-w-md mx-auto">
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={newWhatsappMessage}
+                              onChange={(e) => setNewWhatsappMessage(e.target.value)}
+                              placeholder="Escribe un mensaje para iniciar conversación..."
+                              className={cn(
+                                "flex-1 px-4 py-2 rounded-lg border focus:ring-2 focus:ring-green-500 focus:outline-none",
+                                theme === 'dark'
+                                  ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                                  : "bg-white border-gray-300 text-gray-900 placeholder-gray-500"
+                              )}
+                              onKeyDown={(e) => e.key === 'Enter' && !sendingWhatsapp && sendWhatsappMessage()}
+                            />
+                            <button
+                              onClick={sendWhatsappMessage}
+                              disabled={sendingWhatsapp || !newWhatsappMessage.trim()}
+                              className={cn(
+                                "px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2",
+                                sendingWhatsapp || !newWhatsappMessage.trim()
+                                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                  : "bg-green-600 text-white hover:bg-green-700"
+                              )}
+                            >
+                              {sendingWhatsapp ? (
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                              ) : (
+                                <Send className="w-4 h-4" />
+                              )}
+                              Enviar
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Estado de la conversación */}
+                        <div className={cn(
+                          "p-4 rounded-lg border",
+                          theme === 'dark' ? "bg-gray-700 border-gray-600" : "bg-gray-50 border-gray-200"
+                        )}>
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className={cn(
+                              "font-semibold flex items-center gap-2",
+                              theme === 'dark' ? "text-white" : "text-gray-900"
+                            )}>
+                              <MessageSquare className="w-5 h-5 text-green-500" />
+                              Estado de la Conversación
+                            </h4>
+                            <span className={cn(
+                              "px-3 py-1 rounded-full text-sm font-medium",
+                              whatsappData.status.color === 'green' && "bg-green-100 text-green-800",
+                              whatsappData.status.color === 'yellow' && "bg-yellow-100 text-yellow-800",
+                              whatsappData.status.color === 'red' && "bg-red-100 text-red-800"
+                            )}>
+                              {whatsappData.status.label}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="text-gray-500">Flujo actual:</span>
+                              <span className={cn(
+                                "ml-2 font-medium",
+                                theme === 'dark' ? "text-gray-200" : "text-gray-800"
+                              )}>
+                                {whatsappData.conversation.current_flow === 'idle' ? 'Inactivo' :
+                                 whatsappData.conversation.current_flow === 'pickup_order' ? 'Orden de Recogida' :
+                                 whatsappData.conversation.current_flow || 'N/A'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Último mensaje:</span>
+                              <span className={cn(
+                                "ml-2 font-medium",
+                                theme === 'dark' ? "text-gray-200" : "text-gray-800"
+                              )}>
+                                {whatsappData.conversation.last_message_at
+                                  ? new Date(whatsappData.conversation.last_message_at).toLocaleString('es-ES')
+                                  : 'N/A'}
+                              </span>
+                            </div>
+                            {whatsappData.conversation.completed_order_id && (
+                              <div className="col-span-2">
+                                <span className="text-gray-500">Orden creada:</span>
+                                <span className={cn(
+                                  "ml-2 font-medium text-green-600"
+                                )}>
+                                  #{whatsappData.conversation.completed_order_id} ({whatsappData.conversation.completed_order_type})
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          {/* Datos recopilados */}
+                          {whatsappData.conversation.collected_data && Object.keys(whatsappData.conversation.collected_data).length > 0 && (
+                            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                              <p className="text-sm font-medium text-gray-500 mb-2">Datos recopilados:</p>
+                              <div className="grid grid-cols-2 gap-2 text-sm">
+                                {Object.entries(whatsappData.conversation.collected_data)
+                                  .filter(([key]) => !key.startsWith('_'))
+                                  .map(([key, value]) => (
+                                    <div key={key} className={cn(
+                                      "px-2 py-1 rounded",
+                                      theme === 'dark' ? "bg-gray-600" : "bg-gray-100"
+                                    )}>
+                                      <span className="text-gray-500">{key}:</span>
+                                      <span className={cn(
+                                        "ml-1",
+                                        theme === 'dark' ? "text-gray-200" : "text-gray-800"
+                                      )}>
+                                        {String(value)}
+                                      </span>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Historial de mensajes */}
+                        <div className={cn(
+                          "rounded-lg border",
+                          theme === 'dark' ? "bg-gray-700 border-gray-600" : "bg-white border-gray-200"
+                        )}>
+                          <div className="p-4 border-b border-gray-200 dark:border-gray-600">
+                            <h4 className={cn(
+                              "font-semibold",
+                              theme === 'dark' ? "text-white" : "text-gray-900"
+                            )}>
+                              Historial de Mensajes ({whatsappData.messages.length})
+                            </h4>
+                          </div>
+                          <div className="max-h-96 overflow-y-auto p-4 space-y-3">
+                            {whatsappData.messages.length === 0 ? (
+                              <p className="text-center text-gray-500 py-4">Sin mensajes</p>
+                            ) : (
+                              whatsappData.messages.map((msg) => (
+                                <div
+                                  key={msg.id}
+                                  className={cn(
+                                    "flex",
+                                    msg.direction === 'outbound' ? "justify-end" : "justify-start"
+                                  )}
+                                >
+                                  <div className={cn(
+                                    "max-w-[80%] rounded-lg px-4 py-2",
+                                    msg.direction === 'outbound'
+                                      ? "bg-green-600 text-white"
+                                      : theme === 'dark'
+                                        ? "bg-gray-600 text-gray-200"
+                                        : "bg-gray-100 text-gray-800"
+                                  )}>
+                                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                    <div className={cn(
+                                      "flex items-center justify-end gap-2 mt-1 text-xs",
+                                      msg.direction === 'outbound' ? "text-green-200" : "text-gray-500"
+                                    )}>
+                                      <span>{new Date(msg.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
+                                      {msg.direction === 'outbound' && msg.delivery_status && (
+                                        <span className={cn(
+                                          msg.delivery_status === 'delivered' || msg.delivery_status === 'read' ? "text-green-200" :
+                                          msg.delivery_status === 'failed' ? "text-red-300" : "text-gray-400"
+                                        )}>
+                                          {msg.delivery_status === 'delivered' ? '✓✓' :
+                                           msg.delivery_status === 'read' ? '✓✓' :
+                                           msg.delivery_status === 'sent' ? '✓' :
+                                           msg.delivery_status === 'failed' ? '✗' : '○'}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Input para enviar mensaje */}
+                        <div className={cn(
+                          "p-4 rounded-lg border",
+                          theme === 'dark' ? "bg-gray-700 border-gray-600" : "bg-gray-50 border-gray-200"
+                        )}>
+                          <div className="flex gap-3">
+                            <input
+                              type="text"
+                              value={newWhatsappMessage}
+                              onChange={(e) => setNewWhatsappMessage(e.target.value)}
+                              placeholder="Escribe un mensaje..."
+                              className={cn(
+                                "flex-1 px-4 py-2 rounded-lg border focus:ring-2 focus:ring-green-500 focus:outline-none",
+                                theme === 'dark'
+                                  ? "bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                                  : "bg-white border-gray-300 text-gray-900 placeholder-gray-500"
+                              )}
+                              onKeyDown={(e) => e.key === 'Enter' && !sendingWhatsapp && sendWhatsappMessage()}
+                            />
+                            <button
+                              onClick={sendWhatsappMessage}
+                              disabled={sendingWhatsapp || !newWhatsappMessage.trim()}
+                              className={cn(
+                                "px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2",
+                                sendingWhatsapp || !newWhatsappMessage.trim()
+                                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                  : "bg-green-600 text-white hover:bg-green-700"
+                              )}
+                            >
+                              {sendingWhatsapp ? (
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                              ) : (
+                                <Send className="w-4 h-4" />
+                              )}
+                              Enviar
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

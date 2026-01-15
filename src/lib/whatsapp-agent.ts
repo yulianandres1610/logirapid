@@ -641,6 +641,29 @@ export async function resetConversation(conversationId: number): Promise<void> {
 }
 
 /**
+ * Marca la conversacion como completada con la orden creada
+ */
+export async function markConversationCompleted(
+  conversationId: number,
+  orderId: number,
+  orderType: 'pickup' | 'remittance'
+): Promise<void> {
+  await db.query(`
+    UPDATE whatsapp_conversations
+    SET
+      conversation_status = 'completed',
+      completed_order_id = $1,
+      completed_order_type = $2,
+      completed_at = NOW(),
+      current_flow = 'idle',
+      current_step = NULL,
+      updated_at = NOW()
+    WHERE id = $3
+  `, [orderId, orderType, conversationId])
+  console.log('[WhatsApp Agent] Conversacion marcada como completada:', conversationId, 'Orden:', orderId)
+}
+
+/**
  * Genera un numero de orden unico
  */
 async function generateOrderNumber(prefix: string): Promise<string> {
@@ -1283,12 +1306,13 @@ export async function handleIncomingMessage(
           const result = await createPickupOrder(newCollectedData, phoneNumber)
           console.log('[WhatsApp Agent] Resultado createPickupOrder:', result)
 
-          if (result.success) {
+          if (result.success && result.orderId) {
             orderCreated = true
             orderId = result.orderId
             orderNumber = result.orderNumber
             response = `Listo! Ya quedo registrado, tu numero de orden es ${orderNumber}. Te llamamos para coordinar la recogida ok?`
-            await resetConversation(conversation.id)
+            // Marcar conversacion como completada en lugar de solo resetear
+            await markConversationCompleted(conversation.id, result.orderId, 'pickup')
           } else {
             console.error('[WhatsApp Agent] Error creando orden:', result.error)
             response = 'Uy perdon, se me trabo el sistema. Puedes decirme los datos otra vez?'
@@ -1324,7 +1348,8 @@ export async function handleIncomingMessage(
             console.log('[WhatsApp Agent] Payment link creado:', paymentLink)
 
             response = `Perfecto! Ya quedo tu orden ${orderNumber}. El total con la comision es $${result.totalAmount.toFixed(2)}\n\nPaga por aqui: ${paymentLink}\n\nCuando pagues te aviso y se lo llevamos a tu familia`
-            await resetConversation(conversation.id)
+            // Marcar conversacion como completada
+            await markConversationCompleted(conversation.id, result.orderId, 'remittance')
           } else {
             console.error('[WhatsApp Agent] Error creando remesa:', result.error)
             response = 'Uy perdon, se me trabo. Puedes decirme los datos otra vez?'
