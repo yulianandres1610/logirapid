@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Search, User, Phone, Mail, Loader2, MapPin, Plus, Edit2, FileText } from 'lucide-react'
+import { Search, User, Phone, Mail, Loader2, MapPin, Plus, Edit2, FileText, Trash2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -251,6 +251,31 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
     } catch (error) {
       console.error('Error creating address:', error)
       alert('Error al crear dirección')
+    }
+  }
+
+  const deleteAddress = async (addressId: number, e: React.MouseEvent) => {
+    e.stopPropagation() // Evitar que se seleccione la dirección al eliminar
+
+    if (!confirm('¿Estás seguro de eliminar esta dirección?')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/customer-addresses?id=${addressId}`, {
+        method: 'DELETE'
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        // Actualizar la lista de direcciones
+        setCustomerAddresses(prev => prev.filter(addr => addr.id !== addressId))
+      } else {
+        alert(data.error || 'Error al eliminar dirección')
+      }
+    } catch (error) {
+      console.error('Error deleting address:', error)
+      alert('Error al eliminar dirección')
     }
   }
 
@@ -638,6 +663,22 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
                                   </span>
                                 )}
                               </div>
+                              {/* Botón eliminar dirección */}
+                              {customerAddresses.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => deleteAddress(addr.id!, e)}
+                                  className={cn(
+                                    "p-1.5 rounded-full transition-colors flex-shrink-0",
+                                    theme === 'dark'
+                                      ? 'hover:bg-red-900/50 text-gray-400 hover:text-red-400'
+                                      : 'hover:bg-red-100 text-gray-500 hover:text-red-600'
+                                  )}
+                                  title="Eliminar dirección"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
                             </div>
                           </motion.div>
                         ))}

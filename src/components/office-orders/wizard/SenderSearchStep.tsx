@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Search, User, Phone, Mail, Loader2, MapPin, Plus, Edit2, Key, FileText } from 'lucide-react'
+import { Search, User, Phone, Mail, Loader2, MapPin, Plus, Edit2, Key, FileText, Trash2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -232,12 +232,14 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
 
           if (hasStructuredAddress) {
             // Usar los campos estructurados de la BD
-            customerWithCoords.street = customer.address || customer.street || ''
+            customerWithCoords.street = customer.street || ''
             customerWithCoords.city = customer.city || ''
             customerWithCoords.state = customer.state || ''
             customerWithCoords.zipCode = customer.zipCode || customer.zipcode || ''
             customerWithCoords.apartment = customer.apartment || ''
             customerWithCoords.country = customer.country || 'US'
+            // Mantener el address legacy para display
+            customerWithCoords.address = customer.address || `${customerWithCoords.street}, ${customerWithCoords.city}, ${customerWithCoords.state} ${customerWithCoords.zipCode}`
             console.log('📍 [SenderSearchStep] Using structured address from DB:', {
               street: customerWithCoords.street,
               city: customerWithCoords.city,
@@ -282,12 +284,13 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
       const hasStructuredAddress = customer.city || customer.state || customer.zipCode
 
       if (hasStructuredAddress) {
-        customerWithCoords.street = customer.address || customer.street || ''
+        customerWithCoords.street = customer.street || ''
         customerWithCoords.city = customer.city || ''
         customerWithCoords.state = customer.state || ''
         customerWithCoords.zipCode = customer.zipCode || customer.zipcode || ''
         customerWithCoords.apartment = customer.apartment || ''
         customerWithCoords.country = customer.country || 'US'
+        customerWithCoords.address = customer.address || `${customerWithCoords.street}, ${customerWithCoords.city}, ${customerWithCoords.state} ${customerWithCoords.zipCode}`
       } else if (customer.address) {
         const parsed = parseAddressString(customer.address)
         customerWithCoords.street = parsed.street || customer.address
@@ -395,6 +398,37 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
     setSelectedAddressId(address.id)
     updateWizardData('sender', senderData)
     setCanProceed(true)
+  }
+
+  const deleteAddress = async (addressId: number, e: React.MouseEvent) => {
+    e.stopPropagation() // Evitar que se seleccione la dirección al eliminar
+
+    if (!confirm('¿Estás seguro de eliminar esta dirección?')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/customer-addresses?id=${addressId}`, {
+        method: 'DELETE'
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        // Actualizar la lista de direcciones
+        setCustomerAddresses(prev => prev.filter(addr => addr.id !== addressId))
+
+        // Si la dirección eliminada era la seleccionada, deseleccionar
+        if (selectedAddressId === addressId) {
+          setSelectedAddressId(null)
+          setCanProceed(false)
+        }
+      } else {
+        alert(data.error || 'Error al eliminar dirección')
+      }
+    } catch (error) {
+      console.error('Error deleting address:', error)
+      alert('Error al eliminar dirección')
+    }
   }
 
   const createSender = async () => {
@@ -1122,6 +1156,22 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                               </svg>
                             </div>
+                          )}
+                          {/* Botón eliminar dirección */}
+                          {customerAddresses.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={(e) => deleteAddress(address.id, e)}
+                              className={cn(
+                                "p-1.5 rounded-full transition-colors",
+                                theme === 'dark'
+                                  ? 'hover:bg-red-900/50 text-gray-400 hover:text-red-400'
+                                  : 'hover:bg-red-100 text-gray-500 hover:text-red-600'
+                              )}
+                              title="Eliminar dirección"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           )}
                         </div>
                       </div>
