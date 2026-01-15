@@ -99,6 +99,45 @@ function validateRemittanceData(data: Record<string, unknown>): { valid: boolean
 }
 
 /**
+ * Interface para datos de cliente con direcciones
+ */
+interface CustomerSearchResult {
+  found: boolean
+  id?: number
+  name?: string
+  phone?: string
+  idType?: string
+  idNumber?: string
+  addresses?: Array<{
+    id: number
+    address: string
+    city?: string
+    state?: string
+    zipcode?: string
+    entryPin?: string
+    isDefault?: boolean
+  }>
+}
+
+/**
+ * Interface para datos de destinatario Cuba
+ */
+interface RecipientSearchResult {
+  found: boolean
+  id?: number
+  name?: string
+  phone?: string
+  ci?: string
+  addresses?: Array<{
+    province: string
+    municipality: string
+    street: string
+    reparto?: string
+    instructions?: string
+  }>
+}
+
+/**
  * Busca un cliente existente por numero de telefono
  */
 async function findCustomerByPhone(phoneNumber: string): Promise<{ id: number; name: string } | null> {
@@ -163,6 +202,206 @@ async function findCustomerByPhone(phoneNumber: string): Promise<{ id: number; n
   }
 
   return null
+}
+
+/**
+ * Busca un remitente (sender) por telefono con sus datos y direcciones guardadas
+ */
+async function searchSenderByPhone(phoneNumber: string): Promise<CustomerSearchResult> {
+  const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10)
+  console.log('[WhatsApp Agent] Buscando sender por telefono:', cleanPhone)
+
+  // Buscar en customers con direcciones
+  const customerResult = await db.query(`
+    SELECT
+      c.id, c.firstname, c.lastname, c.phone,
+      c.idtype, c.idnumber, c.entry_pin as customer_entry_pin,
+      ca.id as address_id, ca.street, ca.city, ca.state, ca.zipcode,
+      ca.isprimary
+    FROM customers c
+    LEFT JOIN customer_addresses ca ON ca.customerid = c.id
+    WHERE c.phone LIKE $1
+    ORDER BY ca.isprimary DESC NULLS LAST, ca.id DESC
+  `, [`%${cleanPhone}%`])
+
+  if (customerResult.rows.length > 0) {
+    const first = customerResult.rows[0]
+    const addresses = customerResult.rows
+      .filter(r => r.address_id)
+      .map(r => ({
+        id: r.address_id,
+        address: `${r.street || ''}, ${r.city || ''}, ${r.state || ''} ${r.zipcode || ''}`.trim(),
+        city: r.city,
+        state: r.state,
+        zipcode: r.zipcode,
+        entryPin: first.customer_entry_pin, // Usar entry_pin del customer
+        isDefault: r.isprimary
+      }))
+
+    return {
+      found: true,
+      id: first.id,
+      name: `${first.firstname || ''} ${first.lastname || ''}`.trim(),
+      phone: first.phone,
+      idType: first.idtype,
+      idNumber: first.idnumber,
+      addresses
+    }
+  }
+
+  // Buscar en ordenes anteriores
+  const orderResult = await db.query(`
+    SELECT
+      customername, phone, customeraddress, city, state, zipcode,
+      office_order_data
+    FROM package_orders
+    WHERE phone LIKE $1
+    ORDER BY createdat DESC
+    LIMIT 1
+  `, [`%${cleanPhone}%`])
+
+  if (orderResult.rows.length > 0) {
+    const order = orderResult.rows[0]
+    const officeData = order.office_order_data || {}
+
+    return {
+      found: true,
+      name: order.customername,
+      phone: order.phone,
+      idType: officeData.senderIdType,
+      idNumber: officeData.senderIdNumber,
+      addresses: order.customeraddress ? [{
+        id: 0,
+        address: `${order.customeraddress}, ${order.city || ''}, ${order.state || ''} ${order.zipcode || ''}`,
+        city: order.city,
+        state: order.state,
+        zipcode: order.zipcode,
+        entryPin: officeData.senderEntryPin
+      }] : []
+    }
+  }
+
+  return { found: false }
+}
+
+/**
+ * Busca un destinatario en Cuba por telefono
+ */
+async function searchRecipientByPhone(phoneNumber: string): Promise<RecipientSearchResult> {
+  const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-8) // Telefonos cubanos 8 digitos
+  console.log('[WhatsApp Agent] Buscando destinatario Cuba por telefono:', cleanPhone)
+
+  // Buscar en ordenes anteriores
+  const orderResult = await db.query(`
+    SELECT
+      office_order_data
+    FROM package_orders
+    WHERE office_order_data IS NOT NULL
+      AND office_order_data::text LIKE $1
+    ORDER BY createdat DESC
+    LIMIT 5
+  `, [`%${cleanPhone}%`])
+
+  if (orderResult.rows.length > 0) {
+    // Buscar en los datos del destinatario
+    for (const row of orderResult.rows) {
+      const data = row.office_order_data
+      if (data && data.receiverPhone && data.receiverPhone.includes(cleanPhone)) {
+        return {
+          found: true,
+          name: data.receiverName,
+          phone: data.receiverPhone,
+          ci: data.receiverCI,
+          addresses: data.destination ? [{
+            province: data.destination.provinceName,
+            municipality: data.destination.municipalityName,
+            street: data.destination.street,
+            reparto: data.destination.reparto,
+            instructions: data.destination.deliveryInstructions
+          }] : []
+        }
+      }
+    }
+  }
+
+  // Buscar en remesas
+  const remitResult = await db.query(`
+    SELECT
+      recipient_name, recipient_phone,
+      recipient_province, recipient_municipality, recipient_address
+    FROM remittance_orders
+    WHERE recipient_phone LIKE $1
+    ORDER BY created_at DESC
+    LIMIT 1
+  `, [`%${cleanPhone}%`])
+
+  if (remitResult.rows.length > 0) {
+    const r = remitResult.rows[0]
+    return {
+      found: true,
+      name: r.recipient_name,
+      phone: r.recipient_phone,
+      addresses: [{
+        province: r.recipient_province,
+        municipality: r.recipient_municipality,
+        street: r.recipient_address,
+      }]
+    }
+  }
+
+  return { found: false }
+}
+
+/**
+ * Genera un resumen de los datos recopilados para mostrar al cliente
+ */
+function generateDataSummary(data: Record<string, unknown>, flowType: string): string {
+  if (flowType === 'pickup_order') {
+    const lines = [
+      'Ok, confirma los datos:',
+      '',
+      'REMITENTE:',
+      `- ${data.senderName || 'Sin nombre'}`,
+      `- ${data.senderIdType || 'ID'}: ${data.senderIdNumber || 'Sin numero'}`,
+      `- ${data.senderAddress || 'Sin direccion'}`,
+      `- PIN: ${data.senderEntryPin || 'NO'}`,
+      '',
+      'DESTINATARIO CUBA:',
+      `- ${data.recipientName || 'Sin nombre'}`,
+      `- CI: ${data.recipientCI || 'Sin CI'}`,
+      `- ${data.recipientStreet || ''}, ${data.recipientReparto || ''}`,
+      `- ${data.recipientMunicipality || ''}, ${data.recipientProvince || ''}`,
+      `- Tel: ${data.recipientPhone || 'Sin telefono'}`,
+      '',
+      'Todo correcto?'
+    ]
+    return lines.join('\n')
+  }
+
+  if (flowType === 'remittance_order') {
+    const amount = Number(data.amount) || 0
+    const fee = amount * 0.05
+    const total = amount + fee
+
+    const lines = [
+      'Ok, confirma los datos:',
+      '',
+      `Monto: $${amount.toFixed(2)} USD`,
+      `Comision: $${fee.toFixed(2)}`,
+      `Total: $${total.toFixed(2)}`,
+      '',
+      'BENEFICIARIO:',
+      `- ${data.recipientName || 'Sin nombre'}`,
+      `- ${data.province || ''}, ${data.municipality || ''}`,
+      `- ${data.address || 'Sin direccion'}`,
+      `- Tel: ${data.recipientPhone || 'Sin telefono'}`,
+      '',
+      'Todo correcto?'
+    ]
+    return lines.join('\n')
+  }
+
+  return 'Datos incompletos'
 }
 
 /**
@@ -658,9 +897,13 @@ export async function handleIncomingMessage(
       { role: 'user', content: messageBody }
     ]
 
-    // 4. Verificar si es primera interaccion
-    if (conversation.current_flow === 'idle' && conversation.messages_history.length === 0) {
-      console.log('[WhatsApp Agent] Primera interaccion - enviando saludo')
+    // 4. Verificar si es primera interaccion CON saludo simple
+    // Solo si el mensaje es un saludo simple (Hola, Hi, etc) sin intención específica
+    const simpleGreetings = ['hola', 'hi', 'hello', 'buenos dias', 'buenas tardes', 'buenas noches', 'hey', 'buenas']
+    const isSimpleGreeting = simpleGreetings.some(g => messageBody.toLowerCase().trim() === g)
+
+    if (conversation.current_flow === 'idle' && conversation.messages_history.length === 0 && isSimpleGreeting) {
+      console.log('[WhatsApp Agent] Primera interaccion con saludo simple')
       const greeting = await generateGreeting(conversation.customer_name)
 
       updatedHistory.push({ role: 'assistant', content: greeting })
@@ -722,8 +965,117 @@ export async function handleIncomingMessage(
       }
     }
 
-    // 8. Si el flujo esta completo, crear orden
+    // 8. Manejar busquedas de cliente si GPT lo solicita
     let response = gptResponse.response
+
+    // Buscar remitente por telefono
+    if (gptResponse.searchSender) {
+      console.log('[WhatsApp Agent] Buscando sender por telefono:', gptResponse.searchSender)
+      const senderResult = await searchSenderByPhone(gptResponse.searchSender)
+
+      if (senderResult.found) {
+        // Cliente encontrado - cargar sus datos
+        newCollectedData.senderName = senderResult.name
+        newCollectedData.senderPhone = senderResult.phone || gptResponse.searchSender
+        if (senderResult.idType) newCollectedData.senderIdType = senderResult.idType
+        if (senderResult.idNumber) newCollectedData.senderIdNumber = senderResult.idNumber
+
+        // Construir respuesta con datos encontrados
+        let foundMsg = `Te encontre! Eres ${senderResult.name}.`
+        if (senderResult.addresses && senderResult.addresses.length > 0) {
+          foundMsg += ` Tienes esta direccion guardada: ${senderResult.addresses[0].address}`
+          if (senderResult.addresses[0].entryPin) {
+            foundMsg += ` (PIN: ${senderResult.addresses[0].entryPin})`
+          }
+          foundMsg += `. La usamos?`
+          // Guardar direccion temporalmente
+          newCollectedData._pendingAddress = senderResult.addresses[0]
+        } else {
+          foundMsg += ` Dame tu direccion de recogida.`
+        }
+        response = foundMsg
+      } else {
+        // Cliente no encontrado
+        newCollectedData.senderPhone = gptResponse.searchSender
+        response = 'No te tengo en el sistema. Como te llamas?'
+      }
+    }
+
+    // Buscar destinatario Cuba por telefono
+    if (gptResponse.searchRecipient) {
+      console.log('[WhatsApp Agent] Buscando recipient Cuba:', gptResponse.searchRecipient)
+      const recipientResult = await searchRecipientByPhone(gptResponse.searchRecipient)
+
+      if (recipientResult.found) {
+        // Destinatario encontrado
+        newCollectedData.recipientName = recipientResult.name
+        newCollectedData.recipientPhone = recipientResult.phone || gptResponse.searchRecipient
+        if (recipientResult.ci) newCollectedData.recipientCI = recipientResult.ci
+
+        let foundMsg = `Encontre a ${recipientResult.name}.`
+        if (recipientResult.addresses && recipientResult.addresses.length > 0) {
+          const addr = recipientResult.addresses[0]
+          foundMsg += ` Direccion: ${addr.street || ''}, ${addr.municipality || ''}, ${addr.province || ''}.`
+          newCollectedData.recipientProvince = addr.province
+          newCollectedData.recipientMunicipality = addr.municipality
+          newCollectedData.recipientStreet = addr.street
+          if (addr.reparto) newCollectedData.recipientReparto = addr.reparto
+          foundMsg += ` La usamos?`
+        } else {
+          foundMsg += ` Pero no tengo su direccion. En que provincia esta?`
+        }
+        response = foundMsg
+      } else {
+        // Destinatario no encontrado
+        newCollectedData.recipientPhone = gptResponse.searchRecipient
+        response = 'No lo tengo registrado. Como se llama la persona que recibe?'
+      }
+    }
+
+    // Detectar si el usuario confirma usar datos existentes
+    const confirmWords = ['si', 'sí', 'ok', 'yes', 'correcto', 'esa', 'eso', 'dale', 'bien', 'perfecto']
+    const userConfirms = confirmWords.some(w => messageBody.toLowerCase().includes(w))
+
+    // Si hay direccion pendiente y usuario confirma, aplicarla
+    if (newCollectedData._pendingAddress && userConfirms) {
+      const addr = newCollectedData._pendingAddress as { address: string; city?: string; state?: string; zipcode?: string; entryPin?: string }
+      newCollectedData.senderAddress = addr.address
+      if (addr.entryPin) newCollectedData.senderEntryPin = addr.entryPin
+      delete newCollectedData._pendingAddress
+      console.log('[WhatsApp Agent] Direccion confirmada:', addr.address)
+    }
+
+    // Mostrar resumen si GPT lo solicita O si tenemos todos los datos
+    if (gptResponse.requestSummary && newFlow) {
+      const validation = newFlow === 'pickup_order'
+        ? validatePickupData(newCollectedData)
+        : validateRemittanceData(newCollectedData)
+
+      if (validation.valid) {
+        console.log('[WhatsApp Agent] Mostrando resumen con datos reales')
+        response = generateDataSummary(newCollectedData, newFlow)
+      } else {
+        console.log('[WhatsApp Agent] Faltan datos para resumen:', validation.missing)
+        // Pedir el primer dato faltante
+        const fieldNames: Record<string, string> = {
+          senderName: 'tu nombre completo',
+          senderIdType: 'el tipo de ID (Pasaporte, Licencia o ID)',
+          senderIdNumber: 'el numero del ID',
+          senderAddress: 'la direccion de recogida',
+          senderEntryPin: 'si hay PIN o codigo para entrar',
+          recipientName: 'el nombre de quien recibe en Cuba',
+          recipientPhone: 'el telefono del destinatario en Cuba',
+          recipientCI: 'el carnet de identidad (11 digitos)',
+          recipientProvince: 'la provincia en Cuba',
+          recipientMunicipality: 'el municipio',
+          recipientStreet: 'la calle y numero en Cuba'
+        }
+        const firstMissing = validation.missing[0]
+        response = `Me falta ${fieldNames[firstMissing] || firstMissing}. Cual es?`
+      }
+    }
+
+    // 9. Si el flujo esta completo, crear orden
     let orderCreated = false
     let orderId: number | undefined
     let orderNumber: string | undefined

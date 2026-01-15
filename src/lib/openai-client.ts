@@ -14,68 +14,73 @@ function getOpenAI(): OpenAI {
   return _openai
 }
 
-// System prompt para el agente de LogiRapid - NATURAL COMO PERSONA REAL
-const SYSTEM_PROMPT = `Eres Maria, trabajas en LogiRapid atendiendo clientes por WhatsApp. Hablas como una persona real de Miami, cubana, amigable.
-
-TU PERSONALIDAD:
-- Hablas natural, como si escribieras a un amigo
-- Usas "ok", "dale", "perfecto", "listo"
-- Maximo 1-2 oraciones por mensaje
-- NO suenas robotico ni formal
-- Puedes usar emojis pero pocos
+// System prompt para el agente de LogiRapid - FLUJO ESTRUCTURADO
+const SYSTEM_PROMPT = `Eres Maria de LogiRapid. Hablas natural, como cubana de Miami. Corto y directo, maximo 2 oraciones.
 
 SERVICIOS:
-1. Recogida de paquetes (pasamos a buscar el paquete en USA y lo enviamos a Cuba)
-2. Envio de dinero a Cuba (cupones/remesas)
+1. Recogida de paquetes (USA a Cuba)
+2. Envio de dinero (remesas)
 
-PARA RECOGIDA pregunta UNO POR UNO en este orden:
+REGLA CRITICA:
+- SIEMPRE llama extract_pickup_order_data cuando el usuario da cualquier dato
+- Pregunta UN dato a la vez
+- Respuestas cortas y naturales
 
-Del remitente (USA):
-1. senderName - "Tu nombre completo"
-2. senderPhone - "Tu telefono" (si no te lo da, usa el de WhatsApp)
-3. senderIdType - "Que tipo de ID tienes? (Pasaporte, Licencia, ID estatal)"
-4. senderIdNumber - "Numero de tu ID"
-5. senderAddress - "Direccion donde recogemos" (calle, ciudad, estado y ZIP)
-6. senderEntryPin - "Hay codigo o PIN para entrar al edificio?" (puede ser NO)
-7. senderInstructions - "Alguna instruccion para llegar?" (opcional)
+FLUJO RECOGIDA:
 
-Del destinatario (Cuba):
-8. recipientName - "Nombre completo de quien recibe en Cuba"
-9. recipientPhone - "Telefono en Cuba"
-10. recipientCI - "Carnet de identidad" (DEBE ser 11 digitos, validar formato)
-11. recipientProvince - "Provincia"
-12. recipientMunicipality - "Municipio"
-13. recipientStreet - "Calle y numero"
-14. recipientReparto - "Entre que calles o reparto"
-15. recipientInstructions - "Referencia para encontrar la casa" (opcional)
+1. "Dame tu numero pa buscarte" -> search_customer con el telefono
 
-VALIDACION CARNET CUBA:
-- Debe tener exactamente 11 digitos
-- Si el usuario da un numero incorrecto, pide que lo verifique
-- Ejemplo valido: 85010112345
+2. Si no existe, pide UNO A UNO:
+   - Nombre completo
+   - Tipo ID (Pasaporte/Licencia/ID)
+   - Numero del ID
+   - Direccion completa (calle, ciudad, estado, ZIP)
+   - PIN de entrada (numero/codigo para entrar al edificio, o "NO" si no hay)
 
-PARA REMESAS pregunta UNO POR UNO:
-1. amount - "Cuanto quieres enviar?"
-2. senderName - "Tu nombre completo"
-3. recipientName - "Nombre de quien recibe"
-4. recipientPhone - "Telefono en Cuba"
-5. province - "Provincia"
-6. municipality - "Municipio"
-7. address - "Direccion completa"
+3. "Y el telefono en Cuba?" -> search_recipient
 
-FLUJO:
-1. Pregunta que necesita
-2. Pide los datos UNO A UNO (no pidas varios a la vez)
-3. Cuando tengas TODO, haz un resumen corto
-4. Pregunta "Esta todo bien?"
-5. Si dice si/correcto/dale -> llama la funcion con allDataComplete=true
+4. Si no existe, pide UNO A UNO:
+   - Nombre completo
+   - Carnet de Identidad (11 digitos)
+   - Provincia
+   - Municipio
+   - Calle y numero
+
+5. Cuando tengas TODO -> request_summary({ready: true})
+   Si confirma -> extract_pickup_order_data({allDataComplete: true})
+
+SOBRE EL PIN DE ENTRADA:
+- Es un codigo numerico para entrar al edificio/comunidad (ej: "1234", "4567#")
+- Si no hay codigo, el usuario dira "no", "no hay", "ninguno"
+- Guarda "NO" si no hay PIN
+- NO confundir con la direccion
 
 EJEMPLOS:
-- "Hola! En que te ayudo?"
-- "Dale, tu nombre completo?"
-- "Perfecto, y la direccion donde pasamos a recoger? Con ciudad y ZIP"
-- "Hay codigo o PIN para entrar al edificio?"
-- "Ahora los datos de Cuba. Nombre de quien recibe?"`
+Usuario: "Pedro Lopez"
+-> extract_pickup_order_data({senderName: "Pedro Lopez"})
+-> "Que tipo de ID tienes Pedro?"
+
+Usuario: "Licencia"
+-> extract_pickup_order_data({senderIdType: "Licencia"})
+-> "Y el numero de la licencia?"
+
+Usuario: "D123456"
+-> extract_pickup_order_data({senderIdNumber: "D123456"})
+-> "Dame la direccion completa"
+
+Usuario: "123 Main St Miami FL 33186"
+-> extract_pickup_order_data({senderAddress: "123 Main St Miami FL 33186"})
+-> "Hay codigo o PIN pa entrar al edificio?"
+
+Usuario: "No hay"
+-> extract_pickup_order_data({senderEntryPin: "NO"})
+-> "Ok. Y el telefono de quien recibe en Cuba?"
+
+Usuario: "El codigo es 4567"
+-> extract_pickup_order_data({senderEntryPin: "4567"})
+-> "Perfecto. Y el telefono en Cuba?"
+
+IMPORTANTE: Extrae SOLO el dato que corresponde, no mezcles campos.`
 
 // Interfaces
 export interface ConversationMessage {
@@ -89,6 +94,10 @@ export interface GPTResponse {
   extractedData?: Record<string, unknown>
   flowComplete?: boolean
   readyToCreateOrder?: boolean
+  // Nuevas acciones de busqueda
+  searchSender?: string    // Telefono para buscar remitente
+  searchRecipient?: string // Telefono para buscar destinatario Cuba
+  requestSummary?: boolean // Solicita mostrar resumen
 }
 
 // Function definitions para extraer datos estructurados
@@ -96,8 +105,49 @@ const functions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'search_customer',
+      description: 'Buscar cliente remitente por telefono. USAR cuando el usuario da su numero de telefono para buscarlo en el sistema.',
+      parameters: {
+        type: 'object',
+        properties: {
+          phone: { type: 'string', description: 'Numero de telefono del remitente a buscar' }
+        },
+        required: ['phone']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_recipient',
+      description: 'Buscar destinatario Cuba por telefono. USAR cuando el usuario da el telefono del destinatario en Cuba.',
+      parameters: {
+        type: 'object',
+        properties: {
+          phone: { type: 'string', description: 'Numero de telefono del destinatario en Cuba a buscar' }
+        },
+        required: ['phone']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'request_summary',
+      description: 'LLAMAR cuando ya tienes todos los datos y quieres mostrar el resumen al usuario para confirmacion',
+      parameters: {
+        type: 'object',
+        properties: {
+          ready: { type: 'boolean', description: 'true cuando todos los datos estan completos y quieres mostrar resumen' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'extract_pickup_order_data',
-      description: 'LLAMAR SIEMPRE que el usuario da datos de recogida. Extraer cada dato que mencione.',
+      description: 'LLAMAR SIEMPRE que el usuario da cualquier dato de recogida. Extraer CADA dato que mencione.',
       parameters: {
         type: 'object',
         properties: {
@@ -106,8 +156,8 @@ const functions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           senderPhone: { type: 'string', description: 'Telefono del remitente' },
           senderIdType: { type: 'string', description: 'Tipo de ID: Pasaporte, Licencia, ID estatal' },
           senderIdNumber: { type: 'string', description: 'Numero del documento de identidad' },
-          senderAddress: { type: 'string', description: 'Direccion completa con calle, ciudad, estado y ZIP' },
-          senderEntryPin: { type: 'string', description: 'Codigo/PIN para entrar al edificio. "NO" si no hay' },
+          senderAddress: { type: 'string', description: 'Direccion completa con calle, ciudad, estado y ZIP. NO incluir PIN aqui.' },
+          senderEntryPin: { type: 'string', description: 'SOLO el codigo numerico para entrar al edificio (ej: "1234", "4567#"). Guardar "NO" si el usuario dice que no hay codigo. NUNCA poner la direccion aqui.' },
           senderInstructions: { type: 'string', description: 'Instrucciones de acceso' },
           // Datos del destinatario (Cuba)
           recipientName: { type: 'string', description: 'Nombre completo de quien recibe en Cuba' },
@@ -121,7 +171,7 @@ const functions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           // Control
           allDataComplete: {
             type: 'boolean',
-            description: 'TRUE SOLO cuando tienes TODOS los datos requeridos (senderName, senderIdType, senderIdNumber, senderAddress, senderEntryPin, recipientName, recipientPhone, recipientCI con 11 digitos, recipientProvince, recipientMunicipality, recipientStreet) Y el usuario CONFIRMO'
+            description: 'TRUE SOLO cuando el usuario CONFIRMA que los datos estan correctos (dice SI, OK, Correcto, etc)'
           }
         }
       }
@@ -223,6 +273,11 @@ Continua recopilando los datos faltantes.`
     let flowComplete = false
     let readyToCreateOrder = false
 
+    // Variables para busquedas
+    let searchSender: string | undefined
+    let searchRecipient: string | undefined
+    let requestSummary = false
+
     // Procesar tool calls si existen
     if (message.tool_calls && message.tool_calls.length > 0) {
       for (const toolCall of message.tool_calls) {
@@ -234,14 +289,32 @@ Continua recopilando los datos faltantes.`
 
         if (functionName === 'detect_intent') {
           intent = args.intent
+        } else if (functionName === 'search_customer') {
+          searchSender = args.phone
+          console.log('[OpenAI] GPT solicita buscar sender:', args.phone)
+        } else if (functionName === 'search_recipient') {
+          searchRecipient = args.phone
+          console.log('[OpenAI] GPT solicita buscar recipient:', args.phone)
+        } else if (functionName === 'request_summary') {
+          requestSummary = args.ready === true
+          console.log('[OpenAI] GPT solicita mostrar resumen')
         } else if (functionName === 'extract_pickup_order_data') {
-          extractedData = { ...extractedData, ...args }
+          // Filtrar solo campos con valor
+          const cleanArgs = Object.fromEntries(
+            Object.entries(args).filter(([_, v]) => v !== null && v !== undefined && v !== '')
+          )
+          extractedData = { ...extractedData, ...cleanArgs }
+          console.log('[OpenAI] Datos extraidos pickup:', cleanArgs)
           if (args.allDataComplete) {
             flowComplete = true
             readyToCreateOrder = true
           }
         } else if (functionName === 'extract_remittance_order_data') {
-          extractedData = { ...extractedData, ...args }
+          const cleanArgs = Object.fromEntries(
+            Object.entries(args).filter(([_, v]) => v !== null && v !== undefined && v !== '')
+          )
+          extractedData = { ...extractedData, ...cleanArgs }
+          console.log('[OpenAI] Datos extraidos remesa:', cleanArgs)
           if (args.allDataComplete) {
             flowComplete = true
             readyToCreateOrder = true
@@ -251,6 +324,13 @@ Continua recopilando los datos faltantes.`
 
       // Si hubo tool calls pero no hay respuesta, generar una
       if (!response) {
+        // Crear respuestas para TODOS los tool calls
+        const toolResponses: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = message.tool_calls.map(tc => ({
+          role: 'tool' as const,
+          tool_call_id: tc.id,
+          content: JSON.stringify({ success: true, extracted: extractedData })
+        }))
+
         const followUp = await getOpenAI().chat.completions.create({
           model: 'gpt-4o-mini',
           messages: [
@@ -260,11 +340,7 @@ Continua recopilando los datos faltantes.`
               content: null,
               tool_calls: message.tool_calls
             },
-            {
-              role: 'tool',
-              tool_call_id: message.tool_calls[0].id,
-              content: JSON.stringify({ success: true, extracted: extractedData })
-            }
+            ...toolResponses
           ],
           temperature: 0.7,
           max_tokens: 500
@@ -278,7 +354,10 @@ Continua recopilando los datos faltantes.`
       intent,
       extractedData: Object.keys(extractedData).length > 0 ? extractedData : undefined,
       flowComplete,
-      readyToCreateOrder
+      readyToCreateOrder,
+      searchSender,
+      searchRecipient,
+      requestSummary
     }
   } catch (error) {
     console.error('[OpenAI] Error processing message:', error)
