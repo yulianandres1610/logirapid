@@ -29,46 +29,73 @@ const REMITTANCE_FEE_PERCENTAGE = 5
 // Campos requeridos para cada tipo de orden
 const PICKUP_REQUIRED_FIELDS = [
   'senderName',
+  'senderIdType',        // Tipo de ID (Pasaporte, Licencia, etc.)
+  'senderIdNumber',      // Numero de ID
   'senderAddress',
+  'senderEntryPin',      // PIN de entrada (puede ser "NO")
   'recipientName',
+  'recipientPhone',
+  'recipientCI',         // Carnet de Identidad Cuba (11 digitos)
   'recipientProvince',
   'recipientMunicipality',
-  'recipientAddress'
+  'recipientStreet'      // Calle y numero en Cuba
 ]
 
 const REMITTANCE_REQUIRED_FIELDS = [
   'amount',
   'senderName',
   'recipientName',
+  'recipientPhone',
   'province',
   'municipality',
   'address'
 ]
 
 /**
+ * Valida el formato del Carnet de Identidad de Cuba
+ * Debe tener exactamente 11 digitos
+ */
+function validateCubanCI(ci: string): boolean {
+  if (!ci) return false
+  const cleanCI = ci.replace(/\D/g, '')
+  return cleanCI.length === 11
+}
+
+/**
  * Valida si los datos de recogida estan completos
  */
-function validatePickupData(data: Record<string, unknown>): { valid: boolean; missing: string[] } {
+function validatePickupData(data: Record<string, unknown>): { valid: boolean; missing: string[]; errors: string[] } {
   const missing: string[] = []
+  const errors: string[] = []
+
   for (const field of PICKUP_REQUIRED_FIELDS) {
     if (!data[field] || (typeof data[field] === 'string' && data[field].toString().trim() === '')) {
       missing.push(field)
     }
   }
-  return { valid: missing.length === 0, missing }
+
+  // Validar CI de Cuba si esta presente
+  if (data.recipientCI && !validateCubanCI(String(data.recipientCI))) {
+    errors.push('El Carnet de Identidad debe tener 11 digitos')
+  }
+
+  return { valid: missing.length === 0 && errors.length === 0, missing, errors }
 }
 
 /**
  * Valida si los datos de remesa estan completos
  */
-function validateRemittanceData(data: Record<string, unknown>): { valid: boolean; missing: string[] } {
+function validateRemittanceData(data: Record<string, unknown>): { valid: boolean; missing: string[]; errors: string[] } {
   const missing: string[] = []
+  const errors: string[] = []
+
   for (const field of REMITTANCE_REQUIRED_FIELDS) {
     if (!data[field] || (typeof data[field] === 'string' && data[field].toString().trim() === '')) {
       missing.push(field)
     }
   }
-  return { valid: missing.length === 0, missing }
+
+  return { valid: missing.length === 0 && errors.length === 0, missing, errors }
 }
 
 /**
@@ -360,18 +387,27 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
     const orderNumber = await generateOrderNumber('PICKUP')
     console.log('[WhatsApp Agent] Order Number:', orderNumber)
 
-    // 3. Preparar datos del destinatario en Cuba
+    // 3. Preparar datos completos de la orden
     const officeOrderData = {
+      // Datos del remitente (USA)
       senderName: data.senderName,
       senderPhone: data.senderPhone || phoneNumber,
+      senderIdType: data.senderIdType || '',
+      senderIdNumber: data.senderIdNumber || '',
       senderAddress: data.senderAddress,
+      senderEntryPin: data.senderEntryPin || 'NO',
       senderEntryInstructions: data.senderInstructions || null,
+      // Datos del destinatario (Cuba)
       receiverName: data.recipientName,
       receiverPhone: data.recipientPhone,
+      receiverCI: data.recipientCI || '',
       destination: {
         provinceName: data.recipientProvince,
         municipalityName: data.recipientMunicipality,
-        fullAddress: data.recipientAddress,
+        street: data.recipientStreet,
+        reparto: data.recipientReparto || '',
+        deliveryInstructions: data.recipientInstructions || '',
+        fullAddress: `${data.recipientStreet || ''}, ${data.recipientReparto || ''}, ${data.recipientMunicipality}, ${data.recipientProvince}`,
         country: 'Cuba'
       }
     }
@@ -432,7 +468,7 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
       'FL', // Default state
       '33186', // Default ZIP
       JSON.stringify(services),
-      `Destinatario Cuba: ${data.recipientName} - ${data.recipientProvince}, ${data.recipientMunicipality}`,
+      `ID: ${data.senderIdType} ${data.senderIdNumber} | PIN: ${data.senderEntryPin || 'NO'} | Cuba: ${data.recipientName} (CI: ${data.recipientCI}) - ${data.recipientStreet}, ${data.recipientMunicipality}, ${data.recipientProvince} | Tel: ${data.recipientPhone}`,
       JSON.stringify(officeOrderData)
     ])
 

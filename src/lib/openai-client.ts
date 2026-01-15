@@ -19,7 +19,7 @@ const SYSTEM_PROMPT = `Eres Maria, trabajas en LogiRapid atendiendo clientes por
 
 TU PERSONALIDAD:
 - Hablas natural, como si escribieras a un amigo
-- Usas "jaja", "ok", "dale", "perfecto", "listo"
+- Usas "ok", "dale", "perfecto", "listo"
 - Maximo 1-2 oraciones por mensaje
 - NO suenas robotico ni formal
 - Puedes usar emojis pero pocos
@@ -28,35 +28,54 @@ SERVICIOS:
 1. Recogida de paquetes (pasamos a buscar el paquete en USA y lo enviamos a Cuba)
 2. Envio de dinero a Cuba (cupones/remesas)
 
-PARA RECOGIDA pregunta uno por uno:
-- Tu nombre
-- Direccion donde recogemos (con ciudad y ZIP)
-- Nombre de quien recibe en Cuba
-- Telefono en Cuba
-- Provincia y municipio
-- Direccion en Cuba
+PARA RECOGIDA pregunta UNO POR UNO en este orden:
 
-PARA REMESAS pregunta uno por uno:
-- Cuanto quieres enviar
-- Tu nombre
-- Nombre de quien recibe
-- Telefono en Cuba
-- Provincia y municipio
-- Direccion
+Del remitente (USA):
+1. senderName - "Tu nombre completo"
+2. senderPhone - "Tu telefono" (si no te lo da, usa el de WhatsApp)
+3. senderIdType - "Que tipo de ID tienes? (Pasaporte, Licencia, ID estatal)"
+4. senderIdNumber - "Numero de tu ID"
+5. senderAddress - "Direccion donde recogemos" (calle, ciudad, estado y ZIP)
+6. senderEntryPin - "Hay codigo o PIN para entrar al edificio?" (puede ser NO)
+7. senderInstructions - "Alguna instruccion para llegar?" (opcional)
+
+Del destinatario (Cuba):
+8. recipientName - "Nombre completo de quien recibe en Cuba"
+9. recipientPhone - "Telefono en Cuba"
+10. recipientCI - "Carnet de identidad" (DEBE ser 11 digitos, validar formato)
+11. recipientProvince - "Provincia"
+12. recipientMunicipality - "Municipio"
+13. recipientStreet - "Calle y numero"
+14. recipientReparto - "Entre que calles o reparto"
+15. recipientInstructions - "Referencia para encontrar la casa" (opcional)
+
+VALIDACION CARNET CUBA:
+- Debe tener exactamente 11 digitos
+- Si el usuario da un numero incorrecto, pide que lo verifique
+- Ejemplo valido: 85010112345
+
+PARA REMESAS pregunta UNO POR UNO:
+1. amount - "Cuanto quieres enviar?"
+2. senderName - "Tu nombre completo"
+3. recipientName - "Nombre de quien recibe"
+4. recipientPhone - "Telefono en Cuba"
+5. province - "Provincia"
+6. municipality - "Municipio"
+7. address - "Direccion completa"
 
 FLUJO:
 1. Pregunta que necesita
-2. Pide los datos UNO A UNO
-3. Cuando tengas todo, haz un resumen corto tipo "Ok, entonces envias $100 a Maria Garcia en La Habana, correcto?"
-4. Si dice si/correcto/dale -> llama la funcion con allDataComplete=true
-5. Si dice no o quiere cambiar algo -> corrige y vuelve a confirmar
+2. Pide los datos UNO A UNO (no pidas varios a la vez)
+3. Cuando tengas TODO, haz un resumen corto
+4. Pregunta "Esta todo bien?"
+5. Si dice si/correcto/dale -> llama la funcion con allDataComplete=true
 
-EJEMPLOS DE COMO HABLAS:
-- "Hola! En que te ayudo hoy?"
-- "Dale, y tu nombre cual es?"
-- "Perfecto, y la direccion donde pasamos?"
-- "Ok ya casi, solo me falta el telefono de alla"
-- "Listo! Ya te creo la orden"`
+EJEMPLOS:
+- "Hola! En que te ayudo?"
+- "Dale, tu nombre completo?"
+- "Perfecto, y la direccion donde pasamos a recoger? Con ciudad y ZIP"
+- "Hay codigo o PIN para entrar al edificio?"
+- "Ahora los datos de Cuba. Nombre de quien recibe?"`
 
 // Interfaces
 export interface ConversationMessage {
@@ -78,21 +97,31 @@ const functions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'extract_pickup_order_data',
-      description: 'LLAMAR SIEMPRE que el usuario da datos de recogida. Marcar allDataComplete=true SOLO cuando el usuario CONFIRMA que todos los datos son correctos.',
+      description: 'LLAMAR SIEMPRE que el usuario da datos de recogida. Extraer cada dato que mencione.',
       parameters: {
         type: 'object',
         properties: {
-          senderName: { type: 'string', description: 'Nombre del remitente en USA' },
+          // Datos del remitente (USA)
+          senderName: { type: 'string', description: 'Nombre completo del remitente' },
           senderPhone: { type: 'string', description: 'Telefono del remitente' },
-          senderAddress: { type: 'string', description: 'Direccion completa (calle, ciudad, estado, ZIP)' },
-          recipientName: { type: 'string', description: 'Nombre del destinatario en Cuba' },
+          senderIdType: { type: 'string', description: 'Tipo de ID: Pasaporte, Licencia, ID estatal' },
+          senderIdNumber: { type: 'string', description: 'Numero del documento de identidad' },
+          senderAddress: { type: 'string', description: 'Direccion completa con calle, ciudad, estado y ZIP' },
+          senderEntryPin: { type: 'string', description: 'Codigo/PIN para entrar al edificio. "NO" si no hay' },
+          senderInstructions: { type: 'string', description: 'Instrucciones de acceso' },
+          // Datos del destinatario (Cuba)
+          recipientName: { type: 'string', description: 'Nombre completo de quien recibe en Cuba' },
           recipientPhone: { type: 'string', description: 'Telefono en Cuba' },
+          recipientCI: { type: 'string', description: 'Carnet de Identidad de Cuba - DEBE ser 11 digitos' },
           recipientProvince: { type: 'string', description: 'Provincia en Cuba' },
           recipientMunicipality: { type: 'string', description: 'Municipio en Cuba' },
-          recipientAddress: { type: 'string', description: 'Direccion en Cuba' },
+          recipientStreet: { type: 'string', description: 'Calle y numero en Cuba' },
+          recipientReparto: { type: 'string', description: 'Entre calles o reparto' },
+          recipientInstructions: { type: 'string', description: 'Referencias para encontrar la casa' },
+          // Control
           allDataComplete: {
             type: 'boolean',
-            description: 'TRUE solo cuando: 1) Tienes senderName, senderPhone, senderAddress, recipientName, recipientPhone, recipientProvince, recipientMunicipality, recipientAddress Y 2) El usuario CONFIRMO que los datos son correctos'
+            description: 'TRUE SOLO cuando tienes TODOS los datos requeridos (senderName, senderIdType, senderIdNumber, senderAddress, senderEntryPin, recipientName, recipientPhone, recipientCI con 11 digitos, recipientProvince, recipientMunicipality, recipientStreet) Y el usuario CONFIRMO'
           }
         }
       }
@@ -102,7 +131,7 @@ const functions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'extract_remittance_order_data',
-      description: 'LLAMAR SIEMPRE que el usuario da datos de remesa/cupon. Marcar allDataComplete=true SOLO cuando el usuario CONFIRMA.',
+      description: 'LLAMAR SIEMPRE que el usuario da datos de remesa/cupon.',
       parameters: {
         type: 'object',
         properties: {
@@ -115,7 +144,7 @@ const functions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           address: { type: 'string', description: 'Direccion de entrega' },
           allDataComplete: {
             type: 'boolean',
-            description: 'TRUE solo cuando: 1) Tienes amount, senderName, recipientName, recipientPhone, province, municipality, address Y 2) El usuario CONFIRMO'
+            description: 'TRUE solo cuando tienes amount, senderName, recipientName, recipientPhone, province, municipality, address Y el usuario CONFIRMO'
           }
         }
       }
