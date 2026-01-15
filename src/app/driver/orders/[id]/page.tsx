@@ -99,8 +99,16 @@ export default function OrderDetailPage() {
     setIsLoading(true)
     setError('')
     try {
-      const response = await fetch(`/api/driver-app/orders/${orderId}`)
+      const response = await fetch(`/api/driver-app/orders/${orderId}`, {
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }
+      })
       const data = await response.json()
+
+      if (response.status === 401) {
+        window.location.href = '/driver/login'
+        return
+      }
 
       if (data.success) {
         setOrder(data.data)
@@ -170,10 +178,16 @@ export default function OrderDetailPage() {
     try {
       const response = await fetch(`/api/driver-app/orders/${orderId}/send-receipt`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ method, phone, email })
       })
       const data = await response.json()
+
+      if (response.status === 401) {
+        window.location.href = '/driver/login'
+        return
+      }
 
       if (data.success) {
         setShowReceiptOptions(false)

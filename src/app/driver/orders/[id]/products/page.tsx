@@ -64,8 +64,16 @@ export default function AddProductsPage() {
   const fetchProducts = async () => {
     setIsLoading(true)
     try {
-      const response = await fetch('/api/products?category=paqueteria&active=true')
+      const response = await fetch('/api/products?category=paqueteria&active=true', {
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }
+      })
       const data = await response.json()
+
+      if (response.status === 401) {
+        window.location.href = '/driver/login'
+        return
+      }
 
       if (data.success) {
         setProducts(data.data.products || [])
@@ -83,8 +91,16 @@ export default function AddProductsPage() {
   // Fetch existing products from order
   const fetchOrderProducts = async () => {
     try {
-      const response = await fetch(`/api/driver-app/orders/${orderId}/products`)
+      const response = await fetch(`/api/driver-app/orders/${orderId}/products`, {
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }
+      })
       const data = await response.json()
+
+      if (response.status === 401) {
+        window.location.href = '/driver/login'
+        return
+      }
 
       if (data.success && data.data.products) {
         setCart(data.data.products)
@@ -185,6 +201,7 @@ export default function AddProductsPage() {
     try {
       const response = await fetch(`/api/driver-app/orders/${orderId}/products`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           shippingType,
@@ -195,6 +212,11 @@ export default function AddProductsPage() {
       })
 
       const data = await response.json()
+
+      if (response.status === 401) {
+        window.location.href = '/driver/login'
+        return
+      }
 
       if (data.success) {
         router.back()

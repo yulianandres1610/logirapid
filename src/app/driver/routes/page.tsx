@@ -37,7 +37,12 @@ export default function DriverRoutesPage() {
     setError('')
     try {
       // Fetch all routes (excluding completed by default)
-      const response = await fetch('/api/driver-app/routes')
+      const response = await fetch('/api/driver-app/routes', {
+        credentials: 'include', // Include cookies in the request
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
       const data = await response.json()
 
       console.log('API Response:', data)
@@ -47,6 +52,12 @@ export default function DriverRoutesPage() {
         const routesData = data.data?.routes || data.data || []
         setRoutes(routesData)
       } else {
+        // If unauthorized, redirect to login
+        if (response.status === 401) {
+          console.log('Unauthorized - redirecting to login')
+          window.location.href = '/driver/login'
+          return
+        }
         setError(data.error || 'Error al cargar rutas')
       }
     } catch (err) {

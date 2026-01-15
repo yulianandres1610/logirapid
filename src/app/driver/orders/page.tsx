@@ -47,12 +47,23 @@ export default function DriverOrdersPage() {
     try {
       // Get today's date
       const today = new Date().toISOString().split('T')[0]
-      const response = await fetch(`/api/driver-app/orders?date=${today}`)
+      const response = await fetch(`/api/driver-app/orders?date=${today}`, {
+        credentials: 'include', // Include cookies in the request
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
       const data = await response.json()
 
       if (data.success) {
         setOrders(data.data || [])
       } else {
+        // If unauthorized, redirect to login
+        if (response.status === 401) {
+          console.log('Unauthorized - redirecting to login')
+          window.location.href = '/driver/login'
+          return
+        }
         setError(data.error || 'Error al cargar ordenes')
       }
     } catch (err) {

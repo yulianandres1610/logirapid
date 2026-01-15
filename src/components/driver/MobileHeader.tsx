@@ -29,14 +29,35 @@ export function MobileHeader({ userName, title, showBack, onBack }: MobileHeader
   }
 
   const handleLogout = () => {
-    // Clear cookies
-    document.cookie = 'auth-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
-    document.cookie = 'user-role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
-    document.cookie = 'user-company-id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
-    document.cookie = 'user-company-name=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+    // Determine cookie domain based on environment
+    const isProduction = typeof window !== 'undefined' && window.location.hostname.includes('logirapid.com')
+    const domainPart = isProduction ? 'domain=.logirapid.com;' : ''
+
+    // Clear ALL cookies (with and without domain for safety)
+    const cookieNames = [
+      'auth-token',
+      'user-id',
+      'user-name',
+      'user-email',
+      'user-role',
+      'user-company-id',
+      'user-company-name',
+      'user-company-type'
+    ]
+
+    cookieNames.forEach(name => {
+      // Clear without domain (for development)
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`
+      // Clear with domain (for production)
+      if (domainPart) {
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; ${domainPart}`
+      }
+    })
+
     // Clear localStorage
     localStorage.removeItem('auth-token')
     localStorage.removeItem('user')
+
     // Redirect to login
     router.push('/driver/login')
   }

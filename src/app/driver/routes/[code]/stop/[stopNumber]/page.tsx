@@ -68,8 +68,16 @@ export default function StopDetailPage() {
     setIsLoading(true)
     setError('')
     try {
-      const response = await fetch(`/api/driver-app/routes/${code}/stops`)
+      const response = await fetch(`/api/driver-app/routes/${code}/stops`, {
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }
+      })
       const data = await response.json()
+
+      if (response.status === 401) {
+        window.location.href = '/driver/login'
+        return
+      }
 
       if (data.success) {
         setRouteData(data.data)
@@ -116,9 +124,16 @@ export default function StopDetailPage() {
     setIsCompleting(true)
     try {
       const response = await fetch(`/api/driver-app/routes/${code}/stops/${stopNumber}/complete`, {
-        method: 'POST'
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }
       })
       const data = await response.json()
+
+      if (response.status === 401) {
+        window.location.href = '/driver/login'
+        return
+      }
 
       if (data.success) {
         // Go back to route detail

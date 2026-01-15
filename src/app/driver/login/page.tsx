@@ -85,6 +85,8 @@ export default function DriverLoginPage() {
     setShowLoadingOverlay(true)
 
     try {
+      console.log('[DRIVER LOGIN] Attempting login for:', data.email)
+
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -92,9 +94,13 @@ export default function DriverLoginPage() {
         credentials: 'include',
       })
 
+      console.log('[DRIVER LOGIN] Response status:', response.status)
+
       const result = await response.json()
+      console.log('[DRIVER LOGIN] Response data:', { success: result.success, hasUser: !!result.user, hasToken: !!result.token })
 
       if (!response.ok || !result.success) {
+        console.log('[DRIVER LOGIN] Login failed:', result.error)
         setError(result.error || 'Error al iniciar sesion')
         setShowLoadingOverlay(false)
         setIsLoading(false)
@@ -104,43 +110,34 @@ export default function DriverLoginPage() {
       // Check if user has allowed role
       const allowedRoles = ['DRIVER', 'ADMIN', 'SUPER_ADMIN']
       if (!allowedRoles.includes(result.user?.role)) {
+        console.log('[DRIVER LOGIN] Invalid role:', result.user?.role)
         setError('Este portal es solo para conductores')
         setShowLoadingOverlay(false)
         setIsLoading(false)
         return
       }
 
-      // Store user data
+      console.log('[DRIVER LOGIN] Login successful, role:', result.user?.role)
+
+      // Store user data in localStorage as backup
       localStorage.setItem('user', JSON.stringify(result.user))
-      localStorage.setItem('auth-token', result.token)
+      if (result.token) {
+        localStorage.setItem('auth-token', result.token)
+      }
 
       // Login exitoso, esperar cookies y redirigir
       setIsRedirecting(true)
 
-      // Esperar a que las cookies se propaguen
-      const waitForCookie = () => {
-        const maxAttempts = 60
-        let attempts = 0
-
-        const checkCookie = () => {
-          attempts++
-          const cookies = document.cookie
-          const hasAuthToken = cookies.includes('auth-token=')
-
-          if (hasAuthToken || attempts >= maxAttempts) {
-            router.push('/driver/routes')
-          } else {
-            setTimeout(checkCookie, 50)
-          }
-        }
-
-        checkCookie()
-      }
-
-      waitForCookie()
+      // Give time for cookies to be set, then redirect
+      // The server already set the cookies, so we just need a small delay
+      setTimeout(() => {
+        console.log('[DRIVER LOGIN] Redirecting to /driver/routes')
+        // Use window.location for a hard redirect to ensure cookies are read fresh
+        window.location.href = '/driver/routes'
+      }, 500)
 
     } catch (err) {
-      console.error('Login error:', err)
+      console.error('[DRIVER LOGIN] Error:', err)
       setError('Error de conexion')
       setShowLoadingOverlay(false)
       setIsLoading(false)

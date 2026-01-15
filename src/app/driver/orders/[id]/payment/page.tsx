@@ -54,8 +54,16 @@ export default function PaymentPage() {
   const fetchOrderSummary = async () => {
     setIsLoading(true)
     try {
-      const response = await fetch(`/api/driver-app/orders/${orderId}`)
+      const response = await fetch(`/api/driver-app/orders/${orderId}`, {
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }
+      })
       const data = await response.json()
+
+      if (response.status === 401) {
+        window.location.href = '/driver/login'
+        return
+      }
 
       if (data.success) {
         const order = data.data
@@ -126,6 +134,7 @@ export default function PaymentPage() {
 
       const response = await fetch(`/api/driver-app/orders/${orderId}/confirm-payment`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(paymentData)
       })
@@ -156,6 +165,7 @@ export default function PaymentPage() {
       // Create terminal checkout
       const response = await fetch('/api/square/create-terminal-checkout', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderId,
@@ -189,6 +199,7 @@ export default function PaymentPage() {
     try {
       await fetch(`/api/driver-app/orders/${orderId}/send-receipt`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           method,
