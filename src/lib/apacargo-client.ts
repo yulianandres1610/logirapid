@@ -188,6 +188,17 @@ export interface ApaCargoUSAState {
   abbreviation: string
 }
 
+// Interface para productos de envio disponibles en ApaCargo (Integration API)
+export interface ApaCargoIntegrationShippingProduct {
+  id: number
+  name: string
+  description?: string
+  code?: string
+  price?: number
+  weight?: number
+  dimensions?: string
+}
+
 /**
  * Clase cliente para la API de ApaCargo
  */
@@ -464,6 +475,14 @@ class ApaCargoClient {
    */
   async getShippingProducts(): Promise<Array<{ id: number; name: string; description?: string }>> {
     return this.authenticatedRequest('/shippingproducts')
+  }
+
+  /**
+   * Obtiene los productos de envío disponibles para integración
+   * Endpoint: GET /integration/shippingproducts
+   */
+  async getIntegrationShippingProducts(): Promise<ApaCargoIntegrationShippingProduct[]> {
+    return this.authenticatedRequest<ApaCargoIntegrationShippingProduct[]>('/integration/shippingproducts')
   }
 
   /**

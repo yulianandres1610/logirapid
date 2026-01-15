@@ -35,9 +35,11 @@ import {
   Sparkles,
   Grid3X3,
   List,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Truck
 } from 'lucide-react'
 import { RechargeProductManager } from '@/components/admin/RechargeProductManager'
+import { ApaCargoProductManager } from '@/components/admin/ApaCargoProductManager'
 
 // Interfaces
 interface Product {
@@ -107,6 +109,7 @@ const getCountryFlag = (countryCode: string): string => {
 
 const CATEGORIES = [
   { id: 'paqueteria', name: 'Paqueteria', icon: Box, color: 'blue', gradient: 'from-blue-500 to-blue-600' },
+  { id: 'paqueteria-apacargo', name: 'Paqueteria ApaCargo', icon: Truck, color: 'cyan', gradient: 'from-cyan-500 to-cyan-600' },
   { id: 'remesa', name: 'Remesa', icon: Banknote, color: 'emerald', gradient: 'from-emerald-500 to-emerald-600' },
   { id: 'recarga', name: 'Recarga', icon: Smartphone, color: 'purple', gradient: 'from-purple-500 to-purple-600' },
   { id: 'mercado', name: 'Mercado', icon: ShoppingBag, color: 'orange', gradient: 'from-orange-500 to-orange-600' }
@@ -742,7 +745,7 @@ export default function ProductConfigPage() {
                     )
                   })}
                 </div>
-                {categoryFilter !== 'recarga' && (
+                {categoryFilter !== 'recarga' && categoryFilter !== 'paqueteria-apacargo' && (
                   <button
                     onClick={() => setShowCreateModal(true)}
                     className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl flex items-center gap-2 shadow-lg shadow-blue-500/25 transition-all hover:shadow-blue-500/40 whitespace-nowrap"
@@ -763,6 +766,8 @@ export default function ProductConfigPage() {
                     setRechargeRefreshKey(prev => prev + 1)
                   }}
                 />
+              ) : categoryFilter === 'paqueteria-apacargo' ? (
+                <ApaCargoProductManager hideHeader />
               ) : loading ? (
                 <div className="flex items-center justify-center py-20">
                   <div className="text-center">
