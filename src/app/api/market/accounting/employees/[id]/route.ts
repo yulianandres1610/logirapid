@@ -60,6 +60,7 @@ export async function GET(
         e.currency,
         e.pos_badge_code,
         e.commission_rate,
+        e.warehouse_id,
         e.created_at,
         e.updated_at,
         u.email,
@@ -67,9 +68,11 @@ export async function GET(
         u.lastname,
         u.phone,
         u.role,
+        w.name as warehouse_name,
         CASE WHEN e.pos_pin IS NOT NULL THEN true ELSE false END as has_pin
       FROM market_employees e
       JOIN users u ON e.user_id = u.id
+      LEFT JOIN market_warehouses w ON e.warehouse_id = w.id
       WHERE e.id = $1 AND e.company_id = $2
     `, [employeeId, companyId])
 
@@ -145,6 +148,8 @@ export async function GET(
         hasPIN: employee.has_pin,
         badgeCode: employee.pos_badge_code,
         commissionRate: parseFloat(employee.commission_rate) || 0,
+        warehouseId: employee.warehouse_id,
+        warehouseName: employee.warehouse_name,
         createdAt: employee.created_at,
         updatedAt: employee.updated_at,
         terminals: terminalsResult.rows.map(t => ({
@@ -235,6 +240,7 @@ export async function PUT(
       lastName,
       phone,
       role,
+      password, // New password (optional, if changing)
       status,
       terminationDate,
       payType,
@@ -243,6 +249,7 @@ export async function PUT(
       commissionRate,
       posPin, // New PIN (if changing)
       badgeCode,
+      warehouseId, // Warehouse assignment for MARKET_ALMACENERO
       terminals // Updated terminal associations
     } = body
 
@@ -250,7 +257,7 @@ export async function PUT(
 
     try {
       // Update user info
-      if (firstName !== undefined || lastName !== undefined || phone !== undefined || role !== undefined) {
+      if (firstName !== undefined || lastName !== undefined || phone !== undefined || role !== undefined || password) {
         const validRoles = ['MARKET_MANAGER', 'MARKET_COMERCIAL', 'MARKET_ALMACENERO', 'MARKET_VENDEDOR']
         if (role && !validRoles.includes(role)) {
           await db.query('ROLLBACK')
@@ -260,14 +267,38 @@ export async function PUT(
           }, { status: 400 })
         }
 
-        await db.query(`
-          UPDATE users SET
-            firstname = COALESCE($1, firstname),
-            lastname = COALESCE($2, lastname),
-            phone = COALESCE($3, phone),
-            role = COALESCE($4, role)
-          WHERE id = $5
-        `, [firstName, lastName, phone, role, userId])
+        // Validate password if provided
+        if (password && password.length < 6) {
+          await db.query('ROLLBACK')
+          return NextResponse.json({
+            success: false,
+            error: 'La contraseña debe tener al menos 6 caracteres'
+          }, { status: 400 })
+        }
+
+        // Hash password if provided
+        const hashedPassword = password ? await bcrypt.hash(password, 10) : null
+
+        if (hashedPassword) {
+          await db.query(`
+            UPDATE users SET
+              firstname = COALESCE($1, firstname),
+              lastname = COALESCE($2, lastname),
+              phone = COALESCE($3, phone),
+              role = COALESCE($4, role),
+              password = $6
+            WHERE id = $5
+          `, [firstName, lastName, phone, role, userId, hashedPassword])
+        } else {
+          await db.query(`
+            UPDATE users SET
+              firstname = COALESCE($1, firstname),
+              lastname = COALESCE($2, lastname),
+              phone = COALESCE($3, phone),
+              role = COALESCE($4, role)
+            WHERE id = $5
+          `, [firstName, lastName, phone, role, userId])
+        }
       }
 
       // Prepare employee update
@@ -302,6 +333,10 @@ export async function PUT(
       if (badgeCode !== undefined) {
         updates.push(`pos_badge_code = $${paramIndex++}`)
         values.push(badgeCode || null)
+      }
+      if (warehouseId !== undefined) {
+        updates.push(`warehouse_id = $${paramIndex++}`)
+        values.push(warehouseId || null)
       }
       if (posPin !== undefined) {
         if (posPin === null || posPin === '') {

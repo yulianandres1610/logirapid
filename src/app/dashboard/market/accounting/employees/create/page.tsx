@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   User,
@@ -73,6 +73,7 @@ const PAY_TYPES = [
 
 export default function CreateEmployeePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { theme } = useTheme()
   const [currentStep, setCurrentStep] = useState<string>('personal')
   const [terminals, setTerminals] = useState<Terminal[]>([])
@@ -82,6 +83,11 @@ export default function CreateEmployeePage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [showCancelModal, setShowCancelModal] = useState(false)
+  const [loadingEmployee, setLoadingEmployee] = useState(false)
+
+  // Detectar modo edición
+  const editId = searchParams.get('edit')
+  const isEditMode = !!editId
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
 
@@ -114,6 +120,71 @@ export default function CreateEmployeePage() {
     fetchTerminals()
     fetchWarehouses()
   }, [])
+
+  // Cargar datos del empleado si estamos en modo edición
+  useEffect(() => {
+    const fetchEmployeeData = async () => {
+      if (!editId) return
+
+      setLoadingEmployee(true)
+      try {
+        const response = await fetch(`/api/market/accounting/employees/${editId}`)
+        if (response.ok) {
+          const result = await response.json()
+          if (result.success && result.data) {
+            const emp = result.data
+            // Cargar datos en el formulario
+            setFormData({
+              email: emp.email || '',
+              password: '', // No cargamos la contraseña por seguridad
+              firstName: emp.firstName || '',
+              lastName: emp.lastName || '',
+              phone: emp.phone || '',
+              role: emp.role || '',
+              payType: emp.payType || '',
+              payRate: emp.payRate?.toString() || '',
+              currency: emp.currency || 'USD',
+              hireDate: emp.hireDate ? new Date(emp.hireDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+              commissionRate: emp.commissionRate?.toString() || '',
+              warehouseId: emp.warehouseId?.toString() || '',
+              posPin: '', // No cargamos el PIN por seguridad
+              badgeCode: emp.badgeCode || ''
+            })
+
+            // Cargar permisos de terminales si existen
+            if (emp.terminals && emp.terminals.length > 0) {
+              setTerminalPermissions(emp.terminals.map((t: {
+                terminalId: number
+                terminalName: string
+                canOpenSession: boolean
+                canCloseSession: boolean
+                canVoidOrders: boolean
+                canGiveDiscount: boolean
+                canRefund: boolean
+                maxDiscountPercent: number
+              }) => ({
+                terminalId: t.terminalId,
+                terminalName: t.terminalName,
+                canOpenSession: t.canOpenSession,
+                canCloseSession: t.canCloseSession,
+                canVoidOrders: t.canVoidOrders,
+                canGiveDiscount: t.canGiveDiscount,
+                canRefund: t.canRefund,
+                maxDiscountPercent: t.maxDiscountPercent || 0
+              })))
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching employee:', error)
+        setError('Error al cargar datos del empleado')
+      } finally {
+        setLoadingEmployee(false)
+      }
+    }
+
+    fetchEmployeeData()
+  }, [editId])
 
   const fetchTerminals = async () => {
     try {
@@ -180,7 +251,12 @@ export default function CreateEmployeePage() {
 
     switch (step) {
       case 'personal':
-        if (!formData.email || !formData.password) {
+        if (!formData.email) {
+          setError('Email es requerido')
+          return false
+        }
+        // En modo edición, la contraseña es opcional
+        if (!isEditMode && !formData.password) {
           setError('Email y contraseña son requeridos')
           return false
         }
@@ -188,7 +264,8 @@ export default function CreateEmployeePage() {
           setError('Email inválido')
           return false
         }
-        if (formData.password.length < 6) {
+        // Solo validar contraseña si se proporciona o si es modo creación
+        if (formData.password && formData.password.length < 6) {
           setError('La contraseña debe tener al menos 6 caracteres')
           return false
         }
@@ -242,39 +319,50 @@ export default function CreateEmployeePage() {
     setError('')
   }
 
-  const createEmployee = async () => {
+  const saveEmployee = async () => {
     setSaving(true)
     setError('')
 
     try {
-      const response = await fetch('/api/market/accounting/employees', {
-        method: 'POST',
+      // Preparar datos para enviar
+      const employeeData: Record<string, unknown> = {
+        email: formData.email,
+        firstName: formData.firstName || null,
+        lastName: formData.lastName || null,
+        phone: formData.phone || null,
+        role: formData.role,
+        payType: formData.payType,
+        payRate: parseFloat(formData.payRate),
+        currency: formData.currency,
+        hireDate: formData.hireDate,
+        commissionRate: formData.commissionRate ? parseFloat(formData.commissionRate) : 0,
+        posPin: formData.posPin || null,
+        badgeCode: formData.badgeCode || null,
+        warehouseId: formData.warehouseId ? parseInt(formData.warehouseId) : null,
+        terminals: terminalPermissions.map(p => ({
+          terminalId: p.terminalId,
+          canOpenSession: p.canOpenSession,
+          canCloseSession: p.canCloseSession,
+          canVoidOrders: p.canVoidOrders,
+          canGiveDiscount: p.canGiveDiscount,
+          canRefund: p.canRefund,
+          maxDiscountPercent: p.maxDiscountPercent
+        }))
+      }
+
+      // Solo incluir contraseña si se proporciona
+      if (formData.password) {
+        employeeData.password = formData.password
+      }
+
+      const url = isEditMode
+        ? `/api/market/accounting/employees/${editId}`
+        : '/api/market/accounting/employees'
+
+      const response = await fetch(url, {
+        method: isEditMode ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          firstName: formData.firstName || null,
-          lastName: formData.lastName || null,
-          phone: formData.phone || null,
-          role: formData.role,
-          payType: formData.payType,
-          payRate: parseFloat(formData.payRate),
-          currency: formData.currency,
-          hireDate: formData.hireDate,
-          commissionRate: formData.commissionRate ? parseFloat(formData.commissionRate) : 0,
-          posPin: formData.posPin || null,
-          badgeCode: formData.badgeCode || null,
-          warehouseId: formData.warehouseId ? parseInt(formData.warehouseId) : null,
-          terminals: terminalPermissions.map(p => ({
-            terminalId: p.terminalId,
-            canOpenSession: p.canOpenSession,
-            canCloseSession: p.canCloseSession,
-            canVoidOrders: p.canVoidOrders,
-            canGiveDiscount: p.canGiveDiscount,
-            canRefund: p.canRefund,
-            maxDiscountPercent: p.maxDiscountPercent
-          }))
-        })
+        body: JSON.stringify(employeeData)
       })
 
       const result = await response.json()
@@ -282,10 +370,10 @@ export default function CreateEmployeePage() {
       if (result.success) {
         router.push('/dashboard/market/accounting/employees')
       } else {
-        setError(result.error || 'Error al crear empleado')
+        setError(result.error || (isEditMode ? 'Error al actualizar empleado' : 'Error al crear empleado'))
       }
     } catch (error) {
-      console.error('Error creating employee:', error)
+      console.error('Error saving employee:', error)
       setError('Error de conexión')
     } finally {
       setSaving(false)
@@ -331,13 +419,13 @@ export default function CreateEmployeePage() {
             "text-2xl sm:text-3xl lg:text-4xl font-bold mb-2",
             theme === 'dark' ? 'text-white' : 'text-gray-900'
           )}>
-            Nuevo Empleado
+            {isEditMode ? 'Editar Empleado' : 'Nuevo Empleado'}
           </h1>
           <p className={cn(
             "text-sm sm:text-base",
             theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
           )}>
-            Complete los datos del nuevo empleado
+            {isEditMode ? 'Modifique los datos del empleado' : 'Complete los datos del nuevo empleado'}
           </p>
         </div>
 
@@ -440,7 +528,23 @@ export default function CreateEmployeePage() {
             )}
           </AnimatePresence>
 
+          {/* Loading Employee Data */}
+          {loadingEmployee && (
+            <div className="flex items-center justify-center py-20">
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="w-10 h-10 animate-spin text-purple-600" />
+                <p className={cn(
+                  "text-sm",
+                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                )}>
+                  Cargando datos del empleado...
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Step Content */}
+          {!loadingEmployee && (
           <div className={cn(
             "rounded-2xl shadow-lg p-6",
             theme === 'dark' ? 'bg-gray-800' : 'bg-white'
@@ -477,14 +581,14 @@ export default function CreateEmployeePage() {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         <Lock className="w-4 h-4 inline mr-2" />
-                        Contraseña *
+                        Contraseña {isEditMode ? '(dejar vacío para mantener)' : '*'}
                       </label>
                       <div className="relative">
                         <input
                           type={showPassword ? 'text' : 'password'}
                           value={formData.password}
                           onChange={(e) => updateFormData('password', e.target.value)}
-                          placeholder="Mínimo 6 caracteres"
+                          placeholder={isEditMode ? 'Nueva contraseña (opcional)' : 'Mínimo 6 caracteres'}
                           className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 pr-12"
                         />
                         <button
@@ -1018,7 +1122,7 @@ export default function CreateEmployeePage() {
                 </motion.button>
               ) : (
                 <motion.button
-                  onClick={createEmployee}
+                  onClick={saveEmployee}
                   disabled={saving}
                   className="flex items-center gap-2 px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
                   whileHover={!saving ? { scale: 1.02 } : {}}
@@ -1027,18 +1131,19 @@ export default function CreateEmployeePage() {
                   {saving ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
-                      Creando...
+                      {isEditMode ? 'Guardando...' : 'Creando...'}
                     </>
                   ) : (
                     <>
                       <CheckCircle className="w-5 h-5" />
-                      Crear Empleado
+                      {isEditMode ? 'Guardar Cambios' : 'Crear Empleado'}
                     </>
                   )}
                 </motion.button>
               )}
             </div>
           </div>
+          )}
         </div>
 
       {/* Cancel Confirmation Modal */}
@@ -1065,13 +1170,13 @@ export default function CreateEmployeePage() {
                 "text-lg font-bold mb-2",
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               )}>
-                ¿Cancelar creación?
+                {isEditMode ? '¿Cancelar edición?' : '¿Cancelar creación?'}
               </h3>
               <p className={cn(
                 "mb-6",
                 theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
               )}>
-                Perderás todos los datos ingresados. ¿Estás seguro?
+                {isEditMode ? 'Perderás los cambios realizados. ¿Estás seguro?' : 'Perderás todos los datos ingresados. ¿Estás seguro?'}
               </p>
               <div className="flex gap-3">
                 <button

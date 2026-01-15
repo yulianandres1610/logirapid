@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || ''
     const status = searchParams.get('status')
     const productId = searchParams.get('productId')
+    const warehouseId = searchParams.get('warehouseId') // Filtro para MARKET_ALMACENERO
 
     let query: string
     const queryParams: (string | number)[] = [companyId]
@@ -82,6 +83,13 @@ export async function GET(request: NextRequest) {
     if (status && status !== 'all' && !productId) {
       const isActive = status === 'active'
       query += ` AND mw.is_active = ${isActive}`
+    }
+
+    // Filtro por warehouseId (para MARKET_ALMACENERO)
+    if (warehouseId) {
+      query += ` AND mw.id = $${paramIndex}`
+      queryParams.push(parseInt(warehouseId))
+      paramIndex++
     }
 
     query += ` ORDER BY mw.is_central DESC, mw.name ASC`
