@@ -379,7 +379,7 @@ async function createPaymentLink(
     expiresAt
   ])
 
-  const baseUrl = process.env.NEXT_PUBLIC_PAY_URL || 'https://pay.logirapid.com'
+  const baseUrl = process.env.NEXT_PUBLIC_PAY_URL || 'https://pagos.logirapid.com'
   return `${baseUrl}/${linkCode}`
 }
 

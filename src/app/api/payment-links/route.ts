@@ -162,7 +162,7 @@ export async function POST(request: NextRequest) {
     const paymentLink = result.rows[0]
 
     // Construir URL
-    const baseUrl = process.env.NEXT_PUBLIC_PAY_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://pay.logirapid.com'
+    const baseUrl = process.env.NEXT_PUBLIC_PAY_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://pagos.logirapid.com'
     const paymentUrl = `${baseUrl}/pay/${linkCode}`
 
     return NextResponse.json({
