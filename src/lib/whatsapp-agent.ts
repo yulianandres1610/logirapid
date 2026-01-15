@@ -1,6 +1,7 @@
 import { db } from '@/lib/database'
 import { processMessage, generateGreeting, getErrorMessage, ConversationMessage, GPTResponse } from '@/lib/openai-client'
 import { sendWhatsApp } from '@/lib/sms-service'
+import { validateProvince, validateMunicipality, validateCubaAddress, findClosestMatch, CUBA_PROVINCES } from '@/lib/cuba-locations'
 
 // Interfaces
 export interface Conversation {
@@ -108,6 +109,213 @@ function formatAvailableDatesMessage(dates: { date: string; dayName: string; slo
   })
 
   msg += 'Dime cual prefieres (ej: "manana en la tarde" o "1-2")'
+
+  return msg
+}
+
+/**
+ * Geocodifica una dirección USA usando el API de address-lookup
+ */
+async function geocodeUSAddress(address: string): Promise<{
+  formattedAddress: string
+  street: string
+  city: string
+  state: string
+  zipcode: string
+  latitude: number
+  longitude: number
+} | null> {
+  try {
+    // Construir URL base del servidor
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+    const response = await fetch(`${baseUrl}/api/address-lookup?q=${encodeURIComponent(address)}`)
+
+    if (!response.ok) {
+      console.log('[WhatsApp Agent] Geocode API error:', response.status)
+      return null
+    }
+
+    const result = await response.json()
+
+    if (result.success && result.suggestions && result.suggestions.length > 0) {
+      const best = result.suggestions[0]
+      return {
+        formattedAddress: `${best.address.street}, ${best.address.city}, ${best.address.state} ${best.address.postalCode}`,
+        street: best.address.street,
+        city: best.address.city,
+        state: best.address.state,
+        zipcode: best.address.postalCode,
+        latitude: best.coordinates[1],
+        longitude: best.coordinates[0]
+      }
+    }
+
+    console.log('[WhatsApp Agent] No geocode results for:', address)
+    return null
+  } catch (error) {
+    console.error('[WhatsApp Agent] Geocode error:', error)
+    return null
+  }
+}
+
+/**
+ * Parsea una expresión de fecha del usuario (hoy, mañana, lunes, etc)
+ * y devuelve la fecha correspondiente con slots disponibles
+ */
+function parseUserDateExpression(dateExpression: string, preferredSlot?: string): {
+  success: boolean
+  date?: string
+  dayName?: string
+  slots?: string[]
+  selectedSlot?: string
+  error?: string
+  suggestion?: { date: string; dayName: string; slot: string }
+} {
+  const availableDates = getAvailableDates()
+  const lower = dateExpression.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+  let targetDate: { date: string; dayName: string; slots: string[] } | null = null
+
+  // Detectar "hoy"
+  if (lower.includes('hoy')) {
+    targetDate = availableDates.find(d => d.dayName === 'Hoy') || null
+    if (!targetDate) {
+      // Hoy no tiene slots disponibles
+      const tomorrow = availableDates.find(d => d.dayName === 'Manana')
+      return {
+        success: false,
+        error: 'Para hoy ya no tenemos horarios disponibles.',
+        suggestion: tomorrow ? {
+          date: tomorrow.date,
+          dayName: 'mañana',
+          slot: tomorrow.slots[0]
+        } : undefined
+      }
+    }
+  }
+  // Detectar "mañana" / "manana"
+  else if (lower.includes('manana') && !lower.includes('por la manana')) {
+    targetDate = availableDates.find(d => d.dayName === 'Manana') || null
+  }
+  // Detectar "pasado mañana"
+  else if (lower.includes('pasado')) {
+    targetDate = availableDates[2] || null // El tercer día
+  }
+  // Detectar días de la semana
+  else {
+    const dayMappings: Record<string, string> = {
+      'lunes': 'Lunes',
+      'martes': 'Martes',
+      'miercoles': 'Miercoles',
+      'jueves': 'Jueves',
+      'viernes': 'Viernes',
+      'sabado': 'Sabado',
+      'domingo': 'Domingo'
+    }
+
+    for (const [key, dayName] of Object.entries(dayMappings)) {
+      if (lower.includes(key)) {
+        targetDate = availableDates.find(d => d.dayName === dayName) || null
+        break
+      }
+    }
+  }
+
+  // Si no encontró fecha específica, intentar con números (ej: "el 20")
+  if (!targetDate) {
+    const dayMatch = lower.match(/(?:el\s+)?(\d{1,2})/)
+    if (dayMatch) {
+      const dayNum = parseInt(dayMatch[1])
+      const now = new Date()
+
+      // Buscar en fechas disponibles
+      for (const d of availableDates) {
+        const [day] = d.date.split('/')
+        if (parseInt(day) === dayNum) {
+          targetDate = d
+          break
+        }
+      }
+    }
+  }
+
+  if (!targetDate) {
+    return {
+      success: false,
+      error: 'No entendi la fecha. Puedes decirme "hoy", "mañana", o un dia de la semana?'
+    }
+  }
+
+  // Detectar horario preferido
+  let selectedSlot: string | undefined
+
+  // Mapear preferredSlot de GPT
+  if (preferredSlot === 'morning') {
+    selectedSlot = '8:00 AM - 12:00 PM'
+  } else if (preferredSlot === 'afternoon') {
+    selectedSlot = '12:00 PM - 4:00 PM'
+  } else if (preferredSlot === 'evening') {
+    selectedSlot = '4:00 PM - 8:00 PM'
+  }
+
+  // También detectar del texto
+  if (!selectedSlot) {
+    if (lower.includes('por la manana') || lower.includes('temprano') || lower.includes('en la manana')) {
+      selectedSlot = '8:00 AM - 12:00 PM'
+    } else if (lower.includes('tarde') || lower.includes('mediodia')) {
+      selectedSlot = '12:00 PM - 4:00 PM'
+    } else if (lower.includes('noche') || lower.includes('despues de las 4')) {
+      selectedSlot = '4:00 PM - 8:00 PM'
+    }
+  }
+
+  // Verificar que el slot esté disponible
+  if (selectedSlot && !targetDate.slots.includes(selectedSlot)) {
+    // El slot solicitado no está disponible
+    const slotNames: Record<string, string> = {
+      '8:00 AM - 12:00 PM': 'en la mañana',
+      '12:00 PM - 4:00 PM': 'en la tarde',
+      '4:00 PM - 8:00 PM': 'en la noche'
+    }
+
+    return {
+      success: false,
+      error: `${targetDate.dayName} ${slotNames[selectedSlot] || ''} ya no está disponible.`,
+      date: targetDate.date,
+      dayName: targetDate.dayName,
+      slots: targetDate.slots,
+      suggestion: {
+        date: targetDate.date,
+        dayName: targetDate.dayName.toLowerCase(),
+        slot: targetDate.slots[0]
+      }
+    }
+  }
+
+  return {
+    success: true,
+    date: targetDate.date,
+    dayName: targetDate.dayName,
+    slots: targetDate.slots,
+    selectedSlot
+  }
+}
+
+/**
+ * Formatea un mensaje sobre disponibilidad de horarios
+ */
+function formatSlotSelectionMessage(dayName: string, date: string, slots: string[]): string {
+  const slotNames: Record<string, string> = {
+    '8:00 AM - 12:00 PM': 'Mañana (8AM-12PM)',
+    '12:00 PM - 4:00 PM': 'Tarde (12PM-4PM)',
+    '4:00 PM - 8:00 PM': 'Noche (4PM-8PM)'
+  }
+
+  let msg = `Para ${dayName} (${date}) tengo estos horarios:\n\n`
+  slots.forEach((slot, idx) => {
+    msg += `${idx + 1}. ${slotNames[slot] || slot}\n`
+  })
+  msg += '\nCual prefieres?'
 
   return msg
 }
@@ -728,7 +936,32 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
     console.log('[WhatsApp Agent] ===== CREANDO ORDEN DE RECOGIDA =====')
     console.log('[WhatsApp Agent] Datos recibidos:', JSON.stringify(data, null, 2))
 
-    // 1. Obtener o crear cliente
+    // 1. Geocodificar la dirección para obtener coordenadas
+    let street = String(data.senderAddress || '')
+    let city = 'Miami'
+    let state = 'FL'
+    let zipcode = '33186'
+    let latitude: number | null = null
+    let longitude: number | null = null
+
+    if (data.senderAddress) {
+      console.log('[WhatsApp Agent] Geocodificando dirección:', data.senderAddress)
+      const geoResult = await geocodeUSAddress(String(data.senderAddress))
+
+      if (geoResult) {
+        console.log('[WhatsApp Agent] Geocodificación exitosa:', geoResult)
+        street = geoResult.street || street
+        city = geoResult.city || city
+        state = geoResult.state || state
+        zipcode = geoResult.zipcode || zipcode
+        latitude = geoResult.latitude
+        longitude = geoResult.longitude
+      } else {
+        console.log('[WhatsApp Agent] No se pudo geocodificar, usando valores por defecto')
+      }
+    }
+
+    // 2. Obtener o crear cliente
     const { customerId } = await getOrCreateCustomer(
       phoneNumber,
       String(data.senderName || 'Cliente'),
@@ -736,11 +969,11 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
     )
     console.log('[WhatsApp Agent] Customer ID:', customerId)
 
-    // 2. Generar numero de orden
+    // 3. Generar numero de orden
     const orderNumber = await generateOrderNumber('PICKUP')
     console.log('[WhatsApp Agent] Order Number:', orderNumber)
 
-    // 3. Preparar datos completos de la orden
+    // 4. Preparar datos completos de la orden
     const officeOrderData = {
       // Datos del remitente (USA)
       senderName: data.senderName,
@@ -750,6 +983,11 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
       senderAddress: data.senderAddress,
       senderEntryPin: data.senderEntryPin || 'NO',
       senderEntryInstructions: data.senderInstructions || null,
+      // Coordenadas de recogida
+      pickupCoordinates: latitude && longitude ? {
+        latitude,
+        longitude
+      } : null,
       // Datos del destinatario (Cuba)
       receiverName: data.recipientName,
       receiverPhone: data.recipientPhone,
@@ -765,7 +1003,7 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
       }
     }
 
-    // 4. Preparar servicios (formato que espera el API)
+    // 5. Preparar servicios (formato que espera el API)
     const services = [{
       name: 'Recogida a Domicilio',
       type: 'pickup',
@@ -774,7 +1012,11 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
       subtotal: 0
     }]
 
-    // 5. Insertar orden con todos los campos requeridos
+    // 6. Determinar fecha y horario
+    const scheduledDate = data.scheduledDate ? String(data.scheduledDate) : null
+    const timeSlot = data.timeSlot ? String(data.timeSlot) : '8:00 AM - 12:00 PM'
+
+    // 7. Insertar orden con todos los campos requeridos incluyendo coordenadas
     const result = await db.query(`
       INSERT INTO package_orders (
         customerid,
@@ -789,6 +1031,8 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
         state,
         zipcode,
         country,
+        latitude,
+        longitude,
         services,
         notes,
         subtotal,
@@ -805,8 +1049,8 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
         updatedat
       ) VALUES (
         $1, $2, 'recogida', $3, $4, $5, $6, $7, $8, $9, $10, 'US',
-        $11, $12, 0, 0, 0, NULL, '8:00 AM - 12:00 PM', 'cod', 'pending_payment', 'pending',
-        $13, 'whatsapp-agent', NOW(), NOW()
+        $11, $12, $13, $14, 0, 0, 0, $15, $16, 'cod', 'pending_payment', 'pending',
+        $17, 'whatsapp-agent', NOW(), NOW()
       )
       RETURNING id, ordernumber
     `, [
@@ -816,18 +1060,23 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
       String(data.senderName || '').split(' ')[0] || 'Cliente',
       String(data.senderName || '').split(' ').slice(1).join(' ') || '',
       phoneNumber,
-      data.senderAddress || '',
-      'Miami', // Default city
-      'FL', // Default state
-      '33186', // Default ZIP
+      street,
+      city,
+      state,
+      zipcode,
+      latitude,
+      longitude,
       JSON.stringify(services),
       `ID: ${data.senderIdType} ${data.senderIdNumber} | PIN: ${data.senderEntryPin || 'NO'} | Cuba: ${data.recipientName} (CI: ${data.recipientCI}) - ${data.recipientStreet}, ${data.recipientMunicipality}, ${data.recipientProvince} | Tel: ${data.recipientPhone}`,
+      scheduledDate,
+      timeSlot,
       JSON.stringify(officeOrderData)
     ])
 
     console.log('[WhatsApp Agent] ===== ORDEN CREADA EXITOSAMENTE =====')
     console.log('[WhatsApp Agent] Order ID:', result.rows[0].id)
     console.log('[WhatsApp Agent] Order Number:', result.rows[0].ordernumber)
+    console.log('[WhatsApp Agent] Coordenadas:', latitude, longitude)
 
     return {
       success: true,
@@ -1170,6 +1419,78 @@ export async function handleIncomingMessage(
       response = formatAvailableDatesMessage(availableDates)
       // Guardar fechas disponibles para referencia al parsear la respuesta del usuario
       newCollectedData._availableDates = availableDates
+    }
+
+    // Manejar selección de fecha inteligente
+    if (gptResponse.selectDate) {
+      console.log('[WhatsApp Agent] GPT solicita procesar fecha:', gptResponse.selectDate)
+      const preferredSlot = gptResponse.extractedData?.preferredSlot as string | undefined
+      const dateResult = parseUserDateExpression(gptResponse.selectDate, preferredSlot)
+
+      if (dateResult.success && dateResult.date && dateResult.dayName) {
+        if (dateResult.selectedSlot) {
+          // Fecha y horario seleccionados
+          newCollectedData.scheduledDate = dateResult.date
+          newCollectedData.timeSlot = dateResult.selectedSlot
+          const slotName = dateResult.selectedSlot.includes('8:00 AM') ? 'en la mañana' :
+                           dateResult.selectedSlot.includes('12:00 PM') ? 'en la tarde' : 'en la noche'
+          response = `Perfecto! Pasamos ${dateResult.dayName.toLowerCase()} (${dateResult.date}) ${slotName}. Dejame confirmar los datos...`
+          // Solicitar mostrar resumen
+          gptResponse.requestSummary = true
+        } else if (dateResult.slots) {
+          // Fecha seleccionada pero falta horario
+          response = formatSlotSelectionMessage(dateResult.dayName, dateResult.date, dateResult.slots)
+          newCollectedData._pendingDate = dateResult.date
+          newCollectedData._pendingDayName = dateResult.dayName
+        }
+      } else {
+        // Error con sugerencia
+        if (dateResult.suggestion) {
+          const slotName = dateResult.suggestion.slot.includes('8:00 AM') ? 'en la mañana' :
+                           dateResult.suggestion.slot.includes('12:00 PM') ? 'en la tarde' : 'en la noche'
+          response = `${dateResult.error} Te puedo ofrecer ${dateResult.suggestion.dayName} ${slotName}. Que te parece?`
+          newCollectedData._suggestedDate = dateResult.suggestion.date
+          newCollectedData._suggestedSlot = dateResult.suggestion.slot
+        } else {
+          response = dateResult.error || 'No entendi la fecha. Puedes decirme cuando prefieres?'
+        }
+      }
+    }
+
+    // Validar provincia/municipio de Cuba si se extrae
+    if (gptResponse.extractedData?.recipientProvince) {
+      const province = String(gptResponse.extractedData.recipientProvince)
+      const validatedProvince = validateProvince(province)
+
+      if (!validatedProvince) {
+        // Provincia no válida - buscar sugerencia
+        const suggestion = findClosestMatch(province, CUBA_PROVINCES)
+        if (suggestion) {
+          response = `No encontre "${province}". Quisiste decir "${suggestion}"?`
+        } else {
+          response = `No reconozco esa provincia. Las provincias de Cuba son: La Habana, Matanzas, Santiago de Cuba, Holguin...`
+        }
+        // No guardar la provincia inválida
+        delete newCollectedData.recipientProvince
+      } else {
+        // Provincia válida - guardar el nombre correcto
+        newCollectedData.recipientProvince = validatedProvince
+      }
+    }
+
+    if (gptResponse.extractedData?.recipientMunicipality && newCollectedData.recipientProvince) {
+      const province = String(newCollectedData.recipientProvince)
+      const municipality = String(gptResponse.extractedData.recipientMunicipality)
+      const validation = validateCubaAddress(province, municipality)
+
+      if (!validation.valid && validation.error) {
+        response = validation.error
+        // No guardar el municipio inválido
+        delete newCollectedData.recipientMunicipality
+      } else if (validation.municipality) {
+        // Municipio válido - guardar el nombre correcto
+        newCollectedData.recipientMunicipality = validation.municipality
+      }
     }
 
     // Detectar si el usuario confirma usar datos existentes
