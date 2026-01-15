@@ -978,10 +978,11 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
     console.log('[WhatsApp Agent] Datos recibidos:', JSON.stringify(data, null, 2))
 
     // 1. Geocodificar la dirección para obtener coordenadas
-    let street = String(data.senderAddress || '')
-    let city = 'Miami'
-    let state = 'FL'
-    let zipcode = '33186'
+    let fullAddress = String(data.senderAddress || '')
+    let street = fullAddress
+    let city = ''
+    let state = ''
+    let zipcode = ''
     let latitude: number | null = null
     let longitude: number | null = null
 
@@ -991,14 +992,29 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
 
       if (geoResult) {
         console.log('[WhatsApp Agent] Geocodificación exitosa:', geoResult)
-        street = geoResult.street || street
-        city = geoResult.city || city
-        state = geoResult.state || state
-        zipcode = geoResult.zipcode || zipcode
+        // Guardar la dirección formateada completa
+        fullAddress = geoResult.formattedAddress
+        street = geoResult.street || ''
+        city = geoResult.city || ''
+        state = geoResult.state || ''
+        zipcode = geoResult.zipcode || ''
         latitude = geoResult.latitude
         longitude = geoResult.longitude
       } else {
-        console.log('[WhatsApp Agent] No se pudo geocodificar, usando valores por defecto')
+        console.log('[WhatsApp Agent] No se pudo geocodificar, usando dirección original')
+        // Intentar parsear la dirección manualmente
+        const addressParts = fullAddress.split(',').map(p => p.trim())
+        if (addressParts.length >= 3) {
+          street = addressParts[0] || ''
+          city = addressParts[1] || ''
+          // El último puede ser "FL 33125" o "Florida 33125"
+          const lastPart = addressParts[addressParts.length - 1] || ''
+          const stateZipMatch = lastPart.match(/([A-Za-z]+)\s*(\d{5})?/)
+          if (stateZipMatch) {
+            state = stateZipMatch[1] || ''
+            zipcode = stateZipMatch[2] || ''
+          }
+        }
       }
     }
 
@@ -1078,6 +1094,9 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
     const companyId = companyResult.rows[0]?.id || 1
 
     // 7. Insertar orden con todos los campos requeridos incluyendo coordenadas
+    // Usar dirección completa formateada para customeraddress
+    const customerAddressFormatted = fullAddress || `${street}, ${city}, ${state} ${zipcode}`.trim()
+
     const result = await db.query(`
       INSERT INTO package_orders (
         customerid,
@@ -1122,7 +1141,7 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
       String(data.senderName || '').split(' ')[0] || 'Cliente',
       String(data.senderName || '').split(' ').slice(1).join(' ') || '',
       phoneNumber,
-      street,
+      customerAddressFormatted,  // Dirección completa formateada
       city,
       state,
       zipcode,
@@ -1314,16 +1333,30 @@ export async function handleIncomingMessage(
     console.log('[WhatsApp Agent] Conversacion ID:', conversation.id, 'Flow:', conversation.current_flow)
     console.log('[WhatsApp Agent] Datos previos:', JSON.stringify(conversation.collected_data))
 
-    // 2. Guardar mensaje entrante
+    // 2. Detectar si el usuario quiere empezar una nueva orden (respaldo manual)
+    const newOrderPhrases = ['nueva orden', 'nuevo envio', 'nuevo envío', 'otra persona', 'empezar de nuevo', 'empezar de cero', 'borrar datos', 'otro cliente', 'reiniciar']
+    const msgLowerTrimmed = messageBody.toLowerCase().trim()
+    const wantsNewOrder = newOrderPhrases.some(phrase => msgLowerTrimmed.includes(phrase))
+
+    if (wantsNewOrder && conversation.current_flow !== 'idle') {
+      console.log('[WhatsApp Agent] Usuario solicita nueva orden (detección manual) - limpiando datos')
+      await resetConversation(conversation.id)
+      await saveMessage(conversation.id, 'inbound', messageBody, messageSid)
+      const response = 'Perfecto, empezamos de nuevo. Dame tu numero de telefono para buscarte en el sistema.'
+      await saveMessage(conversation.id, 'outbound', response)
+      return { message: response }
+    }
+
+    // 3. Guardar mensaje entrante
     await saveMessage(conversation.id, 'inbound', messageBody, messageSid)
 
-    // 3. Agregar mensaje al historial
+    // 5. Agregar mensaje al historial
     const updatedHistory: ConversationMessage[] = [
       ...conversation.messages_history,
       { role: 'user', content: messageBody }
     ]
 
-    // 4. Verificar si es primera interaccion CON saludo simple
+    // 6. Verificar si es primera interaccion CON saludo simple
     // Solo si el mensaje es un saludo simple (Hola, Hi, etc) sin intención específica
     const simpleGreetings = ['hola', 'hi', 'hello', 'buenos dias', 'buenas tardes', 'buenas noches', 'hey', 'buenas']
     const isSimpleGreeting = simpleGreetings.some(g => messageBody.toLowerCase().trim() === g)
@@ -1347,7 +1380,7 @@ export async function handleIncomingMessage(
       return { message: greeting }
     }
 
-    // 5. Procesar con GPT
+    // 7. Procesar con GPT
     let gptResponse: GPTResponse
     try {
       console.log('[WhatsApp Agent] Procesando con GPT...')
@@ -1370,7 +1403,16 @@ export async function handleIncomingMessage(
       return { message: errorMsg }
     }
 
-    // 6. Actualizar datos recopilados (ACUMULAR datos)
+    // 8. Manejar solicitud de nueva orden (limpiar datos) - desde GPT
+    if (gptResponse.startNewOrder) {
+      console.log('[WhatsApp Agent] Usuario solicita nueva orden (GPT) - limpiando datos')
+      await resetConversation(conversation.id)
+      const response = 'Perfecto, empezamos de nuevo. Dame tu numero de telefono para buscarte en el sistema.'
+      await saveMessage(conversation.id, 'outbound', response)
+      return { message: response }
+    }
+
+    // 9. Actualizar datos recopilados (ACUMULAR datos)
     const newCollectedData = {
       ...conversation.collected_data,
       ...(gptResponse.extractedData || {})
