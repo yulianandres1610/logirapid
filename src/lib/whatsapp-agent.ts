@@ -1057,17 +1057,17 @@ export async function markConversationCompleted(
 
 /**
  * Genera un numero de orden unico
+ * Formato: PICKUP00001, PICKUP00002, etc.
  */
 async function generateOrderNumber(prefix: string): Promise<string> {
-  const year = new Date().getFullYear()
   const result = await db.query(`
     SELECT COUNT(*) + 1 as next_num
     FROM package_orders
     WHERE ordernumber LIKE $1
-  `, [`${prefix}-${year}-%`])
+  `, [`${prefix}%`])
 
   const nextNum = result.rows[0]?.next_num || 1
-  return `${prefix}-${year}-${String(nextNum).padStart(5, '0')}`
+  return `${prefix}${String(nextNum).padStart(5, '0')}`
 }
 
 /**
