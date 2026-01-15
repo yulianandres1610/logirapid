@@ -1147,7 +1147,7 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
     console.log('[WhatsApp Agent] scheduledDate:', data.scheduledDate)
     console.log('[WhatsApp Agent] timeSlot:', data.timeSlot)
 
-    // 1. Preparar dirección - usar coordenadas pre-validadas si existen
+    // 1. Preparar dirección - usar coordenadas y componentes pre-validados si existen
     const rawAddress = String(data.senderAddress || '').trim()
     let fullAddress = rawAddress
     let street = rawAddress
@@ -1157,13 +1157,21 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
     let latitude: number | null = null
     let longitude: number | null = null
 
-    // Verificar si hay coordenadas pre-validadas (de validate_us_address)
+    // Verificar si hay coordenadas y componentes pre-validados (de validate_us_address)
     const preValidatedCoords = data._addressCoordinates as { latitude: number; longitude: number } | undefined
     if (preValidatedCoords && preValidatedCoords.latitude && preValidatedCoords.longitude) {
       console.log('[WhatsApp Agent] Usando coordenadas PRE-VALIDADAS:', preValidatedCoords)
       latitude = preValidatedCoords.latitude
       longitude = preValidatedCoords.longitude
       fullAddress = rawAddress  // Ya está formateado
+
+      // Usar componentes pre-validados si existen
+      if (data._addressStreet) street = String(data._addressStreet)
+      if (data._addressCity) city = String(data._addressCity)
+      if (data._addressState) state = String(data._addressState)
+      if (data._addressZipcode) zipcode = String(data._addressZipcode)
+
+      console.log('[WhatsApp Agent] Componentes pre-validados:', { street, city, state, zipcode })
     }
 
     // Si no hay coordenadas pre-validadas, geocodificar ahora
@@ -1902,7 +1910,7 @@ export async function handleIncomingMessage(
       )
 
       if (confirmed) {
-        // Guardar la direccion validada
+        // Guardar la direccion validada con TODOS sus componentes
         const validatedAddr = newCollectedData._pendingValidatedAddress as {
           formatted: string
           street: string
@@ -1918,8 +1926,13 @@ export async function handleIncomingMessage(
           latitude: validatedAddr.latitude,
           longitude: validatedAddr.longitude
         }
+        // Guardar componentes individuales para la orden
+        newCollectedData._addressStreet = validatedAddr.street
+        newCollectedData._addressCity = validatedAddr.city
+        newCollectedData._addressState = validatedAddr.state
+        newCollectedData._addressZipcode = validatedAddr.zipcode
         delete newCollectedData._pendingValidatedAddress
-        console.log('[WhatsApp Agent] Direccion confirmada:', validatedAddr.formatted)
+        console.log('[WhatsApp Agent] Direccion confirmada:', validatedAddr.formatted, 'City:', validatedAddr.city, 'State:', validatedAddr.state)
         response = 'Perfecto! Direccion confirmada. Ahora necesito el codigo o PIN para entrar al edificio. Si no hay, dime "no hay".'
       } else if (denied) {
         delete newCollectedData._pendingValidatedAddress
