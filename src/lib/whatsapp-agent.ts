@@ -27,11 +27,78 @@ export interface AgentResponse {
 const REMITTANCE_FEE_PERCENTAGE = 5
 
 /**
+ * Busca un cliente existente por numero de telefono
+ */
+async function findCustomerByPhone(phoneNumber: string): Promise<{ id: number; name: string } | null> {
+  // Limpiar numero
+  const cleanPhone = phoneNumber.replace(/\D/g, '')
+  const phoneVariants = [
+    cleanPhone,
+    `+${cleanPhone}`,
+    `+1${cleanPhone}`,
+    cleanPhone.slice(-10) // Ultimos 10 digitos
+  ]
+
+  // Buscar en customers
+  const customerResult = await db.query(`
+    SELECT id, firstname, lastname
+    FROM customers
+    WHERE phone LIKE ANY($1) OR phone LIKE ANY($2)
+    LIMIT 1
+  `, [
+    phoneVariants.map(p => `%${p}%`),
+    phoneVariants.map(p => `%${p.slice(-10)}%`)
+  ])
+
+  if (customerResult.rows.length > 0) {
+    const c = customerResult.rows[0]
+    return {
+      id: c.id,
+      name: `${c.firstname || ''} ${c.lastname || ''}`.trim() || 'Cliente'
+    }
+  }
+
+  // Buscar en package_orders por telefono del sender
+  const orderResult = await db.query(`
+    SELECT DISTINCT customername, customerphone
+    FROM package_orders
+    WHERE customerphone LIKE ANY($1)
+    ORDER BY createdat DESC
+    LIMIT 1
+  `, [phoneVariants.map(p => `%${p.slice(-10)}%`)])
+
+  if (orderResult.rows.length > 0 && orderResult.rows[0].customername) {
+    return {
+      id: 0,
+      name: orderResult.rows[0].customername
+    }
+  }
+
+  // Buscar en remittance_orders
+  const remitResult = await db.query(`
+    SELECT DISTINCT sender_name, sender_phone
+    FROM remittance_orders
+    WHERE sender_phone LIKE ANY($1)
+    ORDER BY created_at DESC
+    LIMIT 1
+  `, [phoneVariants.map(p => `%${p.slice(-10)}%`)])
+
+  if (remitResult.rows.length > 0 && remitResult.rows[0].sender_name) {
+    return {
+      id: 0,
+      name: remitResult.rows[0].sender_name
+    }
+  }
+
+  return null
+}
+
+/**
  * Obtiene o crea una conversacion para un numero de telefono
  */
 export async function getOrCreateConversation(phoneNumber: string): Promise<Conversation> {
   // Limpiar numero de telefono (remover 'whatsapp:' prefix)
-  const cleanPhone = phoneNumber.replace('whatsapp:', '')
+  const cleanPhone = phoneNumber.replace('whatsapp:', '').trim()
 
   // Buscar conversacion existente
   const result = await db.query(`
@@ -41,6 +108,26 @@ export async function getOrCreateConversation(phoneNumber: string): Promise<Conv
 
   if (result.rows.length > 0) {
     const row = result.rows[0]
+
+    // Si no tiene nombre de cliente, intentar buscarlo
+    let customerName = row.customer_name
+    let customerId = row.customer_id
+
+    if (!customerName) {
+      const customer = await findCustomerByPhone(cleanPhone)
+      if (customer) {
+        customerName = customer.name
+        customerId = customer.id || null
+
+        // Actualizar la conversacion con el nombre del cliente
+        await db.query(`
+          UPDATE whatsapp_conversations
+          SET customer_name = $1, customer_id = $2
+          WHERE id = $3
+        `, [customerName, customerId, row.id])
+      }
+    }
+
     return {
       id: row.id,
       phone_number: row.phone_number,
@@ -48,18 +135,21 @@ export async function getOrCreateConversation(phoneNumber: string): Promise<Conv
       current_step: row.current_step,
       collected_data: row.collected_data || {},
       messages_history: row.messages_history || [],
-      customer_id: row.customer_id,
-      customer_name: row.customer_name,
+      customer_id: customerId,
+      customer_name: customerName,
       last_message_at: row.last_message_at
     }
   }
 
+  // Buscar si es un cliente conocido
+  const customer = await findCustomerByPhone(cleanPhone)
+
   // Crear nueva conversacion
   const insertResult = await db.query(`
-    INSERT INTO whatsapp_conversations (phone_number, current_flow, collected_data, messages_history)
-    VALUES ($1, 'idle', '{}', '[]')
+    INSERT INTO whatsapp_conversations (phone_number, current_flow, collected_data, messages_history, customer_id, customer_name)
+    VALUES ($1, 'idle', '{}', '[]', $2, $3)
     RETURNING *
-  `, [cleanPhone])
+  `, [cleanPhone, customer?.id || null, customer?.name || null])
 
   const row = insertResult.rows[0]
   return {
@@ -69,8 +159,8 @@ export async function getOrCreateConversation(phoneNumber: string): Promise<Conv
     current_step: row.current_step,
     collected_data: {},
     messages_history: [],
-    customer_id: null,
-    customer_name: null,
+    customer_id: customer?.id || null,
+    customer_name: customer?.name || null,
     last_message_at: row.last_message_at
   }
 }
@@ -418,8 +508,8 @@ export async function handleIncomingMessage(
 
     // 4. Verificar si es primera interaccion
     if (conversation.current_flow === 'idle' && conversation.messages_history.length === 0) {
-      // Enviar saludo inicial
-      const greeting = await generateGreeting()
+      // Enviar saludo inicial (personalizado si conocemos al cliente)
+      const greeting = await generateGreeting(conversation.customer_name)
 
       // Actualizar historial con respuesta
       updatedHistory.push({ role: 'assistant', content: greeting })

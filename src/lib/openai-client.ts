@@ -294,8 +294,19 @@ Continua recopilando los datos faltantes.`
 
 /**
  * Genera un mensaje de saludo inicial
+ * Si conocemos al cliente, lo saludamos por su nombre
  */
-export async function generateGreeting(): Promise<string> {
+export async function generateGreeting(customerName?: string | null): Promise<string> {
+  if (customerName) {
+    return `Hola ${customerName}! Que gusto saludarte de nuevo.
+
+Soy tu asistente virtual de LogiRapid. Como puedo ayudarte hoy?
+
+1. Programar recogida de paquetes para Cuba
+2. Enviar dinero a tu familia en Cuba (Cupones Familiares)
+3. Consultar estado de envios`
+  }
+
   return `Hola! Bienvenido a LogiRapid. Soy tu asistente virtual y puedo ayudarte con:
 
 1. Programar recogida de paquetes para Cuba

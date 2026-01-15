@@ -458,6 +458,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // WhatsApp webhooks - rutas públicas para Twilio
+  if (pathname.startsWith('/api/whatsapp')) {
+    return NextResponse.next()
+  }
+
+  // Payment links - rutas públicas para pagos
+  if (pathname.startsWith('/api/payment-links')) {
+    return NextResponse.next()
+  }
+
   // Para rutas API, inyectar headers de autenticación y multi-tenancy
   if (pathname.startsWith('/api')) {
     const authToken = request.cookies.get('auth-token')?.value
