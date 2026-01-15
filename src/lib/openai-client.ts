@@ -1,9 +1,18 @@
 import OpenAI from 'openai'
 
-// Inicializar cliente OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
+// Lazy initialization del cliente OpenAI para evitar errores en build time
+let _openai: OpenAI | null = null
+
+function getOpenAI(): OpenAI {
+  if (!_openai) {
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY is not configured')
+    }
+    _openai = new OpenAI({ apiKey })
+  }
+  return _openai
+}
 
 // System prompt para el agente de LogiRapid
 const SYSTEM_PROMPT = `Eres un asistente virtual de LogiRapid, empresa de envios y remesas a Cuba.
@@ -201,7 +210,7 @@ Continua recopilando los datos faltantes.`
     ]
 
     // Llamar a OpenAI
-    const completion = await openai.chat.completions.create({
+    const completion = await getOpenAI().chat.completions.create({
       model: 'gpt-4o-mini',
       messages,
       tools: functions,
@@ -248,7 +257,7 @@ Continua recopilando los datos faltantes.`
 
       // Si hubo tool calls pero no hay respuesta, generar una
       if (!response) {
-        const followUp = await openai.chat.completions.create({
+        const followUp = await getOpenAI().chat.completions.create({
           model: 'gpt-4o-mini',
           messages: [
             ...messages,
@@ -303,4 +312,4 @@ export function getErrorMessage(): string {
   return `Disculpa, estoy teniendo problemas tecnicos en este momento. Por favor intenta de nuevo en unos minutos o contacta a nuestro equipo de soporte al telefono que aparece en nuestra pagina web.`
 }
 
-export { openai }
+export { getOpenAI }
