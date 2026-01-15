@@ -1769,21 +1769,21 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
         transition={{ type: 'spring', duration: 0.4 }}
-        className={`w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden ${isDark ? 'bg-gray-800' : 'bg-white'}`}
+        className={`w-full ${isRemesa ? 'max-w-2xl' : 'max-w-lg'} rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${isDark ? 'bg-gray-800' : 'bg-white'}`}
       >
         {/* Header with gradient */}
-        <div className={`relative px-6 py-8 bg-gradient-to-r ${selectedCategory.gradient}`}>
+        <div className={`relative px-6 py-6 bg-gradient-to-r ${selectedCategory.gradient} flex-shrink-0`}>
           <div className="absolute inset-0 bg-black/10" />
           <div className="relative flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-              <CategoryIcon className="w-8 h-8 text-white" />
+            <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+              <CategoryIcon className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">
+              <h2 className="text-lg font-bold text-white">
                 {product ? 'Editar Producto' : 'Nuevo Producto'}
               </h2>
               <p className="text-white/70 text-sm">
-                {product ? 'Modifica los datos del producto' : 'Completa los datos del nuevo producto'}
+                {isRemesa ? 'Configura el servicio de remesa' : (product ? 'Modifica los datos' : 'Completa los datos')}
               </p>
             </div>
           </div>
@@ -1795,8 +1795,8 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+          <div className="p-6 space-y-5 overflow-y-auto flex-1">
             {error && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
@@ -2387,8 +2387,8 @@ function ProductModal({ isDark, product, providerCompanies, onClose, onSave }: P
             )}
           </div>
 
-          {/* Footer */}
-          <div className={`flex items-center justify-end gap-3 px-6 py-4 border-t ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-100 bg-gray-50'}`}>
+          {/* Footer - Always visible */}
+          <div className={`flex items-center justify-end gap-3 px-6 py-4 border-t flex-shrink-0 ${isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-100 bg-gray-50'}`}>
             <button
               type="button"
               onClick={onClose}
