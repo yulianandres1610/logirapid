@@ -9,7 +9,6 @@ import {
   Clock,
   Package,
   ChevronRight,
-  Calendar,
   RefreshCw,
   CheckCircle,
   AlertCircle,
@@ -18,17 +17,13 @@ import {
 
 interface RouteData {
   id: number
-  routeNumber: string
-  qrCode: string
+  routeCode: string
   status: string
-  scheduledDate: string
-  totalStops: number
+  distance: string
+  duration: string
+  stops: number
   completedStops: number
-  totalOrders: number
-  distance: number
-  duration: number
-  driverName: string
-  vehiclePlate: string
+  progress: number
 }
 
 export default function DriverRoutesPage() {
@@ -36,20 +31,21 @@ export default function DriverRoutesPage() {
   const [routes, setRoutes] = useState<RouteData[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
-  const [selectedDate, setSelectedDate] = useState(() => {
-    const today = new Date()
-    return today.toISOString().split('T')[0]
-  })
 
   const fetchRoutes = async () => {
     setIsLoading(true)
     setError('')
     try {
-      const response = await fetch(`/api/driver-app/routes?date=${selectedDate}`)
+      // Fetch all routes (excluding completed by default)
+      const response = await fetch('/api/driver-app/routes')
       const data = await response.json()
 
+      console.log('API Response:', data)
+
       if (data.success) {
-        setRoutes(data.data || [])
+        // The API returns data.data.routes (not data.data directly)
+        const routesData = data.data?.routes || data.data || []
+        setRoutes(routesData)
       } else {
         setError(data.error || 'Error al cargar rutas')
       }
@@ -63,13 +59,14 @@ export default function DriverRoutesPage() {
 
   useEffect(() => {
     fetchRoutes()
-  }, [selectedDate])
+  }, [])
 
   const getStatusConfig = (status: string) => {
     switch (status?.toLowerCase()) {
       case 'asignada':
       case 'assigned':
       case 'active':
+      case 'pending':
         return {
           label: 'Asignada',
           color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
@@ -106,29 +103,21 @@ export default function DriverRoutesPage() {
   }
 
   const handleRouteClick = (route: RouteData) => {
-    router.push(`/driver/routes/${route.routeNumber}`)
+    router.push(`/driver/routes/${route.routeCode}`)
   }
 
   return (
     <div className="px-4 py-4">
-      {/* Date Selector */}
-      <div className="mb-6">
-        <div className="flex items-center gap-3 bg-gray-800/50 rounded-xl p-3">
-          <Calendar className="w-5 h-5 text-gray-400" />
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="flex-1 bg-transparent text-white border-none outline-none"
-          />
-          <button
-            onClick={fetchRoutes}
-            disabled={isLoading}
-            className="p-2 text-gray-400 hover:text-white transition-colors"
-          >
-            <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
+      {/* Header with refresh button */}
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-white font-semibold text-lg">Rutas Asignadas</h2>
+        <button
+          onClick={fetchRoutes}
+          disabled={isLoading}
+          className="p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-gray-800"
+        >
+          <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
       {/* Loading State */}
@@ -163,7 +152,7 @@ export default function DriverRoutesPage() {
             Sin rutas asignadas
           </h3>
           <p className="text-gray-400 text-sm">
-            No tienes rutas para esta fecha
+            No tienes rutas asignadas actualmente
           </p>
         </div>
       )}
@@ -174,9 +163,7 @@ export default function DriverRoutesPage() {
           {routes.map((route, index) => {
             const statusConfig = getStatusConfig(route.status)
             const StatusIcon = statusConfig.icon
-            const progress = route.totalStops > 0
-              ? Math.round((route.completedStops / route.totalStops) * 100)
-              : 0
+            const progress = route.progress || 0
 
             return (
               <motion.div
@@ -191,11 +178,8 @@ export default function DriverRoutesPage() {
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <h3 className="text-white font-semibold text-lg">
-                      {route.routeNumber}
+                      {route.routeCode}
                     </h3>
-                    <p className="text-gray-400 text-sm">
-                      {route.vehiclePlate}
-                    </p>
                   </div>
                   <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border ${statusConfig.color}`}>
                     <StatusIcon className="w-3.5 h-3.5" />
@@ -207,23 +191,23 @@ export default function DriverRoutesPage() {
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <div className="bg-gray-900/50 rounded-xl p-3 text-center">
                     <MapPin className="w-4 h-4 text-exa-primary mx-auto mb-1" />
-                    <p className="text-white font-semibold">{route.totalStops}</p>
+                    <p className="text-white font-semibold">{route.stops || 0}</p>
                     <p className="text-gray-500 text-xs">Paradas</p>
                   </div>
                   <div className="bg-gray-900/50 rounded-xl p-3 text-center">
                     <Package className="w-4 h-4 text-exa-secondary mx-auto mb-1" />
-                    <p className="text-white font-semibold">{route.totalOrders}</p>
-                    <p className="text-gray-500 text-xs">Ordenes</p>
+                    <p className="text-white font-semibold">{route.completedStops || 0}</p>
+                    <p className="text-gray-500 text-xs">Completadas</p>
                   </div>
                   <div className="bg-gray-900/50 rounded-xl p-3 text-center">
                     <Clock className="w-4 h-4 text-purple-400 mx-auto mb-1" />
-                    <p className="text-white font-semibold">{route.duration || 0}</p>
-                    <p className="text-gray-500 text-xs">Min est.</p>
+                    <p className="text-white font-semibold text-sm">{route.duration || '0 min'}</p>
+                    <p className="text-gray-500 text-xs">Tiempo</p>
                   </div>
                 </div>
 
                 {/* Progress Bar (if in progress) */}
-                {route.status === 'en_curso' && (
+                {(route.status === 'en_curso' || route.status === 'active') && progress > 0 && (
                   <div className="mb-3">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-gray-400 text-xs">Progreso</span>
@@ -234,7 +218,7 @@ export default function DriverRoutesPage() {
                         initial={{ width: 0 }}
                         animate={{ width: `${progress}%` }}
                         transition={{ duration: 0.5 }}
-                        className="h-full bg-gradient-to-r from-exa-primary to-exa-secondary rounded-full"
+                        className="h-full bg-exa-primary rounded-full"
                       />
                     </div>
                   </div>
@@ -243,7 +227,7 @@ export default function DriverRoutesPage() {
                 {/* Footer */}
                 <div className="flex items-center justify-between pt-3 border-t border-gray-700/50">
                   <p className="text-gray-500 text-xs">
-                    {route.distance ? `${route.distance.toFixed(1)} mi` : '-- mi'}
+                    {route.distance || '-- mi'}
                   </p>
                   <div className="flex items-center gap-1 text-exa-primary">
                     <span className="text-sm font-medium">

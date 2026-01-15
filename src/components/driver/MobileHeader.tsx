@@ -20,25 +20,6 @@ export function MobileHeader({ userName, title, showBack, onBack }: MobileHeader
   // Determine if we should show the back button
   const isSubPage = pathname.split('/').length > 3 || showBack
 
-  // Get page title based on pathname
-  const getPageTitle = () => {
-    if (title) return title
-    if (pathname.includes('/routes/')) {
-      if (pathname.includes('/stop/')) return 'Parada'
-      return 'Detalles de Ruta'
-    }
-    if (pathname.includes('/orders/')) {
-      if (pathname.includes('/products')) return 'Agregar Productos'
-      if (pathname.includes('/payment')) return 'Procesar Pago'
-      if (pathname.includes('/new')) return 'Nueva Orden'
-      return 'Detalles de Orden'
-    }
-    if (pathname === '/driver/routes') return 'Mis Rutas'
-    if (pathname === '/driver/orders') return 'Mis Ordenes'
-    if (pathname === '/driver/settings') return 'Configuracion'
-    return 'Portal Driver'
-  }
-
   const handleBack = () => {
     if (onBack) {
       onBack()
@@ -62,7 +43,7 @@ export function MobileHeader({ userName, title, showBack, onBack }: MobileHeader
 
   return (
     <header className="sticky top-0 z-40 bg-gray-900/95 backdrop-blur-lg border-b border-gray-800 safe-area-pt">
-      <div className="flex items-center justify-between h-14 px-4">
+      <div className="flex items-center justify-between h-16 px-4">
         {/* Left side - Back button or Logo */}
         <div className="flex items-center gap-3">
           {isSubPage ? (
@@ -70,13 +51,13 @@ export function MobileHeader({ userName, title, showBack, onBack }: MobileHeader
               onClick={handleBack}
               className="p-2 -ml-2 text-gray-400 hover:text-white transition-colors"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-6 h-6" />
             </button>
           ) : (
             <img
               src="/images/blanco.png"
               alt="LogiRapid"
-              className="h-8 w-auto object-contain"
+              className="h-10 w-auto object-contain"
               onError={(e) => {
                 const target = e.target as HTMLImageElement
                 target.style.display = 'none'
@@ -85,23 +66,13 @@ export function MobileHeader({ userName, title, showBack, onBack }: MobileHeader
           )}
         </div>
 
-        {/* Center - Title */}
-        <motion.h1
-          key={pathname}
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-white font-semibold text-base absolute left-1/2 -translate-x-1/2"
-        >
-          {getPageTitle()}
-        </motion.h1>
-
         {/* Right side - User menu */}
         <div className="relative">
           <button
             onClick={() => setShowMenu(!showMenu)}
             className="flex items-center gap-2 p-2 -mr-2 text-gray-400 hover:text-white transition-colors"
           >
-            <User className="w-5 h-5" />
+            <User className="w-6 h-6" />
           </button>
 
           {/* Dropdown menu */}

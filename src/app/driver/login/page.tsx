@@ -3,16 +3,40 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mail, Lock, Eye, EyeOff, Truck, Package, AlertCircle } from 'lucide-react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { Mail, Lock, Eye, EyeOff, AlertCircle, Truck } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+
+const driverLoginSchema = z.object({
+  email: z.string().email('Email invalido'),
+  password: z.string().min(6, 'La contrasena debe tener al menos 6 caracteres'),
+})
+
+type DriverLoginFormData = z.infer<typeof driverLoginSchema>
 
 export default function DriverLoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [isRedirecting, setIsRedirecting] = useState(false)
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(false)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isValid },
+    watch,
+  } = useForm<DriverLoginFormData>({
+    resolver: zodResolver(driverLoginSchema),
+    mode: 'onChange',
+  })
+
+  const watchedEmail = watch('email')
+  const watchedPassword = watch('password')
 
   // Check if user is already authenticated on mount
   useEffect(() => {
@@ -27,62 +51,98 @@ export default function DriverLoginPage() {
           const now = Math.floor(Date.now() / 1000)
           if (payload.exp < now) return false
         }
+        // Check if user has allowed role
+        const allowedRoles = ['DRIVER', 'ADMIN', 'SUPER_ADMIN']
+        if (!allowedRoles.includes(payload.role)) return false
         return true
       } catch {
         return false
       }
     }
 
-    const authToken = document.cookie
-      .split('; ')
-      .find(row => row.startsWith('auth-token='))
-      ?.split('=')[1]
+    const checkAuthentication = () => {
+      const authToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('auth-token='))
+        ?.split('=')[1]
 
-    if (authToken && isTokenValid(authToken)) {
-      router.push('/driver/routes')
-    } else {
-      setIsCheckingAuth(false)
+      if (authToken && isTokenValid(authToken)) {
+        console.log('[DRIVER LOGIN] User already authenticated, redirecting to routes')
+        setShowLoadingOverlay(true)
+        setIsRedirecting(true)
+        router.push('/driver/routes')
+      } else {
+        setIsCheckingAuth(false)
+      }
     }
+
+    checkAuthentication()
   }, [router])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
+  const onSubmit = async (data: DriverLoginFormData) => {
+    setError(null)
     setIsLoading(true)
+    setShowLoadingOverlay(true)
 
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email, password })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+        credentials: 'include',
       })
 
-      const data = await response.json()
+      const result = await response.json()
 
-      if (data.success) {
-        const allowedRoles = ['DRIVER', 'ADMIN', 'SUPER_ADMIN']
-        if (!allowedRoles.includes(data.data.user.role)) {
-          setError('Este portal es solo para conductores')
-          setIsLoading(false)
-          return
+      if (!response.ok || !result.success) {
+        setError(result.error || 'Error al iniciar sesion')
+        setShowLoadingOverlay(false)
+        setIsLoading(false)
+        return
+      }
+
+      // Check if user has allowed role
+      const allowedRoles = ['DRIVER', 'ADMIN', 'SUPER_ADMIN']
+      if (!allowedRoles.includes(result.user?.role)) {
+        setError('Este portal es solo para conductores')
+        setShowLoadingOverlay(false)
+        setIsLoading(false)
+        return
+      }
+
+      // Store user data
+      localStorage.setItem('user', JSON.stringify(result.user))
+      localStorage.setItem('auth-token', result.token)
+
+      // Login exitoso, esperar cookies y redirigir
+      setIsRedirecting(true)
+
+      // Esperar a que las cookies se propaguen
+      const waitForCookie = () => {
+        const maxAttempts = 60
+        let attempts = 0
+
+        const checkCookie = () => {
+          attempts++
+          const cookies = document.cookie
+          const hasAuthToken = cookies.includes('auth-token=')
+
+          if (hasAuthToken || attempts >= maxAttempts) {
+            router.push('/driver/routes')
+          } else {
+            setTimeout(checkCookie, 50)
+          }
         }
 
-        localStorage.setItem('user', JSON.stringify(data.data.user))
-        localStorage.setItem('auth-token', data.data.token)
-
-        document.cookie = `auth-token=${data.data.token}; path=/; max-age=${60 * 60 * 24 * 7}`
-        document.cookie = `user-role=${data.data.user.role}; path=/; max-age=${60 * 60 * 24 * 7}`
-
-        router.push('/driver/routes')
-      } else {
-        setError(data.error || 'Error al iniciar sesion')
-        setIsLoading(false)
+        checkCookie()
       }
+
+      waitForCookie()
+
     } catch (err) {
       console.error('Login error:', err)
-      setError('Error de conexion. Intenta de nuevo.')
+      setError('Error de conexion')
+      setShowLoadingOverlay(false)
       setIsLoading(false)
     }
   }
@@ -99,8 +159,6 @@ export default function DriverLoginPage() {
     )
   }
 
-  const isFormValid = email.length > 0 && password.length >= 6
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Animated Background Elements */}
@@ -115,14 +173,25 @@ export default function DriverLoginPage() {
         <div className="absolute top-1/3 right-1/5 w-64 h-64 bg-exa-primary/20 rounded-full filter blur-3xl animate-pulse delay-1200" />
         <div className="absolute bottom-1/4 left-1/6 w-56 h-56 bg-exa-primary/12 rounded-full filter blur-2xl animate-pulse delay-900" />
         <div className="absolute top-3/4 right-1/3 w-48 h-48 bg-exa-primary/16 rounded-full filter blur-2xl animate-pulse delay-600" />
+        <div className="absolute left-1/5 top-1/6 w-68 h-68 bg-exa-primary/14 rounded-full filter blur-3xl animate-pulse delay-1500" />
+        <div className="absolute right-1/6 bottom-1/5 w-60 h-60 bg-exa-primary/18 rounded-full filter blur-2xl animate-pulse delay-400" />
+        <div className="absolute top-2/3 left-1/4 w-52 h-52 bg-exa-primary/10 rounded-full filter blur-3xl animate-pulse delay-1100" />
 
         {/* Reflejos de color secundario (azul) */}
         <div className="absolute bottom-1/3 right-1/4 w-76 h-76 bg-exa-secondary/15 rounded-full filter blur-3xl animate-pulse delay-800" />
         <div className="absolute top-1/5 left-1/2 w-64 h-64 bg-exa-secondary/12 rounded-full filter blur-2xl animate-pulse delay-1400" />
         <div className="absolute top-3/5 left-1/6 w-56 h-56 bg-exa-secondary/18 rounded-full filter blur-3xl animate-pulse delay-200" />
+        <div className="absolute bottom-2/5 right-1/5 w-48 h-48 bg-exa-secondary/14 rounded-full filter blur-2xl animate-pulse delay-1700" />
+        <div className="absolute left-2/5 top-1/4 w-72 h-72 bg-exa-secondary/16 rounded-full filter blur-3xl animate-pulse delay-500" />
+        <div className="absolute right-2/5 bottom-1/6 w-40 h-40 bg-exa-secondary/20 rounded-full filter blur-2xl animate-pulse delay-1300" />
+        <div className="absolute top-4/5 left-1/3 w-52 h-52 bg-exa-secondary/12 rounded-full filter blur-2xl animate-pulse delay-900" />
+        <div className="absolute bottom-1/6 right-2/3 w-44 h-44 bg-exa-secondary/16 rounded-full filter blur-2xl animate-pulse delay-1600" />
+        <div className="absolute left-1/4 top-2/3 w-60 h-60 bg-exa-secondary/14 rounded-full filter blur-3xl animate-pulse delay-400" />
+        <div className="absolute right-1/3 top-1/6 w-36 h-36 bg-exa-secondary/18 rounded-full filter blur-2xl animate-pulse delay-1100" />
       </div>
 
-      {/* Main Container */}
+
+      {/* Main Container - Centrado */}
       <div className="relative z-10 w-full max-w-md mx-auto">
         {/* Login Card */}
         <motion.div
@@ -141,168 +210,160 @@ export default function DriverLoginPage() {
             <img
               src="/images/blanco.png"
               alt="LogiRapid"
-              className="object-contain w-full max-w-xs h-auto mb-4"
+              className="object-contain w-full max-w-xs h-auto"
               onError={(e) => {
-                const target = e.target as HTMLImageElement
-                target.style.display = 'none'
-                const parent = target.parentElement
+                console.error('Error loading logo:', e);
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                const parent = target.parentElement;
                 if (parent) {
-                  const fallback = document.createElement('div')
-                  fallback.className = 'text-white font-bold text-3xl tracking-wider px-4 py-2'
-                  fallback.textContent = 'LogiRapid'
-                  parent.insertBefore(fallback, parent.firstChild)
+                  parent.innerHTML = `
+                    <div class="text-white font-bold text-3xl tracking-wider px-4 py-2">
+                      LogiRapid
+                    </div>
+                    <p class="text-exa-primary text-sm mt-2">Portal Driver</p>
+                  `;
                 }
               }}
             />
-
-            {/* Portal Driver Badge */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              className="inline-flex items-center gap-2 bg-exa-primary/20 text-exa-primary px-5 py-2.5 rounded-full border border-exa-primary/30"
-            >
-              <Truck className="w-5 h-5" />
-              <span className="text-sm font-bold tracking-wide">Portal Driver</span>
-            </motion.div>
+            <p className="text-exa-primary text-sm mt-2 font-medium">Portal Driver</p>
           </motion.div>
 
           {/* Form Content */}
-          <form onSubmit={handleSubmit} className="p-8 pt-4 space-y-6">
-            {/* Email Field */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="email"
-                  placeholder="Correo electronico"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className={`
-                    w-full pl-12 pr-4 py-4 bg-white/5 border border-exa-primary/30
-                    rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:ring-2
-                    focus:ring-exa-primary focus:border-exa-primary transition-all duration-300
-                    ${email ? 'bg-white/10 border-exa-primary/50' : ''}
-                  `}
-                  disabled={isLoading}
-                  required
-                />
-              </div>
-            </motion.div>
-
-            {/* Password Field */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Contrasena"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={`
-                    w-full pl-12 pr-12 py-4 bg-white/5 border border-exa-primary/30
-                    rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:ring-2
-                    focus:ring-exa-primary focus:border-exa-primary transition-all duration-300
-                    ${password ? 'bg-white/10 border-exa-primary/50' : ''}
-                  `}
-                  disabled={isLoading}
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-white transition-colors"
-                  disabled={isLoading}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
-                </button>
-              </div>
-            </motion.div>
-
-            {/* Error Message */}
-            <AnimatePresence>
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.3 }}
-                  className="flex items-center space-x-2 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl"
-                >
-                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
-                  <span className="text-sm text-red-300">{error}</span>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Submit Button */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <button
-                type="submit"
-                disabled={!isFormValid || isLoading}
-                className={`
-                  w-full h-14 text-base font-semibold text-white rounded-2xl
-                  transition-all duration-300
-                  ${!isFormValid || isLoading
-                    ? 'bg-gray-600 cursor-not-allowed'
-                    : 'bg-exa-primary hover:bg-exa-primary/90 hover:shadow-xl hover:shadow-exa-primary/25'
-                  }
-                `}
+          <div className="p-8 pt-4">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              {/* Email Field */}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 }}
               >
-                {isLoading ? (
-                  <div className="flex items-center justify-center space-x-2">
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Ingresando...</span>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Mail className="h-5 w-5 text-gray-400" />
                   </div>
-                ) : (
-                  <div className="flex items-center justify-center space-x-2">
-                    <span>Ingresar</span>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
-                  </div>
+                  <input
+                    type="email"
+                    placeholder="Correo electronico"
+                    {...register('email')}
+                    className={`
+                      w-full pl-12 pr-4 py-4 bg-white/5 border ${errors.email ? 'border-red-500' : 'border-exa-primary/30'}
+                      rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:ring-2
+                      focus:ring-exa-primary focus:border-exa-primary transition-all duration-300
+                      ${watchedEmail ? 'bg-white/10 border-exa-primary/50' : ''}
+                    `}
+                    disabled={isLoading}
+                  />
+                </div>
+                {errors.email && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-2 text-sm text-red-400 flex items-center"
+                  >
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    {errors.email.message}
+                  </motion.p>
                 )}
-              </button>
-            </motion.div>
+              </motion.div>
 
-            {/* Help Link */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4 }}
-              className="text-center"
-            >
-              <p className="text-gray-400 text-sm">
-                Problemas para acceder?{' '}
-                <button
-                  type="button"
-                  className="text-exa-primary hover:text-exa-secondary transition-colors"
+              {/* Password Field */}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Contrasena"
+                    {...register('password')}
+                    className={`
+                      w-full pl-12 pr-12 py-4 bg-white/5 border ${errors.password ? 'border-red-500' : 'border-exa-primary/30'}
+                      rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:ring-2
+                      focus:ring-exa-primary focus:border-exa-primary transition-all duration-300
+                      ${watchedPassword ? 'bg-white/10 border-exa-primary/50' : ''}
+                    `}
+                    disabled={isLoading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-white transition-colors"
+                    disabled={isLoading}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+                {errors.password && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-2 text-sm text-red-400 flex items-center"
+                  >
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    {errors.password.message}
+                  </motion.p>
+                )}
+              </motion.div>
+
+              {/* Error Message */}
+              <AnimatePresence>
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.3 }}
+                    className="flex items-center space-x-2 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl"
+                  >
+                    <AlertCircle className="w-5 h-5 text-red-400" />
+                    <span className="text-sm text-red-300">{error}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Submit Button */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <Button
+                  type="submit"
+                  className="w-full h-14 text-base font-semibold bg-exa-primary hover:bg-exa-primary/90 text-white rounded-2xl transition-all duration-300 hover:shadow-xl hover:shadow-exa-primary/25"
+                  loading={isLoading}
+                  disabled={!isValid || !watchedEmail || !watchedPassword || isLoading}
                 >
+                  <div className="flex items-center justify-center space-x-2">
+                    <span>{isLoading ? 'Ingresando...' : 'Ingresar'}</span>
+                    {!isLoading && (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                      </svg>
+                    )}
+                  </div>
+                </Button>
+              </motion.div>
+            </form>
+
+            {/* Alternative Login */}
+            <div className="mt-8 text-center">
+              <p className="text-gray-400 text-sm mb-4">
+                Necesitas ayuda?{' '}
+                <button className="text-exa-primary hover:text-exa-secondary transition-colors">
                   Contacta soporte
                 </button>
               </p>
-            </motion.div>
-          </form>
+            </div>
+          </div>
         </motion.div>
 
         {/* Footer */}
@@ -409,10 +470,49 @@ export default function DriverLoginPage() {
           delay: 1.8
         }}
       />
+      <motion.div
+        className="absolute bottom-1/5 left-1/3 w-2 h-2 bg-exa-secondary rounded-full opacity-75"
+        animate={{
+          y: [0, -25, 0],
+          x: [0, -18, 0],
+        }}
+        transition={{
+          duration: 3.2,
+          repeat: Infinity,
+          ease: "easeInOut",
+          delay: 0.3
+        }}
+      />
+      <motion.div
+        className="absolute top-3/5 left-1/5 w-3 h-3 bg-exa-primary rounded-full opacity-65"
+        animate={{
+          y: [0, -35, 0],
+          x: [0, 15, 0],
+        }}
+        transition={{
+          duration: 4.5,
+          repeat: Infinity,
+          ease: "easeInOut",
+          delay: 1.6
+        }}
+      />
+      <motion.div
+        className="absolute bottom-3/5 right-1/4 w-2 h-2 bg-exa-secondary rounded-full opacity-70"
+        animate={{
+          y: [0, -20, 0],
+          x: [0, 22, 0],
+        }}
+        transition={{
+          duration: 2.9,
+          repeat: Infinity,
+          ease: "easeInOut",
+          delay: 0.7
+        }}
+      />
 
       {/* Loading Overlay */}
       <AnimatePresence>
-        {isLoading && (
+        {(isRedirecting || showLoadingOverlay) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -449,7 +549,7 @@ export default function DriverLoginPage() {
                   transition={{ delay: 0.6 }}
                   className="text-sm text-gray-400"
                 >
-                  Verificando credenciales...
+                  Cargando tu espacio de trabajo...
                 </motion.p>
               </div>
 
