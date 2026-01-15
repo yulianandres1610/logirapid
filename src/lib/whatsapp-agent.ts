@@ -47,11 +47,13 @@ function getAvailableDates(): { date: string; dayName: string; slots: string[] }
   // Nombres de dias en espanol
   const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado']
 
-  // Formato de fecha para mostrar
+  // Formato de fecha para mostrar (incluye año para evitar confusión)
   const formatDateStr = (d: Date): string => {
-    const day = d.getDate()
+    const year = d.getFullYear()
     const month = d.getMonth() + 1
-    return `${day}/${month}`
+    const day = d.getDate()
+    // Guardar en formato ISO para consistencia (YYYY-MM-DD)
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
   }
 
   // Calcular slots disponibles para hoy
@@ -90,6 +92,17 @@ function getAvailableDates(): { date: string; dayName: string; slots: string[] }
 }
 
 /**
+ * Convierte fecha ISO a formato legible para el usuario
+ */
+function formatDateForDisplay(isoDate: string): string {
+  const parts = isoDate.split('-')
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}` // día/mes
+  }
+  return isoDate
+}
+
+/**
  * Formatea las fechas disponibles en un mensaje amigable para WhatsApp
  */
 function formatAvailableDatesMessage(dates: { date: string; dayName: string; slots: string[] }[]): string {
@@ -99,7 +112,8 @@ function formatAvailableDatesMessage(dates: { date: string; dayName: string; slo
   const datesToShow = dates.slice(0, 3)
 
   datesToShow.forEach((d, idx) => {
-    msg += `${idx + 1}. ${d.dayName} (${d.date}):\n`
+    const displayDate = formatDateForDisplay(d.date)
+    msg += `${idx + 1}. ${d.dayName} (${displayDate}):\n`
     d.slots.forEach((slot, slotIdx) => {
       const slotLabel = slot.includes('8:00 AM') ? 'Manana' :
                         slot.includes('12:00 PM') ? 'Tarde' : 'Noche'
@@ -216,15 +230,22 @@ async function geocodeUSAddress(address: string): Promise<{
 
       // Formatear dirección completa
       let formattedAddress = ''
-      if (street) formattedAddress += street
-      if (city) formattedAddress += formattedAddress ? `, ${city}` : city
-      if (state) formattedAddress += formattedAddress ? `, ${state}` : state
-      if (zipcode) formattedAddress += ` ${zipcode}`
-      formattedAddress = formattedAddress.trim()
 
-      // Si no pudimos extraer bien, usar place_name directamente
-      if (!formattedAddress || formattedAddress.length < 5) {
-        formattedAddress = feature.place_name?.replace(/, United States$/, '') || address
+      // Si tenemos place_name completo, usarlo como base (es más confiable)
+      if (feature.place_name) {
+        formattedAddress = feature.place_name.replace(/, United States$/, '').replace(/, USA$/, '').trim()
+      } else {
+        // Construir manualmente solo si no hay place_name
+        if (street) formattedAddress += street
+        if (city) formattedAddress += formattedAddress ? `, ${city}` : city
+        if (state) formattedAddress += formattedAddress ? `, ${state}` : state
+        if (zipcode) formattedAddress += ` ${zipcode}`
+        formattedAddress = formattedAddress.trim()
+      }
+
+      // Verificar que no sea solo ciudad/estado
+      if (!formattedAddress || formattedAddress.length < 10 || !formattedAddress.includes(',')) {
+        formattedAddress = address // Usar dirección original si no se pudo formatear bien
       }
 
       console.log('[WhatsApp Agent] Geocodificación exitosa:', {
@@ -1218,26 +1239,31 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
       // Verificar si ya está en formato ISO (YYYY-MM-DD)
       if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
         scheduledDate = rawDate
+        console.log('[WhatsApp Agent] Fecha ya en formato ISO:', scheduledDate)
       }
-      // Convertir fecha de formato "16/1" o "16/01" a formato ISO "YYYY-MM-DD"
-      else if (rawDate.includes('/')) {
+      // Convertir fecha de formato "16/1" o "16/01" (día/mes) a formato ISO "YYYY-MM-DD"
+      else if (rawDate.includes('/') && rawDate.split('/').length === 2) {
         const dateParts = rawDate.split('/')
-        if (dateParts.length === 2) {
-          const day = parseInt(dateParts[0])
-          const month = parseInt(dateParts[1])
-          const year = new Date().getFullYear()
-          // Si el mes es menor al actual, puede ser del próximo año
-          const currentMonth = new Date().getMonth() + 1
-          const actualYear = month < currentMonth ? year + 1 : year
-          scheduledDate = `${actualYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+        const day = parseInt(dateParts[0])
+        const month = parseInt(dateParts[1])
+        const year = new Date().getFullYear()
+        // Si el mes es menor al actual, puede ser del próximo año
+        const currentMonth = new Date().getMonth() + 1
+        const currentDay = new Date().getDate()
+        let actualYear = year
+        if (month < currentMonth || (month === currentMonth && day < currentDay)) {
+          actualYear = year + 1
         }
+        scheduledDate = `${actualYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+        console.log('[WhatsApp Agent] Fecha convertida de dd/mm:', rawDate, '->', scheduledDate)
       }
-      // Si no se pudo convertir, intentar parsear como fecha
+      // Si no se pudo convertir, intentar parsear como fecha genérica
       else {
         try {
           const parsed = new Date(rawDate)
           if (!isNaN(parsed.getTime())) {
             scheduledDate = parsed.toISOString().split('T')[0]
+            console.log('[WhatsApp Agent] Fecha parseada como Date:', scheduledDate)
           }
         } catch {
           console.log('[WhatsApp Agent] No se pudo parsear fecha:', rawDate)
@@ -1250,7 +1276,18 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
       const tomorrow = new Date()
       tomorrow.setDate(tomorrow.getDate() + 1)
       scheduledDate = tomorrow.toISOString().split('T')[0]
-      console.log('[WhatsApp Agent] Sin fecha, usando mañana:', scheduledDate)
+      console.log('[WhatsApp Agent] Sin fecha válida, usando mañana:', scheduledDate)
+    }
+
+    // Validar que la fecha no sea en el pasado
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const scheduledDateObj = new Date(scheduledDate + 'T00:00:00')
+    if (scheduledDateObj < today) {
+      console.log('[WhatsApp Agent] Fecha en el pasado, ajustando a mañana')
+      const tomorrow = new Date()
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      scheduledDate = tomorrow.toISOString().split('T')[0]
     }
 
     // Horario - asegurar que siempre tenga un valor
@@ -1708,9 +1745,10 @@ export async function handleIncomingMessage(
           if (addr.entryPin && addr.entryPin !== 'NO') {
             foundMsg += `PIN entrada: ${addr.entryPin}\n`
           }
-          foundMsg += `\nSon correctos estos datos?`
+          foundMsg += `\nSon correctos estos datos? (Si/No)`
           // Guardar direccion temporalmente para confirmar
           newCollectedData._pendingAddress = addr
+          newCollectedData._senderComplete = true
         } else {
           foundMsg += `\nDame tu direccion de recogida.`
         }
@@ -1753,7 +1791,10 @@ export async function handleIncomingMessage(
           if (addr.reparto) newCollectedData.recipientReparto = addr.reparto
           if (addr.instructions) newCollectedData.recipientInstructions = addr.instructions
 
-          foundMsg += `\nSon correctos estos datos?`
+          // Marcar que el destinatario está completo para que GPT no pregunte más
+          newCollectedData._recipientComplete = true
+
+          foundMsg += `\nSon correctos estos datos? (Si/No)`
         } else {
           foundMsg += `\nPero no tengo su direccion guardada. En que provincia esta?`
         }
@@ -1827,6 +1868,42 @@ export async function handleIncomingMessage(
       } else if (denied) {
         delete newCollectedData._pendingValidatedAddress
         response = 'Ok, dame la direccion correcta por favor.'
+      }
+    }
+
+    // Detectar confirmacion de datos del destinatario encontrado
+    if (newCollectedData._recipientComplete && !gptResponse.searchRecipient) {
+      const msgLower = messageBody.toLowerCase().trim()
+      const confirmed = ['si', 'sí', 'ok', 'correcto', 'correcta', 'yes', 'esta bien', 'ese es', 'esa es', 'son correctos', 'esos son'].some(
+        word => msgLower === word || msgLower.startsWith(word + ' ') || msgLower.endsWith(' ' + word)
+      )
+      const denied = ['no', 'incorrecto', 'otra', 'cambiar', 'otro'].some(
+        word => msgLower === word || msgLower.startsWith(word + ' ')
+      )
+
+      if (confirmed) {
+        // Destinatario confirmado - pasar a fechas
+        delete newCollectedData._recipientComplete
+        newCollectedData._recipientConfirmed = true
+        console.log('[WhatsApp Agent] Destinatario confirmado, pasando a fechas')
+
+        // Mostrar fechas disponibles
+        const availableDates = getAvailableDates()
+        response = 'Perfecto! Destinatario confirmado.\n\n' + formatAvailableDatesMessage(availableDates)
+        newCollectedData._availableDates = availableDates
+        gptResponse.getAvailableDates = false // Ya mostramos las fechas
+      } else if (denied) {
+        // Usuario quiere corregir datos del destinatario
+        delete newCollectedData._recipientComplete
+        // Limpiar datos del destinatario para que los vuelva a pedir
+        delete newCollectedData.recipientName
+        delete newCollectedData.recipientPhone
+        delete newCollectedData.recipientCI
+        delete newCollectedData.recipientProvince
+        delete newCollectedData.recipientMunicipality
+        delete newCollectedData.recipientStreet
+        delete newCollectedData.recipientReparto
+        response = 'Ok, vamos a corregir. Dame el telefono del destinatario en Cuba.'
       }
     }
 
@@ -1911,12 +1988,22 @@ export async function handleIncomingMessage(
       }
     }
 
-    // Detectar si el usuario confirma usar datos existentes
+    // Detectar si el usuario confirma usar datos existentes del remitente
     const confirmWords = ['si', 'sí', 'ok', 'yes', 'correcto', 'esa', 'eso', 'dale', 'bien', 'perfecto']
-    const userConfirms = confirmWords.some(w => messageBody.toLowerCase().includes(w))
+    const userConfirms = confirmWords.some(w => messageBody.toLowerCase().trim() === w || messageBody.toLowerCase().startsWith(w + ' '))
 
-    // Si hay direccion pendiente y usuario confirma, aplicarla
-    if (newCollectedData._pendingAddress && userConfirms) {
+    // Si hay direccion pendiente y datos del remitente completos, y usuario confirma
+    if (newCollectedData._pendingAddress && newCollectedData._senderComplete && userConfirms) {
+      const addr = newCollectedData._pendingAddress as { address: string; city?: string; state?: string; zipcode?: string; entryPin?: string }
+      newCollectedData.senderAddress = addr.address
+      if (addr.entryPin) newCollectedData.senderEntryPin = addr.entryPin
+      delete newCollectedData._pendingAddress
+      delete newCollectedData._senderComplete
+      newCollectedData._senderConfirmed = true
+      console.log('[WhatsApp Agent] Remitente confirmado, direccion:', addr.address)
+      response = 'Perfecto! Datos del remitente confirmados. Ahora dame el telefono del destinatario en Cuba.'
+    } else if (newCollectedData._pendingAddress && userConfirms) {
+      // Confirmar solo direccion
       const addr = newCollectedData._pendingAddress as { address: string; city?: string; state?: string; zipcode?: string; entryPin?: string }
       newCollectedData.senderAddress = addr.address
       if (addr.entryPin) newCollectedData.senderEntryPin = addr.entryPin

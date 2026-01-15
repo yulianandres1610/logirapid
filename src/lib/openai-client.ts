@@ -57,13 +57,20 @@ FASE 1 - REMITENTE (quien envia):
 FASE 2 - DESTINATARIO CUBA (quien recibe):
 Solo cuando FASE 1 este COMPLETA:
 1. Pedir telefono Cuba (8 digitos)
-2. Si lo encontramos: mostrar datos y confirmar
-3. Si NO existe, pedir UNO A UNO:
+2. Si lo encontramos CON direccion completa:
+   - Mostrar TODOS los datos encontrados
+   - Preguntar SOLO "Son correctos estos datos? (Si/No)"
+   - ESPERAR respuesta del usuario, NO preguntar nada mas
+   - Si dice SI: pasar directamente a FASE 3 (fechas)
+   - Si dice NO: preguntar que quiere corregir
+3. Si NO existe o no tiene direccion, pedir UNO A UNO:
    a. Nombre completo
    b. Carnet de Identidad (11 digitos exactos)
    c. Provincia (debe ser valida: La Habana, Matanzas, etc)
    d. Municipio (debe ser valido para esa provincia)
    e. Direccion en Cuba (calle, numero, entre calles)
+
+IMPORTANTE: Cuando encuentres un destinatario con datos completos, NO pidas verificar cada dato individualmente. Solo pregunta si SON CORRECTOS y espera Si/No.
 
 FASE 3 - FECHA Y HORA:
 Solo cuando FASE 1 y 2 esten COMPLETAS:
@@ -329,7 +336,10 @@ ${missingFields.filter(f => !f.startsWith('_')).map(f => `- ${fieldNames[f] || f
 
 ${missingFields.length === 0 || (missingFields.length <= 2 && missingFields.every(f => ['scheduledDate', 'timeSlot'].includes(f)))
   ? 'REMITENTE Y DESTINATARIO COMPLETOS - pide fecha si no la tenemos'
-  : 'Sigue recopilando datos faltantes UNO A UNO'}`
+  : 'Sigue recopilando datos faltantes UNO A UNO'}
+
+${collectedData._recipientComplete ? '⚠️ DESTINATARIO ENCONTRADO - ESPERANDO CONFIRMACION. Solo pregunta "Son correctos?" NO pidas mas datos.' : ''}
+${collectedData._recipientConfirmed ? '✅ DESTINATARIO CONFIRMADO - Pasa a preguntar fecha y horario' : ''}`
     }
 
     // Construir mensajes para GPT
