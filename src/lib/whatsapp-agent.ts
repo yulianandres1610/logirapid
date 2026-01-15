@@ -23,10 +23,107 @@ export interface AgentResponse {
   paymentLink?: string
 }
 
-// Comision por defecto para remesas (5%)
-const REMITTANCE_FEE_PERCENTAGE = 5
+// Horarios disponibles para recogida
+const ALL_TIME_SLOTS = [
+  '8:00 AM - 12:00 PM',
+  '12:00 PM - 4:00 PM',
+  '4:00 PM - 8:00 PM'
+]
 
-// Campos requeridos para cada tipo de orden
+/**
+ * Obtiene las fechas y horarios disponibles para recogida
+ * Sigue la misma logica del wizard:
+ * - Antes de 8am: todos los slots de hoy
+ * - 8-12: solo tarde y noche de hoy
+ * - 12-16: solo noche de hoy
+ * - Despues de 16: empieza con manana
+ */
+function getAvailableDates(): { date: string; dayName: string; slots: string[] }[] {
+  const now = new Date()
+  const currentHour = now.getHours()
+  const result: { date: string; dayName: string; slots: string[] }[] = []
+
+  // Nombres de dias en espanol
+  const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado']
+
+  // Formato de fecha para mostrar
+  const formatDateStr = (d: Date): string => {
+    const day = d.getDate()
+    const month = d.getMonth() + 1
+    return `${day}/${month}`
+  }
+
+  // Calcular slots disponibles para hoy
+  let todaySlots: string[] = []
+  if (currentHour < 8) {
+    todaySlots = [...ALL_TIME_SLOTS]
+  } else if (currentHour < 12) {
+    todaySlots = ALL_TIME_SLOTS.slice(1) // Solo tarde y noche
+  } else if (currentHour < 16) {
+    todaySlots = ALL_TIME_SLOTS.slice(2) // Solo noche
+  }
+  // Despues de las 16, no hay slots para hoy
+
+  // Agregar hoy si tiene slots disponibles
+  if (todaySlots.length > 0) {
+    result.push({
+      date: formatDateStr(now),
+      dayName: 'Hoy',
+      slots: todaySlots
+    })
+  }
+
+  // Agregar proximos 6 dias (todos los slots)
+  for (let i = 1; i <= 6; i++) {
+    const futureDate = new Date()
+    futureDate.setDate(futureDate.getDate() + i)
+
+    result.push({
+      date: formatDateStr(futureDate),
+      dayName: i === 1 ? 'Manana' : dayNames[futureDate.getDay()],
+      slots: [...ALL_TIME_SLOTS]
+    })
+  }
+
+  return result
+}
+
+/**
+ * Formatea las fechas disponibles en un mensaje amigable para WhatsApp
+ */
+function formatAvailableDatesMessage(dates: { date: string; dayName: string; slots: string[] }[]): string {
+  let msg = 'Estas son las fechas disponibles:\n\n'
+
+  // Mostrar solo las primeras 3 fechas para no abrumar
+  const datesToShow = dates.slice(0, 3)
+
+  datesToShow.forEach((d, idx) => {
+    msg += `${idx + 1}. ${d.dayName} (${d.date}):\n`
+    d.slots.forEach((slot, slotIdx) => {
+      const slotLabel = slot.includes('8:00 AM') ? 'Manana' :
+                        slot.includes('12:00 PM') ? 'Tarde' : 'Noche'
+      msg += `   ${slotIdx + 1}. ${slotLabel} (${slot})\n`
+    })
+    msg += '\n'
+  })
+
+  msg += 'Dime cual prefieres (ej: "manana en la tarde" o "1-2")'
+
+  return msg
+}
+
+// Configuracion de remesas (para uso futuro)
+const REMITTANCE_FEE_PERCENTAGE = 5 // 5% comision
+const REMITTANCE_REQUIRED_FIELDS = [
+  'amount',
+  'recipientName',
+  'recipientPhone',
+  'province',
+  'municipality',
+  'address'
+]
+
+// Campos requeridos para orden de recogida
 const PICKUP_REQUIRED_FIELDS = [
   'senderName',
   'senderIdType',        // Tipo de ID (Pasaporte, Licencia, etc.)
@@ -38,17 +135,9 @@ const PICKUP_REQUIRED_FIELDS = [
   'recipientCI',         // Carnet de Identidad Cuba (11 digitos)
   'recipientProvince',
   'recipientMunicipality',
-  'recipientStreet'      // Calle y numero en Cuba
-]
-
-const REMITTANCE_REQUIRED_FIELDS = [
-  'amount',
-  'senderName',
-  'recipientName',
-  'recipientPhone',
-  'province',
-  'municipality',
-  'address'
+  'recipientStreet',     // Calle y numero en Cuba
+  'scheduledDate',       // Fecha de recogida
+  'timeSlot'             // Horario de recogida
 ]
 
 /**
@@ -83,7 +172,7 @@ function validatePickupData(data: Record<string, unknown>): { valid: boolean; mi
 }
 
 /**
- * Valida si los datos de remesa estan completos
+ * Valida si los datos de remesa estan completos (para uso futuro)
  */
 function validateRemittanceData(data: Record<string, unknown>): { valid: boolean; missing: string[]; errors: string[] } {
   const missing: string[] = []
@@ -976,24 +1065,29 @@ export async function handleIncomingMessage(
       const senderResult = await searchSenderByPhone(gptResponse.searchSender)
 
       if (senderResult.found) {
-        // Cliente encontrado - cargar sus datos
+        // Cliente encontrado - cargar TODOS sus datos
         newCollectedData.senderName = senderResult.name
         newCollectedData.senderPhone = senderResult.phone || gptResponse.searchSender
         if (senderResult.idType) newCollectedData.senderIdType = senderResult.idType
         if (senderResult.idNumber) newCollectedData.senderIdNumber = senderResult.idNumber
 
-        // Construir respuesta con datos encontrados
-        let foundMsg = `Te encontre! Eres ${senderResult.name}.`
+        // Construir respuesta con TODOS los datos encontrados
+        let foundMsg = `Te encontre! Eres ${senderResult.name}.\n\n`
+        if (senderResult.idType && senderResult.idNumber) {
+          foundMsg += `${senderResult.idType}: ${senderResult.idNumber}\n`
+        }
+
         if (senderResult.addresses && senderResult.addresses.length > 0) {
-          foundMsg += ` Tienes esta direccion guardada: ${senderResult.addresses[0].address}`
-          if (senderResult.addresses[0].entryPin) {
-            foundMsg += ` (PIN: ${senderResult.addresses[0].entryPin})`
+          const addr = senderResult.addresses[0]
+          foundMsg += `Direccion: ${addr.address}\n`
+          if (addr.entryPin && addr.entryPin !== 'NO') {
+            foundMsg += `PIN entrada: ${addr.entryPin}\n`
           }
-          foundMsg += `. La usamos?`
-          // Guardar direccion temporalmente
-          newCollectedData._pendingAddress = senderResult.addresses[0]
+          foundMsg += `\nSon correctos estos datos?`
+          // Guardar direccion temporalmente para confirmar
+          newCollectedData._pendingAddress = addr
         } else {
-          foundMsg += ` Dame tu direccion de recogida.`
+          foundMsg += `\nDame tu direccion de recogida.`
         }
         response = foundMsg
       } else {
@@ -1009,22 +1103,34 @@ export async function handleIncomingMessage(
       const recipientResult = await searchRecipientByPhone(gptResponse.searchRecipient)
 
       if (recipientResult.found) {
-        // Destinatario encontrado
+        // Destinatario encontrado - guardar TODOS sus datos
         newCollectedData.recipientName = recipientResult.name
         newCollectedData.recipientPhone = recipientResult.phone || gptResponse.searchRecipient
         if (recipientResult.ci) newCollectedData.recipientCI = recipientResult.ci
 
-        let foundMsg = `Encontre a ${recipientResult.name}.`
+        // Construir mensaje con TODOS los datos encontrados
+        let foundMsg = `Encontre a ${recipientResult.name}!\n\n`
+        foundMsg += `Tel: ${recipientResult.phone || gptResponse.searchRecipient}\n`
+        if (recipientResult.ci) {
+          foundMsg += `CI: ${recipientResult.ci}\n`
+        }
+
         if (recipientResult.addresses && recipientResult.addresses.length > 0) {
           const addr = recipientResult.addresses[0]
-          foundMsg += ` Direccion: ${addr.street || ''}, ${addr.municipality || ''}, ${addr.province || ''}.`
+          foundMsg += `Direccion: ${addr.street || ''}`
+          if (addr.reparto) foundMsg += `, ${addr.reparto}`
+          foundMsg += `\n${addr.municipality || ''}, ${addr.province || ''}\n`
+
+          // Guardar todos los datos de direccion
           newCollectedData.recipientProvince = addr.province
           newCollectedData.recipientMunicipality = addr.municipality
           newCollectedData.recipientStreet = addr.street
           if (addr.reparto) newCollectedData.recipientReparto = addr.reparto
-          foundMsg += ` La usamos?`
+          if (addr.instructions) newCollectedData.recipientInstructions = addr.instructions
+
+          foundMsg += `\nSon correctos estos datos?`
         } else {
-          foundMsg += ` Pero no tengo su direccion. En que provincia esta?`
+          foundMsg += `\nPero no tengo su direccion guardada. En que provincia esta?`
         }
         response = foundMsg
       } else {
@@ -1032,6 +1138,15 @@ export async function handleIncomingMessage(
         newCollectedData.recipientPhone = gptResponse.searchRecipient
         response = 'No lo tengo registrado. Como se llama la persona que recibe?'
       }
+    }
+
+    // Mostrar fechas disponibles si GPT lo solicita
+    if (gptResponse.getAvailableDates) {
+      console.log('[WhatsApp Agent] GPT solicita mostrar fechas disponibles')
+      const availableDates = getAvailableDates()
+      response = formatAvailableDatesMessage(availableDates)
+      // Guardar fechas disponibles para referencia al parsear la respuesta del usuario
+      newCollectedData._availableDates = availableDates
     }
 
     // Detectar si el usuario confirma usar datos existentes
@@ -1045,6 +1160,78 @@ export async function handleIncomingMessage(
       if (addr.entryPin) newCollectedData.senderEntryPin = addr.entryPin
       delete newCollectedData._pendingAddress
       console.log('[WhatsApp Agent] Direccion confirmada:', addr.address)
+    }
+
+    // Parsear seleccion de fecha si hay fechas disponibles guardadas
+    if (newCollectedData._availableDates && !newCollectedData.scheduledDate) {
+      const availableDates = newCollectedData._availableDates as { date: string; dayName: string; slots: string[] }[]
+      const msgLower = messageBody.toLowerCase()
+
+      // Intentar parsear formato "1-2" (fecha-horario)
+      const numericMatch = msgLower.match(/(\d)-(\d)/)
+      if (numericMatch) {
+        const dateIdx = parseInt(numericMatch[1]) - 1
+        const slotIdx = parseInt(numericMatch[2]) - 1
+        if (availableDates[dateIdx] && availableDates[dateIdx].slots[slotIdx]) {
+          newCollectedData.scheduledDate = availableDates[dateIdx].date
+          newCollectedData.timeSlot = availableDates[dateIdx].slots[slotIdx]
+          delete newCollectedData._availableDates
+          console.log('[WhatsApp Agent] Fecha seleccionada:', newCollectedData.scheduledDate, newCollectedData.timeSlot)
+        }
+      }
+
+      // Intentar parsear texto natural
+      if (!newCollectedData.scheduledDate) {
+        // Detectar dia
+        let selectedDateIdx = -1
+        if (msgLower.includes('hoy')) {
+          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Hoy')
+        } else if (msgLower.includes('mañana') || msgLower.includes('manana')) {
+          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Manana')
+        } else if (msgLower.includes('lunes')) {
+          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Lunes')
+        } else if (msgLower.includes('martes')) {
+          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Martes')
+        } else if (msgLower.includes('miercoles') || msgLower.includes('miércoles')) {
+          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Miercoles')
+        } else if (msgLower.includes('jueves')) {
+          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Jueves')
+        } else if (msgLower.includes('viernes')) {
+          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Viernes')
+        } else if (msgLower.includes('sabado') || msgLower.includes('sábado')) {
+          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Sabado')
+        } else if (msgLower.includes('domingo')) {
+          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Domingo')
+        }
+
+        // Detectar horario
+        let selectedSlot = ''
+        if (msgLower.includes('mañana') && !msgLower.includes('manana')) {
+          // "mañana" como hora del dia, no como "tomorrow"
+          selectedSlot = '8:00 AM - 12:00 PM'
+        } else if (msgLower.includes('temprano') || (msgLower.includes('manana') && selectedDateIdx >= 0)) {
+          // Si dice "mañana temprano" = tomorrow morning
+          if (selectedDateIdx >= 0) {
+            selectedSlot = '8:00 AM - 12:00 PM'
+          }
+        }
+        if (msgLower.includes('tarde')) {
+          selectedSlot = '12:00 PM - 4:00 PM'
+        } else if (msgLower.includes('noche')) {
+          selectedSlot = '4:00 PM - 8:00 PM'
+        }
+
+        // Si encontro ambos, guardar
+        if (selectedDateIdx >= 0 && selectedSlot) {
+          // Verificar que el slot este disponible para esa fecha
+          if (availableDates[selectedDateIdx].slots.includes(selectedSlot)) {
+            newCollectedData.scheduledDate = availableDates[selectedDateIdx].date
+            newCollectedData.timeSlot = selectedSlot
+            delete newCollectedData._availableDates
+            console.log('[WhatsApp Agent] Fecha seleccionada (texto):', newCollectedData.scheduledDate, newCollectedData.timeSlot)
+          }
+        }
+      }
     }
 
     // Mostrar resumen si GPT lo solicita O si tenemos todos los datos

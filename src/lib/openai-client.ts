@@ -14,73 +14,56 @@ function getOpenAI(): OpenAI {
   return _openai
 }
 
-// System prompt para el agente de LogiRapid - FLUJO ESTRUCTURADO
+// System prompt para el agente de LogiRapid - SOLO PAQUETERÍA
 const SYSTEM_PROMPT = `Eres Maria de LogiRapid. Hablas natural, como cubana de Miami. Corto y directo, maximo 2 oraciones.
 
-SERVICIOS:
-1. Recogida de paquetes (USA a Cuba)
-2. Envio de dinero (remesas)
+SOLO AYUDAS CON: Recogida de paquetes para enviar a Cuba.
+NO HABLES DE: Remesas, dinero, cupones familiares. Si preguntan por eso: "Para enviar dinero llama al 305-123-4567"
 
-REGLA CRITICA:
-- SIEMPRE llama extract_pickup_order_data cuando el usuario da cualquier dato
+FLUJO OBLIGATORIO - Sigue estos pasos EN ORDEN:
+
+PASO 1 - REMITENTE (quien envia desde USA):
+- Pregunta: "Dame tu numero pa buscarte en el sistema"
+- Llama search_customer(phone)
+- Si lo encuentras: Muestra TODOS sus datos y pregunta "Son correctos estos datos?"
+- Si no existe: Pide datos UNO A UNO
+
+PASO 2 - DESTINATARIO CUBA (quien recibe):
+- Pregunta: "Dame el telefono de quien recibe en Cuba"
+- Llama search_recipient(phone)
+- Si lo encuentras: Muestra TODOS sus datos y pregunta "Son correctos?"
+- Si no existe: Pide datos UNO A UNO
+
+PASO 3 - FECHA DE RECOGIDA:
+- Cuando tengas remitente y destinatario completos
+- Llama get_available_dates()
+- El sistema mostrara las fechas disponibles
+- Espera que el usuario elija
+
+PASO 4 - CONFIRMACIÓN:
+- Cuando tenga fecha seleccionada -> request_summary
+- Si confirma todo -> extract_pickup_order_data({allDataComplete: true})
+
+DATOS REMITENTE (USA):
+- Nombre completo
+- Tipo ID (Pasaporte/Licencia/ID)
+- Numero del ID
+- Direccion completa (calle, ciudad, estado, ZIP)
+- PIN de entrada (codigo numerico o "NO" si no hay)
+
+DATOS DESTINATARIO (CUBA):
+- Nombre completo
+- Carnet de Identidad (11 digitos OBLIGATORIO)
+- Provincia
+- Municipio
+- Calle y numero
+
+REGLAS:
 - Pregunta UN dato a la vez
-- Respuestas cortas y naturales
-
-FLUJO RECOGIDA:
-
-1. "Dame tu numero pa buscarte" -> search_customer con el telefono
-
-2. Si no existe, pide UNO A UNO:
-   - Nombre completo
-   - Tipo ID (Pasaporte/Licencia/ID)
-   - Numero del ID
-   - Direccion completa (calle, ciudad, estado, ZIP)
-   - PIN de entrada (numero/codigo para entrar al edificio, o "NO" si no hay)
-
-3. "Y el telefono en Cuba?" -> search_recipient
-
-4. Si no existe, pide UNO A UNO:
-   - Nombre completo
-   - Carnet de Identidad (11 digitos)
-   - Provincia
-   - Municipio
-   - Calle y numero
-
-5. Cuando tengas TODO -> request_summary({ready: true})
-   Si confirma -> extract_pickup_order_data({allDataComplete: true})
-
-SOBRE EL PIN DE ENTRADA:
-- Es un codigo numerico para entrar al edificio/comunidad (ej: "1234", "4567#")
-- Si no hay codigo, el usuario dira "no", "no hay", "ninguno"
-- Guarda "NO" si no hay PIN
-- NO confundir con la direccion
-
-EJEMPLOS:
-Usuario: "Pedro Lopez"
--> extract_pickup_order_data({senderName: "Pedro Lopez"})
--> "Que tipo de ID tienes Pedro?"
-
-Usuario: "Licencia"
--> extract_pickup_order_data({senderIdType: "Licencia"})
--> "Y el numero de la licencia?"
-
-Usuario: "D123456"
--> extract_pickup_order_data({senderIdNumber: "D123456"})
--> "Dame la direccion completa"
-
-Usuario: "123 Main St Miami FL 33186"
--> extract_pickup_order_data({senderAddress: "123 Main St Miami FL 33186"})
--> "Hay codigo o PIN pa entrar al edificio?"
-
-Usuario: "No hay"
--> extract_pickup_order_data({senderEntryPin: "NO"})
--> "Ok. Y el telefono de quien recibe en Cuba?"
-
-Usuario: "El codigo es 4567"
--> extract_pickup_order_data({senderEntryPin: "4567"})
--> "Perfecto. Y el telefono en Cuba?"
-
-IMPORTANTE: Extrae SOLO el dato que corresponde, no mezcles campos.`
+- SIEMPRE llama extract_pickup_order_data cuando el usuario da cualquier dato
+- Cuando encuentres datos guardados, SIEMPRE muéstralos completos al usuario
+- No inventes datos, solo usa lo que el usuario dice
+- El CI de Cuba DEBE tener 11 digitos`
 
 // Interfaces
 export interface ConversationMessage {
@@ -94,10 +77,11 @@ export interface GPTResponse {
   extractedData?: Record<string, unknown>
   flowComplete?: boolean
   readyToCreateOrder?: boolean
-  // Nuevas acciones de busqueda
+  // Acciones de busqueda
   searchSender?: string    // Telefono para buscar remitente
   searchRecipient?: string // Telefono para buscar destinatario Cuba
   requestSummary?: boolean // Solicita mostrar resumen
+  getAvailableDates?: boolean // Solicita mostrar fechas disponibles
 }
 
 // Function definitions para extraer datos estructurados
@@ -146,6 +130,17 @@ const functions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'get_available_dates',
+      description: 'LLAMAR cuando ya tienes los datos del remitente y destinatario completos para mostrar las fechas y horarios disponibles para la recogida',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'extract_pickup_order_data',
       description: 'LLAMAR SIEMPRE que el usuario da cualquier dato de recogida. Extraer CADA dato que mencione.',
       parameters: {
@@ -180,42 +175,15 @@ const functions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
-      name: 'extract_remittance_order_data',
-      description: 'LLAMAR SIEMPRE que el usuario da datos de remesa/cupon.',
-      parameters: {
-        type: 'object',
-        properties: {
-          amount: { type: 'number', description: 'Monto en USD' },
-          senderName: { type: 'string', description: 'Nombre de quien envia' },
-          recipientName: { type: 'string', description: 'Nombre del beneficiario en Cuba' },
-          recipientPhone: { type: 'string', description: 'Telefono en Cuba' },
-          province: { type: 'string', description: 'Provincia' },
-          municipality: { type: 'string', description: 'Municipio' },
-          address: { type: 'string', description: 'Direccion de entrega' },
-          allDataComplete: {
-            type: 'boolean',
-            description: 'TRUE solo cuando tienes amount, senderName, recipientName, recipientPhone, province, municipality, address Y el usuario CONFIRMO'
-          }
-        }
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
       name: 'detect_intent',
-      description: 'Detecta la intencion del usuario cuando inicia una conversacion o cambia de tema',
+      description: 'Detecta la intencion del usuario cuando inicia una conversacion',
       parameters: {
         type: 'object',
         properties: {
           intent: {
             type: 'string',
-            enum: ['pickup_order', 'remittance_order', 'support', 'greeting', 'unknown'],
+            enum: ['pickup_order', 'support', 'greeting', 'unknown'],
             description: 'La intencion detectada del usuario'
-          },
-          confidence: {
-            type: 'number',
-            description: 'Nivel de confianza de 0 a 1'
           }
         },
         required: ['intent']
@@ -273,10 +241,11 @@ Continua recopilando los datos faltantes.`
     let flowComplete = false
     let readyToCreateOrder = false
 
-    // Variables para busquedas
+    // Variables para busquedas y acciones
     let searchSender: string | undefined
     let searchRecipient: string | undefined
     let requestSummary = false
+    let getAvailableDates = false
 
     // Procesar tool calls si existen
     if (message.tool_calls && message.tool_calls.length > 0) {
@@ -298,6 +267,9 @@ Continua recopilando los datos faltantes.`
         } else if (functionName === 'request_summary') {
           requestSummary = args.ready === true
           console.log('[OpenAI] GPT solicita mostrar resumen')
+        } else if (functionName === 'get_available_dates') {
+          getAvailableDates = true
+          console.log('[OpenAI] GPT solicita mostrar fechas disponibles')
         } else if (functionName === 'extract_pickup_order_data') {
           // Filtrar solo campos con valor
           const cleanArgs = Object.fromEntries(
@@ -305,16 +277,6 @@ Continua recopilando los datos faltantes.`
           )
           extractedData = { ...extractedData, ...cleanArgs }
           console.log('[OpenAI] Datos extraidos pickup:', cleanArgs)
-          if (args.allDataComplete) {
-            flowComplete = true
-            readyToCreateOrder = true
-          }
-        } else if (functionName === 'extract_remittance_order_data') {
-          const cleanArgs = Object.fromEntries(
-            Object.entries(args).filter(([_, v]) => v !== null && v !== undefined && v !== '')
-          )
-          extractedData = { ...extractedData, ...cleanArgs }
-          console.log('[OpenAI] Datos extraidos remesa:', cleanArgs)
           if (args.allDataComplete) {
             flowComplete = true
             readyToCreateOrder = true
@@ -357,7 +319,8 @@ Continua recopilando los datos faltantes.`
       readyToCreateOrder,
       searchSender,
       searchRecipient,
-      requestSummary
+      requestSummary,
+      getAvailableDates
     }
   } catch (error) {
     console.error('[OpenAI] Error processing message:', error)
