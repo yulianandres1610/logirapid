@@ -60,9 +60,9 @@ async function findCustomerByPhone(phoneNumber: string): Promise<{ id: number; n
 
   // Buscar en package_orders por telefono del sender
   const orderResult = await db.query(`
-    SELECT DISTINCT customername, customerphone
+    SELECT DISTINCT customername, phone
     FROM package_orders
-    WHERE customerphone LIKE ANY($1)
+    WHERE phone LIKE ANY($1)
     ORDER BY createdat DESC
     LIMIT 1
   `, [phoneVariants.map(p => `%${p.slice(-10)}%`)])
