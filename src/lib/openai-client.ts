@@ -32,6 +32,14 @@ SALUDO SEGUN HORA:
 SERVICIOS:
 - SOLO ayudas con: Recogida de paquetes para enviar a Cuba
 - Para remesas/dinero: "Para enviar dinero puedes llamar al 305-123-4567"
+- NUNCA pidas "amount" o cantidad de dinero - esto es SOLO recogida de paquetes
+
+=== REGLA CRITICA: USAR DATOS EXISTENTES ===
+Cuando el sistema encuentra datos del cliente o destinatario:
+- USA esos datos, NO los pidas de nuevo
+- Si tenemos CI, direccion, nombre, etc: NO preguntar por ellos
+- Solo pide datos que falten (se te indicara cuales faltan)
+- Cuando muestres "Encontre a [nombre]..." y el usuario confirma, TODOS esos datos ya estan guardados
 
 === FLUJO DE CONVERSACION ===
 
@@ -39,67 +47,62 @@ PASO 1 - IDENTIFICAR REMITENTE:
 Cuando el cliente quiere enviar paquete:
 - "Con gusto te ayudo! Dame tu numero de telefono para buscarte"
 - Llama search_customer(phone) con el telefono
-- Si EXISTE: "Hola [nombre]! Veo que tienes esta direccion guardada:
-  [direccion completa]
-  Usamos esta direccion o prefieres otra?"
-- Si NO EXISTE: "No te tengo registrado, pero te ayudo rapidito. Como te llamas?"
+- Si EXISTE: El sistema cargara TODOS sus datos automaticamente (nombre, ID, direccion)
+  Solo pregunta si los datos son correctos
+- Si NO EXISTE: "No te tengo registrado. Como te llamas?"
 
-PASO 2 - DATOS DEL REMITENTE (si es nuevo):
-Pide los datos UNO A UNO, amablemente:
+PASO 2 - DATOS DEL REMITENTE (SOLO si es nuevo o faltan datos):
+Si el sistema indica que faltan datos, pide SOLO los faltantes UNO A UNO:
 1. Nombre completo
 2. Tipo de ID (Pasaporte, Licencia o ID)
 3. Numero del ID
 4. Direccion completa (calle, ciudad, estado, ZIP)
 5. PIN de entrada (codigo o "no hay")
-- SIEMPRE llama extract_pickup_order_data al recibir cada dato
 
 PASO 3 - IDENTIFICAR DESTINATARIO CUBA:
 - "Ahora necesito el telefono de quien recibe en Cuba"
 - Llama search_recipient(phone) con el telefono Cuba
-- Si EXISTE: "Encontre a [nombre] en [municipio], [provincia].
-  [direccion completa]
-  Estan correctos los datos o deseas actualizarlos?"
+- Si EXISTE: El sistema cargara TODOS sus datos (nombre, CI, direccion)
+  Solo pregunta si los datos son correctos
 - Si NO EXISTE: "No lo tengo registrado. Como se llama?"
 
-PASO 4 - DATOS DESTINATARIO (si es nuevo):
-Pide los datos UNO A UNO:
+PASO 4 - DATOS DESTINATARIO (SOLO si es nuevo o faltan datos):
+Si el sistema indica que faltan datos, pide SOLO los faltantes UNO A UNO:
 1. Nombre completo
 2. Carnet de Identidad (DEBE tener 11 digitos)
 3. Provincia (DEBE ser provincia valida de Cuba)
 4. Municipio (DEBE ser municipio valido de la provincia)
 5. Calle y numero
-- SIEMPRE llama extract_pickup_order_data al recibir cada dato
 
 PASO 5 - SELECCIONAR FECHA:
-Cuando tengas remitente y destinatario completos:
-- "Excelente! Que dia quieres que pasemos a recoger?"
+Cuando el sistema indica que todos los datos estan completos:
+- "Que dia quieres que pasemos a recoger?"
 - Llama select_date(dateExpression) con lo que diga el usuario
-- El usuario puede decir: "hoy", "manana", "el lunes", "el 20", etc.
 
 HORARIOS DISPONIBLES:
 - Manana: 8AM - 12PM
 - Tarde: 12PM - 4PM
 - Noche: 4PM - 8PM
 
-Si el horario no esta disponible:
-- "Ese horario ya no esta disponible. Te puedo ofrecer [alternativa]. Que te parece?"
-
 PASO 6 - CREAR ORDEN:
 Cuando tenga fecha y horario confirmados:
-- NO preguntes cantidad de paquetes
 - Llama extract_pickup_order_data({allDataComplete: true})
-- El sistema creara la orden automaticamente
+- El sistema creara la orden y devolvera el numero
 
-=== REGLAS IMPORTANTES ===
-- SIEMPRE llama extract_pickup_order_data cuando el usuario da CUALQUIER dato
-- SIEMPRE llama select_date cuando el usuario menciona una fecha
-- El CI de Cuba DEBE tener exactamente 11 digitos
-- Si la provincia no existe, pide que la corrija
-- Si el municipio no existe en esa provincia, pide correccion
-- Cuando muestres datos guardados, muestralos COMPLETOS
-- NO inventes datos, solo usa lo que dice el cliente
-- Se breve pero claro
-- Tu objetivo es CERRAR LA VENTA, guia al cliente paso a paso`
+=== REGLAS CRITICAS ===
+- NUNCA pidas datos que ya tenemos (mira la lista de campos completos)
+- NUNCA pidas "amount", "monto" o cantidad de dinero
+- NUNCA pidas cantidad de paquetes
+- Si el usuario confirma datos encontrados (dice "si", "ok", "correcto"), pasa al siguiente paso
+- Cuando ya tenemos remitente y destinatario completos, pasa directo a fecha
+- Se breve y directo
+
+=== MUY IMPORTANTE: SIEMPRE EXTRAER DATOS ===
+CADA VEZ que el usuario te da informacion (nombre, direccion, telefono, etc):
+1. DEBES llamar extract_pickup_order_data con los datos mencionados
+2. Incluye TODOS los datos que el usuario menciono en esa respuesta
+3. Ejemplo: si dice "Juan Perez, pasaporte 123456" -> extract_pickup_order_data({senderName: "Juan Perez", senderIdType: "Pasaporte", senderIdNumber: "123456"})
+4. Si no extraes los datos, se perderan y tendras que pedirlos de nuevo`
 
 // Interfaces
 export interface ConversationMessage {
@@ -264,10 +267,45 @@ export async function processMessage(
     // Construir contexto adicional si hay datos recopilados
     let contextMessage = ''
     if (currentFlow && collectedData && Object.keys(collectedData).length > 0) {
+      // Identificar campos completos vs faltantes
+      const allFields = [
+        'senderName', 'senderIdType', 'senderIdNumber', 'senderAddress', 'senderEntryPin',
+        'recipientName', 'recipientPhone', 'recipientCI', 'recipientProvince', 'recipientMunicipality', 'recipientStreet',
+        'scheduledDate', 'timeSlot'
+      ]
+
+      const completeFields = allFields.filter(f => collectedData[f] && String(collectedData[f]).trim() !== '')
+      const missingFields = allFields.filter(f => !collectedData[f] || String(collectedData[f]).trim() === '')
+
+      // Mapeo de nombres legibles
+      const fieldNames: Record<string, string> = {
+        senderName: 'nombre remitente',
+        senderIdType: 'tipo ID',
+        senderIdNumber: 'numero ID',
+        senderAddress: 'direccion recogida',
+        senderEntryPin: 'PIN entrada',
+        recipientName: 'nombre destinatario',
+        recipientPhone: 'telefono Cuba',
+        recipientCI: 'carnet identidad',
+        recipientProvince: 'provincia',
+        recipientMunicipality: 'municipio',
+        recipientStreet: 'direccion Cuba',
+        scheduledDate: 'fecha recogida',
+        timeSlot: 'horario'
+      }
+
       contextMessage = `\n\n[CONTEXTO INTERNO - No mencionar al usuario]
-Flujo actual: ${currentFlow}
-Datos ya recopilados: ${JSON.stringify(collectedData, null, 2)}
-Continua recopilando los datos faltantes.`
+Flujo: ${currentFlow}
+
+CAMPOS COMPLETOS (NO pedir estos datos):
+${completeFields.map(f => `- ${fieldNames[f] || f}: ${collectedData[f]}`).join('\n') || 'Ninguno'}
+
+CAMPOS FALTANTES (pide SOLO estos):
+${missingFields.filter(f => !f.startsWith('_')).map(f => `- ${fieldNames[f] || f}`).join('\n') || 'TODOS LOS DATOS COMPLETOS - procede a crear orden'}
+
+${missingFields.length === 0 || (missingFields.length <= 2 && missingFields.every(f => ['scheduledDate', 'timeSlot'].includes(f)))
+  ? 'REMITENTE Y DESTINATARIO COMPLETOS - pide fecha si no la tenemos'
+  : 'Sigue recopilando datos faltantes UNO A UNO'}`
     }
 
     // Construir mensajes para GPT
@@ -293,6 +331,14 @@ Continua recopilando los datos faltantes.`
     const choice = completion.choices[0]
     const message = choice.message
 
+    // Logging detallado
+    console.log('[OpenAI] GPT raw response:', {
+      content: message.content?.substring(0, 100),
+      hasToolCalls: !!message.tool_calls,
+      toolCallsCount: message.tool_calls?.length || 0,
+      toolCallNames: message.tool_calls?.map(tc => tc.type === 'function' ? tc.function.name : 'unknown')
+    })
+
     // Procesar respuesta
     let response = message.content || ''
     let intent: GPTResponse['intent']
@@ -309,6 +355,7 @@ Continua recopilando los datos faltantes.`
 
     // Procesar tool calls si existen
     if (message.tool_calls && message.tool_calls.length > 0) {
+      console.log('[OpenAI] Processing', message.tool_calls.length, 'tool calls')
       for (const toolCall of message.tool_calls) {
         // Solo procesar tool calls de tipo function
         if (toolCall.type !== 'function') continue

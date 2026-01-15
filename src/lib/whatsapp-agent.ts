@@ -331,22 +331,29 @@ const REMITTANCE_REQUIRED_FIELDS = [
   'address'
 ]
 
-// Campos requeridos para orden de recogida
-const PICKUP_REQUIRED_FIELDS = [
+// Campos MINIMOS requeridos para orden de recogida (sin estos no se puede crear)
+const PICKUP_MINIMUM_FIELDS = [
   'senderName',
-  'senderIdType',        // Tipo de ID (Pasaporte, Licencia, etc.)
-  'senderIdNumber',      // Numero de ID
   'senderAddress',
-  'senderEntryPin',      // PIN de entrada (puede ser "NO")
   'recipientName',
   'recipientPhone',
-  'recipientCI',         // Carnet de Identidad Cuba (11 digitos)
   'recipientProvince',
   'recipientMunicipality',
-  'recipientStreet',     // Calle y numero en Cuba
-  'scheduledDate',       // Fecha de recogida
-  'timeSlot'             // Horario de recogida
+  'scheduledDate',
+  'timeSlot'
 ]
+
+// Campos opcionales pero deseables
+const PICKUP_OPTIONAL_FIELDS = [
+  'senderIdType',        // Tipo de ID (Pasaporte, Licencia, etc.)
+  'senderIdNumber',      // Numero de ID
+  'senderEntryPin',      // PIN de entrada (puede ser "NO")
+  'recipientCI',         // Carnet de Identidad Cuba (11 digitos)
+  'recipientStreet'      // Calle y numero en Cuba
+]
+
+// Todos los campos de recogida (para backward compatibility)
+const PICKUP_REQUIRED_FIELDS = [...PICKUP_MINIMUM_FIELDS, ...PICKUP_OPTIONAL_FIELDS]
 
 /**
  * Valida el formato del Carnet de Identidad de Cuba
@@ -360,14 +367,30 @@ function validateCubanCI(ci: string): boolean {
 
 /**
  * Valida si los datos de recogida estan completos
+ * Ahora distingue entre campos minimos y opcionales
  */
-function validatePickupData(data: Record<string, unknown>): { valid: boolean; missing: string[]; errors: string[] } {
+function validatePickupData(data: Record<string, unknown>): {
+  valid: boolean
+  minimumMet: boolean
+  missing: string[]
+  missingOptional: string[]
+  errors: string[]
+} {
   const missing: string[] = []
+  const missingOptional: string[] = []
   const errors: string[] = []
 
-  for (const field of PICKUP_REQUIRED_FIELDS) {
+  // Verificar campos minimos
+  for (const field of PICKUP_MINIMUM_FIELDS) {
     if (!data[field] || (typeof data[field] === 'string' && data[field].toString().trim() === '')) {
       missing.push(field)
+    }
+  }
+
+  // Verificar campos opcionales
+  for (const field of PICKUP_OPTIONAL_FIELDS) {
+    if (!data[field] || (typeof data[field] === 'string' && data[field].toString().trim() === '')) {
+      missingOptional.push(field)
     }
   }
 
@@ -376,7 +399,15 @@ function validatePickupData(data: Record<string, unknown>): { valid: boolean; mi
     errors.push('El Carnet de Identidad debe tener 11 digitos')
   }
 
-  return { valid: missing.length === 0 && errors.length === 0, missing, errors }
+  const minimumMet = missing.length === 0 && errors.length === 0
+
+  return {
+    valid: missing.length === 0 && missingOptional.length === 0 && errors.length === 0,
+    minimumMet,
+    missing,
+    missingOptional,
+    errors
+  }
 }
 
 /**
@@ -919,11 +950,15 @@ async function getOrCreateCustomer(
   const firstName = nameParts[0] || 'Cliente'
   const lastName = nameParts.slice(1).join(' ') || 'WhatsApp'
 
+  // Obtener company_id por defecto (primera compañia disponible)
+  const companyResult = await db.query(`SELECT id FROM companies ORDER BY id LIMIT 1`)
+  const companyId = companyResult.rows[0]?.id || 1
+
   const insertResult = await db.query(`
-    INSERT INTO customers (firstname, lastname, phone, address, createdat, updatedat)
-    VALUES ($1, $2, $3, $4, NOW(), NOW())
+    INSERT INTO customers (firstname, lastname, phone, address, createdat, createdby, company_id)
+    VALUES ($1, $2, $3, $4, NOW(), 'whatsapp-agent', $5)
     RETURNING id
-  `, [firstName, lastName, phoneNumber, address || ''])
+  `, [firstName, lastName, phoneNumber, address || '', companyId])
 
   console.log('[WhatsApp Agent] Nuevo cliente creado:', insertResult.rows[0].id)
   return { customerId: insertResult.rows[0].id, isNew: true }
@@ -1019,8 +1054,28 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
     }]
 
     // 6. Determinar fecha y horario
-    const scheduledDate = data.scheduledDate ? String(data.scheduledDate) : null
+    let scheduledDate: string | null = null
+    if (data.scheduledDate) {
+      // Convertir fecha de formato "16/1" a formato ISO "YYYY-MM-DD"
+      const dateParts = String(data.scheduledDate).split('/')
+      if (dateParts.length === 2) {
+        const day = parseInt(dateParts[0])
+        const month = parseInt(dateParts[1])
+        const year = new Date().getFullYear()
+        // Si el mes es menor al actual, puede ser del próximo año
+        const currentMonth = new Date().getMonth() + 1
+        const actualYear = month < currentMonth ? year + 1 : year
+        scheduledDate = `${actualYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+      } else {
+        scheduledDate = String(data.scheduledDate)
+      }
+    }
     const timeSlot = data.timeSlot ? String(data.timeSlot) : '8:00 AM - 12:00 PM'
+    console.log('[WhatsApp Agent] Fecha convertida:', scheduledDate, 'Horario:', timeSlot)
+
+    // Obtener company_id
+    const companyResult = await db.query(`SELECT id FROM companies ORDER BY id LIMIT 1`)
+    const companyId = companyResult.rows[0]?.id || 1
 
     // 7. Insertar orden con todos los campos requeridos incluyendo coordenadas
     const result = await db.query(`
@@ -1052,11 +1107,12 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
         office_order_data,
         createdby,
         createdat,
-        updatedat
+        updatedat,
+        company_id
       ) VALUES (
         $1, $2, 'recogida', $3, $4, $5, $6, $7, $8, $9, $10, 'US',
         $11, $12, $13, $14, 0, 0, 0, $15, $16, 'cod', 'pending_payment', 'pending',
-        $17, 'whatsapp-agent', NOW(), NOW()
+        $17, 'whatsapp-agent', NOW(), NOW(), $18
       )
       RETURNING id, ordernumber
     `, [
@@ -1076,7 +1132,8 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
       `ID: ${data.senderIdType} ${data.senderIdNumber} | PIN: ${data.senderEntryPin || 'NO'} | Cuba: ${data.recipientName} (CI: ${data.recipientCI}) - ${data.recipientStreet}, ${data.recipientMunicipality}, ${data.recipientProvince} | Tel: ${data.recipientPhone}`,
       scheduledDate,
       timeSlot,
-      JSON.stringify(officeOrderData)
+      JSON.stringify(officeOrderData),
+      companyId
     ])
 
     console.log('[WhatsApp Agent] ===== ORDEN CREADA EXITOSAMENTE =====')
@@ -1320,17 +1377,95 @@ export async function handleIncomingMessage(
     }
     // Eliminar allDataComplete de los datos guardados
     delete newCollectedData.allDataComplete
+
+    // === EXTRACCION MANUAL DE RESPALDO ===
+    // Si GPT no extrajo datos pero el contexto sugiere que el usuario dio información
+    if (!gptResponse.extractedData || Object.keys(gptResponse.extractedData).length === 0) {
+      const msgLower = messageBody.toLowerCase().trim()
+      const prevData = conversation.collected_data
+
+      // Si tenemos senderPhone pero no senderName, el mensaje probablemente es el nombre
+      if (prevData.senderPhone && !prevData.senderName && !newCollectedData.senderName) {
+        // Verificar que no sea un número o comando
+        if (!/^\d+$/.test(msgLower) && !msgLower.startsWith('/') && messageBody.length > 2 && messageBody.length < 50) {
+          newCollectedData.senderName = messageBody.trim()
+          console.log('[WhatsApp Agent] Extraccion manual: senderName =', newCollectedData.senderName)
+        }
+      }
+
+      // Si tenemos recipientPhone pero no recipientName, el mensaje probablemente es el nombre
+      if (prevData.recipientPhone && !prevData.recipientName && !newCollectedData.recipientName) {
+        if (!/^\d+$/.test(msgLower) && !msgLower.startsWith('/') && messageBody.length > 2 && messageBody.length < 50) {
+          newCollectedData.recipientName = messageBody.trim()
+          console.log('[WhatsApp Agent] Extraccion manual: recipientName =', newCollectedData.recipientName)
+        }
+      }
+
+      // Detectar CI cubano (11 dígitos)
+      const ciMatch = messageBody.match(/\b(\d{11})\b/)
+      if (ciMatch && prevData.recipientName && !prevData.recipientCI && !newCollectedData.recipientCI) {
+        newCollectedData.recipientCI = ciMatch[1]
+        console.log('[WhatsApp Agent] Extraccion manual: recipientCI =', newCollectedData.recipientCI)
+      }
+
+      // Detectar provincia de Cuba mencionada
+      if (prevData.recipientName && !prevData.recipientProvince && !newCollectedData.recipientProvince) {
+        const validatedProvince = validateProvince(messageBody)
+        if (validatedProvince) {
+          newCollectedData.recipientProvince = validatedProvince
+          console.log('[WhatsApp Agent] Extraccion manual: recipientProvince =', newCollectedData.recipientProvince)
+        }
+      }
+
+      // Detectar municipio si ya tenemos provincia
+      if (prevData.recipientProvince && !prevData.recipientMunicipality && !newCollectedData.recipientMunicipality) {
+        const validation = validateCubaAddress(String(prevData.recipientProvince), messageBody)
+        if (validation.valid && validation.municipality) {
+          newCollectedData.recipientMunicipality = validation.municipality
+          console.log('[WhatsApp Agent] Extraccion manual: recipientMunicipality =', newCollectedData.recipientMunicipality)
+        }
+      }
+
+      // Detectar calle en Cuba si ya tenemos municipio
+      if (prevData.recipientMunicipality && !prevData.recipientStreet && !newCollectedData.recipientStreet) {
+        if (messageBody.length > 5 && messageBody.length < 200 && !/^\d{11}$/.test(messageBody)) {
+          newCollectedData.recipientStreet = messageBody.trim()
+          console.log('[WhatsApp Agent] Extraccion manual: recipientStreet =', newCollectedData.recipientStreet)
+        }
+      }
+    }
+
     console.log('[WhatsApp Agent] Datos acumulados:', JSON.stringify(newCollectedData))
 
     // 7. Determinar nuevo flujo
     let newFlow = conversation.current_flow
+
+    // Detectar flujo por intent explícito de GPT
     if (gptResponse.intent && conversation.current_flow === 'idle') {
       if (gptResponse.intent === 'pickup_order') {
         newFlow = 'pickup_order'
-        console.log('[WhatsApp Agent] Nuevo flujo: pickup_order')
+        console.log('[WhatsApp Agent] Nuevo flujo por intent: pickup_order')
       } else if (gptResponse.intent === 'remittance_order') {
         newFlow = 'remittance_order'
-        console.log('[WhatsApp Agent] Nuevo flujo: remittance_order')
+        console.log('[WhatsApp Agent] Nuevo flujo por intent: remittance_order')
+      }
+    }
+
+    // Auto-detectar flujo pickup_order si hay indicadores
+    // (GPT a veces no devuelve intent pero sí busca datos)
+    if (newFlow === 'idle') {
+      const hasPickupIndicators =
+        gptResponse.searchSender ||                    // Buscó remitente
+        gptResponse.searchRecipient ||                 // Buscó destinatario
+        gptResponse.getAvailableDates ||               // Pidió fechas
+        gptResponse.selectDate ||                      // Seleccionó fecha
+        newCollectedData.senderName ||                 // Ya tiene nombre sender
+        newCollectedData.recipientName ||              // Ya tiene nombre recipient
+        conversation.collected_data.senderPhone        // Ya tiene teléfono sender
+
+      if (hasPickupIndicators) {
+        newFlow = 'pickup_order'
+        console.log('[WhatsApp Agent] Nuevo flujo auto-detectado: pickup_order')
       }
     }
 
@@ -1586,32 +1721,40 @@ export async function handleIncomingMessage(
 
     // Mostrar resumen si GPT lo solicita O si tenemos todos los datos
     if (gptResponse.requestSummary && newFlow) {
-      const validation = newFlow === 'pickup_order'
-        ? validatePickupData(newCollectedData)
-        : validateRemittanceData(newCollectedData)
+      if (newFlow === 'pickup_order') {
+        const validation = validatePickupData(newCollectedData)
 
-      if (validation.valid) {
-        console.log('[WhatsApp Agent] Mostrando resumen con datos reales')
-        response = generateDataSummary(newCollectedData, newFlow)
-      } else {
-        console.log('[WhatsApp Agent] Faltan datos para resumen:', validation.missing)
-        // Pedir el primer dato faltante
-        const fieldNames: Record<string, string> = {
-          senderName: 'tu nombre completo',
-          senderIdType: 'el tipo de ID (Pasaporte, Licencia o ID)',
-          senderIdNumber: 'el numero del ID',
-          senderAddress: 'la direccion de recogida',
-          senderEntryPin: 'si hay PIN o codigo para entrar',
-          recipientName: 'el nombre de quien recibe en Cuba',
-          recipientPhone: 'el telefono del destinatario en Cuba',
-          recipientCI: 'el carnet de identidad (11 digitos)',
-          recipientProvince: 'la provincia en Cuba',
-          recipientMunicipality: 'el municipio',
-          recipientStreet: 'la calle y numero en Cuba'
+        // Mostrar resumen si tenemos los datos minimos
+        if (validation.minimumMet) {
+          console.log('[WhatsApp Agent] Mostrando resumen con datos minimos OK')
+          response = generateDataSummary(newCollectedData, newFlow)
+        } else {
+          console.log('[WhatsApp Agent] Faltan datos minimos para resumen:', validation.missing)
+          // Pedir el primer dato faltante (solo minimos)
+          const fieldNames: Record<string, string> = {
+            senderName: 'tu nombre completo',
+            senderAddress: 'la direccion de recogida',
+            recipientName: 'el nombre de quien recibe en Cuba',
+            recipientPhone: 'el telefono del destinatario en Cuba',
+            recipientProvince: 'la provincia en Cuba',
+            recipientMunicipality: 'el municipio',
+            scheduledDate: 'que dia quieres que pasemos',
+            timeSlot: 'a que hora prefieres'
+          }
+          const firstMissing = validation.missing[0]
+          response = `Me falta ${fieldNames[firstMissing] || firstMissing}. Me lo puedes dar?`
         }
-        const firstMissing = validation.missing[0]
-        response = `Me falta ${fieldNames[firstMissing] || firstMissing}. Cual es?`
+      } else if (newFlow === 'remittance_order') {
+        // Solo validar remesa si estamos explícitamente en ese flujo
+        const validation = validateRemittanceData(newCollectedData)
+        if (validation.valid) {
+          response = generateDataSummary(newCollectedData, newFlow)
+        } else {
+          const firstMissing = validation.missing[0]
+          response = `Me falta ${firstMissing}. Cual es?`
+        }
       }
+      // Si newFlow es 'idle' pero pidió summary, ignorar (no debería pasar)
     }
 
     // 9. Si el flujo esta completo, crear orden
@@ -1627,9 +1770,12 @@ export async function handleIncomingMessage(
         // Validar datos antes de crear
         const validation = validatePickupData(newCollectedData)
         console.log('[WhatsApp Agent] Validacion pickup:', validation)
+        console.log('[WhatsApp Agent] minimumMet:', validation.minimumMet)
+        console.log('[WhatsApp Agent] missing:', validation.missing)
 
-        if (validation.valid) {
-          console.log('[WhatsApp Agent] Creando orden de recogida...')
+        // Crear orden si tenemos los datos MINIMOS (aunque falten opcionales)
+        if (validation.minimumMet) {
+          console.log('[WhatsApp Agent] Creando orden de recogida (datos minimos OK)...')
           const result = await createPickupOrder(newCollectedData, phoneNumber)
           console.log('[WhatsApp Agent] Resultado createPickupOrder:', result)
 
@@ -1637,16 +1783,28 @@ export async function handleIncomingMessage(
             orderCreated = true
             orderId = result.orderId
             orderNumber = result.orderNumber
-            response = `Listo! Ya quedo registrado, tu numero de orden es ${orderNumber}. Te llamamos para coordinar la recogida ok?`
-            // Marcar conversacion como completada en lugar de solo resetear
+            response = `Listo! Ya quedo registrada tu orden ${orderNumber}. Te llamamos para coordinar la recogida. Gracias!`
+            // Marcar conversacion como completada
             await markConversationCompleted(conversation.id, result.orderId, 'pickup')
           } else {
             console.error('[WhatsApp Agent] Error creando orden:', result.error)
             response = 'Uy perdon, se me trabo el sistema. Puedes decirme los datos otra vez?'
           }
         } else {
-          console.log('[WhatsApp Agent] Datos incompletos, faltan:', validation.missing)
-          // No crear orden, seguir recopilando
+          console.log('[WhatsApp Agent] Faltan datos minimos:', validation.missing)
+          // Informar que datos faltan
+          const fieldNames: Record<string, string> = {
+            senderName: 'tu nombre',
+            senderAddress: 'tu direccion',
+            recipientName: 'nombre del destinatario',
+            recipientPhone: 'telefono de Cuba',
+            recipientProvince: 'provincia',
+            recipientMunicipality: 'municipio',
+            scheduledDate: 'fecha de recogida',
+            timeSlot: 'horario'
+          }
+          const missingNames = validation.missing.map(f => fieldNames[f] || f).slice(0, 2)
+          response = `Me falta ${missingNames.join(' y ')} para crear la orden. Me lo puedes dar?`
         }
       } else if (newFlow === 'remittance_order') {
         // Validar datos antes de crear
