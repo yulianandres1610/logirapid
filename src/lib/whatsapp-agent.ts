@@ -777,6 +777,7 @@ export async function getOrCreateConversation(phoneNumber: string): Promise<Conv
 
 /**
  * Guarda un mensaje en el historial
+ * @param sentBy - Identifica quién envió: 'customer' | 'ai' | 'agent'
  */
 export async function saveMessage(
   conversationId: number,
@@ -784,19 +785,24 @@ export async function saveMessage(
   content: string,
   messageSid?: string,
   intent?: string,
-  extractedData?: Record<string, unknown>
+  extractedData?: Record<string, unknown>,
+  sentBy?: 'customer' | 'ai' | 'agent'
 ): Promise<void> {
+  // Determinar sent_by automáticamente si no se proporciona
+  const sender = sentBy || (direction === 'inbound' ? 'customer' : 'ai')
+
   await db.query(`
     INSERT INTO whatsapp_messages (
-      conversation_id, direction, message_sid, content, detected_intent, extracted_data
-    ) VALUES ($1, $2, $3, $4, $5, $6)
+      conversation_id, direction, message_sid, content, detected_intent, extracted_data, sent_by
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
   `, [
     conversationId,
     direction,
     messageSid || null,
     content,
     intent || null,
-    extractedData ? JSON.stringify(extractedData) : null
+    extractedData ? JSON.stringify(extractedData) : null,
+    sender
   ])
 }
 

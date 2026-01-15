@@ -71,6 +71,7 @@ export async function GET(
       delivery_status: string | null
       error_message: string | null
       created_at: string
+      sent_by: string | null
     }> = []
 
     if (conversationResult.rows.length > 0) {
@@ -98,7 +99,8 @@ export async function GET(
           detected_intent,
           delivery_status,
           error_message,
-          created_at
+          created_at,
+          sent_by
         FROM whatsapp_messages
         WHERE conversation_id = $1
         ORDER BY created_at ASC

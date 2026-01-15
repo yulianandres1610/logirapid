@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Users,
@@ -39,7 +39,11 @@ import {
   ChevronFirst,
   ChevronLast,
   Filter,
-  Send
+  Send,
+  Pause,
+  Play,
+  Bot,
+  UserCircle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -214,12 +218,17 @@ export default function CRMPage() {
       detected_intent: string | null
       delivery_status: string | null
       created_at: string
+      sent_by: string | null
     }>
     status: { label: string; color: string }
   } | null>(null)
   const [whatsappLoading, setWhatsappLoading] = useState(false)
   const [newWhatsappMessage, setNewWhatsappMessage] = useState('')
   const [sendingWhatsapp, setSendingWhatsapp] = useState(false)
+  const [isPolling, setIsPolling] = useState(true)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const lastMessageCountRef = useRef<number>(0)
 
   // Estados para autocompletado de direcciones
   const [addressSuggestions, setAddressSuggestions] = useState([])
@@ -801,6 +810,49 @@ export default function CRMPage() {
       setSendingWhatsapp(false)
     }
   }
+
+  // Polling para actualización automática del chat
+  useEffect(() => {
+    if (selectedCustomer && activeTab === 'whatsapp' && isPolling) {
+      pollingIntervalRef.current = setInterval(async () => {
+        try {
+          const response = await fetch(`/api/crm/customers/${selectedCustomer.id}/whatsapp`)
+          const result = await response.json()
+          if (result.success) {
+            // Solo actualizar si hay nuevos mensajes
+            const newCount = result.data.messages?.length || 0
+            if (newCount !== lastMessageCountRef.current) {
+              setWhatsappData(result.data)
+              lastMessageCountRef.current = newCount
+            }
+          }
+        } catch (error) {
+          console.error('Error polling WhatsApp:', error)
+        }
+      }, 3000)
+    }
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+      }
+    }
+  }, [selectedCustomer, activeTab, isPolling])
+
+  // Auto-scroll al último mensaje
+  useEffect(() => {
+    if (messagesEndRef.current && whatsappData?.messages?.length) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [whatsappData?.messages?.length])
+
+  // Actualizar contador de mensajes cuando se carga WhatsApp data
+  useEffect(() => {
+    if (whatsappData?.messages) {
+      lastMessageCountRef.current = whatsappData.messages.length
+    }
+  }, [whatsappData?.messages])
 
   const handleViewCustomer = async (customer: Customer) => {
     setSelectedCustomer(customer)
@@ -2698,220 +2750,252 @@ export default function CRMPage() {
                   />
                 )}
 
-                {/* WhatsApp Tab Content */}
+                {/* WhatsApp Tab Content - Diseño estilo WhatsApp */}
                 {activeTab === 'whatsapp' && (
-                  <div className="space-y-6">
+                  <div className="flex flex-col h-[600px] rounded-xl overflow-hidden shadow-lg border border-gray-200 dark:border-gray-700">
                     {whatsappLoading ? (
-                      <div className="flex items-center justify-center py-12">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
-                        <span className="ml-3 text-gray-500">Cargando historial de WhatsApp...</span>
-                      </div>
-                    ) : !whatsappData?.conversation ? (
-                      <div className="text-center py-12">
-                        <MessageSquare className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                        <p className={cn(
-                          "text-lg font-medium mb-2",
-                          theme === 'dark' ? "text-gray-300" : "text-gray-700"
-                        )}>
-                          Sin conversaciones de WhatsApp
-                        </p>
-                        <p className="text-gray-500 mb-6">
-                          Este cliente no tiene historial de chat con el agente de WhatsApp
-                        </p>
-                        {/* Input para enviar mensaje inicial */}
-                        <div className="max-w-md mx-auto">
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={newWhatsappMessage}
-                              onChange={(e) => setNewWhatsappMessage(e.target.value)}
-                              placeholder="Escribe un mensaje para iniciar conversación..."
-                              className={cn(
-                                "flex-1 px-4 py-2 rounded-lg border focus:ring-2 focus:ring-green-500 focus:outline-none",
-                                theme === 'dark'
-                                  ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
-                                  : "bg-white border-gray-300 text-gray-900 placeholder-gray-500"
-                              )}
-                              onKeyDown={(e) => e.key === 'Enter' && !sendingWhatsapp && sendWhatsappMessage()}
-                            />
-                            <button
-                              onClick={sendWhatsappMessage}
-                              disabled={sendingWhatsapp || !newWhatsappMessage.trim()}
-                              className={cn(
-                                "px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2",
-                                sendingWhatsapp || !newWhatsappMessage.trim()
-                                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                                  : "bg-green-600 text-white hover:bg-green-700"
-                              )}
-                            >
-                              {sendingWhatsapp ? (
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                              ) : (
-                                <Send className="w-4 h-4" />
-                              )}
-                              Enviar
-                            </button>
-                          </div>
+                      <div className="flex-1 flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500 mx-auto mb-3"></div>
+                          <p className="text-gray-500">Cargando conversación...</p>
                         </div>
                       </div>
                     ) : (
                       <>
-                        {/* Estado de la conversación */}
-                        <div className={cn(
-                          "p-4 rounded-lg border",
-                          theme === 'dark' ? "bg-gray-700 border-gray-600" : "bg-gray-50 border-gray-200"
-                        )}>
-                          <div className="flex items-center justify-between mb-3">
-                            <h4 className={cn(
-                              "font-semibold flex items-center gap-2",
-                              theme === 'dark' ? "text-white" : "text-gray-900"
-                            )}>
-                              <MessageSquare className="w-5 h-5 text-green-500" />
-                              Estado de la Conversación
-                            </h4>
+                        {/* Header del Chat - Estilo WhatsApp */}
+                        <div className="flex items-center gap-3 px-4 py-3 bg-emerald-600 text-white">
+                          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                            <UserCircle className="w-6 h-6" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold truncate">
+                              {selectedCustomer?.fullName || 'Cliente'}
+                            </h3>
+                            <p className="text-xs text-emerald-100 truncate">
+                              {selectedCustomer?.phone || 'Sin teléfono'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {/* Estado de la conversación */}
                             <span className={cn(
-                              "px-3 py-1 rounded-full text-sm font-medium",
-                              whatsappData.status.color === 'green' && "bg-green-100 text-green-800",
-                              whatsappData.status.color === 'yellow' && "bg-yellow-100 text-yellow-800",
-                              whatsappData.status.color === 'red' && "bg-red-100 text-red-800"
+                              "px-2 py-1 rounded-full text-xs font-medium",
+                              whatsappData?.status?.color === 'green' && "bg-emerald-800 text-emerald-100",
+                              whatsappData?.status?.color === 'yellow' && "bg-yellow-500 text-yellow-900",
+                              whatsappData?.status?.color === 'red' && "bg-red-500 text-white",
+                              whatsappData?.status?.color === 'gray' && "bg-gray-500 text-white"
                             )}>
-                              {whatsappData.status.label}
+                              {whatsappData?.status?.label || 'Sin conversación'}
                             </span>
+                            {/* Botón de polling */}
+                            <button
+                              onClick={() => setIsPolling(!isPolling)}
+                              className={cn(
+                                "p-1.5 rounded-full transition-colors",
+                                isPolling ? "bg-emerald-700 hover:bg-emerald-800" : "bg-red-500 hover:bg-red-600"
+                              )}
+                              title={isPolling ? 'Pausar actualización automática' : 'Reanudar actualización automática'}
+                            >
+                              {isPolling ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                            </button>
                           </div>
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-500">Flujo actual:</span>
-                              <span className={cn(
-                                "ml-2 font-medium",
-                                theme === 'dark' ? "text-gray-200" : "text-gray-800"
-                              )}>
-                                {whatsappData.conversation.current_flow === 'idle' ? 'Inactivo' :
-                                 whatsappData.conversation.current_flow === 'pickup_order' ? 'Orden de Recogida' :
-                                 whatsappData.conversation.current_flow || 'N/A'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Último mensaje:</span>
-                              <span className={cn(
-                                "ml-2 font-medium",
-                                theme === 'dark' ? "text-gray-200" : "text-gray-800"
-                              )}>
-                                {whatsappData.conversation.last_message_at
-                                  ? new Date(whatsappData.conversation.last_message_at).toLocaleString('es-ES')
-                                  : 'N/A'}
-                              </span>
-                            </div>
-                            {whatsappData.conversation.completed_order_id && (
-                              <div className="col-span-2">
-                                <span className="text-gray-500">Orden creada:</span>
-                                <span className={cn(
-                                  "ml-2 font-medium text-green-600"
-                                )}>
-                                  #{whatsappData.conversation.completed_order_id} ({whatsappData.conversation.completed_order_type})
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          {/* Datos recopilados */}
-                          {whatsappData.conversation.collected_data && Object.keys(whatsappData.conversation.collected_data).length > 0 && (
-                            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
-                              <p className="text-sm font-medium text-gray-500 mb-2">Datos recopilados:</p>
-                              <div className="grid grid-cols-2 gap-2 text-sm">
-                                {Object.entries(whatsappData.conversation.collected_data)
-                                  .filter(([key]) => !key.startsWith('_'))
-                                  .map(([key, value]) => (
-                                    <div key={key} className={cn(
-                                      "px-2 py-1 rounded",
-                                      theme === 'dark' ? "bg-gray-600" : "bg-gray-100"
-                                    )}>
-                                      <span className="text-gray-500">{key}:</span>
-                                      <span className={cn(
-                                        "ml-1",
-                                        theme === 'dark' ? "text-gray-200" : "text-gray-800"
-                                      )}>
-                                        {String(value)}
-                                      </span>
-                                    </div>
-                                  ))}
-                              </div>
-                            </div>
-                          )}
                         </div>
 
-                        {/* Historial de mensajes */}
-                        <div className={cn(
-                          "rounded-lg border",
-                          theme === 'dark' ? "bg-gray-700 border-gray-600" : "bg-white border-gray-200"
-                        )}>
-                          <div className="p-4 border-b border-gray-200 dark:border-gray-600">
-                            <h4 className={cn(
-                              "font-semibold",
-                              theme === 'dark' ? "text-white" : "text-gray-900"
-                            )}>
-                              Historial de Mensajes ({whatsappData.messages.length})
-                            </h4>
-                          </div>
-                          <div className="max-h-96 overflow-y-auto p-4 space-y-3">
-                            {whatsappData.messages.length === 0 ? (
-                              <p className="text-center text-gray-500 py-4">Sin mensajes</p>
-                            ) : (
-                              whatsappData.messages.map((msg) => (
+                        {/* Área de mensajes */}
+                        <div
+                          className={cn(
+                            "flex-1 overflow-y-auto p-4 space-y-3",
+                            theme === 'dark'
+                              ? "bg-gray-800"
+                              : "bg-[#e5ddd5]"
+                          )}
+                          style={{
+                            backgroundImage: theme === 'dark'
+                              ? 'none'
+                              : 'url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAABLElEQVR4nO2YMQ6CQBBF/9oYK2NtPIGeQU9h4RU8gFfwBFZewM5KeAALCwstjCXUxsZEwobAmCwbVlbQPbPJlEz+vswkw8wC0q8jA9gBeABwAvAAcF3WwBnADsAVwB7AG4A7AHtm4ALASUGdAdAQ3ACYAjgC2DOtRwBOAJ4BHJkWLQG8AFQZAH0BNAQPAEcAe6a1DeAI4BmAE4AbgCeAHYAnJN0AeAJYZwA0BJYAnpm0F4AjgBuAJ4AdgCMkhYG1BkBD8AhJYWBdAbgCWGdSHwFsAayZ1EcAawBrTOojgDWANZP6COBIoD4CWANYY1IfAawBrDGpjwDWANaY1EcAawBrTOojgDWANSb1EcAawBqT+ghgDWCNSX0EsAawxqQ+AlgDWGNSHwGsAaw53QPfXQRfVvQAAAAASUVORK5CYII=")',
+                            backgroundSize: '40px 40px'
+                          }}
+                        >
+                          {!whatsappData?.messages?.length ? (
+                            <div className="flex flex-col items-center justify-center h-full text-center">
+                              <div className={cn(
+                                "w-16 h-16 rounded-full flex items-center justify-center mb-4",
+                                theme === 'dark' ? "bg-gray-700" : "bg-white/80"
+                              )}>
+                                <MessageSquare className="w-8 h-8 text-gray-400" />
+                              </div>
+                              <p className={cn(
+                                "font-medium mb-1",
+                                theme === 'dark' ? "text-gray-300" : "text-gray-700"
+                              )}>
+                                Sin mensajes aún
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                Envía un mensaje para iniciar la conversación
+                              </p>
+                            </div>
+                          ) : (
+                            <>
+                              {whatsappData.messages.map((msg) => (
                                 <div
                                   key={msg.id}
                                   className={cn(
-                                    "flex",
+                                    "flex gap-2",
                                     msg.direction === 'outbound' ? "justify-end" : "justify-start"
                                   )}
                                 >
+                                  {/* Avatar para mensajes entrantes (cliente) */}
+                                  {msg.direction === 'inbound' && (
+                                    <div className="w-8 h-8 rounded-full bg-gray-500 flex items-center justify-center text-white text-sm flex-shrink-0 self-end">
+                                      <User className="w-4 h-4" />
+                                    </div>
+                                  )}
+
+                                  {/* Burbuja del mensaje */}
                                   <div className={cn(
-                                    "max-w-[80%] rounded-lg px-4 py-2",
+                                    "max-w-[70%] rounded-2xl px-4 py-2 shadow-sm relative",
                                     msg.direction === 'outbound'
-                                      ? "bg-green-600 text-white"
+                                      ? msg.sent_by === 'ai' || !msg.sent_by
+                                        ? "bg-emerald-500 text-white"
+                                        : "bg-blue-500 text-white"
                                       : theme === 'dark'
-                                        ? "bg-gray-600 text-gray-200"
-                                        : "bg-gray-100 text-gray-800"
+                                        ? "bg-gray-700 text-gray-100"
+                                        : "bg-white text-gray-900"
                                   )}>
-                                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                    {/* Indicador de quién envió (solo para salientes) */}
+                                    {msg.direction === 'outbound' && (
+                                      <div className={cn(
+                                        "text-[10px] font-medium mb-1 flex items-center gap-1",
+                                        msg.sent_by === 'ai' || !msg.sent_by
+                                          ? "text-emerald-100"
+                                          : "text-blue-100"
+                                      )}>
+                                        {msg.sent_by === 'ai' || !msg.sent_by ? (
+                                          <>
+                                            <Bot className="w-3 h-3" />
+                                            María (IA)
+                                          </>
+                                        ) : (
+                                          <>
+                                            <UserCircle className="w-3 h-3" />
+                                            Agente
+                                          </>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* Indicador para mensajes del cliente */}
+                                    {msg.direction === 'inbound' && (
+                                      <div className={cn(
+                                        "text-[10px] font-medium mb-1",
+                                        theme === 'dark' ? "text-gray-400" : "text-gray-500"
+                                      )}>
+                                        Cliente
+                                      </div>
+                                    )}
+
+                                    {/* Contenido del mensaje */}
+                                    <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+
+                                    {/* Hora y estado de entrega */}
                                     <div className={cn(
-                                      "flex items-center justify-end gap-2 mt-1 text-xs",
-                                      msg.direction === 'outbound' ? "text-green-200" : "text-gray-500"
+                                      "flex items-center justify-end gap-1.5 mt-1",
+                                      msg.direction === 'outbound'
+                                        ? msg.sent_by === 'ai' || !msg.sent_by
+                                          ? "text-emerald-100"
+                                          : "text-blue-100"
+                                        : "text-gray-500"
                                     )}>
-                                      <span>{new Date(msg.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
+                                      <span className="text-[10px]">
+                                        {new Date(msg.created_at).toLocaleTimeString('es-ES', {
+                                          hour: '2-digit',
+                                          minute: '2-digit'
+                                        })}
+                                      </span>
                                       {msg.direction === 'outbound' && msg.delivery_status && (
-                                        <span className={cn(
-                                          msg.delivery_status === 'delivered' || msg.delivery_status === 'read' ? "text-green-200" :
-                                          msg.delivery_status === 'failed' ? "text-red-300" : "text-gray-400"
-                                        )}>
-                                          {msg.delivery_status === 'delivered' ? '✓✓' :
-                                           msg.delivery_status === 'read' ? '✓✓' :
+                                        <span className="text-[10px]">
+                                          {msg.delivery_status === 'delivered' || msg.delivery_status === 'read' ? '✓✓' :
                                            msg.delivery_status === 'sent' ? '✓' :
                                            msg.delivery_status === 'failed' ? '✗' : '○'}
                                         </span>
                                       )}
                                     </div>
                                   </div>
+
+                                  {/* Avatar para mensajes salientes */}
+                                  {msg.direction === 'outbound' && (
+                                    <div className={cn(
+                                      "w-8 h-8 rounded-full flex items-center justify-center text-white text-sm flex-shrink-0 self-end",
+                                      msg.sent_by === 'ai' || !msg.sent_by
+                                        ? "bg-emerald-600"
+                                        : "bg-blue-600"
+                                    )}>
+                                      {msg.sent_by === 'ai' || !msg.sent_by ? (
+                                        <Bot className="w-4 h-4" />
+                                      ) : (
+                                        <UserCircle className="w-4 h-4" />
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
-                              ))
-                            )}
-                          </div>
+                              ))}
+                              {/* Elemento para auto-scroll */}
+                              <div ref={messagesEndRef} />
+                            </>
+                          )}
                         </div>
 
-                        {/* Input para enviar mensaje */}
+                        {/* Información de la conversación (colapsable) */}
+                        {whatsappData?.conversation && (
+                          <div className={cn(
+                            "px-4 py-2 text-xs border-t flex items-center gap-4 flex-wrap",
+                            theme === 'dark'
+                              ? "bg-gray-700 border-gray-600 text-gray-400"
+                              : "bg-gray-50 border-gray-200 text-gray-600"
+                          )}>
+                            <span className="flex items-center gap-1">
+                              <Activity className="w-3 h-3" />
+                              {whatsappData.conversation.current_flow === 'idle' ? 'Inactivo' :
+                               whatsappData.conversation.current_flow === 'pickup_order' ? 'Orden de Recogida' :
+                               whatsappData.conversation.current_flow || 'N/A'}
+                            </span>
+                            {whatsappData.conversation.completed_order_id && (
+                              <span className="flex items-center gap-1 text-emerald-600">
+                                <CheckCircle className="w-3 h-3" />
+                                Orden #{whatsappData.conversation.completed_order_id}
+                              </span>
+                            )}
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {whatsappData.conversation.last_message_at
+                                ? new Date(whatsappData.conversation.last_message_at).toLocaleString('es-ES', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })
+                                : 'N/A'}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Input para enviar mensaje - Estilo WhatsApp */}
                         <div className={cn(
-                          "p-4 rounded-lg border",
-                          theme === 'dark' ? "bg-gray-700 border-gray-600" : "bg-gray-50 border-gray-200"
+                          "px-4 py-3 border-t",
+                          theme === 'dark'
+                            ? "bg-gray-700 border-gray-600"
+                            : "bg-gray-100 border-gray-200"
                         )}>
-                          <div className="flex gap-3">
+                          <div className="flex items-center gap-3">
                             <input
                               type="text"
                               value={newWhatsappMessage}
                               onChange={(e) => setNewWhatsappMessage(e.target.value)}
                               placeholder="Escribe un mensaje..."
                               className={cn(
-                                "flex-1 px-4 py-2 rounded-lg border focus:ring-2 focus:ring-green-500 focus:outline-none",
+                                "flex-1 px-4 py-2.5 rounded-full border-0 focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm",
                                 theme === 'dark'
-                                  ? "bg-gray-800 border-gray-600 text-white placeholder-gray-400"
-                                  : "bg-white border-gray-300 text-gray-900 placeholder-gray-500"
+                                  ? "bg-gray-600 text-white placeholder-gray-400"
+                                  : "bg-white text-gray-900 placeholder-gray-500"
                               )}
                               onKeyDown={(e) => e.key === 'Enter' && !sendingWhatsapp && sendWhatsappMessage()}
                             />
@@ -2919,18 +3003,17 @@ export default function CRMPage() {
                               onClick={sendWhatsappMessage}
                               disabled={sendingWhatsapp || !newWhatsappMessage.trim()}
                               className={cn(
-                                "px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2",
+                                "w-10 h-10 rounded-full flex items-center justify-center transition-all",
                                 sendingWhatsapp || !newWhatsappMessage.trim()
                                   ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                                  : "bg-green-600 text-white hover:bg-green-700"
+                                  : "bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95"
                               )}
                             >
                               {sendingWhatsapp ? (
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
                               ) : (
-                                <Send className="w-4 h-4" />
+                                <Send className="w-5 h-5" />
                               )}
-                              Enviar
                             </button>
                           </div>
                         </div>

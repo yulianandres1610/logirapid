@@ -106,7 +106,7 @@ export async function POST(
       )
     }
 
-    // Guardar mensaje en la base de datos
+    // Guardar mensaje en la base de datos (enviado por agente humano)
     await db.query(`
       INSERT INTO whatsapp_messages (
         conversation_id,
@@ -114,8 +114,9 @@ export async function POST(
         message_sid,
         content,
         delivery_status,
+        sent_by,
         created_at
-      ) VALUES ($1, 'outbound', $2, $3, 'sent', NOW())
+      ) VALUES ($1, 'outbound', $2, $3, 'sent', 'agent', NOW())
     `, [conversationId, sendResult.messageId, message.trim()])
 
     // Actualizar last_message_at de la conversación
