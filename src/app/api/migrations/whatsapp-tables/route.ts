@@ -61,6 +61,28 @@ export async function POST() {
       await db.query(`CREATE INDEX IF NOT EXISTS idx_whatsapp_msg_conv ON whatsapp_messages(conversation_id)`)
     } catch { /* Index may exist */ }
 
+    // Agregar columnas de estado de entrega (si no existen)
+    try {
+      await db.query(`ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS delivery_status VARCHAR(20)`)
+    } catch { /* Column may exist */ }
+
+    try {
+      await db.query(`ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS error_code VARCHAR(20)`)
+    } catch { /* Column may exist */ }
+
+    try {
+      await db.query(`ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS error_message TEXT`)
+    } catch { /* Column may exist */ }
+
+    try {
+      await db.query(`ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS status_updated_at TIMESTAMP`)
+    } catch { /* Column may exist */ }
+
+    // Indice para buscar por message_sid
+    try {
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_whatsapp_msg_sid ON whatsapp_messages(message_sid)`)
+    } catch { /* Index may exist */ }
+
     // Crear tabla de links de pago
     await db.query(`
       CREATE TABLE IF NOT EXISTS payment_links (
