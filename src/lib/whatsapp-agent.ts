@@ -931,37 +931,57 @@ async function getOrCreateCustomer(
   name: string,
   address?: string
 ): Promise<{ customerId: number; isNew: boolean }> {
-  const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10)
+  try {
+    const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10)
+    console.log('[WhatsApp Agent] getOrCreateCustomer - Phone:', phoneNumber, 'Clean:', cleanPhone, 'Name:', name)
 
-  // Buscar cliente existente por telefono
-  const existingResult = await db.query(`
-    SELECT id FROM customers
-    WHERE phone LIKE $1 OR phone LIKE $2
-    LIMIT 1
-  `, [`%${cleanPhone}%`, `%${cleanPhone}%`])
+    // Buscar cliente existente por telefono Y nombre similar (para evitar duplicados)
+    const existingResult = await db.query(`
+      SELECT id, firstname, lastname, phone FROM customers
+      WHERE phone LIKE $1 OR phone LIKE $2
+      ORDER BY id DESC
+      LIMIT 1
+    `, [`%${cleanPhone}%`, `%${cleanPhone}%`])
 
-  if (existingResult.rows.length > 0) {
-    console.log('[WhatsApp Agent] Cliente existente encontrado:', existingResult.rows[0].id)
-    return { customerId: existingResult.rows[0].id, isNew: false }
+    if (existingResult.rows.length > 0) {
+      const existing = existingResult.rows[0]
+      console.log('[WhatsApp Agent] Cliente existente encontrado:', existing.id, existing.firstname, existing.lastname)
+      return { customerId: existing.id, isNew: false }
+    }
+
+    // Crear nuevo cliente
+    const nameParts = (name || 'Cliente WhatsApp').trim().split(' ')
+    const firstName = nameParts[0] || 'Cliente'
+    const lastName = nameParts.slice(1).join(' ') || ''
+
+    console.log('[WhatsApp Agent] Creando nuevo cliente:', firstName, lastName, phoneNumber)
+
+    // Obtener company_id por defecto (primera compañia disponible)
+    const companyResult = await db.query(`SELECT id FROM companies ORDER BY id LIMIT 1`)
+    const companyId = companyResult.rows[0]?.id || 1
+
+    const insertResult = await db.query(`
+      INSERT INTO customers (firstname, lastname, phone, address, createdat, createdby, company_id)
+      VALUES ($1, $2, $3, $4, NOW(), 'whatsapp-agent', $5)
+      RETURNING id
+    `, [firstName, lastName, phoneNumber, address || '', companyId])
+
+    console.log('[WhatsApp Agent] ✅ Nuevo cliente creado con ID:', insertResult.rows[0].id)
+    return { customerId: insertResult.rows[0].id, isNew: true }
+  } catch (error) {
+    console.error('[WhatsApp Agent] ❌ Error creando cliente:', error)
+    // Si falla la creación, intentar buscar de nuevo por si ya existe
+    const fallbackResult = await db.query(`
+      SELECT id FROM customers WHERE phone LIKE $1 LIMIT 1
+    `, [`%${phoneNumber.replace(/\D/g, '').slice(-10)}%`])
+
+    if (fallbackResult.rows.length > 0) {
+      console.log('[WhatsApp Agent] Cliente encontrado en fallback:', fallbackResult.rows[0].id)
+      return { customerId: fallbackResult.rows[0].id, isNew: false }
+    }
+
+    throw error
   }
-
-  // Crear nuevo cliente
-  const nameParts = (name || 'Cliente WhatsApp').split(' ')
-  const firstName = nameParts[0] || 'Cliente'
-  const lastName = nameParts.slice(1).join(' ') || 'WhatsApp'
-
-  // Obtener company_id por defecto (primera compañia disponible)
-  const companyResult = await db.query(`SELECT id FROM companies ORDER BY id LIMIT 1`)
-  const companyId = companyResult.rows[0]?.id || 1
-
-  const insertResult = await db.query(`
-    INSERT INTO customers (firstname, lastname, phone, address, createdat, createdby, company_id)
-    VALUES ($1, $2, $3, $4, NOW(), 'whatsapp-agent', $5)
-    RETURNING id
-  `, [firstName, lastName, phoneNumber, address || '', companyId])
-
-  console.log('[WhatsApp Agent] Nuevo cliente creado:', insertResult.rows[0].id)
-  return { customerId: insertResult.rows[0].id, isNew: true }
 }
 
 /**
@@ -980,7 +1000,7 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
     console.log('[WhatsApp Agent] scheduledDate:', data.scheduledDate)
     console.log('[WhatsApp Agent] timeSlot:', data.timeSlot)
 
-    // 1. Preparar dirección - usar la dirección del cliente tal como la dio
+    // 1. Preparar dirección - usar coordenadas pre-validadas si existen
     const rawAddress = String(data.senderAddress || '').trim()
     let fullAddress = rawAddress
     let street = rawAddress
@@ -990,43 +1010,54 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
     let latitude: number | null = null
     let longitude: number | null = null
 
-    // Solo geocodificar si hay dirección
-    if (rawAddress && rawAddress.length > 5) {
-      console.log('[WhatsApp Agent] Geocodificando dirección:', rawAddress)
-      const geoResult = await geocodeUSAddress(rawAddress)
+    // Verificar si hay coordenadas pre-validadas (de validate_us_address)
+    const preValidatedCoords = data._addressCoordinates as { latitude: number; longitude: number } | undefined
+    if (preValidatedCoords && preValidatedCoords.latitude && preValidatedCoords.longitude) {
+      console.log('[WhatsApp Agent] Usando coordenadas PRE-VALIDADAS:', preValidatedCoords)
+      latitude = preValidatedCoords.latitude
+      longitude = preValidatedCoords.longitude
+      fullAddress = rawAddress  // Ya está formateado
+    }
 
-      if (geoResult) {
-        console.log('[WhatsApp Agent] Geocodificación exitosa:', geoResult)
-        // Guardar la dirección formateada completa
-        fullAddress = geoResult.formattedAddress
-        street = geoResult.street || rawAddress
-        city = geoResult.city || 'Miami'
-        state = geoResult.state || 'FL'
-        zipcode = geoResult.zipcode || ''
-        latitude = geoResult.latitude
-        longitude = geoResult.longitude
-      } else {
-        console.log('[WhatsApp Agent] No se pudo geocodificar, parseando manualmente')
-        // Intentar parsear la dirección manualmente
-        fullAddress = rawAddress  // Mantener la dirección original
-        const addressParts = rawAddress.split(',').map(p => p.trim())
-        if (addressParts.length >= 2) {
-          street = addressParts[0] || rawAddress
-          city = addressParts[1] || 'Miami'
-          if (addressParts.length >= 3) {
-            // El último puede ser "FL 33125" o "Florida 33125"
-            const lastPart = addressParts[addressParts.length - 1] || ''
-            const stateZipMatch = lastPart.match(/([A-Za-z]{2,})\s*(\d{5})?/)
-            if (stateZipMatch) {
-              state = stateZipMatch[1] || 'FL'
-              zipcode = stateZipMatch[2] || ''
+    // Si no hay coordenadas pre-validadas, geocodificar ahora
+    if (!latitude || !longitude) {
+      if (rawAddress && rawAddress.length > 5) {
+        console.log('[WhatsApp Agent] Geocodificando dirección:', rawAddress)
+        const geoResult = await geocodeUSAddress(rawAddress)
+
+        if (geoResult) {
+          console.log('[WhatsApp Agent] Geocodificación exitosa:', geoResult)
+          // Guardar la dirección formateada completa
+          fullAddress = geoResult.formattedAddress
+          street = geoResult.street || rawAddress
+          city = geoResult.city || 'Miami'
+          state = geoResult.state || 'FL'
+          zipcode = geoResult.zipcode || ''
+          latitude = geoResult.latitude
+          longitude = geoResult.longitude
+        } else {
+          console.log('[WhatsApp Agent] No se pudo geocodificar, parseando manualmente')
+          // Intentar parsear la dirección manualmente
+          fullAddress = rawAddress  // Mantener la dirección original
+          const addressParts = rawAddress.split(',').map(p => p.trim())
+          if (addressParts.length >= 2) {
+            street = addressParts[0] || rawAddress
+            city = addressParts[1] || 'Miami'
+            if (addressParts.length >= 3) {
+              // El último puede ser "FL 33125" o "Florida 33125"
+              const lastPart = addressParts[addressParts.length - 1] || ''
+              const stateZipMatch = lastPart.match(/([A-Za-z]{2,})\s*(\d{5})?/)
+              if (stateZipMatch) {
+                state = stateZipMatch[1] || 'FL'
+                zipcode = stateZipMatch[2] || ''
+              }
             }
           }
         }
+      } else {
+        console.log('[WhatsApp Agent] Sin dirección válida, usando valores por defecto')
+        fullAddress = 'Dirección pendiente'
       }
-    } else {
-      console.log('[WhatsApp Agent] Sin dirección válida, usando valores por defecto')
-      fullAddress = 'Dirección pendiente'
     }
 
     console.log('[WhatsApp Agent] Dirección final:', { fullAddress, street, city, state, zipcode, latitude, longitude })
@@ -1636,6 +1667,71 @@ export async function handleIncomingMessage(
         // Destinatario no encontrado
         newCollectedData.recipientPhone = gptResponse.searchRecipient
         response = 'No lo tengo registrado. Como se llama la persona que recibe?'
+      }
+    }
+
+    // Validar direccion USA con Mapbox
+    if (gptResponse.validateAddress) {
+      console.log('[WhatsApp Agent] Validando direccion con Mapbox:', gptResponse.validateAddress)
+      const geoResult = await geocodeUSAddress(gptResponse.validateAddress)
+
+      if (geoResult && geoResult.formattedAddress) {
+        // Direccion validada exitosamente
+        console.log('[WhatsApp Agent] Direccion validada:', geoResult)
+
+        // Guardar temporalmente para que el usuario confirme
+        newCollectedData._pendingValidatedAddress = {
+          original: gptResponse.validateAddress,
+          formatted: geoResult.formattedAddress,
+          street: geoResult.street,
+          city: geoResult.city,
+          state: geoResult.state,
+          zipcode: geoResult.zipcode,
+          latitude: geoResult.latitude,
+          longitude: geoResult.longitude
+        }
+
+        response = `📍 Encontre esta direccion:\n\n*${geoResult.formattedAddress}*\n\nEsta es correcta?`
+      } else {
+        // No se pudo validar la direccion
+        console.log('[WhatsApp Agent] No se pudo validar direccion:', gptResponse.validateAddress)
+        response = `No pude encontrar esa direccion. Por favor dame la direccion completa con:\n- Numero y calle\n- Ciudad\n- Estado (ej: FL)\n- Codigo postal (5 digitos)`
+      }
+    }
+
+    // Detectar confirmacion de direccion validada
+    if (newCollectedData._pendingValidatedAddress && !gptResponse.validateAddress) {
+      const msgLower = messageBody.toLowerCase().trim()
+      const confirmed = ['si', 'sí', 'ok', 'correcto', 'correcta', 'yes', 'esta bien', 'esa es', 'esa misma'].some(
+        word => msgLower === word || msgLower.startsWith(word + ' ') || msgLower.endsWith(' ' + word)
+      )
+      const denied = ['no', 'incorrecta', 'incorrecto', 'otra', 'cambiar'].some(
+        word => msgLower === word || msgLower.startsWith(word + ' ')
+      )
+
+      if (confirmed) {
+        // Guardar la direccion validada
+        const validatedAddr = newCollectedData._pendingValidatedAddress as {
+          formatted: string
+          street: string
+          city: string
+          state: string
+          zipcode: string
+          latitude: number
+          longitude: number
+        }
+        newCollectedData.senderAddress = validatedAddr.formatted
+        newCollectedData._addressValidated = true
+        newCollectedData._addressCoordinates = {
+          latitude: validatedAddr.latitude,
+          longitude: validatedAddr.longitude
+        }
+        delete newCollectedData._pendingValidatedAddress
+        console.log('[WhatsApp Agent] Direccion confirmada:', validatedAddr.formatted)
+        response = 'Perfecto! Direccion confirmada. Ahora necesito el codigo o PIN para entrar al edificio. Si no hay, dime "no hay".'
+      } else if (denied) {
+        delete newCollectedData._pendingValidatedAddress
+        response = 'Ok, dame la direccion correcta por favor.'
       }
     }
 

@@ -70,16 +70,22 @@ Solo cuando FASE 1 y 2 esten COMPLETAS:
 1. Preguntar que dia prefiere
 2. Preguntar horario: manana (8-12), tarde (12-4), noche (4-8)
 
-=== VALIDACION DE DIRECCIONES USA ===
+=== VALIDACION DE DIRECCIONES USA (MUY IMPORTANTE) ===
+Cuando el usuario da una direccion:
+1. LLAMA validate_us_address(direccion) INMEDIATAMENTE
+2. El sistema validara con Mapbox y te devolvera la direccion formateada
+3. MUESTRA la direccion formateada al usuario para que CONFIRME
+4. Solo si el usuario dice SI/CORRECTO, guarda la direccion con extract_pickup_order_data
+5. Si el usuario dice NO o corrige, pide la direccion de nuevo
+
 Una direccion USA valida DEBE tener:
 - Numero y calle (ej: "123 Main Street")
 - Ciudad (ej: "Miami")
 - Estado (ej: "FL" o "Florida")
 - ZIP code (5 digitos, ej: "33125")
 
-Si falta algo, pedir que complete. Ejemplo:
-- Usuario: "vivo en Miami" -> "Necesito la direccion completa con calle, numero y ZIP"
-- Usuario: "123 Main St Miami" -> "Cual es el codigo ZIP?"
+IMPORTANTE: Las coordenadas correctas dependen de validar la direccion.
+NO guardes una direccion sin validarla primero con validate_us_address.
 
 === EXTRACCION DE DATOS ===
 CADA VEZ que el usuario da un dato, llama extract_pickup_order_data con ESE dato especifico.
@@ -112,6 +118,7 @@ export interface GPTResponse {
   getAvailableDates?: boolean // Solicita mostrar fechas disponibles
   selectDate?: string // Expresion de fecha del usuario (hoy, manana, lunes, etc)
   startNewOrder?: boolean // Usuario quiere empezar nueva orden (limpiar datos)
+  validateAddress?: string // Direccion a validar con Mapbox
 }
 
 // Function definitions para extraer datos estructurados
@@ -206,6 +213,20 @@ const functions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'validate_us_address',
+      description: 'LLAMAR cuando el usuario da una direccion en USA. Valida la direccion con Mapbox y devuelve la direccion formateada para confirmacion.',
+      parameters: {
+        type: 'object',
+        properties: {
+          address: { type: 'string', description: 'La direccion que dio el usuario, tal cual la escribio' }
+        },
+        required: ['address']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'extract_pickup_order_data',
       description: 'LLAMAR SIEMPRE que el usuario da cualquier dato de recogida. Extraer CADA dato que mencione.',
       parameters: {
@@ -216,7 +237,7 @@ const functions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           senderPhone: { type: 'string', description: 'Telefono del remitente' },
           senderIdType: { type: 'string', description: 'Tipo de ID: Pasaporte, Licencia, ID estatal' },
           senderIdNumber: { type: 'string', description: 'Numero del documento de identidad' },
-          senderAddress: { type: 'string', description: 'Direccion completa con calle, ciudad, estado y ZIP. NO incluir PIN aqui.' },
+          senderAddress: { type: 'string', description: 'Direccion completa VALIDADA con calle, ciudad, estado y ZIP. NO incluir PIN aqui.' },
           senderEntryPin: { type: 'string', description: 'SOLO el codigo numerico para entrar al edificio (ej: "1234", "4567#"). Guardar "NO" si el usuario dice que no hay codigo. NUNCA poner la direccion aqui.' },
           senderInstructions: { type: 'string', description: 'Instrucciones de acceso' },
           // Datos del destinatario (Cuba)
@@ -356,6 +377,7 @@ ${missingFields.length === 0 || (missingFields.length <= 2 && missingFields.ever
     let getAvailableDates = false
     let selectDate: string | undefined
     let startNewOrder = false
+    let validateAddress: string | undefined
 
     // Procesar tool calls si existen
     if (message.tool_calls && message.tool_calls.length > 0) {
@@ -391,6 +413,9 @@ ${missingFields.length === 0 || (missingFields.length <= 2 && missingFields.ever
             extractedData = { ...extractedData, preferredSlot: args.preferredSlot }
           }
           console.log('[OpenAI] GPT solicita procesar fecha:', args.dateExpression, args.preferredSlot)
+        } else if (functionName === 'validate_us_address') {
+          validateAddress = args.address
+          console.log('[OpenAI] GPT solicita validar direccion:', args.address)
         } else if (functionName === 'extract_pickup_order_data') {
           // Filtrar solo campos con valor
           const cleanArgs = Object.fromEntries(
@@ -443,7 +468,8 @@ ${missingFields.length === 0 || (missingFields.length <= 2 && missingFields.ever
       requestSummary,
       getAvailableDates,
       selectDate,
-      startNewOrder
+      startNewOrder,
+      validateAddress
     }
   } catch (error) {
     console.error('[OpenAI] Error processing message:', error)
