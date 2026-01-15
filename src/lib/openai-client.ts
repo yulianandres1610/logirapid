@@ -49,8 +49,8 @@ FASE 1 - REMITENTE (quien envia):
 2. Si lo encontramos en sistema: mostrar datos y confirmar
 3. Si NO existe o quiere usar otros datos, pedir UNO A UNO:
    a. Nombre completo
-   b. Tipo de ID (Pasaporte, Licencia, ID)
-   c. Numero del ID
+   b. Tipo de ID (Pasaporte, Licencia, ID) - NO validar formato
+   c. Numero del ID - ACEPTAR CUALQUIER formato (ej: "H2334", "AB123456", etc.) - NO validar
    d. Direccion COMPLETA (ejemplo: "123 Main St, Miami, FL 33125")
    e. PIN de entrada (codigo numerico o "no hay")
 
@@ -235,8 +235,8 @@ const functions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           // Datos del remitente (USA)
           senderName: { type: 'string', description: 'Nombre completo del remitente' },
           senderPhone: { type: 'string', description: 'Telefono del remitente' },
-          senderIdType: { type: 'string', description: 'Tipo de ID: Pasaporte, Licencia, ID estatal' },
-          senderIdNumber: { type: 'string', description: 'Numero del documento de identidad' },
+          senderIdType: { type: 'string', description: 'Tipo de ID: Pasaporte, Licencia, ID estatal - NO validar' },
+          senderIdNumber: { type: 'string', description: 'Numero del documento de identidad - ACEPTAR cualquier formato (H2334, AB123, etc) - NO validar' },
           senderAddress: { type: 'string', description: 'Direccion completa VALIDADA con calle, ciudad, estado y ZIP. NO incluir PIN aqui.' },
           senderEntryPin: { type: 'string', description: 'SOLO el codigo numerico para entrar al edificio (ej: "1234", "4567#"). Guardar "NO" si el usuario dice que no hay codigo. NUNCA poner la direccion aqui.' },
           senderInstructions: { type: 'string', description: 'Instrucciones de acceso' },

@@ -126,34 +126,129 @@ async function geocodeUSAddress(address: string): Promise<{
   longitude: number
 } | null> {
   try {
-    // Construir URL base del servidor
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-    const response = await fetch(`${baseUrl}/api/address-lookup?q=${encodeURIComponent(address)}`)
+    // Usar Mapbox Geocoding API directamente
+    const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoieXVsaWFuYW5kcmVzMTYxMCIsImEiOiJjbWgycTlsZGsxM200YnNvbnN2d2wwcHJ5In0.wlU7-bazAs2eYjknx7H97Q'
+
+    // Limpiar la dirección
+    let cleanAddress = address.trim()
+      .replace(/,\s*us$/i, '')
+      .replace(/,\s*usa$/i, '')
+      .replace(/,\s*united states$/i, '')
+
+    const encodedAddress = encodeURIComponent(cleanAddress)
+
+    console.log('[WhatsApp Agent] Geocodificando con Mapbox:', cleanAddress)
+
+    // Primer intento: buscar como dirección exacta
+    let response = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedAddress}.json?` +
+      `access_token=${mapboxToken}&` +
+      `country=US&` +
+      `types=address,place&` +
+      `autocomplete=true&` +
+      `limit=5`
+    )
 
     if (!response.ok) {
-      console.log('[WhatsApp Agent] Geocode API error:', response.status)
+      console.log('[WhatsApp Agent] Mapbox API error:', response.status)
       return null
     }
 
-    const result = await response.json()
+    let data = await response.json()
 
-    if (result.success && result.suggestions && result.suggestions.length > 0) {
-      const best = result.suggestions[0]
+    // Si no hay resultados, intentar sin restricción de tipo
+    if (!data.features || data.features.length === 0) {
+      console.log('[WhatsApp Agent] Sin resultados con types=address, intentando búsqueda general')
+      response = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedAddress}.json?` +
+        `access_token=${mapboxToken}&` +
+        `country=US&` +
+        `autocomplete=true&` +
+        `limit=5`
+      )
+      data = await response.json()
+    }
+
+    if (data.features && data.features.length > 0) {
+      // Buscar el mejor resultado (preferir el que tenga más componentes)
+      let bestFeature = data.features[0]
+      for (const feature of data.features) {
+        if (feature.place_type?.includes('address')) {
+          bestFeature = feature
+          break
+        }
+      }
+
+      const feature = bestFeature
+      const [longitude, latitude] = feature.center
+
+      // Extraer componentes de la dirección
+      let street = ''
+      let city = ''
+      let state = ''
+      let zipcode = ''
+
+      // Extraer de context array (más confiable)
+      if (feature.context) {
+        for (const ctx of feature.context) {
+          if (ctx.id.startsWith('postcode')) {
+            zipcode = ctx.text
+          } else if (ctx.id.startsWith('place') || ctx.id.startsWith('locality')) {
+            city = ctx.text
+          } else if (ctx.id.startsWith('region')) {
+            // Convertir nombre de estado a abreviación
+            state = ctx.short_code?.replace('US-', '') || ctx.text
+          }
+        }
+      }
+
+      // Street viene del texto principal
+      street = feature.text || ''
+      if (feature.address) {
+        street = `${feature.address} ${street}`
+      }
+
+      // Si no hay street pero tenemos place_name, usarlo
+      if (!street && feature.place_name) {
+        const parts = feature.place_name.split(',')
+        street = parts[0]?.trim() || ''
+      }
+
+      // Formatear dirección completa
+      let formattedAddress = ''
+      if (street) formattedAddress += street
+      if (city) formattedAddress += formattedAddress ? `, ${city}` : city
+      if (state) formattedAddress += formattedAddress ? `, ${state}` : state
+      if (zipcode) formattedAddress += ` ${zipcode}`
+      formattedAddress = formattedAddress.trim()
+
+      // Si no pudimos extraer bien, usar place_name directamente
+      if (!formattedAddress || formattedAddress.length < 5) {
+        formattedAddress = feature.place_name?.replace(/, United States$/, '') || address
+      }
+
+      console.log('[WhatsApp Agent] Geocodificación exitosa:', {
+        formattedAddress,
+        latitude,
+        longitude,
+        relevance: feature.relevance
+      })
+
       return {
-        formattedAddress: `${best.address.street}, ${best.address.city}, ${best.address.state} ${best.address.postalCode}`,
-        street: best.address.street,
-        city: best.address.city,
-        state: best.address.state,
-        zipcode: best.address.postalCode,
-        latitude: best.coordinates[1],
-        longitude: best.coordinates[0]
+        formattedAddress,
+        street: street || formattedAddress.split(',')[0] || '',
+        city: city || 'Miami',
+        state: state || 'FL',
+        zipcode: zipcode || '',
+        latitude,
+        longitude
       }
     }
 
-    console.log('[WhatsApp Agent] No geocode results for:', address)
+    console.log('[WhatsApp Agent] Sin resultados de Mapbox para:', address)
     return null
   } catch (error) {
-    console.error('[WhatsApp Agent] Geocode error:', error)
+    console.error('[WhatsApp Agent] Error en geocodificación Mapbox:', error)
     return null
   }
 }
