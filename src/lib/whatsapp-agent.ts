@@ -60,7 +60,7 @@ async function findCustomerByPhone(phoneNumber: string): Promise<{ id: number; n
 
   // Buscar en package_orders por telefono del sender
   const orderResult = await db.query(`
-    SELECT DISTINCT customername, phone
+    SELECT customername, phone, createdat
     FROM package_orders
     WHERE phone LIKE ANY($1)
     ORDER BY createdat DESC
@@ -76,7 +76,7 @@ async function findCustomerByPhone(phoneNumber: string): Promise<{ id: number; n
 
   // Buscar en remittance_orders
   const remitResult = await db.query(`
-    SELECT DISTINCT sender_name, sender_phone
+    SELECT sender_name, sender_phone, created_at
     FROM remittance_orders
     WHERE sender_phone LIKE ANY($1)
     ORDER BY created_at DESC
