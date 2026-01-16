@@ -26,21 +26,37 @@ SERVICIO UNICO: Recogida de paquetes para enviar a Cuba
 - Para remesas/dinero: "Para dinero llama al 305-123-4567"
 - NUNCA pidas "amount", "monto" o cantidad de dinero
 
-=== REGLA #1: NO INVENTAR DATOS ===
-- NUNCA asumas datos que el usuario no te ha dado
-- NUNCA inventes direcciones, nombres, telefonos o cualquier dato
-- Solo usa EXACTAMENTE lo que el usuario escribio
-- Si no entiendes algo, pregunta de nuevo
+=== REGLA CRITICA #1: NO INVENTAR DATOS - CERO TOLERANCIA ===
+⚠️ ESTA ES LA REGLA MAS IMPORTANTE - VIOLACION = ERROR GRAVE ⚠️
 
-=== REGLA #2: UN DATO A LA VEZ ===
+- NUNCA JAMAS asumas, inventes o supongas datos
+- NUNCA uses datos de mensajes anteriores para un cliente nuevo
+- NUNCA rellenes campos con valores inventados o de ejemplo
+- Si el usuario NO dijo un dato, ese dato NO existe
+- Solo guarda EXACTAMENTE lo que el usuario ACABA de escribir en ESTE mensaje
+- Si no entiendes algo, pregunta de nuevo - NUNCA adivines
+- NUNCA llames extract_pickup_order_data con datos que el usuario NO dijo
+
+EJEMPLOS DE ERRORES (NO HACER):
+❌ Usuario dice "Maria Garcia" -> NO inventes telefono, direccion, ID
+❌ Usuario dice "quiero enviar" -> NO asumas que ya tiene datos previos
+❌ Usuario menciona una direccion -> NO inventes el ZIP code o ciudad
+
+EJEMPLOS CORRECTOS:
+✅ Usuario dice "Maria Garcia" -> Solo guarda senderName="Maria Garcia", pregunta siguiente dato
+✅ Usuario dice "123 Main St Miami" -> Valida con Mapbox, NO inventes ZIP
+
+=== REGLA #2: UN DATO A LA VEZ - SIN EXCEPCIONES ===
 - Pide UN solo dato por mensaje
+- ESPERA la respuesta antes de pedir otro
 - NO pases al siguiente dato hasta que el actual este COMPLETO
 - Si el usuario da info incompleta, pide que complete ESE dato
 
-=== REGLA #3: NUEVA ORDEN = LIMPIAR DATOS ===
+=== REGLA #3: NUEVA ORDEN = BORRAR TODO ===
 Si el usuario dice: "nueva orden", "otro envio", "para otra persona", "empezar de nuevo":
-- Llama start_new_order() para limpiar datos anteriores
-- Comienza desde cero pidiendo el telefono
+- Llama start_new_order() INMEDIATAMENTE
+- OLVIDA todos los datos anteriores
+- Comienza desde cero como si fuera primera vez
 
 === FLUJO ESTRICTO - SEGUIR EN ORDEN ===
 
@@ -235,7 +251,7 @@ const functions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'extract_pickup_order_data',
-      description: 'LLAMAR SIEMPRE que el usuario da cualquier dato de recogida. Extraer CADA dato que mencione.',
+      description: 'LLAMAR SOLO cuando el usuario DA un dato especifico en SU MENSAJE ACTUAL. NO llamar si no hay datos nuevos. NO inventar valores. Solo extraer lo que el usuario ACABA de decir.',
       parameters: {
         type: 'object',
         properties: {
@@ -328,11 +344,15 @@ export async function processMessage(
       contextMessage = `\n\n[CONTEXTO INTERNO - No mencionar al usuario]
 Flujo: ${currentFlow}
 
-CAMPOS COMPLETOS (NO pedir estos datos):
-${completeFields.map(f => `- ${fieldNames[f] || f}: ${collectedData[f]}`).join('\n') || 'Ninguno'}
+⚠️ RECORDATORIO: NO INVENTAR DATOS - Solo usa lo que el usuario DIJO en este mensaje.
 
-CAMPOS FALTANTES (pide SOLO estos):
-${missingFields.filter(f => !f.startsWith('_')).map(f => `- ${fieldNames[f] || f}`).join('\n') || 'TODOS LOS DATOS COMPLETOS - procede a crear orden'}
+DATOS YA RECOPILADOS (NO volver a pedir):
+${completeFields.length > 0 ? completeFields.map(f => `✓ ${fieldNames[f] || f}: "${collectedData[f]}"`).join('\n') : '(ninguno todavia)'}
+
+DATOS FALTANTES (pedir UNO A LA VEZ, en orden):
+${missingFields.filter(f => !f.startsWith('_')).map(f => `○ ${fieldNames[f] || f}`).join('\n') || 'TODOS LOS DATOS COMPLETOS'}
+
+PROXIMO DATO A PEDIR: ${missingFields.filter(f => !f.startsWith('_'))[0] ? fieldNames[missingFields.filter(f => !f.startsWith('_'))[0]] || missingFields[0] : 'ninguno - crear orden'}
 
 ${missingFields.length === 0 || (missingFields.length <= 2 && missingFields.every(f => ['scheduledDate', 'timeSlot'].includes(f)))
   ? 'REMITENTE Y DESTINATARIO COMPLETOS - pide fecha si no la tenemos'
@@ -429,9 +449,24 @@ ${collectedData.scheduledDate && collectedData.timeSlot ? '✅ FECHA Y HORARIO Y
           validateAddress = args.address
           console.log('[OpenAI] GPT solicita validar direccion:', args.address)
         } else if (functionName === 'extract_pickup_order_data') {
-          // Filtrar solo campos con valor
+          // Filtrar solo campos con valor REAL (no inventados)
+          const suspiciousPatterns = [
+            /^(ejemplo|example|test|prueba|xxx|placeholder)/i,
+            /^(null|undefined|n\/a|na|ninguno|none)$/i,
+            /^\d{3}-\d{3}-\d{4}$/, // Telefono formato generico
+          ]
           const cleanArgs = Object.fromEntries(
-            Object.entries(args).filter(([_, v]) => v !== null && v !== undefined && v !== '')
+            Object.entries(args).filter(([key, v]) => {
+              if (v === null || v === undefined || v === '') return false
+              const strVal = String(v).trim()
+              if (strVal.length === 0) return false
+              // Rechazar valores sospechosos de ser inventados
+              if (suspiciousPatterns.some(p => p.test(strVal))) {
+                console.log('[OpenAI] ⚠️ Rechazando valor sospechoso:', key, '=', strVal)
+                return false
+              }
+              return true
+            })
           )
           extractedData = { ...extractedData, ...cleanArgs }
           console.log('[OpenAI] Datos extraidos pickup:', cleanArgs)
