@@ -2355,6 +2355,21 @@ export async function handleIncomingMessage(
       } else if (validation.municipality) {
         // Municipio válido - guardar el nombre correcto
         newCollectedData.recipientMunicipality = validation.municipality
+
+        // Si tenemos todos los datos mínimos del destinatario, mostrar fechas automáticamente
+        if (newCollectedData.recipientName &&
+            newCollectedData.recipientPhone &&
+            newCollectedData.recipientProvince &&
+            !newCollectedData._availableDates &&
+            !newCollectedData.scheduledDate) {
+          console.log('[WhatsApp Agent] Datos del destinatario completos, mostrando fechas')
+          newCollectedData._recipientConfirmed = true
+          const availableDates = getAvailableDates()
+          response = `Perfecto! Destinatario registrado: ${newCollectedData.recipientName} en ${newCollectedData.recipientMunicipality}, ${newCollectedData.recipientProvince}.\n\n` +
+                     formatAvailableDatesMessage(availableDates)
+          newCollectedData._availableDates = availableDates
+          responseOverridden = true
+        }
       }
     }
 
@@ -2447,13 +2462,19 @@ export async function handleIncomingMessage(
       }
     }
 
-    // Auto-crear orden si tenemos todos los datos (remitente confirmado, destinatario confirmado, fecha seleccionada)
-    if (newCollectedData._recipientConfirmed &&
-        newCollectedData.scheduledDate &&
-        newCollectedData.timeSlot &&
-        newCollectedData.senderAddress &&
-        newCollectedData.recipientName) {
-      console.log('[WhatsApp Agent] Todos los datos completos (destinatario confirmado + fecha), creando orden automáticamente')
+    // Auto-crear orden si tenemos todos los datos mínimos requeridos
+    // Verificar datos mínimos: remitente (nombre, dirección) + destinatario (nombre, teléfono, provincia, municipio) + fecha/hora
+    const hasMinimumSenderData = newCollectedData.senderName && newCollectedData.senderAddress
+    const hasMinimumRecipientData = newCollectedData.recipientName &&
+                                     newCollectedData.recipientPhone &&
+                                     newCollectedData.recipientProvince &&
+                                     newCollectedData.recipientMunicipality
+    const hasDateTimeData = newCollectedData.scheduledDate && newCollectedData.timeSlot
+
+    if (hasMinimumSenderData && hasMinimumRecipientData && hasDateTimeData) {
+      console.log('[WhatsApp Agent] Todos los datos mínimos completos, creando orden automáticamente')
+      console.log('[WhatsApp Agent] Sender:', newCollectedData.senderName, '| Recipient:', newCollectedData.recipientName)
+      console.log('[WhatsApp Agent] Date:', newCollectedData.scheduledDate, '| Slot:', newCollectedData.timeSlot)
       gptResponse.readyToCreateOrder = true
       gptResponse.requestSummary = false  // No mostrar resumen, crear directamente
     }
