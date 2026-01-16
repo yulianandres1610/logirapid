@@ -1949,11 +1949,36 @@ export async function handleIncomingMessage(
         newCollectedData._addressState = validatedAddr.state
         newCollectedData._addressZipcode = validatedAddr.zipcode
         delete newCollectedData._pendingValidatedAddress
+        newCollectedData._waitingForPin = true  // Marcar que esperamos PIN
         console.log('[WhatsApp Agent] Direccion confirmada:', validatedAddr.formatted, 'City:', validatedAddr.city, 'State:', validatedAddr.state)
         response = 'Perfecto! Direccion confirmada. Ahora necesito el codigo o PIN para entrar al edificio. Si no hay, dime "no hay".'
+        responseOverridden = true
       } else if (denied) {
         delete newCollectedData._pendingValidatedAddress
         response = 'Ok, dame la direccion correcta por favor.'
+      }
+    }
+
+    // Detectar respuesta de PIN (después de confirmar dirección)
+    if (newCollectedData._waitingForPin && !newCollectedData.senderEntryPin) {
+      const msgLower = messageBody.toLowerCase().trim()
+      const noPinPhrases = ['no hay', 'no tiene', 'ninguno', 'nada', 'no', 'sin pin', 'sin codigo', 'no hay pin', 'no hay codigo', 'no tengo']
+      const hasNoPin = noPinPhrases.some(phrase => msgLower.includes(phrase) || msgLower === phrase)
+
+      if (hasNoPin) {
+        // Usuario indica que no hay PIN
+        newCollectedData.senderEntryPin = 'NO'
+        delete newCollectedData._waitingForPin
+        console.log('[WhatsApp Agent] PIN: No hay (usuario indicó)')
+        response = 'Entendido, sin codigo de acceso. Ahora dame el telefono del destinatario en Cuba (8 digitos).'
+        responseOverridden = true
+      } else if (msgLower.length > 0 && msgLower.length < 20) {
+        // Usuario dio un PIN/código
+        newCollectedData.senderEntryPin = messageBody.trim()
+        delete newCollectedData._waitingForPin
+        console.log('[WhatsApp Agent] PIN guardado:', newCollectedData.senderEntryPin)
+        response = `Perfecto, codigo de acceso: ${newCollectedData.senderEntryPin}. Ahora dame el telefono del destinatario en Cuba (8 digitos).`
+        responseOverridden = true
       }
     }
 

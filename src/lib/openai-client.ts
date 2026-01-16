@@ -358,6 +358,7 @@ ${missingFields.length === 0 || (missingFields.length <= 2 && missingFields.ever
   ? 'REMITENTE Y DESTINATARIO COMPLETOS - pide fecha si no la tenemos'
   : 'Sigue recopilando datos faltantes UNO A UNO'}
 
+${collectedData._waitingForPin ? '⏳ ESPERANDO PIN/CODIGO DE ACCESO - El usuario debe dar un codigo o decir "no hay". NO busques clientes, NO pidas otros datos.' : ''}
 ${collectedData._recipientComplete ? '⚠️ DESTINATARIO ENCONTRADO CON TODOS LOS DATOS (nombre, CI, direccion) - ESPERANDO CONFIRMACION. Solo di "Son correctos estos datos?" NO pidas CI ni nada mas.' : ''}
 ${collectedData._recipientConfirmed ? '✅ DESTINATARIO YA CONFIRMADO - Todos los datos del destinatario estan completos (nombre, CI, direccion). NO pidas CI ni direccion. Solo pide fecha/horario si no los tenemos.' : ''}
 ${collectedData._senderConfirmed ? '✅ REMITENTE YA CONFIRMADO - NO pidas mas datos del remitente.' : ''}
