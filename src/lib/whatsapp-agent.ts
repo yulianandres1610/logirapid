@@ -2018,35 +2018,43 @@ export async function handleIncomingMessage(
       }
     }
 
-    // Crear cliente en CRM cuando tenemos nombre CONFIRMADO (no del GPT, sino del mensaje del usuario)
-    // Solo crear si el mensaje actual parece ser un nombre (no un número, no muy corto)
+    // Crear cliente en CRM cuando tenemos nombre y teléfono del remitente
+    // Esto se ejecuta cuando el usuario da su nombre después de no ser encontrado en el sistema
     if (newCollectedData._needsCustomerCreation && newCollectedData.senderPhone) {
-      // Verificar si el mensaje actual es un nombre válido
+      // Si GPT ya extrajo el nombre O el mensaje actual es un nombre válido, crear el cliente
       const possibleName = messageBody.trim()
-      const isValidName = possibleName.length >= 3 &&
+      const isValidNameInMessage = possibleName.length >= 3 &&
                           possibleName.length <= 50 &&
-                          !/^\d+$/.test(possibleName) &&  // No es solo números
-                          !possibleName.startsWith('/') &&  // No es comando
-                          /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$/.test(possibleName)  // Solo letras y espacios
+                          !/^\d+$/.test(possibleName) &&
+                          !possibleName.startsWith('/') &&
+                          /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$/.test(possibleName)
 
-      if (isValidName && !newCollectedData.senderName) {
-        // El mensaje actual es el nombre del usuario
-        newCollectedData.senderName = possibleName
-        console.log('[WhatsApp Agent] Nombre capturado del mensaje:', possibleName)
+      // Usar el nombre del mensaje si es válido, o el que GPT extrajo
+      const nameToUse = isValidNameInMessage ? possibleName : (newCollectedData.senderName ? String(newCollectedData.senderName) : null)
 
-        console.log('[WhatsApp Agent] Creando cliente nuevo en CRM:', possibleName, newCollectedData.senderPhone)
+      if (nameToUse && !newCollectedData._customerId) {
+        // Guardar el nombre si vino del mensaje
+        if (isValidNameInMessage) {
+          newCollectedData.senderName = possibleName
+          console.log('[WhatsApp Agent] Nombre capturado del mensaje:', possibleName)
+        }
+
+        console.log('[WhatsApp Agent] Creando cliente nuevo en CRM:', nameToUse, newCollectedData.senderPhone)
         try {
           const { customerId, isNew } = await getOrCreateCustomer(
             String(newCollectedData.senderPhone),
-            possibleName
+            nameToUse
           )
+          console.log('[WhatsApp Agent] getOrCreateCustomer resultado - ID:', customerId, 'isNew:', isNew)
+          newCollectedData._customerId = customerId
           if (isNew) {
-            console.log('[WhatsApp Agent] ✅ Cliente creado en CRM con ID:', customerId)
-            newCollectedData._customerId = customerId
+            console.log('[WhatsApp Agent] ✅ Cliente NUEVO creado en CRM con ID:', customerId)
+          } else {
+            console.log('[WhatsApp Agent] Cliente existente encontrado en CRM con ID:', customerId)
           }
           delete newCollectedData._needsCustomerCreation
         } catch (error) {
-          console.error('[WhatsApp Agent] Error creando cliente:', error)
+          console.error('[WhatsApp Agent] ❌ Error creando cliente:', error)
         }
       }
     }
