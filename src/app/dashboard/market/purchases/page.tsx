@@ -248,21 +248,27 @@ export default function MarketPurchasesPage() {
       const response = await fetch('/api/print/services?includeOffline=false')
       const data = await response.json()
       if (data.success && data.data?.services) {
-        // Filter services to only include thermal printers for purchase invoices
+        // Filter services that are active and have printers
+        // Accept any printer type (thermal_80mm preferred, but allow all)
         const activeServices = data.data.services
           .filter((s: { status: string; printers?: unknown[] }) => s.status === 'active' && s.printers && s.printers.length > 0)
-          .map((service: PrintService) => ({
-            ...service,
-            // Only keep thermal printers (80mm receipt printers)
-            printers: service.printers.filter((p: { printerType: string }) => p.printerType === 'thermal_80mm')
-          }))
-          .filter((s: PrintService) => s.printers.length > 0) // Remove services with no thermal printers
 
         setPrintServices(activeServices)
 
-        // Auto-select first available thermal printer
+        // Auto-select first available printer (prefer thermal, then any online)
         for (const service of activeServices) {
-          const availablePrinter = service.printers.find((p: { isOnline: boolean }) => p.isOnline)
+          // First try thermal printers
+          let availablePrinter = service.printers.find((p: { isOnline: boolean; printerType: string }) =>
+            p.isOnline && p.printerType === 'thermal_80mm'
+          )
+          // If no thermal, try any online printer
+          if (!availablePrinter) {
+            availablePrinter = service.printers.find((p: { isOnline: boolean }) => p.isOnline)
+          }
+          // If still nothing, try any printer
+          if (!availablePrinter && service.printers.length > 0) {
+            availablePrinter = service.printers[0]
+          }
           if (availablePrinter) {
             setSelectedPrinter({ serviceId: service.id, printerId: availablePrinter.id })
             break
