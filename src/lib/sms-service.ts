@@ -36,8 +36,8 @@ async function getClient(): Promise<any> {
  * Acepta formatos: 1234567890, +11234567890, (123) 456-7890, +5352123456 (Cuba), etc.
  */
 export function formatPhoneNumber(phone: string): string {
-  // Limpiar prefijo de WhatsApp si existe
-  let cleanPhone = phone.replace(/^whatsapp:/i, '').trim()
+  // Limpiar prefijo de WhatsApp si existe (con o sin espacio)
+  let cleanPhone = phone.replace(/^whatsapp:\s*/i, '').trim()
 
   // Si ya tiene formato E.164 valido (+seguido de digitos), retornarlo
   if (/^\+\d{10,15}$/.test(cleanPhone)) {
@@ -52,8 +52,18 @@ export function formatPhoneNumber(phone: string): string {
     return `+${digits}`
   }
 
-  // Si tiene 10 digitos sin +, asumir USA
-  if (digits.length === 10) {
+  // Detectar numeros de Cuba (empiezan con 53, tienen 10 digitos: 53 + 8 digitos)
+  if (digits.length === 10 && digits.startsWith('53')) {
+    return `+${digits}`
+  }
+
+  // Detectar numeros de Mexico (empiezan con 52, tienen 12 digitos: 52 + 10 digitos)
+  if (digits.length === 12 && digits.startsWith('52')) {
+    return `+${digits}`
+  }
+
+  // Si tiene 10 digitos y NO empieza con codigo de pais conocido, asumir USA
+  if (digits.length === 10 && !digits.startsWith('53')) {
     return `+1${digits}`
   }
 
@@ -62,8 +72,8 @@ export function formatPhoneNumber(phone: string): string {
     return `+${digits}`
   }
 
-  // Si tiene mas de 11 digitos, agregar +
-  if (digits.length > 11) {
+  // Si tiene mas de 10 digitos, agregar +
+  if (digits.length > 10) {
     return `+${digits}`
   }
 
