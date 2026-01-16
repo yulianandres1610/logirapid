@@ -490,26 +490,30 @@ ${collectedData.scheduledDate && collectedData.timeSlot ? '✅ FECHA Y HORARIO Y
 }
 
 /**
- * Genera un mensaje de saludo inicial - NATURAL
+ * Genera un mensaje de saludo inicial - MUY AMABLE Y CALIDO
  */
 export async function generateGreeting(customerName?: string | null): Promise<string> {
   // Determinar saludo segun hora del dia
   const hour = new Date().getHours()
   let saludo: string
+  let emoji: string
 
   if (hour >= 5 && hour < 12) {
-    saludo = 'Buenos dias'
+    saludo = 'Buenos días'
+    emoji = '☀️'
   } else if (hour >= 12 && hour < 18) {
     saludo = 'Buenas tardes'
+    emoji = '🌤️'
   } else {
     saludo = 'Buenas noches'
+    emoji = '🌙'
   }
 
   if (customerName) {
-    return `${saludo} ${customerName}! Soy Maria de LogiRapid. Que gusto saludarte! En que te puedo ayudar hoy?`
+    return `${emoji} ¡${saludo} ${customerName}!\n\nSoy María de LogiRapid, tu asistente para envíos a Cuba. ¡Qué gusto saludarte!\n\n¿En qué te puedo ayudar hoy? 📦`
   }
 
-  return `${saludo}! Soy Maria de LogiRapid. En que te puedo ayudar hoy?`
+  return `${emoji} ¡${saludo}!\n\nSoy María de LogiRapid, tu asistente para envíos a Cuba. Estoy aquí para ayudarte con la recogida de tus paquetes.\n\n¿En qué te puedo ayudar hoy? 📦`
 }
 
 /**

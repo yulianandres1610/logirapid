@@ -321,6 +321,9 @@ function parseUserDateExpression(dateExpression: string, preferredSlot?: string)
   const availableDates = getAvailableDates()
   const lower = dateExpression.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
+  console.log('[parseUserDateExpression] Input:', dateExpression, '| Normalized:', lower)
+  console.log('[parseUserDateExpression] Available dates:', availableDates.map(d => `${d.dayName}=${d.date}`).join(', '))
+
   let targetDate: { date: string; dayName: string; slots: string[] } | null = null
 
   // Detectar "hoy"
@@ -343,6 +346,7 @@ function parseUserDateExpression(dateExpression: string, preferredSlot?: string)
   // Detectar "mañana" / "manana"
   else if (lower.includes('manana') && !lower.includes('por la manana')) {
     targetDate = availableDates.find(d => d.dayName === 'Manana') || null
+    console.log('[parseUserDateExpression] Detectado MAÑANA, targetDate:', targetDate?.date, targetDate?.dayName)
   }
   // Detectar "pasado mañana"
   else if (lower.includes('pasado')) {
@@ -1992,11 +1996,14 @@ export async function handleIncomingMessage(
       const preferredSlot = gptResponse.extractedData?.preferredSlot as string | undefined
       const dateResult = parseUserDateExpression(gptResponse.selectDate, preferredSlot)
 
+      console.log('[WhatsApp Agent] Resultado parseUserDateExpression:', JSON.stringify(dateResult))
+
       if (dateResult.success && dateResult.date && dateResult.dayName) {
         if (dateResult.selectedSlot) {
           // Fecha y horario seleccionados
           newCollectedData.scheduledDate = dateResult.date
           newCollectedData.timeSlot = dateResult.selectedSlot
+          console.log('[WhatsApp Agent] ✅ Fecha guardada:', dateResult.date, '| Slot:', dateResult.selectedSlot, '| DayName:', dateResult.dayName)
           const slotName = dateResult.selectedSlot.includes('8:00 AM') ? 'en la mañana' :
                            dateResult.selectedSlot.includes('12:00 PM') ? 'en la tarde' : 'en la noche'
           const displayDate = formatDateForDisplay(dateResult.date)
@@ -2125,21 +2132,14 @@ export async function handleIncomingMessage(
           selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Domingo')
         }
 
-        // Detectar horario
+        // Detectar horario - prioridad: tarde > noche > mañana/temprano
         let selectedSlot = ''
-        if (msgLower.includes('mañana') && !msgLower.includes('manana')) {
-          // "mañana" como hora del dia, no como "tomorrow"
-          selectedSlot = '8:00 AM - 12:00 PM'
-        } else if (msgLower.includes('temprano') || (msgLower.includes('manana') && selectedDateIdx >= 0)) {
-          // Si dice "mañana temprano" = tomorrow morning
-          if (selectedDateIdx >= 0) {
-            selectedSlot = '8:00 AM - 12:00 PM'
-          }
-        }
         if (msgLower.includes('tarde')) {
           selectedSlot = '12:00 PM - 4:00 PM'
         } else if (msgLower.includes('noche')) {
           selectedSlot = '4:00 PM - 8:00 PM'
+        } else if (msgLower.includes('temprano') || msgLower.includes('por la mañana') || msgLower.includes('por la manana') || msgLower.includes('en la mañana') || msgLower.includes('en la manana')) {
+          selectedSlot = '8:00 AM - 12:00 PM'
         }
 
         // Si encontro ambos, guardar
@@ -2240,7 +2240,27 @@ export async function handleIncomingMessage(
             orderCreated = true
             orderId = result.orderId
             orderNumber = result.orderNumber
-            response = `Listo! Ya quedo registrada tu orden ${orderNumber}. Te llamamos para coordinar la recogida. Gracias!`
+
+            // Formatear fecha para mostrar
+            const scheduledDateStr = String(newCollectedData.scheduledDate || '')
+            const timeSlotStr = String(newCollectedData.timeSlot || '')
+            let fechaDisplay = ''
+            if (scheduledDateStr) {
+              const parts = scheduledDateStr.split('-')
+              if (parts.length === 3) {
+                fechaDisplay = `${parts[2]}/${parts[1]}/${parts[0]}` // DD/MM/YYYY
+              }
+            }
+            const horarioDisplay = timeSlotStr.includes('8:00 AM') ? 'en la mañana (8AM-12PM)' :
+                                   timeSlotStr.includes('12:00 PM') ? 'en la tarde (12PM-4PM)' :
+                                   timeSlotStr.includes('4:00 PM') ? 'en la noche (4PM-8PM)' : timeSlotStr
+
+            response = `🎉 ¡Listo! Tu orden ha sido registrada exitosamente.\n\n` +
+                       `📋 *Número de orden:* ${orderNumber}\n` +
+                       `📅 *Fecha de recogida:* ${fechaDisplay}\n` +
+                       `🕐 *Horario:* ${horarioDisplay}\n\n` +
+                       `Te contactaremos para coordinar la recogida. ¡Gracias por confiar en LogiRapid! 📦✨`
+
             // Marcar conversacion como completada
             await markConversationCompleted(conversation.id, result.orderId, 'pickup')
           } else {
