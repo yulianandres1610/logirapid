@@ -11,6 +11,20 @@ interface JWTPayload {
   companyName: string
 }
 
+// Ensure accepted_by and accepted_at columns exist
+async function ensureAcceptanceColumns() {
+  try {
+    await db.query(`ALTER TABLE market_purchases ADD COLUMN IF NOT EXISTS accepted_by INTEGER REFERENCES users(id)`)
+    await db.query(`ALTER TABLE market_purchases ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP`)
+  } catch (error) {
+    // Columns might already exist or table doesn't support IF NOT EXISTS
+    console.log('[Market Purchase API] Migration check:', error instanceof Error ? error.message : error)
+  }
+}
+
+// Run migration on module load
+ensureAcceptanceColumns()
+
 /**
  * GET /api/market/purchases/[id]
  * Get purchase details with lines, including lot/expiration info
