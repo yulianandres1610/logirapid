@@ -1284,8 +1284,9 @@ export default function UnifiedReceptionView({
                           <input
                             type="number"
                             value={quantityReceived}
-                            onChange={(e) => updateLineQuantity(line.lineId, parseInt(e.target.value) || 0)}
+                            onChange={(e) => updateLineQuantity(line.lineId, parseFloat(e.target.value) || 0)}
                             min={0}
+                            step="any"
                             className={cn(
                               'w-full px-3 py-2 rounded-lg border text-center font-bold',
                               theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'
