@@ -1956,6 +1956,31 @@ export async function handleIncomingMessage(
       return { message: response }
     }
 
+    // 8.1 Verificar si ya se creó una orden en esta conversación
+    const existingOrder = conversation.collected_data._orderCreated === true
+    const existingOrderNumber = conversation.collected_data._orderNumber as string | undefined
+    if (existingOrder && !gptResponse.startNewOrder) {
+      const msgLower = messageBody.toLowerCase().trim()
+      // Detectar si quiere hacer otra orden
+      const wantsNewOrder = ['otra', 'nuevo', 'nueva', 'mas', 'otro envio', 'otra orden', 'quiero enviar'].some(
+        word => msgLower.includes(word)
+      )
+
+      if (wantsNewOrder) {
+        console.log('[WhatsApp Agent] Usuario con orden existente quiere crear otra')
+        await resetConversation(conversation.id)
+        const response = '¡Perfecto! Vamos con otro envío. 📦 Dame tu número de teléfono para buscarte en el sistema.'
+        await saveMessage(conversation.id, 'outbound', response)
+        return { message: response }
+      }
+
+      // Si no quiere nueva orden, simplemente responder que ya tiene una
+      console.log('[WhatsApp Agent] Usuario con orden existente envió mensaje:', msgLower.substring(0, 50))
+      const response = `¡Hola! 👋 Ya tienes tu orden ${existingOrderNumber || ''} registrada. ¿Quieres hacer *otro envío*? Solo dime y te ayudo.`
+      await saveMessage(conversation.id, 'outbound', response)
+      return { message: response }
+    }
+
     // 9. Actualizar datos recopilados (ACUMULAR datos)
     // Filtrar senderEntryPin de GPT si estamos en el proceso de confirmar dirección o esperando PIN
     // (GPT a veces extrae "NO" prematuramente cuando el usuario confirma la dirección)
@@ -2865,6 +2890,7 @@ export async function handleIncomingMessage(
     }
 
     // Auto-crear orden si tenemos todos los datos mínimos requeridos
+    // PERO SOLO si no se ha creado una orden ya y el usuario confirmo explícitamente
     // Verificar datos mínimos: remitente (nombre, dirección) + destinatario (nombre, teléfono, provincia, municipio) + fecha/hora
     const hasMinimumSenderData = newCollectedData.senderName && newCollectedData.senderAddress
     const hasMinimumRecipientData = newCollectedData.recipientName &&
@@ -2872,13 +2898,29 @@ export async function handleIncomingMessage(
                                      newCollectedData.recipientProvince &&
                                      newCollectedData.recipientMunicipality
     const hasDateTimeData = newCollectedData.scheduledDate && newCollectedData.timeSlot
+    const orderAlreadyCreated = newCollectedData._orderCreated === true || conversation.collected_data._orderCreated === true
 
-    if (hasMinimumSenderData && hasMinimumRecipientData && hasDateTimeData) {
-      console.log('[WhatsApp Agent] Todos los datos mínimos completos, creando orden automáticamente')
-      console.log('[WhatsApp Agent] Sender:', newCollectedData.senderName, '| Recipient:', newCollectedData.recipientName)
-      console.log('[WhatsApp Agent] Date:', newCollectedData.scheduledDate, '| Slot:', newCollectedData.timeSlot)
-      gptResponse.readyToCreateOrder = true
-      gptResponse.requestSummary = false  // No mostrar resumen, crear directamente
+    // SOLO crear orden automáticamente si:
+    // 1. Tenemos todos los datos mínimos
+    // 2. NO se ha creado una orden ya
+    // 3. El usuario acaba de confirmar fecha/hora (no cualquier mensaje)
+    // 4. Hay flag de espera de confirmación activo
+    if (hasMinimumSenderData && hasMinimumRecipientData && hasDateTimeData && !orderAlreadyCreated) {
+      // Solo crear si el usuario confirmó explícitamente (flag _waitingForOrderConfirmation)
+      // o si GPT específicamente pidió crear la orden
+      if (wasWaitingForOrderConfirmation || gptResponse.readyToCreateOrder) {
+        console.log('[WhatsApp Agent] Todos los datos mínimos completos, creando orden')
+        console.log('[WhatsApp Agent] Sender:', newCollectedData.senderName, '| Recipient:', newCollectedData.recipientName)
+        console.log('[WhatsApp Agent] Date:', newCollectedData.scheduledDate, '| Slot:', newCollectedData.timeSlot)
+        gptResponse.readyToCreateOrder = true
+        gptResponse.requestSummary = false
+      } else {
+        // Tenemos datos pero necesitamos confirmación del usuario
+        console.log('[WhatsApp Agent] Datos completos pero esperando confirmación explícita')
+      }
+    } else if (orderAlreadyCreated) {
+      console.log('[WhatsApp Agent] Orden ya creada para esta conversación, no crear otra')
+      gptResponse.readyToCreateOrder = false
     }
 
     // Mostrar resumen si GPT lo solicita O si tenemos todos los datos
@@ -2983,6 +3025,12 @@ export async function handleIncomingMessage(
                        `🕐 *Horario:* ${horarioDisplay}\n\n` +
                        `Te contactaremos para coordinar la recogida. ¡Gracias por confiar en LogiRapid! 📦✨`
 
+            // Marcar orden creada para evitar duplicados
+            newCollectedData._orderCreated = true
+            newCollectedData._orderNumber = orderNumber
+            newCollectedData._orderId = result.orderId
+            delete newCollectedData._waitingForOrderConfirmation
+
             // Marcar conversacion como completada
             await markConversationCompleted(conversation.id, result.orderId, 'pickup')
           } else {
@@ -3046,6 +3094,13 @@ export async function handleIncomingMessage(
             console.log('[WhatsApp Agent] Payment link creado:', paymentLink)
 
             response = `Perfecto! Ya quedo tu orden ${orderNumber}. El total con la comision es $${result.totalAmount.toFixed(2)}\n\nPaga por aqui: ${paymentLink}\n\nCuando pagues te aviso y se lo llevamos a tu familia`
+
+            // Marcar orden creada para evitar duplicados
+            newCollectedData._orderCreated = true
+            newCollectedData._orderNumber = orderNumber
+            newCollectedData._orderId = result.orderId
+            delete newCollectedData._waitingForOrderConfirmation
+
             // Marcar conversacion como completada
             await markConversationCompleted(conversation.id, result.orderId, 'remittance')
           } else {
