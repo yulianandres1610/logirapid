@@ -96,7 +96,22 @@ Solo cuando FASE 1 este COMPLETA:
    - Cuando el usuario da el nombre, el sistema pregunta el CI
    - NO llames search_recipient con el nombre - ESO ES UN ERROR
    - NO vuelvas a llamar search_recipient una vez que se inicio el flujo de nuevo destinatario
-   - Los datos se iran pidiendo automaticamente: nombre -> CI -> provincia -> municipio -> direccion
+   - Los datos se iran pidiendo EN ESTE ORDEN ESTRICTO:
+     a. Nombre completo
+     b. Carnet de Identidad (CI - 11 dígitos)
+     c. Provincia en Cuba
+     d. Municipio en Cuba (OBLIGATORIO preguntar y validar ANTES de pedir dirección)
+     e. Dirección (calle y número)
+
+=== FLUJO DE DIRECCIÓN CUBA (MUY IMPORTANTE) ===
+Después de confirmar la PROVINCIA, DEBES preguntar el MUNICIPIO:
+1. Usuario da provincia (ej: "Holguín")
+2. TU: "Perfecto, provincia Holguín. ¿En qué municipio?" (OBLIGATORIO preguntar)
+3. Usuario da municipio (ej: "Gibara", "Holguín", "Banes", etc.)
+4. TU: Confirmar municipio y LUEGO pedir la dirección (calle y número)
+
+NUNCA saltes del paso de provincia directamente a pedir la dirección completa.
+El municipio es OBLIGATORIO antes de pedir la calle.
 
 IMPORTANTE FASE 2:
 - search_recipient SOLO se usa con TELEFONO de 8 digitos
@@ -379,7 +394,9 @@ ${collectedData._waitingForPin ? '⏳ ESPERANDO PIN/CODIGO DE ACCESO - El usuari
 ${collectedData._recipientComplete ? '⚠️ DESTINATARIO ENCONTRADO CON TODOS LOS DATOS (nombre, CI, direccion) - ESPERANDO CONFIRMACION. Solo di "Son correctos estos datos?" NO pidas CI ni nada mas.' : ''}
 ${collectedData._recipientConfirmed ? '✅ DESTINATARIO YA CONFIRMADO - Todos los datos del destinatario estan completos (nombre, CI, direccion). NO pidas CI ni direccion. Solo pide fecha/horario si no los tenemos.' : ''}
 ${collectedData._senderConfirmed ? '✅ REMITENTE YA CONFIRMADO - NO pidas mas datos del remitente.' : ''}
-${collectedData.scheduledDate && collectedData.timeSlot ? '✅ FECHA Y HORARIO YA SELECCIONADOS - Procede a crear la orden con readyToCreateOrder=true' : ''}`
+${collectedData.scheduledDate && collectedData.timeSlot ? '✅ FECHA Y HORARIO YA SELECCIONADOS - Procede a crear la orden con readyToCreateOrder=true' : ''}
+${collectedData.recipientProvince && !collectedData.recipientMunicipality ? '⚠️ MUNICIPIO PENDIENTE - Tienes la provincia pero FALTA el municipio. PREGUNTA: "¿En qué municipio de ' + collectedData.recipientProvince + '?" NO pidas la dirección todavía.' : ''}
+${collectedData.recipientMunicipality && !collectedData.recipientStreet ? '⚠️ DIRECCIÓN PENDIENTE - Ya tienes provincia y municipio. Ahora pide la dirección (calle y número).' : ''}`
     }
 
     // Construir mensajes para GPT
