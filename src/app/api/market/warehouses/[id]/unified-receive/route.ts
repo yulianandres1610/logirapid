@@ -361,16 +361,17 @@ export async function POST(
 
       const newStatus = parseInt(pendingResult.rows[0].pending) === 0 ? 'received' : 'partial'
 
-      // Update order status (use $5 as duplicate of $1 to avoid type inference issue)
+      // Update order status - always set received_at when items are received
+      // This ensures partial receptions also have a received_at timestamp for history tracking
       await db.query(`
         UPDATE consignment_orders SET
           status = $1,
           warehouse_id = COALESCE(warehouse_id, $2),
-          received_at = CASE WHEN $5 = 'received' THEN NOW() ELSE received_at END,
-          received_by = $3,
+          received_at = COALESCE(received_at, NOW()),
+          received_by = COALESCE(received_by, $3),
           updated_at = NOW()
         WHERE id = $4
-      `, [newStatus, warehouseId, payload.userId, orderId, newStatus])
+      `, [newStatus, warehouseId, payload.userId, orderId])
 
       // Create wallet transaction for received goods
       const walletResult = await db.query(
@@ -571,16 +572,17 @@ export async function POST(
 
       const newStatus = parseInt(pendingResult.rows[0].pending) === 0 ? 'recibido' : 'pendiente'
 
-      // Update purchase status (use $5 as duplicate of $1 to avoid type inference issue)
+      // Update purchase status - always set received_date when items are received
+      // This ensures partial receptions also have a received_date timestamp for history tracking
       await db.query(`
         UPDATE market_purchases SET
           status = $1,
           warehouse_id = COALESCE(warehouse_id, $2),
-          received_date = CASE WHEN $5 = 'recibido' THEN NOW() ELSE received_date END,
-          received_by = $3,
+          received_date = COALESCE(received_date, NOW()),
+          received_by = COALESCE(received_by, $3),
           updated_at = NOW()
         WHERE id = $4
-      `, [newStatus, warehouseId, payload.userId, orderId, newStatus])
+      `, [newStatus, warehouseId, payload.userId, orderId])
 
       // Note: Individual product inventory movements are created per line item above
       // This is just a log note - the actual stock movements happen in the line processing

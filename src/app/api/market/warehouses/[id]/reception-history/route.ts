@@ -44,13 +44,15 @@ export async function GET(
     const limit = parseInt(searchParams.get('limit') || '50')
 
     // Get consignment receptions
+    // Include partial orders even if received_at is null (for legacy data)
+    // Use updated_at as fallback date for sorting
     const consignmentReceptions = type === 'purchase' ? [] : (await db.query(`
       SELECT
         o.id,
         o.order_number,
         'consignment' as order_type,
         o.status,
-        o.received_at,
+        COALESCE(o.received_at, o.updated_at) as received_at,
         s.supplier_code as supplier_code,
         s.name as supplier_name,
         u.name as received_by_name,
@@ -63,20 +65,22 @@ export async function GET(
       WHERE o.company_id = $1
         AND o.warehouse_id = $2
         AND o.status IN ('received', 'partial')
-        AND o.received_at IS NOT NULL
-      GROUP BY o.id, o.order_number, o.status, o.received_at, s.supplier_code, s.name, u.name
-      ORDER BY o.received_at DESC
+      GROUP BY o.id, o.order_number, o.status, o.received_at, o.updated_at, s.supplier_code, s.name, u.name
+      HAVING COALESCE(SUM(ol.quantity_received), 0) > 0
+      ORDER BY COALESCE(o.received_at, o.updated_at) DESC
       LIMIT $3
     `, [payload.companyId, warehouseId, limit])).rows
 
     // Get purchase receptions
+    // Include pendiente orders even if received_date is null (for legacy data)
+    // Use updated_at as fallback date for sorting
     const purchaseReceptions = type === 'consignment' ? [] : (await db.query(`
       SELECT
         p.id,
         p.purchase_number as order_number,
         'purchase' as order_type,
         p.status,
-        p.received_date as received_at,
+        COALESCE(p.received_date, p.updated_at) as received_at,
         COALESCE(ms.supplier_code, 'PROV') as supplier_code,
         COALESCE(p.supplier_name, ms.name, 'Proveedor') as supplier_name,
         u.name as received_by_name,
@@ -89,9 +93,9 @@ export async function GET(
       WHERE p.company_id = $1
         AND p.warehouse_id = $2
         AND p.status IN ('recibido', 'pendiente')
-        AND p.received_date IS NOT NULL
-      GROUP BY p.id, p.purchase_number, p.status, p.received_date, ms.supplier_code, p.supplier_name, ms.name, u.name
-      ORDER BY p.received_date DESC
+      GROUP BY p.id, p.purchase_number, p.status, p.received_date, p.updated_at, ms.supplier_code, p.supplier_name, ms.name, u.name
+      HAVING COALESCE(SUM(pl.quantity_received), 0) > 0
+      ORDER BY COALESCE(p.received_date, p.updated_at) DESC
       LIMIT $3
     `, [payload.companyId, warehouseId, limit])).rows
 
