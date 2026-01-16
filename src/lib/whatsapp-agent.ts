@@ -1083,16 +1083,23 @@ async function getOrCreateCustomer(
   address?: string
 ): Promise<{ customerId: number; isNew: boolean }> {
   try {
+    // Limpiar teléfono: solo dígitos, últimos 10
     const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10)
-    console.log('[WhatsApp Agent] getOrCreateCustomer - Phone:', phoneNumber, 'Clean:', cleanPhone, 'Name:', name)
 
-    // Buscar cliente existente por telefono Y nombre similar (para evitar duplicados)
+    // Formatear teléfono para guardar: (XXX) XXX-XXXX
+    const formattedPhone = cleanPhone.length === 10
+      ? `(${cleanPhone.slice(0,3)}) ${cleanPhone.slice(3,6)}-${cleanPhone.slice(6)}`
+      : phoneNumber
+
+    console.log('[WhatsApp Agent] getOrCreateCustomer - Original:', phoneNumber, 'Clean:', cleanPhone, 'Formatted:', formattedPhone, 'Name:', name)
+
+    // Buscar cliente existente por teléfono
     const existingResult = await db.query(`
       SELECT id, firstname, lastname, phone FROM customers
-      WHERE phone LIKE $1 OR phone LIKE $2
+      WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, '(', ''), ')', ''), '-', ''), ' ', '') LIKE $1
       ORDER BY id DESC
       LIMIT 1
-    `, [`%${cleanPhone}%`, `%${cleanPhone}%`])
+    `, [`%${cleanPhone}%`])
 
     if (existingResult.rows.length > 0) {
       const existing = existingResult.rows[0]
@@ -1100,12 +1107,13 @@ async function getOrCreateCustomer(
       return { customerId: existing.id, isNew: false }
     }
 
-    // Crear nuevo cliente
-    const nameParts = (name || 'Cliente WhatsApp').trim().split(' ')
+    // Crear nuevo cliente con nombre limpio
+    const cleanName = (name || 'Cliente WhatsApp').trim()
+    const nameParts = cleanName.split(' ')
     const firstName = nameParts[0] || 'Cliente'
     const lastName = nameParts.slice(1).join(' ') || ''
 
-    console.log('[WhatsApp Agent] Creando nuevo cliente:', firstName, lastName, phoneNumber)
+    console.log('[WhatsApp Agent] Creando nuevo cliente:', firstName, lastName, formattedPhone)
 
     // Obtener company_id por defecto (primera compañia disponible)
     const companyResult = await db.query(`SELECT id FROM companies ORDER BY id LIMIT 1`)
@@ -1115,16 +1123,17 @@ async function getOrCreateCustomer(
       INSERT INTO customers (firstname, lastname, phone, address, createdat, createdby, company_id)
       VALUES ($1, $2, $3, $4, NOW(), 'whatsapp-agent', $5)
       RETURNING id
-    `, [firstName, lastName, phoneNumber, address || '', companyId])
+    `, [firstName, lastName, formattedPhone, address || '', companyId])
 
-    console.log('[WhatsApp Agent] ✅ Nuevo cliente creado con ID:', insertResult.rows[0].id)
+    console.log('[WhatsApp Agent] ✅ Nuevo cliente creado con ID:', insertResult.rows[0].id, 'Nombre:', firstName, lastName, 'Tel:', formattedPhone)
     return { customerId: insertResult.rows[0].id, isNew: true }
   } catch (error) {
     console.error('[WhatsApp Agent] ❌ Error creando cliente:', error)
     // Si falla la creación, intentar buscar de nuevo por si ya existe
+    const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10)
     const fallbackResult = await db.query(`
-      SELECT id FROM customers WHERE phone LIKE $1 LIMIT 1
-    `, [`%${phoneNumber.replace(/\D/g, '').slice(-10)}%`])
+      SELECT id FROM customers WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, '(', ''), ')', ''), '-', ''), ' ', '') LIKE $1 LIMIT 1
+    `, [`%${cleanPhone}%`])
 
     if (fallbackResult.rows.length > 0) {
       console.log('[WhatsApp Agent] Cliente encontrado en fallback:', fallbackResult.rows[0].id)
@@ -1818,17 +1827,27 @@ export async function handleIncomingMessage(
       }
     }
 
-    // Crear cliente en CRM inmediatamente cuando tenemos nombre y teléfono (cliente nuevo)
-    if (newCollectedData._needsCustomerCreation &&
-        newCollectedData.senderPhone &&
-        (newCollectedData.senderName || gptResponse.extractedData?.senderName)) {
-      const customerName = String(newCollectedData.senderName || gptResponse.extractedData?.senderName || '')
-      if (customerName && customerName.length > 2) {
-        console.log('[WhatsApp Agent] Creando cliente nuevo en CRM:', customerName, newCollectedData.senderPhone)
+    // Crear cliente en CRM cuando tenemos nombre CONFIRMADO (no del GPT, sino del mensaje del usuario)
+    // Solo crear si el mensaje actual parece ser un nombre (no un número, no muy corto)
+    if (newCollectedData._needsCustomerCreation && newCollectedData.senderPhone) {
+      // Verificar si el mensaje actual es un nombre válido
+      const possibleName = messageBody.trim()
+      const isValidName = possibleName.length >= 3 &&
+                          possibleName.length <= 50 &&
+                          !/^\d+$/.test(possibleName) &&  // No es solo números
+                          !possibleName.startsWith('/') &&  // No es comando
+                          /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$/.test(possibleName)  // Solo letras y espacios
+
+      if (isValidName && !newCollectedData.senderName) {
+        // El mensaje actual es el nombre del usuario
+        newCollectedData.senderName = possibleName
+        console.log('[WhatsApp Agent] Nombre capturado del mensaje:', possibleName)
+
+        console.log('[WhatsApp Agent] Creando cliente nuevo en CRM:', possibleName, newCollectedData.senderPhone)
         try {
           const { customerId, isNew } = await getOrCreateCustomer(
             String(newCollectedData.senderPhone),
-            customerName
+            possibleName
           )
           if (isNew) {
             console.log('[WhatsApp Agent] ✅ Cliente creado en CRM con ID:', customerId)
