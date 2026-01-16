@@ -2467,44 +2467,86 @@ export async function handleIncomingMessage(
 
     // Parsear seleccion de fecha si hay fechas disponibles guardadas
     if (newCollectedData._availableDates && !newCollectedData.scheduledDate) {
-      const availableDates = newCollectedData._availableDates as { date: string; dayName: string; slots: string[] }[]
+      // IMPORTANTE: Recalcular fechas disponibles en tiempo real (pueden haber cambiado)
+      const currentAvailableDates = getAvailableDates()
+      const savedDates = newCollectedData._availableDates as { date: string; dayName: string; slots: string[] }[]
       const msgLower = messageBody.toLowerCase()
+
+      // Helper para verificar si un slot está disponible actualmente
+      const isSlotCurrentlyAvailable = (dayName: string, slot: string): boolean => {
+        const currentDay = currentAvailableDates.find(d => d.dayName === dayName)
+        return currentDay ? currentDay.slots.includes(slot) : false
+      }
+
+      // Helper para obtener alternativa cuando slot no disponible
+      const getAlternativeSuggestion = (dayName: string, requestedSlot: string): string => {
+        const currentDay = currentAvailableDates.find(d => d.dayName === dayName)
+        if (currentDay && currentDay.slots.length > 0) {
+          const slotName = currentDay.slots[0].includes('8:00 AM') ? 'en la mañana' :
+                           currentDay.slots[0].includes('12:00 PM') ? 'en la tarde' : 'en la noche'
+          return `Te puedo ofrecer ${dayName.toLowerCase()} ${slotName}. ¿Te parece bien?`
+        }
+        // Si hoy no tiene slots, ofrecer mañana
+        const tomorrow = currentAvailableDates.find(d => d.dayName === 'Manana')
+        if (tomorrow) {
+          return `Te puedo ofrecer mañana en la mañana (${tomorrow.slots[0]}). ¿Te parece bien?`
+        }
+        return 'Dime otro día y horario que te convenga.'
+      }
 
       // Intentar parsear formato "1-2" (fecha-horario)
       const numericMatch = msgLower.match(/(\d)-(\d)/)
       if (numericMatch) {
         const dateIdx = parseInt(numericMatch[1]) - 1
         const slotIdx = parseInt(numericMatch[2]) - 1
-        if (availableDates[dateIdx] && availableDates[dateIdx].slots[slotIdx]) {
-          newCollectedData.scheduledDate = availableDates[dateIdx].date
-          newCollectedData.timeSlot = availableDates[dateIdx].slots[slotIdx]
-          delete newCollectedData._availableDates
-          console.log('[WhatsApp Agent] Fecha seleccionada:', newCollectedData.scheduledDate, newCollectedData.timeSlot)
+        if (savedDates[dateIdx] && savedDates[dateIdx].slots[slotIdx]) {
+          const requestedDayName = savedDates[dateIdx].dayName
+          const requestedSlot = savedDates[dateIdx].slots[slotIdx]
+
+          // Verificar disponibilidad actual
+          if (isSlotCurrentlyAvailable(requestedDayName, requestedSlot)) {
+            // Obtener fecha actual para ese día
+            const currentDay = currentAvailableDates.find(d => d.dayName === requestedDayName)
+            newCollectedData.scheduledDate = currentDay?.date || savedDates[dateIdx].date
+            newCollectedData.timeSlot = requestedSlot
+            delete newCollectedData._availableDates
+            console.log('[WhatsApp Agent] Fecha seleccionada:', newCollectedData.scheduledDate, newCollectedData.timeSlot)
+          } else {
+            // Slot ya no disponible, sugerir alternativa
+            const slotName = requestedSlot.includes('8:00 AM') ? 'en la mañana' :
+                             requestedSlot.includes('12:00 PM') ? 'en la tarde' : 'en la noche'
+            response = `Lo siento, ${requestedDayName.toLowerCase()} ${slotName} ya no está disponible. ` +
+                       getAlternativeSuggestion(requestedDayName, requestedSlot)
+            // Actualizar fechas guardadas con las actuales
+            newCollectedData._availableDates = currentAvailableDates
+            responseOverridden = true
+            console.log('[WhatsApp Agent] Slot no disponible, sugiriendo alternativa')
+          }
         }
       }
 
       // Intentar parsear texto natural
-      if (!newCollectedData.scheduledDate) {
-        // Detectar dia
-        let selectedDateIdx = -1
+      if (!newCollectedData.scheduledDate && !responseOverridden) {
+        // Detectar dia - usar fechas ACTUALES
+        let selectedDayName = ''
         if (msgLower.includes('hoy')) {
-          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Hoy')
+          selectedDayName = 'Hoy'
         } else if (msgLower.includes('mañana') || msgLower.includes('manana')) {
-          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Manana')
+          selectedDayName = 'Manana'
         } else if (msgLower.includes('lunes')) {
-          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Lunes')
+          selectedDayName = 'Lunes'
         } else if (msgLower.includes('martes')) {
-          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Martes')
+          selectedDayName = 'Martes'
         } else if (msgLower.includes('miercoles') || msgLower.includes('miércoles')) {
-          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Miercoles')
+          selectedDayName = 'Miercoles'
         } else if (msgLower.includes('jueves')) {
-          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Jueves')
+          selectedDayName = 'Jueves'
         } else if (msgLower.includes('viernes')) {
-          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Viernes')
+          selectedDayName = 'Viernes'
         } else if (msgLower.includes('sabado') || msgLower.includes('sábado')) {
-          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Sabado')
+          selectedDayName = 'Sabado'
         } else if (msgLower.includes('domingo')) {
-          selectedDateIdx = availableDates.findIndex(d => d.dayName === 'Domingo')
+          selectedDayName = 'Domingo'
         }
 
         // Detectar horario - prioridad: tarde > noche > mañana/temprano
@@ -2517,11 +2559,32 @@ export async function handleIncomingMessage(
           selectedSlot = '8:00 AM - 12:00 PM'
         }
 
-        // Si encontro ambos, guardar
-        if (selectedDateIdx >= 0 && selectedSlot) {
-          // Verificar que el slot este disponible para esa fecha
-          if (availableDates[selectedDateIdx].slots.includes(selectedSlot)) {
-            newCollectedData.scheduledDate = availableDates[selectedDateIdx].date
+        // Si encontro día y horario
+        if (selectedDayName && selectedSlot) {
+          // Verificar disponibilidad en tiempo real
+          const currentDay = currentAvailableDates.find(d => d.dayName === selectedDayName)
+
+          if (!currentDay) {
+            // Día no disponible (ej: "hoy" después de las 4pm)
+            const slotName = selectedSlot.includes('8:00 AM') ? 'en la mañana' :
+                             selectedSlot.includes('12:00 PM') ? 'en la tarde' : 'en la noche'
+            response = `Lo siento, para ${selectedDayName.toLowerCase()} ya no tenemos horarios disponibles. ` +
+                       getAlternativeSuggestion(selectedDayName, selectedSlot)
+            newCollectedData._availableDates = currentAvailableDates
+            responseOverridden = true
+            console.log('[WhatsApp Agent] Día no disponible:', selectedDayName)
+          } else if (!currentDay.slots.includes(selectedSlot)) {
+            // Día disponible pero el slot específico no
+            const slotName = selectedSlot.includes('8:00 AM') ? 'en la mañana' :
+                             selectedSlot.includes('12:00 PM') ? 'en la tarde' : 'en la noche'
+            response = `Lo siento, ${selectedDayName.toLowerCase()} ${slotName} ya no está disponible. ` +
+                       getAlternativeSuggestion(selectedDayName, selectedSlot)
+            newCollectedData._availableDates = currentAvailableDates
+            responseOverridden = true
+            console.log('[WhatsApp Agent] Slot no disponible para', selectedDayName, ':', selectedSlot)
+          } else {
+            // Todo disponible - guardar
+            newCollectedData.scheduledDate = currentDay.date
             newCollectedData.timeSlot = selectedSlot
             delete newCollectedData._availableDates
             console.log('[WhatsApp Agent] Fecha seleccionada (texto):', newCollectedData.scheduledDate, newCollectedData.timeSlot)
