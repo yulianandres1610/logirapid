@@ -154,29 +154,32 @@ export async function generatePurchaseInvoicePdf(data: PurchaseInvoiceData): Pro
   drawText('FACTURA DE COMPRA', 400, 750, { font: fontBold, size: 16, color: darkBlue })
 
   // === BARCODE AT TOP RIGHT (for easy scanning) ===
-  let barcodeY = 730
+  let infoY = 728 // Position for invoice info text
+
   if (barcodeImage) {
     const barcodeWidth = 150
-    const barcodeHeight = 40
+    const barcodeHeight = 35
+    // Draw barcode starting at y=728, going down
     page.drawImage(barcodeImage, {
       x: 400,
-      y: barcodeY - barcodeHeight + 10,
+      y: infoY - barcodeHeight,
       width: barcodeWidth,
       height: barcodeHeight
     })
-    barcodeY -= 35
+    // Move info text below the barcode
+    infoY = infoY - barcodeHeight - 8
   }
 
-  // Invoice number and date (below barcode)
-  drawText(`No: ${invoiceNumber}`, 400, barcodeY, { font: fontBold, size: 11 })
-  drawText(`Fecha: ${dateStr}`, 400, barcodeY - 15, { size: 10 })
+  // Invoice number and date (below barcode if exists)
+  drawText(`No: ${invoiceNumber}`, 400, infoY, { font: fontBold, size: 11 })
+  drawText(`Fecha: ${dateStr}`, 400, infoY - 15, { size: 10 })
 
   if (data.purchaseNumber && data.invoiceNumber) {
-    drawText(`Orden: ${data.purchaseNumber}`, 400, barcodeY - 30, { size: 10 })
+    drawText(`Orden: ${data.purchaseNumber}`, 400, infoY - 30, { size: 10 })
   }
 
   if (data.dueDate) {
-    drawText(`Vence: ${data.dueDate}`, 400, barcodeY - 45, { size: 10, color: gray })
+    drawText(`Vence: ${data.dueDate}`, 400, infoY - 45, { size: 10, color: gray })
   }
 
   y = 660

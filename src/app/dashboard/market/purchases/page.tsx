@@ -117,6 +117,7 @@ export default function MarketPurchasesPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [userRole, setUserRole] = useState<string>('')
+  const [companyName, setCompanyName] = useState<string>('')
 
   // Validation state
   const [showValidationModal, setShowValidationModal] = useState(false)
@@ -135,7 +136,7 @@ export default function MarketPurchasesPage() {
   const [purchaseLines, setPurchaseLines] = useState<PurchaseLine[]>([])
   const [purchaseData, setPurchaseData] = useState<Record<string, unknown> | null>(null)
 
-  // Get user role from cookies
+  // Get user role and company name from cookies
   useEffect(() => {
     try {
       const cookies = document.cookie.split(';')
@@ -143,8 +144,12 @@ export default function MarketPurchasesPage() {
       if (roleCookie) {
         setUserRole(decodeURIComponent(roleCookie.split('=')[1]))
       }
+      const companyNameCookie = cookies.find(c => c.trim().startsWith('user-company-name='))
+      if (companyNameCookie) {
+        setCompanyName(decodeURIComponent(companyNameCookie.split('=')[1]))
+      }
     } catch (e) {
-      console.error('Error getting user role:', e)
+      console.error('Error getting user data from cookies:', e)
     }
   }, [])
 
@@ -341,6 +346,7 @@ export default function MarketPurchasesPage() {
         body: JSON.stringify({
           documentType: 'purchase_invoice',
           documentData: {
+            companyName: companyName || 'Mercado',
             purchaseNumber: printPurchase.purchaseNumber,
             supplier: {
               code: printPurchase.supplierCode || '',

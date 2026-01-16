@@ -140,8 +140,7 @@ export function generatePurchaseInvoiceEscpos(data: PurchaseInvoiceData): Buffer
 
   // === SCANNABLE BARCODE AT TOP FOR EASY SCANNING ===
   // This is the main barcode for the almacenero to scan when receiving
-  // Use CODE128B for better compatibility with most thermal printers
-  const barcodeDataTop = invoiceNumber.replace(/[^A-Z0-9-]/gi, '').toUpperCase()
+  const barcodeDataTop = invoiceNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase()
   if (barcodeDataTop.length > 0 && barcodeDataTop.length <= 20) {
     lines.push(Commands.ALIGN_CENTER)
 
@@ -153,16 +152,15 @@ export function generatePurchaseInvoiceEscpos(data: PurchaseInvoiceData): Buffer
     lines.push(Commands.BOLD_OFF)
     lines.push(Commands.FEED_LINE)
 
-    // ESC/POS Barcode settings for CODE128
+    // ESC/POS Barcode settings
     lines.push(`${GS}h\x50`) // height = 80 dots
     lines.push(`${GS}w\x02`) // width = 2
-    lines.push(`${GS}H\x00`) // HRI none (already printed text above)
+    lines.push(`${GS}H\x00`) // HRI position: none (already printed text above)
     lines.push(`${GS}f\x00`) // Font A for HRI
 
-    // Print CODE128B barcode (better compatibility than CODE39)
-    // Format: GS k 73 n d1...dn (CODE128 with length prefix)
-    const barcodeClean = barcodeDataTop.replace(/-/g, '')
-    lines.push(`${GS}k\x49${String.fromCharCode(barcodeClean.length)}${barcodeClean}`)
+    // Print CODE39 barcode (most compatible with thermal printers)
+    // Format: GS k 4 d1...dn NUL (CODE39 with null terminator)
+    lines.push(`${GS}k\x04${barcodeDataTop}\x00`)
     lines.push(Commands.FEED_LINE)
   } else {
     // Fallback: just print the number as text if barcode can't be generated
@@ -277,7 +275,7 @@ export function generatePurchaseInvoiceEscpos(data: PurchaseInvoiceData): Buffer
       lines.push(`     COD: ${productCode}`)
       lines.push(Commands.FEED_LINE)
 
-      // Print scannable barcode for the product using CODE128B
+      // Print scannable barcode for the product using CODE39
       const cleanBarcode = productCode.replace(/[^A-Z0-9]/gi, '').toUpperCase()
 
       if (cleanBarcode.length > 0 && cleanBarcode.length <= 20) {
@@ -288,9 +286,9 @@ export function generatePurchaseInvoiceEscpos(data: PurchaseInvoiceData): Buffer
         lines.push(`${GS}w\x02`) // width = 2
         lines.push(`${GS}H\x00`) // HRI none (we already printed the code)
 
-        // Print CODE128B barcode (better compatibility)
-        // Format: GS k 73 n d1...dn
-        lines.push(`${GS}k\x49${String.fromCharCode(cleanBarcode.length)}${cleanBarcode}`)
+        // Print CODE39 barcode (most compatible)
+        // Format: GS k 4 d1...dn NUL
+        lines.push(`${GS}k\x04${cleanBarcode}\x00`)
         lines.push(Commands.FEED_LINE)
 
         lines.push(Commands.ALIGN_LEFT)
