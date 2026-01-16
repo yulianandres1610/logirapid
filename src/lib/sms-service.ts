@@ -33,24 +33,37 @@ async function getClient(): Promise<any> {
 
 /**
  * Formatea un numero de telefono para asegurar formato E.164
- * Acepta formatos: 1234567890, +11234567890, (123) 456-7890
+ * Acepta formatos: 1234567890, +11234567890, (123) 456-7890, +5352123456 (Cuba), etc.
  */
 export function formatPhoneNumber(phone: string): string {
-  // Remover todo excepto digitos
-  const digits = phone.replace(/\D/g, '')
+  // Limpiar prefijo de WhatsApp si existe
+  let cleanPhone = phone.replace(/^whatsapp:/i, '').trim()
 
-  // Si tiene 10 digitos, agregar codigo de pais US
+  // Si ya tiene formato E.164 valido (+seguido de digitos), retornarlo
+  if (/^\+\d{10,15}$/.test(cleanPhone)) {
+    return cleanPhone
+  }
+
+  // Remover todo excepto digitos
+  const digits = cleanPhone.replace(/\D/g, '')
+
+  // Si tenia + al inicio, es numero internacional - agregar + de vuelta
+  if (cleanPhone.startsWith('+') && digits.length >= 10) {
+    return `+${digits}`
+  }
+
+  // Si tiene 10 digitos sin +, asumir USA
   if (digits.length === 10) {
     return `+1${digits}`
   }
 
-  // Si tiene 11 digitos y empieza con 1, agregar +
+  // Si tiene 11 digitos y empieza con 1, es USA
   if (digits.length === 11 && digits.startsWith('1')) {
     return `+${digits}`
   }
 
-  // Si ya tiene el formato correcto
-  if (digits.length > 10) {
+  // Si tiene mas de 11 digitos, agregar +
+  if (digits.length > 11) {
     return `+${digits}`
   }
 
@@ -59,12 +72,14 @@ export function formatPhoneNumber(phone: string): string {
 }
 
 /**
- * Valida que un numero de telefono sea valido para SMS
+ * Valida que un numero de telefono sea valido para SMS/WhatsApp
+ * Acepta numeros internacionales en formato E.164
  */
 export function isValidPhoneNumber(phone: string): boolean {
   const formatted = formatPhoneNumber(phone)
-  // Validar formato E.164 basico
-  return /^\+1\d{10}$/.test(formatted)
+  // Validar formato E.164 internacional (+ seguido de 10-15 digitos)
+  // Esto acepta: +1 (USA/Canada), +53 (Cuba), +52 (Mexico), etc.
+  return /^\+\d{10,15}$/.test(formatted)
 }
 
 /**
