@@ -149,9 +149,9 @@ export async function GET(
           variantName: row.variant_name || null,
           variantSku: row.variant_sku || null,
           variantBarcode: row.variant_barcode || null,
-          quantityOrdered: parseInt(row.quantity_ordered),
-          quantityReceived: parseInt(row.quantity_received),
-          quantityPending: parseInt(row.quantity_ordered) - parseInt(row.quantity_received),
+          quantityOrdered: parseFloat(row.quantity_ordered),
+          quantityReceived: parseFloat(row.quantity_received),
+          quantityPending: parseFloat(row.quantity_ordered) - parseFloat(row.quantity_received),
           unitCost: parseFloat(row.unit_cost)
         }))
 
@@ -234,9 +234,9 @@ export async function GET(
           variantName: row.variant_name || null,
           variantSku: row.variant_sku || null,
           variantBarcode: row.variant_barcode || null,
-          quantityOrdered: parseInt(row.quantity),
-          quantityReceived: parseInt(row.quantity_received),
-          quantityPending: parseInt(row.quantity) - parseInt(row.quantity_received),
+          quantityOrdered: parseFloat(row.quantity),
+          quantityReceived: parseFloat(row.quantity_received),
+          quantityPending: parseFloat(row.quantity) - parseFloat(row.quantity_received),
           unitCost: parseFloat(row.unit_cost)
         }))
 

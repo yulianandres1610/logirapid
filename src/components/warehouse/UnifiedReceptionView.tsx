@@ -159,6 +159,12 @@ function formatDate(dateStr: string): string {
   }
 }
 
+// Format quantity - show decimals only if not integer
+function formatQty(value: number): string {
+  if (Number.isInteger(value)) return value.toString()
+  return value.toFixed(2)
+}
+
 export default function UnifiedReceptionView({
   warehouseId,
   warehouseName,
@@ -1186,10 +1192,10 @@ export default function UnifiedReceptionView({
                       <div className="text-center min-w-[90px]">
                         <div className="flex items-center justify-center gap-1">
                           <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                            {quantityReceived}
+                            {formatQty(quantityReceived)}
                           </span>
                           <span className="text-lg text-gray-400">/</span>
-                          <span className="text-lg text-gray-500">{line.quantityPending}</span>
+                          <span className="text-lg text-gray-500">{formatQty(line.quantityPending)}</span>
                         </div>
                         {quantityReceived !== line.quantityPending && quantityReceived > 0 && (
                           <span className={cn(
@@ -1199,8 +1205,8 @@ export default function UnifiedReceptionView({
                               : 'text-blue-600'
                           )}>
                             {quantityReceived > line.quantityPending
-                              ? `+${quantityReceived - line.quantityPending}`
-                              : `${quantityReceived - line.quantityPending}`}
+                              ? `+${formatQty(quantityReceived - line.quantityPending)}`
+                              : formatQty(quantityReceived - line.quantityPending)}
                           </span>
                         )}
                       </div>
@@ -1304,7 +1310,7 @@ export default function UnifiedReceptionView({
             <div>
               <p className="text-sm text-gray-500">Total Contado</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {totalToReceive} <span className="text-lg text-gray-400">/ {totalExpected}</span> unidades
+                {formatQty(totalToReceive)} <span className="text-lg text-gray-400">/ {formatQty(totalExpected)}</span> unidades
               </p>
             </div>
             <div className="flex gap-2">
