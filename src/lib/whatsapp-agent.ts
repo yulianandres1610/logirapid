@@ -834,6 +834,93 @@ async function searchRecipientByPhone(phoneNumber: string): Promise<RecipientSea
 }
 
 /**
+ * Guarda o actualiza un destinatario de Cuba en la base de datos
+ */
+async function saveRecipient(data: {
+  phone: string
+  name: string
+  ci?: string
+  province?: string
+  municipality?: string
+  street?: string
+  reparto?: string
+}): Promise<{ recipientId: number; isNew: boolean }> {
+  try {
+    const cleanPhone = data.phone.replace(/\D/g, '').slice(-8)
+    console.log('[WhatsApp Agent] saveRecipient - Phone:', cleanPhone, 'Name:', data.name)
+
+    // Obtener company_id
+    const companyResult = await db.query(`SELECT id FROM companies ORDER BY id LIMIT 1`)
+    const companyId = companyResult.rows[0]?.id || 1
+
+    // Buscar destinatario existente por teléfono
+    const existingResult = await db.query(`
+      SELECT id FROM customers
+      WHERE REPLACE(phone, ' ', '') LIKE $1 AND country = 'Cuba'
+      ORDER BY id DESC LIMIT 1
+    `, [`%${cleanPhone}%`])
+
+    const fullAddress = [data.street, data.reparto, data.municipality, data.province]
+      .filter(Boolean)
+      .join(', ')
+
+    const nameParts = (data.name || '').trim().split(' ')
+    const firstName = nameParts[0] || 'Destinatario'
+    const lastName = nameParts.slice(1).join(' ') || ''
+
+    if (existingResult.rows.length > 0) {
+      // Actualizar destinatario existente
+      const recipientId = existingResult.rows[0].id
+      await db.query(`
+        UPDATE customers SET
+          firstname = $1,
+          lastname = $2,
+          idnumber = $3,
+          address = $4,
+          city = $5,
+          state = $6
+        WHERE id = $7
+      `, [
+        firstName,
+        lastName,
+        data.ci || null,
+        fullAddress,
+        data.municipality || null,
+        data.province || null,
+        recipientId
+      ])
+      console.log('[WhatsApp Agent] Destinatario actualizado, ID:', recipientId)
+      return { recipientId, isNew: false }
+    }
+
+    // Crear nuevo destinatario
+    const insertResult = await db.query(`
+      INSERT INTO customers (
+        firstname, lastname, phone, idnumber,
+        address, city, state, country,
+        createdat, createdby, company_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'Cuba', NOW(), 'whatsapp-agent', $8)
+      RETURNING id
+    `, [
+      firstName,
+      lastName,
+      cleanPhone,
+      data.ci || null,
+      fullAddress,
+      data.municipality || null,
+      data.province || null,
+      companyId
+    ])
+
+    console.log('[WhatsApp Agent] ✅ Destinatario creado, ID:', insertResult.rows[0].id)
+    return { recipientId: insertResult.rows[0].id, isNew: true }
+  } catch (error) {
+    console.error('[WhatsApp Agent] ❌ Error guardando destinatario:', error)
+    return { recipientId: 0, isNew: false }
+  }
+}
+
+/**
  * Genera un resumen de los datos recopilados para mostrar al cliente
  */
 function generateDataSummary(data: Record<string, unknown>, flowType: string): string {
@@ -1077,10 +1164,23 @@ async function generateOrderNumber(prefix: string): Promise<string> {
 /**
  * Obtiene o crea un cliente por numero de telefono
  */
+interface CustomerData {
+  name: string
+  phone: string
+  idType?: string
+  idNumber?: string
+  address?: string
+  street?: string
+  city?: string
+  state?: string
+  zipcode?: string
+  country?: string
+}
+
 async function getOrCreateCustomer(
   phoneNumber: string,
   name: string,
-  address?: string
+  customerData?: Partial<CustomerData>
 ): Promise<{ customerId: number; isNew: boolean }> {
   try {
     // Limpiar teléfono: solo dígitos, últimos 10
@@ -1104,6 +1204,51 @@ async function getOrCreateCustomer(
     if (existingResult.rows.length > 0) {
       const existing = existingResult.rows[0]
       console.log('[WhatsApp Agent] Cliente existente encontrado:', existing.id, existing.firstname, existing.lastname)
+
+      // Si tenemos datos adicionales, actualizar el cliente existente
+      if (customerData && (customerData.idType || customerData.idNumber || customerData.address)) {
+        const updateFields: string[] = []
+        const updateValues: any[] = []
+        let paramIndex = 1
+
+        if (customerData.idType) {
+          updateFields.push(`idtype = $${paramIndex++}`)
+          updateValues.push(customerData.idType)
+        }
+        if (customerData.idNumber) {
+          updateFields.push(`idnumber = $${paramIndex++}`)
+          updateValues.push(customerData.idNumber)
+        }
+        if (customerData.address) {
+          updateFields.push(`address = $${paramIndex++}`)
+          updateValues.push(customerData.address)
+        }
+        if (customerData.city) {
+          updateFields.push(`city = $${paramIndex++}`)
+          updateValues.push(customerData.city)
+        }
+        if (customerData.state) {
+          updateFields.push(`state = $${paramIndex++}`)
+          updateValues.push(customerData.state)
+        }
+        if (customerData.zipcode) {
+          updateFields.push(`zipcode = $${paramIndex++}`)
+          updateValues.push(customerData.zipcode)
+        }
+        if (customerData.country) {
+          updateFields.push(`country = $${paramIndex++}`)
+          updateValues.push(customerData.country)
+        }
+
+        if (updateFields.length > 0) {
+          updateValues.push(existing.id)
+          await db.query(`
+            UPDATE customers SET ${updateFields.join(', ')} WHERE id = $${paramIndex}
+          `, updateValues)
+          console.log('[WhatsApp Agent] Cliente actualizado con datos adicionales')
+        }
+      }
+
       return { customerId: existing.id, isNew: false }
     }
 
@@ -1120,10 +1265,27 @@ async function getOrCreateCustomer(
     const companyId = companyResult.rows[0]?.id || 1
 
     const insertResult = await db.query(`
-      INSERT INTO customers (firstname, lastname, phone, address, createdat, createdby, company_id)
-      VALUES ($1, $2, $3, $4, NOW(), 'whatsapp-agent', $5)
+      INSERT INTO customers (
+        firstname, lastname, phone,
+        idtype, idnumber,
+        address, city, state, zipcode, country,
+        createdat, createdby, company_id
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), 'whatsapp-agent', $11)
       RETURNING id
-    `, [firstName, lastName, formattedPhone, address || '', companyId])
+    `, [
+      firstName,
+      lastName,
+      formattedPhone,
+      customerData?.idType || null,
+      customerData?.idNumber || null,
+      customerData?.address || '',
+      customerData?.city || null,
+      customerData?.state || null,
+      customerData?.zipcode || null,
+      customerData?.country || 'US',
+      companyId
+    ])
 
     console.log('[WhatsApp Agent] ✅ Nuevo cliente creado con ID:', insertResult.rows[0].id, 'Nombre:', firstName, lastName, 'Tel:', formattedPhone)
     return { customerId: insertResult.rows[0].id, isNew: true }
@@ -1230,13 +1392,22 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
 
     console.log('[WhatsApp Agent] Dirección final:', { fullAddress, street, city, state, zipcode, latitude, longitude })
 
-    // 2. Obtener o crear cliente
+    // 2. Obtener o crear cliente (remitente) con todos sus datos
     const { customerId } = await getOrCreateCustomer(
       phoneNumber,
       String(data.senderName || 'Cliente'),
-      String(data.senderAddress || '')
+      {
+        idType: String(data.senderIdType || ''),
+        idNumber: String(data.senderIdNumber || ''),
+        address: fullAddress,
+        street: street,
+        city: city,
+        state: state,
+        zipcode: zipcode,
+        country: 'US'
+      }
     )
-    console.log('[WhatsApp Agent] Customer ID:', customerId)
+    console.log('[WhatsApp Agent] Customer ID (remitente):', customerId)
 
     // 3. Generar numero de orden
     const orderNumber = await generateOrderNumber('PICKUP')
@@ -1366,6 +1537,7 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
         lastname,
         phone,
         customeraddress,
+        street,
         city,
         state,
         zipcode,
@@ -1388,9 +1560,9 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
         updatedat,
         company_id
       ) VALUES (
-        $1, $2, 'recogida', $3, $4, $5, $6, $7, $8, $9, $10, 'US',
-        $11, $12, $13, $14, 0, 0, 0, $15, $16, 'cod', 'pending_payment', 'pending',
-        $17, 'whatsapp-agent', NOW(), NOW(), $18
+        $1, $2, 'recogida', $3, $4, $5, $6, $7, $8, $9, $10, $11, 'US',
+        $12, $13, $14, $15, 0, 0, 0, $16, $17, 'cod', 'pending_payment', 'pending',
+        $18, 'whatsapp-agent', NOW(), NOW(), $19
       )
       RETURNING id, ordernumber
     `, [
@@ -1401,6 +1573,7 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
       String(data.senderName || '').split(' ').slice(1).join(' ') || '',
       phoneNumber,
       customerAddressFormatted,  // Dirección completa formateada
+      street,                    // Calle por separado
       city,
       state,
       zipcode,
@@ -1418,6 +1591,24 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
     console.log('[WhatsApp Agent] Order ID:', result.rows[0].id)
     console.log('[WhatsApp Agent] Order Number:', result.rows[0].ordernumber)
     console.log('[WhatsApp Agent] Coordenadas:', latitude, longitude)
+
+    // 8. Guardar destinatario en CRM para futuras búsquedas
+    if (data.recipientPhone && data.recipientName) {
+      try {
+        const { recipientId, isNew } = await saveRecipient({
+          phone: String(data.recipientPhone),
+          name: String(data.recipientName),
+          ci: data.recipientCI ? String(data.recipientCI) : undefined,
+          province: data.recipientProvince ? String(data.recipientProvince) : undefined,
+          municipality: data.recipientMunicipality ? String(data.recipientMunicipality) : undefined,
+          street: data.recipientStreet ? String(data.recipientStreet) : undefined,
+          reparto: data.recipientReparto ? String(data.recipientReparto) : undefined
+        })
+        console.log('[WhatsApp Agent] Destinatario guardado en CRM:', recipientId, isNew ? '(nuevo)' : '(actualizado)')
+      } catch (err) {
+        console.error('[WhatsApp Agent] Error guardando destinatario (no crítico):', err)
+      }
+    }
 
     return {
       success: true,
@@ -2180,7 +2371,8 @@ export async function handleIncomingMessage(
       delete newCollectedData._senderComplete
       newCollectedData._senderConfirmed = true
       console.log('[WhatsApp Agent] Remitente confirmado, direccion:', addr.address)
-      response = 'Perfecto! Datos del remitente confirmados. Ahora dame el telefono del destinatario en Cuba.'
+      response = 'Perfecto! Datos del remitente confirmados. Ahora dame el telefono del destinatario en Cuba (8 digitos).'
+      responseOverridden = true  // Usar nuestra respuesta, no la de GPT
     } else if (newCollectedData._pendingAddress && userConfirms) {
       // Confirmar solo direccion
       const addr = newCollectedData._pendingAddress as { address: string; city?: string; state?: string; zipcode?: string; entryPin?: string }
