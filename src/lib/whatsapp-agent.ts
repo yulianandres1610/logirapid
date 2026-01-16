@@ -2185,16 +2185,75 @@ export async function handleIncomingMessage(
         // Usuario indica que no hay PIN
         newCollectedData.senderEntryPin = 'NO'
         delete newCollectedData._waitingForPin
-        console.log('[WhatsApp Agent] PIN: No hay (usuario indicó)')
+        newCollectedData._waitingForRecipientPhone = true  // Esperamos teléfono del destinatario
+        console.log('[WhatsApp Agent] PIN: No hay (usuario indicó), ahora esperamos teléfono destinatario')
         response = 'Entendido, sin codigo de acceso. Ahora dame el telefono del destinatario en Cuba (8 digitos).'
         responseOverridden = true
       } else if (msgLower.length > 0 && msgLower.length < 20) {
         // Usuario dio un PIN/código
         newCollectedData.senderEntryPin = messageBody.trim()
         delete newCollectedData._waitingForPin
-        console.log('[WhatsApp Agent] PIN guardado:', newCollectedData.senderEntryPin)
+        newCollectedData._waitingForRecipientPhone = true  // Esperamos teléfono del destinatario
+        console.log('[WhatsApp Agent] PIN guardado:', newCollectedData.senderEntryPin, ', ahora esperamos teléfono destinatario')
         response = `Perfecto, codigo de acceso: ${newCollectedData.senderEntryPin}. Ahora dame el telefono del destinatario en Cuba (8 digitos).`
         responseOverridden = true
+      }
+    }
+
+    // Detectar respuesta de teléfono del destinatario (después de confirmar PIN)
+    if (newCollectedData._waitingForRecipientPhone && !newCollectedData.recipientPhone) {
+      const phoneDigits = messageBody.replace(/\D/g, '')
+      // Validar que sea un teléfono cubano (8 dígitos)
+      if (phoneDigits.length === 8) {
+        console.log('[WhatsApp Agent] Teléfono destinatario detectado:', phoneDigits)
+        delete newCollectedData._waitingForRecipientPhone
+
+        // Buscar destinatario en el sistema
+        const recipientResult = await searchRecipientByPhone(phoneDigits)
+
+        if (recipientResult.found) {
+          // Destinatario encontrado - guardar TODOS sus datos
+          newCollectedData.recipientName = recipientResult.name
+          newCollectedData.recipientPhone = recipientResult.phone || phoneDigits
+          if (recipientResult.ci) newCollectedData.recipientCI = recipientResult.ci
+
+          // Construir mensaje con TODOS los datos encontrados
+          let foundMsg = `Encontre a ${recipientResult.name}!\n\n`
+          foundMsg += `Tel: ${recipientResult.phone || phoneDigits}\n`
+          if (recipientResult.ci) {
+            foundMsg += `CI: ${recipientResult.ci}\n`
+          }
+
+          if (recipientResult.addresses && recipientResult.addresses.length > 0) {
+            const addr = recipientResult.addresses[0]
+            foundMsg += `Direccion: ${addr.street || ''}`
+            if (addr.reparto) foundMsg += `, ${addr.reparto}`
+            foundMsg += `\n${addr.municipality || ''}, ${addr.province || ''}\n`
+
+            // Guardar todos los datos de direccion
+            newCollectedData.recipientProvince = addr.province
+            newCollectedData.recipientMunicipality = addr.municipality
+            newCollectedData.recipientStreet = addr.street
+            if (addr.reparto) newCollectedData.recipientReparto = addr.reparto
+            if (addr.instructions) newCollectedData.recipientInstructions = addr.instructions
+
+            // Marcar que el destinatario está completo
+            newCollectedData._recipientComplete = true
+
+            foundMsg += `\nSon correctos estos datos? (Si/No)`
+          } else {
+            foundMsg += `\nPero no tengo su direccion guardada. En que provincia esta?`
+          }
+          response = foundMsg
+          responseOverridden = true
+        } else {
+          // Destinatario no encontrado - pedir nombre
+          newCollectedData.recipientPhone = phoneDigits
+          newCollectedData._waitingForRecipientName = true
+          console.log('[WhatsApp Agent] Destinatario no encontrado, pidiendo nombre')
+          response = 'No lo tengo registrado. ¿Cómo se llama la persona que recibe?'
+          responseOverridden = true
+        }
       }
     }
 
@@ -2385,7 +2444,8 @@ export async function handleIncomingMessage(
       delete newCollectedData._pendingAddress
       delete newCollectedData._senderComplete
       newCollectedData._senderConfirmed = true
-      console.log('[WhatsApp Agent] Remitente confirmado, direccion:', addr.address)
+      newCollectedData._waitingForRecipientPhone = true  // Esperamos teléfono del destinatario
+      console.log('[WhatsApp Agent] Remitente confirmado, direccion:', addr.address, ', ahora esperamos teléfono destinatario')
       response = 'Perfecto! Datos del remitente confirmados. Ahora dame el telefono del destinatario en Cuba (8 digitos).'
       responseOverridden = true  // Usar nuestra respuesta, no la de GPT
     } else if (newCollectedData._pendingAddress && userConfirms) {
