@@ -2837,7 +2837,18 @@ export async function handleIncomingMessage(
             delete newCollectedData._suggestedSlot
             const slotName = suggestedSlot.includes('8:00 AM') ? 'en la mañana' : suggestedSlot.includes('12:00 PM') ? 'en la tarde' : 'en la noche'
             console.log('[WhatsApp Agent] ✅ Usuario confirmó fecha/hora con "Si":', currentDay.date, suggestedSlot)
-            // No override - dejar que el flujo continue para crear la orden
+
+            // Mostrar resumen con NUESTRA fecha para evitar inconsistencias con GPT
+            const hasAllMinimumData = newCollectedData.senderName &&
+                                      newCollectedData.senderAddress &&
+                                      newCollectedData.recipientName &&
+                                      newCollectedData.recipientPhone
+            if (hasAllMinimumData && newFlow === 'pickup_order') {
+              console.log('[WhatsApp Agent] CASO 0: Mostrando resumen con fecha correcta:', currentDay.date, suggestedSlot)
+              response = generateDataSummary(newCollectedData, newFlow)
+              newCollectedData._waitingForOrderConfirmation = true
+              responseOverridden = true
+            }
           } else {
             response = `¡Ups! Ese horario ya no está disponible. ¿Qué otro día u horario prefieres?`
             delete newCollectedData._pendingDay
@@ -2864,6 +2875,18 @@ export async function handleIncomingMessage(
             delete newCollectedData._availableDates
             delete newCollectedData._pendingDay
             console.log('[WhatsApp Agent] ✅ Fecha y hora guardadas:', currentDay.date, selectedSlot)
+
+            // Mostrar resumen con NUESTRA fecha para evitar inconsistencias con GPT
+            const hasAllMinimumData = newCollectedData.senderName &&
+                                      newCollectedData.senderAddress &&
+                                      newCollectedData.recipientName &&
+                                      newCollectedData.recipientPhone
+            if (hasAllMinimumData && newFlow === 'pickup_order') {
+              console.log('[WhatsApp Agent] CASO 1: Mostrando resumen con fecha correcta:', currentDay.date, selectedSlot)
+              response = generateDataSummary(newCollectedData, newFlow)
+              newCollectedData._waitingForOrderConfirmation = true
+              responseOverridden = true
+            }
           }
         }
         // CASO 2: Usuario da solo el día (ej: "mañana")
@@ -2882,14 +2905,16 @@ export async function handleIncomingMessage(
             newCollectedData._suggestedSlot = firstSlot
             const slotName = firstSlot.includes('8:00 AM') ? 'mañana (8-12)' : firstSlot.includes('12:00 PM') ? 'tarde (12-4)' : 'noche (4-8)'
             const otherSlots = currentDay.slots.slice(1).map(s => s.includes('8:00 AM') ? 'mañana (8-12)' : s.includes('12:00 PM') ? 'tarde (12-4)' : 'noche (4-8)').join(' o ')
+            // Mostrar la fecha junto con el nombre del día
+            const displayDate = formatDateForDisplay(currentDay.date)
 
             if (currentDay.slots.length === 1) {
-              response = `¡Perfecto, ${selectedDayName.toLowerCase()}! 📅 Solo tenemos disponible ${slotName}. ¿Te parece bien?`
+              response = `¡Perfecto, ${selectedDayName.toLowerCase()} (${displayDate})! 📅 Solo tenemos disponible ${slotName}. ¿Te parece bien?`
             } else {
-              response = `¡Genial, ${selectedDayName.toLowerCase()}! 📅 ¿Prefieres ${slotName}${otherSlots ? ` o ${otherSlots}` : ''}?`
+              response = `¡Genial, ${selectedDayName.toLowerCase()} (${displayDate})! 📅 ¿Prefieres ${slotName}${otherSlots ? ` o ${otherSlots}` : ''}?`
             }
             responseOverridden = true
-            console.log('[WhatsApp Agent] Día guardado pendiente:', selectedDayName, '- slot sugerido:', firstSlot)
+            console.log('[WhatsApp Agent] Día guardado pendiente:', selectedDayName, currentDay.date, '- slot sugerido:', firstSlot)
           }
         }
         // CASO 3: Usuario da solo la hora y hay día pendiente (ej: "tarde" después de haber dicho "mañana")
@@ -2913,7 +2938,20 @@ export async function handleIncomingMessage(
             delete newCollectedData._availableDates
             delete newCollectedData._pendingDay
             delete newCollectedData._pendingDayDate
+            delete newCollectedData._suggestedSlot
             console.log('[WhatsApp Agent] ✅ Fecha (pendiente) y hora guardadas:', currentDay.date, selectedSlot)
+
+            // Mostrar resumen con NUESTRA fecha para evitar inconsistencias con GPT
+            const hasAllMinimumData = newCollectedData.senderName &&
+                                      newCollectedData.senderAddress &&
+                                      newCollectedData.recipientName &&
+                                      newCollectedData.recipientPhone
+            if (hasAllMinimumData && newFlow === 'pickup_order') {
+              console.log('[WhatsApp Agent] CASO 3: Mostrando resumen con fecha correcta:', currentDay.date, selectedSlot)
+              response = generateDataSummary(newCollectedData, newFlow)
+              newCollectedData._waitingForOrderConfirmation = true
+              responseOverridden = true
+            }
           }
         }
         // CASO 4: Usuario da solo la hora sin día previo - asumir "mañana" o primer día disponible
@@ -2926,7 +2964,18 @@ export async function handleIncomingMessage(
             delete newCollectedData._availableDates
             const slotName = selectedSlot.includes('8:00 AM') ? 'en la mañana' : selectedSlot.includes('12:00 PM') ? 'en la tarde' : 'en la noche'
             console.log('[WhatsApp Agent] ✅ Fecha auto-asignada y hora guardadas:', dayWithSlot.date, selectedSlot)
-            // No override response - dejar que fluya normalmente
+
+            // Mostrar resumen con NUESTRA fecha para evitar inconsistencias con GPT
+            const hasAllMinimumData = newCollectedData.senderName &&
+                                      newCollectedData.senderAddress &&
+                                      newCollectedData.recipientName &&
+                                      newCollectedData.recipientPhone
+            if (hasAllMinimumData && newFlow === 'pickup_order') {
+              console.log('[WhatsApp Agent] CASO 4: Mostrando resumen con fecha correcta:', dayWithSlot.date, selectedSlot)
+              response = generateDataSummary(newCollectedData, newFlow)
+              newCollectedData._waitingForOrderConfirmation = true
+              responseOverridden = true
+            }
           }
         }
       }
