@@ -279,7 +279,7 @@ export default function RemesaPage() {
           return false
         }
         if (!remesaData.senderPhone.trim()) {
-          setError('Por favor ingresa el teléfono del remitente')
+          setError('Por favor ingresa el número de quien envía')
           return false
         }
         // El email es opcional, pero si se ingresa debe ser válido
@@ -614,7 +614,7 @@ export default function RemesaPage() {
             type="tel"
             value={remesaData.senderPhone}
             onChange={(e) => updateData('senderPhone', e.target.value)}
-            placeholder="Número de teléfono del remitente"
+            placeholder="Número de quien envía"
             className={cn(
               "w-full pl-12 pr-4 py-4 text-lg border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent",
               theme === 'dark'

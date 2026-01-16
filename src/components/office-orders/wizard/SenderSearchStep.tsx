@@ -595,7 +595,7 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
             "text-base",
             theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
           )}>
-            Busca al cliente por teléfono o crea uno nuevo
+            Busca por el número de la persona que envía o crea uno nuevo
           </p>
         </div>
       </div>
@@ -610,7 +610,7 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
                 theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
               )} />
               <Input
-                placeholder="Buscar por teléfono..."
+                placeholder="Número de quien envía..."
                 value={searchPhone}
                 onChange={(e) => setSearchPhone(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && searchCustomer()}
@@ -727,7 +727,7 @@ export default function SenderSearchStep({ wizardData, updateWizardData, setCanP
                   )}
                 />
                 <Input
-                  placeholder="Teléfono *"
+                  placeholder="Número de quien envía *"
                   value={newSender.phone}
                   onChange={(e) => setNewSender({ ...newSender, phone: e.target.value })}
                   className={cn(

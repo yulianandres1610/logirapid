@@ -474,7 +474,7 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
                 theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
               )} />
               <Input
-                placeholder="Buscar por teléfono..."
+                placeholder="Número de quien recibe..."
                 value={searchPhone}
                 onChange={(e) => setSearchPhone(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && searchCustomer()}
@@ -917,7 +917,7 @@ export default function RecipientSearchStep({ wizardData, updateWizardData, setC
                   )}
                 />
                 <Input
-                  placeholder="Teléfono *"
+                  placeholder="Número de quien recibe *"
                   value={newRecipient.phone}
                   onChange={(e) => setNewRecipient({ ...newRecipient, phone: e.target.value })}
                   className={cn(
