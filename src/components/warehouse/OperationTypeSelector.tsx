@@ -116,55 +116,72 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
     return () => clearInterval(interval)
   }, [currentWarehouse.id])
 
+  // Separar en filas para el layout: 4 arriba, 3 abajo centradas
+  const topRow = operationTypes.slice(0, 4)
+  const bottomRow = operationTypes.slice(4)
+
+  const renderCard = (op: typeof operationTypes[0], index: number) => {
+    const Icon = op.icon
+    const showBadge = (op.id === 'receive_transfer' && pendingCount > 0) || (op.id === 'order_reception' && pendingConsignments > 0)
+    const badgeCount = op.id === 'receive_transfer' ? pendingCount : pendingConsignments
+
+    return (
+      <motion.button
+        key={op.id}
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: index * 0.08, type: 'spring', stiffness: 200 }}
+        whileHover={{ scale: 1.05, y: -4 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => onSelect(op.id)}
+        className={`
+          relative flex flex-col items-center justify-center
+          w-[120px] h-[120px] sm:w-[130px] sm:h-[130px] md:w-[140px] md:h-[140px]
+          rounded-2xl
+          bg-gradient-to-br ${op.gradient}
+          text-white shadow-lg
+          hover:shadow-xl transition-all duration-200
+          group overflow-hidden
+        `}
+      >
+        {/* Badge for pending operations */}
+        {showBadge && (
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="absolute top-2 right-2 z-20 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-lg"
+          >
+            <span className={`text-xs font-bold ${op.id === 'order_reception' ? 'text-teal-600' : 'text-purple-600'}`}>
+              {badgeCount}
+            </span>
+          </motion.div>
+        )}
+
+        {/* Icon container */}
+        <div className="relative z-10 w-12 h-12 sm:w-14 sm:h-14 bg-white/20 rounded-xl flex items-center justify-center mb-2 group-hover:bg-white/30 transition-colors">
+          <Icon className="w-6 h-6 sm:w-7 sm:h-7" />
+        </div>
+
+        {/* Text */}
+        <h3 className="relative z-10 text-sm sm:text-base font-bold text-center leading-tight px-2">
+          {op.name}
+        </h3>
+      </motion.button>
+    )
+  }
+
   return (
     <div className="flex items-center justify-center min-h-[60vh] p-4 w-full">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 lg:gap-5 max-w-7xl mx-auto">
-        {operationTypes.map((op, index) => {
-          const Icon = op.icon
-          const showBadge = (op.id === 'receive_transfer' && pendingCount > 0) || (op.id === 'order_reception' && pendingConsignments > 0)
-            const badgeCount = op.id === 'receive_transfer' ? pendingCount : pendingConsignments
-          return (
-            <motion.button
-              key={op.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              whileHover={{ scale: 1.02, y: -4 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => onSelect(op.id)}
-              className={`
-                relative flex flex-col items-center p-6 lg:p-8 rounded-2xl
-                bg-gradient-to-br ${op.gradient}
-                text-white shadow-lg
-                hover:shadow-xl transition-all duration-200
-                group overflow-hidden
-                min-h-[180px] lg:min-h-[220px]
-              `}
-            >
-              {/* Badge for pending operations */}
-              {showBadge && (
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="absolute top-3 right-3 z-20 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg"
-                >
-                  <span className={`text-sm font-bold ${op.id === 'order_reception' ? 'text-teal-600' : 'text-purple-600'}`}>{badgeCount}</span>
-                </motion.div>
-              )}
+      <div className="flex flex-col items-center gap-4">
+        {/* Fila superior: 4 elementos */}
+        <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
+          {topRow.map((op, index) => renderCard(op, index))}
+        </div>
 
-              {/* Icon container */}
-              <div className="relative z-10 w-16 h-16 lg:w-20 lg:h-20 bg-white/20 rounded-xl flex items-center justify-center mb-4 group-hover:bg-white/30 transition-colors">
-                <Icon className="w-8 h-8 lg:w-10 lg:h-10" />
-              </div>
-
-              {/* Text */}
-              <h3 className="relative z-10 text-lg lg:text-xl font-bold mb-2">{op.name}</h3>
-              <p className="relative z-10 text-sm lg:text-base text-white/80 text-center leading-tight">
-                {op.description}
-              </p>
-            </motion.button>
-          )
-        })}
+        {/* Fila inferior: 3 elementos centrados */}
+        <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
+          {bottomRow.map((op, index) => renderCard(op, index + 4))}
+        </div>
       </div>
     </div>
   )
