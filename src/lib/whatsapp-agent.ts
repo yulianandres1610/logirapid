@@ -40,7 +40,9 @@ const ALL_TIME_SLOTS = [
  * - Despues de 16: empieza con manana
  */
 function getAvailableDates(): { date: string; dayName: string; slots: string[] }[] {
-  const now = new Date()
+  // Usar zona horaria de Miami (America/New_York) para evitar problemas con servidores en UTC
+  const miamiTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })
+  const now = new Date(miamiTime)
   const currentHour = now.getHours()
   const result: { date: string; dayName: string; slots: string[] }[] = []
 
@@ -49,12 +51,18 @@ function getAvailableDates(): { date: string; dayName: string; slots: string[] }
 
   // Formato de fecha para mostrar (incluye año para evitar confusión)
   const formatDateStr = (d: Date): string => {
-    const year = d.getFullYear()
-    const month = d.getMonth() + 1
-    const day = d.getDate()
-    // Guardar en formato ISO para consistencia (YYYY-MM-DD)
-    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    // Usar toLocaleDateString para obtener la fecha en zona horaria de Miami
+    const options: Intl.DateTimeFormatOptions = {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }
+    const parts = new Intl.DateTimeFormat('en-CA', options).format(d).split('-')
+    return `${parts[0]}-${parts[1]}-${parts[2]}` // YYYY-MM-DD
   }
+
+  console.log('[getAvailableDates] Miami time:', miamiTime, '| Hour:', currentHour)
 
   // Calcular slots disponibles para hoy
   let todaySlots: string[] = []
@@ -78,11 +86,15 @@ function getAvailableDates(): { date: string; dayName: string; slots: string[] }
 
   // Agregar proximos 6 dias (todos los slots)
   for (let i = 1; i <= 6; i++) {
-    const futureDate = new Date()
+    // Crear fecha en zona horaria de Miami
+    const futureDate = new Date(now)
     futureDate.setDate(futureDate.getDate() + i)
 
+    const dateStr = formatDateStr(futureDate)
+    console.log('[getAvailableDates] Day', i, ':', i === 1 ? 'Manana' : dayNames[futureDate.getDay()], '=', dateStr)
+
     result.push({
-      date: formatDateStr(futureDate),
+      date: dateStr,
       dayName: i === 1 ? 'Manana' : dayNames[futureDate.getDay()],
       slots: [...ALL_TIME_SLOTS]
     })
@@ -1557,23 +1569,37 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
       }
     }
 
-    // Si no hay fecha, usar mañana por defecto
+    // Si no hay fecha, usar mañana por defecto (zona horaria Miami)
     if (!scheduledDate) {
-      const tomorrow = new Date()
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      scheduledDate = tomorrow.toISOString().split('T')[0]
-      console.log('[WhatsApp Agent] Sin fecha válida, usando mañana:', scheduledDate)
+      const miamiTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })
+      const now = new Date(miamiTime)
+      now.setDate(now.getDate() + 1)
+      const options: Intl.DateTimeFormatOptions = {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }
+      scheduledDate = new Intl.DateTimeFormat('en-CA', options).format(now)
+      console.log('[WhatsApp Agent] Sin fecha válida, usando mañana (Miami):', scheduledDate)
     }
 
-    // Validar que la fecha no sea en el pasado
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    // Validar que la fecha no sea en el pasado (zona horaria Miami)
+    const miamiTimeStr = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })
+    const todayMiami = new Date(miamiTimeStr)
+    todayMiami.setHours(0, 0, 0, 0)
     const scheduledDateObj = new Date(scheduledDate + 'T00:00:00')
-    if (scheduledDateObj < today) {
-      console.log('[WhatsApp Agent] Fecha en el pasado, ajustando a mañana')
-      const tomorrow = new Date()
+    if (scheduledDateObj < todayMiami) {
+      console.log('[WhatsApp Agent] Fecha en el pasado, ajustando a mañana (Miami)')
+      const tomorrow = new Date(miamiTimeStr)
       tomorrow.setDate(tomorrow.getDate() + 1)
-      scheduledDate = tomorrow.toISOString().split('T')[0]
+      const options: Intl.DateTimeFormatOptions = {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }
+      scheduledDate = new Intl.DateTimeFormat('en-CA', options).format(tomorrow)
     }
 
     // Horario - asegurar que siempre tenga un valor
