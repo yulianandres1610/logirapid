@@ -643,7 +643,7 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                 },
                 {
                   label: 'Unidades',
-                  value: totalUnits,
+                  value: Number.isInteger(totalUnits) ? totalUnits : totalUnits.toFixed(2),
                   icon: Package,
                   color: 'purple',
                   suffix: 'uds'
@@ -657,7 +657,7 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                 },
                 {
                   label: 'Pendiente',
-                  value: metrics.pendingUnits,
+                  value: Number.isInteger(metrics.pendingUnits) ? metrics.pendingUnits : metrics.pendingUnits.toFixed(2),
                   icon: Clock,
                   color: 'amber',
                   suffix: 'uds'
@@ -752,13 +752,13 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                       'text-sm font-medium',
                       theme === 'dark' ? 'text-white' : 'text-gray-900'
                     )}>
-                      {metrics.totalUnitsOrdered}
+                      {Number.isInteger(metrics.totalUnitsOrdered) ? metrics.totalUnitsOrdered : metrics.totalUnitsOrdered?.toFixed(2)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-500">Recibidas</span>
                     <span className="text-sm font-medium text-emerald-500">
-                      {metrics.totalUnitsReceived}
+                      {Number.isInteger(metrics.totalUnitsReceived) ? metrics.totalUnitsReceived : metrics.totalUnitsReceived?.toFixed(2)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -767,7 +767,7 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                       'text-sm font-medium',
                       metrics.pendingUnits > 0 ? 'text-amber-500' : 'text-emerald-500'
                     )}>
-                      {metrics.pendingUnits}
+                      {Number.isInteger(metrics.pendingUnits) ? metrics.pendingUnits : metrics.pendingUnits?.toFixed(2)}
                     </span>
                   </div>
                 </div>

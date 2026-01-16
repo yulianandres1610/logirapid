@@ -782,7 +782,7 @@ export default function MarketPurchasesPage() {
                             </td>
                             <td className="py-4 px-4 text-center">
                               <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                {purchase.lineCount} / {purchase.totalItems}
+                                {purchase.lineCount} / {Number.isInteger(purchase.totalItems) ? purchase.totalItems : purchase.totalItems.toFixed(2)}
                               </span>
                               <p className="text-xs text-gray-500">items / uds</p>
                             </td>
