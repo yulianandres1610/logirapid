@@ -1768,6 +1768,9 @@ function generateLinkCode(): string {
 /**
  * Procesa un mensaje entrante del cliente
  */
+// Tiempo de inactividad para cerrar conversación (30 minutos)
+const CONVERSATION_TIMEOUT_MINUTES = 30
+
 export async function handleIncomingMessage(
   phoneNumber: string,
   messageBody: string,
@@ -1782,6 +1785,50 @@ export async function handleIncomingMessage(
     const conversation = await getOrCreateConversation(phoneNumber)
     console.log('[WhatsApp Agent] Conversacion ID:', conversation.id, 'Flow:', conversation.current_flow)
     console.log('[WhatsApp Agent] Datos previos:', JSON.stringify(conversation.collected_data))
+
+    // 1.5 Verificar si la conversación estuvo inactiva por mucho tiempo
+    const lastMessageTime = new Date(conversation.last_message_at).getTime()
+    const now = Date.now()
+    const minutesInactive = (now - lastMessageTime) / (1000 * 60)
+    const wasInProgress = conversation.current_flow && conversation.current_flow !== 'idle'
+    const hadCollectedData = Object.keys(conversation.collected_data).length > 0
+
+    console.log('[WhatsApp Agent] Tiempo inactivo:', Math.round(minutesInactive), 'minutos | En progreso:', wasInProgress)
+
+    // Si estuvo inactiva más de 30 min y tenía una orden en progreso, cerrar y reiniciar
+    if (minutesInactive > CONVERSATION_TIMEOUT_MINUTES && wasInProgress && hadCollectedData) {
+      console.log('[WhatsApp Agent] ⏰ Conversación expirada por inactividad - reiniciando')
+
+      // Marcar conversación como abandonada en CRM (guardar datos para referencia)
+      const abandonedData = {
+        ...conversation.collected_data,
+        _abandoned: true,
+        _abandonedAt: new Date().toISOString(),
+        _abandonedReason: 'timeout',
+        _minutesInactive: Math.round(minutesInactive)
+      }
+
+      // Guardar registro de conversación abandonada
+      await db.query(`
+        INSERT INTO whatsapp_abandoned_conversations (
+          phone_number, collected_data, abandoned_at, reason
+        ) VALUES ($1, $2, NOW(), 'timeout')
+        ON CONFLICT DO NOTHING
+      `, [phoneNumber.replace('whatsapp:', ''), JSON.stringify(abandonedData)]).catch(() => {
+        // Tabla puede no existir, ignorar
+        console.log('[WhatsApp Agent] Nota: tabla whatsapp_abandoned_conversations no existe')
+      })
+
+      // Resetear conversación
+      await resetConversation(conversation.id)
+      await saveMessage(conversation.id, 'inbound', messageBody, messageSid)
+
+      const response = '¡Hola de nuevo! 👋 Tu sesión anterior expiró por inactividad. ' +
+                       'No te preocupes, podemos empezar de nuevo. ' +
+                       '¿En qué puedo ayudarte hoy?'
+      await saveMessage(conversation.id, 'outbound', response)
+      return { message: response }
+    }
 
     // 2. Detectar si el usuario quiere empezar una nueva orden (respaldo manual)
     const newOrderPhrases = ['nueva orden', 'nuevo envio', 'nuevo envío', 'otra persona', 'empezar de nuevo', 'empezar de cero', 'borrar datos', 'otro cliente', 'reiniciar']
@@ -2545,7 +2592,8 @@ export async function handleIncomingMessage(
         }
       }
 
-      // Intentar parsear texto natural
+      // Intentar parsear texto natural para fecha y hora
+      // Ahora soporta selección en pasos separados (primero día, luego hora o viceversa)
       if (!newCollectedData.scheduledDate && !responseOverridden) {
         // Detectar dia - usar fechas ACTUALES
         let selectedDayName = ''
@@ -2569,45 +2617,101 @@ export async function handleIncomingMessage(
           selectedDayName = 'Domingo'
         }
 
-        // Detectar horario - prioridad: tarde > noche > mañana/temprano
+        // Detectar horario - múltiples formas de expresarlo
         let selectedSlot = ''
-        if (msgLower.includes('tarde')) {
+        if (msgLower.includes('tarde') || msgLower.includes('12') || msgLower.includes('12-4') || msgLower.includes('12 a 4')) {
           selectedSlot = '12:00 PM - 4:00 PM'
-        } else if (msgLower.includes('noche')) {
+        } else if (msgLower.includes('noche') || msgLower.includes('4-8') || msgLower.includes('4 a 8') || msgLower.includes('4pm')) {
           selectedSlot = '4:00 PM - 8:00 PM'
-        } else if (msgLower.includes('temprano') || msgLower.includes('por la mañana') || msgLower.includes('por la manana') || msgLower.includes('en la mañana') || msgLower.includes('en la manana')) {
+        } else if (msgLower.includes('temprano') || msgLower.includes('mañana') && (msgLower.includes('por la') || msgLower.includes('en la')) ||
+                   msgLower.includes('8-12') || msgLower.includes('8 a 12') || msgLower.includes('8am')) {
           selectedSlot = '8:00 AM - 12:00 PM'
         }
 
-        // Si encontro día y horario
+        // Si hay un día pendiente de mensaje anterior, usarlo
+        const pendingDay = newCollectedData._pendingDay as string | undefined
+        const effectiveDayName = selectedDayName || pendingDay
+
+        console.log('[WhatsApp Agent] Parseando fecha/hora:', {
+          selectedDayName,
+          selectedSlot,
+          pendingDay,
+          effectiveDayName,
+          msgLower: msgLower.substring(0, 50)
+        })
+
+        // CASO 1: Usuario da día y horario juntos (ej: "mañana en la tarde")
         if (selectedDayName && selectedSlot) {
-          // Verificar disponibilidad en tiempo real
           const currentDay = currentAvailableDates.find(d => d.dayName === selectedDayName)
 
           if (!currentDay) {
-            // Día no disponible (ej: "hoy" después de las 4pm)
-            const slotName = selectedSlot.includes('8:00 AM') ? 'en la mañana' :
-                             selectedSlot.includes('12:00 PM') ? 'en la tarde' : 'en la noche'
-            response = `Lo siento, para ${selectedDayName.toLowerCase()} ya no tenemos horarios disponibles. ` +
-                       getAlternativeSuggestion(selectedDayName, selectedSlot)
-            newCollectedData._availableDates = currentAvailableDates
+            response = `Lo siento, ${selectedDayName.toLowerCase()} no está disponible. ¿Qué otro día prefieres?`
             responseOverridden = true
-            console.log('[WhatsApp Agent] Día no disponible:', selectedDayName)
           } else if (!currentDay.slots.includes(selectedSlot)) {
-            // Día disponible pero el slot específico no
-            const slotName = selectedSlot.includes('8:00 AM') ? 'en la mañana' :
-                             selectedSlot.includes('12:00 PM') ? 'en la tarde' : 'en la noche'
-            response = `Lo siento, ${selectedDayName.toLowerCase()} ${slotName} ya no está disponible. ` +
-                       getAlternativeSuggestion(selectedDayName, selectedSlot)
-            newCollectedData._availableDates = currentAvailableDates
+            const slotName = selectedSlot.includes('8:00 AM') ? 'en la mañana' : selectedSlot.includes('12:00 PM') ? 'en la tarde' : 'en la noche'
+            const availableSlots = currentDay.slots.map(s => s.includes('8:00 AM') ? 'mañana (8-12)' : s.includes('12:00 PM') ? 'tarde (12-4)' : 'noche (4-8)').join(', ')
+            response = `Lo siento, ${selectedDayName.toLowerCase()} ${slotName} no está disponible. Horarios disponibles: ${availableSlots}`
             responseOverridden = true
-            console.log('[WhatsApp Agent] Slot no disponible para', selectedDayName, ':', selectedSlot)
           } else {
-            // Todo disponible - guardar
             newCollectedData.scheduledDate = currentDay.date
             newCollectedData.timeSlot = selectedSlot
             delete newCollectedData._availableDates
-            console.log('[WhatsApp Agent] Fecha seleccionada (texto):', newCollectedData.scheduledDate, newCollectedData.timeSlot)
+            delete newCollectedData._pendingDay
+            console.log('[WhatsApp Agent] ✅ Fecha y hora guardadas:', currentDay.date, selectedSlot)
+          }
+        }
+        // CASO 2: Usuario da solo el día (ej: "mañana")
+        else if (selectedDayName && !selectedSlot) {
+          const currentDay = currentAvailableDates.find(d => d.dayName === selectedDayName)
+
+          if (!currentDay) {
+            response = `Lo siento, ${selectedDayName.toLowerCase()} no está disponible. ¿Qué otro día prefieres?`
+            responseOverridden = true
+          } else {
+            // Guardar día pendiente y preguntar hora
+            newCollectedData._pendingDay = selectedDayName
+            newCollectedData._pendingDayDate = currentDay.date
+            const availableSlots = currentDay.slots.map(s => s.includes('8:00 AM') ? 'mañana (8-12)' : s.includes('12:00 PM') ? 'tarde (12-4)' : 'noche (4-8)').join(', ')
+            response = `Perfecto, ${selectedDayName.toLowerCase()}. ¿A qué hora prefieres? Horarios disponibles: ${availableSlots}`
+            responseOverridden = true
+            console.log('[WhatsApp Agent] Día guardado pendiente:', selectedDayName, '- esperando horario')
+          }
+        }
+        // CASO 3: Usuario da solo la hora y hay día pendiente (ej: "tarde" después de haber dicho "mañana")
+        else if (!selectedDayName && selectedSlot && pendingDay) {
+          const pendingDayDate = newCollectedData._pendingDayDate as string
+          const currentDay = currentAvailableDates.find(d => d.dayName === pendingDay)
+
+          if (!currentDay) {
+            response = `Lo siento, ${pendingDay.toLowerCase()} ya no está disponible. ¿Qué día prefieres?`
+            delete newCollectedData._pendingDay
+            delete newCollectedData._pendingDayDate
+            responseOverridden = true
+          } else if (!currentDay.slots.includes(selectedSlot)) {
+            const slotName = selectedSlot.includes('8:00 AM') ? 'en la mañana' : selectedSlot.includes('12:00 PM') ? 'en la tarde' : 'en la noche'
+            const availableSlots = currentDay.slots.map(s => s.includes('8:00 AM') ? 'mañana (8-12)' : s.includes('12:00 PM') ? 'tarde (12-4)' : 'noche (4-8)').join(', ')
+            response = `Lo siento, ${slotName} no está disponible para ${pendingDay.toLowerCase()}. Horarios disponibles: ${availableSlots}`
+            responseOverridden = true
+          } else {
+            newCollectedData.scheduledDate = currentDay.date
+            newCollectedData.timeSlot = selectedSlot
+            delete newCollectedData._availableDates
+            delete newCollectedData._pendingDay
+            delete newCollectedData._pendingDayDate
+            console.log('[WhatsApp Agent] ✅ Fecha (pendiente) y hora guardadas:', currentDay.date, selectedSlot)
+          }
+        }
+        // CASO 4: Usuario da solo la hora sin día previo - asumir "mañana" o primer día disponible
+        else if (!selectedDayName && selectedSlot && !pendingDay) {
+          // Usar primer día disponible que tenga ese slot
+          const dayWithSlot = currentAvailableDates.find(d => d.slots.includes(selectedSlot))
+          if (dayWithSlot) {
+            newCollectedData.scheduledDate = dayWithSlot.date
+            newCollectedData.timeSlot = selectedSlot
+            delete newCollectedData._availableDates
+            const slotName = selectedSlot.includes('8:00 AM') ? 'en la mañana' : selectedSlot.includes('12:00 PM') ? 'en la tarde' : 'en la noche'
+            console.log('[WhatsApp Agent] ✅ Fecha auto-asignada y hora guardadas:', dayWithSlot.date, selectedSlot)
+            // No override response - dejar que fluya normalmente
           }
         }
       }
