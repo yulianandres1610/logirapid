@@ -43,11 +43,13 @@ export async function GET(
     const type = searchParams.get('type') // 'consignment', 'purchase', or null for both
     const limit = parseInt(searchParams.get('limit') || '50')
 
+    console.log('[Reception History] Query params:', { companyId: payload.companyId, warehouseId, type, limit })
+
     // Get consignment receptions
-    // Include partial orders even if received_at is null (for legacy data)
-    // Use updated_at as fallback date for sorting
+    // Buscar órdenes que tengan lotes en este almacén (consignment_lot_inventory)
+    // o que tengan warehouse_id = este almacén
     const consignmentReceptions = type === 'purchase' ? [] : (await db.query(`
-      SELECT
+      SELECT DISTINCT
         o.id,
         o.order_number,
         'consignment' as order_type,
@@ -56,26 +58,41 @@ export async function GET(
         s.supplier_code as supplier_code,
         s.name as supplier_name,
         u.name as received_by_name,
-        COALESCE(SUM(ol.quantity_received), 0) as total_units,
-        COUNT(DISTINCT ol.id) as total_lines
+        (SELECT COALESCE(SUM(quantity_received), 0) FROM consignment_order_lines WHERE order_id = o.id) as total_units,
+        (SELECT COUNT(*) FROM consignment_order_lines WHERE order_id = o.id AND quantity_received > 0) as total_lines
       FROM consignment_orders o
       JOIN market_suppliers s ON s.id = o.supplier_id
       LEFT JOIN users u ON u.id = o.received_by
-      LEFT JOIN consignment_order_lines ol ON ol.order_id = o.id
       WHERE o.company_id = $1
-        AND o.warehouse_id = $2
         AND o.status IN ('received', 'partial')
-      GROUP BY o.id, o.order_number, o.status, o.received_at, o.updated_at, s.supplier_code, s.name, u.name
-      HAVING COALESCE(SUM(ol.quantity_received), 0) > 0
+        AND (
+          o.warehouse_id = $2
+          OR EXISTS (
+            SELECT 1 FROM consignment_lot_inventory cli
+            WHERE cli.warehouse_id = $2
+            AND cli.company_id = $1
+            AND EXISTS (
+              SELECT 1 FROM consignment_order_lines col
+              WHERE col.order_id = o.id
+              AND col.id = cli.order_line_id
+            )
+          )
+        )
+        AND EXISTS (
+          SELECT 1 FROM consignment_order_lines col
+          WHERE col.order_id = o.id AND col.quantity_received > 0
+        )
       ORDER BY COALESCE(o.received_at, o.updated_at) DESC
       LIMIT $3
     `, [payload.companyId, warehouseId, limit])).rows
 
+    console.log('[Reception History] Consignment results:', consignmentReceptions.length)
+
     // Get purchase receptions
-    // Include pendiente orders even if received_date is null (for legacy data)
-    // Use updated_at as fallback date for sorting
+    // Buscar compras que tengan lotes en este almacén (purchase_lot_inventory)
+    // o que tengan warehouse_id = este almacén
     const purchaseReceptions = type === 'consignment' ? [] : (await db.query(`
-      SELECT
+      SELECT DISTINCT
         p.id,
         p.purchase_number as order_number,
         'purchase' as order_type,
@@ -84,20 +101,35 @@ export async function GET(
         COALESCE(ms.supplier_code, 'PROV') as supplier_code,
         COALESCE(p.supplier_name, ms.name, 'Proveedor') as supplier_name,
         u.name as received_by_name,
-        COALESCE(SUM(pl.quantity_received), 0) as total_units,
-        COUNT(DISTINCT pl.id) as total_lines
+        (SELECT COALESCE(SUM(quantity_received), 0) FROM market_purchase_lines WHERE purchase_id = p.id) as total_units,
+        (SELECT COUNT(*) FROM market_purchase_lines WHERE purchase_id = p.id AND quantity_received > 0) as total_lines
       FROM market_purchases p
       LEFT JOIN market_suppliers ms ON ms.id = p.supplier_id
       LEFT JOIN users u ON u.id = p.received_by
-      LEFT JOIN market_purchase_lines pl ON pl.purchase_id = p.id
       WHERE p.company_id = $1
-        AND p.warehouse_id = $2
         AND p.status IN ('recibido', 'pendiente')
-      GROUP BY p.id, p.purchase_number, p.status, p.received_date, p.updated_at, ms.supplier_code, p.supplier_name, ms.name, u.name
-      HAVING COALESCE(SUM(pl.quantity_received), 0) > 0
+        AND (
+          p.warehouse_id = $2
+          OR EXISTS (
+            SELECT 1 FROM purchase_lot_inventory pli
+            WHERE pli.warehouse_id = $2
+            AND pli.company_id = $1
+            AND EXISTS (
+              SELECT 1 FROM market_purchase_lines mpl
+              WHERE mpl.purchase_id = p.id
+              AND mpl.id = pli.purchase_line_id
+            )
+          )
+        )
+        AND EXISTS (
+          SELECT 1 FROM market_purchase_lines mpl
+          WHERE mpl.purchase_id = p.id AND mpl.quantity_received > 0
+        )
       ORDER BY COALESCE(p.received_date, p.updated_at) DESC
       LIMIT $3
     `, [payload.companyId, warehouseId, limit])).rows
+
+    console.log('[Reception History] Purchase results:', purchaseReceptions.length)
 
     // Combine and sort by date
     const allReceptions = [...consignmentReceptions, ...purchaseReceptions]
