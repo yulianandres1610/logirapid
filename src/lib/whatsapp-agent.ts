@@ -2632,14 +2632,41 @@ export async function handleIncomingMessage(
         const pendingDay = newCollectedData._pendingDay as string | undefined
         const effectiveDayName = selectedDayName || pendingDay
 
+        // Detectar confirmaciones tipo "Si", "Ok", "Dale", "Perfecto"
+        const isConfirmation = ['si', 'sí', 'ok', 'dale', 'perfecto', 'esta bien', 'está bien', 'listo', 'bueno', 'claro', 'vale'].includes(msgLower.trim())
+        const suggestedSlot = newCollectedData._suggestedSlot as string | undefined
+
         console.log('[WhatsApp Agent] Parseando fecha/hora:', {
           selectedDayName,
           selectedSlot,
           pendingDay,
-          effectiveDayName,
+          suggestedSlot,
+          isConfirmation,
           msgLower: msgLower.substring(0, 50)
         })
 
+        // CASO 0: Usuario confirma con "Si" cuando hay día y slot sugerido pendientes
+        if (isConfirmation && pendingDay && suggestedSlot) {
+          const currentDay = currentAvailableDates.find(d => d.dayName === pendingDay)
+
+          if (currentDay && currentDay.slots.includes(suggestedSlot)) {
+            newCollectedData.scheduledDate = currentDay.date
+            newCollectedData.timeSlot = suggestedSlot
+            delete newCollectedData._availableDates
+            delete newCollectedData._pendingDay
+            delete newCollectedData._pendingDayDate
+            delete newCollectedData._suggestedSlot
+            const slotName = suggestedSlot.includes('8:00 AM') ? 'en la mañana' : suggestedSlot.includes('12:00 PM') ? 'en la tarde' : 'en la noche'
+            console.log('[WhatsApp Agent] ✅ Usuario confirmó fecha/hora con "Si":', currentDay.date, suggestedSlot)
+            // No override - dejar que el flujo continue para crear la orden
+          } else {
+            response = `¡Ups! Ese horario ya no está disponible. ¿Qué otro día u horario prefieres?`
+            delete newCollectedData._pendingDay
+            delete newCollectedData._pendingDayDate
+            delete newCollectedData._suggestedSlot
+            responseOverridden = true
+          }
+        }
         // CASO 1: Usuario da día y horario juntos (ej: "mañana en la tarde")
         if (selectedDayName && selectedSlot) {
           const currentDay = currentAvailableDates.find(d => d.dayName === selectedDayName)
@@ -2665,16 +2692,25 @@ export async function handleIncomingMessage(
           const currentDay = currentAvailableDates.find(d => d.dayName === selectedDayName)
 
           if (!currentDay) {
-            response = `Lo siento, ${selectedDayName.toLowerCase()} no está disponible. ¿Qué otro día prefieres?`
+            response = `¡Ay, ${selectedDayName.toLowerCase()} no tenemos disponible! 😅 ¿Qué otro día te viene bien?`
             responseOverridden = true
           } else {
-            // Guardar día pendiente y preguntar hora
+            // Guardar día pendiente y sugerir primer horario disponible
             newCollectedData._pendingDay = selectedDayName
             newCollectedData._pendingDayDate = currentDay.date
-            const availableSlots = currentDay.slots.map(s => s.includes('8:00 AM') ? 'mañana (8-12)' : s.includes('12:00 PM') ? 'tarde (12-4)' : 'noche (4-8)').join(', ')
-            response = `Perfecto, ${selectedDayName.toLowerCase()}. ¿A qué hora prefieres? Horarios disponibles: ${availableSlots}`
+            // Sugerir el primer slot disponible
+            const firstSlot = currentDay.slots[0]
+            newCollectedData._suggestedSlot = firstSlot
+            const slotName = firstSlot.includes('8:00 AM') ? 'mañana (8-12)' : firstSlot.includes('12:00 PM') ? 'tarde (12-4)' : 'noche (4-8)'
+            const otherSlots = currentDay.slots.slice(1).map(s => s.includes('8:00 AM') ? 'mañana (8-12)' : s.includes('12:00 PM') ? 'tarde (12-4)' : 'noche (4-8)').join(' o ')
+
+            if (currentDay.slots.length === 1) {
+              response = `¡Perfecto, ${selectedDayName.toLowerCase()}! 📅 Solo tenemos disponible ${slotName}. ¿Te parece bien?`
+            } else {
+              response = `¡Genial, ${selectedDayName.toLowerCase()}! 📅 ¿Prefieres ${slotName}${otherSlots ? ` o ${otherSlots}` : ''}?`
+            }
             responseOverridden = true
-            console.log('[WhatsApp Agent] Día guardado pendiente:', selectedDayName, '- esperando horario')
+            console.log('[WhatsApp Agent] Día guardado pendiente:', selectedDayName, '- slot sugerido:', firstSlot)
           }
         }
         // CASO 3: Usuario da solo la hora y hay día pendiente (ej: "tarde" después de haber dicho "mañana")
@@ -2766,7 +2802,8 @@ export async function handleIncomingMessage(
               timeSlot: 'a que hora prefieres'
             }
             const firstMissing = validation.missing[0]
-            response = `Me falta ${fieldNames[firstMissing] || firstMissing}. Me lo puedes dar?`
+            const friendlyName = fieldNames[firstMissing] || firstMissing
+            response = `¡Ya casi! 😊 Solo necesito ${friendlyName}. ¿Me lo puedes dar?`
           }
         }
       } else if (newFlow === 'remittance_order') {
@@ -2776,7 +2813,7 @@ export async function handleIncomingMessage(
           response = generateDataSummary(newCollectedData, newFlow)
         } else {
           const firstMissing = validation.missing[0]
-          response = `Me falta ${firstMissing}. Cual es?`
+          response = `¡Casi listo! Solo necesito ${firstMissing}. ¿Cuál es?`
         }
       }
       // Si newFlow es 'idle' pero pidió summary, ignorar (no debería pasar)
@@ -2833,7 +2870,7 @@ export async function handleIncomingMessage(
             await markConversationCompleted(conversation.id, result.orderId, 'pickup')
           } else {
             console.error('[WhatsApp Agent] Error creando orden:', result.error)
-            response = 'Uy perdon, se me trabo el sistema. Puedes decirme los datos otra vez?'
+            response = '¡Ay, disculpa! 😅 Tuve un problemita técnico. ¿Me puedes repetir los datos? ¡Prometo que esta vez queda!'
           }
         } else {
           console.log('[WhatsApp Agent] Faltan datos minimos:', validation.missing, 'Errores:', validation.errors)
@@ -2854,15 +2891,15 @@ export async function handleIncomingMessage(
             // Mostrar el primer error de validación
             const error = validation.errors[0]
             if (error.includes('Carnet de Identidad')) {
-              response = 'El carnet de identidad (CI) de Cuba debe tener 11 dígitos. Por favor, dame el CI correcto.'
+              response = '¡Ups! 😅 El carnet de identidad (CI) de Cuba tiene 11 dígitos. ¿Puedes verificarlo y dármelo de nuevo?'
             } else {
-              response = `${error}. Por favor, corrígelo.`
+              response = `¡Un momentito! ${error}. ¿Puedes corregirlo?`
             }
           } else if (validation.missing && validation.missing.length > 0) {
             const missingNames = validation.missing.map(f => fieldNames[f] || f).slice(0, 2)
-            response = `Me falta ${missingNames.join(' y ')} para crear la orden. Me lo puedes dar?`
+            response = `¡Ya casi terminamos! 🎯 Solo necesito ${missingNames.join(' y ')}. ¿Me ayudas con eso?`
           } else {
-            response = 'Parece que falta algún dato. Por favor, dime qué información adicional necesitas proporcionar.'
+            response = '¡Estamos muy cerca! 😊 ¿Puedes decirme qué dato adicional te gustaría agregar?'
           }
         }
       } else if (newFlow === 'remittance_order') {
