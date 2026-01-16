@@ -1876,9 +1876,19 @@ export async function handleIncomingMessage(
     }
 
     // 9. Actualizar datos recopilados (ACUMULAR datos)
+    // Filtrar senderEntryPin de GPT si estamos en el proceso de confirmar dirección o esperando PIN
+    // (GPT a veces extrae "NO" prematuramente cuando el usuario confirma la dirección)
+    const filteredExtractedData = { ...(gptResponse.extractedData || {}) }
+    const isWaitingForAddressConfirmation = conversation.collected_data._pendingValidatedAddress
+    const isWaitingForPinResponse = conversation.collected_data._waitingForPin
+    if ((isWaitingForAddressConfirmation || isWaitingForPinResponse) && filteredExtractedData.senderEntryPin) {
+      console.log('[WhatsApp Agent] Filtrando senderEntryPin de GPT, esperamos respuesta manual del usuario')
+      delete filteredExtractedData.senderEntryPin
+    }
+
     const newCollectedData = {
       ...conversation.collected_data,
-      ...(gptResponse.extractedData || {})
+      ...filteredExtractedData
     }
     // Eliminar allDataComplete de los datos guardados
     delete newCollectedData.allDataComplete
@@ -2184,12 +2194,18 @@ export async function handleIncomingMessage(
     }
 
     // Detectar respuesta de PIN (después de confirmar dirección)
-    if (newCollectedData._waitingForPin && !newCollectedData.senderEntryPin) {
+    // IMPORTANTE: Solo procesar si _waitingForPin ya existía ANTES de este mensaje
+    // (para evitar procesar "Si" de confirmación de dirección como PIN)
+    const wasWaitingForPin = conversation.collected_data._waitingForPin === true
+    if (wasWaitingForPin && !newCollectedData.senderEntryPin) {
       const msgLower = messageBody.toLowerCase().trim()
-      const noPinPhrases = ['no hay', 'no tiene', 'ninguno', 'nada', 'no', 'sin pin', 'sin codigo', 'no hay pin', 'no hay codigo', 'no tengo']
+      const noPinPhrases = ['no hay', 'no tiene', 'ninguno', 'nada', 'sin pin', 'sin codigo', 'no hay pin', 'no hay codigo', 'no tengo']
       const hasNoPin = noPinPhrases.some(phrase => msgLower.includes(phrase) || msgLower === phrase)
 
-      if (hasNoPin) {
+      // Ignorar respuestas muy cortas que podrían ser confirmaciones (si, no, ok)
+      const isShortConfirmation = ['si', 'sí', 'no', 'ok'].includes(msgLower)
+
+      if (hasNoPin && !isShortConfirmation) {
         // Usuario indica que no hay PIN
         newCollectedData.senderEntryPin = 'NO'
         delete newCollectedData._waitingForPin
@@ -2197,8 +2213,8 @@ export async function handleIncomingMessage(
         console.log('[WhatsApp Agent] PIN: No hay (usuario indicó), ahora esperamos teléfono destinatario')
         response = 'Entendido, sin codigo de acceso. Ahora dame el telefono del destinatario en Cuba (8 digitos).'
         responseOverridden = true
-      } else if (msgLower.length > 0 && msgLower.length < 20) {
-        // Usuario dio un PIN/código
+      } else if (!isShortConfirmation && msgLower.length > 0 && msgLower.length < 20) {
+        // Usuario dio un PIN/código (pero no es una confirmación corta)
         newCollectedData.senderEntryPin = messageBody.trim()
         delete newCollectedData._waitingForPin
         newCollectedData._waitingForRecipientPhone = true  // Esperamos teléfono del destinatario
