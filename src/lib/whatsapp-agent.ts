@@ -772,7 +772,39 @@ async function searchRecipientByPhone(phoneNumber: string): Promise<RecipientSea
   const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-8) // Telefonos cubanos 8 digitos
   console.log('[WhatsApp Agent] Buscando destinatario Cuba por telefono:', cleanPhone)
 
-  // Buscar en ordenes anteriores
+  // 1. Buscar primero en la tabla customers (donde guardamos los destinatarios)
+  const customerResult = await db.query(`
+    SELECT
+      id, firstname, lastname, phone, idnumber as ci,
+      address, city as municipality, state as province
+    FROM customers
+    WHERE country = 'Cuba'
+      AND (
+        REPLACE(phone, ' ', '') LIKE $1
+        OR phone LIKE $2
+      )
+    ORDER BY createdat DESC
+    LIMIT 1
+  `, [`%${cleanPhone}%`, `%${cleanPhone}%`])
+
+  if (customerResult.rows.length > 0) {
+    const c = customerResult.rows[0]
+    const fullName = [c.firstname, c.lastname].filter(Boolean).join(' ')
+    console.log('[WhatsApp Agent] Destinatario encontrado en customers:', fullName)
+    return {
+      found: true,
+      name: fullName,
+      phone: c.phone,
+      ci: c.ci,
+      addresses: [{
+        province: c.province,
+        municipality: c.municipality,
+        street: c.address,
+      }]
+    }
+  }
+
+  // 2. Buscar en ordenes anteriores
   const orderResult = await db.query(`
     SELECT
       office_order_data
@@ -2448,6 +2480,31 @@ export async function handleIncomingMessage(
       }
     }
 
+    // Detectar confirmacion final de orden despues del resumen
+    const wasWaitingForOrderConfirmation = conversation.collected_data._waitingForOrderConfirmation === true
+    if (wasWaitingForOrderConfirmation && !responseOverridden) {
+      const msgLower = messageBody.toLowerCase().trim()
+      const confirmed = ['si', 'sí', 'ok', 'correcto', 'correcta', 'yes', 'esta bien', 'todo bien', 'perfecto', 'dale', 'listo', 'confirmo', 'afirmativo'].some(
+        word => msgLower === word || msgLower.startsWith(word + ' ') || msgLower.endsWith(' ' + word)
+      )
+      const denied = ['no', 'incorrecto', 'cambiar', 'corregir', 'modificar'].some(
+        word => msgLower === word || msgLower.startsWith(word + ' ')
+      )
+
+      if (confirmed) {
+        // Usuario confirmo el resumen - activar creacion de orden
+        console.log('[WhatsApp Agent] ✅ Usuario confirmo el resumen, activando readyToCreateOrder')
+        delete newCollectedData._waitingForOrderConfirmation
+        gptResponse.readyToCreateOrder = true
+        gptResponse.requestSummary = false
+      } else if (denied) {
+        // Usuario quiere corregir algo
+        delete newCollectedData._waitingForOrderConfirmation
+        response = 'Ok, ¿qué dato quieres corregir? Puedes decirme: remitente, destinatario, fecha u horario.'
+        responseOverridden = true
+      }
+    }
+
     // Mostrar fechas disponibles si GPT lo solicita
     if (gptResponse.getAvailableDates) {
       console.log('[WhatsApp Agent] GPT solicita mostrar fechas disponibles')
@@ -2833,6 +2890,8 @@ export async function handleIncomingMessage(
         if (validation.minimumMet) {
           console.log('[WhatsApp Agent] Mostrando resumen con datos minimos OK')
           response = generateDataSummary(newCollectedData, newFlow)
+          newCollectedData._waitingForOrderConfirmation = true
+          console.log('[WhatsApp Agent] Flag _waitingForOrderConfirmation activado')
         } else {
           // Si el destinatario fue confirmado, no pedir datos del destinatario
           const missingNonRecipient = validation.missing.filter(f =>
@@ -2842,6 +2901,8 @@ export async function handleIncomingMessage(
           if (missingNonRecipient.length === 0 && newCollectedData._recipientConfirmed) {
             console.log('[WhatsApp Agent] Destinatario confirmado, todos los datos OK')
             response = generateDataSummary(newCollectedData, newFlow)
+            newCollectedData._waitingForOrderConfirmation = true
+            console.log('[WhatsApp Agent] Flag _waitingForOrderConfirmation activado')
           } else {
             console.log('[WhatsApp Agent] Faltan datos minimos para resumen:', validation.missing)
             // Pedir el primer dato faltante (solo minimos)
@@ -2865,6 +2926,8 @@ export async function handleIncomingMessage(
         const validation = validateRemittanceData(newCollectedData)
         if (validation.valid) {
           response = generateDataSummary(newCollectedData, newFlow)
+          newCollectedData._waitingForOrderConfirmation = true
+          console.log('[WhatsApp Agent] Flag _waitingForOrderConfirmation activado (remesa)')
         } else {
           const firstMissing = validation.missing[0]
           response = `¡Casi listo! Solo necesito ${firstMissing}. ¿Cuál es?`
