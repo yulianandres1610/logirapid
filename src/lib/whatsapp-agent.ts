@@ -2199,13 +2199,17 @@ export async function handleIncomingMessage(
     const wasWaitingForPin = conversation.collected_data._waitingForPin === true
     if (wasWaitingForPin && !newCollectedData.senderEntryPin) {
       const msgLower = messageBody.toLowerCase().trim()
+      // Frases que indican "no hay PIN" - incluir "no" solo cuando esperamos PIN específicamente
       const noPinPhrases = ['no hay', 'no tiene', 'ninguno', 'nada', 'sin pin', 'sin codigo', 'no hay pin', 'no hay codigo', 'no tengo']
       const hasNoPin = noPinPhrases.some(phrase => msgLower.includes(phrase) || msgLower === phrase)
 
-      // Ignorar respuestas muy cortas que podrían ser confirmaciones (si, no, ok)
-      const isShortConfirmation = ['si', 'sí', 'no', 'ok'].includes(msgLower)
+      // "no" solo = "no hay PIN" cuando estamos esperando específicamente el PIN
+      const isJustNo = msgLower === 'no'
 
-      if (hasNoPin && !isShortConfirmation) {
+      // Ignorar "si" como PIN (podría ser confirmación tardía)
+      const isSiConfirmation = ['si', 'sí', 'ok'].includes(msgLower)
+
+      if (hasNoPin || isJustNo) {
         // Usuario indica que no hay PIN
         newCollectedData.senderEntryPin = 'NO'
         delete newCollectedData._waitingForPin
@@ -2213,8 +2217,8 @@ export async function handleIncomingMessage(
         console.log('[WhatsApp Agent] PIN: No hay (usuario indicó), ahora esperamos teléfono destinatario')
         response = 'Entendido, sin codigo de acceso. Ahora dame el telefono del destinatario en Cuba (8 digitos).'
         responseOverridden = true
-      } else if (!isShortConfirmation && msgLower.length > 0 && msgLower.length < 20) {
-        // Usuario dio un PIN/código (pero no es una confirmación corta)
+      } else if (!isSiConfirmation && msgLower.length > 0 && msgLower.length < 20) {
+        // Usuario dio un PIN/código (pero no es "si/ok" que podría ser confirmación tardía)
         newCollectedData.senderEntryPin = messageBody.trim()
         delete newCollectedData._waitingForPin
         newCollectedData._waitingForRecipientPhone = true  // Esperamos teléfono del destinatario
@@ -2728,8 +2732,8 @@ export async function handleIncomingMessage(
             response = 'Uy perdon, se me trabo el sistema. Puedes decirme los datos otra vez?'
           }
         } else {
-          console.log('[WhatsApp Agent] Faltan datos minimos:', validation.missing)
-          // Informar que datos faltan
+          console.log('[WhatsApp Agent] Faltan datos minimos:', validation.missing, 'Errores:', validation.errors)
+          // Informar que datos faltan o hay errores de validación
           const fieldNames: Record<string, string> = {
             senderName: 'tu nombre',
             senderAddress: 'tu direccion',
@@ -2740,8 +2744,22 @@ export async function handleIncomingMessage(
             scheduledDate: 'fecha de recogida',
             timeSlot: 'horario'
           }
-          const missingNames = validation.missing.map(f => fieldNames[f] || f).slice(0, 2)
-          response = `Me falta ${missingNames.join(' y ')} para crear la orden. Me lo puedes dar?`
+
+          // Primero verificar si hay errores de validación (como CI incorrecto)
+          if (validation.errors && validation.errors.length > 0) {
+            // Mostrar el primer error de validación
+            const error = validation.errors[0]
+            if (error.includes('Carnet de Identidad')) {
+              response = 'El carnet de identidad (CI) de Cuba debe tener 11 dígitos. Por favor, dame el CI correcto.'
+            } else {
+              response = `${error}. Por favor, corrígelo.`
+            }
+          } else if (validation.missing && validation.missing.length > 0) {
+            const missingNames = validation.missing.map(f => fieldNames[f] || f).slice(0, 2)
+            response = `Me falta ${missingNames.join(' y ')} para crear la orden. Me lo puedes dar?`
+          } else {
+            response = 'Parece que falta algún dato. Por favor, dime qué información adicional necesitas proporcionar.'
+          }
         }
       } else if (newFlow === 'remittance_order') {
         // Validar datos antes de crear
