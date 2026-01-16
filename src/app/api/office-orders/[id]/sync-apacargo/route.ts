@@ -35,7 +35,13 @@ interface OfficeOrderData {
     state?: string
     zipCode?: string
     country?: string
-    municipalityId?: number
+    provinceName?: string
+    provinceId?: number | null
+    municipalityName?: string
+    municipalityId?: number | null
+    reparto?: string
+    fullAddress?: string
+    deliveryInstructions?: string
   }
   serviceConfigs?: Array<{
     serviceId: number

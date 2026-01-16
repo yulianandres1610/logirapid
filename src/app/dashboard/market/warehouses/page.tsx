@@ -83,6 +83,7 @@ export default function MarketWarehousesPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [employeeWarehouseId, setEmployeeWarehouseId] = useState<number | null>(null)
   const [loadingEmployee, setLoadingEmployee] = useState(true)
+  const [employeeError, setEmployeeError] = useState<string | null>(null)
 
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
   const isAlmacenero = user?.role === 'MARKET_ALMACENERO'
@@ -100,9 +101,15 @@ export default function MarketWarehousesPage() {
         const data = await response.json()
         if (data.success && data.data?.warehouseId) {
           setEmployeeWarehouseId(data.data.warehouseId)
+          setEmployeeError(null)
+        } else {
+          // Sin almacén asignado - mostrar error
+          console.error('Almacenero sin almacén asignado')
+          setEmployeeError('No tienes un almacén asignado. Contacta al administrador.')
         }
       } catch (error) {
         console.error('Error fetching employee warehouse:', error)
+        setEmployeeError('Error al cargar tu almacén asignado')
       } finally {
         setLoadingEmployee(false)
       }
@@ -202,6 +209,16 @@ export default function MarketWarehousesPage() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
+            {/* Error de almacenero sin almacén asignado */}
+            {employeeError && (
+              <div className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 p-4 rounded-xl border border-red-200 dark:border-red-800">
+                <div className="flex items-center gap-3">
+                  <Warehouse className="w-5 h-5" />
+                  <span className="font-medium">{employeeError}</span>
+                </div>
+              </div>
+            )}
+
             {/* Stats Cards - Estilo Productos */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
               {/* Total Almacenes */}

@@ -246,15 +246,20 @@ export default function MarketDashboardPage() {
   const [companyName, setCompanyName] = useState('Mercado')
 
   useEffect(() => {
-    // Check if user is MARKET_COMERCIAL and redirect
+    // Check if user is MARKET_COMERCIAL or MARKET_ALMACENERO and redirect
     try {
       const cookies = document.cookie.split(';')
       const roleCookie = cookies.find(c => c.trim().startsWith('user-role='))
       if (roleCookie) {
         const role = decodeURIComponent(roleCookie.split('=')[1])
+        // COMERCIAL → Compras
         if (role === 'MARKET_COMERCIAL') {
-          // Comerciales no tienen acceso al dashboard, redirigir a compras
           router.replace('/dashboard/market/purchases')
+          return
+        }
+        // ALMACENERO → Almacenes
+        if (role === 'MARKET_ALMACENERO') {
+          router.replace('/dashboard/market/warehouses')
           return
         }
       }

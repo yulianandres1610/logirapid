@@ -1,7 +1,7 @@
 import { db } from '@/lib/database'
 import { processMessage, generateGreeting, getErrorMessage, ConversationMessage, GPTResponse } from '@/lib/openai-client'
 import { sendWhatsApp } from '@/lib/sms-service'
-import { validateProvince, validateMunicipality, validateCubaAddress, findClosestMatch, CUBA_PROVINCES } from '@/lib/cuba-locations'
+import { validateProvince, validateMunicipality, validateCubaAddress, findClosestMatch, CUBA_PROVINCES, getProvinceApaCargoId, getMunicipalityApaCargoId } from '@/lib/cuba-locations'
 
 // Interfaces
 export interface Conversation {
@@ -1434,7 +1434,9 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
       receiverCI: data.recipientCI || '',
       destination: {
         provinceName: data.recipientProvince,
+        provinceId: data.recipientProvinceId || null,
         municipalityName: data.recipientMunicipality,
+        municipalityId: data.recipientMunicipalityId || null,
         street: data.recipientStreet,
         reparto: data.recipientReparto || '',
         deliveryInstructions: data.recipientInstructions || '',
@@ -1975,7 +1977,12 @@ export async function handleIncomingMessage(
         const validatedProvince = validateProvince(messageBody)
         if (validatedProvince) {
           newCollectedData.recipientProvince = validatedProvince
-          console.log('[WhatsApp Agent] Extraccion manual: recipientProvince =', newCollectedData.recipientProvince)
+          // Guardar también el ID de APACargo
+          const provinceId = getProvinceApaCargoId(validatedProvince)
+          if (provinceId) {
+            newCollectedData.recipientProvinceId = provinceId
+          }
+          console.log('[WhatsApp Agent] Extraccion manual: recipientProvince =', newCollectedData.recipientProvince, '| ID:', provinceId)
         }
       }
 
@@ -1984,7 +1991,12 @@ export async function handleIncomingMessage(
         const validation = validateCubaAddress(String(prevData.recipientProvince), messageBody)
         if (validation.valid && validation.municipality) {
           newCollectedData.recipientMunicipality = validation.municipality
-          console.log('[WhatsApp Agent] Extraccion manual: recipientMunicipality =', newCollectedData.recipientMunicipality)
+          // Guardar también el ID de APACargo
+          const municipalityId = getMunicipalityApaCargoId(String(prevData.recipientProvince), validation.municipality)
+          if (municipalityId) {
+            newCollectedData.recipientMunicipalityId = municipalityId
+          }
+          console.log('[WhatsApp Agent] Extraccion manual: recipientMunicipality =', newCollectedData.recipientMunicipality, '| ID:', municipalityId)
         }
       }
 
@@ -2151,6 +2163,20 @@ export async function handleIncomingMessage(
           if (addr.reparto) newCollectedData.recipientReparto = addr.reparto
           if (addr.instructions) newCollectedData.recipientInstructions = addr.instructions
 
+          // Obtener IDs de APACargo para provincia y municipio
+          if (addr.province) {
+            const provinceId = getProvinceApaCargoId(addr.province)
+            if (provinceId) {
+              newCollectedData.recipientProvinceId = provinceId
+            }
+          }
+          if (addr.province && addr.municipality) {
+            const municipalityId = getMunicipalityApaCargoId(addr.province, addr.municipality)
+            if (municipalityId) {
+              newCollectedData.recipientMunicipalityId = municipalityId
+            }
+          }
+
           // Marcar que el destinatario está completo para que GPT no pregunte más
           newCollectedData._recipientComplete = true
 
@@ -2312,6 +2338,20 @@ export async function handleIncomingMessage(
             if (addr.reparto) newCollectedData.recipientReparto = addr.reparto
             if (addr.instructions) newCollectedData.recipientInstructions = addr.instructions
 
+            // Obtener IDs de APACargo para provincia y municipio
+            if (addr.province) {
+              const provinceId = getProvinceApaCargoId(addr.province)
+              if (provinceId) {
+                newCollectedData.recipientProvinceId = provinceId
+              }
+            }
+            if (addr.province && addr.municipality) {
+              const municipalityId = getMunicipalityApaCargoId(addr.province, addr.municipality)
+              if (municipalityId) {
+                newCollectedData.recipientMunicipalityId = municipalityId
+              }
+            }
+
             // Marcar que el destinatario está completo
             newCollectedData._recipientComplete = true
 
@@ -2399,7 +2439,9 @@ export async function handleIncomingMessage(
         delete newCollectedData.recipientPhone
         delete newCollectedData.recipientCI
         delete newCollectedData.recipientProvince
+        delete newCollectedData.recipientProvinceId
         delete newCollectedData.recipientMunicipality
+        delete newCollectedData.recipientMunicipalityId
         delete newCollectedData.recipientStreet
         delete newCollectedData.recipientReparto
         response = 'Ok, vamos a corregir. Dame el telefono del destinatario en Cuba.'
@@ -2471,9 +2513,15 @@ export async function handleIncomingMessage(
         }
         // No guardar la provincia inválida
         delete newCollectedData.recipientProvince
+        delete newCollectedData.recipientProvinceId
       } else {
-        // Provincia válida - guardar el nombre correcto
+        // Provincia válida - guardar el nombre correcto y el ID de APACargo
         newCollectedData.recipientProvince = validatedProvince
+        const provinceId = getProvinceApaCargoId(validatedProvince)
+        if (provinceId) {
+          newCollectedData.recipientProvinceId = provinceId
+          console.log('[WhatsApp Agent] Provincia validada:', validatedProvince, '| APACargo ID:', provinceId)
+        }
       }
     }
 
@@ -2486,9 +2534,15 @@ export async function handleIncomingMessage(
         response = validation.error
         // No guardar el municipio inválido
         delete newCollectedData.recipientMunicipality
+        delete newCollectedData.recipientMunicipalityId
       } else if (validation.municipality) {
-        // Municipio válido - guardar el nombre correcto
+        // Municipio válido - guardar el nombre correcto y el ID de APACargo
         newCollectedData.recipientMunicipality = validation.municipality
+        const municipalityId = getMunicipalityApaCargoId(province, validation.municipality)
+        if (municipalityId) {
+          newCollectedData.recipientMunicipalityId = municipalityId
+          console.log('[WhatsApp Agent] Municipio validado:', validation.municipality, '| APACargo ID:', municipalityId)
+        }
 
         // Si tenemos todos los datos mínimos del destinatario, mostrar fechas automáticamente
         if (newCollectedData.recipientName &&
