@@ -830,9 +830,10 @@ export default function ReceivePurchasePage() {
                                 <input
                                   type="number"
                                   value={line.quantityToReceive}
-                                  onChange={(e) => updateLineQuantity(line.lineId, parseInt(e.target.value) || 0)}
+                                  onChange={(e) => updateLineQuantity(line.lineId, parseFloat(e.target.value) || 0)}
                                   min="0"
                                   max={pending}
+                                  step="any"
                                   className={cn(
                                     "w-16 text-center py-2 rounded-lg border font-medium",
                                     theme === 'dark'
