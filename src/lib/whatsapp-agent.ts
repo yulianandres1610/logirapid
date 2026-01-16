@@ -350,7 +350,13 @@ function parseUserDateExpression(dateExpression: string, preferredSlot?: string)
   }
   // Detectar "pasado mañana"
   else if (lower.includes('pasado')) {
-    targetDate = availableDates[2] || null // El tercer día
+    // Buscar "Mañana" y tomar el día siguiente (pasado mañana = hoy + 2 días)
+    // Esto funciona correctamente independientemente de si "Hoy" está en el array
+    const tomorrowIdx = availableDates.findIndex(d => d.dayName === 'Manana')
+    if (tomorrowIdx >= 0 && availableDates[tomorrowIdx + 1]) {
+      targetDate = availableDates[tomorrowIdx + 1]
+    }
+    console.log('[parseUserDateExpression] Detectado PASADO MAÑANA, targetDate:', targetDate?.date, targetDate?.dayName)
   }
   // Detectar días de la semana
   else {
@@ -957,24 +963,47 @@ async function saveRecipient(data: {
  */
 function generateDataSummary(data: Record<string, unknown>, flowType: string): string {
   if (flowType === 'pickup_order') {
+    // Formatear fecha para mostrar
+    let fechaDisplay = ''
+    const scheduledDate = data.scheduledDate as string | undefined
+    if (scheduledDate) {
+      const parts = scheduledDate.split('-')
+      if (parts.length === 3) {
+        fechaDisplay = `${parts[2]}/${parts[1]}` // DD/MM
+      }
+    }
+    const timeSlot = data.timeSlot as string | undefined
+    const horarioDisplay = timeSlot?.includes('8:00 AM') ? 'Mañana (8AM-12PM)' :
+                           timeSlot?.includes('12:00 PM') ? 'Tarde (12PM-4PM)' :
+                           timeSlot?.includes('4:00 PM') ? 'Noche (4PM-8PM)' : timeSlot || ''
+
     const lines = [
-      'Ok, confirma los datos:',
+      '📋 *Resumen de tu orden:*',
       '',
-      'REMITENTE:',
-      `- ${data.senderName || 'Sin nombre'}`,
-      `- ${data.senderIdType || 'ID'}: ${data.senderIdNumber || 'Sin numero'}`,
-      `- ${data.senderAddress || 'Sin direccion'}`,
-      `- PIN: ${data.senderEntryPin || 'NO'}`,
+      '*REMITENTE:*',
+      `• ${data.senderName || 'Sin nombre'}`,
+      `• ${data.senderIdType || 'ID'}: ${data.senderIdNumber || 'Sin numero'}`,
+      `• ${data.senderAddress || 'Sin direccion'}`,
+      `• PIN: ${data.senderEntryPin || 'NO'}`,
       '',
-      'DESTINATARIO CUBA:',
-      `- ${data.recipientName || 'Sin nombre'}`,
-      `- CI: ${data.recipientCI || 'Sin CI'}`,
-      `- ${data.recipientStreet || ''}, ${data.recipientReparto || ''}`,
-      `- ${data.recipientMunicipality || ''}, ${data.recipientProvince || ''}`,
-      `- Tel: ${data.recipientPhone || 'Sin telefono'}`,
-      '',
-      'Todo correcto?'
+      '*DESTINATARIO CUBA:*',
+      `• ${data.recipientName || 'Sin nombre'}`,
+      `• CI: ${data.recipientCI || 'Sin CI'}`,
+      `• ${data.recipientStreet || ''}, ${data.recipientReparto || ''}`,
+      `• ${data.recipientMunicipality || ''}, ${data.recipientProvince || ''}`,
+      `• Tel: ${data.recipientPhone || 'Sin telefono'}`,
+      ''
     ]
+
+    // Agregar fecha y horario si están disponibles
+    if (fechaDisplay || horarioDisplay) {
+      lines.push('*RECOGIDA:*')
+      if (fechaDisplay) lines.push(`• Fecha: ${fechaDisplay}`)
+      if (horarioDisplay) lines.push(`• Horario: ${horarioDisplay}`)
+      lines.push('')
+    }
+
+    lines.push('¿Todo correcto? Responde *Sí* para confirmar o *No* para corregir.')
     return lines.join('\n')
   }
 
@@ -2556,9 +2585,23 @@ export async function handleIncomingMessage(
           const slotName = dateResult.selectedSlot.includes('8:00 AM') ? 'en la mañana' :
                            dateResult.selectedSlot.includes('12:00 PM') ? 'en la tarde' : 'en la noche'
           const displayDate = formatDateForDisplay(dateResult.date)
-          response = `Perfecto! Pasamos ${dateResult.dayName.toLowerCase()} (${displayDate}) ${slotName}. Dejame confirmar los datos...`
-          // Solicitar mostrar resumen
-          gptResponse.requestSummary = true
+
+          // Verificar si tenemos todos los datos para mostrar resumen inmediatamente
+          const hasAllMinimumData = newCollectedData.senderName &&
+                                    newCollectedData.senderAddress &&
+                                    newCollectedData.recipientName &&
+                                    newCollectedData.recipientPhone
+
+          if (hasAllMinimumData && newFlow === 'pickup_order') {
+            // Mostrar resumen inmediatamente con NUESTRA fecha calculada
+            console.log('[WhatsApp Agent] Mostrando resumen inmediato con fecha correcta:', dateResult.date)
+            response = generateDataSummary(newCollectedData, newFlow)
+            newCollectedData._waitingForOrderConfirmation = true
+            gptResponse.requestSummary = false  // Ya mostramos el resumen
+          } else {
+            response = `Perfecto! Pasamos ${dateResult.dayName.toLowerCase()} (${displayDate}) ${slotName}. Dejame confirmar los datos...`
+            gptResponse.requestSummary = true
+          }
           responseOverridden = true  // Usar nuestra respuesta
         } else if (dateResult.slots) {
           // Fecha seleccionada pero falta horario
