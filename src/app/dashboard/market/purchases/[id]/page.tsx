@@ -436,20 +436,6 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                 </motion.button>
               </Link>
 
-              {/* Botón Recibir Mercancía - Solo visible si está comprada o pendiente */}
-              {order && (order.status === 'comprada' || order.status === 'pendiente' || order.status === 'confirmed') && (
-                <Link href={`/dashboard/market/purchases/${order.id}/receive`}>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-colors bg-emerald-600 text-white hover:bg-emerald-700"
-                  >
-                    <Truck className="w-4 h-4" />
-                    <span>Recibir Mercancía</span>
-                  </motion.button>
-                </Link>
-              )}
-
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}

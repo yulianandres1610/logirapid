@@ -308,8 +308,8 @@ export async function GET(request: NextRequest) {
           confirmedByName: row.confirmed_by_name,
           receivedByName: row.received_by_name,
           lineCount: parseInt(row.line_count) || 0,
-          totalItems: parseInt(row.total_items) || 0,
-          totalReceived: parseInt(row.total_received) || 0
+          totalItems: parseFloat(row.total_items) || 0,
+          totalReceived: parseFloat(row.total_received) || 0
         })),
         stats: {
           draft: parseInt(stats.draft_count) || 0,

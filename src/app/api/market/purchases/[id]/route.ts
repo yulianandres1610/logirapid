@@ -11,19 +11,45 @@ interface JWTPayload {
   companyName: string
 }
 
-// Ensure accepted_by and accepted_at columns exist
-async function ensureAcceptanceColumns() {
+// Migration flag
+let migrationRun = false
+
+// Ensure accepted_by and accepted_at columns exist + decimal quantities
+async function ensureMigrations() {
+  if (migrationRun) return
+  migrationRun = true
+
   try {
     await db.query(`ALTER TABLE market_purchases ADD COLUMN IF NOT EXISTS accepted_by INTEGER REFERENCES users(id)`)
     await db.query(`ALTER TABLE market_purchases ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP`)
   } catch (error) {
-    // Columns might already exist or table doesn't support IF NOT EXISTS
     console.log('[Market Purchase API] Migration check:', error instanceof Error ? error.message : error)
+  }
+
+  // Ensure decimal quantities
+  try {
+    await db.query(`
+      ALTER TABLE market_purchase_lines
+      ALTER COLUMN quantity TYPE DECIMAL(12,3) USING quantity::DECIMAL(12,3)
+    `)
+    console.log('[Migration] Changed market_purchase_lines.quantity to DECIMAL')
+  } catch {
+    // Column might already be DECIMAL
+  }
+
+  try {
+    await db.query(`
+      ALTER TABLE market_purchase_lines
+      ALTER COLUMN quantity_received TYPE DECIMAL(12,3) USING quantity_received::DECIMAL(12,3)
+    `)
+    console.log('[Migration] Changed market_purchase_lines.quantity_received to DECIMAL')
+  } catch {
+    // Ignore errors
   }
 }
 
 // Run migration on module load
-ensureAcceptanceColumns()
+ensureMigrations()
 
 /**
  * GET /api/market/purchases/[id]
@@ -184,10 +210,10 @@ export async function GET(
           productSku: line.product_sku,
           productBarcode: line.product_barcode || null,
           productImage: line.product_image,
-          quantity: parseInt(line.quantity) || 0,
+          quantity: parseFloat(line.quantity) || 0,
           unitPrice: parseFloat(line.unit_price) || 0,
           totalPrice: parseFloat(line.total_price) || 0,
-          quantityReceived: parseInt(line.quantity_received) || 0,
+          quantityReceived: parseFloat(line.quantity_received) || 0,
           lotNumber: line.lot_number,
           expirationDate: line.expiration_date,
           manufacturingDate: line.manufacturing_date
@@ -551,12 +577,25 @@ export async function PUT(
       })
     }
 
-    // Update draft purchase
-    if (purchase.status !== 'draft') {
+    // Update purchase - allow editing based on status and role
+    // Draft: anyone can edit
+    // Comprada/Pendiente/Confirmed: only ADMIN, SUPER_ADMIN, MARKET_MANAGER can edit
+    // Recibido/Cancelled: no one can edit
+    const canEditAnyStatus = ['SUPER_ADMIN', 'ADMIN', 'MARKET_MANAGER'].includes(payload.role)
+    const editableStatuses = ['draft', 'comprada', 'confirmed', 'pendiente']
+
+    if (!editableStatuses.includes(purchase.status)) {
       return NextResponse.json({
         success: false,
-        error: 'Solo se pueden editar compras en borrador'
+        error: 'No se pueden editar compras recibidas o canceladas'
       }, { status: 400 })
+    }
+
+    if (purchase.status !== 'draft' && !canEditAnyStatus) {
+      return NextResponse.json({
+        success: false,
+        error: 'Solo administradores o managers pueden editar compras confirmadas'
+      }, { status: 403 })
     }
 
     const {
