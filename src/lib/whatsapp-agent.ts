@@ -1607,27 +1607,40 @@ export async function handleIncomingMessage(
     ]
 
     // 6. Verificar si es primera interaccion CON saludo simple
-    // Solo si el mensaje es un saludo simple (Hola, Hi, etc) sin intención específica
-    const simpleGreetings = ['hola', 'hi', 'hello', 'buenos dias', 'buenas tardes', 'buenas noches', 'hey', 'buenas']
-    const isSimpleGreeting = simpleGreetings.some(g => messageBody.toLowerCase().trim() === g)
+    // Para CUALQUIER primera interacción, María debe presentarse primero
+    const greetingWords = ['hola', 'hi', 'hello', 'buenos dias', 'buenas tardes', 'buenas noches', 'hey', 'buenas', 'saludos', 'ola']
+    const containsGreeting = greetingWords.some(g => msgLowerTrimmed.includes(g))
+    const isFirstMessage = conversation.messages_history.length === 0
 
-    if (conversation.current_flow === 'idle' && conversation.messages_history.length === 0 && isSimpleGreeting) {
-      console.log('[WhatsApp Agent] Primera interaccion con saludo simple')
+    // Si es primera interacción, siempre saludar y presentarse
+    if (isFirstMessage && conversation.current_flow === 'idle') {
+      console.log('[WhatsApp Agent] Primera interaccion - presentando a María')
       const greeting = await generateGreeting(conversation.customer_name)
 
+      // Si el mensaje es solo un saludo simple, responder con el saludo y esperar
+      const isOnlyGreeting = containsGreeting && msgLowerTrimmed.length < 30 &&
+        !msgLowerTrimmed.includes('enviar') && !msgLowerTrimmed.includes('paquete') &&
+        !msgLowerTrimmed.includes('orden') && !msgLowerTrimmed.includes('recogida')
+
+      if (isOnlyGreeting) {
+        updatedHistory.push({ role: 'assistant', content: greeting })
+
+        await updateConversationState(
+          conversation.id,
+          'idle',
+          null,
+          {},
+          updatedHistory
+        )
+
+        await saveMessage(conversation.id, 'outbound', greeting)
+
+        return { message: greeting }
+      }
+
+      // Si el mensaje incluye una solicitud, agregar el saludo al historial y continuar procesando
       updatedHistory.push({ role: 'assistant', content: greeting })
-
-      await updateConversationState(
-        conversation.id,
-        'idle',
-        null,
-        {},
-        updatedHistory
-      )
-
-      await saveMessage(conversation.id, 'outbound', greeting)
-
-      return { message: greeting }
+      // El saludo se enviará junto con la respuesta a la solicitud
     }
 
     // 7. Procesar con GPT

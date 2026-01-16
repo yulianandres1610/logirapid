@@ -233,7 +233,7 @@ export async function DELETE(
     }
 
     // Delete associated addresses first
-    await db.query('DELETE FROM customer_addresses WHERE customer_id = $1', [id])
+    await db.query('DELETE FROM customer_addresses WHERE customerid = $1', [id])
 
     // Delete change history
     await db.query('DELETE FROM customer_change_history WHERE customerid = $1', [id])

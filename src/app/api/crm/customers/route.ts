@@ -632,7 +632,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Eliminar direcciones asociadas primero
-    await db.query('DELETE FROM customer_addresses WHERE customer_id = $1', [customerId])
+    await db.query('DELETE FROM customer_addresses WHERE customerid = $1', [customerId])
 
     // Eliminar historial de cambios
     await db.query('DELETE FROM customer_change_history WHERE customerid = $1', [customerId])

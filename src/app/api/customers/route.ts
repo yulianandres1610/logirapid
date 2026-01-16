@@ -698,7 +698,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Eliminar direcciones asociadas primero
-    await db.query('DELETE FROM customer_addresses WHERE customer_id = $1', [parseInt(id)])
+    await db.query('DELETE FROM customer_addresses WHERE customerid = $1', [parseInt(id)])
 
     // Eliminar el cliente
     const deleteQuery = 'DELETE FROM customers WHERE id = $1 RETURNING id'
