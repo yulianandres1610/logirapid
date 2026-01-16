@@ -52,18 +52,19 @@ export function formatPhoneNumber(phone: string): string {
     return `+${digits}`
   }
 
-  // Detectar numeros de Cuba (empiezan con 53, tienen 10 digitos: 53 + 8 digitos)
-  if (digits.length === 10 && digits.startsWith('53')) {
+  // Detectar numeros de Cuba (empiezan con 53, tienen 10-11 digitos)
+  // Formato: +53 5XXXXXXX (movil) o +53 XXXXXXXX (fijo)
+  if ((digits.length === 10 || digits.length === 11) && digits.startsWith('53')) {
     return `+${digits}`
   }
 
-  // Detectar numeros de Mexico (empiezan con 52, tienen 12 digitos: 52 + 10 digitos)
-  if (digits.length === 12 && digits.startsWith('52')) {
+  // Detectar numeros de Mexico (empiezan con 52, tienen 12-13 digitos)
+  if ((digits.length === 12 || digits.length === 13) && digits.startsWith('52')) {
     return `+${digits}`
   }
 
   // Si tiene 10 digitos y NO empieza con codigo de pais conocido, asumir USA
-  if (digits.length === 10 && !digits.startsWith('53')) {
+  if (digits.length === 10 && !digits.startsWith('53') && !digits.startsWith('52')) {
     return `+1${digits}`
   }
 
@@ -865,8 +866,16 @@ export async function sendWhatsApp(to: string, message: string): Promise<SMSResu
     // Formatear y validar número destino
     const formattedTo = formatPhoneNumber(to)
 
+    // Debug logging para diagnosticar problemas de formato
+    console.log(`[WhatsApp Service] Phone formatting:`, {
+      original: to,
+      formatted: formattedTo,
+      originalLength: to.length,
+      formattedLength: formattedTo.length
+    })
+
     if (!isValidPhoneNumber(formattedTo)) {
-      console.warn(`[WhatsApp Service] Invalid phone number: ${to}`)
+      console.warn(`[WhatsApp Service] Invalid phone number: ${to} -> ${formattedTo}`)
       return {
         success: false,
         error: `Invalid phone number: ${to}`,
