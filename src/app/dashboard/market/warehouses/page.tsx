@@ -122,6 +122,13 @@ export default function MarketWarehousesPage() {
     // Wait for employee warehouse to load if almacenero
     if (isAlmacenero && loadingEmployee) return
 
+    // Si es almacenero pero no tiene warehouseId asignado, no cargar almacenes
+    if (isAlmacenero && !employeeWarehouseId) {
+      setWarehouses([])
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     try {
       const params = new URLSearchParams()
@@ -137,7 +144,7 @@ export default function MarketWarehousesPage() {
       const data = await response.json()
 
       if (data.success) {
-        // For almacenero, filter client-side as backup
+        // For almacenero, filter client-side as backup (doble seguridad)
         let filteredWarehouses = data.data.warehouses
         if (isAlmacenero && employeeWarehouseId) {
           filteredWarehouses = filteredWarehouses.filter(
@@ -161,11 +168,14 @@ export default function MarketWarehousesPage() {
   }, [statusFilter, loadingEmployee, employeeWarehouseId])
 
   useEffect(() => {
+    // Solo ejecutar búsqueda si no es almacenero, o si ya tiene warehouseId cargado
+    if (isAlmacenero && (loadingEmployee || !employeeWarehouseId)) return
+
     const debounce = setTimeout(() => {
       fetchWarehouses()
     }, 300)
     return () => clearTimeout(debounce)
-  }, [search])
+  }, [search, isAlmacenero, loadingEmployee, employeeWarehouseId])
 
   const handleDeleteWarehouse = async () => {
     if (!deleteWarehouse) return
