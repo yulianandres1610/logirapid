@@ -175,6 +175,21 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
   const [pendingInvoices, setPendingInvoices] = useState<InvoiceFile[]>([])
   const [uploadingInvoices, setUploadingInvoices] = useState(false)
   const [accepting, setAccepting] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
+
+  // Get user role from cookies
+  useEffect(() => {
+    try {
+      const cookies = document.cookie.split(';')
+      const roleCookie = cookies.find(c => c.trim().startsWith('user-role='))
+      if (roleCookie) {
+        const role = decodeURIComponent(roleCookie.split('=')[1])
+        setUserRole(role)
+      }
+    } catch (e) {
+      console.error('Error reading role cookie:', e)
+    }
+  }, [])
 
   useEffect(() => {
     fetchOrder()
@@ -517,7 +532,8 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
 
                 {/* Right: Total + Accept Button */}
                 <div className="flex items-center gap-4">
-                  {order.needsAcceptance && (
+                  {/* Botón Aceptar - Solo visible para MARKET_MANAGER, ADMIN, SUPER_ADMIN (NO comerciales) */}
+                  {order.needsAcceptance && userRole && ['MARKET_MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(userRole) && (
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
