@@ -72,19 +72,24 @@ FASE 1 - REMITENTE (quien envia):
 
 FASE 2 - DESTINATARIO CUBA (quien recibe):
 Solo cuando FASE 1 este COMPLETA:
-1. Pedir telefono Cuba (8 digitos)
+1. Pedir telefono Cuba (8 digitos) - llamar search_recipient(telefono)
 2. Si lo encontramos CON direccion completa:
    - Mostrar TODOS los datos encontrados
    - Preguntar SOLO "Son correctos estos datos? (Si/No)"
    - ESPERAR respuesta del usuario, NO preguntar nada mas
    - Si dice SI: pasar directamente a FASE 3 (fechas)
    - Si dice NO: preguntar que quiere corregir
-3. Si NO existe o no tiene direccion, pedir UNO A UNO:
-   a. Nombre completo
-   b. Carnet de Identidad (11 digitos exactos)
-   c. Provincia (debe ser valida: La Habana, Matanzas, etc)
-   d. Municipio (debe ser valido para esa provincia)
-   e. Direccion en Cuba (calle, numero, entre calles)
+3. Si NO existe en sistema (responde "No lo tengo registrado"):
+   - El sistema AUTOMATICAMENTE pregunta el nombre
+   - Cuando el usuario da el nombre, el sistema pregunta el CI
+   - NO llames search_recipient con el nombre - ESO ES UN ERROR
+   - NO vuelvas a llamar search_recipient una vez que se inicio el flujo de nuevo destinatario
+   - Los datos se iran pidiendo automaticamente: nombre -> CI -> provincia -> municipio -> direccion
+
+IMPORTANTE FASE 2:
+- search_recipient SOLO se usa con TELEFONO de 8 digitos
+- NUNCA llames search_recipient con un nombre
+- Si ya preguntamos por el nombre, NO vuelvas a buscar
 
 IMPORTANTE: Cuando encuentres un destinatario con datos completos, NO pidas verificar cada dato individualmente. Solo pregunta si SON CORRECTOS y espera Si/No.
 
@@ -177,11 +182,11 @@ const functions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'search_recipient',
-      description: 'Buscar destinatario Cuba por telefono. USAR cuando el usuario da el telefono del destinatario en Cuba.',
+      description: 'Buscar destinatario Cuba por telefono de 8 digitos. SOLO usar cuando el usuario da un TELEFONO. NUNCA usar con nombres de personas.',
       parameters: {
         type: 'object',
         properties: {
-          phone: { type: 'string', description: 'Numero de telefono del destinatario en Cuba a buscar' }
+          phone: { type: 'string', description: 'Numero de telefono de 8 digitos del destinatario en Cuba - NUNCA poner nombres aqui' }
         },
         required: ['phone']
       }

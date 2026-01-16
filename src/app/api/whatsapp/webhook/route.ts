@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { handleIncomingMessage, sendResponse } from '@/lib/whatsapp-agent'
+import { markWhatsAppAsRead } from '@/lib/sms-service'
 
 /**
  * Webhook para recibir mensajes de WhatsApp via Twilio
@@ -37,6 +38,14 @@ export async function POST(request: NextRequest) {
         '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
         { headers: { 'Content-Type': 'text/xml' } }
       )
+    }
+
+    // Marcar mensaje como leído inmediatamente
+    // Esto envía el recibo de lectura al cliente de WhatsApp
+    if (messageSid) {
+      markWhatsAppAsRead(messageSid).catch(err => {
+        console.warn('[WhatsApp Webhook] Failed to mark message as read:', err)
+      })
     }
 
     // Procesar mensaje con el agente

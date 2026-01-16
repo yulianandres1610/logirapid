@@ -788,6 +788,38 @@ export function maskPhoneNumber(phone: string): string {
 // ==========================================
 
 /**
+ * Marks a WhatsApp message as read
+ * This sends a "read" receipt back to the sender
+ *
+ * @param messageSid - The Twilio Message SID of the incoming message
+ * @returns Promise<boolean> - true if successful
+ */
+export async function markWhatsAppAsRead(messageSid: string): Promise<boolean> {
+  try {
+    if (!messageSid) {
+      console.warn('[WhatsApp Service] No messageSid provided for read receipt')
+      return false
+    }
+
+    const client = await getClient()
+
+    // Update the message status to "read"
+    // This sends a read receipt back to the WhatsApp user
+    await client.messages(messageSid).update({
+      status: 'read'
+    })
+
+    console.log(`[WhatsApp Service] Message ${messageSid} marked as read`)
+    return true
+
+  } catch (error: any) {
+    // Log but don't fail - read receipts are not critical
+    console.warn(`[WhatsApp Service] Could not mark message as read:`, error.message || error)
+    return false
+  }
+}
+
+/**
  * Sends a WhatsApp message using Twilio
  * Uses free-form messages (session messages) - not templates
  */

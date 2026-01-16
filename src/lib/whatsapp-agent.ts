@@ -1861,7 +1861,11 @@ export async function handleIncomingMessage(
     }
 
     // Buscar destinatario Cuba por telefono
-    if (gptResponse.searchRecipient) {
+    // NO buscar si ya estamos esperando nombre o CI del destinatario
+    if (gptResponse.searchRecipient &&
+        !newCollectedData._waitingForRecipientName &&
+        !newCollectedData._waitingForRecipientCI &&
+        !newCollectedData.recipientName) {
       console.log('[WhatsApp Agent] Buscando recipient Cuba:', gptResponse.searchRecipient)
       const recipientResult = await searchRecipientByPhone(gptResponse.searchRecipient)
 
@@ -1900,9 +1904,11 @@ export async function handleIncomingMessage(
         }
         response = foundMsg
       } else {
-        // Destinatario no encontrado
+        // Destinatario no encontrado - marcar que esperamos el nombre
         newCollectedData.recipientPhone = gptResponse.searchRecipient
+        newCollectedData._waitingForRecipientName = true
         response = 'No lo tengo registrado. Como se llama la persona que recibe?'
+        responseOverridden = true
       }
     }
 
@@ -1997,6 +2003,43 @@ export async function handleIncomingMessage(
         delete newCollectedData._waitingForPin
         console.log('[WhatsApp Agent] PIN guardado:', newCollectedData.senderEntryPin)
         response = `Perfecto, codigo de acceso: ${newCollectedData.senderEntryPin}. Ahora dame el telefono del destinatario en Cuba (8 digitos).`
+        responseOverridden = true
+      }
+    }
+
+    // Detectar respuesta de nombre del destinatario (después de buscar teléfono Cuba y no encontrar)
+    if (newCollectedData._waitingForRecipientName && !newCollectedData.recipientName) {
+      const possibleName = messageBody.trim()
+      // Validar que parece un nombre (no es solo números, no es muy corto o largo, tiene letras)
+      const isValidName = possibleName.length >= 3 &&
+                          possibleName.length <= 60 &&
+                          !/^\d+$/.test(possibleName) &&
+                          !possibleName.startsWith('/') &&
+                          /[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]/.test(possibleName)
+
+      if (isValidName) {
+        newCollectedData.recipientName = possibleName
+        delete newCollectedData._waitingForRecipientName
+        newCollectedData._waitingForRecipientCI = true
+        console.log('[WhatsApp Agent] Nombre destinatario capturado:', possibleName)
+        response = `Perfecto, ${possibleName}. Ahora necesito el carnet de identidad de ${possibleName.split(' ')[0]}. Debe tener 11 digitos.`
+        responseOverridden = true
+      }
+    }
+
+    // Detectar respuesta de CI del destinatario
+    if (newCollectedData._waitingForRecipientCI && !newCollectedData.recipientCI) {
+      const ciMatch = messageBody.match(/\b(\d{11})\b/)
+      if (ciMatch) {
+        newCollectedData.recipientCI = ciMatch[1]
+        delete newCollectedData._waitingForRecipientCI
+        console.log('[WhatsApp Agent] CI destinatario capturado:', ciMatch[1])
+        const recipientFirstName = newCollectedData.recipientName ? String(newCollectedData.recipientName).split(' ')[0] : 'el destinatario'
+        response = `Carnet ${ciMatch[1]} registrado. Ahora dime en que provincia de Cuba esta ${recipientFirstName}?`
+        responseOverridden = true
+      } else if (/^\d+$/.test(messageBody.trim())) {
+        // Es un número pero no tiene 11 dígitos
+        response = `El carnet de identidad debe tener exactamente 11 digitos. Por favor verifica e intenta de nuevo.`
         responseOverridden = true
       }
     }
