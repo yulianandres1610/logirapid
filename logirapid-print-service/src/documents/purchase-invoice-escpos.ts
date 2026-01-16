@@ -140,24 +140,35 @@ export function generatePurchaseInvoiceEscpos(data: PurchaseInvoiceData): Buffer
 
   // === SCANNABLE BARCODE AT TOP FOR EASY SCANNING ===
   // This is the main barcode for the almacenero to scan when receiving
-  const barcodeDataTop = invoiceNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase()
-  if (barcodeDataTop.length > 0) {
-    lines.push(Commands.FEED_LINE)
+  // Use CODE128B for better compatibility with most thermal printers
+  const barcodeDataTop = invoiceNumber.replace(/[^A-Z0-9-]/gi, '').toUpperCase()
+  if (barcodeDataTop.length > 0 && barcodeDataTop.length <= 20) {
     lines.push(Commands.ALIGN_CENTER)
 
-    // ESC/POS Barcode settings - larger and prominent
-    lines.push(`${GS}h\x50`) // height = 80 dots (larger for visibility)
-    lines.push(`${GS}w\x03`) // width = 3 (wider bars)
-    lines.push(`${GS}H\x02`) // HRI below barcode
-    lines.push(`${GS}f\x00`) // Font A for HRI
-
-    // Print CODE39 barcode (alphanumeric only)
-    lines.push(`${GS}k\x04${barcodeDataTop}\x00`)
+    // Print invoice number first as large text (always visible)
+    lines.push(Commands.BOLD_ON)
+    lines.push(Commands.DOUBLE_SIZE_ON)
+    lines.push(invoiceNumber)
+    lines.push(Commands.NORMAL_SIZE)
+    lines.push(Commands.BOLD_OFF)
     lines.push(Commands.FEED_LINE)
 
-    // Print full number as text (with hyphens for readability)
+    // ESC/POS Barcode settings for CODE128
+    lines.push(`${GS}h\x50`) // height = 80 dots
+    lines.push(`${GS}w\x02`) // width = 2
+    lines.push(`${GS}H\x00`) // HRI none (already printed text above)
+    lines.push(`${GS}f\x00`) // Font A for HRI
+
+    // Print CODE128B barcode (better compatibility than CODE39)
+    // Format: GS k 73 n d1...dn (CODE128 with length prefix)
+    const barcodeClean = barcodeDataTop.replace(/-/g, '')
+    lines.push(`${GS}k\x49${String.fromCharCode(barcodeClean.length)}${barcodeClean}`)
+    lines.push(Commands.FEED_LINE)
+  } else {
+    // Fallback: just print the number as text if barcode can't be generated
+    lines.push(Commands.ALIGN_CENTER)
     lines.push(Commands.BOLD_ON)
-    lines.push(Commands.DOUBLE_HEIGHT_ON)
+    lines.push(Commands.DOUBLE_SIZE_ON)
     lines.push(invoiceNumber)
     lines.push(Commands.NORMAL_SIZE)
     lines.push(Commands.BOLD_OFF)
@@ -266,20 +277,20 @@ export function generatePurchaseInvoiceEscpos(data: PurchaseInvoiceData): Buffer
       lines.push(`     COD: ${productCode}`)
       lines.push(Commands.FEED_LINE)
 
-      // Print scannable barcode for the product
-      // Only alphanumeric characters for barcode (remove hyphens/special chars to avoid scanner issues)
+      // Print scannable barcode for the product using CODE128B
       const cleanBarcode = productCode.replace(/[^A-Z0-9]/gi, '').toUpperCase()
 
       if (cleanBarcode.length > 0 && cleanBarcode.length <= 20) {
         lines.push(Commands.ALIGN_CENTER)
 
         // Barcode settings for product code (smaller than invoice barcode)
-        lines.push(`${GS}h\x30`) // height = 48 dots (smaller)
+        lines.push(`${GS}h\x28`) // height = 40 dots (smaller)
         lines.push(`${GS}w\x02`) // width = 2
         lines.push(`${GS}H\x00`) // HRI none (we already printed the code)
 
-        // Print CODE39 barcode (alphanumeric only)
-        lines.push(`${GS}k\x04${cleanBarcode}\x00`)
+        // Print CODE128B barcode (better compatibility)
+        // Format: GS k 73 n d1...dn
+        lines.push(`${GS}k\x49${String.fromCharCode(cleanBarcode.length)}${cleanBarcode}`)
         lines.push(Commands.FEED_LINE)
 
         lines.push(Commands.ALIGN_LEFT)

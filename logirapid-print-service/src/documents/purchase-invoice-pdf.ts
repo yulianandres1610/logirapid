@@ -4,6 +4,7 @@
  */
 
 import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont } from 'pdf-lib'
+import bwipjs from 'bwip-js'
 
 interface InvoiceItem {
   name: string
@@ -91,6 +92,24 @@ export async function generatePurchaseInvoicePdf(data: PurchaseInvoiceData): Pro
 
   let y = 750 // Start from top
 
+  // === GENERATE BARCODE FOR INVOICE NUMBER ===
+  let barcodeImage: Awaited<ReturnType<typeof pdfDoc.embedPng>> | null = null
+  try {
+    const barcodeData = invoiceNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase()
+    if (barcodeData.length > 0 && barcodeData.length <= 20) {
+      const barcodePng = await bwipjs.toBuffer({
+        bcid: 'code128',
+        text: barcodeData,
+        scale: 3,
+        height: 12,
+        includetext: false
+      })
+      barcodeImage = await pdfDoc.embedPng(barcodePng)
+    }
+  } catch (err) {
+    console.error('Error generating barcode for PDF:', err)
+  }
+
   // Helper function to draw text
   const drawText = (
     text: string,
@@ -134,16 +153,30 @@ export async function generatePurchaseInvoicePdf(data: PurchaseInvoiceData): Pro
   // Invoice title on the right
   drawText('FACTURA DE COMPRA', 400, 750, { font: fontBold, size: 16, color: darkBlue })
 
-  // Invoice number and date
-  drawText(`No: ${invoiceNumber}`, 400, 730, { font: fontBold, size: 11 })
-  drawText(`Fecha: ${dateStr}`, 400, 715, { size: 10 })
+  // === BARCODE AT TOP RIGHT (for easy scanning) ===
+  let barcodeY = 730
+  if (barcodeImage) {
+    const barcodeWidth = 150
+    const barcodeHeight = 40
+    page.drawImage(barcodeImage, {
+      x: 400,
+      y: barcodeY - barcodeHeight + 10,
+      width: barcodeWidth,
+      height: barcodeHeight
+    })
+    barcodeY -= 35
+  }
+
+  // Invoice number and date (below barcode)
+  drawText(`No: ${invoiceNumber}`, 400, barcodeY, { font: fontBold, size: 11 })
+  drawText(`Fecha: ${dateStr}`, 400, barcodeY - 15, { size: 10 })
 
   if (data.purchaseNumber && data.invoiceNumber) {
-    drawText(`Orden: ${data.purchaseNumber}`, 400, 700, { size: 10 })
+    drawText(`Orden: ${data.purchaseNumber}`, 400, barcodeY - 30, { size: 10 })
   }
 
   if (data.dueDate) {
-    drawText(`Vence: ${data.dueDate}`, 400, 685, { size: 10, color: gray })
+    drawText(`Vence: ${data.dueDate}`, 400, barcodeY - 45, { size: 10, color: gray })
   }
 
   y = 660
