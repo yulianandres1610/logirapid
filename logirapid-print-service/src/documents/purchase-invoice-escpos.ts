@@ -10,6 +10,11 @@ interface InvoiceItem {
   quantity: number
   unitCost: number
   total?: number
+  // Variant information
+  variantId?: number | null
+  variantName?: string | null
+  variantSku?: string | null
+  variantBarcode?: string | null
 }
 
 interface PurchaseInvoiceData {
@@ -133,6 +138,32 @@ export function generatePurchaseInvoiceEscpos(data: PurchaseInvoiceData): Buffer
     lines.push(Commands.FEED_LINE)
   }
 
+  // === SCANNABLE BARCODE AT TOP FOR EASY SCANNING ===
+  // This is the main barcode for the almacenero to scan when receiving
+  const barcodeDataTop = invoiceNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase()
+  if (barcodeDataTop.length > 0) {
+    lines.push(Commands.FEED_LINE)
+    lines.push(Commands.ALIGN_CENTER)
+
+    // ESC/POS Barcode settings - larger and prominent
+    lines.push(`${GS}h\x50`) // height = 80 dots (larger for visibility)
+    lines.push(`${GS}w\x03`) // width = 3 (wider bars)
+    lines.push(`${GS}H\x02`) // HRI below barcode
+    lines.push(`${GS}f\x00`) // Font A for HRI
+
+    // Print CODE39 barcode (alphanumeric only)
+    lines.push(`${GS}k\x04${barcodeDataTop}\x00`)
+    lines.push(Commands.FEED_LINE)
+
+    // Print full number as text (with hyphens for readability)
+    lines.push(Commands.BOLD_ON)
+    lines.push(Commands.DOUBLE_HEIGHT_ON)
+    lines.push(invoiceNumber)
+    lines.push(Commands.NORMAL_SIZE)
+    lines.push(Commands.BOLD_OFF)
+    lines.push(Commands.FEED_LINE)
+  }
+
   lines.push(SEPARATOR)
   lines.push(Commands.FEED_LINE)
 
@@ -208,9 +239,9 @@ export function generatePurchaseInvoiceEscpos(data: PurchaseInvoiceData): Buffer
   for (const item of items) {
     const itemTotal = item.total ?? (item.quantity ?? 0) * (item.unitCost ?? 0)
     const itemName = item.name || 'Producto sin nombre'
-    const qtyStr = (item.quantity ?? 0).toString().padStart(2)
+    const qtyStr = formatQty(item.quantity ?? 0).padStart(5)
     const totalStr = formatCurrency(itemTotal)
-    const maxNameLen = PAPER_WIDTH - 6 - totalStr.length - 2
+    const maxNameLen = PAPER_WIDTH - 8 - totalStr.length - 2
 
     // Truncate name if too long
     const displayName = itemName.length > maxNameLen
@@ -221,8 +252,14 @@ export function generatePurchaseInvoiceEscpos(data: PurchaseInvoiceData): Buffer
     lines.push(formatLine(itemLine, totalStr, PAPER_WIDTH))
     lines.push(Commands.FEED_LINE)
 
-    // Get product code for barcode (prefer barcode, then sku)
-    const productCode = item.barcode || item.sku
+    // Show variant name if exists
+    if (item.variantName) {
+      lines.push(`     VAR: ${item.variantName}`)
+      lines.push(Commands.FEED_LINE)
+    }
+
+    // Get product code for barcode - prefer variant barcode/sku, then product barcode/sku
+    const productCode = item.variantBarcode || item.variantSku || item.barcode || item.sku
 
     if (productCode) {
       // Print product code as text
@@ -332,28 +369,6 @@ export function generatePurchaseInvoiceEscpos(data: PurchaseInvoiceData): Buffer
     }
   }
 
-  // === BARCODE with invoice number ===
-  // Only use alphanumeric characters for barcode (remove hyphens to avoid scanner issues)
-  const barcodeData = invoiceNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase()
-  if (barcodeData.length > 0) {
-    lines.push(Commands.FEED_LINE)
-    lines.push(Commands.ALIGN_CENTER)
-
-    // ESC/POS Barcode settings
-    lines.push(`${GS}h\x40`) // height = 64 dots
-    lines.push(`${GS}w\x02`) // width = 2
-    lines.push(`${GS}H\x02`) // HRI below barcode
-    lines.push(`${GS}f\x00`) // Font A for HRI
-
-    // Print CODE39 barcode (alphanumeric only)
-    lines.push(`${GS}k\x04${barcodeData}\x00`)
-    lines.push(Commands.FEED_LINE)
-
-    // Print full number as text (with hyphens for readability)
-    lines.push(invoiceNumber)
-    lines.push(Commands.FEED_LINE)
-  }
-
   // === FOOTER ===
   lines.push(Commands.FEED_LINE)
   lines.push(Commands.ALIGN_CENTER)
@@ -377,6 +392,12 @@ function formatLine(left: string, right: string, width: number): string {
 
 function formatCurrency(amount: number): string {
   return '$' + amount.toFixed(2)
+}
+
+function formatQty(value: number): string {
+  // Show decimals only if not an integer
+  if (Number.isInteger(value)) return value.toString()
+  return value.toFixed(2)
 }
 
 function wordWrap(text: string, maxWidth: number): string[] {

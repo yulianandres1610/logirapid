@@ -84,6 +84,10 @@ interface PurchaseLine {
   productName: string
   productSku: string
   productBarcode: string | null
+  variantId?: number | null
+  variantName?: string | null
+  variantSku?: string | null
+  variantBarcode?: string | null
   quantity: number
   unitPrice: number
   totalPrice: number
@@ -286,10 +290,25 @@ export default function MarketPurchasesPage() {
       const response = await fetch(`/api/market/purchases/${purchaseId}`)
       const data = await response.json()
       if (data.success && data.data?.lines) {
-        setPurchaseLines(data.data.lines.map((l: { productName: string; productSku: string; productBarcode: string | null; variantBarcode: string | null; quantity: number; unitPrice: number; totalPrice: number }) => ({
+        setPurchaseLines(data.data.lines.map((l: {
+          productName: string;
+          productSku: string;
+          productBarcode: string | null;
+          variantId?: number | null;
+          variantName?: string | null;
+          variantSku?: string | null;
+          variantBarcode?: string | null;
+          quantity: number;
+          unitPrice: number;
+          totalPrice: number
+        }) => ({
           productName: l.productName,
           productSku: l.productSku,
-          productBarcode: l.variantBarcode || l.productBarcode || null,
+          productBarcode: l.productBarcode || null,
+          variantId: l.variantId || null,
+          variantName: l.variantName || null,
+          variantSku: l.variantSku || null,
+          variantBarcode: l.variantBarcode || null,
           quantity: l.quantity,
           unitPrice: l.unitPrice,
           totalPrice: l.totalPrice
@@ -331,6 +350,10 @@ export default function MarketPurchasesPage() {
               name: l.productName,
               sku: l.productSku,
               barcode: l.productBarcode,
+              variantId: l.variantId,
+              variantName: l.variantName,
+              variantSku: l.variantSku,
+              variantBarcode: l.variantBarcode,
               quantity: l.quantity,
               unitCost: l.unitPrice,
               total: l.totalPrice
