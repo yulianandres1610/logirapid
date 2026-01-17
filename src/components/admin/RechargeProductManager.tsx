@@ -341,14 +341,14 @@ export function RechargeProductManager({ onOpenModal, onProductsChange, hideHead
                   </td>
                   <td className="px-6 py-4 text-center">
                     {product.isPromotion ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-exa-primary dark:text-red-400">
+                      <span className="inline-flex flex-shrink-0 items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-exa-primary dark:text-red-400 whitespace-nowrap">
                         <Gift className="w-3.5 h-3.5" />
                         Promo
                       </span>
                     ) : product.promotions.length > 0 ? (
                       <button
                         onClick={() => handleShowPromo(product)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-exa-primary dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                        className="inline-flex flex-shrink-0 items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-exa-primary dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors whitespace-nowrap"
                         title="Ver promociones"
                       >
                         <Gift className="w-3.5 h-3.5" />

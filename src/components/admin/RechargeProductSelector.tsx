@@ -264,7 +264,7 @@ export function RechargeProductSelector({ onClose, onProductSelected }: Recharge
                                 {prod.countryName} - Monto: ${prod.providerAmount.toFixed(2)}
                               </p>
                             </div>
-                            <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400">
+                            <span className="flex-shrink-0 px-2 py-0.5 text-xs rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400">
                               Producto
                             </span>
                           </button>
@@ -297,7 +297,7 @@ export function RechargeProductSelector({ onClose, onProductSelected }: Recharge
                                 {prod.validTo && ` - Hasta: ${new Date(prod.validTo).toLocaleDateString('es-ES')}`}
                               </p>
                             </div>
-                            <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 dark:bg-red-500/20 text-exa-primary dark:text-red-400">
+                            <span className="flex-shrink-0 px-2 py-0.5 text-xs rounded-full bg-red-100 dark:bg-red-500/20 text-exa-primary dark:text-red-400">
                               Promo
                             </span>
                           </button>
@@ -341,7 +341,7 @@ export function RechargeProductSelector({ onClose, onProductSelected }: Recharge
                       </p>
                     )}
                   </div>
-                  <span className={`px-2 py-1 text-xs rounded-full ${
+                  <span className={`flex-shrink-0 px-2 py-1 text-xs rounded-full ${
                     selectedProduct.type === 'promotion'
                       ? 'bg-red-100 dark:bg-red-500/20 text-exa-primary dark:text-red-400'
                       : 'bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400'

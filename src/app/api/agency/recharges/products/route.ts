@@ -77,19 +77,43 @@ export async function GET(request: NextRequest) {
     const products = result.rows.map((row: any) => {
       // Check if product has manual pricing (created via new form)
       const hasManualPricing = row.manual_cost_price !== null && row.manual_selling_price !== null
+      // Check if company has specific pricing configured
+      const hasCompanyPricing = row.pricing_id !== null && row.pricing_company_id === companyId
 
       // Calculate miCosto (cost to the agency) and precioClientes (price to charge customers)
       let miCosto = 0
       let precioClientes: number | null = null
       let hasPricing = false
 
-      if (hasManualPricing) {
-        // For manually created products
+      // Priority: Company-specific pricing > Manual pricing > Platform pricing
+      if (hasCompanyPricing) {
+        // Agency has configured their own pricing for this product
+        const baseCost = row.provider_amount
+          ? parseFloat(row.provider_amount)
+          : row.manual_cost_price
+            ? parseFloat(row.manual_cost_price)
+            : row.base_cost
+              ? parseFloat(row.base_cost)
+              : 0
+
+        miCosto = baseCost
+
+        if (row.selling_price) {
+          precioClientes = parseFloat(row.selling_price)
+        } else if (row.margin_type === 'percentage') {
+          precioClientes = baseCost * (1 + parseFloat(row.margin_value) / 100)
+        } else if (row.margin_type === 'fixed') {
+          precioClientes = baseCost + parseFloat(row.margin_value)
+        }
+
+        hasPricing = row.pricing_enabled === true
+      } else if (hasManualPricing) {
+        // For manually created products without company-specific pricing
         miCosto = parseFloat(row.manual_cost_price)
         precioClientes = parseFloat(row.manual_selling_price)
         hasPricing = true
       } else if (row.pricing_id) {
-        // For margin-based pricing
+        // For platform-wide pricing (company_id IS NULL)
         const baseCost = row.provider_amount
           ? parseFloat(row.provider_amount)
           : row.base_cost
