@@ -31,6 +31,47 @@ const ALL_TIME_SLOTS = [
   '4:00 PM - 8:00 PM'
 ]
 
+// Cache para company ID del agente (evita queries repetidas)
+let cachedAgentCompanyId: number | null = null
+
+/**
+ * Obtiene el company ID para el agente de WhatsApp/Voice
+ * Usa la variable de entorno WHATSAPP_AGENT_COMPANY_NAME para buscar la empresa
+ * @returns El ID de la empresa configurada
+ */
+async function getAgentCompanyId(): Promise<number> {
+  // Retornar cache si existe
+  if (cachedAgentCompanyId !== null) {
+    return cachedAgentCompanyId
+  }
+
+  const companyName = process.env.WHATSAPP_AGENT_COMPANY_NAME
+  if (!companyName) {
+    console.error('[WhatsApp Agent] WHATSAPP_AGENT_COMPANY_NAME not configured, using fallback')
+    // Fallback a primera empresa si no hay configuracion
+    const fallbackResult = await db.query(`SELECT id FROM companies ORDER BY id LIMIT 1`)
+    cachedAgentCompanyId = fallbackResult.rows[0]?.id || 1
+    return cachedAgentCompanyId
+  }
+
+  const result = await db.query(
+    `SELECT id FROM companies WHERE legalname ILIKE $1 LIMIT 1`,
+    [`%${companyName}%`]
+  )
+
+  if (!result.rows[0]?.id) {
+    console.error(`[WhatsApp Agent] Company "${companyName}" not found in database, using fallback`)
+    // Fallback a primera empresa si no se encuentra
+    const fallbackResult = await db.query(`SELECT id FROM companies ORDER BY id LIMIT 1`)
+    cachedAgentCompanyId = fallbackResult.rows[0]?.id || 1
+    return cachedAgentCompanyId
+  }
+
+  cachedAgentCompanyId = result.rows[0].id
+  console.log(`[WhatsApp Agent] Using company "${companyName}" with ID: ${cachedAgentCompanyId}`)
+  return cachedAgentCompanyId
+}
+
 /**
  * Obtiene las fechas y horarios disponibles para recogida
  * Sigue la misma logica del wizard:
@@ -899,9 +940,8 @@ async function saveRecipient(data: {
     const cleanPhone = data.phone.replace(/\D/g, '').slice(-8)
     console.log('[WhatsApp Agent] saveRecipient - Phone:', cleanPhone, 'Name:', data.name)
 
-    // Obtener company_id
-    const companyResult = await db.query(`SELECT id FROM companies ORDER BY id LIMIT 1`)
-    const companyId = companyResult.rows[0]?.id || 1
+    // Obtener company_id de la empresa configurada
+    const companyId = await getAgentCompanyId()
 
     // Buscar destinatario existente por teléfono
     const existingResult = await db.query(`
@@ -1333,9 +1373,8 @@ async function getOrCreateCustomer(
 
     console.log('[WhatsApp Agent] Creando nuevo cliente:', firstName, lastName, formattedPhone)
 
-    // Obtener company_id por defecto (primera compañia disponible)
-    const companyResult = await db.query(`SELECT id FROM companies ORDER BY id LIMIT 1`)
-    const companyId = companyResult.rows[0]?.id || 1
+    // Obtener company_id de la empresa configurada
+    const companyId = await getAgentCompanyId()
 
     const insertResult = await db.query(`
       INSERT INTO customers (
@@ -1608,9 +1647,8 @@ async function createPickupOrder(data: Record<string, unknown>, phoneNumber: str
 
     console.log('[WhatsApp Agent] Fecha final:', scheduledDate, 'Horario final:', timeSlot)
 
-    // Obtener company_id
-    const companyResult = await db.query(`SELECT id FROM companies ORDER BY id LIMIT 1`)
-    const companyId = companyResult.rows[0]?.id || 1
+    // Obtener company_id de la empresa configurada
+    const companyId = await getAgentCompanyId()
 
     // 7. Insertar orden con todos los campos requeridos incluyendo coordenadas
     // Usar dirección completa formateada para customeraddress
