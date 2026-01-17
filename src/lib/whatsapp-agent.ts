@@ -678,6 +678,7 @@ interface RecipientSearchResult {
 
 /**
  * Busca un cliente existente por numero de telefono
+ * SOLO busca clientes de la empresa configurada (LogiRapid)
  */
 async function findCustomerByPhone(phoneNumber: string): Promise<{ id: number; name: string } | null> {
   // Limpiar numero
@@ -689,15 +690,20 @@ async function findCustomerByPhone(phoneNumber: string): Promise<{ id: number; n
     cleanPhone.slice(-10) // Ultimos 10 digitos
   ]
 
-  // Buscar en customers
+  // Obtener company_id de la empresa configurada
+  const companyId = await getAgentCompanyId()
+
+  // Buscar en customers - FILTRADO POR COMPANY
   const customerResult = await db.query(`
     SELECT id, firstname, lastname
     FROM customers
-    WHERE phone LIKE ANY($1) OR phone LIKE ANY($2)
+    WHERE (phone LIKE ANY($1) OR phone LIKE ANY($2))
+      AND (company_id = $3 OR company_id IS NULL)
     LIMIT 1
   `, [
     phoneVariants.map(p => `%${p}%`),
-    phoneVariants.map(p => `%${p.slice(-10)}%`)
+    phoneVariants.map(p => `%${p.slice(-10)}%`),
+    companyId
   ])
 
   if (customerResult.rows.length > 0) {
@@ -708,14 +714,15 @@ async function findCustomerByPhone(phoneNumber: string): Promise<{ id: number; n
     }
   }
 
-  // Buscar en package_orders por telefono del sender
+  // Buscar en package_orders por telefono del sender - FILTRADO POR COMPANY
   const orderResult = await db.query(`
     SELECT customername, phone, createdat
     FROM package_orders
     WHERE phone LIKE ANY($1)
+      AND company_id = $2
     ORDER BY createdat DESC
     LIMIT 1
-  `, [phoneVariants.map(p => `%${p.slice(-10)}%`)])
+  `, [phoneVariants.map(p => `%${p.slice(-10)}%`), companyId])
 
   if (orderResult.rows.length > 0 && orderResult.rows[0].customername) {
     return {
@@ -724,14 +731,15 @@ async function findCustomerByPhone(phoneNumber: string): Promise<{ id: number; n
     }
   }
 
-  // Buscar en remittance_orders
+  // Buscar en remittance_orders - FILTRADO POR COMPANY
   const remitResult = await db.query(`
     SELECT sender_name, sender_phone, created_at
     FROM remittance_orders
     WHERE sender_phone LIKE ANY($1)
+      AND company_id = $2
     ORDER BY created_at DESC
     LIMIT 1
-  `, [phoneVariants.map(p => `%${p.slice(-10)}%`)])
+  `, [phoneVariants.map(p => `%${p.slice(-10)}%`), companyId])
 
   if (remitResult.rows.length > 0 && remitResult.rows[0].sender_name) {
     return {
@@ -745,12 +753,16 @@ async function findCustomerByPhone(phoneNumber: string): Promise<{ id: number; n
 
 /**
  * Busca un remitente (sender) por telefono con sus datos y direcciones guardadas
+ * SOLO busca clientes de la empresa configurada (LogiRapid)
  */
 async function searchSenderByPhone(phoneNumber: string): Promise<CustomerSearchResult> {
   const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10)
   console.log('[WhatsApp Agent] Buscando sender por telefono:', cleanPhone)
 
-  // Buscar en customers con direcciones
+  // Obtener company_id de la empresa configurada
+  const companyId = await getAgentCompanyId()
+
+  // Buscar en customers con direcciones - FILTRADO POR COMPANY
   const customerResult = await db.query(`
     SELECT
       c.id, c.firstname, c.lastname, c.phone,
@@ -760,8 +772,9 @@ async function searchSenderByPhone(phoneNumber: string): Promise<CustomerSearchR
     FROM customers c
     LEFT JOIN customer_addresses ca ON ca.customerid = c.id
     WHERE c.phone LIKE $1
+      AND (c.company_id = $2 OR c.company_id IS NULL)
     ORDER BY ca.isprimary DESC NULLS LAST, ca.id DESC
-  `, [`%${cleanPhone}%`])
+  `, [`%${cleanPhone}%`, companyId])
 
   if (customerResult.rows.length > 0) {
     const first = customerResult.rows[0]
@@ -789,16 +802,17 @@ async function searchSenderByPhone(phoneNumber: string): Promise<CustomerSearchR
     }
   }
 
-  // Buscar en ordenes anteriores
+  // Buscar en ordenes anteriores - FILTRADO POR COMPANY
   const orderResult = await db.query(`
     SELECT
       customername, phone, customeraddress, city, state, zipcode,
       office_order_data
     FROM package_orders
     WHERE phone LIKE $1
+      AND company_id = $2
     ORDER BY createdat DESC
     LIMIT 1
-  `, [`%${cleanPhone}%`])
+  `, [`%${cleanPhone}%`, companyId])
 
   if (orderResult.rows.length > 0) {
     const order = orderResult.rows[0]
@@ -826,12 +840,16 @@ async function searchSenderByPhone(phoneNumber: string): Promise<CustomerSearchR
 
 /**
  * Busca un destinatario en Cuba por telefono
+ * SOLO busca destinatarios de la empresa configurada (LogiRapid)
  */
 async function searchRecipientByPhone(phoneNumber: string): Promise<RecipientSearchResult> {
   const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-8) // Telefonos cubanos 8 digitos
   console.log('[WhatsApp Agent] Buscando destinatario Cuba por telefono:', cleanPhone)
 
-  // 1. Buscar primero en la tabla customers (donde guardamos los destinatarios)
+  // Obtener company_id de la empresa configurada
+  const companyId = await getAgentCompanyId()
+
+  // 1. Buscar primero en la tabla customers (donde guardamos los destinatarios) - FILTRADO POR COMPANY
   const customerResult = await db.query(`
     SELECT
       id, firstname, lastname, phone, idnumber as ci,
@@ -842,9 +860,10 @@ async function searchRecipientByPhone(phoneNumber: string): Promise<RecipientSea
         REPLACE(phone, ' ', '') LIKE $1
         OR phone LIKE $2
       )
+      AND (company_id = $3 OR company_id IS NULL)
     ORDER BY createdat DESC
     LIMIT 1
-  `, [`%${cleanPhone}%`, `%${cleanPhone}%`])
+  `, [`%${cleanPhone}%`, `%${cleanPhone}%`, companyId])
 
   if (customerResult.rows.length > 0) {
     const c = customerResult.rows[0]
@@ -863,16 +882,17 @@ async function searchRecipientByPhone(phoneNumber: string): Promise<RecipientSea
     }
   }
 
-  // 2. Buscar en ordenes anteriores
+  // 2. Buscar en ordenes anteriores - FILTRADO POR COMPANY
   const orderResult = await db.query(`
     SELECT
       office_order_data
     FROM package_orders
     WHERE office_order_data IS NOT NULL
       AND office_order_data::text LIKE $1
+      AND company_id = $2
     ORDER BY createdat DESC
     LIMIT 5
-  `, [`%${cleanPhone}%`])
+  `, [`%${cleanPhone}%`, companyId])
 
   if (orderResult.rows.length > 0) {
     // Buscar en los datos del destinatario
@@ -896,16 +916,17 @@ async function searchRecipientByPhone(phoneNumber: string): Promise<RecipientSea
     }
   }
 
-  // Buscar en remesas
+  // Buscar en remesas - FILTRADO POR COMPANY
   const remitResult = await db.query(`
     SELECT
       recipient_name, recipient_phone,
       recipient_province, recipient_municipality, recipient_address
     FROM remittance_orders
     WHERE recipient_phone LIKE $1
+      AND company_id = $2
     ORDER BY created_at DESC
     LIMIT 1
-  `, [`%${cleanPhone}%`])
+  `, [`%${cleanPhone}%`, companyId])
 
   if (remitResult.rows.length > 0) {
     const r = remitResult.rows[0]
