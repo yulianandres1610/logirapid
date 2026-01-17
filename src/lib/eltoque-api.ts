@@ -1,4 +1,5 @@
-// Servicio para consumir el API de tasas de cambio de eltoque.cubarapid.com
+// Servicio para consumir el API de tasas de cambio de ElToque
+// Endpoint: http://173.249.39.167:8000/tasas
 
 export interface ExchangeRate {
   moneda: string
@@ -46,8 +47,8 @@ export function getCurrencyMeta(currency: string): CurrencyMeta {
 }
 
 class ElToqueAPI {
-  private static readonly BASE_URL = 'https://eltoque.cubarapid.com'
-  private static readonly API_KEY = 'logirapid_02c9333b1a53596be22d3ecf34d605c5'
+  private static readonly BASE_URL = 'http://173.249.39.167:8000'
+  private static readonly ACCESS_TOKEN = 'tu_clave_secreta_aqui'
   private static lastFetchTime = 0
   private static readonly MIN_FETCH_INTERVAL = 300000 // 5 minutos mínimo entre peticiones para reducir latencia
   private static cachedRates: AllExchangeRates | null = null
@@ -65,10 +66,10 @@ class ElToqueAPI {
         return this.cachedRates
       }
 
-      console.log('🔄 Fetching fresh exchange rates from eltoque.cubarapid.com...')
+      console.log('🔄 Fetching fresh exchange rates from ElToque API...')
 
-      // Nueva autenticación con x-api-key
-      const url = `${this.BASE_URL}/api/tasas`
+      // Autenticación con access_token header
+      const url = `${this.BASE_URL}/tasas`
       console.log('📡 Fetching from:', url)
 
       const controller = new AbortController()
@@ -79,7 +80,7 @@ class ElToqueAPI {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'x-api-key': this.API_KEY
+          'access_token': this.ACCESS_TOKEN
         },
         cache: 'no-store',
         signal: controller.signal
@@ -349,7 +350,7 @@ class ElToqueAPI {
    */
   static async getRate(currency: keyof AllExchangeRates): Promise<ExchangeRate> {
     try {
-      console.log(`🔄 Fetching ${currency} rate from eltoque.cubarapid.com...`)
+      console.log(`🔄 Fetching ${currency} rate from ElToque API...`)
 
       // En lugar de hacer una petición individual, usemos getAllRates y extraigamos la moneda
       const allRates = await this.getAllRates()
@@ -390,14 +391,14 @@ class ElToqueAPI {
         lastCheck: now,
         message: isUsingSimulated ?
           'Conectado usando tasas de respaldo (API temporalmente no disponible)' :
-          'Conectado al API de eltoque.cubarapid.com',
+          'Conectado al API de ElToque',
         usingFallback: isUsingSimulated
       }
     } catch (error) {
       return {
         isConnected: false,
         lastCheck: new Date().toISOString(),
-        message: 'No se pudo conectar al API de eltoque.cubarapid.com',
+        message: 'No se pudo conectar al API de ElToque',
         usingFallback: true
       }
     }
