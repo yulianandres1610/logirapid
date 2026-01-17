@@ -8,9 +8,13 @@ export const runtime = 'nodejs'
 
 const VoiceResponse = twilio.twiml.VoiceResponse
 
+// Mensaje de bienvenida calido y natural
+const WELCOME_MESSAGE = `¡Hola! Gracias por llamar a LogiRapid. Soy Sofia, tu asistente virtual.
+¿En que puedo ayudarte hoy? Puedes decirme si quieres hacer un envio a Cuba, consultar el estado de un pedido, o cualquier otra cosa que necesites.`
+
 /**
  * Webhook para recibir llamadas entrantes de Twilio
- * Genera TwiML para conectar a un stream de media WebSocket
+ * Usa Twilio Speech Recognition + OpenAI para conversacion natural
  */
 export async function POST(request: NextRequest) {
   try {
@@ -64,43 +68,54 @@ export async function POST(request: NextRequest) {
       to,
       companyId,
       customerId,
-      'ringing',
+      'in-progress',
       JSON.stringify({
         customerName,
-        startedAt: new Date().toISOString()
+        startedAt: new Date().toISOString(),
+        conversationHistory: []
       })
     ])
 
-    console.log('[Twilio Voice] Call recorded in database:', { callSid, companyId, customerId })
+    console.log('[Twilio Voice] Call recorded:', { callSid, companyId, customerId, customerName })
 
-    // Generate TwiML response
+    // Generate TwiML response with natural greeting
     const response = new VoiceResponse()
 
-    // Get the host for WebSocket URL
-    const host = request.headers.get('host') || 'agencias.logirapid.com'
-    const protocol = host.includes('localhost') ? 'ws' : 'wss'
-    const streamUrl = `${protocol}://${host}/api/twilio/media-stream`
+    // Saludo personalizado si conocemos al cliente
+    let greeting = WELCOME_MESSAGE
+    if (customerName) {
+      greeting = `¡Hola ${customerName.split(' ')[0]}! Que gusto escucharte. Soy Sofia de LogiRapid. ¿En que te puedo ayudar hoy?`
+    }
 
-    // Add a greeting message while connecting
+    // Usar voz mas natural y calida (Lupe es una voz femenina espanola muy natural)
     response.say({
-      voice: 'Polly.Lucia-Neural',
+      voice: 'Polly.Lupe-Neural',
       language: 'es-US'
-    }, 'Bienvenido a LogiRapid. Un momento por favor mientras lo conectamos con nuestro asistente.')
+    }, greeting)
 
-    // Connect to the media stream
-    const connect = response.connect()
-    const stream = connect.stream({
-      url: streamUrl
+    // Configurar Gather para escuchar la respuesta del usuario
+    const gather = response.gather({
+      input: ['speech'],
+      language: 'es-US',
+      speechTimeout: 'auto',
+      speechModel: 'phone_call',
+      enhanced: true,
+      action: '/api/twilio/voice/respond',
+      method: 'POST'
     })
 
-    // Pass custom parameters to the stream
-    stream.parameter({ name: 'callSid', value: callSid })
-    stream.parameter({ name: 'from', value: from })
-    stream.parameter({ name: 'customerId', value: customerId?.toString() || '' })
-    stream.parameter({ name: 'customerName', value: customerName || '' })
-    stream.parameter({ name: 'companyId', value: companyId.toString() })
+    // Si no hay respuesta, preguntar de nuevo
+    response.say({
+      voice: 'Polly.Lupe-Neural',
+      language: 'es-US'
+    }, '¿Sigues ahi? Si necesitas ayuda, solo dime en que puedo asistirte.')
 
-    console.log('[Twilio Voice] TwiML generated, connecting to:', streamUrl)
+    // Redirect para intentar de nuevo
+    response.redirect({
+      method: 'POST'
+    }, '/api/twilio/voice')
+
+    console.log('[Twilio Voice] TwiML generated for call:', callSid)
 
     // Return TwiML response
     return new NextResponse(response.toString(), {
@@ -113,12 +128,12 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[Twilio Voice] Error:', error)
 
-    // Return error TwiML
+    // Return error TwiML with friendly message
     const response = new VoiceResponse()
     response.say({
-      voice: 'Polly.Lucia-Neural',
+      voice: 'Polly.Lupe-Neural',
       language: 'es-US'
-    }, 'Lo sentimos, hubo un error al procesar su llamada. Por favor intente de nuevo mas tarde.')
+    }, 'Disculpa, tuvimos un pequeno problema tecnico. Por favor intenta llamar de nuevo en unos momentos. Gracias por tu paciencia.')
     response.hangup()
 
     return new NextResponse(response.toString(), {
