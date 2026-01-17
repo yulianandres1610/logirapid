@@ -1553,9 +1553,9 @@ export default function ExchangeRatePage() {
                         theme === 'dark' ? "bg-gray-700 border-gray-600 text-gray-300" : "bg-white border-gray-200 text-gray-800"
                       )}>
                         <div className="flex items-center justify-between">
-                          <span>Tasa eltoque:</span>
+                          <span>Tasa eltoque (USD):</span>
                           <span className="font-bold">
-                            $<AnimatedCounter value={475} duration={1500} />
+                            ${rates?.USD?.rate ? <AnimatedCounter value={rates.USD.rate} duration={1500} /> : '---'}
                           </span>
                         </div>
                         <div className="flex items-center justify-center my-2">
@@ -1580,7 +1580,7 @@ export default function ExchangeRatePage() {
                             adjustmentPercentage < 0 ? "text-orange-500" :
                             "text-blue-500"
                           )}>
-                            $<AnimatedCounter value={475 * (1 + adjustmentPercentage / 100)} duration={2000} />
+                            ${rates?.USD?.rate ? <AnimatedCounter value={rates.USD.rate * (1 + adjustmentPercentage / 100)} duration={2000} /> : '---'}
                           </span>
                         </div>
                       </div>
