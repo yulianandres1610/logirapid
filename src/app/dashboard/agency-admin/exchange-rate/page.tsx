@@ -21,18 +21,29 @@ export default function ExchangeRatePage() {
   const currencyFlags: Record<string, string> = {
     USD: '🇺🇸',
     EUR: '🇪🇺',
-    MLC: '💳'
+    MLC: '💳',
+    GBP: '🇬🇧',
+    CAD: '🇨🇦',
+    MXN: '🇲🇽',
+    BRL: '🇧🇷',
+    ZELLE: '💸',
+    CLA: '📱'
   }
 
   const currencyNames: Record<string, string> = {
     USD: 'Dólar Americano',
     EUR: 'Euro',
-    MLC: 'Tarjeta MLC'
+    MLC: 'Tarjeta MLC',
+    GBP: 'Libra Esterlina',
+    CAD: 'Dólar Canadiense',
+    MXN: 'Peso Mexicano',
+    BRL: 'Real Brasileño',
+    ZELLE: 'Zelle',
+    CLA: 'CashApp'
   }
 
-  // Filtrar solo las monedas disponibles del API
-  const availableCurrencies = ['USD', 'EUR', 'MLC']
-  const filteredRates = rates.filter(rate => availableCurrencies.includes(rate.currency))
+  // Mostrar todas las monedas disponibles del API (no filtrar)
+  const filteredRates = rates
 
   if (loading && rates.length === 0) {
     return (
@@ -148,8 +159,8 @@ export default function ExchangeRatePage() {
             </motion.div>
           </AnimatePresence>
 
-          {/* Grid de Tasas - Solo USD, EUR, MLC */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Grid de Tasas - Todas las monedas configuradas */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredRates.map((rateData, index) => (
               <motion.div
                 key={rateData.currency}
