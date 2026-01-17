@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPublishedRates } from '@/lib/database'
 import { AgencyRatesService } from '@/lib/agency-rates.service'
 
 // Force dynamic rendering
@@ -14,14 +13,16 @@ interface CachedData {
 }
 let cachedRates: CachedData | null = null
 let cacheTimestamp = 0
-const CACHE_TTL = 60000 // 60 segundos
+const CACHE_TTL = 30000 // 30 segundos (reducido para reflejar cambios más rápido)
 
 /**
  * Endpoint para que las AGENCIAS consulten las tasas publicadas
- * Solo retorna las tasas finales (con ajuste aplicado)
- * NO retorna el porcentaje de ajuste ni las tasas base de ElToque
  *
- * OPTIMIZACIÓN: Caché en memoria con TTL de 60 segundos
+ * IMPORTANTE: Este endpoint SIEMPRE calcula las tasas en tiempo real usando:
+ * - Tasas base de ElToque (o las más recientes disponibles)
+ * - Porcentaje de ajuste configurado globalmente en /dashboard/admin/exchange-rate?tab=agency
+ *
+ * Fórmula: tasaAgencia = tasaBase * (1 + ajuste% / 100)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -42,112 +43,94 @@ export async function GET(request: NextRequest) {
     }
 
     if (forceRefresh) {
-      console.log('[PUBLISHED_RATES] Force refresh requested, bypassing cache...')
+      console.log('[PUBLISHED_RATES] Force refresh requested, calculating fresh rates...')
+      // Limpiar caché al forzar refresh
+      cachedRates = null
+      cacheTimestamp = 0
     } else {
-      console.log('[PUBLISHED_RATES] Cache miss, fetching fresh rates...')
+      console.log('[PUBLISHED_RATES] Cache miss, calculating rates...')
     }
 
-    // Intentar obtener tasas publicadas desde historial
-    let rates = await getPublishedRates()
+    // SIEMPRE calcular tasas desde AgencyRatesService (usa configuración global actual)
+    const service = AgencyRatesService.getInstance()
 
-    // Si no hay historial, calcular en tiempo real desde AgencyRatesService
-    if (!rates || rates.length === 0) {
-      console.log('[PUBLISHED_RATES] No history found, calculating from AgencyRatesService...')
+    // Esperar a que el servicio esté inicializado
+    await service.ensureBaseRatesLoaded()
 
-      const service = AgencyRatesService.getInstance()
+    let agencyRates = service.calculateAgencyRates()
 
-      // Esperar a que el servicio esté inicializado
-      await service.ensureBaseRatesLoaded()
+    // Si no hay tasas base cargadas, intentar obtener de ElToque
+    if (!agencyRates || Object.keys(agencyRates).length === 0) {
+      console.log('[PUBLISHED_RATES] No base rates loaded, fetching from ElToque API...')
 
-      let agencyRates = service.calculateAgencyRates()
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+        const elToqueResponse = await fetch(`${baseUrl}/api/exchange-rates?forceRefresh=true`, {
+          signal: AbortSignal.timeout(8000)
+        })
+        const elToqueData = await elToqueResponse.json()
 
-      // Si aún no hay tasas, intentar obtener de ElToque directamente
-      if (!agencyRates || Object.keys(agencyRates).length === 0) {
-        console.log('[PUBLISHED_RATES] No rates from service, trying ElToque API...')
-
-        try {
-          const elToqueResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/exchange-rates`, {
-            signal: AbortSignal.timeout(5000)
-          })
-          const elToqueData = await elToqueResponse.json()
-
-          if (elToqueData.success && elToqueData.data) {
-            const freshBaseRates: Record<string, number> = {}
-            Object.entries(elToqueData.data).forEach(([currency, rateData]: [string, any]) => {
-              if (typeof rateData === 'object' && rateData.rate) {
-                freshBaseRates[currency] = rateData.rate
-              }
-            })
-
-            if (Object.keys(freshBaseRates).length > 0) {
-              // Actualizar servicio Y persistir al historial
-              await service.updateBaseRates(freshBaseRates, true)
-              agencyRates = service.calculateAgencyRates()
-              console.log('[PUBLISHED_RATES] Loaded and persisted rates from ElToque')
+        if (elToqueData.success && elToqueData.data) {
+          const freshBaseRates: Record<string, number> = {}
+          Object.entries(elToqueData.data).forEach(([currency, rateData]: [string, any]) => {
+            if (typeof rateData === 'object' && rateData.rate) {
+              freshBaseRates[currency] = rateData.rate
             }
+          })
+
+          if (Object.keys(freshBaseRates).length > 0) {
+            console.log('[PUBLISHED_RATES] Loaded', Object.keys(freshBaseRates).length, 'base rates from ElToque')
+            // Actualizar servicio con las nuevas tasas base
+            await service.updateBaseRates(freshBaseRates, true)
+            agencyRates = service.calculateAgencyRates()
           }
-        } catch (elToqueError) {
-          console.warn('[PUBLISHED_RATES] Failed to fetch from ElToque:', elToqueError)
         }
+      } catch (elToqueError) {
+        console.warn('[PUBLISHED_RATES] Failed to fetch from ElToque:', elToqueError)
       }
-
-      if (!agencyRates || Object.keys(agencyRates).length === 0) {
-        console.log('[PUBLISHED_RATES] No rates available from any source')
-        return NextResponse.json({
-          success: false,
-          message: 'No published rates available',
-          rates: []
-        }, { status: 200 })
-      }
-
-      // Formatear tasas calculadas al formato de published rates
-      const formattedRates = Object.entries(agencyRates).map(([currency, rateData]) => ({
-        currency,
-        rate: rateData.agencyRate,
-        lastUpdated: rateData.lastUpdate
-      }))
-
-      // Guardar en caché
-      const lastUpdated = new Date().toISOString()
-      cachedRates = { rates: formattedRates, lastUpdated, source: 'calculated' }
-      cacheTimestamp = now
-
-      console.log(`[PUBLISHED_RATES] Returning ${formattedRates.length} calculated rates - cached`)
-
-      return NextResponse.json({
-        success: true,
-        rates: formattedRates,
-        lastUpdated,
-        source: 'calculated'
-      })
     }
 
-    // Formatear respuesta para agencias (solo datos necesarios)
-    const formattedRates = rates.map(r => ({
-      currency: r.currency,
-      rate: parseFloat(r.rate),
-      lastUpdated: r.timestamp
+    // Si aún no hay tasas, retornar error
+    if (!agencyRates || Object.keys(agencyRates).length === 0) {
+      console.log('[PUBLISHED_RATES] No rates available')
+      return NextResponse.json({
+        success: false,
+        message: 'No hay tasas disponibles. El administrador debe configurar las tasas.',
+        rates: []
+      }, { status: 200 })
+    }
+
+    // Obtener configuración para logging
+    const config = service.getConfig()
+    console.log(`[PUBLISHED_RATES] Calculating rates with ${config?.adjustmentPercentage || 0}% adjustment`)
+
+    // Formatear tasas calculadas
+    const lastUpdated = new Date().toISOString()
+    const formattedRates = Object.entries(agencyRates).map(([currency, rateData]) => ({
+      currency,
+      rate: rateData.agencyRate,
+      lastUpdated
     }))
 
     // Guardar en caché
-    const lastUpdated = rates[0]?.timestamp || new Date().toISOString()
-    cachedRates = { rates: formattedRates, lastUpdated, source: 'history' }
+    cachedRates = { rates: formattedRates, lastUpdated, source: 'calculated' }
     cacheTimestamp = now
 
-    console.log(`[PUBLISHED_RATES] Returning ${formattedRates.length} published rates from history - cached`)
+    console.log(`[PUBLISHED_RATES] Returning ${formattedRates.length} calculated rates (adjustment: ${config?.adjustmentPercentage || 0}%)`)
 
     return NextResponse.json({
       success: true,
       rates: formattedRates,
       lastUpdated,
-      source: 'history'
+      source: 'calculated',
+      adjustmentPercentage: config?.adjustmentPercentage
     })
 
   } catch (error) {
-    console.error('[PUBLISHED_RATES] Error fetching published rates:', error)
+    console.error('[PUBLISHED_RATES] Error:', error)
     return NextResponse.json({
       success: false,
-      error: 'Error fetching published rates',
+      error: 'Error al obtener tasas publicadas',
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 })
   }
