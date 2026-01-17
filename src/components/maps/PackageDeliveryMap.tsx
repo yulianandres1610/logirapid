@@ -15,7 +15,7 @@ interface PackageOrder {
   orderNumber: string
   customerName: string
   customerAddress?: string
-  services: string[]
+  services: (string | { name?: string; type?: string; quantity?: number; unitPrice?: number; subtotal?: number })[]
   boxes?: any[]
   status: string
   scheduledDate?: string
@@ -638,11 +638,17 @@ export default function PackageDeliveryMap({
               <div className="flex-1">
                 <p className="text-xs text-gray-500 dark:text-gray-400">Servicios</p>
                 <div className="space-y-1">
-                  {selectedOrder.services.map((service, index) => (
-                    <div key={index} className="text-sm text-gray-900 dark:text-white">
-                      {service}
-                    </div>
-                  ))}
+                  {selectedOrder.services.map((service, index) => {
+                    // Manejar tanto strings como objetos de servicio
+                    const serviceName = typeof service === 'string'
+                      ? service
+                      : (service as { name?: string; type?: string })?.name || (service as { name?: string; type?: string })?.type || 'Servicio'
+                    return (
+                      <div key={index} className="text-sm text-gray-900 dark:text-white">
+                        {serviceName}
+                      </div>
+                    )
+                  })}
                   {(() => {
                     // Parsear boxes si es string JSON
                     let boxes = selectedOrder.boxes
