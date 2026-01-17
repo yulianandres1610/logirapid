@@ -365,25 +365,27 @@ export async function saveAgencyRatesHistory(history: any[]) {
   try {
     if (!history || history.length === 0) return []
 
-    // Construir query con múltiples inserts
+    // Construir query con múltiples inserts - incluye timestamp
     const placeholders = history.map((_, i) =>
-      `($${i * 6 + 1}, $${i * 6 + 2}, $${i * 6 + 3}, $${i * 6 + 4}, $${i * 6 + 5}, $${i * 6 + 6})`
+      `($${i * 7 + 1}, $${i * 7 + 2}, $${i * 7 + 3}, $${i * 7 + 4}, $${i * 7 + 5}, $${i * 7 + 6}, $${i * 7 + 7})`
     ).join(', ')
 
     const query = `
       INSERT INTO agency_rates_history
-      (id, configid, currency, baserate, agencyrate, adjustmentpercentage)
+      (id, configid, currency, baserate, agencyrate, adjustmentpercentage, timestamp)
       VALUES ${placeholders}
       RETURNING *
     `
 
+    const now = new Date().toISOString()
     const values = history.flatMap(h => [
       h.id,
       h.configId,
       h.currency,
       h.baseRate,
       h.agencyRate,
-      h.adjustmentPercentage
+      h.adjustmentPercentage,
+      h.timestamp || now
     ])
 
     const result = await db.query(query, values)

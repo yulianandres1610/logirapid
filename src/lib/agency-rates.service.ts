@@ -11,6 +11,7 @@ import {
 
 export class AgencyRatesService {
   private static instance: AgencyRatesService
+  private static initializationPromise: Promise<void> | null = null
   private baseRates: Record<string, number> = {}
   private config: AgencyRatesConfig | null = null
   private isInitialized = false
@@ -18,15 +19,41 @@ export class AgencyRatesService {
   private constructor() {
     // Inicializar baseRates vacío - se cargará desde BD o API externa
     this.baseRates = {}
-    this.loadConfigFromDB()
-    this.loadBaseRatesFromDB()
+  }
+
+  /**
+   * Método de inicialización async que carga config y tasas base
+   */
+  private async initialize(): Promise<void> {
+    if (this.isInitialized) return
+
+    try {
+      await this.loadConfigFromDB()
+      await this.loadBaseRatesFromDB()
+      this.isInitialized = true
+      console.log('[AgencyRatesService] Initialization complete')
+    } catch (error) {
+      console.error('[AgencyRatesService] Error during initialization:', error)
+      this.isInitialized = true // Mark as initialized even on error to prevent infinite retries
+    }
   }
 
   public static getInstance(): AgencyRatesService {
     if (!AgencyRatesService.instance) {
       AgencyRatesService.instance = new AgencyRatesService()
+      // Start initialization but don't block
+      AgencyRatesService.initializationPromise = AgencyRatesService.instance.initialize()
     }
     return AgencyRatesService.instance
+  }
+
+  /**
+   * Espera a que la inicialización termine antes de continuar
+   */
+  public async waitForInitialization(): Promise<void> {
+    if (AgencyRatesService.initializationPromise) {
+      await AgencyRatesService.initializationPromise
+    }
   }
 
   /**
@@ -71,6 +98,9 @@ export class AgencyRatesService {
    * Método público para que los endpoints puedan esperar a que las tasas estén listas
    */
   public async ensureBaseRatesLoaded(): Promise<void> {
+    // Primero esperar a que la inicialización termine
+    await this.waitForInitialization()
+
     // Si ya hay tasas cargadas, no hacer nada
     if (Object.keys(this.baseRates).length > 0) {
       return
@@ -131,8 +161,17 @@ export class AgencyRatesService {
     }
   }
 
-  public updateBaseRates(rates: Record<string, number>): void {
+  /**
+   * Actualiza las tasas base y opcionalmente guarda en historial
+   * @param rates Las nuevas tasas base
+   * @param persistToHistory Si es true, guarda las tasas calculadas en el historial
+   */
+  public async updateBaseRates(rates: Record<string, number>, persistToHistory: boolean = false): Promise<void> {
     this.baseRates = { ...rates }
+
+    if (persistToHistory && this.config) {
+      await this.saveCurrentRatesToHistory()
+    }
   }
 
   public async updateConfig(config: Partial<AgencyRatesConfig>, companyId?: string): Promise<void> {
@@ -141,8 +180,6 @@ export class AgencyRatesService {
     }
 
     if (this.config) {
-      const previousPercentage = this.config.adjustmentPercentage
-
       this.config = { ...this.config, ...config, updatedAt: new Date().toISOString() }
 
       try {
@@ -152,27 +189,46 @@ export class AgencyRatesService {
           isActive: this.config.isActive
         })
 
-        // Si el porcentaje cambió, guardar historial
-        if (previousPercentage !== this.config.adjustmentPercentage) {
-          const agencyRates = this.calculateAgencyRates()
-          const historyData = Object.entries(agencyRates).map(([currency, rate]) => ({
-            id: `${this.config!.id}_${currency}_${Date.now()}`,
-            configId: this.config!.id,
-            currency,
-            baseRate: rate.baseRate,
-            agencyRate: rate.agencyRate,
-            adjustmentPercentage: this.config!.adjustmentPercentage
-          }))
-
-          await saveAgencyRatesHistory(historyData)
-          console.log('📈 Historial de tasas guardado para cambio de porcentaje')
-        }
+        // SIEMPRE guardar historial cuando se actualiza la configuración
+        // Esto asegura que las agencias siempre vean tasas actualizadas
+        await this.saveCurrentRatesToHistory()
 
         console.log('✅ Configuración de tasas actualizada en base de datos')
       } catch (error) {
         console.error('❌ Error al actualizar configuración en base de datos:', error)
       }
     }
+  }
+
+  /**
+   * Guarda las tasas actuales calculadas en el historial
+   * Esto permite que las agencias vean las tasas desde /api/published-rates
+   */
+  public async saveCurrentRatesToHistory(): Promise<void> {
+    if (!this.config || Object.keys(this.baseRates).length === 0) {
+      console.warn('[AgencyRatesService] No se puede guardar historial: falta config o baseRates')
+      return
+    }
+
+    const agencyRates = this.calculateAgencyRates()
+    if (Object.keys(agencyRates).length === 0) {
+      console.warn('[AgencyRatesService] No hay tasas calculadas para guardar')
+      return
+    }
+
+    const timestamp = new Date().toISOString()
+    const historyData = Object.entries(agencyRates).map(([currency, rate]) => ({
+      id: `${this.config!.id}_${currency}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      configId: this.config!.id,
+      currency,
+      baseRate: rate.baseRate,
+      agencyRate: rate.agencyRate,
+      adjustmentPercentage: this.config!.adjustmentPercentage,
+      timestamp
+    }))
+
+    await saveAgencyRatesHistory(historyData)
+    console.log('📈 Historial de tasas guardado:', Object.keys(agencyRates).join(', '))
   }
 
   public calculateAgencyRates(): Record<string, AgencyRate> {

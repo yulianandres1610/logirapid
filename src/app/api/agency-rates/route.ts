@@ -81,7 +81,8 @@ export async function GET(request: NextRequest) {
 
           if (Object.keys(freshBaseRates).length > 0) {
             console.log('[agency-rates] Loaded', Object.keys(freshBaseRates).length, 'rates from exchange-rates API')
-            service.updateBaseRates(freshBaseRates)
+            // Actualizar tasas base Y persistir al historial para que las agencias las vean
+            await service.updateBaseRates(freshBaseRates, true)
             baseRates = freshBaseRates
           } else {
             console.warn('[agency-rates] No rates found in exchange-rates API response')
@@ -200,7 +201,8 @@ export async function PUT(request: NextRequest) {
     }
 
     const service = AgencyRatesService.getInstance()
-    service.updateBaseRates(body.rates)
+    // Actualizar tasas base Y persistir al historial
+    await service.updateBaseRates(body.rates, true)
 
     // Recalcular tasas de agencia con nuevas tasas base
     const agencyRates = service.calculateAgencyRates()

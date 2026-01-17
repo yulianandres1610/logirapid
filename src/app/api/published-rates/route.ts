@@ -49,10 +49,44 @@ export async function GET(request: NextRequest) {
       console.log('[PUBLISHED_RATES] No history found, calculating from AgencyRatesService...')
 
       const service = AgencyRatesService.getInstance()
-      const agencyRates = service.calculateAgencyRates()
+
+      // Esperar a que el servicio esté inicializado
+      await service.ensureBaseRatesLoaded()
+
+      let agencyRates = service.calculateAgencyRates()
+
+      // Si aún no hay tasas, intentar obtener de ElToque directamente
+      if (!agencyRates || Object.keys(agencyRates).length === 0) {
+        console.log('[PUBLISHED_RATES] No rates from service, trying ElToque API...')
+
+        try {
+          const elToqueResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/exchange-rates`, {
+            signal: AbortSignal.timeout(5000)
+          })
+          const elToqueData = await elToqueResponse.json()
+
+          if (elToqueData.success && elToqueData.data) {
+            const freshBaseRates: Record<string, number> = {}
+            Object.entries(elToqueData.data).forEach(([currency, rateData]: [string, any]) => {
+              if (typeof rateData === 'object' && rateData.rate) {
+                freshBaseRates[currency] = rateData.rate
+              }
+            })
+
+            if (Object.keys(freshBaseRates).length > 0) {
+              // Actualizar servicio Y persistir al historial
+              await service.updateBaseRates(freshBaseRates, true)
+              agencyRates = service.calculateAgencyRates()
+              console.log('[PUBLISHED_RATES] Loaded and persisted rates from ElToque')
+            }
+          }
+        } catch (elToqueError) {
+          console.warn('[PUBLISHED_RATES] Failed to fetch from ElToque:', elToqueError)
+        }
+      }
 
       if (!agencyRates || Object.keys(agencyRates).length === 0) {
-        console.log('[PUBLISHED_RATES] No rates available from service')
+        console.log('[PUBLISHED_RATES] No rates available from any source')
         return NextResponse.json({
           success: false,
           message: 'No published rates available',
@@ -72,7 +106,7 @@ export async function GET(request: NextRequest) {
       cachedRates = { rates: formattedRates, lastUpdated, source: 'calculated' }
       cacheTimestamp = now
 
-      console.log(`[PUBLISHED_RATES] Returning ${formattedRates.length} calculated rates (no history) - cached`)
+      console.log(`[PUBLISHED_RATES] Returning ${formattedRates.length} calculated rates - cached`)
 
       return NextResponse.json({
         success: true,
