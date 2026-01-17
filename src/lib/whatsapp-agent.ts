@@ -1913,6 +1913,162 @@ function generateLinkCode(): string {
   return code
 }
 
+// ===== FUNCIONES DE RECARGA =====
+
+/**
+ * Obtiene los productos de recarga disponibles para WhatsApp
+ * Usa el precio de venta configurado en el catálogo de la agencia
+ */
+async function getRechargeProductsForWhatsApp(companyId: number): Promise<{
+  products: Array<{
+    id: number
+    name: string
+    price: number
+    hasPromotion: boolean
+    univcellProductId: number
+  }>
+  message: string
+}> {
+  // Obtener productos con precio configurado para esta empresa
+  const result = await db.query(`
+    SELECT
+      erp.id,
+      erp.name,
+      erp.custom_name,
+      erp.is_promotion,
+      erp.univcell_product_id,
+      -- Priorizar manual_selling_price, luego pricing de la empresa
+      COALESCE(
+        erp.manual_selling_price,
+        rpp.selling_price
+      ) as selling_price,
+      -- Verificar si tiene promociones activas
+      EXISTS (
+        SELECT 1 FROM recharge_promotions rpr
+        WHERE rpr.external_product_id = erp.id
+          AND rpr.is_active = true
+          AND (rpr.valid_to IS NULL OR rpr.valid_to > NOW())
+      ) as has_active_promo
+    FROM external_recharge_products erp
+    -- Join con pricing de la empresa específica
+    LEFT JOIN recharge_product_pricing rpp
+      ON rpp.external_product_id = erp.id
+      AND rpp.company_id = $1
+      AND rpp.is_enabled = true
+    WHERE erp.is_active = true
+      -- Solo mostrar productos que tengan precio configurado
+      AND (erp.manual_selling_price IS NOT NULL OR rpp.selling_price IS NOT NULL)
+    ORDER BY COALESCE(erp.manual_selling_price, rpp.selling_price) ASC
+  `, [companyId])
+
+  if (result.rows.length === 0) {
+    return {
+      products: [],
+      message: 'Lo siento, no hay productos de recarga disponibles en este momento. 😔'
+    }
+  }
+
+  const products = result.rows.map((p: any) => ({
+    id: p.id,
+    name: p.custom_name || p.name,
+    price: parseFloat(p.selling_price),
+    hasPromotion: p.is_promotion || p.has_active_promo,
+    univcellProductId: p.univcell_product_id
+  }))
+
+  const message = `📱 *Recargas disponibles:*\n\n` +
+    products.map((p, i) =>
+      `${i + 1}. ${p.name} - *$${p.price.toFixed(2)}*${p.hasPromotion ? ' 🔥' : ''}`
+    ).join('\n') +
+    `\n\n¿Cuál quieres enviar? Responde con el número.`
+
+  return { products, message }
+}
+
+/**
+ * Valida un número de teléfono cubano para recarga
+ */
+function validateCubanRechargePhone(phone: string): {
+  valid: boolean
+  formattedPhone: string
+  error?: string
+} {
+  const cleaned = phone.replace(/\D/g, '')
+  if (cleaned.length !== 8) {
+    return { valid: false, formattedPhone: '', error: 'El número debe tener 8 dígitos' }
+  }
+  if (!cleaned.startsWith('5')) {
+    return { valid: false, formattedPhone: '', error: 'El número debe empezar con 5' }
+  }
+  return { valid: true, formattedPhone: `+53${cleaned}` }
+}
+
+/**
+ * Crea una orden de recarga en la base de datos
+ */
+async function createRechargeOrder(
+  data: Record<string, unknown>,
+  phoneNumber: string,
+  companyId: number
+): Promise<{
+  success: boolean
+  orderId?: number
+  orderNumber?: string
+  totalAmount?: number
+  error?: string
+}> {
+  try {
+    const { productId, productName, productPrice, destinationPhone, univcellProductId } = data
+    const orderNumber = `REC-${Date.now()}`
+    const localReference = `wa-${orderNumber}`
+
+    // Insertar en recharge_transactions con todos los campos necesarios
+    const result = await db.query(`
+      INSERT INTO recharge_transactions (
+        local_reference,
+        order_number,
+        company_id,
+        product_id,
+        univcell_product_id,
+        destination,
+        amount,
+        status,
+        payment_status,
+        customer_phone,
+        product_name,
+        source,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', 'pending', $8, $9, 'whatsapp', NOW())
+      RETURNING id
+    `, [
+      localReference,
+      orderNumber,
+      companyId,
+      productId,
+      univcellProductId,
+      destinationPhone,
+      productPrice,
+      phoneNumber,
+      productName
+    ])
+
+    console.log('[WhatsApp Agent] Orden de recarga creada:', orderNumber, 'ID:', result.rows[0].id)
+
+    return {
+      success: true,
+      orderId: result.rows[0].id,
+      orderNumber,
+      totalAmount: productPrice as number
+    }
+  } catch (error) {
+    console.error('[WhatsApp Agent] Error creando orden de recarga:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    }
+  }
+}
+
 /**
  * Procesa un mensaje entrante del cliente
  */
@@ -2193,7 +2349,16 @@ export async function handleIncomingMessage(
       } else if (gptResponse.intent === 'remittance_order') {
         newFlow = 'remittance_order'
         console.log('[WhatsApp Agent] Nuevo flujo por intent: remittance_order')
+      } else if (gptResponse.intent === 'recharge_order') {
+        newFlow = 'recharge_order'
+        console.log('[WhatsApp Agent] Nuevo flujo por intent: recharge_order')
       }
+    }
+
+    // Auto-detectar flujo recharge_order si GPT solicita productos de recarga
+    if (gptResponse.getRechargeProducts && newFlow === 'idle') {
+      newFlow = 'recharge_order'
+      console.log('[WhatsApp Agent] Nuevo flujo auto-detectado: recharge_order')
     }
 
     // Auto-detectar flujo pickup_order si hay indicadores
@@ -2217,6 +2382,131 @@ export async function handleIncomingMessage(
     // 8. Manejar busquedas de cliente si GPT lo solicita
     let response = gptResponse.response
     let responseOverridden = false  // Flag para indicar que nuestra respuesta tiene prioridad
+
+    // ===== MANEJO DE FLUJO DE RECARGA =====
+    // Mostrar productos de recarga cuando GPT lo solicita
+    if (gptResponse.getRechargeProducts) {
+      console.log('[WhatsApp Agent] Mostrando productos de recarga')
+      const companyId = await getAgentCompanyId()
+      const { products, message } = await getRechargeProductsForWhatsApp(companyId)
+
+      // Guardar productos en estado de conversación
+      newCollectedData._rechargeProducts = products
+      newCollectedData._flow = 'recharge_order'
+
+      response = message
+      responseOverridden = true
+      newFlow = 'recharge_order'
+    }
+
+    // Seleccionar producto de recarga
+    if (gptResponse.selectRechargeProduct && newCollectedData._rechargeProducts) {
+      console.log('[WhatsApp Agent] Seleccionando producto de recarga:', gptResponse.selectRechargeProduct)
+      const products = newCollectedData._rechargeProducts as any[]
+      const selection = gptResponse.selectRechargeProduct
+
+      // Buscar producto por número o nombre
+      let selectedProduct = null
+      const num = parseInt(selection)
+      if (!isNaN(num) && num > 0 && num <= products.length) {
+        selectedProduct = products[num - 1]
+      } else {
+        selectedProduct = products.find((p: any) =>
+          p.name.toLowerCase().includes(selection.toLowerCase())
+        )
+      }
+
+      if (selectedProduct) {
+        newCollectedData.productId = selectedProduct.id
+        newCollectedData.productName = selectedProduct.name
+        newCollectedData.productPrice = selectedProduct.price
+        newCollectedData.univcellProductId = selectedProduct.univcellProductId
+
+        response = `¡Perfecto! *${selectedProduct.name}* por *$${selectedProduct.price.toFixed(2)}*\n\n` +
+          `📱 Dame el número de teléfono cubano a recargar (8 dígitos, ej: 56886845)`
+        responseOverridden = true
+      } else {
+        response = 'No encontré ese producto. Por favor selecciona un número de la lista.'
+        responseOverridden = true
+      }
+    }
+
+    // Extraer teléfono de destino para recarga
+    if (gptResponse.extractedData?.destinationPhone && newFlow === 'recharge_order') {
+      const phoneResult = validateCubanRechargePhone(String(gptResponse.extractedData.destinationPhone))
+      if (phoneResult.valid) {
+        newCollectedData.destinationPhone = phoneResult.formattedPhone
+        console.log('[WhatsApp Agent] Teléfono de recarga validado:', phoneResult.formattedPhone)
+
+        // Si ya tenemos producto seleccionado, mostrar confirmación
+        if (newCollectedData.productId && newCollectedData.productName && newCollectedData.productPrice) {
+          response = `📱 Recarga de *${newCollectedData.productName}* por *$${(newCollectedData.productPrice as number).toFixed(2)}*\n` +
+            `📞 Al número: *${phoneResult.formattedPhone}*\n\n` +
+            `¿Es correcto? Responde *Sí* para continuar.`
+          responseOverridden = true
+        }
+      } else {
+        response = `⚠️ ${phoneResult.error}. Por favor dame un número de 8 dígitos que empiece con 5.`
+        responseOverridden = true
+      }
+    }
+
+    // Confirmar y crear orden de recarga
+    if (gptResponse.extractedData?.rechargeConfirmed &&
+        newCollectedData.productId &&
+        newCollectedData.destinationPhone) {
+      console.log('[WhatsApp Agent] Creando orden de recarga...')
+      const companyId = await getAgentCompanyId()
+      const orderResult = await createRechargeOrder(newCollectedData, phoneNumber, companyId)
+
+      if (orderResult.success) {
+        // Crear link de pago
+        const paymentLinkUrl = await createPaymentLink(
+          'recharge',
+          orderResult.orderId!,
+          orderResult.orderNumber!,
+          orderResult.totalAmount!,
+          phoneNumber,
+          'Cliente WhatsApp'
+        )
+
+        // Marcar orden como creada
+        newCollectedData._orderCreated = true
+        newCollectedData._orderNumber = orderResult.orderNumber
+        newCollectedData._orderId = orderResult.orderId
+
+        response = `🎉 ¡Listo! Tu recarga de *${newCollectedData.productName}* al *${newCollectedData.destinationPhone}*\n\n` +
+          `💰 Total: *$${orderResult.totalAmount?.toFixed(2)}*\n` +
+          `📦 Orden: *${orderResult.orderNumber}*\n\n` +
+          `💳 Paga aquí: ${paymentLinkUrl}\n\n` +
+          `Te avisaré cuando tu recarga esté completada. ✅`
+        responseOverridden = true
+
+        // Guardar mensaje y actualizar estado
+        updatedHistory.push({ role: 'assistant', content: response })
+        await updateConversationState(
+          conversation.id,
+          'completed',
+          null,
+          newCollectedData,
+          updatedHistory
+        )
+        await saveMessage(conversation.id, 'outbound', response)
+
+        return {
+          message: response,
+          orderCreated: true,
+          orderId: orderResult.orderId,
+          orderNumber: orderResult.orderNumber,
+          paymentLink: paymentLinkUrl
+        }
+      } else {
+        response = '❌ Hubo un error al crear tu orden. Por favor intenta de nuevo.'
+        responseOverridden = true
+      }
+    }
+
+    // ===== FIN MANEJO DE FLUJO DE RECARGA =====
 
     // Buscar remitente por telefono
     if (gptResponse.searchSender) {

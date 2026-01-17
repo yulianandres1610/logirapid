@@ -34,7 +34,21 @@ TONO COMERCIAL - Orientado a cerrar ventas:
 - Resalta beneficios: "Pasamos a recogerlo directo a tu puerta"
 - Genera confianza: "Llevamos años enviando a Cuba, tu paquete está en buenas manos"
 
-SERVICIO UNICO: Recogida de paquetes para enviar a Cuba
+SERVICIOS DISPONIBLES:
+1. Recogida de paquetes para enviar a Cuba
+2. Recargas de teléfono móvil a Cuba
+
+SERVICIO DE RECARGAS MOVILES:
+- Cuando el usuario menciona "recarga", "recargar", "saldo", "recarga cuba", "cubacel", "nauta"
+- LLAMA get_recharge_products para mostrar los productos disponibles
+- Espera que el usuario seleccione un producto (por número o nombre)
+- LLAMA select_recharge_product con la selección del usuario
+- Pide el número de teléfono cubano (8 dígitos, empieza con 5)
+- LLAMA extract_recharge_data con el teléfono
+- Confirma los datos y pide confirmación
+- Cuando confirma, LLAMA extract_recharge_data con confirmOrder: true
+
+SERVICIO DE PAQUETES:
 - Para remesas/dinero: "Para dinero llama al 305-123-4567"
 - NUNCA pidas "amount", "monto" o cantidad de dinero
 
@@ -162,7 +176,7 @@ export interface ConversationMessage {
 
 export interface GPTResponse {
   response: string
-  intent?: 'pickup_order' | 'remittance_order' | 'support' | 'greeting' | 'unknown'
+  intent?: 'pickup_order' | 'remittance_order' | 'recharge_order' | 'support' | 'greeting' | 'unknown'
   extractedData?: Record<string, unknown>
   flowComplete?: boolean
   readyToCreateOrder?: boolean
@@ -174,6 +188,9 @@ export interface GPTResponse {
   selectDate?: string // Expresion de fecha del usuario (hoy, manana, lunes, etc)
   startNewOrder?: boolean // Usuario quiere empezar nueva orden (limpiar datos)
   validateAddress?: string // Direccion a validar con Mapbox
+  // Acciones de recarga
+  getRechargeProducts?: boolean // Solicita mostrar productos de recarga
+  selectRechargeProduct?: string // Seleccion de producto de recarga
 }
 
 // Function definitions para extraer datos estructurados
@@ -323,11 +340,60 @@ const functions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         properties: {
           intent: {
             type: 'string',
-            enum: ['pickup_order', 'support', 'greeting', 'unknown'],
-            description: 'La intencion detectada del usuario'
+            enum: ['pickup_order', 'recharge_order', 'support', 'greeting', 'unknown'],
+            description: 'La intencion detectada del usuario: pickup_order (paquetes), recharge_order (recargas), support (ayuda), greeting (saludo)'
           }
         },
         required: ['intent']
+      }
+    }
+  },
+  // ===== FUNCIONES DE RECARGA =====
+  {
+    type: 'function',
+    function: {
+      name: 'get_recharge_products',
+      description: 'LLAMAR cuando el usuario quiere enviar una recarga a Cuba. Muestra los productos de recarga disponibles con precios.',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'select_recharge_product',
+      description: 'LLAMAR cuando el usuario selecciona un producto de recarga por numero o nombre.',
+      parameters: {
+        type: 'object',
+        properties: {
+          productSelection: {
+            type: 'string',
+            description: 'Lo que dijo el usuario para seleccionar: numero (ej: "1", "3") o nombre (ej: "ilimitada", "cubacel 20")'
+          }
+        },
+        required: ['productSelection']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'extract_recharge_data',
+      description: 'Extraer datos de la orden de recarga: telefono cubano a recargar o confirmacion de orden.',
+      parameters: {
+        type: 'object',
+        properties: {
+          destinationPhone: {
+            type: 'string',
+            description: 'Numero de telefono cubano a recargar (8 digitos, empieza con 5)'
+          },
+          confirmOrder: {
+            type: 'boolean',
+            description: 'true cuando el usuario CONFIRMA que quiere proceder con la recarga (dice "si", "correcto", "dale", etc)'
+          }
+        }
       }
     }
   }
@@ -445,6 +511,9 @@ ${collectedData.recipientMunicipality && !collectedData.recipientStreet ? '⚠�
     let selectDate: string | undefined
     let startNewOrder = false
     let validateAddress: string | undefined
+    // Variables para recargas
+    let getRechargeProducts = false
+    let selectRechargeProduct: string | undefined
 
     // Procesar tool calls si existen
     if (message.tool_calls && message.tool_calls.length > 0) {
@@ -510,6 +579,23 @@ ${collectedData.recipientMunicipality && !collectedData.recipientStreet ? '⚠�
             readyToCreateOrder = true
           }
         }
+        // ===== FUNCIONES DE RECARGA =====
+        else if (functionName === 'get_recharge_products') {
+          getRechargeProducts = true
+          console.log('[OpenAI] GPT solicita mostrar productos de recarga')
+        } else if (functionName === 'select_recharge_product') {
+          selectRechargeProduct = args.productSelection
+          console.log('[OpenAI] GPT solicita seleccionar producto de recarga:', args.productSelection)
+        } else if (functionName === 'extract_recharge_data') {
+          if (args.destinationPhone) {
+            extractedData.destinationPhone = args.destinationPhone
+            console.log('[OpenAI] Telefono de recarga extraido:', args.destinationPhone)
+          }
+          if (args.confirmOrder === true) {
+            extractedData.rechargeConfirmed = true
+            console.log('[OpenAI] Usuario confirmo orden de recarga')
+          }
+        }
       }
 
       // Si hubo tool calls pero no hay respuesta, generar una
@@ -551,7 +637,10 @@ ${collectedData.recipientMunicipality && !collectedData.recipientStreet ? '⚠�
       getAvailableDates,
       selectDate,
       startNewOrder,
-      validateAddress
+      validateAddress,
+      // Campos de recarga
+      getRechargeProducts,
+      selectRechargeProduct
     }
   } catch (error) {
     console.error('[OpenAI] Error processing message:', error)

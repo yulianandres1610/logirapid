@@ -86,6 +86,18 @@ export async function GET(
       if (orderResult.rows.length > 0) {
         orderDetails = orderResult.rows[0]
       }
+    } else if (paymentLink.order_type === 'recharge') {
+      const orderResult = await db.query(`
+        SELECT
+          id, order_number, destination, amount, product_name,
+          status, payment_status
+        FROM recharge_transactions
+        WHERE id = $1
+      `, [paymentLink.order_id])
+
+      if (orderResult.rows.length > 0) {
+        orderDetails = orderResult.rows[0]
+      }
     }
 
     return NextResponse.json({
@@ -186,6 +198,28 @@ export async function POST(
           updatedat = NOW()
         WHERE id = $1
       `, [paymentLink.order_id])
+    } else if (paymentLink.order_type === 'recharge') {
+      // Actualizar estado de la transacción de recarga
+      await db.query(`
+        UPDATE recharge_transactions
+        SET
+          payment_status = 'paid',
+          status = 'processing',
+          updated_at = NOW()
+        WHERE id = $1
+      `, [paymentLink.order_id])
+
+      // Ejecutar recarga con Univcell en background
+      try {
+        console.log('[Payment Link API] Ejecutando recarga para orden:', paymentLink.order_id)
+        const { executeRechargeFromPayment } = await import('@/lib/univcell-client')
+        // Ejecutar en background para no bloquear la respuesta
+        executeRechargeFromPayment(paymentLink.order_id).catch((err: Error) => {
+          console.error('[Payment Link API] Error ejecutando recarga:', err)
+        })
+      } catch (importError) {
+        console.error('[Payment Link API] Error importando univcell-client:', importError)
+      }
     }
 
     return NextResponse.json({

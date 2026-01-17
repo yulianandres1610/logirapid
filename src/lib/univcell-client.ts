@@ -413,4 +413,102 @@ export function getUnivCellClient(config?: Partial<UnivCellConfig>): UnivCellCli
   return univcellClientInstance
 }
 
+/**
+ * Ejecuta una recarga desde un pago completado
+ * Se llama cuando el cliente completa el pago de un link de recarga
+ */
+export async function executeRechargeFromPayment(transactionId: number): Promise<void> {
+  const { db } = await import('@/lib/database')
+
+  console.log('[UnivCell] Ejecutando recarga para transacción:', transactionId)
+
+  // Obtener datos de la transacción
+  const txResult = await db.query(`
+    SELECT
+      rt.*,
+      erp.univcell_product_id,
+      erp.provider_amount
+    FROM recharge_transactions rt
+    LEFT JOIN external_recharge_products erp ON erp.id = rt.product_id
+    WHERE rt.id = $1
+  `, [transactionId])
+
+  const tx = txResult.rows[0]
+  if (!tx) {
+    throw new Error(`Transaction ${transactionId} not found`)
+  }
+
+  console.log('[UnivCell] Transacción encontrada:', {
+    id: tx.id,
+    destination: tx.destination,
+    amount: tx.amount,
+    univcellProductId: tx.univcell_product_id || tx.univcell_product_id
+  })
+
+  // Obtener el product_id de Univcell
+  const univcellProductId = tx.univcell_product_id || tx.univcell_product_id
+  if (!univcellProductId) {
+    throw new Error(`No univcell_product_id found for transaction ${transactionId}`)
+  }
+
+  // Ejecutar recarga con Univcell
+  const client = getUnivCellClient()
+
+  // Formatear teléfono: quitar el +53 si existe
+  const destination = tx.destination.replace(/^\+53/, '')
+
+  // El monto en centavos (UnivCell espera centavos)
+  const amountInCents = Math.round(parseFloat(tx.amount) * 100)
+
+  try {
+    const result = await client.executeTopUp({
+      product_id: univcellProductId,
+      destination: destination,
+      amount: amountInCents,
+      local_reference: tx.local_reference,
+      realtime: true
+    })
+
+    console.log('[UnivCell] Resultado de recarga:', result)
+
+    // Actualizar transacción con resultado
+    await db.query(`
+      UPDATE recharge_transactions
+      SET
+        univcell_order_id = $1,
+        status = $2,
+        result_message = $3,
+        confirmation_code = $4,
+        updated_at = NOW()
+      WHERE id = $5
+    `, [
+      result.data?.id || null,
+      result.data?.status === 'ok' ? 'completed' : (result.data?.status === 'pending' ? 'pending' : 'processing'),
+      result.data?.resultMessage || null,
+      result.data?.confirmationCode || null,
+      transactionId
+    ])
+
+    console.log('[UnivCell] Transacción actualizada con resultado')
+
+  } catch (error) {
+    console.error('[UnivCell] Error ejecutando recarga:', error)
+
+    // Actualizar transacción con error
+    await db.query(`
+      UPDATE recharge_transactions
+      SET
+        status = 'failed',
+        result_message = $1,
+        updated_at = NOW()
+      WHERE id = $2
+    `, [
+      error instanceof Error ? error.message : 'Error desconocido',
+      transactionId
+    ])
+
+    throw error
+  }
+}
+
 export { UnivCellClient }

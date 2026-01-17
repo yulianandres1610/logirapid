@@ -101,8 +101,8 @@ export async function POST(request: NextRequest) {
 
     const transaction = result.rows[0]
 
-    // Only update if transaction is still pending
-    if (transaction.status === 'pending') {
+    // Only update if transaction is still pending or processing
+    if (transaction.status === 'pending' || transaction.status === 'processing') {
       const newStatus = status === 'ok' ? 'completed' : 'failed'
 
       await db.query(`
@@ -130,6 +130,45 @@ export async function POST(request: NextRequest) {
         newStatus,
         confirmationCode
       })
+
+      // Enviar notificación por WhatsApp si la transacción fue completada o fallida
+      try {
+        // Obtener datos de la transacción para la notificación
+        const txDetails = await db.query(`
+          SELECT customer_phone, destination, amount, order_number, product_name
+          FROM recharge_transactions WHERE id = $1
+        `, [transaction.id])
+
+        const tx = txDetails.rows[0]
+        if (tx?.customer_phone) {
+          // Importar la función de envío de WhatsApp
+          const { sendWhatsApp } = await import('@/lib/sms-service')
+
+          let message: string
+          if (newStatus === 'completed') {
+            message = `✅ ¡Tu recarga fue completada!\n\n` +
+              `📱 Producto: ${tx.product_name || 'Recarga'}\n` +
+              `📞 Número: ${tx.destination}\n` +
+              `💰 Monto: $${parseFloat(tx.amount).toFixed(2)}\n` +
+              `📦 Orden: ${tx.order_number}\n` +
+              `🔑 Código: ${confirmationCode || 'N/A'}\n\n` +
+              `¡Gracias por usar LogiRapid! 🎉`
+          } else {
+            message = `❌ Tu recarga no pudo ser procesada.\n\n` +
+              `📱 Producto: ${tx.product_name || 'Recarga'}\n` +
+              `📞 Número: ${tx.destination}\n` +
+              `📦 Orden: ${tx.order_number}\n\n` +
+              `Motivo: ${resultMessage || 'Error desconocido'}\n\n` +
+              `Por favor contacta a soporte si necesitas ayuda.`
+          }
+
+          await sendWhatsApp(tx.customer_phone, message)
+          console.log('[Webhook] WhatsApp notification sent to:', tx.customer_phone)
+        }
+      } catch (notifyError) {
+        console.error('[Webhook] Error sending WhatsApp notification:', notifyError)
+        // No fallamos el webhook por error de notificación
+      }
     } else {
       console.log('[Webhook] Transaction already processed:', {
         id: transaction.id,
