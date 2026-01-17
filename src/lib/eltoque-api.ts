@@ -153,6 +153,12 @@ class ElToqueAPI {
 
     // Verificar diferentes formatos de respuesta posibles
     if (apiResponse && typeof apiResponse === 'object') {
+      // Formato ElToque nuevo: { monedas: [...], fecha_actualizacion: "..." }
+      if (Array.isArray(apiResponse.monedas) && apiResponse.monedas.length > 0) {
+        console.log('📋 Processing ElToque format: monedas array')
+        return this.processRatesArray(apiResponse.monedas, apiResponse.fecha_actualizacion)
+      }
+
       // Formato 1: { exito: true, datos: [...] }
       if (apiResponse.exito && Array.isArray(apiResponse.datos)) {
         console.log('📋 Processing Spanish format: exito/datos')
@@ -231,8 +237,10 @@ class ElToqueAPI {
 
   /**
    * Procesar array de tasas de cambio
+   * @param datos Array de tasas
+   * @param globalTimestamp Timestamp global opcional (para formato ElToque)
    */
-  private static processRatesArray(datos: any[]): AllExchangeRates {
+  private static processRatesArray(datos: any[], globalTimestamp?: string): AllExchangeRates {
     const ratesObject: AllExchangeRates = {} as AllExchangeRates
 
     datos.forEach((rateData: any, index) => {
@@ -240,21 +248,32 @@ class ElToqueAPI {
       const currency = rateData.moneda || rateData.currency || rateData.code || rateData.sigla ||
                       rateData.coin || rateData.short_name || rateData.symbol || rateData.name
 
-      // Campos posibles para la tasa (prioridad)
-      const rate = rateData.tasa || rateData.rate || rateData.value || rateData.price ||
+      // Campos posibles para la tasa (prioridad) - incluyendo precio_cup del nuevo ElToque
+      const rate = rateData.precio_cup || rateData.tasa || rateData.rate || rateData.value || rateData.price ||
                   rateData.buy || rateData.sell || rateData.compra || rateData.venta ||
                   rateData.amount || rateData.cantidad || rateData.quantity
 
       if (currency && typeof rate === 'number' && rate > 0) {
         console.log(`💱 Processing ${currency}: ${rate} (index: ${index})`)
+
+        // Manejar variación - puede venir como string "+5" o número
+        let variacion = 0
+        if (rateData.cambio) {
+          // Formato ElToque: "+5" o "-3"
+          variacion = parseFloat(rateData.cambio) || 0
+        } else if (rateData.variacion !== undefined) {
+          variacion = typeof rateData.variacion === 'number' ? rateData.variacion : parseFloat(rateData.variacion) || 0
+        } else if (rateData.change !== undefined) {
+          variacion = typeof rateData.change === 'number' ? rateData.change : parseFloat(rateData.change) || 0
+        }
+
         ratesObject[currency as keyof AllExchangeRates] = {
           moneda: currency,
           tasa: rate,
-          fechaActualizacion: rateData.fechaActualizacion || rateData.updatedAt || rateData.timestamp ||
+          fechaActualizacion: globalTimestamp || rateData.fechaActualizacion || rateData.updatedAt || rateData.timestamp ||
                           rateData.date || rateData.last_update || rateData.lastUpdate ||
                           rateData.fecha || new Date().toISOString(),
-          variacion: rateData.variacion || rateData.change || rateData.variation ||
-                    rateData.diferencia || rateData.difference || 0
+          variacion: variacion
         }
       } else {
         console.warn(`⚠️ Skipping invalid rate data:`, { currency, rate, rateData })
