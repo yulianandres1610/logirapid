@@ -26,9 +26,11 @@ const CACHE_TTL = 60000 // 60 segundos
 export async function GET(request: NextRequest) {
   try {
     const now = Date.now()
+    const { searchParams } = new URL(request.url)
+    const forceRefresh = searchParams.get('refresh') === 'true'
 
-    // Si hay caché válido, retornar inmediatamente
-    if (cachedRates && (now - cacheTimestamp) < CACHE_TTL) {
+    // Si hay caché válido Y no se fuerza refresh, retornar inmediatamente
+    if (!forceRefresh && cachedRates && (now - cacheTimestamp) < CACHE_TTL) {
       console.log('[PUBLISHED_RATES] Returning cached rates (TTL remaining: ' + Math.round((CACHE_TTL - (now - cacheTimestamp)) / 1000) + 's)')
       return NextResponse.json({
         success: true,
@@ -39,7 +41,11 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    console.log('[PUBLISHED_RATES] Cache miss, fetching fresh rates...')
+    if (forceRefresh) {
+      console.log('[PUBLISHED_RATES] Force refresh requested, bypassing cache...')
+    } else {
+      console.log('[PUBLISHED_RATES] Cache miss, fetching fresh rates...')
+    }
 
     // Intentar obtener tasas publicadas desde historial
     let rates = await getPublishedRates()
