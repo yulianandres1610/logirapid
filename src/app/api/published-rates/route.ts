@@ -1,28 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { AgencyRatesService } from '@/lib/agency-rates.service'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-// Caché en memoria para mejorar rendimiento
+// Caché en memoria simple
 interface CachedData {
   rates: any[]
   lastUpdated: string
-  source: string
+  baseRates: Record<string, number>
 }
 let cachedRates: CachedData | null = null
 let cacheTimestamp = 0
-const CACHE_TTL = 30000 // 30 segundos (reducido para reflejar cambios más rápido)
+const CACHE_TTL = 30000 // 30 segundos
 
 /**
  * Endpoint para que las AGENCIAS consulten las tasas publicadas
  *
- * IMPORTANTE: Este endpoint SIEMPRE intenta obtener tasas frescas de ElToque
- * - Tasas base de ElToque (actualizadas en cada request o desde caché)
- * - Porcentaje de ajuste configurado globalmente en /dashboard/admin/exchange-rate?tab=agency
- *
- * Fórmula: tasaAgencia = tasaBase * (1 + ajuste% / 100)
+ * SIMPLIFICADO: Obtiene tasas directamente de ElToque y aplica ajuste
+ * No depende de la tabla agency_rates_history para evitar problemas de sincronización
  */
 export async function GET(request: NextRequest) {
   try {
@@ -32,105 +28,94 @@ export async function GET(request: NextRequest) {
 
     // Si hay caché válido Y no se fuerza refresh, retornar inmediatamente
     if (!forceRefresh && cachedRates && (now - cacheTimestamp) < CACHE_TTL) {
-      console.log('[PUBLISHED_RATES] Returning cached rates (TTL remaining: ' + Math.round((CACHE_TTL - (now - cacheTimestamp)) / 1000) + 's)')
+      console.log('[PUBLISHED_RATES] Returning cached rates')
       return NextResponse.json({
         success: true,
         rates: cachedRates.rates,
         lastUpdated: cachedRates.lastUpdated,
-        source: cachedRates.source,
+        source: 'cache',
         cached: true
       })
     }
 
-    if (forceRefresh) {
-      console.log('[PUBLISHED_RATES] Force refresh requested, calculating fresh rates...')
-      // Limpiar caché al forzar refresh
-      cachedRates = null
-      cacheTimestamp = 0
-    } else {
-      console.log('[PUBLISHED_RATES] Cache miss, calculating rates...')
-    }
+    console.log('[PUBLISHED_RATES] Fetching fresh rates from ElToque...')
 
-    const service = AgencyRatesService.getInstance()
-
-    // Esperar a que el servicio esté inicializado
-    await service.ensureBaseRatesLoaded()
-
-    // SIEMPRE intentar obtener tasas frescas de ElToque primero
-    // Esto asegura que las agencias siempre vean tasas actualizadas
-    console.log('[PUBLISHED_RATES] Fetching fresh rates from ElToque API...')
+    // 1. Obtener tasas frescas de ElToque
+    let baseRates: Record<string, number> = {}
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://agencias.logirapid.com'
       const elToqueResponse = await fetch(`${baseUrl}/api/exchange-rates?forceRefresh=true`, {
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(10000),
         cache: 'no-store'
       })
       const elToqueData = await elToqueResponse.json()
 
       if (elToqueData.success && elToqueData.data) {
-        const freshBaseRates: Record<string, number> = {}
         Object.entries(elToqueData.data).forEach(([currency, rateData]: [string, any]) => {
           if (typeof rateData === 'object' && rateData.rate) {
-            freshBaseRates[currency] = rateData.rate
+            baseRates[currency] = rateData.rate
           }
         })
-
-        if (Object.keys(freshBaseRates).length > 0) {
-          console.log('[PUBLISHED_RATES] Loaded', Object.keys(freshBaseRates).length, 'fresh rates from ElToque:',
-            Object.entries(freshBaseRates).slice(0, 3).map(([k, v]) => `${k}=${v}`).join(', '))
-          // Actualizar servicio con las nuevas tasas base y persistir
-          await service.updateBaseRates(freshBaseRates, true)
-        }
+        console.log('[PUBLISHED_RATES] Got', Object.keys(baseRates).length, 'rates from ElToque:',
+          `USD=${baseRates['USD']}, EUR=${baseRates['EUR']}`)
       }
     } catch (elToqueError) {
-      console.warn('[PUBLISHED_RATES] Failed to fetch from ElToque, using cached rates:', elToqueError)
+      console.error('[PUBLISHED_RATES] ElToque fetch failed:', elToqueError)
+      // Usar caché anterior si existe
+      if (cachedRates?.baseRates) {
+        baseRates = cachedRates.baseRates
+        console.log('[PUBLISHED_RATES] Using previous cached rates as fallback')
+      }
     }
 
-    // Calcular tasas de agencia (con tasas frescas o las cacheadas)
-    let agencyRates = service.calculateAgencyRates()
-
-    // Si aún no hay tasas, cargar desde historial como fallback
-    if (!agencyRates || Object.keys(agencyRates).length === 0) {
-      console.log('[PUBLISHED_RATES] No rates calculated, loading from history...')
-      await service.ensureBaseRatesLoaded()
-      agencyRates = service.calculateAgencyRates()
-    }
-
-    // Si aún no hay tasas, retornar error
-    if (!agencyRates || Object.keys(agencyRates).length === 0) {
-      console.log('[PUBLISHED_RATES] No rates available')
+    if (Object.keys(baseRates).length === 0) {
       return NextResponse.json({
         success: false,
-        message: 'No hay tasas disponibles. El administrador debe configurar las tasas.',
+        message: 'No hay tasas disponibles',
         rates: []
       }, { status: 200 })
     }
 
-    // Obtener configuración para logging
-    const config = service.getConfig()
-    console.log(`[PUBLISHED_RATES] Calculating rates with ${config?.adjustmentPercentage || 0}% adjustment`)
+    // 2. Obtener configuración de ajuste desde la base de datos
+    let adjustmentPercentage = 0
+    try {
+      const { getAgencyConfig } = await import('@/lib/database')
+      const config = await getAgencyConfig()
+      if (config && config.isActive) {
+        adjustmentPercentage = config.adjustmentPercentage || 0
+      }
+    } catch (configError) {
+      console.warn('[PUBLISHED_RATES] Could not load config, using 0% adjustment')
+    }
 
-    // Formatear tasas calculadas
+    // 3. Calcular tasas con ajuste
     const lastUpdated = new Date().toISOString()
-    const formattedRates = Object.entries(agencyRates).map(([currency, rateData]) => ({
-      currency,
-      rate: rateData.agencyRate,
-      lastUpdated
-    }))
+    const formattedRates = Object.entries(baseRates).map(([currency, baseRate]) => {
+      const agencyRate = baseRate * (1 + adjustmentPercentage / 100)
+      return {
+        currency,
+        rate: Math.round(agencyRate * 100) / 100,
+        lastUpdated
+      }
+    })
 
-    // Guardar en caché
-    cachedRates = { rates: formattedRates, lastUpdated, source: 'calculated' }
+    // 4. Guardar en caché
+    cachedRates = {
+      rates: formattedRates,
+      lastUpdated,
+      baseRates
+    }
     cacheTimestamp = now
 
-    console.log(`[PUBLISHED_RATES] Returning ${formattedRates.length} calculated rates (adjustment: ${config?.adjustmentPercentage || 0}%)`)
+    console.log(`[PUBLISHED_RATES] Returning ${formattedRates.length} rates (${adjustmentPercentage}% adjustment)`)
 
     return NextResponse.json({
       success: true,
       rates: formattedRates,
       lastUpdated,
-      source: 'calculated',
-      adjustmentPercentage: config?.adjustmentPercentage
+      source: 'eltoque',
+      adjustmentPercentage
     })
 
   } catch (error) {
