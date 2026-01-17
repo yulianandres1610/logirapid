@@ -208,7 +208,10 @@ export class OpenAIRealtimeClient extends EventEmitter {
         return
       }
 
+      // Modelo GA de realtime (soporta WebRTC, WebSocket y SIP)
       const url = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17'
+      // Nota: Para usar gpt-realtime-2025-08-28 se requiere integracion SIP con Twilio
+      // ya que Vercel no soporta WebSockets persistentes en funciones serverless
 
       this.ws = new WebSocket(url, {
         headers: {
@@ -222,12 +225,12 @@ export class OpenAIRealtimeClient extends EventEmitter {
         this.isConnected = true
         this.reconnectAttempts = 0
 
-        // Configure session
+        // Configure session with natural voice settings
         this.sendEvent({
           type: 'session.update',
           session: {
             modalities: ['text', 'audio'],
-            voice: 'shimmer', // Options: alloy, echo, fable, onyx, nova, shimmer
+            voice: 'coral', // coral es mas calida y natural para espanol
             instructions: VOICE_SYSTEM_PROMPT,
             input_audio_format: 'pcm16',
             output_audio_format: 'pcm16',
@@ -236,12 +239,14 @@ export class OpenAIRealtimeClient extends EventEmitter {
             },
             turn_detection: {
               type: 'server_vad',
-              threshold: 0.5,
-              prefix_padding_ms: 300,
-              silence_duration_ms: 500
+              threshold: 0.6, // Mas alto para evitar interrupciones accidentales
+              prefix_padding_ms: 400, // Mas tiempo antes de hablar
+              silence_duration_ms: 800 // Mas tiempo de silencio antes de responder
             },
             tools: VOICE_TOOLS,
-            tool_choice: 'auto'
+            tool_choice: 'auto',
+            temperature: 0.8, // Un poco mas creativo para conversacion natural
+            max_response_output_tokens: 300 // Respuestas concisas
           }
         })
 
