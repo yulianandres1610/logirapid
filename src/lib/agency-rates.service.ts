@@ -167,10 +167,24 @@ export class AgencyRatesService {
    * @param persistToHistory Si es true, guarda las tasas calculadas en el historial
    */
   public async updateBaseRates(rates: Record<string, number>, persistToHistory: boolean = false): Promise<void> {
-    this.baseRates = { ...rates }
+    // Asegurar que tenemos las tasas y config cargadas antes de actualizar
+    await this.waitForInitialization()
 
-    if (persistToHistory && this.config) {
-      await this.saveCurrentRatesToHistory()
+    this.baseRates = { ...rates }
+    console.log('[AgencyRatesService] Base rates updated:', Object.keys(rates).join(', '))
+
+    if (persistToHistory) {
+      // Si no hay config, cargarla primero
+      if (!this.config) {
+        await this.loadConfigFromDB()
+      }
+
+      if (this.config) {
+        await this.saveCurrentRatesToHistory()
+        console.log('[AgencyRatesService] Rates persisted to history')
+      } else {
+        console.warn('[AgencyRatesService] Cannot persist: config not loaded')
+      }
     }
   }
 

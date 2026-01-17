@@ -201,6 +201,10 @@ export async function PUT(request: NextRequest) {
     }
 
     const service = AgencyRatesService.getInstance()
+
+    // IMPORTANTE: Asegurar que el servicio esté inicializado (config cargado)
+    await service.ensureBaseRatesLoaded()
+
     // Actualizar tasas base Y persistir al historial
     await service.updateBaseRates(body.rates, true)
 
