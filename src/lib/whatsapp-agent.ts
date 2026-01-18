@@ -1903,7 +1903,7 @@ async function createPaymentLink(
     expiresAt
   ])
 
-  const baseUrl = process.env.NEXT_PUBLIC_PAY_URL || 'https://pagos.logirapid.com'
+  const baseUrl = process.env.NEXT_PUBLIC_PAY_URL || 'https://agencias.logirapid.com/pay'
   return `${baseUrl}/${linkCode}`
 }
 
@@ -2159,6 +2159,96 @@ async function createRechargeOrder(
       success: false,
       error: error instanceof Error ? error.message : 'Error desconocido'
     }
+  }
+}
+
+/**
+ * Verifica si el cliente tiene una orden de recarga pendiente de pago
+ */
+async function getPendingRechargeOrder(customerPhone: string): Promise<{
+  hasPending: boolean
+  order?: {
+    id: number
+    orderNumber: string
+    productName: string
+    destination: string
+    amount: number
+    customerName: string
+    paymentLinkCode: string
+    createdAt: string
+  }
+}> {
+  try {
+    const cleanPhone = customerPhone.replace('whatsapp:', '')
+
+    // Buscar orden pendiente de pago creada en las últimas 24 horas
+    const result = await db.query(`
+      SELECT
+        rt.id,
+        rt.order_number,
+        rt.product_name,
+        rt.destination,
+        rt.amount,
+        rt.customer_name,
+        rt.created_at,
+        pl.link_code
+      FROM recharge_transactions rt
+      LEFT JOIN payment_links pl ON pl.order_type = 'recharge' AND pl.order_id = rt.id AND pl.status = 'pending'
+      WHERE rt.customer_phone = $1
+        AND rt.status = 'pending'
+        AND rt.payment_status = 'pending'
+        AND rt.source = 'whatsapp'
+        AND rt.created_at > NOW() - INTERVAL '24 hours'
+      ORDER BY rt.created_at DESC
+      LIMIT 1
+    `, [cleanPhone])
+
+    if (result.rows.length === 0) {
+      return { hasPending: false }
+    }
+
+    const row = result.rows[0]
+    return {
+      hasPending: true,
+      order: {
+        id: row.id,
+        orderNumber: row.order_number,
+        productName: row.product_name,
+        destination: row.destination,
+        amount: parseFloat(row.amount),
+        customerName: row.customer_name || 'Cliente',
+        paymentLinkCode: row.link_code,
+        createdAt: row.created_at
+      }
+    }
+  } catch (error) {
+    console.error('[WhatsApp Agent] Error verificando orden pendiente:', error)
+    return { hasPending: false }
+  }
+}
+
+/**
+ * Cancela una orden de recarga pendiente de pago
+ */
+async function cancelPendingRechargeOrder(orderId: number): Promise<boolean> {
+  try {
+    await db.query(`
+      UPDATE recharge_transactions
+      SET status = 'cancelled', payment_status = 'cancelled', updated_at = NOW()
+      WHERE id = $1 AND status = 'pending' AND payment_status = 'pending'
+    `, [orderId])
+
+    await db.query(`
+      UPDATE payment_links
+      SET status = 'cancelled', updated_at = NOW()
+      WHERE order_type = 'recharge' AND order_id = $1 AND status = 'pending'
+    `, [orderId])
+
+    console.log('[WhatsApp Agent] Orden de recarga cancelada:', orderId)
+    return true
+  } catch (error) {
+    console.error('[WhatsApp Agent] Error cancelando orden:', error)
+    return false
   }
 }
 
@@ -2477,19 +2567,78 @@ export async function handleIncomingMessage(
     let responseOverridden = false  // Flag para indicar que nuestra respuesta tiene prioridad
 
     // ===== MANEJO DE FLUJO DE RECARGA =====
+
+    // Manejar cancelación de orden pendiente
+    if (newCollectedData._pendingRechargeOrder && !responseOverridden) {
+      const msgLower = messageBody.toLowerCase().trim()
+      const wantsCancel = msgLower.includes('cancelar') || msgLower.includes('eliminar') || msgLower.includes('borrar') || msgLower === 'no' || msgLower === '2'
+      const wantsContinue = msgLower.includes('pagar') || msgLower.includes('continuar') || msgLower.includes('link') || msgLower === 'si' || msgLower === 'sí' || msgLower === '1'
+
+      if (wantsCancel) {
+        const pendingOrder = newCollectedData._pendingRechargeOrder as { id: number; orderNumber: string }
+        const cancelled = await cancelPendingRechargeOrder(pendingOrder.id)
+        delete newCollectedData._pendingRechargeOrder
+
+        if (cancelled) {
+          response = `✅ Orden *${pendingOrder.orderNumber}* cancelada.\n\n¿Deseas crear una nueva recarga?`
+        } else {
+          response = '❌ No se pudo cancelar la orden. Por favor intenta de nuevo.'
+        }
+        responseOverridden = true
+      } else if (wantsContinue) {
+        const pendingOrder = newCollectedData._pendingRechargeOrder as { paymentLinkCode: string; orderNumber: string; amount: number }
+        const baseUrl = process.env.NEXT_PUBLIC_PAY_URL || 'https://agencias.logirapid.com/pay'
+        delete newCollectedData._pendingRechargeOrder
+
+        response = `💳 *Continúa con tu pago:*\n${baseUrl}/${pendingOrder.paymentLinkCode}\n\n` +
+          `📦 Orden: *${pendingOrder.orderNumber}*\n` +
+          `💰 Total: *$${pendingOrder.amount.toFixed(2)}*\n\n` +
+          `✅ Una vez completes el pago, recibirás tu recarga automáticamente.`
+        responseOverridden = true
+      }
+    }
+
     // Mostrar productos de recarga cuando GPT lo solicita
-    if (gptResponse.getRechargeProducts) {
-      console.log('[WhatsApp Agent] Mostrando productos de recarga')
-      const companyId = await getAgentCompanyId()
-      const { products, message } = await getRechargeProductsForWhatsApp(companyId)
+    if (gptResponse.getRechargeProducts && !responseOverridden) {
+      console.log('[WhatsApp Agent] Verificando órdenes pendientes de pago...')
 
-      // Guardar productos en estado de conversación
-      newCollectedData._rechargeProducts = products
-      newCollectedData._flow = 'recharge_order'
+      // Primero verificar si tiene una orden pendiente de pago
+      const pendingCheck = await getPendingRechargeOrder(phoneNumber)
 
-      response = message
-      responseOverridden = true
-      newFlow = 'recharge_order'
+      if (pendingCheck.hasPending && pendingCheck.order) {
+        console.log('[WhatsApp Agent] Cliente tiene orden pendiente:', pendingCheck.order.orderNumber)
+        const order = pendingCheck.order
+        const baseUrl = process.env.NEXT_PUBLIC_PAY_URL || 'https://agencias.logirapid.com/pay'
+
+        // Guardar orden pendiente para manejar respuesta
+        newCollectedData._pendingRechargeOrder = order
+
+        response = `📱 *Tienes una recarga pendiente de pago:*\n\n` +
+          `🎁 Producto: *${order.productName}*\n` +
+          `📞 Destino: *${order.destination}*\n` +
+          `💰 Total: *$${order.amount.toFixed(2)}*\n` +
+          `📦 Orden: *${order.orderNumber}*\n\n` +
+          `💳 Link de pago:\n${baseUrl}/${order.paymentLinkCode}\n\n` +
+          `¿Qué deseas hacer?\n` +
+          `1️⃣ *Pagar* - Continuar con esta orden\n` +
+          `2️⃣ *Cancelar* - Eliminar y crear nueva`
+
+        responseOverridden = true
+        newFlow = 'recharge_order'
+      } else {
+        // No tiene orden pendiente, mostrar productos
+        console.log('[WhatsApp Agent] Mostrando productos de recarga')
+        const companyId = await getAgentCompanyId()
+        const { products, message } = await getRechargeProductsForWhatsApp(companyId)
+
+        // Guardar productos en estado de conversación
+        newCollectedData._rechargeProducts = products
+        newCollectedData._flow = 'recharge_order'
+
+        response = message
+        responseOverridden = true
+        newFlow = 'recharge_order'
+      }
     }
 
     // Seleccionar producto de recarga - detectar selección del mensaje del usuario

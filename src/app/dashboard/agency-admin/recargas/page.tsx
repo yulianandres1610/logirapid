@@ -28,7 +28,8 @@ import {
   XCircle,
   ChevronLeft,
   ChevronRight,
-  Eye
+  Eye,
+  Trash2
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -205,6 +206,30 @@ export default function AgencyRecargasPage() {
       console.error('Error fetching transactions:', error)
     } finally {
       setLoadingTransactions(false)
+    }
+  }
+
+  // Cancel a pending recharge order
+  const cancelRecharge = async (id: number) => {
+    if (!confirm('¿Estás seguro de cancelar esta orden de recarga?')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/admin/recargas/${id}/cancel`, {
+        method: 'POST'
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        showNotification('success', 'Cancelada', 'Orden cancelada exitosamente')
+        fetchTransactions() // Refresh the list
+      } else {
+        showNotification('error', 'Error', data.error || 'No se pudo cancelar la orden')
+      }
+    } catch (error) {
+      console.error('Error cancelling recharge:', error)
+      showNotification('error', 'Error', 'Error al cancelar la orden')
     }
   }
 
@@ -1355,6 +1380,23 @@ Gracias por su compra!
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
+                              {transaction.status === 'pending' && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    cancelRecharge(transaction.id)
+                                  }}
+                                  className={cn(
+                                    "p-2 rounded-lg transition-colors",
+                                    theme === 'dark'
+                                      ? 'hover:bg-red-900/50 text-gray-400 hover:text-red-400'
+                                      : 'hover:bg-red-100 text-gray-500 hover:text-red-600'
+                                  )}
+                                  title="Cancelar orden"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
                             </td>
                           </motion.tr>
                         )
