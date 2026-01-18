@@ -123,7 +123,6 @@ export async function GET(
         pl.customer_name as pl_customer_name,
         pl.customer_email as pl_customer_email,
         pl.stripe_payment_intent_id,
-        pl.stripe_checkout_session_id,
         pl.paid_at,
         pl.expires_at,
         pl.created_at as payment_link_created_at
@@ -192,7 +191,6 @@ export async function GET(
         currency: paymentLink.currency || 'USD',
         paymentStatus: paymentLink.payment_status,
         stripePaymentIntentId: paymentLink.stripe_payment_intent_id,
-        stripeCheckoutSessionId: paymentLink.stripe_checkout_session_id,
         paidAt: paymentLink.paid_at,
         expiresAt: paymentLink.expires_at,
         paymentLinkCreatedAt: paymentLink.payment_link_created_at

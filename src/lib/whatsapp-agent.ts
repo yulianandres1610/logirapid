@@ -2656,11 +2656,14 @@ export async function handleIncomingMessage(
         newCollectedData._orderNumber = orderResult.orderNumber
         newCollectedData._orderId = orderResult.orderId
 
-        response = `🎉 ¡Listo! Tu recarga de *${newCollectedData.productName}* al *${newCollectedData.destinationPhone}*\n\n` +
+        response = `🎉 *¡Orden creada!*\n\n` +
+          `📱 Recarga: *${newCollectedData.productName}*\n` +
+          `📞 Destino: *${newCollectedData.destinationPhone}*\n` +
+          `👤 Cliente: *${orderResult.customerName}*\n` +
           `💰 Total: *$${orderResult.totalAmount?.toFixed(2)}*\n` +
           `📦 Orden: *${orderResult.orderNumber}*\n\n` +
-          `💳 Paga aquí: ${paymentLinkUrl}\n\n` +
-          `Te avisaré cuando tu recarga esté completada. ✅`
+          `💳 *Paga aquí para completar tu recarga:*\n${paymentLinkUrl}\n\n` +
+          `✅ Una vez completes el pago, recibirás tu recarga y recibo automáticamente.`
         responseOverridden = true
 
         // Guardar mensaje y actualizar estado

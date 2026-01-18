@@ -43,7 +43,6 @@ interface PaymentInfo {
   currency: string
   paymentStatus: string
   stripePaymentIntentId: string | null
-  stripeCheckoutSessionId: string | null
   paidAt: string | null
   expiresAt: string | null
   paymentLinkCreatedAt: string
