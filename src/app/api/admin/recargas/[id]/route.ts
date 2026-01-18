@@ -52,9 +52,29 @@ export async function GET(
     }
 
     // Get the recharge transaction with all details
+    // Usar columnas específicas para evitar errores con columnas que no existen
     let query = `
       SELECT
-        rt.*,
+        rt.id,
+        rt.company_id,
+        rt.user_id,
+        rt.univcell_order_id,
+        rt.local_reference,
+        rt.product_id,
+        rt.product_name,
+        rt.destination,
+        rt.amount,
+        rt.amount_cents,
+        rt.service_type,
+        rt.status,
+        rt.result_code,
+        rt.result_message,
+        rt.confirmation_code,
+        rt.customer_name,
+        rt.customer_email,
+        rt.created_at,
+        rt.completed_at,
+        rt.updated_at,
         u.full_name as user_name,
         u.email as user_email,
         c.name as company_name,
@@ -96,16 +116,16 @@ export async function GET(
       // Basic info
       id: row.id,
       localReference: row.local_reference,
-      orderNumber: row.order_number,
+      orderNumber: row.local_reference?.slice(0, 12) || `REC-${row.id}`,
       univcellOrderId: row.univcell_order_id,
 
       // Product info
       productId: row.product_id,
-      productName: row.product_name || row.external_product_name,
-      countryCode: row.country_code,
-      countryName: row.country_name,
+      productName: row.product_name || row.external_product_name || 'Recarga',
+      countryCode: row.country_code || 'CU',
+      countryName: row.country_name || 'Cuba',
       isPromotion: row.is_promotion || false,
-      serviceType: row.service_type,
+      serviceType: row.service_type || 'telefono',
 
       // Pricing info
       amount: parseFloat(row.amount) || 0,
@@ -119,8 +139,8 @@ export async function GET(
       phoneNumber: row.destination,
 
       // Status
-      status: row.status,
-      paymentStatus: row.payment_status,
+      status: row.status || 'pending',
+      paymentStatus: null, // No existe en la tabla base
       resultCode: row.result_code,
       resultMessage: row.result_message,
       confirmationCode: row.confirmation_code,
@@ -128,7 +148,7 @@ export async function GET(
       // Customer info
       customerName: row.customer_name,
       customerEmail: row.customer_email,
-      customerPhone: row.customer_phone,
+      customerPhone: null, // No existe en la tabla base
 
       // Company & User info
       companyId: row.company_id,
@@ -138,7 +158,7 @@ export async function GET(
       userEmail: row.user_email,
 
       // Source & tracking
-      source: row.source || 'web',
+      source: 'web', // Default ya que no existe en la tabla base
 
       // Timestamps
       createdAt: row.created_at,
