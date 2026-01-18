@@ -731,12 +731,12 @@ async function findCustomerByPhone(phoneNumber: string): Promise<{ id: number; n
     }
   }
 
-  // Buscar en remittance_orders - FILTRADO POR COMPANY
+  // Buscar en remittance_orders - FILTRADO POR COMPANY (usa selling_company_id)
   const remitResult = await db.query(`
     SELECT sender_name, sender_phone, created_at
     FROM remittance_orders
     WHERE sender_phone LIKE ANY($1)
-      AND company_id = $2
+      AND selling_company_id = $2
     ORDER BY created_at DESC
     LIMIT 1
   `, [phoneVariants.map(p => `%${p.slice(-10)}%`), companyId])
@@ -916,14 +916,14 @@ async function searchRecipientByPhone(phoneNumber: string): Promise<RecipientSea
     }
   }
 
-  // Buscar en remesas - FILTRADO POR COMPANY
+  // Buscar en remesas - FILTRADO POR COMPANY (usa selling_company_id)
   const remitResult = await db.query(`
     SELECT
       recipient_name, recipient_phone,
       recipient_province, recipient_municipality, recipient_address
     FROM remittance_orders
     WHERE recipient_phone LIKE $1
-      AND company_id = $2
+      AND selling_company_id = $2
     ORDER BY created_at DESC
     LIMIT 1
   `, [`%${cleanPhone}%`, companyId])
@@ -2023,6 +2023,18 @@ async function createRechargeOrder(
     const orderNumber = `REC-${Date.now()}`
     const localReference = `wa-${orderNumber}`
 
+    // Asegurar que existen las columnas necesarias
+    try {
+      await db.query(`ALTER TABLE recharge_transactions ADD COLUMN IF NOT EXISTS order_number VARCHAR(50)`)
+      await db.query(`ALTER TABLE recharge_transactions ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50)`)
+      await db.query(`ALTER TABLE recharge_transactions ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'pending'`)
+      await db.query(`ALTER TABLE recharge_transactions ADD COLUMN IF NOT EXISTS source VARCHAR(20)`)
+      await db.query(`ALTER TABLE recharge_transactions ADD COLUMN IF NOT EXISTS univcell_product_id INTEGER`)
+    } catch (alterError) {
+      // Ignorar errores si las columnas ya existen
+      console.log('[WhatsApp Agent] Columnas ya existen o no se pudieron crear')
+    }
+
     // Insertar en recharge_transactions con todos los campos necesarios
     const result = await db.query(`
       INSERT INTO recharge_transactions (
@@ -2400,24 +2412,41 @@ export async function handleIncomingMessage(
       newFlow = 'recharge_order'
     }
 
-    // Seleccionar producto de recarga
-    if (gptResponse.selectRechargeProduct && newCollectedData._rechargeProducts) {
-      console.log('[WhatsApp Agent] Seleccionando producto de recarga:', gptResponse.selectRechargeProduct)
+    // Seleccionar producto de recarga - detectar selección del mensaje del usuario
+    // Esto maneja tanto cuando GPT llama select_recharge_product como cuando el usuario
+    // simplemente responde con un número o nombre de producto
+    // IMPORTANTE: Solo intentar seleccionar si NO acabamos de mostrar los productos (getRechargeProducts)
+    const hasRechargeProducts = newCollectedData._rechargeProducts && Array.isArray(newCollectedData._rechargeProducts)
+    const noProductSelected = !newCollectedData.productId
+    const notJustLoadedProducts = !gptResponse.getRechargeProducts
+    const userSelection = gptResponse.selectRechargeProduct ||
+      (hasRechargeProducts && noProductSelected && notJustLoadedProducts ? messageBody : null)
+
+    if (userSelection && hasRechargeProducts && notJustLoadedProducts) {
+      console.log('[WhatsApp Agent] Intentando seleccionar producto de recarga:', userSelection)
       const products = newCollectedData._rechargeProducts as any[]
-      const selection = gptResponse.selectRechargeProduct
 
       // Buscar producto por número o nombre
       let selectedProduct = null
-      const num = parseInt(selection)
+
+      // Limpiar mensaje del usuario (remover "la", "el", "quiero", etc.)
+      const cleanedSelection = userSelection
+        .toLowerCase()
+        .replace(/^(la|el|quiero|dame|enviar|selecciono?)\s*/i, '')
+        .trim()
+
+      const num = parseInt(cleanedSelection)
       if (!isNaN(num) && num > 0 && num <= products.length) {
         selectedProduct = products[num - 1]
       } else {
+        // Buscar por nombre parcial
         selectedProduct = products.find((p: any) =>
-          p.name.toLowerCase().includes(selection.toLowerCase())
+          p.name.toLowerCase().includes(cleanedSelection)
         )
       }
 
       if (selectedProduct) {
+        console.log('[WhatsApp Agent] Producto seleccionado:', selectedProduct.name)
         newCollectedData.productId = selectedProduct.id
         newCollectedData.productName = selectedProduct.name
         newCollectedData.productPrice = selectedProduct.price
@@ -2426,9 +2455,15 @@ export async function handleIncomingMessage(
         response = `¡Perfecto! *${selectedProduct.name}* por *$${selectedProduct.price.toFixed(2)}*\n\n` +
           `📱 Dame el número de teléfono cubano a recargar (8 dígitos, ej: 56886845)`
         responseOverridden = true
-      } else {
-        response = 'No encontré ese producto. Por favor selecciona un número de la lista.'
-        responseOverridden = true
+      } else if (noProductSelected) {
+        // Solo mostrar error si realmente intentó seleccionar
+        const looksLikeSelection = /^\d+$/.test(cleanedSelection) ||
+          products.some((p: any) => cleanedSelection.includes(p.name.toLowerCase().split(' ')[0]))
+
+        if (looksLikeSelection) {
+          response = 'No encontré ese producto. Por favor selecciona un número de la lista (1, 2, 3...)'
+          responseOverridden = true
+        }
       }
     }
 
@@ -2592,10 +2627,12 @@ export async function handleIncomingMessage(
 
     // Buscar destinatario Cuba por telefono
     // NO buscar si ya estamos esperando nombre o CI del destinatario
+    // NO buscar si estamos en flujo de recarga (usamos destinationPhone para eso)
     if (gptResponse.searchRecipient &&
         !newCollectedData._waitingForRecipientName &&
         !newCollectedData._waitingForRecipientCI &&
-        !newCollectedData.recipientName) {
+        !newCollectedData.recipientName &&
+        newFlow !== 'recharge_order') {
       console.log('[WhatsApp Agent] Buscando recipient Cuba:', gptResponse.searchRecipient)
       const recipientResult = await searchRecipientByPhone(gptResponse.searchRecipient)
 
