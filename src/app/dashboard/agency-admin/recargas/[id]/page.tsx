@@ -36,6 +36,19 @@ import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import LoadingBox from '@/components/ui/LoadingBox'
 
+interface PaymentInfo {
+  paymentLinkId: number
+  linkCode: string
+  paymentAmount: number
+  currency: string
+  paymentStatus: string
+  stripePaymentIntentId: string | null
+  stripeCheckoutSessionId: string | null
+  paidAt: string | null
+  expiresAt: string | null
+  paymentLinkCreatedAt: string
+}
+
 interface RechargeDetails {
   id: number
   localReference: string
@@ -68,6 +81,7 @@ interface RechargeDetails {
   userName: string
   userEmail: string
   source: string
+  payment: PaymentInfo | null
   createdAt: string
   completedAt: string | null
   updatedAt: string
@@ -428,6 +442,111 @@ export default function RechargeDetailsPage({ params }: { params: Promise<{ id: 
                   </div>
                 </div>
               </motion.div>
+
+              {/* Payment/Stripe Info */}
+              {recharge.payment && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.35 }}
+                  className={cn(
+                    "rounded-2xl border p-6",
+                    theme === 'dark'
+                      ? 'bg-gray-800/50 border-gray-700'
+                      : 'bg-white border-gray-200 shadow-sm'
+                  )}
+                >
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                      <CreditCard className="w-5 h-5 text-white" />
+                    </div>
+                    <h3 className="text-lg font-semibold">Información de Pago (Stripe)</h3>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Estado del Pago</span>
+                      <span className={cn(
+                        "px-2 py-1 rounded-lg text-xs font-medium",
+                        recharge.payment.paymentStatus === 'paid'
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                          : recharge.payment.paymentStatus === 'expired'
+                            ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                            : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                      )}>
+                        {recharge.payment.paymentStatus === 'paid' ? 'Pagado' :
+                         recharge.payment.paymentStatus === 'expired' ? 'Expirado' :
+                         recharge.payment.paymentStatus === 'cancelled' ? 'Cancelado' : 'Pendiente'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Monto Cobrado</span>
+                      <span className="font-medium">
+                        ${recharge.payment.paymentAmount.toFixed(2)} {recharge.payment.currency}
+                      </span>
+                    </div>
+
+                    {recharge.payment.stripePaymentIntentId && (
+                      <div className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Payment Intent ID</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs truncate max-w-[180px]">
+                            {recharge.payment.stripePaymentIntentId}
+                          </span>
+                          <button
+                            onClick={() => copyToClipboard(recharge.payment!.stripePaymentIntentId!, 'Payment Intent ID')}
+                            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded flex-shrink-0"
+                          >
+                            <Copy className="w-4 h-4 text-gray-400" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Código de Link</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs">{recharge.payment.linkCode}</span>
+                        <button
+                          onClick={() => copyToClipboard(recharge.payment!.linkCode, 'Código de Link')}
+                          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                        >
+                          <Copy className="w-4 h-4 text-gray-400" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {recharge.payment.paidAt && (
+                      <div className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Fecha de Pago</span>
+                        <span className="text-sm font-medium">
+                          {new Date(recharge.payment.paidAt).toLocaleDateString('es-ES', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Link Creado</span>
+                      <span className="text-sm font-medium">
+                        {new Date(recharge.payment.paymentLinkCreatedAt).toLocaleDateString('es-ES', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
 
               {/* Customer Info */}
               <motion.div

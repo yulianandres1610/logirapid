@@ -2085,17 +2085,24 @@ async function createRechargeOrder(
   orderId?: number
   orderNumber?: string
   totalAmount?: number
+  customerName?: string
+  customerPhone?: string
   error?: string
 }> {
   try {
-    const { productId, productName, productPrice, destinationPhone, univcellProductId } = data
+    const { productId, productName, productPrice, destinationPhone, univcellProductId, rechargeCustomerName, rechargeCustomerPhone } = data
     const orderNumber = `REC-${Date.now()}`
     const localReference = `wa-${orderNumber}`
+
+    // Usar nombre y teléfono de contacto del cliente (o defaults)
+    const customerName = rechargeCustomerName as string || 'Cliente WhatsApp'
+    const customerPhone = rechargeCustomerPhone as string || phoneNumber.replace('whatsapp:', '')
 
     // Asegurar que existen las columnas necesarias
     try {
       await db.query(`ALTER TABLE recharge_transactions ADD COLUMN IF NOT EXISTS order_number VARCHAR(50)`)
       await db.query(`ALTER TABLE recharge_transactions ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50)`)
+      await db.query(`ALTER TABLE recharge_transactions ADD COLUMN IF NOT EXISTS customer_name VARCHAR(100)`)
       await db.query(`ALTER TABLE recharge_transactions ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'pending'`)
       await db.query(`ALTER TABLE recharge_transactions ADD COLUMN IF NOT EXISTS source VARCHAR(20)`)
       await db.query(`ALTER TABLE recharge_transactions ADD COLUMN IF NOT EXISTS univcell_product_id INTEGER`)
@@ -2117,10 +2124,11 @@ async function createRechargeOrder(
         status,
         payment_status,
         customer_phone,
+        customer_name,
         product_name,
         source,
         created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', 'pending', $8, $9, 'whatsapp', NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', 'pending', $8, $9, $10, 'whatsapp', NOW())
       RETURNING id
     `, [
       localReference,
@@ -2130,17 +2138,20 @@ async function createRechargeOrder(
       univcellProductId,
       destinationPhone,
       productPrice,
-      phoneNumber,
+      customerPhone,
+      customerName,
       productName
     ])
 
-    console.log('[WhatsApp Agent] Orden de recarga creada:', orderNumber, 'ID:', result.rows[0].id)
+    console.log('[WhatsApp Agent] Orden de recarga creada:', orderNumber, 'ID:', result.rows[0].id, 'Cliente:', customerName)
 
     return {
       success: true,
       orderId: result.rows[0].id,
       orderNumber,
-      totalAmount: productPrice as number
+      totalAmount: productPrice as number,
+      customerName,
+      customerPhone
     }
   } catch (error) {
     console.error('[WhatsApp Agent] Error creando orden de recarga:', error)
@@ -2544,15 +2555,79 @@ export async function handleIncomingMessage(
         newCollectedData.destinationPhone = phoneResult.formattedPhone
         console.log('[WhatsApp Agent] Teléfono de recarga validado:', phoneResult.formattedPhone)
 
-        // Si ya tenemos producto seleccionado, mostrar confirmación
+        // Si ya tenemos producto seleccionado, pedir nombre del cliente
         if (newCollectedData.productId && newCollectedData.productName && newCollectedData.productPrice) {
-          response = `📱 Recarga de *${newCollectedData.productName}* por *$${(newCollectedData.productPrice as number).toFixed(2)}*\n` +
-            `📞 Al número: *${phoneResult.formattedPhone}*\n\n` +
-            `¿Es correcto? Responde *Sí* para continuar.`
-          responseOverridden = true
+          // Si aún no tenemos nombre del cliente, pedirlo
+          if (!newCollectedData.rechargeCustomerName) {
+            newCollectedData._waitingForRechargeCustomerName = true
+            response = `📱 Recarga de *${newCollectedData.productName}* al *${phoneResult.formattedPhone}*\n\n` +
+              `👤 ¿A nombre de quién va este recibo? (Nombre completo del cliente)`
+            responseOverridden = true
+          }
         }
       } else {
         response = `⚠️ ${phoneResult.error}. Por favor dame un número de 8 dígitos que empiece con 5.`
+        responseOverridden = true
+      }
+    }
+
+    // Capturar nombre del cliente para recarga
+    if (newCollectedData._waitingForRechargeCustomerName && newFlow === 'recharge_order' && !responseOverridden) {
+      const possibleName = messageBody.trim()
+      // Validar que sea un nombre válido (letras y espacios, 3-50 caracteres)
+      const isValidName = possibleName.length >= 3 &&
+                          possibleName.length <= 50 &&
+                          !/^\d+$/.test(possibleName) &&
+                          /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$/.test(possibleName)
+
+      if (isValidName) {
+        newCollectedData.rechargeCustomerName = possibleName
+        delete newCollectedData._waitingForRechargeCustomerName
+        newCollectedData._waitingForRechargeCustomerPhone = true
+        console.log('[WhatsApp Agent] Nombre del cliente recarga:', possibleName)
+
+        response = `✅ Perfecto, *${possibleName}*\n\n` +
+          `📞 ¿Teléfono de contacto para el recibo?\n` +
+          `(Envía tu número o escribe "mismo" si es este WhatsApp)`
+        responseOverridden = true
+      } else {
+        response = `Por favor dame un nombre válido (solo letras y espacios, mínimo 3 caracteres)`
+        responseOverridden = true
+      }
+    }
+
+    // Capturar teléfono de contacto del cliente para recarga
+    if (newCollectedData._waitingForRechargeCustomerPhone && newFlow === 'recharge_order' && !responseOverridden) {
+      const input = messageBody.trim().toLowerCase()
+      let contactPhone = ''
+
+      // Si dice "mismo" o similar, usar el teléfono de WhatsApp
+      if (input === 'mismo' || input === 'este' || input === 'si' || input === 'sí') {
+        contactPhone = phoneNumber.replace('whatsapp:', '')
+      } else {
+        // Intentar extraer número del mensaje
+        const phoneDigits = messageBody.replace(/\D/g, '')
+        if (phoneDigits.length >= 10) {
+          contactPhone = phoneDigits.startsWith('1') ? `+${phoneDigits}` : `+1${phoneDigits}`
+        } else if (phoneDigits.length > 0) {
+          response = `Por favor dame un número válido (mínimo 10 dígitos) o escribe "mismo" para usar este WhatsApp`
+          responseOverridden = true
+        }
+      }
+
+      if (contactPhone && !responseOverridden) {
+        newCollectedData.rechargeCustomerPhone = contactPhone
+        delete newCollectedData._waitingForRechargeCustomerPhone
+        console.log('[WhatsApp Agent] Teléfono de contacto recarga:', contactPhone)
+
+        // Mostrar confirmación final
+        response = `📱 *Resumen de tu recarga:*\n\n` +
+          `🎁 Producto: *${newCollectedData.productName}*\n` +
+          `💰 Precio: *$${(newCollectedData.productPrice as number).toFixed(2)}*\n` +
+          `📞 Destino: *${newCollectedData.destinationPhone}*\n` +
+          `👤 Cliente: *${newCollectedData.rechargeCustomerName}*\n` +
+          `📱 Contacto: *${contactPhone}*\n\n` +
+          `¿Todo correcto? Responde *Sí* para continuar con el pago.`
         responseOverridden = true
       }
     }
@@ -2566,14 +2641,14 @@ export async function handleIncomingMessage(
       const orderResult = await createRechargeOrder(newCollectedData, phoneNumber, companyId)
 
       if (orderResult.success) {
-        // Crear link de pago
+        // Crear link de pago con datos del cliente
         const paymentLinkUrl = await createPaymentLink(
           'recharge',
           orderResult.orderId!,
           orderResult.orderNumber!,
           orderResult.totalAmount!,
-          phoneNumber,
-          'Cliente WhatsApp'
+          orderResult.customerPhone || phoneNumber.replace('whatsapp:', ''),
+          orderResult.customerName || 'Cliente WhatsApp'
         )
 
         // Marcar orden como creada

@@ -77,7 +77,7 @@ export async function GET(
         rt.updated_at,
         u.full_name as user_name,
         u.email as user_email,
-        c.name as company_name,
+        c.legalname as company_name,
         erp.name as external_product_name,
         erp.country_code,
         erp.country_name,
@@ -111,6 +111,30 @@ export async function GET(
 
     const row = result.rows[0]
 
+    // Obtener datos del payment link relacionado (si existe)
+    const paymentLinkResult = await db.query(`
+      SELECT
+        pl.id as payment_link_id,
+        pl.link_code,
+        pl.amount as payment_amount,
+        pl.currency,
+        pl.status as payment_status,
+        pl.customer_phone as pl_customer_phone,
+        pl.customer_name as pl_customer_name,
+        pl.customer_email as pl_customer_email,
+        pl.stripe_payment_intent_id,
+        pl.stripe_checkout_session_id,
+        pl.paid_at,
+        pl.expires_at,
+        pl.created_at as payment_link_created_at
+      FROM payment_links pl
+      WHERE pl.order_type = 'recharge' AND pl.order_id = $1
+      ORDER BY pl.created_at DESC
+      LIMIT 1
+    `, [rechargeId])
+
+    const paymentLink = paymentLinkResult.rows[0] || null
+
     // Format the response with all details
     const rechargeDetails = {
       // Basic info
@@ -140,15 +164,15 @@ export async function GET(
 
       // Status
       status: row.status || 'pending',
-      paymentStatus: null, // No existe en la tabla base
+      paymentStatus: paymentLink?.payment_status || null,
       resultCode: row.result_code,
       resultMessage: row.result_message,
       confirmationCode: row.confirmation_code,
 
-      // Customer info
-      customerName: row.customer_name,
-      customerEmail: row.customer_email,
-      customerPhone: null, // No existe en la tabla base
+      // Customer info (priorizar datos de payment_link si existen)
+      customerName: paymentLink?.pl_customer_name || row.customer_name,
+      customerEmail: paymentLink?.pl_customer_email || row.customer_email,
+      customerPhone: paymentLink?.pl_customer_phone || null,
 
       // Company & User info
       companyId: row.company_id,
@@ -158,7 +182,21 @@ export async function GET(
       userEmail: row.user_email,
 
       // Source & tracking
-      source: 'web', // Default ya que no existe en la tabla base
+      source: paymentLink?.pl_customer_phone ? 'whatsapp' : 'web',
+
+      // Payment/Stripe info
+      payment: paymentLink ? {
+        paymentLinkId: paymentLink.payment_link_id,
+        linkCode: paymentLink.link_code,
+        paymentAmount: parseFloat(paymentLink.payment_amount) || 0,
+        currency: paymentLink.currency || 'USD',
+        paymentStatus: paymentLink.payment_status,
+        stripePaymentIntentId: paymentLink.stripe_payment_intent_id,
+        stripeCheckoutSessionId: paymentLink.stripe_checkout_session_id,
+        paidAt: paymentLink.paid_at,
+        expiresAt: paymentLink.expires_at,
+        paymentLinkCreatedAt: paymentLink.payment_link_created_at
+      } : null,
 
       // Timestamps
       createdAt: row.created_at,
