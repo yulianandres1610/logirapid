@@ -599,7 +599,8 @@ ${collectedData.recipientMunicipality && !collectedData.recipientStreet ? '‚ö†Ô∏
       }
 
       // Si hubo tool calls pero no hay respuesta, generar una
-      if (!response) {
+      // EXCEPTO para get_recharge_products que lo maneja whatsapp-agent con datos reales
+      if (!response && !getRechargeProducts) {
         // Crear respuestas para TODOS los tool calls
         const toolResponses: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = message.tool_calls.map(tc => ({
           role: 'tool' as const,
@@ -622,6 +623,9 @@ ${collectedData.recipientMunicipality && !collectedData.recipientStreet ? '‚ö†Ô∏
           max_tokens: 500
         })
         response = followUp.choices[0].message.content || ''
+      } else if (getRechargeProducts && !response) {
+        // Para recargas, usar mensaje placeholder que ser√° reemplazado por whatsapp-agent
+        response = 'Cargando productos de recarga...'
       }
     }
 

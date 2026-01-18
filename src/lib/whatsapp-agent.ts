@@ -1930,6 +1930,7 @@ async function getRechargeProductsForWhatsApp(companyId: number): Promise<{
   message: string
 }> {
   // Obtener productos con precio configurado para esta empresa
+  // Prioridad: precio de la agencia > precio manual global
   const result = await db.query(`
     SELECT
       erp.id,
@@ -1937,10 +1938,10 @@ async function getRechargeProductsForWhatsApp(companyId: number): Promise<{
       erp.custom_name,
       erp.is_promotion,
       erp.univcell_product_id,
-      -- Priorizar manual_selling_price, luego pricing de la empresa
+      -- Priorizar pricing de la empresa, luego manual_selling_price
       COALESCE(
-        erp.manual_selling_price,
-        rpp.selling_price
+        rpp.selling_price,
+        erp.manual_selling_price
       ) as selling_price,
       -- Verificar si tiene promociones activas
       EXISTS (
@@ -1957,8 +1958,8 @@ async function getRechargeProductsForWhatsApp(companyId: number): Promise<{
       AND rpp.is_enabled = true
     WHERE erp.is_active = true
       -- Solo mostrar productos que tengan precio configurado
-      AND (erp.manual_selling_price IS NOT NULL OR rpp.selling_price IS NOT NULL)
-    ORDER BY COALESCE(erp.manual_selling_price, rpp.selling_price) ASC
+      AND (rpp.selling_price IS NOT NULL OR erp.manual_selling_price IS NOT NULL)
+    ORDER BY COALESCE(rpp.selling_price, erp.manual_selling_price) ASC
   `, [companyId])
 
   if (result.rows.length === 0) {
