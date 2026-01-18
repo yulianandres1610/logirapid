@@ -31,44 +31,50 @@ const ALL_TIME_SLOTS = [
   '4:00 PM - 8:00 PM'
 ]
 
-// Cache para company ID del agente (evita queries repetidas)
+// Cache para company ID del agente (con TTL de 5 minutos para permitir cambios)
 let cachedAgentCompanyId: number | null = null
+let cachedAgentCompanyIdTimestamp: number | null = null
 
 /**
  * Obtiene el company ID para el agente de WhatsApp/Voice
  * Usa la variable de entorno WHATSAPP_AGENT_COMPANY_NAME para buscar la empresa
+ * IMPORTANTE: Los precios mostrados serán los configurados en el catálogo de esta empresa
  * @returns El ID de la empresa configurada
  */
 async function getAgentCompanyId(): Promise<number> {
-  // Retornar cache si existe
-  if (cachedAgentCompanyId !== null) {
+  // Cache por 5 minutos para permitir cambios en configuración
+  const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutos
+  const now = Date.now()
+
+  if (cachedAgentCompanyId !== null && cachedAgentCompanyIdTimestamp && (now - cachedAgentCompanyIdTimestamp) < CACHE_TTL_MS) {
     return cachedAgentCompanyId
   }
 
   const companyName = process.env.WHATSAPP_AGENT_COMPANY_NAME
   if (!companyName) {
     console.error('[WhatsApp Agent] WHATSAPP_AGENT_COMPANY_NAME not configured, using fallback')
-    // Fallback a primera empresa si no hay configuracion
     const fallbackResult = await db.query(`SELECT id FROM companies ORDER BY id LIMIT 1`)
     cachedAgentCompanyId = fallbackResult.rows[0]?.id || 1
+    cachedAgentCompanyIdTimestamp = now
     return cachedAgentCompanyId
   }
 
   const result = await db.query(
-    `SELECT id FROM companies WHERE legalname ILIKE $1 LIMIT 1`,
+    `SELECT id, legalname FROM companies WHERE legalname ILIKE $1 LIMIT 1`,
     [`%${companyName}%`]
   )
 
   if (!result.rows[0]?.id) {
     console.error(`[WhatsApp Agent] Company "${companyName}" not found in database, using fallback`)
-    // Fallback a primera empresa si no se encuentra
     const fallbackResult = await db.query(`SELECT id FROM companies ORDER BY id LIMIT 1`)
     cachedAgentCompanyId = fallbackResult.rows[0]?.id || 1
+    cachedAgentCompanyIdTimestamp = now
     return cachedAgentCompanyId
   }
 
   cachedAgentCompanyId = result.rows[0].id
-  console.log(`[WhatsApp Agent] Using company "${companyName}" with ID: ${cachedAgentCompanyId}`)
+  cachedAgentCompanyIdTimestamp = now
+  console.log(`[WhatsApp Agent] Using company "${result.rows[0].legalname}" (ID: ${cachedAgentCompanyId}) - Precios del catálogo de esta empresa`)
   return cachedAgentCompanyId
 }
 
@@ -1930,8 +1936,9 @@ async function getRechargeProductsForWhatsApp(companyId: number): Promise<{
   }>
   message: string
 }> {
-  // Obtener productos con precio configurado para esta empresa
-  // La misma lógica que /api/agency/recharges/products
+  // Obtener productos con precio de venta configurado para esta empresa
+  // IMPORTANTE: Solo mostrar productos que tengan selling_price en recharge_product_pricing
+  // Los precios manuales (manual_selling_price) son el COSTO para la agencia, NO el precio de venta
   const result = await db.query(`
     SELECT
       erp.id,
@@ -1958,24 +1965,15 @@ async function getRechargeProductsForWhatsApp(companyId: number): Promise<{
           AND (rpr.valid_to IS NULL OR rpr.valid_to > NOW())
       ) as has_active_promo
     FROM external_recharge_products erp
-    -- Join con pricing de la empresa específica (prioridad) o plataforma (NULL)
-    LEFT JOIN LATERAL (
-      SELECT
-        id, company_id, selling_price, margin_type, margin_value, is_enabled
-      FROM recharge_product_pricing
-      WHERE external_product_id = erp.id
-        AND (company_id = $1 OR company_id IS NULL)
-      ORDER BY
-        CASE WHEN company_id = $1 THEN 0 ELSE 1 END,
-        id DESC
-      LIMIT 1
-    ) rpp ON true
+    -- Join con pricing de la empresa específica SOLAMENTE (no plataforma)
+    INNER JOIN recharge_product_pricing rpp
+      ON rpp.external_product_id = erp.id
+      AND rpp.company_id = $1
+      AND rpp.is_enabled = true
     WHERE erp.is_active = true
-      AND (
-        rpp.id IS NOT NULL
-        OR (erp.manual_cost_price IS NOT NULL AND erp.manual_selling_price IS NOT NULL)
-      )
-    ORDER BY erp.name ASC
+      -- DEBE tener precio de venta configurado
+      AND (rpp.selling_price IS NOT NULL OR (rpp.margin_type IS NOT NULL AND rpp.margin_value IS NOT NULL))
+    ORDER BY rpp.selling_price ASC NULLS LAST, erp.name ASC
   `, [companyId])
 
   console.log('[WhatsApp Recharge] Query result for companyId:', companyId, 'rows:', result.rows.length)
@@ -1992,60 +1990,39 @@ async function getRechargeProductsForWhatsApp(companyId: number): Promise<{
     }
   }
 
-  // Calcular precios usando la misma lógica que el catálogo
-  // IMPORTANTE:
-  // - manual_selling_price = Lo que LogiRapid cobra a la agencia (Mi Costo de la agencia)
-  // - recharge_product_pricing.selling_price = Lo que la agencia cobra al cliente (Precio Clientes)
+  // Calcular precios - Ahora SOLO tenemos productos con pricing de esta empresa
+  // - manual_selling_price = Mi Costo (lo que LogiRapid cobra a la agencia)
+  // - rpp.selling_price = Precio Clientes (lo que la agencia cobra al cliente)
   const products = result.rows.map((row: any) => {
-    console.log('[WhatsApp Recharge] Processing product:', row.name, {
-      pricing_id: row.pricing_id,
-      pricing_company_id: row.pricing_company_id,
-      rpp_selling_price: row.selling_price,
-      margin_type: row.margin_type,
-      margin_value: row.margin_value,
-      manual_selling_price: row.manual_selling_price,
-      manual_cost_price: row.manual_cost_price
-    })
-
-    // La agencia DEBE tener pricing configurado en recharge_product_pricing
-    // para que aparezca el producto en WhatsApp
-    const hasCompanyPricing = row.pricing_id !== null && row.pricing_company_id === companyId
-    const hasPlatformPricing = row.pricing_id !== null && row.pricing_company_id === null
-
-    // Mi Costo de la agencia = Lo que LogiRapid les cobra = manual_selling_price
+    // Mi Costo de la agencia = Lo que LogiRapid les cobra
     const miCosto = row.manual_selling_price ? parseFloat(row.manual_selling_price) : 0
 
-    let customerPrice: number | null = null
+    // Precio de venta al cliente (del catálogo de la agencia)
+    let customerPrice: number
 
-    if (hasCompanyPricing) {
-      // La agencia tiene precio de venta configurado
-      if (row.selling_price) {
-        customerPrice = parseFloat(row.selling_price)
-      } else if (row.margin_type === 'percentage' && row.margin_value) {
-        customerPrice = miCosto * (1 + parseFloat(row.margin_value) / 100)
-      } else if (row.margin_type === 'fixed' && row.margin_value) {
-        customerPrice = miCosto + parseFloat(row.margin_value)
-      }
-    } else if (hasPlatformPricing) {
-      // Precio de plataforma (global)
-      if (row.selling_price) {
-        customerPrice = parseFloat(row.selling_price)
-      } else if (row.margin_type === 'percentage' && row.margin_value) {
-        customerPrice = miCosto * (1 + parseFloat(row.margin_value) / 100)
-      } else if (row.margin_type === 'fixed' && row.margin_value) {
-        customerPrice = miCosto + parseFloat(row.margin_value)
-      }
+    if (row.selling_price) {
+      // Precio fijo configurado
+      customerPrice = parseFloat(row.selling_price)
+    } else if (row.margin_type === 'percentage' && row.margin_value) {
+      // Precio calculado por porcentaje sobre el costo
+      customerPrice = miCosto * (1 + parseFloat(row.margin_value) / 100)
+    } else if (row.margin_type === 'fixed' && row.margin_value) {
+      // Precio calculado por margen fijo
+      customerPrice = miCosto + parseFloat(row.margin_value)
+    } else {
+      // No debería llegar aquí por el WHERE de la query, pero por seguridad
+      customerPrice = 0
     }
 
-    console.log('[WhatsApp Recharge] Calculated prices for', row.name, ':', {
+    console.log('[WhatsApp Recharge] Product:', row.custom_name || row.name, {
       miCosto,
       customerPrice,
-      hasCompanyPricing,
-      hasPlatformPricing
+      selling_price: row.selling_price,
+      margin_type: row.margin_type,
+      margin_value: row.margin_value
     })
 
-    // Solo retornar productos que tienen precio de venta configurado
-    if (!customerPrice || customerPrice <= 0) {
+    if (customerPrice <= 0) {
       return null
     }
 
