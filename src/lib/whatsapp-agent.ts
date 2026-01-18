@@ -1978,6 +1978,13 @@ async function getRechargeProductsForWhatsApp(companyId: number): Promise<{
     ORDER BY erp.name ASC
   `, [companyId])
 
+  console.log('[WhatsApp Recharge] Query result for companyId:', companyId, 'rows:', result.rows.length)
+
+  // Log de debug para ver los datos crudos
+  if (result.rows.length > 0) {
+    console.log('[WhatsApp Recharge] Sample row data:', JSON.stringify(result.rows[0], null, 2))
+  }
+
   if (result.rows.length === 0) {
     return {
       products: [],
@@ -1985,68 +1992,79 @@ async function getRechargeProductsForWhatsApp(companyId: number): Promise<{
     }
   }
 
-  // Calcular precios usando la misma lógica que el API web
+  // Calcular precios usando la misma lógica que el catálogo
+  // IMPORTANTE:
+  // - manual_selling_price = Lo que LogiRapid cobra a la agencia (Mi Costo de la agencia)
+  // - recharge_product_pricing.selling_price = Lo que la agencia cobra al cliente (Precio Clientes)
   const products = result.rows.map((row: any) => {
-    const hasManualPricing = row.manual_cost_price !== null && row.manual_selling_price !== null
-    const hasCompanyPricing = row.pricing_id !== null && row.pricing_company_id === companyId
+    console.log('[WhatsApp Recharge] Processing product:', row.name, {
+      pricing_id: row.pricing_id,
+      pricing_company_id: row.pricing_company_id,
+      rpp_selling_price: row.selling_price,
+      margin_type: row.margin_type,
+      margin_value: row.margin_value,
+      manual_selling_price: row.manual_selling_price,
+      manual_cost_price: row.manual_cost_price
+    })
 
-    let costPrice = 0
+    // La agencia DEBE tener pricing configurado en recharge_product_pricing
+    // para que aparezca el producto en WhatsApp
+    const hasCompanyPricing = row.pricing_id !== null && row.pricing_company_id === companyId
+    const hasPlatformPricing = row.pricing_id !== null && row.pricing_company_id === null
+
+    // Mi Costo de la agencia = Lo que LogiRapid les cobra = manual_selling_price
+    const miCosto = row.manual_selling_price ? parseFloat(row.manual_selling_price) : 0
+
     let customerPrice: number | null = null
 
-    // Priority: Company-specific pricing > Manual pricing > Platform pricing
     if (hasCompanyPricing) {
-      const baseCost = row.provider_amount
-        ? parseFloat(row.provider_amount)
-        : row.manual_cost_price
-          ? parseFloat(row.manual_cost_price)
-          : row.base_cost
-            ? parseFloat(row.base_cost)
-            : 0
-
-      costPrice = baseCost
-
+      // La agencia tiene precio de venta configurado
       if (row.selling_price) {
         customerPrice = parseFloat(row.selling_price)
       } else if (row.margin_type === 'percentage' && row.margin_value) {
-        customerPrice = baseCost * (1 + parseFloat(row.margin_value) / 100)
+        customerPrice = miCosto * (1 + parseFloat(row.margin_value) / 100)
       } else if (row.margin_type === 'fixed' && row.margin_value) {
-        customerPrice = baseCost + parseFloat(row.margin_value)
+        customerPrice = miCosto + parseFloat(row.margin_value)
       }
-    } else if (hasManualPricing) {
-      costPrice = parseFloat(row.manual_cost_price)
-      customerPrice = parseFloat(row.manual_selling_price)
-    } else if (row.pricing_id) {
-      const baseCost = row.provider_amount
-        ? parseFloat(row.provider_amount)
-        : row.base_cost
-          ? parseFloat(row.base_cost)
-          : 0
-
-      costPrice = baseCost
-
+    } else if (hasPlatformPricing) {
+      // Precio de plataforma (global)
       if (row.selling_price) {
         customerPrice = parseFloat(row.selling_price)
       } else if (row.margin_type === 'percentage' && row.margin_value) {
-        customerPrice = baseCost * (1 + parseFloat(row.margin_value) / 100)
+        customerPrice = miCosto * (1 + parseFloat(row.margin_value) / 100)
       } else if (row.margin_type === 'fixed' && row.margin_value) {
-        customerPrice = baseCost + parseFloat(row.margin_value)
+        customerPrice = miCosto + parseFloat(row.margin_value)
       }
     }
 
-    // Si no hay precio de venta configurado, usar el costo + 10% de margen default
-    if (!customerPrice) {
-      customerPrice = costPrice * 1.1
+    console.log('[WhatsApp Recharge] Calculated prices for', row.name, ':', {
+      miCosto,
+      customerPrice,
+      hasCompanyPricing,
+      hasPlatformPricing
+    })
+
+    // Solo retornar productos que tienen precio de venta configurado
+    if (!customerPrice || customerPrice <= 0) {
+      return null
     }
 
     return {
       id: row.id,
       name: row.custom_name || row.name,
       price: customerPrice,
-      costPrice: costPrice,
+      costPrice: miCosto,
       hasPromotion: row.is_promotion || row.has_active_promo,
       univcellProductId: row.univcell_product_id
     }
-  }).filter(p => p.price > 0) // Solo productos con precio válido
+  }).filter(p => p !== null) as Array<{
+    id: number
+    name: string
+    price: number
+    costPrice: number
+    hasPromotion: boolean
+    univcellProductId: number
+  }>
 
   // Ordenar por precio
   products.sort((a, b) => a.price - b.price)
