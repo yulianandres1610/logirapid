@@ -75,7 +75,7 @@ export async function GET(
         rt.created_at,
         rt.completed_at,
         rt.updated_at,
-        u.full_name as user_name,
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as user_name,
         u.email as user_email,
         c.legalname as company_name,
         erp.name as external_product_name,
@@ -209,9 +209,10 @@ export async function GET(
 
   } catch (error) {
     console.error('[Recargas] Error fetching recharge:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
     return NextResponse.json({
       success: false,
-      error: 'Error al obtener la recarga'
+      error: `Error al obtener la recarga: ${errorMessage}`
     }, { status: 500 })
   }
 }
