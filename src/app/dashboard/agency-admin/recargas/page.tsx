@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Smartphone,
@@ -26,7 +27,8 @@ import {
   AlertCircle,
   XCircle,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Eye
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -119,6 +121,7 @@ const STATUSES: Record<string, { label: string; color: string; icon: typeof Aler
 }
 
 export default function AgencyRecargasPage() {
+  const router = useRouter()
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
 
@@ -1246,6 +1249,9 @@ Gracias por su compra!
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                           Referencia
                         </th>
+                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Acciones
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -1258,7 +1264,8 @@ Gracias por su compra!
                             key={transaction.id}
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                            onClick={() => router.push(`/dashboard/agency-admin/recargas/${transaction.id}`)}
+                            className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
                           >
                             <td className="px-4 py-4 whitespace-nowrap">
                               <div className="text-sm font-medium text-black dark:text-gray-100">
@@ -1331,6 +1338,23 @@ Gracias por su compra!
                                   {transaction.confirmationCode}
                                 </div>
                               )}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-center">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  router.push(`/dashboard/agency-admin/recargas/${transaction.id}`)
+                                }}
+                                className={cn(
+                                  "p-2 rounded-lg transition-colors",
+                                  theme === 'dark'
+                                    ? 'hover:bg-gray-600 text-gray-400 hover:text-white'
+                                    : 'hover:bg-gray-100 text-gray-500 hover:text-gray-900'
+                                )}
+                                title="Ver detalles"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
                             </td>
                           </motion.tr>
                         )

@@ -1924,13 +1924,14 @@ async function getRechargeProductsForWhatsApp(companyId: number): Promise<{
     id: number
     name: string
     price: number
+    costPrice: number
     hasPromotion: boolean
     univcellProductId: number
   }>
   message: string
 }> {
   // Obtener productos con precio configurado para esta empresa
-  // Prioridad: precio de la agencia > precio manual global
+  // La misma lógica que /api/agency/recharges/products
   const result = await db.query(`
     SELECT
       erp.id,
@@ -1938,11 +1939,17 @@ async function getRechargeProductsForWhatsApp(companyId: number): Promise<{
       erp.custom_name,
       erp.is_promotion,
       erp.univcell_product_id,
-      -- Priorizar pricing de la empresa, luego manual_selling_price
-      COALESCE(
-        rpp.selling_price,
-        erp.manual_selling_price
-      ) as selling_price,
+      erp.manual_cost_price,
+      erp.manual_selling_price,
+      erp.provider_amount,
+      erp.base_cost,
+      -- Pricing específico de la empresa
+      rpp.id as pricing_id,
+      rpp.company_id as pricing_company_id,
+      rpp.selling_price,
+      rpp.margin_type,
+      rpp.margin_value,
+      rpp.is_enabled as pricing_enabled,
       -- Verificar si tiene promociones activas
       EXISTS (
         SELECT 1 FROM recharge_promotions rpr
@@ -1951,15 +1958,24 @@ async function getRechargeProductsForWhatsApp(companyId: number): Promise<{
           AND (rpr.valid_to IS NULL OR rpr.valid_to > NOW())
       ) as has_active_promo
     FROM external_recharge_products erp
-    -- Join con pricing de la empresa específica
-    LEFT JOIN recharge_product_pricing rpp
-      ON rpp.external_product_id = erp.id
-      AND rpp.company_id = $1
-      AND rpp.is_enabled = true
+    -- Join con pricing de la empresa específica (prioridad) o plataforma (NULL)
+    LEFT JOIN LATERAL (
+      SELECT
+        id, company_id, selling_price, margin_type, margin_value, is_enabled
+      FROM recharge_product_pricing
+      WHERE external_product_id = erp.id
+        AND (company_id = $1 OR company_id IS NULL)
+      ORDER BY
+        CASE WHEN company_id = $1 THEN 0 ELSE 1 END,
+        id DESC
+      LIMIT 1
+    ) rpp ON true
     WHERE erp.is_active = true
-      -- Solo mostrar productos que tengan precio configurado
-      AND (rpp.selling_price IS NOT NULL OR erp.manual_selling_price IS NOT NULL)
-    ORDER BY COALESCE(rpp.selling_price, erp.manual_selling_price) ASC
+      AND (
+        rpp.id IS NOT NULL
+        OR (erp.manual_cost_price IS NOT NULL AND erp.manual_selling_price IS NOT NULL)
+      )
+    ORDER BY erp.name ASC
   `, [companyId])
 
   if (result.rows.length === 0) {
@@ -1969,13 +1985,71 @@ async function getRechargeProductsForWhatsApp(companyId: number): Promise<{
     }
   }
 
-  const products = result.rows.map((p: any) => ({
-    id: p.id,
-    name: p.custom_name || p.name,
-    price: parseFloat(p.selling_price),
-    hasPromotion: p.is_promotion || p.has_active_promo,
-    univcellProductId: p.univcell_product_id
-  }))
+  // Calcular precios usando la misma lógica que el API web
+  const products = result.rows.map((row: any) => {
+    const hasManualPricing = row.manual_cost_price !== null && row.manual_selling_price !== null
+    const hasCompanyPricing = row.pricing_id !== null && row.pricing_company_id === companyId
+
+    let costPrice = 0
+    let customerPrice: number | null = null
+
+    // Priority: Company-specific pricing > Manual pricing > Platform pricing
+    if (hasCompanyPricing) {
+      const baseCost = row.provider_amount
+        ? parseFloat(row.provider_amount)
+        : row.manual_cost_price
+          ? parseFloat(row.manual_cost_price)
+          : row.base_cost
+            ? parseFloat(row.base_cost)
+            : 0
+
+      costPrice = baseCost
+
+      if (row.selling_price) {
+        customerPrice = parseFloat(row.selling_price)
+      } else if (row.margin_type === 'percentage' && row.margin_value) {
+        customerPrice = baseCost * (1 + parseFloat(row.margin_value) / 100)
+      } else if (row.margin_type === 'fixed' && row.margin_value) {
+        customerPrice = baseCost + parseFloat(row.margin_value)
+      }
+    } else if (hasManualPricing) {
+      costPrice = parseFloat(row.manual_cost_price)
+      customerPrice = parseFloat(row.manual_selling_price)
+    } else if (row.pricing_id) {
+      const baseCost = row.provider_amount
+        ? parseFloat(row.provider_amount)
+        : row.base_cost
+          ? parseFloat(row.base_cost)
+          : 0
+
+      costPrice = baseCost
+
+      if (row.selling_price) {
+        customerPrice = parseFloat(row.selling_price)
+      } else if (row.margin_type === 'percentage' && row.margin_value) {
+        customerPrice = baseCost * (1 + parseFloat(row.margin_value) / 100)
+      } else if (row.margin_type === 'fixed' && row.margin_value) {
+        customerPrice = baseCost + parseFloat(row.margin_value)
+      }
+    }
+
+    // Si no hay precio de venta configurado, usar el costo + 10% de margen default
+    if (!customerPrice) {
+      customerPrice = costPrice * 1.1
+    }
+
+    return {
+      id: row.id,
+      name: row.custom_name || row.name,
+      price: customerPrice,
+      costPrice: costPrice,
+      hasPromotion: row.is_promotion || row.has_active_promo,
+      univcellProductId: row.univcell_product_id
+    }
+  }).filter(p => p.price > 0) // Solo productos con precio válido
+
+  // Ordenar por precio
+  products.sort((a, b) => a.price - b.price)
 
   const message = `📱 *Recargas disponibles:*\n\n` +
     products.map((p, i) =>
@@ -2446,10 +2520,11 @@ export async function handleIncomingMessage(
       }
 
       if (selectedProduct) {
-        console.log('[WhatsApp Agent] Producto seleccionado:', selectedProduct.name)
+        console.log('[WhatsApp Agent] Producto seleccionado:', selectedProduct.name, 'Precio:', selectedProduct.price, 'Costo:', selectedProduct.costPrice)
         newCollectedData.productId = selectedProduct.id
         newCollectedData.productName = selectedProduct.name
-        newCollectedData.productPrice = selectedProduct.price
+        newCollectedData.productPrice = selectedProduct.price // Precio de venta al cliente
+        newCollectedData.productCostPrice = selectedProduct.costPrice // Costo para la agencia
         newCollectedData.univcellProductId = selectedProduct.univcellProductId
 
         response = `¡Perfecto! *${selectedProduct.name}* por *$${selectedProduct.price.toFixed(2)}*\n\n` +
