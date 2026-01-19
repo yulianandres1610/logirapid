@@ -590,6 +590,12 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Monitor, label: "Punto de Venta", href: "/dashboard/market/pos" },
   ]
 
+  // Menu items para MARKET_MANAGER_TIENDA (Almacén asignado + Terminales asignados)
+  const marketManagerTiendaMenuItems = [
+    { icon: Warehouse, label: "Mi Almacén", href: "/dashboard/market/warehouses" },
+    { icon: Monitor, label: "Punto de Venta", href: "/dashboard/market/pos" },
+  ]
+
   // Hook para verificar servicios habilitados
   const { hasService, hasSubmodule } = useEnabledServices()
 
@@ -636,6 +642,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     if (user?.role === 'MARKET_COMERCIAL') return marketComercialMenuItems
     if (user?.role === 'MARKET_ALMACENERO') return marketAlmaceneroMenuItems
     if (user?.role === 'MARKET_VENDEDOR') return marketVendedorMenuItems
+    if (user?.role === 'MARKET_MANAGER_TIENDA') return marketManagerTiendaMenuItems
     // Filtrar items que requieren rol específico
     return marketMenuItems.filter(item => {
       if (item.requiredRole && user?.role !== item.requiredRole) {
