@@ -90,10 +90,18 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/print/services?includeOffline=false')
+      const response = await fetch('/api/print/services?includeOffline=false', {
+        credentials: 'include'
+      })
       const data = await response.json()
 
-      if (data.success && data.data?.services) {
+      // Check for API errors first
+      if (!data.success) {
+        setError(data.error || 'Error al cargar servicios de impresión')
+        return
+      }
+
+      if (data.data?.services && data.data.services.length > 0) {
         // Filter to only active services with printers
         const activeServices = data.data.services.filter(
           (s: PrintService) => s.status === 'active' && s.printers?.length > 0
@@ -120,9 +128,11 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
             || labelPrinters[0]
 
           setSelectedPrinter(defaultPrinter || null)
+        } else {
+          setError('No hay servicios de impresión activos con impresoras configuradas')
         }
       } else {
-        setError('No se encontraron servicios de impresión activos')
+        setError('No se encontraron servicios de impresión. Configure un servicio en la aplicación de escritorio.')
       }
     } catch (err) {
       console.error('Error fetching print services:', err)
@@ -210,6 +220,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
         const response = await fetch('/api/print/jobs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             ...job,
             printServiceId: selectedService.id,
