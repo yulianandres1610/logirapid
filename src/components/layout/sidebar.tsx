@@ -593,7 +593,16 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   // Menu items para MARKET_MANAGER_TIENDA (Almacén asignado + Terminales asignados)
   const marketManagerTiendaMenuItems = [
     { icon: Warehouse, label: "Mi Almacén", href: "/dashboard/market/warehouses" },
-    { icon: Monitor, label: "Punto de Venta", href: "/dashboard/market/pos" },
+    {
+      icon: Monitor,
+      label: "Punto de Venta",
+      href: "/dashboard/market/pos",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: Monitor, label: "Terminales", href: "/dashboard/market/pos" },
+        { icon: ClipboardList, label: "Conteos Inventario", href: "/dashboard/market/pos/inventory-counts" },
+      ]
+    },
   ]
 
   // Hook para verificar servicios habilitados

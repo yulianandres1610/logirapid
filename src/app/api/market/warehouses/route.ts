@@ -39,11 +39,25 @@ export async function GET(request: NextRequest) {
     }
 
     const companyId = payload.companyId
+    const userRole = payload.role
+    const userId = payload.userId
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search') || ''
     const status = searchParams.get('status')
     const productId = searchParams.get('productId')
-    const warehouseId = searchParams.get('warehouseId') // Filtro para MARKET_ALMACENERO
+    let warehouseId = searchParams.get('warehouseId') // Filtro para MARKET_ALMACENERO
+
+    // Auto-filter by assigned warehouse for MARKET_MANAGER_TIENDA and MARKET_ALMACENERO
+    if (userRole === 'MARKET_MANAGER_TIENDA' || userRole === 'MARKET_ALMACENERO') {
+      const employeeResult = await db.query(`
+        SELECT warehouse_id FROM market_employees
+        WHERE user_id = $1 AND company_id = $2 AND status = 'active'
+      `, [userId, companyId])
+
+      if (employeeResult.rows.length > 0 && employeeResult.rows[0].warehouse_id) {
+        warehouseId = employeeResult.rows[0].warehouse_id.toString()
+      }
+    }
 
     let query: string
     const queryParams: (string | number)[] = [companyId]
@@ -96,8 +110,8 @@ export async function GET(request: NextRequest) {
 
     const result = await db.query(query, queryParams)
 
-    // Get stats
-    const statsResult = await db.query(`
+    // Get stats (filtered by warehouse for restricted roles)
+    let statsQuery = `
       SELECT
         COUNT(*) as total,
         COUNT(*) FILTER (WHERE is_active = true) as active,
@@ -105,7 +119,15 @@ export async function GET(request: NextRequest) {
         COUNT(*) FILTER (WHERE is_central = true) as central
       FROM market_warehouses
       WHERE company_id = $1
-    `, [companyId])
+    `
+    const statsParams: (string | number)[] = [companyId]
+
+    if (warehouseId) {
+      statsQuery += ` AND id = $2`
+      statsParams.push(parseInt(warehouseId))
+    }
+
+    const statsResult = await db.query(statsQuery, statsParams)
 
     return NextResponse.json({
       success: true,
