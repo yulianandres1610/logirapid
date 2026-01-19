@@ -996,11 +996,16 @@ export default function WarehouseOperationsPage() {
                     <p>Escanea productos para agregarlos</p>
                   </div>
                 ) : (
-                  <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                    <AnimatePresence>
+                  <div className="space-y-3">
+                    <AnimatePresence mode="popLayout">
                       {operation.products.map((product, index) => (
-                        <div
+                        <motion.div
                           key={product.id}
+                          layout
+                          initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ duration: 0.2 }}
                           onClick={() => {
                             setSelectedProductIndex(index)
                             setNumpadValue(
@@ -1024,7 +1029,7 @@ export default function WarehouseOperationsPage() {
                                 : undefined
                             }
                           />
-                        </div>
+                        </motion.div>
                       ))}
                     </AnimatePresence>
                   </div>
