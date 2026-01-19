@@ -512,6 +512,36 @@ export async function POST(request: NextRequest) {
           // Use variant image or fall back to product image
           const variantImageUrl = v.imageUrl || imageUrl || null
 
+          // Validate barcode uniqueness for this variant
+          if (variantBarcode && v.barcode) {
+            // Check if barcode exists in other products
+            const productBarcodeCheck = await db.query(
+              'SELECT id, name FROM market_products WHERE company_id = $1 AND barcode = $2',
+              [companyId, variantBarcode]
+            )
+            if (productBarcodeCheck.rows.length > 0) {
+              return NextResponse.json({
+                success: false,
+                error: `El código de barras "${variantBarcode}" ya existe en el producto "${productBarcodeCheck.rows[0].name}"`
+              }, { status: 400 })
+            }
+
+            // Check if barcode exists in other variants
+            const variantBarcodeCheck = await db.query(`
+              SELECT v.id, v.variant_name, p.name as product_name
+              FROM market_product_variants v
+              JOIN market_products p ON p.id = v.product_id
+              WHERE p.company_id = $1 AND v.barcode = $2
+            `, [companyId, variantBarcode])
+            if (variantBarcodeCheck.rows.length > 0) {
+              const existing = variantBarcodeCheck.rows[0]
+              return NextResponse.json({
+                success: false,
+                error: `El código de barras "${variantBarcode}" ya existe en la variante "${existing.variant_name}" del producto "${existing.product_name}"`
+              }, { status: 400 })
+            }
+          }
+
           const variantResult = await db.query(`
             INSERT INTO market_product_variants (
               product_id, variant_name, sku, barcode, cost_price, selling_price,

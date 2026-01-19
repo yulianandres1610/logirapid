@@ -400,6 +400,37 @@ export async function PUT(
           const variantBarcode = v.barcode || `${barcode || sku || productId}-V${Date.now()}`
           // Generate SKU if empty
           const variantSku = v.sku || `${sku || `PRD${productId}`}-${v.name?.replace(/\s+/g, '-').substring(0, 10) || 'VAR'}`
+
+          // Validate barcode uniqueness for this variant
+          if (variantBarcode && v.barcode) {
+            // Check if barcode exists in other products
+            const productBarcodeCheck = await db.query(
+              'SELECT id, name FROM market_products WHERE company_id = $1 AND barcode = $2',
+              [parseInt(companyId), variantBarcode]
+            )
+            if (productBarcodeCheck.rows.length > 0) {
+              return NextResponse.json({
+                success: false,
+                error: `El código de barras "${variantBarcode}" ya existe en el producto "${productBarcodeCheck.rows[0].name}"`
+              }, { status: 400 })
+            }
+
+            // Check if barcode exists in other variants (excluding current variant if updating)
+            const currentVariantId = v.id && typeof v.id === 'number' ? v.id : -1
+            const variantBarcodeCheck = await db.query(`
+              SELECT v.id, v.variant_name, p.name as product_name
+              FROM market_product_variants v
+              JOIN market_products p ON p.id = v.product_id
+              WHERE p.company_id = $1 AND v.barcode = $2 AND v.id != $3
+            `, [parseInt(companyId), variantBarcode, currentVariantId])
+            if (variantBarcodeCheck.rows.length > 0) {
+              const existing = variantBarcodeCheck.rows[0]
+              return NextResponse.json({
+                success: false,
+                error: `El código de barras "${variantBarcode}" ya existe en la variante "${existing.variant_name}" del producto "${existing.product_name}"`
+              }, { status: 400 })
+            }
+          }
           const variantImageUrl = v.imageUrl || imageUrl || null
 
           // Check if this variant has a valid existing ID (not a temp ID like 'var-xxx')
