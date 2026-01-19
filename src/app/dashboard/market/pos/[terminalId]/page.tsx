@@ -1635,19 +1635,19 @@ export default function POSTerminalPage() {
                       </p>
                     )}
 
-                    {/* Info button */}
+                    {/* Info button - always visible for touch devices */}
                     <button
                       onClick={(e) => showProductDetails(product, e)}
                       className={cn(
-                        'absolute top-1 left-1 lg:top-2 lg:left-2 w-5 h-5 lg:w-6 lg:h-6 rounded-full flex items-center justify-center transition-all',
-                        'opacity-0 group-hover:opacity-100',
+                        'absolute top-1 left-1 lg:top-2 lg:left-2 w-6 h-6 lg:w-7 lg:h-7 rounded-full flex items-center justify-center transition-all z-10',
                         theme === 'dark'
-                          ? 'bg-gray-700 hover:bg-blue-600 text-gray-300 hover:text-white'
-                          : 'bg-white/90 hover:bg-blue-500 text-gray-600 hover:text-white',
-                        'shadow-sm'
+                          ? 'bg-gray-700/90 hover:bg-blue-600 text-gray-300 hover:text-white'
+                          : 'bg-white/95 hover:bg-blue-500 text-gray-600 hover:text-white',
+                        'shadow-md border',
+                        theme === 'dark' ? 'border-gray-600' : 'border-gray-300'
                       )}
                     >
-                      <Info className="w-3 h-3 lg:w-3.5 lg:h-3.5" />
+                      <Info className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
                     </button>
 
                     {/* Variants badge */}
