@@ -351,11 +351,12 @@ export async function PUT(
         }, { status: 400 })
       }
 
-      // Update purchase with acceptance
+      // Update purchase with acceptance - also change validation_status to confirmed
       await db.query(`
         UPDATE market_purchases
         SET accepted_by = $1,
             accepted_at = NOW(),
+            validation_status = 'confirmed',
             updated_at = NOW()
         WHERE id = $2
       `, [userId, purchaseId])
