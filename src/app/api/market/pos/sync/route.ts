@@ -158,6 +158,49 @@ export async function POST(request: NextRequest) {
         const totalAmount = subtotal - totalDiscount + totalTax
         const warehouseId = order.warehouseId || defaultWarehouseId
 
+        // Validate stock availability before creating order
+        if (warehouseId) {
+          for (const line of order.lines) {
+            const quantity = parseFloat(line.quantity) || 1
+            const productId = parseInt(line.productId) || null
+
+            if (productId) {
+              const productCheck = await db.query(
+                'SELECT name, track_inventory FROM market_products WHERE id = $1',
+                [productId]
+              )
+
+              if (productCheck.rows[0]?.track_inventory) {
+                const stockCheck = await db.query(`
+                  SELECT COALESCE(quantity_on_hand, 0) as available
+                  FROM market_warehouse_stock
+                  WHERE product_id = $1 AND warehouse_id = $2
+                `, [productId, warehouseId])
+
+                const availableStock = parseFloat(stockCheck.rows[0]?.available) || 0
+
+                if (availableStock < quantity) {
+                  const productName = productCheck.rows[0]?.name || `Producto ${productId}`
+                  console.log('[POS Sync] Insufficient stock for offline order:', {
+                    offlineId: order.offlineId,
+                    productId,
+                    productName,
+                    requested: quantity,
+                    available: availableStock
+                  })
+
+                  results.push({
+                    offlineId: order.offlineId,
+                    success: false,
+                    error: `Stock insuficiente para "${productName}". Disponible: ${availableStock}`
+                  })
+                  continue // Skip this order, move to next
+                }
+              }
+            }
+          }
+        }
+
         // Create order
         const orderResult = await db.query(`
           INSERT INTO market_pos_orders (
