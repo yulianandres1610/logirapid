@@ -52,6 +52,12 @@ interface Product {
   unitOfMeasure: string
   createdAt: string
   updatedAt: string
+  matchedVariant?: {
+    id: number
+    name: string
+    barcode: string
+    sku: string
+  }
 }
 
 interface Stats {
@@ -672,6 +678,11 @@ export default function MarketInventoryPage() {
                                   <p className="font-medium text-gray-900 dark:text-white">{product.name}</p>
                                   {product.category && (
                                     <p className="text-xs text-gray-500 dark:text-gray-400">{product.category}</p>
+                                  )}
+                                  {product.matchedVariant && (
+                                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-0.5">
+                                      📦 Variante: {product.matchedVariant.name} ({product.matchedVariant.barcode || product.matchedVariant.sku})
+                                    </p>
                                   )}
                                 </div>
                               </div>

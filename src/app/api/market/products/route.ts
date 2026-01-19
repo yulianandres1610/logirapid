@@ -89,9 +89,18 @@ export async function GET(request: NextRequest) {
     const queryParams: (string | number)[] = [companyId]
     let paramIndex = 2
 
-    // Search filter
+    // Search filter - includes variant barcodes/SKUs
     if (search) {
-      query += ` AND (LOWER(p.name) LIKE $${paramIndex} OR LOWER(p.sku) LIKE $${paramIndex} OR LOWER(p.barcode) LIKE $${paramIndex})`
+      query += ` AND (
+        LOWER(p.name) LIKE $${paramIndex}
+        OR LOWER(p.sku) LIKE $${paramIndex}
+        OR LOWER(p.barcode) LIKE $${paramIndex}
+        OR EXISTS (
+          SELECT 1 FROM market_product_variants v
+          WHERE v.product_id = p.id
+          AND (LOWER(v.barcode) LIKE $${paramIndex} OR LOWER(v.sku) LIKE $${paramIndex})
+        )
+      )`
       queryParams.push(`%${search.toLowerCase()}%`)
       paramIndex++
     }
@@ -132,7 +141,16 @@ export async function GET(request: NextRequest) {
     let countParamIndex = 2
 
     if (search) {
-      countQuery += ` AND (LOWER(p.name) LIKE $${countParamIndex} OR LOWER(p.sku) LIKE $${countParamIndex} OR LOWER(p.barcode) LIKE $${countParamIndex})`
+      countQuery += ` AND (
+        LOWER(p.name) LIKE $${countParamIndex}
+        OR LOWER(p.sku) LIKE $${countParamIndex}
+        OR LOWER(p.barcode) LIKE $${countParamIndex}
+        OR EXISTS (
+          SELECT 1 FROM market_product_variants v
+          WHERE v.product_id = p.id
+          AND (LOWER(v.barcode) LIKE $${countParamIndex} OR LOWER(v.sku) LIKE $${countParamIndex})
+        )
+      )`
       countParams.push(`%${search.toLowerCase()}%`)
       countParamIndex++
     }
@@ -235,12 +253,24 @@ export async function GET(request: NextRequest) {
       WHERE p.company_id = $1 AND p.is_active = true
     `, [companyId])
 
+    // Check if search matched a variant (for UI feedback)
+    const searchLower = search.toLowerCase()
+
     return NextResponse.json({
       success: true,
       data: {
         products: result.rows.map(row => {
           const variants = variantsByProduct[row.id] || []
           const hasVariants = variants.length > 0
+
+          // Find if search matched a variant's barcode or SKU
+          let matchedVariant: { id: number; name: string; barcode: string; sku: string } | undefined
+          if (search && hasVariants) {
+            matchedVariant = variants.find(v =>
+              (v.barcode && v.barcode.toLowerCase().includes(searchLower)) ||
+              (v.sku && v.sku.toLowerCase().includes(searchLower))
+            )
+          }
 
           return {
             id: row.id,
@@ -268,7 +298,13 @@ export async function GET(request: NextRequest) {
             createdAt: row.created_at,
             updatedAt: row.updated_at,
             hasVariants,
-            variants: hasVariants ? variants : undefined
+            variants: hasVariants ? variants : undefined,
+            matchedVariant: matchedVariant ? {
+              id: matchedVariant.id,
+              name: matchedVariant.name,
+              barcode: matchedVariant.barcode,
+              sku: matchedVariant.sku
+            } : undefined
           }
         }),
         categories: categoriesResult.rows.map(r => r.category),
