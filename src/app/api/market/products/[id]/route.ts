@@ -428,6 +428,19 @@ export async function PUT(
               productId
             ])
 
+            // Update variant options - delete old and insert new
+            if (v.options && Array.isArray(v.options)) {
+              await db.query('DELETE FROM market_variant_options WHERE variant_id = $1', [v.id])
+              for (const opt of v.options) {
+                if (opt.type && opt.value) {
+                  await db.query(`
+                    INSERT INTO market_variant_options (variant_id, option_type, option_value)
+                    VALUES ($1, $2, $3)
+                  `, [v.id, opt.type, opt.value])
+                }
+              }
+            }
+
             processedVariantIds.add(v.id)
             savedVariants.push({
               id: v.id,
@@ -484,16 +497,25 @@ export async function PUT(
       const variantsToDelete = [...existingVariantIds].filter(id => !processedVariantIds.has(id))
       if (variantsToDelete.length > 0) {
         console.log('[Product Update] Deleting removed variants:', variantsToDelete)
-        // First delete variant options
-        await db.query(
-          'DELETE FROM market_variant_options WHERE variant_id = ANY($1)',
-          [variantsToDelete]
-        )
-        // Then delete variants
-        await db.query(
-          'DELETE FROM market_product_variants WHERE id = ANY($1)',
-          [variantsToDelete]
-        )
+        try {
+          // First delete variant options
+          const optionsDeleteResult = await db.query(
+            'DELETE FROM market_variant_options WHERE variant_id = ANY($1)',
+            [variantsToDelete]
+          )
+          console.log('[Product Update] Deleted', optionsDeleteResult.rowCount, 'variant options')
+
+          // Then delete variants
+          const variantsDeleteResult = await db.query(
+            'DELETE FROM market_product_variants WHERE id = ANY($1)',
+            [variantsToDelete]
+          )
+          console.log('[Product Update] Deleted', variantsDeleteResult.rowCount, 'variants')
+        } catch (deleteError) {
+          console.error('[Product Update] Error deleting old variants:', deleteError)
+        }
+      } else {
+        console.log('[Product Update] No variants to delete. Existing:', existingVariantIds.size, 'Processed:', processedVariantIds.size)
       }
 
       // Log variant changes

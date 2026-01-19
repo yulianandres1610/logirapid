@@ -9,10 +9,16 @@ export const runtime = 'nodejs'
 
 const VoiceResponse = twilio.twiml.VoiceResponse
 
-// OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
+// Lazy OpenAI client initialization to avoid build-time errors
+let _openai: OpenAI | null = null
+function getOpenAI(): OpenAI {
+  if (!_openai) {
+    _openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    })
+  }
+  return _openai
+}
 
 // System prompt para el agente de voz - conversacional y amigable
 const VOICE_SYSTEM_PROMPT = `Eres Sofia, la asistente telefonica de LogiRapid, una empresa de envios y logistica a Cuba ubicada en Miami.
@@ -129,7 +135,7 @@ export async function POST(request: NextRequest) {
     } else {
       // Generate response with OpenAI
       try {
-        const completion = await openai.chat.completions.create({
+        const completion = await getOpenAI().chat.completions.create({
           model: 'gpt-4o-mini',
           messages: [
             { role: 'system', content: VOICE_SYSTEM_PROMPT },

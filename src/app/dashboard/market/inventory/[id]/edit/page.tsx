@@ -955,16 +955,48 @@ export default function EditProductPage() {
     }
 
     const combinations = generateCombinations(variantTypes)
-    const newVariants: Variant[] = combinations.map((combo, index) => ({
-      id: `var-${Date.now()}-${index}`,
-      name: combo.map(c => c.value).join(' - '),
-      sku: '',
-      barcode: '',
-      costPrice: formData.costPrice,
-      sellingPrice: formData.sellingPrice,
-      options: combo,
-      imageUrl: ''
-    }))
+
+    // Helper to create a unique key for a combination of options
+    const getComboKey = (options: { type: string; value: string }[]) => {
+      return options
+        .map(o => `${o.type}:${o.value}`)
+        .sort()
+        .join('|')
+    }
+
+    // Create a map of existing variants by their option combination
+    const existingVariantsMap = new Map<string, Variant>()
+    variants.forEach(v => {
+      const key = getComboKey(v.options)
+      existingVariantsMap.set(key, v)
+    })
+
+    // Generate variants, preserving existing ones with their DB IDs
+    const newVariants: Variant[] = combinations.map((combo, index) => {
+      const comboKey = getComboKey(combo)
+      const existingVariant = existingVariantsMap.get(comboKey)
+
+      if (existingVariant) {
+        // Preserve existing variant with its DB ID and data
+        return {
+          ...existingVariant,
+          name: combo.map(c => c.value).join(' - '), // Update name in case format changed
+          options: combo // Update options to ensure consistency
+        }
+      } else {
+        // Create new variant with temp ID
+        return {
+          id: `var-${Date.now()}-${index}`,
+          name: combo.map(c => c.value).join(' - '),
+          sku: '',
+          barcode: '',
+          costPrice: formData.costPrice,
+          sellingPrice: formData.sellingPrice,
+          options: combo,
+          imageUrl: ''
+        }
+      }
+    })
 
     setVariants(newVariants)
     setFormData(prev => ({ ...prev, hasVariants: true }))
