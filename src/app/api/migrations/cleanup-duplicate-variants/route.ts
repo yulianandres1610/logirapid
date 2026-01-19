@@ -198,10 +198,22 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // If debug=true, also return all variants
+    const debug = searchParams.get('debug') === 'true'
+
     return NextResponse.json({
       success: true,
+      totalVariants: result.rows.length,
       totalDuplicates: duplicates.reduce((sum, d) => sum + d.duplicateCount, 0),
-      duplicates
+      duplicates,
+      ...(debug && {
+        allVariants: result.rows.map(r => ({
+          id: r.variant_id,
+          name: r.variant_name,
+          normalizedName: r.normalized_name,
+          optionKey: r.option_key
+        }))
+      })
     })
 
   } catch (error) {
