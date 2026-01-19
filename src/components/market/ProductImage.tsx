@@ -143,13 +143,13 @@ export function ProductImageSquare({
         <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-300 via-gray-200 to-gray-300 dark:from-gray-600 dark:via-gray-500 dark:to-gray-600 bg-[length:200%_100%]" />
       )}
 
-      {/* Image */}
+      {/* Image - use object-contain to preserve aspect ratio without cropping */}
       {src && !hasError && (
         <img
           src={src}
           alt={alt}
           className={cn(
-            'w-full h-full object-cover transition-opacity duration-300',
+            'w-full h-full object-contain transition-opacity duration-300 p-1',
             isLoading ? 'opacity-0' : 'opacity-100'
           )}
           onLoad={handleLoad}
