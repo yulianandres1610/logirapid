@@ -150,6 +150,7 @@ export async function GET(
 
     const variantStock = Array.from(variantStockMap.values())
 
+    // Add cache headers to reduce repeated calls (30 seconds)
     return NextResponse.json({
       success: true,
       data: {
@@ -157,6 +158,10 @@ export async function GET(
         variantStock,
         totals,
         warehouseCount: warehousesResult.rows.length
+      }
+    }, {
+      headers: {
+        'Cache-Control': 'private, max-age=30, stale-while-revalidate=60'
       }
     })
   } catch (error) {

@@ -206,6 +206,10 @@ export default function POSTerminalPage() {
   const [warehouseStocks, setWarehouseStocks] = useState<WarehouseStock[]>([])
   const [loadingStocks, setLoadingStocks] = useState(false)
 
+  // Cache for product stock data (reduces API calls)
+  const stockCacheRef = useRef<Map<number, { data: WarehouseStock[], timestamp: number }>>(new Map())
+  const STOCK_CACHE_TTL = 30000 // 30 seconds
+
   // Cashier authentication state
   const [authenticatedEmployee, setAuthenticatedEmployee] = useState<AuthenticatedEmployee | null>(null)
   const [checkingAuth, setCheckingAuth] = useState(true)
@@ -845,11 +849,23 @@ export default function POSTerminalPage() {
     setSelectedProductForVariant(null)
   }, [selectedProductForVariant, addToCart])
 
-  // Show product details modal
+  // Show product details modal (with caching to reduce API calls)
   const showProductDetails = useCallback(async (product: Product, e: React.MouseEvent) => {
     e.stopPropagation() // Prevent adding to cart
     setSelectedProductForDetails(product)
     setShowProductDetailsModal(true)
+
+    // Check cache first
+    const cached = stockCacheRef.current.get(product.id)
+    const now = Date.now()
+
+    if (cached && (now - cached.timestamp) < STOCK_CACHE_TTL) {
+      // Use cached data
+      setWarehouseStocks(cached.data)
+      setLoadingStocks(false)
+      return
+    }
+
     setLoadingStocks(true)
     setWarehouseStocks([])
 
@@ -858,7 +874,7 @@ export default function POSTerminalPage() {
       const data = await res.json()
 
       if (data.success && data.data.warehouses) {
-        setWarehouseStocks(data.data.warehouses.map((w: {
+        const stocks = data.data.warehouses.map((w: {
           warehouseId: number
           warehouseName: string
           warehouseCode: string
@@ -870,7 +886,11 @@ export default function POSTerminalPage() {
           warehouseCode: w.warehouseCode,
           stock: w.quantityOnHand,
           isCurrentWarehouse: w.isCurrentWarehouse
-        })))
+        }))
+
+        // Cache the result
+        stockCacheRef.current.set(product.id, { data: stocks, timestamp: now })
+        setWarehouseStocks(stocks)
       }
     } catch (error) {
       console.error('[POS] Error fetching warehouse stocks:', error)
