@@ -249,7 +249,7 @@ export async function PUT(
       commissionRate,
       posPin, // New PIN (if changing)
       badgeCode,
-      warehouseId, // Warehouse assignment for MARKET_ALMACENERO
+      warehouseId, // Warehouse assignment for MARKET_ALMACENERO and MARKET_MANAGER_TIENDA
       terminals // Updated terminal associations
     } = body
 
@@ -258,7 +258,7 @@ export async function PUT(
     try {
       // Update user info
       if (firstName !== undefined || lastName !== undefined || phone !== undefined || role !== undefined || password) {
-        const validRoles = ['MARKET_MANAGER', 'MARKET_COMERCIAL', 'MARKET_ALMACENERO', 'MARKET_VENDEDOR']
+        const validRoles = ['MARKET_MANAGER', 'MARKET_MANAGER_TIENDA', 'MARKET_COMERCIAL', 'MARKET_ALMACENERO', 'MARKET_VENDEDOR']
         if (role && !validRoles.includes(role)) {
           await db.query('ROLLBACK')
           return NextResponse.json({

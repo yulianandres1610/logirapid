@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
       firstName,
       lastName,
       phone,
-      role, // MARKET_MANAGER, MARKET_COMERCIAL, MARKET_ALMACENERO, MARKET_VENDEDOR
+      role, // MARKET_MANAGER, MARKET_MANAGER_TIENDA, MARKET_COMERCIAL, MARKET_ALMACENERO, MARKET_VENDEDOR
 
       // Employee data
       hireDate,
@@ -235,7 +235,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate role
-    const validRoles = ['MARKET_MANAGER', 'MARKET_COMERCIAL', 'MARKET_ALMACENERO', 'MARKET_VENDEDOR']
+    const validRoles = ['MARKET_MANAGER', 'MARKET_MANAGER_TIENDA', 'MARKET_COMERCIAL', 'MARKET_ALMACENERO', 'MARKET_VENDEDOR']
     if (!validRoles.includes(role)) {
       return NextResponse.json({
         success: false,
@@ -243,11 +243,11 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Validate warehouseId required for MARKET_ALMACENERO
-    if (role === 'MARKET_ALMACENERO' && !warehouseId) {
+    // Validate warehouseId required for MARKET_ALMACENERO and MARKET_MANAGER_TIENDA
+    if ((role === 'MARKET_ALMACENERO' || role === 'MARKET_MANAGER_TIENDA') && !warehouseId) {
       return NextResponse.json({
         success: false,
-        error: 'Debe seleccionar un almacén para el rol Almacenero'
+        error: 'Debe seleccionar un almacén para este rol'
       }, { status: 400 })
     }
 

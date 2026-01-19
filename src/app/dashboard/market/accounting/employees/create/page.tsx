@@ -59,7 +59,8 @@ const STEPS = [
 ]
 
 const ROLES = [
-  { value: 'MARKET_MANAGER', label: 'Manager', description: 'Acceso completo, puede aprobar solicitudes' },
+  { value: 'MARKET_MANAGER', label: 'Manager General', description: 'Acceso completo a todo el sistema' },
+  { value: 'MARKET_MANAGER_TIENDA', label: 'Manager Tienda', description: 'Gestiona tienda: acepta transferencias, arqueos, cajeros' },
   { value: 'MARKET_COMERCIAL', label: 'Comercial', description: 'Ventas, puede ver sus comisiones' },
   { value: 'MARKET_ALMACENERO', label: 'Almacenero', description: 'Inventario, sin acceso a nóminas' },
   { value: 'MARKET_VENDEDOR', label: 'Vendedor', description: 'Solo POS, ve sus ventas y comisiones' }
@@ -280,8 +281,8 @@ export default function CreateEmployeePage() {
           setError('La tarifa debe ser mayor a 0')
           return false
         }
-        if (formData.role === 'MARKET_ALMACENERO' && !formData.warehouseId) {
-          setError('Debe seleccionar un almacén para el rol Almacenero')
+        if ((formData.role === 'MARKET_ALMACENERO' || formData.role === 'MARKET_MANAGER_TIENDA') && !formData.warehouseId) {
+          setError('Debe seleccionar un almacén para este rol')
           return false
         }
         return true
@@ -681,8 +682,8 @@ export default function CreateEmployeePage() {
                     </div>
                   </div>
 
-                  {/* Warehouse selector - only for MARKET_ALMACENERO */}
-                  {formData.role === 'MARKET_ALMACENERO' && (
+                  {/* Warehouse selector - for MARKET_ALMACENERO and MARKET_MANAGER_TIENDA */}
+                  {(formData.role === 'MARKET_ALMACENERO' || formData.role === 'MARKET_MANAGER_TIENDA') && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                         <WarehouseIcon className="w-4 h-4 inline mr-2" />
@@ -1032,7 +1033,7 @@ export default function CreateEmployeePage() {
                             {new Date(formData.hireDate).toLocaleDateString('es-ES')}
                           </dd>
                         </div>
-                        {formData.role === 'MARKET_ALMACENERO' && formData.warehouseId && (
+                        {(formData.role === 'MARKET_ALMACENERO' || formData.role === 'MARKET_MANAGER_TIENDA') && formData.warehouseId && (
                           <div>
                             <dt className="text-gray-500">Almacén Asignado</dt>
                             <dd className="font-medium text-emerald-600 dark:text-emerald-400">
