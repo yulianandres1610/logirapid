@@ -715,7 +715,7 @@ export default function WarehouseOperationsPage() {
 
   const handleNumpadConfirm = () => {
     if (selectedProductIndex !== null && operation.products[selectedProductIndex]) {
-      const quantity = parseInt(numpadValue) || 1
+      const quantity = parseFloat(numpadValue) || 1
       const productId = operation.products[selectedProductIndex].id
 
       if (operation.operationType === 'adjustment') {

@@ -21,8 +21,18 @@ export default function WarehouseNumpad({
   const handleNumberClick = (num: string) => {
     if (disabled) return
 
+    // Handle decimal point
+    if (num === '.') {
+      // Don't add if already has decimal
+      if (value.includes('.')) return
+      // Add leading zero if starting with decimal
+      const newValue = value === '0' || value === '' ? '0.' : value + '.'
+      onChange(newValue)
+      return
+    }
+
     const newValue = value === '0' ? num : value + num
-    const numericValue = parseInt(newValue)
+    const numericValue = parseFloat(newValue)
 
     if (maxValue && numericValue > maxValue) {
       onChange(String(maxValue))
@@ -45,7 +55,15 @@ export default function WarehouseNumpad({
     }
   }
 
-  const buttons = [
+  type ButtonConfig = {
+    label: string
+    action: () => void
+    special?: boolean
+    decimal?: boolean
+    icon?: typeof Delete
+  }
+
+  const buttons: ButtonConfig[] = [
     { label: '7', action: () => handleNumberClick('7') },
     { label: '8', action: () => handleNumberClick('8') },
     { label: '9', action: () => handleNumberClick('9') },
@@ -55,7 +73,7 @@ export default function WarehouseNumpad({
     { label: '1', action: () => handleNumberClick('1') },
     { label: '2', action: () => handleNumberClick('2') },
     { label: '3', action: () => handleNumberClick('3') },
-    { label: 'C', action: handleClear, special: true },
+    { label: '.', action: () => handleNumberClick('.'), decimal: true },
     { label: '0', action: () => handleNumberClick('0') },
     { label: 'del', action: handleBackspace, icon: Delete }
   ]
@@ -85,7 +103,9 @@ export default function WarehouseNumpad({
                 ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
                 : btn.icon
                   ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-gray-600'
+                  : btn.decimal
+                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-gray-600'
               }
             `}
           >
