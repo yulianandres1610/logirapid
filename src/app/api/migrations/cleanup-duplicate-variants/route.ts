@@ -34,26 +34,32 @@ export async function POST(request: NextRequest) {
       const pid = row.product_id
 
       // Get all variants for this product with their options
+      // Normalize names: lowercase, trim, and remove extra spaces
       const variantsResult = await db.query(`
         SELECT
           v.id,
           v.variant_name,
           v.created_at,
+          LOWER(TRIM(REGEXP_REPLACE(v.variant_name, '\\s+', ' ', 'g'))) as normalized_name,
           COALESCE(
-            (SELECT string_agg(vo.option_type || ':' || vo.option_value, '|' ORDER BY vo.option_type)
+            (SELECT string_agg(
+              LOWER(TRIM(vo.option_type)) || ':' || LOWER(TRIM(vo.option_value)),
+              '|' ORDER BY LOWER(TRIM(vo.option_type))
+            )
              FROM market_variant_options vo
              WHERE vo.variant_id = v.id),
-            v.variant_name
+            ''
           ) as option_key
         FROM market_product_variants v
         WHERE v.product_id = $1
         ORDER BY v.created_at ASC
       `, [pid])
 
-      // Group by option_key and find duplicates
+      // Group by normalized_name (case-insensitive, trimmed) to find duplicates
       const groupedByKey = new Map<string, number[]>()
       for (const variant of variantsResult.rows) {
-        const key = variant.option_key || variant.variant_name
+        // Use normalized name as key - this catches duplicates with different casing/spacing
+        const key = variant.normalized_name || variant.variant_name?.toLowerCase().trim()
         if (!groupedByKey.has(key)) {
           groupedByKey.set(key, [])
         }
@@ -123,6 +129,7 @@ export async function GET(request: NextRequest) {
     const productId = searchParams.get('productId')
 
     // Get all variants grouped by product and option combination
+    // Normalize names: lowercase, trim, and remove extra spaces
     let query = `
       SELECT
         v.product_id,
@@ -130,11 +137,15 @@ export async function GET(request: NextRequest) {
         v.id as variant_id,
         v.variant_name,
         v.created_at,
+        LOWER(TRIM(REGEXP_REPLACE(v.variant_name, '\\s+', ' ', 'g'))) as normalized_name,
         COALESCE(
-          (SELECT string_agg(vo.option_type || ':' || vo.option_value, '|' ORDER BY vo.option_type)
+          (SELECT string_agg(
+            LOWER(TRIM(vo.option_type)) || ':' || LOWER(TRIM(vo.option_value)),
+            '|' ORDER BY LOWER(TRIM(vo.option_type))
+          )
            FROM market_variant_options vo
            WHERE vo.variant_id = v.id),
-          v.variant_name
+          ''
         ) as option_key
       FROM market_product_variants v
       JOIN market_products p ON p.id = v.product_id
@@ -146,7 +157,7 @@ export async function GET(request: NextRequest) {
       params.push(parseInt(productId))
     }
 
-    query += ' ORDER BY v.product_id, option_key, v.created_at'
+    query += ' ORDER BY v.product_id, normalized_name, v.created_at'
 
     const result = await db.query(query, params)
 
@@ -159,7 +170,8 @@ export async function GET(request: NextRequest) {
         groupedByProduct.set(row.product_id, new Map())
       }
       const productMap = groupedByProduct.get(row.product_id)!
-      const key = row.option_key || row.variant_name
+      // Use normalized name as key
+      const key = row.normalized_name || row.variant_name?.toLowerCase().trim()
 
       if (!productMap.has(key)) {
         productMap.set(key, [])
