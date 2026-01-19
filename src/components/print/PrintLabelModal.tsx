@@ -58,7 +58,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
   const exchangeRates = useMarketExchangeRates()
-  const USD_CUP_BCC = exchangeRates?.USD_CUP_BCC || 411 // Tasa BCC para etiquetas con fallback
+  const USD_CUP_BCC = exchangeRates?.USD_CUP_BCC || 411
 
   const [loading, setLoading] = useState(true)
   const [printing, setPrinting] = useState(false)
@@ -69,7 +69,6 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
   const [variantCopies, setVariantCopies] = useState<Record<number, number>>({})
   const [error, setError] = useState<string | null>(null)
 
-  // Debug log para ver los datos recibidos
   useEffect(() => {
     if (isOpen) {
       console.log('[PrintLabelModal] Datos recibidos:', {
@@ -84,13 +83,11 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
     }
   }, [isOpen, productData])
 
-  // Validate productData
   if (!productData) {
     console.error('[PrintLabelModal] productData is null or undefined')
     return null
   }
 
-  // Calculate total copies with safe fallbacks
   const hasVariants = productData.variants && Array.isArray(productData.variants) && productData.variants.length > 0
   const totalCopies = copies + Object.values(variantCopies).reduce((a, b) => a + (b || 0), 0)
 
@@ -116,25 +113,21 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
       })
       const data = await response.json()
 
-      // Check for API errors first
       if (!data.success) {
         setError(data.error || 'Error al cargar servicios de impresión')
         return
       }
 
       if (data.data?.services && data.data.services.length > 0) {
-        // Filter to only active services with printers
         const activeServices = data.data.services.filter(
           (s: PrintService) => s.status === 'active' && s.printers?.length > 0
         )
         setServices(activeServices)
 
-        // Auto-select first service and default label printer
         if (activeServices.length > 0) {
           const firstService = activeServices[0]
           setSelectedService(firstService)
 
-          // Filter to only label printers
           const labelPrinters = firstService.printers.filter((p: PrinterInfo) =>
             p.printerType === 'label_barcode' ||
             p.printerType === 'label_4x6' ||
@@ -143,7 +136,6 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
             p.printerName.toLowerCase().includes('etiqueta')
           )
 
-          // Find default or first online label printer
           const defaultPrinter = labelPrinters.find((p: PrinterInfo) => p.isDefault && p.isOnline)
             || labelPrinters.find((p: PrinterInfo) => p.isOnline)
             || labelPrinters[0]
@@ -153,7 +145,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
           setError('No hay servicios de impresión activos con impresoras configuradas')
         }
       } else {
-        setError('No se encontraron servicios de impresión. Configure un servicio en la aplicación de escritorio.')
+        setError('No se encontraron servicios de impresión.')
       }
     } catch (err) {
       console.error('Error fetching print services:', err)
@@ -163,7 +155,6 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
     }
   }
 
-  // includePrice: true = con precio CUP, false = solo nombre y codigo
   const handlePrint = async (includePrice: boolean) => {
     if (!selectedService || !selectedPrinter) {
       showNotification('error', 'Error', 'Seleccione una impresora')
@@ -179,7 +170,6 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
     try {
       const jobs: { documentType: string; documentData: Record<string, unknown>; copies: number }[] = []
 
-      // Calculate price in CUP using BCC rate
       const calculatePriceCUP = (priceUSD: number) => {
         if (!includePrice) return undefined
         const rate = USD_CUP_BCC || 411
@@ -188,7 +178,6 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
         return Math.round(price * rate)
       }
 
-      // Add base product job if copies > 0
       if (copies > 0) {
         jobs.push({
           documentType: 'product_label',
@@ -198,7 +187,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
             barcode: productData.barcode || '',
             barcodeType: detectBarcodeType(productData.barcode || ''),
             includePrice,
-            priceCUP: calculatePriceCUP(productData.price || 0),
+            priceCUP: calculatePriceCUP(Number(productData.price) || 0),
             currency: 'CUP',
             unitOfMeasure: productData.unitOfMeasure,
             category: productData.category,
@@ -209,7 +198,6 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
         })
       }
 
-      // Add variant jobs
       if (productData.variants) {
         for (const variant of productData.variants) {
           const qty = variantCopies[variant.id] || 0
@@ -235,7 +223,6 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
         }
       }
 
-      // Send all jobs
       const jobNumbers: string[] = []
       for (const job of jobs) {
         const response = await fetch('/api/print/jobs', {
@@ -263,13 +250,17 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
       showNotification(
         'success',
         'Imprimiendo',
-        `${jobNumbers.length} trabajo(s) ${priceInfo} enviado(s) a ${selectedPrinter.printerName} (${totalCopies} etiquetas)`
+        `${totalCopies} etiqueta${totalCopies > 1 ? 's' : ''} ${priceInfo} enviada${totalCopies > 1 ? 's' : ''} a ${selectedPrinter.printerName}`
       )
-      onPrintSuccess?.(jobNumbers[0])
+
+      if (onPrintSuccess && jobNumbers.length > 0) {
+        onPrintSuccess(jobNumbers.join(', '))
+      }
+
       onClose()
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Error desconocido'
-      showNotification('error', 'Error de impresión', errorMessage)
+      console.error('Print error:', err)
+      showNotification('error', 'Error', err instanceof Error ? err.message : 'Error al imprimir')
     } finally {
       setPrinting(false)
     }
@@ -286,6 +277,14 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
 
   if (!isOpen) return null
 
+  const labelPrinters = selectedService?.printers.filter(printer =>
+    printer.printerType === 'label_barcode' ||
+    printer.printerType === 'label_4x6' ||
+    printer.printerName.toLowerCase().includes('label') ||
+    printer.printerName.toLowerCase().includes('barcode') ||
+    printer.printerName.toLowerCase().includes('etiqueta')
+  ) || []
+
   return (
     <AnimatePresence>
       <motion.div
@@ -296,382 +295,229 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
         onClick={onClose}
       >
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
           onClick={(e) => e.stopPropagation()}
           className={cn(
-            'w-full max-w-md rounded-2xl shadow-2xl overflow-hidden',
+            'w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden',
             theme === 'dark' ? 'bg-gray-800' : 'bg-white'
           )}
         >
-          {/* Header */}
+          {/* Header compacto */}
           <div className={cn(
-            'px-6 py-4 border-b flex items-center justify-between',
-            theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
+            'px-4 py-3 border-b flex items-center justify-between',
+            theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
           )}>
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                <Printer className="w-5 h-5 text-emerald-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white">Imprimir Etiqueta</h3>
-                <p className="text-xs text-gray-500 truncate max-w-[200px]">{productData.productName}</p>
-              </div>
+            <div className="flex items-center gap-2">
+              <Printer className="w-5 h-5 text-emerald-600" />
+              <h3 className="font-semibold text-gray-900 dark:text-white">Imprimir Etiquetas</h3>
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
             >
               <X className="w-5 h-5 text-gray-500" />
             </button>
           </div>
 
           {/* Content */}
-          <div className="p-6 space-y-6">
+          <div className="p-4">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-8">
-                <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mb-3" />
+                <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mb-2" />
                 <p className="text-sm text-gray-500">Buscando impresoras...</p>
               </div>
             ) : error ? (
-              <div className="flex flex-col items-center justify-center py-8">
-                <AlertCircle className="w-12 h-12 text-red-500 mb-3" />
-                <p className="text-gray-600 dark:text-gray-300 text-center">{error}</p>
+              <div className="flex flex-col items-center justify-center py-6">
+                <AlertCircle className="w-10 h-10 text-red-500 mb-2" />
+                <p className="text-gray-600 dark:text-gray-300 text-center text-sm">{error}</p>
                 <button
                   onClick={fetchPrintServices}
-                  className="mt-4 text-sm text-emerald-600 hover:text-emerald-700"
+                  className="mt-3 text-sm text-emerald-600 hover:text-emerald-700"
                 >
                   Reintentar
                 </button>
               </div>
-            ) : services.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8">
-                <AlertCircle className="w-12 h-12 text-amber-500 mb-3" />
-                <p className="text-gray-600 dark:text-gray-300 text-center font-medium">
-                  No hay servicios de impresión disponibles
-                </p>
-                <p className="text-sm text-gray-500 text-center mt-1">
-                  Instala y configura LogiRapid Print Service
-                </p>
-              </div>
             ) : (
-              <>
-                {/* Service Selector (if multiple) */}
-                {services.length > 1 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Servicio de Impresión
-                    </label>
-                    <select
-                      value={selectedService?.id || ''}
-                      onChange={(e) => {
-                        const service = services.find(s => s.id === parseInt(e.target.value))
-                        setSelectedService(service || null)
-                        if (service) {
-                          // Filter to only label printers
-                          const labelPrinters = service.printers.filter(p =>
-                            p.printerType === 'label_barcode' ||
-                            p.printerType === 'label_4x6' ||
-                            p.printerName.toLowerCase().includes('label') ||
-                            p.printerName.toLowerCase().includes('barcode') ||
-                            p.printerName.toLowerCase().includes('etiqueta')
-                          )
-                          const defaultPrinter = labelPrinters.find(p => p.isDefault && p.isOnline)
-                            || labelPrinters.find(p => p.isOnline)
-                            || labelPrinters[0]
-                          setSelectedPrinter(defaultPrinter || null)
-                        }
-                      }}
-                      className={cn(
-                        'w-full px-4 py-3 rounded-xl border transition-colors',
-                        theme === 'dark'
-                          ? 'bg-gray-700 border-gray-600 text-white'
-                          : 'bg-white border-gray-200 text-gray-900'
-                      )}
-                    >
-                      {services.map(service => (
-                        <option key={service.id} value={service.id}>
-                          {service.serviceName} ({service.serviceCode})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Printer Selector - Only show label printers for product labels */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Impresora de Etiquetas
-                  </label>
-                  <div className="space-y-2">
-                    {selectedService?.printers
-                      .filter(printer =>
-                        printer.printerType === 'label_barcode' ||
-                        printer.printerType === 'label_4x6' ||
-                        printer.printerName.toLowerCase().includes('label') ||
-                        printer.printerName.toLowerCase().includes('barcode') ||
-                        printer.printerName.toLowerCase().includes('etiqueta')
-                      )
-                      .map(printer => (
+              <div className="grid grid-cols-2 gap-4">
+                {/* Columna izquierda: Impresora */}
+                <div className="space-y-3">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    Impresora
+                  </p>
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                    {labelPrinters.map(printer => (
                       <button
                         key={printer.id}
                         onClick={() => setSelectedPrinter(printer)}
                         className={cn(
-                          'w-full p-4 rounded-xl border-2 transition-all text-left flex items-center justify-between',
+                          'w-full p-2.5 rounded-lg border transition-all text-left flex items-center gap-2',
                           selectedPrinter?.id === printer.id
-                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30'
                             : theme === 'dark'
-                              ? 'border-gray-600 bg-gray-700/50 hover:border-gray-500'
-                              : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                              ? 'border-gray-600 hover:border-gray-500'
+                              : 'border-gray-200 hover:border-gray-300'
                         )}
                       >
-                        <div className="flex items-center gap-3">
-                          <Printer className={cn(
-                            'w-5 h-5',
-                            selectedPrinter?.id === printer.id ? 'text-emerald-600' : 'text-gray-400'
-                          )} />
-                          <div>
-                            <p className={cn(
-                              'font-medium',
-                              selectedPrinter?.id === printer.id
-                                ? 'text-emerald-700 dark:text-emerald-400'
-                                : 'text-gray-900 dark:text-white'
-                            )}>
-                              {printer.printerName}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {printer.printerType === 'thermal_80mm' ? 'Térmica 80mm' :
-                               printer.printerType === 'label_4x6' ? 'Etiquetas 4x6' :
-                               printer.printerType === 'label_barcode' ? 'Código de barras' :
-                               'Estándar'}
-                              {printer.isDefault && ' • Predeterminada'}
-                            </p>
+                        <div className="flex-1 min-w-0">
+                          <p className={cn(
+                            'text-sm font-medium truncate',
+                            selectedPrinter?.id === printer.id
+                              ? 'text-emerald-700 dark:text-emerald-400'
+                              : 'text-gray-900 dark:text-white'
+                          )}>
+                            {printer.printerName}
+                          </p>
+                          <div className="flex items-center gap-1.5">
+                            {printer.isOnline ? (
+                              <Wifi className="w-3 h-3 text-green-500" />
+                            ) : (
+                              <WifiOff className="w-3 h-3 text-gray-400" />
+                            )}
+                            <span className="text-xs text-gray-500">
+                              {printer.isOnline ? 'Online' : 'Offline'}
+                            </span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {printer.isOnline ? (
-                            <div className="flex items-center gap-1 text-green-600">
-                              <Wifi className="w-4 h-4" />
-                              <span className="text-xs">Online</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1 text-gray-400">
-                              <WifiOff className="w-4 h-4" />
-                              <span className="text-xs">Offline</span>
-                            </div>
-                          )}
-                          {selectedPrinter?.id === printer.id && (
-                            <CheckCircle className="w-5 h-5 text-emerald-500" />
-                          )}
-                        </div>
+                        {selectedPrinter?.id === printer.id && (
+                          <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                        )}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Product and Variants Selection */}
+                {/* Columna derecha: Productos */}
                 <div className="space-y-3">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Seleccionar etiquetas a imprimir
-                  </label>
-
-                  {/* Base Product */}
-                  <div className={cn(
-                    'p-4 rounded-xl border-2',
-                    copies > 0
-                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
-                      : theme === 'dark'
-                        ? 'border-gray-600 bg-gray-700/50'
-                        : 'border-gray-200 bg-gray-50'
-                  )}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className={cn(
-                          'font-semibold truncate',
-                          copies > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-900 dark:text-white'
-                        )}>
-                          {productData.productName}
-                        </p>
-                        <p className="text-xs text-gray-500 font-mono">
-                          {productData.barcode || productData.sku}
-                        </p>
-                        <p className="text-sm font-medium text-emerald-600">
-                          {productData.currency === 'USD' ? '$' : productData.currency}
-                          {(Number(productData.price) || 0).toFixed(2)}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 ml-4">
-                        <button
-                          onClick={() => setCopies(Math.max(0, copies - 1))}
-                          className={cn(
-                            'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-                            theme === 'dark'
-                              ? 'bg-gray-600 hover:bg-gray-500 text-white'
-                              : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
-                          )}
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-                        <div className={cn(
-                          'w-12 h-8 rounded-lg flex items-center justify-center text-lg font-bold',
-                          theme === 'dark' ? 'bg-gray-600 text-white' : 'bg-gray-200 text-gray-900'
-                        )}>
-                          {copies}
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    Etiquetas ({totalCopies})
+                  </p>
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                    {/* Producto base */}
+                    <div className={cn(
+                      'p-2.5 rounded-lg border',
+                      copies > 0
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30'
+                        : theme === 'dark'
+                          ? 'border-gray-600'
+                          : 'border-gray-200'
+                    )}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {productData.productName}
+                          </p>
+                          <p className="text-xs text-gray-500 font-mono truncate">
+                            {productData.barcode || productData.sku}
+                          </p>
                         </div>
-                        <button
-                          onClick={() => setCopies(Math.min(50, copies + 1))}
-                          className={cn(
-                            'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-                            theme === 'dark'
-                              ? 'bg-gray-600 hover:bg-gray-500 text-white'
-                              : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
-                          )}
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => setCopies(Math.max(0, copies - 1))}
+                            className="w-7 h-7 rounded flex items-center justify-center bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="w-8 text-center font-bold text-sm">{copies}</span>
+                          <button
+                            onClick={() => setCopies(Math.min(50, copies + 1))}
+                            className="w-7 h-7 rounded flex items-center justify-center bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Variants */}
-                  {hasVariants && (
-                    <>
-                      <p className="text-xs text-gray-500 uppercase tracking-wide pt-2">
-                        Variantes ({productData.variants?.length})
-                      </p>
-                      {productData.variants?.map(variant => {
-                        const qty = variantCopies[variant.id] || 0
-                        return (
-                          <div
-                            key={variant.id}
-                            className={cn(
-                              'p-4 rounded-xl border-2',
-                              qty > 0
-                                ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
-                                : theme === 'dark'
-                                  ? 'border-gray-600 bg-gray-700/50'
-                                  : 'border-gray-200 bg-gray-50'
-                            )}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1 min-w-0">
-                                <p className={cn(
-                                  'font-semibold truncate',
-                                  qty > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-900 dark:text-white'
-                                )}>
-                                  {variant.name}
-                                </p>
-                                <p className="text-xs text-gray-500 font-mono">
-                                  {variant.barcode || variant.sku || 'Sin codigo'}
-                                </p>
-                                <p className="text-sm font-medium text-emerald-600">
-                                  {productData.currency === 'USD' ? '$' : productData.currency}
-                                  {(Number(variant.price) || Number(productData.price) || 0).toFixed(2)}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2 ml-4">
-                                <button
-                                  onClick={() => updateVariantCopies(variant.id, -1)}
-                                  className={cn(
-                                    'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-                                    theme === 'dark'
-                                      ? 'bg-gray-600 hover:bg-gray-500 text-white'
-                                      : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
-                                  )}
-                                >
-                                  <Minus className="w-4 h-4" />
-                                </button>
-                                <div className={cn(
-                                  'w-12 h-8 rounded-lg flex items-center justify-center text-lg font-bold',
-                                  theme === 'dark' ? 'bg-gray-600 text-white' : 'bg-gray-200 text-gray-900'
-                                )}>
-                                  {qty}
-                                </div>
-                                <button
-                                  onClick={() => updateVariantCopies(variant.id, 1)}
-                                  className={cn(
-                                    'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-                                    theme === 'dark'
-                                      ? 'bg-gray-600 hover:bg-gray-500 text-white'
-                                      : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
-                                  )}
-                                >
-                                  <Plus className="w-4 h-4" />
-                                </button>
-                              </div>
+                    {/* Variantes */}
+                    {hasVariants && productData.variants?.map(variant => {
+                      const qty = variantCopies[variant.id] || 0
+                      return (
+                        <div
+                          key={variant.id}
+                          className={cn(
+                            'p-2.5 rounded-lg border',
+                            qty > 0
+                              ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30'
+                              : theme === 'dark'
+                                ? 'border-gray-600'
+                                : 'border-gray-200'
+                          )}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                {variant.name}
+                              </p>
+                              <p className="text-xs text-gray-500 font-mono truncate">
+                                {variant.barcode || variant.sku || 'Sin código'}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <button
+                                onClick={() => updateVariantCopies(variant.id, -1)}
+                                className="w-7 h-7 rounded flex items-center justify-center bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="w-8 text-center font-bold text-sm">{qty}</span>
+                              <button
+                                onClick={() => updateVariantCopies(variant.id, 1)}
+                                className="w-7 h-7 rounded flex items-center justify-center bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
-                        )
-                      })}
-                    </>
-                  )}
-
-                  {/* Total */}
-                  <div className={cn(
-                    'p-3 rounded-xl text-center',
-                    theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-100'
-                  )}>
-                    <p className="text-sm text-gray-500">Total de etiquetas</p>
-                    <p className="text-2xl font-bold text-emerald-600">{totalCopies}</p>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
-              </>
+              </div>
             )}
           </div>
 
-          {/* Footer */}
+          {/* Footer compacto */}
           {!loading && services.length > 0 && (
             <div className={cn(
-              'px-6 py-4 border-t',
-              theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+              'px-4 py-3 border-t flex gap-2',
+              theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
             )}>
-              <div className="flex gap-2 mb-3">
-                <button
-                  onClick={() => handlePrint(true)}
-                  disabled={printing || !selectedPrinter || totalCopies === 0}
-                  className={cn(
-                    'flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors',
-                    'bg-gradient-to-r from-green-500 to-green-600 text-white',
-                    'hover:from-green-600 hover:to-green-700',
-                    'disabled:opacity-50 disabled:cursor-not-allowed'
-                  )}
-                >
-                  {printing ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <DollarSign className="w-5 h-5" />
-                  )}
-                  Con Precio (CUP)
-                </button>
-                <button
-                  onClick={() => handlePrint(false)}
-                  disabled={printing || !selectedPrinter || totalCopies === 0}
-                  className={cn(
-                    'flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors',
-                    theme === 'dark'
-                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
-                  )}
-                >
-                  {printing ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Tag className="w-5 h-5" />
-                  )}
-                  Sin Precio
-                </button>
-              </div>
               <button
-                onClick={onClose}
+                onClick={() => handlePrint(true)}
+                disabled={printing || !selectedPrinter || totalCopies === 0}
                 className={cn(
-                  'w-full py-2 rounded-xl font-medium transition-colors text-sm',
-                  theme === 'dark'
-                    ? 'text-gray-400 hover:text-gray-300'
-                    : 'text-gray-500 hover:text-gray-700'
+                  'flex-1 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 text-sm',
+                  'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white',
+                  'hover:from-emerald-600 hover:to-emerald-700',
+                  'disabled:opacity-50 disabled:cursor-not-allowed'
                 )}
               >
-                Cancelar
+                {printing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <DollarSign className="w-4 h-4" />
+                )}
+                Con Precio
+              </button>
+              <button
+                onClick={() => handlePrint(false)}
+                disabled={printing || !selectedPrinter || totalCopies === 0}
+                className={cn(
+                  'flex-1 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 text-sm',
+                  theme === 'dark'
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                )}
+              >
+                {printing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Tag className="w-4 h-4" />
+                )}
+                Sin Precio
               </button>
             </div>
           )}
@@ -680,5 +526,3 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
     </AnimatePresence>
   )
 }
-
-export default PrintLabelModal
