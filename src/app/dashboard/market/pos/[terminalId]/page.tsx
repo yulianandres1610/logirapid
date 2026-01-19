@@ -821,14 +821,47 @@ export default function POSTerminalPage() {
   })
 
   // Handle product click - show variant modal if product has variants
+  // If product is out of stock, show details modal with warehouse stock info
   const handleProductClick = useCallback((product: Product) => {
+    // Si el producto está sin stock, mostrar modal de detalles con stock en otros almacenes
+    if (product.trackInventory && product.stock <= 0) {
+      setSelectedProductForDetails(product)
+      setShowProductDetailsModal(true)
+      // Cargar stock de otros almacenes
+      setLoadingStocks(true)
+      setWarehouseStocks([])
+      fetch(`/api/market/products/${product.id}/stock?currentWarehouseId=${terminal?.warehouseId || ''}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.data.warehouses) {
+            const stocks = data.data.warehouses.map((w: {
+              warehouseId: number
+              warehouseName: string
+              warehouseCode: string
+              quantityOnHand: number
+              isCurrentWarehouse: boolean
+            }) => ({
+              warehouseId: w.warehouseId,
+              warehouseName: w.warehouseName,
+              warehouseCode: w.warehouseCode,
+              stock: w.quantityOnHand,
+              isCurrentWarehouse: w.isCurrentWarehouse
+            }))
+            setWarehouseStocks(stocks)
+          }
+        })
+        .catch(error => console.error('[POS] Error fetching warehouse stocks:', error))
+        .finally(() => setLoadingStocks(false))
+      return
+    }
+
     if (product.hasVariants && product.variants && product.variants.length > 0) {
       setSelectedProductForVariant(product)
       setShowVariantModal(true)
     } else {
       addToCart(product, null)
     }
-  }, [addToCart])
+  }, [addToCart, terminal?.warehouseId])
 
   // Handle variant selection from modal
   const handleVariantSelect = useCallback((variant: Variant) => {
@@ -1610,11 +1643,10 @@ export default function POSTerminalPage() {
                     key={product.id}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => handleProductClick(product)}
-                    disabled={product.trackInventory && product.stock <= 0}
                     className={cn(
                       'relative p-1.5 sm:p-2 lg:p-3 rounded-lg lg:rounded-xl text-left transition-all border group',
                       product.trackInventory && product.stock <= 0
-                        ? 'opacity-50 cursor-not-allowed'
+                        ? 'opacity-60'
                         : '',
                       theme === 'dark'
                         ? 'bg-gray-800 border-gray-700 hover:border-blue-500 active:bg-gray-700'

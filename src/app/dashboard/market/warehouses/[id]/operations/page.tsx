@@ -557,13 +557,14 @@ export default function WarehouseOperationsPage() {
       const existingIndex = prev.products.findIndex(p => p.productId === data.product.id)
 
       if (existingIndex >= 0) {
-        // Increment quantity
-        const updated = [...prev.products]
-        updated[existingIndex] = {
-          ...updated[existingIndex],
-          quantity: updated[existingIndex].quantity + 1
+        // Increment quantity y mover al inicio de la lista
+        const existingProduct = prev.products[existingIndex]
+        const otherProducts = prev.products.filter((_, i) => i !== existingIndex)
+        const updatedProduct = {
+          ...existingProduct,
+          quantity: existingProduct.quantity + 1
         }
-        return { ...prev, products: updated }
+        return { ...prev, products: [updatedProduct, ...otherProducts] }
       }
 
       // Add new product
@@ -581,7 +582,8 @@ export default function WarehouseOperationsPage() {
         sellingPrice: data.product.sellingPrice
       }
 
-      return { ...prev, products: [...prev.products, newProduct] }
+      // Agregar el producto al inicio de la lista para que sea visible sin scroll
+      return { ...prev, products: [newProduct, ...prev.products] }
     })
     setError(null)
   }, [])
