@@ -2455,21 +2455,24 @@ export default function EditProductPage() {
                                       )}>
                                         {variant.name}
                                       </p>
-                                      <div className="flex gap-1 mt-1">
-                                        {variant.options.map((opt, i) => (
-                                          <span
-                                            key={i}
-                                            className={cn(
-                                              "text-xs px-2 py-0.5 rounded-full",
-                                              theme === 'dark'
-                                                ? 'bg-gray-700 text-gray-300'
-                                                : 'bg-gray-100 text-gray-600'
-                                            )}
-                                          >
-                                            {opt.value}
-                                          </span>
-                                        ))}
-                                      </div>
+                                      {/* Only show options if they add info beyond the variant name */}
+                                      {variant.options.length > 1 && (
+                                        <div className="flex gap-1 mt-1">
+                                          {variant.options.map((opt, i) => (
+                                            <span
+                                              key={i}
+                                              className={cn(
+                                                "text-xs px-2 py-0.5 rounded-full",
+                                                theme === 'dark'
+                                                  ? 'bg-gray-700 text-gray-300'
+                                                  : 'bg-gray-100 text-gray-600'
+                                              )}
+                                            >
+                                              {opt.type}: {opt.value}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
                                     </div>
                                     <button
                                       onClick={() => removeVariant(variant.id)}
