@@ -7,6 +7,8 @@ import Image from 'next/image'
 export interface ScannedProduct {
   id: number
   productId: number
+  variantId?: number | null
+  variantName?: string | null
   name: string
   sku: string
   barcode: string

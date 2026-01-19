@@ -82,7 +82,91 @@ export async function POST(
 
     const searchCode = barcode.trim()
 
-    // First try exact match on barcode or SKU
+    // STEP 1: First try to find a VARIANT by exact barcode/SKU match
+    const variantResult = await db.query(`
+      SELECT
+        v.id as variant_id,
+        v.variant_name,
+        v.sku as variant_sku,
+        v.barcode as variant_barcode,
+        v.price as variant_price,
+        v.cost_price as variant_cost_price,
+        v.image_url as variant_image_url,
+        p.id as product_id,
+        p.name as product_name,
+        p.description,
+        p.sku as product_sku,
+        p.barcode as product_barcode,
+        p.category,
+        p.unit_of_measure as unit,
+        p.cost_price as product_cost_price,
+        p.selling_price as product_selling_price,
+        p.image_url as product_image_url,
+        p.is_active,
+        COALESCE(ws.quantity_on_hand, 0) as quantity_on_hand,
+        COALESCE(ws.quantity_reserved, 0) as quantity_reserved
+      FROM market_product_variants v
+      JOIN market_products p ON p.id = v.product_id
+      LEFT JOIN market_warehouse_stock ws ON ws.product_id = p.id AND ws.variant_id = v.id AND ws.warehouse_id = $2
+      WHERE p.company_id = $1
+        AND v.is_active = true
+        AND (v.barcode = $3 OR v.sku = $3)
+      LIMIT 1
+    `, [payload.companyId, warehouseId, searchCode])
+
+    // If variant found, return it
+    if (variantResult.rows.length > 0) {
+      const v = variantResult.rows[0]
+
+      if (!v.is_active) {
+        return NextResponse.json({
+          success: false,
+          error: 'Producto inactivo',
+          code: 'PRODUCT_INACTIVE'
+        }, { status: 400 })
+      }
+
+      const quantityOnHand = parseFloat(v.quantity_on_hand) || 0
+      const quantityReserved = parseFloat(v.quantity_reserved) || 0
+      const quantityAvailable = quantityOnHand - quantityReserved
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          product: {
+            id: v.product_id,
+            name: v.product_name,
+            description: v.description,
+            sku: v.product_sku,
+            barcode: v.product_barcode,
+            category: v.category,
+            unit: v.unit || 'unidad',
+            costPrice: parseFloat(v.variant_cost_price || v.product_cost_price) || 0,
+            sellingPrice: parseFloat(v.variant_price || v.product_selling_price) || 0,
+            imageUrl: v.variant_image_url || v.product_image_url
+          },
+          variant: {
+            id: v.variant_id,
+            name: v.variant_name,
+            sku: v.variant_sku,
+            barcode: v.variant_barcode,
+            price: parseFloat(v.variant_price) || 0,
+            costPrice: parseFloat(v.variant_cost_price) || 0,
+            imageUrl: v.variant_image_url
+          },
+          stock: {
+            warehouseId: warehouseId,
+            warehouseName: warehouse.name,
+            quantityOnHand,
+            quantityReserved,
+            quantityAvailable,
+            allowNegative: warehouse.allow_negative_stock
+          }
+        }
+      })
+    }
+
+    // STEP 2: Try exact match on product barcode or SKU
     let productResult = await db.query(`
       SELECT
         p.id,
@@ -96,15 +180,16 @@ export async function POST(
         p.selling_price,
         p.image_url,
         p.is_active,
+        p.has_variants,
         COALESCE(ws.quantity_on_hand, 0) as quantity_on_hand,
         COALESCE(ws.quantity_reserved, 0) as quantity_reserved
       FROM market_products p
-      LEFT JOIN market_warehouse_stock ws ON p.id = ws.product_id AND ws.warehouse_id = $2
+      LEFT JOIN market_warehouse_stock ws ON p.id = ws.product_id AND ws.variant_id IS NULL AND ws.warehouse_id = $2
       WHERE p.company_id = $1 AND (p.barcode = $3 OR p.sku = $3)
       LIMIT 1
     `, [payload.companyId, warehouseId, searchCode])
 
-    // If no exact match, try partial search on name, SKU, or barcode
+    // STEP 3: If no exact match, try partial search on name, SKU, or barcode
     if (productResult.rows.length === 0) {
       productResult = await db.query(`
         SELECT
@@ -119,10 +204,11 @@ export async function POST(
           p.selling_price,
           p.image_url,
           p.is_active,
+          p.has_variants,
           COALESCE(ws.quantity_on_hand, 0) as quantity_on_hand,
           COALESCE(ws.quantity_reserved, 0) as quantity_reserved
         FROM market_products p
-        LEFT JOIN market_warehouse_stock ws ON p.id = ws.product_id AND ws.warehouse_id = $2
+        LEFT JOIN market_warehouse_stock ws ON p.id = ws.product_id AND ws.variant_id IS NULL AND ws.warehouse_id = $2
         WHERE p.company_id = $1
           AND (
             p.name ILIKE $3
@@ -158,6 +244,38 @@ export async function POST(
       }, { status: 400 })
     }
 
+    // STEP 4: If product has variants, get them for selection
+    let variants = null
+    if (product.has_variants) {
+      const variantsResult = await db.query(`
+        SELECT
+          v.id,
+          v.variant_name as name,
+          v.sku,
+          v.barcode,
+          v.price,
+          v.cost_price,
+          v.image_url,
+          COALESCE(ws.quantity_on_hand, 0) as quantity_on_hand,
+          COALESCE(ws.quantity_reserved, 0) as quantity_reserved
+        FROM market_product_variants v
+        LEFT JOIN market_warehouse_stock ws ON ws.product_id = $1 AND ws.variant_id = v.id AND ws.warehouse_id = $3
+        WHERE v.product_id = $1 AND v.is_active = true
+        ORDER BY v.variant_name
+      `, [product.id, payload.companyId, warehouseId])
+
+      variants = variantsResult.rows.map(v => ({
+        id: v.id,
+        name: v.name,
+        sku: v.sku,
+        barcode: v.barcode,
+        price: parseFloat(v.price) || 0,
+        costPrice: parseFloat(v.cost_price) || 0,
+        imageUrl: v.image_url,
+        stock: parseFloat(v.quantity_on_hand) - parseFloat(v.quantity_reserved)
+      }))
+    }
+
     const quantityOnHand = parseFloat(product.quantity_on_hand) || 0
     const quantityReserved = parseFloat(product.quantity_reserved) || 0
     const quantityAvailable = quantityOnHand - quantityReserved
@@ -175,8 +293,10 @@ export async function POST(
           unit: product.unit || 'unidad',
           costPrice: parseFloat(product.cost_price) || 0,
           sellingPrice: parseFloat(product.selling_price) || 0,
-          imageUrl: product.image_url
+          imageUrl: product.image_url,
+          hasVariants: product.has_variants || false
         },
+        variants: variants,
         stock: {
           warehouseId: warehouseId,
           warehouseName: warehouse.name,

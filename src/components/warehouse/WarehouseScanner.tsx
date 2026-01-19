@@ -12,6 +12,17 @@ interface WarehouseScannerProps {
   disabled?: boolean
 }
 
+export interface ProductVariant {
+  id: number
+  name: string
+  sku: string
+  barcode: string | null
+  price: number
+  costPrice: number
+  imageUrl: string | null
+  stock: number
+}
+
 export interface ScannedProductData {
   product: {
     id: number
@@ -24,7 +35,18 @@ export interface ScannedProductData {
     costPrice: number
     sellingPrice: number
     imageUrl: string | null
+    hasVariants?: boolean
   }
+  variant?: {
+    id: number
+    name: string
+    sku: string
+    barcode: string | null
+    price: number
+    costPrice: number
+    imageUrl: string | null
+  }
+  variants?: ProductVariant[]
   stock: {
     warehouseId: number
     warehouseName: string

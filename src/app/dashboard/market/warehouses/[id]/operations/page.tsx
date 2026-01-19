@@ -427,6 +427,10 @@ export default function WarehouseOperationsPage() {
   // Password verification for exiting to backend
   const [showExitPasswordModal, setShowExitPasswordModal] = useState(false)
 
+  // Variant selection state
+  const [showVariantModal, setShowVariantModal] = useState(false)
+  const [pendingProductWithVariants, setPendingProductWithVariants] = useState<ScannedProductData | null>(null)
+
   // Fetch warehouse data
   useEffect(() => {
     const fetchWarehouse = async () => {
@@ -552,9 +556,22 @@ export default function WarehouseOperationsPage() {
   }
 
   const handleProductScanned = useCallback((data: ScannedProductData) => {
+    // Si el producto tiene variantes y NO se escaneó una variante específica, mostrar selector
+    if (data.product.hasVariants && data.variants && data.variants.length > 0 && !data.variant) {
+      setPendingProductWithVariants(data)
+      setShowVariantModal(true)
+      return
+    }
+
+    // Determinar el variantId si se escaneó una variante específica
+    const variantId = data.variant?.id || null
+    const variantName = data.variant?.name || null
+
     setOperation(prev => {
-      // Check if product already exists
-      const existingIndex = prev.products.findIndex(p => p.productId === data.product.id)
+      // Check if product+variant already exists
+      const existingIndex = prev.products.findIndex(p =>
+        p.productId === data.product.id && p.variantId === variantId
+      )
 
       if (existingIndex >= 0) {
         // Increment quantity y mover al inicio de la lista
@@ -567,19 +584,25 @@ export default function WarehouseOperationsPage() {
         return { ...prev, products: [updatedProduct, ...otherProducts] }
       }
 
-      // Add new product
+      // Add new product (with or without variant)
+      const displayName = variantName
+        ? `${data.product.name} - ${variantName}`
+        : data.product.name
+
       const newProduct: ScannedProduct = {
         id: Date.now(),
         productId: data.product.id,
-        name: data.product.name,
-        sku: data.product.sku,
-        barcode: data.product.barcode,
-        imageUrl: data.product.imageUrl,
+        variantId: variantId,
+        variantName: variantName,
+        name: displayName,
+        sku: data.variant?.sku || data.product.sku,
+        barcode: data.variant?.barcode || data.product.barcode,
+        imageUrl: data.variant?.imageUrl || data.product.imageUrl,
         unit: data.stock.warehouseName ? data.product.unit : 'unidad',
         quantity: 1,
         currentStock: data.stock.quantityAvailable,
-        costPrice: data.product.costPrice,
-        sellingPrice: data.product.sellingPrice
+        costPrice: data.variant?.costPrice || data.product.costPrice,
+        sellingPrice: data.variant?.price || data.product.sellingPrice
       }
 
       // Agregar el producto al inicio de la lista para que sea visible sin scroll
@@ -587,6 +610,55 @@ export default function WarehouseOperationsPage() {
     })
     setError(null)
   }, [])
+
+  // Handle variant selection from modal
+  const handleVariantSelect = useCallback((variant: { id: number; name: string; sku: string; barcode: string | null; price: number; costPrice: number; imageUrl: string | null; stock: number }) => {
+    if (!pendingProductWithVariants) return
+
+    const data = pendingProductWithVariants
+
+    setOperation(prev => {
+      // Check if this variant already exists
+      const existingIndex = prev.products.findIndex(p =>
+        p.productId === data.product.id && p.variantId === variant.id
+      )
+
+      if (existingIndex >= 0) {
+        // Increment quantity y mover al inicio
+        const existingProduct = prev.products[existingIndex]
+        const otherProducts = prev.products.filter((_, i) => i !== existingIndex)
+        const updatedProduct = {
+          ...existingProduct,
+          quantity: existingProduct.quantity + 1
+        }
+        return { ...prev, products: [updatedProduct, ...otherProducts] }
+      }
+
+      const displayName = `${data.product.name} - ${variant.name}`
+
+      const newProduct: ScannedProduct = {
+        id: Date.now(),
+        productId: data.product.id,
+        variantId: variant.id,
+        variantName: variant.name,
+        name: displayName,
+        sku: variant.sku,
+        barcode: variant.barcode || data.product.barcode,
+        imageUrl: variant.imageUrl || data.product.imageUrl,
+        unit: data.product.unit,
+        quantity: 1,
+        currentStock: variant.stock,
+        costPrice: variant.costPrice,
+        sellingPrice: variant.price
+      }
+
+      return { ...prev, products: [newProduct, ...prev.products] }
+    })
+
+    setShowVariantModal(false)
+    setPendingProductWithVariants(null)
+    setError(null)
+  }, [pendingProductWithVariants])
 
   const handleScanError = useCallback((errorMessage: string) => {
     setError(errorMessage)
@@ -803,6 +875,78 @@ export default function WarehouseOperationsPage() {
         description="Ingrese su contraseña para salir de las operaciones de almacén y volver al backend."
         operationType="exit"
       />
+
+      {/* Variant Selection Modal */}
+      <AnimatePresence>
+        {showVariantModal && pendingProductWithVariants && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => {
+              setShowVariantModal(false)
+              setPendingProductWithVariants(null)
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full max-h-[80vh] overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 className="font-bold text-lg text-gray-900 dark:text-white">
+                  Seleccionar Variante
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {pendingProductWithVariants.product.name}
+                </p>
+              </div>
+              <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto">
+                {pendingProductWithVariants.variants?.map(variant => (
+                  <button
+                    key={variant.id}
+                    onClick={() => handleVariantSelect(variant)}
+                    className="w-full p-3 flex items-center justify-between rounded-xl border border-gray-200 dark:border-gray-700 hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all"
+                  >
+                    <div className="text-left">
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        {variant.name}
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        SKU: {variant.sku}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-purple-600">
+                        Stock: {variant.stock}
+                      </p>
+                      {variant.barcode && (
+                        <p className="text-xs text-gray-400">
+                          {variant.barcode}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => {
+                    setShowVariantModal(false)
+                    setPendingProductWithVariants(null)
+                  }}
+                  className="w-full py-2 px-4 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
