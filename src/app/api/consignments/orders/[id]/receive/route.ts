@@ -81,6 +81,14 @@ export async function POST(
       }, { status: 400 })
     }
 
+    // Check if order is pending validation - cannot receive until approved
+    if (order.validation_status === 'pending_validation') {
+      return NextResponse.json({
+        success: false,
+        error: 'Esta consignación está pendiente de aprobación. Debe ser aprobada antes de poder recibirla.'
+      }, { status: 400 })
+    }
+
     const supplierCode = order.supplier_code
     const today = new Date()
     const dateStr = today.toISOString().split('T')[0].replace(/-/g, '').slice(2) // YYMMDD

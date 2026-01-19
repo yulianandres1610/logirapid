@@ -377,6 +377,14 @@ export async function PUT(
         }, { status: 400 })
       }
 
+      // Check if order is pending validation - cannot receive until approved
+      if (purchase.validation_status === 'pending_validation') {
+        return NextResponse.json({
+          success: false,
+          error: 'Esta compra está pendiente de aprobación. Debe ser aprobada antes de poder recibirla.'
+        }, { status: 400 })
+      }
+
       // Use warehouseId from request body if provided, otherwise use the one from purchase
       const targetWarehouseId = warehouseId || purchase.warehouse_id
 

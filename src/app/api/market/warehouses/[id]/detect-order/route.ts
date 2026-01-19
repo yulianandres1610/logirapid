@@ -97,7 +97,7 @@ export async function GET(
     if (code.startsWith('CONS-') || !code.startsWith('PUR-')) {
       const consignmentResult = await db.query(`
         SELECT
-          o.id, o.order_number, o.status, o.warehouse_id,
+          o.id, o.order_number, o.status, o.warehouse_id, o.validation_status,
           s.id as supplier_id, s.supplier_code as supplier_code, s.name as supplier_name
         FROM consignment_orders o
         JOIN market_suppliers s ON s.id = o.supplier_id
@@ -108,6 +108,14 @@ export async function GET(
 
       if (consignmentResult.rows.length > 0) {
         const order = consignmentResult.rows[0]
+
+        // Check if order is pending validation - cannot receive until approved
+        if (order.validation_status === 'pending_validation') {
+          return NextResponse.json({
+            success: false,
+            error: 'Esta consignación está pendiente de aprobación. Debe ser aprobada antes de poder recibirla.'
+          }, { status: 400 })
+        }
 
         // Check if order is for this warehouse or can be received here
         if (order.warehouse_id && order.warehouse_id !== warehouseId) {
@@ -181,7 +189,7 @@ export async function GET(
     if (!detectedOrder && (code.startsWith('PUR-') || !code.startsWith('CONS-'))) {
       const purchaseResult = await db.query(`
         SELECT
-          p.id, p.purchase_number, p.status, p.warehouse_id,
+          p.id, p.purchase_number, p.status, p.warehouse_id, p.validation_status,
           p.supplier_id, p.supplier_name,
           ms.supplier_code
         FROM market_purchases p
@@ -193,6 +201,14 @@ export async function GET(
 
       if (purchaseResult.rows.length > 0) {
         const purchase = purchaseResult.rows[0]
+
+        // Check if purchase is pending validation - cannot receive until approved
+        if (purchase.validation_status === 'pending_validation') {
+          return NextResponse.json({
+            success: false,
+            error: 'Esta compra está pendiente de aprobación. Debe ser aprobada antes de poder recibirla.'
+          }, { status: 400 })
+        }
 
         // Check if purchase is for this warehouse
         if (purchase.warehouse_id && purchase.warehouse_id !== warehouseId) {

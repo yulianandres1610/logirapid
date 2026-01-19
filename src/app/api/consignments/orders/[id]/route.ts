@@ -242,11 +242,12 @@ export async function PUT(
         }, { status: 400 })
       }
 
-      // Update order with acceptance
+      // Update order with acceptance and change validation_status to confirmed
       await db.query(`
         UPDATE consignment_orders
         SET accepted_by = $1,
             accepted_at = NOW(),
+            validation_status = 'confirmed',
             updated_at = NOW()
         WHERE id = $2
       `, [payload.userId, orderId])
