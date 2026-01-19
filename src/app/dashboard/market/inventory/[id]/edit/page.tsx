@@ -3176,12 +3176,12 @@ export default function EditProductPage() {
           isOpen={showPrintModal}
           onClose={() => setShowPrintModal(false)}
           productData={{
-            productName: formData.name,
-            sku: formData.sku,
-            barcode: formData.barcode,
+            productName: formData.name || 'Producto',
+            sku: formData.sku || '',
+            barcode: formData.barcode || formData.sku || '',
             price: parseFloat(formData.sellingPrice) || 0,
-            currency: formData.currency,
-            unitOfMeasure: formData.unitOfMeasure,
+            currency: formData.currency || 'USD',
+            unitOfMeasure: formData.unitOfMeasure || 'unidad',
             category: formData.category || undefined,
             description: formData.description || undefined
           }}

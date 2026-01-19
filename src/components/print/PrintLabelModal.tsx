@@ -28,10 +28,10 @@ interface PrinterInfo {
 interface ProductVariant {
   id: number
   name: string
-  barcode: string
-  sku?: string
+  barcode: string | null
+  sku?: string | null
   price?: number
-  imageUrl?: string
+  imageUrl?: string | null
 }
 
 interface ProductLabelData {
@@ -69,9 +69,30 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
   const [variantCopies, setVariantCopies] = useState<Record<number, number>>({})
   const [error, setError] = useState<string | null>(null)
 
-  // Calculate total copies
-  const hasVariants = productData.variants && productData.variants.length > 0
-  const totalCopies = copies + Object.values(variantCopies).reduce((a, b) => a + b, 0)
+  // Debug log para ver los datos recibidos
+  useEffect(() => {
+    if (isOpen) {
+      console.log('[PrintLabelModal] Datos recibidos:', {
+        productName: productData?.productName,
+        sku: productData?.sku,
+        barcode: productData?.barcode,
+        price: productData?.price,
+        currency: productData?.currency,
+        hasVariants: !!productData?.variants,
+        variantsCount: productData?.variants?.length || 0
+      })
+    }
+  }, [isOpen, productData])
+
+  // Validate productData
+  if (!productData) {
+    console.error('[PrintLabelModal] productData is null or undefined')
+    return null
+  }
+
+  // Calculate total copies with safe fallbacks
+  const hasVariants = productData.variants && Array.isArray(productData.variants) && productData.variants.length > 0
+  const totalCopies = copies + Object.values(variantCopies).reduce((a, b) => a + (b || 0), 0)
 
   const updateVariantCopies = (variantId: number, delta: number) => {
     setVariantCopies(prev => ({

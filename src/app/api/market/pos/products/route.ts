@@ -225,9 +225,9 @@ export async function GET(request: NextRequest) {
       }
       variantsByProduct[v.product_id].push({
         id: v.id,
-        name: v.name,
-        sku: v.sku,
-        barcode: v.barcode,
+        name: v.name || v.sku || `Variante ${v.id}`,
+        sku: v.sku || '',
+        barcode: v.barcode || v.sku || '',
         price: parseFloat(v.price) || 0,
         stock: parseFloat(v.stock) || 0,
         totalStock: parseFloat(v.total_stock) || 0,

@@ -1107,7 +1107,7 @@ export default function MarketInventoryPage() {
             productData={{
               productName: printProduct.name,
               sku: printProduct.sku,
-              barcode: printProduct.barcode,
+              barcode: printProduct.barcode || printProduct.sku,
               price: printProduct.sellingPrice,
               currency: printProduct.currency,
               unitOfMeasure: printProduct.unitOfMeasure,

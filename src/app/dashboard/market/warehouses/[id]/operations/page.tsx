@@ -556,6 +556,9 @@ export default function WarehouseOperationsPage() {
   }
 
   const handleProductScanned = useCallback((data: ScannedProductData) => {
+    // Log completo de datos recibidos del API
+    console.log('[Operations] Datos completos del API:', JSON.stringify(data, null, 2))
+
     // Si el producto tiene variantes y NO se escaneó una variante específica, mostrar selector
     if (data.product.hasVariants && data.variants && data.variants.length > 0 && !data.variant) {
       setPendingProductWithVariants(data)
@@ -564,14 +567,15 @@ export default function WarehouseOperationsPage() {
     }
 
     // Determinar el variantId si se escaneó una variante específica
-    const variantId = data.variant?.id || null
-    const variantName = data.variant?.name || null
+    const variantId = data.variant?.id ?? null
+    const variantName = data.variant?.name ?? null
 
     // Log para debug
     console.log('[Operations] Producto escaneado:', {
       productName: data.product.name,
       variantId,
       variantName,
+      variantObject: data.variant,
       hasVariant: !!data.variant
     })
 
@@ -614,7 +618,12 @@ export default function WarehouseOperationsPage() {
         sellingPrice: data.variant?.price || data.product.sellingPrice
       }
 
-      console.log('[Operations] Nuevo producto agregado:', newProduct)
+      console.log('[Operations] Nuevo producto agregado:', {
+        name: newProduct.name,
+        variantId: newProduct.variantId,
+        variantName: newProduct.variantName,
+        sku: newProduct.sku
+      })
 
       // Agregar el producto al inicio de la lista para que sea visible sin scroll
       return { ...prev, products: [newProduct, ...prev.products] }

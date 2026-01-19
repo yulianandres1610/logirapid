@@ -34,10 +34,10 @@ interface Product {
 interface ProductVariant {
   id: number
   name: string
-  barcode: string
-  sku?: string
+  barcode: string | null
+  sku?: string | null
   price?: number
-  imageUrl?: string
+  imageUrl?: string | null
 }
 
 interface PrintLabelsViewProps {
@@ -327,7 +327,14 @@ export default function PrintLabelsView({
             unitOfMeasure: selectedProduct.unit,
             category: selectedProduct.category || undefined,
             description: selectedProduct.description || undefined,
-            variants: selectedProduct.variants
+            variants: selectedProduct.variants?.map(v => ({
+              id: v.id,
+              name: v.name || v.sku || `Variante ${v.id}`,
+              barcode: v.barcode || v.sku || '',
+              sku: v.sku || '',
+              price: v.price || selectedProduct.sellingPrice,
+              imageUrl: v.imageUrl || null
+            }))
           }}
           onPrintSuccess={() => {
             handlePrintModalClose()
