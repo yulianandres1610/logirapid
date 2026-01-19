@@ -567,6 +567,14 @@ export default function WarehouseOperationsPage() {
     const variantId = data.variant?.id || null
     const variantName = data.variant?.name || null
 
+    // Log para debug
+    console.log('[Operations] Producto escaneado:', {
+      productName: data.product.name,
+      variantId,
+      variantName,
+      hasVariant: !!data.variant
+    })
+
     setOperation(prev => {
       // Check if product+variant already exists
       const existingIndex = prev.products.findIndex(p =>
@@ -585,6 +593,7 @@ export default function WarehouseOperationsPage() {
       }
 
       // Add new product (with or without variant)
+      // El nombre debe incluir la variante para identificación clara
       const displayName = variantName
         ? `${data.product.name} - ${variantName}`
         : data.product.name
@@ -598,12 +607,14 @@ export default function WarehouseOperationsPage() {
         sku: data.variant?.sku || data.product.sku,
         barcode: data.variant?.barcode || data.product.barcode,
         imageUrl: data.variant?.imageUrl || data.product.imageUrl,
-        unit: data.stock.warehouseName ? data.product.unit : 'unidad',
+        unit: data.product.unit || 'unidad',
         quantity: 1,
         currentStock: data.stock.quantityAvailable,
         costPrice: data.variant?.costPrice || data.product.costPrice,
         sellingPrice: data.variant?.price || data.product.sellingPrice
       }
+
+      console.log('[Operations] Nuevo producto agregado:', newProduct)
 
       // Agregar el producto al inicio de la lista para que sea visible sin scroll
       return { ...prev, products: [newProduct, ...prev.products] }

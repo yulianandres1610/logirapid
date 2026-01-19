@@ -118,6 +118,13 @@ export async function POST(
     if (variantResult.rows.length > 0) {
       const v = variantResult.rows[0]
 
+      console.log('[Scan Product] Variante encontrada:', {
+        variantId: v.variant_id,
+        variantName: v.variant_name,
+        productName: v.product_name,
+        variantSku: v.variant_sku
+      })
+
       if (!v.is_active) {
         return NextResponse.json({
           success: false,
@@ -129,6 +136,9 @@ export async function POST(
       const quantityOnHand = parseFloat(v.quantity_on_hand) || 0
       const quantityReserved = parseFloat(v.quantity_reserved) || 0
       const quantityAvailable = quantityOnHand - quantityReserved
+
+      // Construir nombre de variante completo para display
+      const variantDisplayName = v.variant_name || v.variant_sku || `Variante ${v.variant_id}`
 
       return NextResponse.json({
         success: true,
@@ -147,7 +157,7 @@ export async function POST(
           },
           variant: {
             id: v.variant_id,
-            name: v.variant_name,
+            name: variantDisplayName,
             sku: v.variant_sku,
             barcode: v.variant_barcode,
             price: parseFloat(v.variant_price) || 0,

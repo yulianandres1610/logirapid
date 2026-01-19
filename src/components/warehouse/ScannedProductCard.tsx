@@ -106,6 +106,11 @@ export default function ScannedProductCard({
         <h4 className="font-medium text-gray-900 dark:text-white truncate">
           {product.name}
         </h4>
+        {product.variantName && (
+          <p className="text-xs font-medium text-purple-600 dark:text-purple-400">
+            Variante: {product.variantName}
+          </p>
+        )}
         <p className="text-sm text-gray-500 dark:text-gray-400">
           SKU: {product.sku}
         </p>
