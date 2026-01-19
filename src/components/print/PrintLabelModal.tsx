@@ -214,7 +214,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
         for (const variant of productData.variants) {
           const qty = variantCopies[variant.id] || 0
           if (qty > 0) {
-            const variantPrice = variant.price || productData.price || 0
+            const variantPrice = Number(variant.price) || Number(productData.price) || 0
             jobs.push({
               documentType: 'product_label',
               documentData: {
@@ -498,7 +498,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
                         </p>
                         <p className="text-sm font-medium text-emerald-600">
                           {productData.currency === 'USD' ? '$' : productData.currency}
-                          {(productData.price || 0).toFixed(2)}
+                          {(Number(productData.price) || 0).toFixed(2)}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 ml-4">
@@ -567,7 +567,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
                                 </p>
                                 <p className="text-sm font-medium text-emerald-600">
                                   {productData.currency === 'USD' ? '$' : productData.currency}
-                                  {(variant.price || productData.price || 0).toFixed(2)}
+                                  {(Number(variant.price) || Number(productData.price) || 0).toFixed(2)}
                                 </p>
                               </div>
                               <div className="flex items-center gap-2 ml-4">
