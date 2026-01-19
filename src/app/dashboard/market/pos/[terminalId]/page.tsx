@@ -1656,10 +1656,13 @@ export default function POSTerminalPage() {
                     )}
 
                     {/* Info button - always visible for touch devices */}
-                    <button
+                    <div
+                      role="button"
+                      tabIndex={0}
                       onClick={(e) => showProductDetails(product, e)}
+                      onKeyDown={(e) => e.key === 'Enter' && showProductDetails(product, e as unknown as React.MouseEvent)}
                       className={cn(
-                        'absolute top-1 left-1 lg:top-2 lg:left-2 w-6 h-6 lg:w-7 lg:h-7 rounded-full flex items-center justify-center transition-all z-10',
+                        'absolute top-1 left-1 lg:top-2 lg:left-2 w-6 h-6 lg:w-7 lg:h-7 rounded-full flex items-center justify-center transition-all z-20 cursor-pointer',
                         theme === 'dark'
                           ? 'bg-gray-700/90 hover:bg-blue-600 text-gray-300 hover:text-white'
                           : 'bg-white/95 hover:bg-blue-500 text-gray-600 hover:text-white',
@@ -1668,7 +1671,7 @@ export default function POSTerminalPage() {
                       )}
                     >
                       <Info className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
-                    </button>
+                    </div>
 
                     {/* Variants badge */}
                     {product.hasVariants && (
