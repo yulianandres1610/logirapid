@@ -464,10 +464,14 @@ export async function DELETE(
       }, { status: 404 })
     }
 
-    // Soft delete: change status to terminated
+    // Soft delete: change status to terminated and clear POS credentials to allow reuse
     await db.query(`
       UPDATE market_employees
-      SET status = 'terminated', termination_date = CURRENT_DATE, updated_at = NOW()
+      SET status = 'terminated',
+          termination_date = CURRENT_DATE,
+          pos_badge_code = NULL,
+          pos_pin = NULL,
+          updated_at = NOW()
       WHERE id = $1
     `, [employeeId])
 
