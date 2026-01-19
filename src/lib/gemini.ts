@@ -10,6 +10,7 @@ import sharp from 'sharp'
 // Límite de tamaño para imágenes enviadas a Gemini (2MB en base64 ≈ 1.5MB original)
 const GEMINI_MAX_IMAGE_SIZE = 2 * 1024 * 1024 // 2MB en base64
 const GEMINI_TARGET_SIZE = 1024 // Redimensionar a max 1024px si es muy grande
+const STANDARD_IMAGE_SIZE = 1024 // Tamaño estándar para todas las imágenes de productos
 
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
@@ -83,6 +84,65 @@ async function compressImageForGemini(base64Data: string): Promise<string> {
     console.error('[Gemini] Compression error:', error)
     // En caso de error, devolver original
     return cleanBase64
+  }
+}
+
+/**
+ * Normaliza una imagen a tamaño estándar 1024x1024 con fondo blanco
+ * Esto asegura que todas las imágenes de productos tengan el mismo tamaño
+ */
+async function normalizeImageSize(base64Data: string): Promise<string> {
+  try {
+    const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '')
+    const inputBuffer = Buffer.from(cleanBase64, 'base64')
+
+    // Obtener metadata de la imagen
+    const metadata = await sharp(inputBuffer).metadata()
+    const width = metadata.width || STANDARD_IMAGE_SIZE
+    const height = metadata.height || STANDARD_IMAGE_SIZE
+
+    console.log(`[Gemini Normalize] Input size: ${width}x${height}`)
+
+    // Calcular el tamaño para que el producto ocupe ~80% del frame
+    const maxDimension = Math.max(width, height)
+    const targetProductSize = Math.floor(STANDARD_IMAGE_SIZE * 0.8) // 80% del frame
+    const scale = targetProductSize / maxDimension
+
+    const scaledWidth = Math.floor(width * scale)
+    const scaledHeight = Math.floor(height * scale)
+
+    // Redimensionar la imagen manteniendo proporción
+    const resizedBuffer = await sharp(inputBuffer)
+      .resize(scaledWidth, scaledHeight, {
+        fit: 'inside',
+        withoutEnlargement: false
+      })
+      .toBuffer()
+
+    // Crear imagen final 1024x1024 con fondo blanco y producto centrado
+    const outputBuffer = await sharp({
+      create: {
+        width: STANDARD_IMAGE_SIZE,
+        height: STANDARD_IMAGE_SIZE,
+        channels: 3,
+        background: { r: 255, g: 255, b: 255 }
+      }
+    })
+      .composite([{
+        input: resizedBuffer,
+        gravity: 'center'
+      }])
+      .png({ quality: 95 })
+      .toBuffer()
+
+    const outputBase64 = outputBuffer.toString('base64')
+    console.log(`[Gemini Normalize] Output size: ${STANDARD_IMAGE_SIZE}x${STANDARD_IMAGE_SIZE}`)
+
+    return outputBase64
+  } catch (error) {
+    console.error('[Gemini Normalize] Error:', error)
+    // En caso de error, devolver original
+    return base64Data.replace(/^data:image\/\w+;base64,/, '')
   }
 }
 
@@ -209,22 +269,27 @@ The final image should match professional e-commerce product photography standar
     if (data.candidates && data.candidates[0]?.content?.parts) {
       for (const part of data.candidates[0].content.parts) {
         if (part.inlineData?.data) {
-          console.log('[Gemini Clean] Image cleaned successfully')
+          console.log('[Gemini Clean] Image cleaned successfully, normalizing size...')
+
+          // Normalizar la imagen a 1024x1024 con fondo blanco centrado
+          const normalizedImage = await normalizeImageSize(part.inlineData.data)
+
           return {
             success: true,
-            imageBase64: part.inlineData.data,
-            description: 'Imagen limpiada con fondo blanco'
+            imageBase64: normalizedImage,
+            description: 'Imagen limpiada con fondo blanco (1024x1024)'
           }
         }
       }
     }
 
-    // Si no devuelve imagen editada, devolver la original
-    console.log('[Gemini Clean] No edited image returned, keeping original')
+    // Si no devuelve imagen editada, normalizar la original
+    console.log('[Gemini Clean] No edited image returned, normalizing original...')
+    const normalizedOriginal = await normalizeImageSize(cleanBase64)
     return {
       success: true,
-      imageBase64: cleanBase64,
-      description: 'No se pudo editar la imagen, se mantiene la original'
+      imageBase64: normalizedOriginal,
+      description: 'Imagen normalizada a tamaño estándar (1024x1024)'
     }
 
   } catch (error) {
@@ -309,11 +374,15 @@ Requirements:
     if (data.candidates && data.candidates[0]?.content?.parts) {
       for (const part of data.candidates[0].content.parts) {
         if (part.inlineData?.data) {
-          console.log('[Gemini Image] Image generated successfully, size:', part.inlineData.data.length, 'chars')
+          console.log('[Gemini Image] Image generated successfully, normalizing size...')
+
+          // Normalizar la imagen a 1024x1024 con fondo blanco centrado
+          const normalizedImage = await normalizeImageSize(part.inlineData.data)
+
           return {
             success: true,
-            imageBase64: part.inlineData.data,
-            imageDescription: `Imagen generada para ${productName}`
+            imageBase64: normalizedImage,
+            imageDescription: `Imagen generada para ${productName} (1024x1024)`
           }
         }
       }
@@ -390,11 +459,15 @@ async function generateImageWithFallback(
     if (data.candidates && data.candidates[0]?.content?.parts) {
       for (const part of data.candidates[0].content.parts) {
         if (part.inlineData?.data) {
-          console.log('[Gemini Fallback] Image generated successfully')
+          console.log('[Gemini Fallback] Image generated successfully, normalizing size...')
+
+          // Normalizar la imagen a 1024x1024 con fondo blanco centrado
+          const normalizedImage = await normalizeImageSize(part.inlineData.data)
+
           return {
             success: true,
-            imageBase64: part.inlineData.data,
-            imageDescription: `Imagen generada para ${productName}`
+            imageBase64: normalizedImage,
+            imageDescription: `Imagen generada para ${productName} (1024x1024)`
           }
         }
       }
