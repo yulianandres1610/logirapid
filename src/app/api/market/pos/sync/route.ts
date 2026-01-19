@@ -159,10 +159,11 @@ export async function POST(request: NextRequest) {
         const warehouseId = order.warehouseId || defaultWarehouseId
 
         // Validate stock availability before creating order
+        let hasStockError = false
         if (warehouseId) {
           for (const line of order.lines) {
-            const quantity = parseFloat(line.quantity) || 1
-            const productId = parseInt(line.productId) || null
+            const quantity = parseFloat(String(line.quantity)) || 1
+            const productId = parseInt(String(line.productId)) || null
 
             if (productId) {
               const productCheck = await db.query(
@@ -189,16 +190,21 @@ export async function POST(request: NextRequest) {
                     available: availableStock
                   })
 
-                  results.push({
+                  results.failed++
+                  results.errors.push({
                     offlineId: order.offlineId,
-                    success: false,
                     error: `Stock insuficiente para "${productName}". Disponible: ${availableStock}`
                   })
-                  continue // Skip this order, move to next
+                  hasStockError = true
+                  break // Exit line loop
                 }
               }
             }
           }
+        }
+
+        if (hasStockError) {
+          continue // Skip to next order
         }
 
         // Create order
