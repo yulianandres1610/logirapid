@@ -1659,7 +1659,15 @@ export default function POSTerminalPage() {
                     <div
                       role="button"
                       tabIndex={0}
-                      onClick={(e) => showProductDetails(product, e)}
+                      onPointerDown={(e) => {
+                        e.stopPropagation()
+                        e.preventDefault()
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        e.preventDefault()
+                        showProductDetails(product, e)
+                      }}
                       onKeyDown={(e) => e.key === 'Enter' && showProductDetails(product, e as unknown as React.MouseEvent)}
                       className={cn(
                         'absolute top-1 left-1 lg:top-2 lg:left-2 w-6 h-6 lg:w-7 lg:h-7 rounded-full flex items-center justify-center transition-all z-20 cursor-pointer',
