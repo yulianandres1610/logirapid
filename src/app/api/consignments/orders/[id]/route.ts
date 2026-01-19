@@ -3,6 +3,17 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
 
+// Ensure accepted_by and accepted_at columns exist
+async function ensureColumns() {
+  try {
+    await db.query(`ALTER TABLE consignment_orders ADD COLUMN IF NOT EXISTS accepted_by INTEGER REFERENCES users(id)`)
+    await db.query(`ALTER TABLE consignment_orders ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP WITH TIME ZONE`)
+  } catch (e) {
+    // Columns might already exist, ignore
+  }
+}
+ensureColumns()
+
 interface JWTPayload {
   userId: number
   email: string
