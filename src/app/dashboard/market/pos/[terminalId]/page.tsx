@@ -68,6 +68,7 @@ interface ProductVariant {
   barcode: string
   price: number
   stock: number
+  totalStock?: number
   imageUrl: string | null
 }
 
@@ -85,6 +86,7 @@ interface Product {
   taxRate: number
   imageUrl: string | null
   stock: number
+  totalStockAllWarehouses?: number
   trackInventory: boolean
   hasVariants: boolean
   variants?: ProductVariant[]
@@ -709,8 +711,12 @@ export default function POSTerminalPage() {
 
     // Validate stock if trackInventory is enabled
     if (product.trackInventory && stock <= 0) {
-      setError(`Sin stock disponible: ${itemName}`)
-      setTimeout(() => setError(null), 3000)
+      const totalOtherStock = variant?.totalStock || product.totalStockAllWarehouses || 0
+      const otherStockMsg = totalOtherStock > 0
+        ? ` (Hay ${totalOtherStock} en otros almacenes - ver detalles)`
+        : ''
+      setError(`Sin stock en este almacén: ${itemName}${otherStockMsg}`)
+      setTimeout(() => setError(null), 4000)
       return
     }
 
@@ -1655,10 +1661,15 @@ export default function POSTerminalPage() {
 
                     {/* Out of stock overlay */}
                     {product.trackInventory && product.stock <= 0 && (
-                      <div className="absolute inset-0 bg-gray-900/50 rounded-lg lg:rounded-xl flex items-center justify-center">
+                      <div className="absolute inset-0 bg-gray-900/60 rounded-lg lg:rounded-xl flex flex-col items-center justify-center p-1">
                         <span className="bg-red-500 text-white px-2 py-0.5 lg:px-3 lg:py-1 rounded-full text-[10px] lg:text-sm font-medium">
-                          Agotado
+                          Sin stock
                         </span>
+                        {(product.totalStockAllWarehouses || 0) > 0 && (
+                          <span className="mt-1 text-[9px] lg:text-xs text-white/90 text-center">
+                            Hay {product.totalStockAllWarehouses} en otros almacenes
+                          </span>
+                        )}
                       </div>
                     )}
                   </motion.button>

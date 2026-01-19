@@ -86,7 +86,8 @@ export async function GET(request: NextRequest) {
           COALESCE(p.image_url, pi.image_url) as image_url,
           p.is_active,
           true as track_inventory,
-          COALESCE(ws.quantity_on_hand, p.quantity_on_hand, 0) as stock
+          COALESCE(ws.quantity_on_hand, 0) as stock,
+          p.quantity_on_hand as total_stock
         FROM market_products p
         LEFT JOIN market_warehouse_stock ws ON p.id = ws.product_id AND ws.warehouse_id = $2 AND ws.variant_id IS NULL
         LEFT JOIN LATERAL (
@@ -186,6 +187,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Get variants for all products (join with products to filter by company)
+    // Only return warehouse-specific stock, not total stock
     const variantsResult = await db.query(`
       SELECT
         v.id,
@@ -196,7 +198,8 @@ export async function GET(request: NextRequest) {
         v.selling_price as price,
         v.image_url,
         v.is_active,
-        COALESCE(ws.quantity_on_hand, v.quantity_on_hand, 0) as stock
+        COALESCE(ws.quantity_on_hand, 0) as stock,
+        v.quantity_on_hand as total_stock
       FROM market_product_variants v
       JOIN market_products p ON v.product_id = p.id
       LEFT JOIN market_warehouse_stock ws ON v.product_id = ws.product_id AND v.id = ws.variant_id AND ws.warehouse_id = $1
@@ -212,6 +215,7 @@ export async function GET(request: NextRequest) {
       barcode: string
       price: number
       stock: number
+      totalStock: number
       imageUrl: string | null
     }>> = {}
 
@@ -226,6 +230,7 @@ export async function GET(request: NextRequest) {
         barcode: v.barcode,
         price: parseFloat(v.price) || 0,
         stock: parseFloat(v.stock) || 0,
+        totalStock: parseFloat(v.total_stock) || 0,
         imageUrl: v.image_url
       })
     }
@@ -246,10 +251,15 @@ export async function GET(request: NextRequest) {
       const variants = variantsByProduct[p.id] || []
       const hasVariants = variants.length > 0
 
-      // If product has variants, calculate total stock from variants
-      const totalStock = hasVariants
+      // Calculate warehouse-specific stock (this is what the cashier can sell)
+      const warehouseStock = hasVariants
         ? variants.reduce((sum, v) => sum + v.stock, 0)
         : parseFloat(p.stock) || 0
+
+      // Calculate total stock across all warehouses (for info purposes)
+      const totalStockAllWarehouses = hasVariants
+        ? variants.reduce((sum, v) => sum + v.totalStock, 0)
+        : parseFloat(p.total_stock) || 0
 
       return {
         id: p.id,
@@ -265,7 +275,8 @@ export async function GET(request: NextRequest) {
         costPrice: parseFloat(p.cost_price) || 0,
         taxRate: parseFloat(p.tax_rate) || 0,
         imageUrl: p.image_url,
-        stock: totalStock,
+        stock: warehouseStock,
+        totalStockAllWarehouses,
         trackInventory: p.track_inventory,
         hasVariants,
         variants: hasVariants ? variants : undefined
