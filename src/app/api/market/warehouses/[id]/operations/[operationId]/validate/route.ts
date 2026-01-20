@@ -3,6 +3,19 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
 
+// Tolerance for floating point comparison
+const TOLERANCE = 0.001
+
+// Check if two numbers are equal within tolerance
+function areEqual(a: number, b: number): boolean {
+  return Math.abs(a - b) < TOLERANCE
+}
+
+// Check if quantity is complete (with tolerance)
+function isQuantityComplete(validated: number, expected: number): boolean {
+  return validated >= expected - TOLERANCE
+}
+
 interface JWTPayload {
   userId: number
   email: string
@@ -142,24 +155,31 @@ export async function POST(
       ORDER BY p.name, v.variant_name NULLS FIRST
     `, [opId])
 
-    const updatedLines = updatedLinesResult.rows.map(line => ({
-      lineId: line.line_id,
-      productId: line.product_id,
-      variantId: line.variant_id || null,
-      productName: line.product_name,
-      variantName: line.variant_name || null,
-      sku: line.variant_sku || line.sku,
-      barcode: line.variant_barcode || line.barcode || null,
-      quantityExpected: parseFloat(line.quantity_expected) || 0,
-      quantityValidated: parseFloat(line.quantity_validated) || 0,
-      isComplete: parseFloat(line.quantity_validated) >= parseFloat(line.quantity_expected)
-    }))
+    const updatedLines = updatedLinesResult.rows.map(line => {
+      const qtyExpected = parseFloat(line.quantity_expected) || 0
+      const qtyValidated = parseFloat(line.quantity_validated) || 0
+      return {
+        lineId: line.line_id,
+        productId: line.product_id,
+        variantId: line.variant_id || null,
+        productName: line.product_name,
+        variantName: line.variant_name || null,
+        sku: line.variant_sku || line.sku,
+        barcode: line.variant_barcode || line.barcode || null,
+        quantityExpected: qtyExpected,
+        quantityValidated: qtyValidated,
+        isComplete: isQuantityComplete(qtyValidated, qtyExpected)
+      }
+    })
 
     // Calculate progress
     const totalExpected = updatedLines.reduce((sum, l) => sum + l.quantityExpected, 0)
     const totalValidated = updatedLines.reduce((sum, l) => sum + l.quantityValidated, 0)
     const completedLines = updatedLines.filter(l => l.isComplete).length
-    const progressPercent = totalExpected > 0 ? Math.round((totalValidated / totalExpected) * 100) : 0
+    const isAllValidated = completedLines === updatedLines.length
+    // If all lines are complete, show 100% even with tiny floating point differences
+    const progressPercent = isAllValidated ? 100 :
+      (totalExpected > 0 ? Math.min(99, Math.round((totalValidated / totalExpected) * 100)) : 0)
 
     return NextResponse.json({
       success: true,
@@ -174,7 +194,7 @@ export async function POST(
           totalExpected,
           totalValidated,
           progressPercent,
-          isAllValidated: completedLines === updatedLines.length
+          isAllValidated
         }
       }
     })
@@ -280,24 +300,31 @@ export async function GET(
       ORDER BY p.name, v.variant_name NULLS FIRST
     `, [opId])
 
-    const lines = linesResult.rows.map(line => ({
-      lineId: line.line_id,
-      productId: line.product_id,
-      variantId: line.variant_id || null,
-      productName: line.product_name,
-      variantName: line.variant_name || null,
-      sku: line.variant_sku || line.sku,
-      barcode: line.variant_barcode || line.barcode || null,
-      quantityExpected: parseFloat(line.quantity_expected) || 0,
-      quantityValidated: parseFloat(line.quantity_validated) || 0,
-      isComplete: parseFloat(line.quantity_validated) >= parseFloat(line.quantity_expected)
-    }))
+    const lines = linesResult.rows.map(line => {
+      const qtyExpected = parseFloat(line.quantity_expected) || 0
+      const qtyValidated = parseFloat(line.quantity_validated) || 0
+      return {
+        lineId: line.line_id,
+        productId: line.product_id,
+        variantId: line.variant_id || null,
+        productName: line.product_name,
+        variantName: line.variant_name || null,
+        sku: line.variant_sku || line.sku,
+        barcode: line.variant_barcode || line.barcode || null,
+        quantityExpected: qtyExpected,
+        quantityValidated: qtyValidated,
+        isComplete: isQuantityComplete(qtyValidated, qtyExpected)
+      }
+    })
 
     // Calculate progress
     const totalExpected = lines.reduce((sum, l) => sum + l.quantityExpected, 0)
     const totalValidated = lines.reduce((sum, l) => sum + l.quantityValidated, 0)
     const completedLines = lines.filter(l => l.isComplete).length
-    const progressPercent = totalExpected > 0 ? Math.round((totalValidated / totalExpected) * 100) : 0
+    const isAllValidated = completedLines === lines.length
+    // If all lines are complete, show 100% even with tiny floating point differences
+    const progressPercent = isAllValidated ? 100 :
+      (totalExpected > 0 ? Math.min(99, Math.round((totalValidated / totalExpected) * 100)) : 0)
 
     return NextResponse.json({
       success: true,
@@ -328,7 +355,7 @@ export async function GET(
           totalExpected,
           totalValidated,
           progressPercent,
-          isAllValidated: completedLines === lines.length
+          isAllValidated
         }
       }
     })
