@@ -17,8 +17,11 @@ import {
   ChevronRight,
   Download,
   RefreshCw,
-  Filter,
-  Loader2
+  Loader2,
+  Tag,
+  Boxes,
+  TrendingUp,
+  BarChart3
 } from 'lucide-react'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
@@ -32,11 +35,14 @@ interface StockReportViewProps {
 interface Product {
   productId: number
   variantId: number | null
+  productName: string
+  variantName: string | null
   name: string
   sku: string
   barcode: string
   category: string
   imageUrl: string | null
+  unitOfMeasure: string
   quantityOnHand: number
   quantityReserved: number
   quantityAvailable: number
@@ -189,12 +195,14 @@ export default function StockReportView({ warehouseId, warehouseName, onBack }: 
   const exportToCSV = () => {
     if (!products.length) return
 
-    const headers = ['Producto', 'SKU', 'Codigo', 'Categoria', 'Stock', 'Reservado', 'Disponible', 'Costo Unit', 'Precio Venta', 'Valor Costo', 'Valor Venta']
+    const headers = ['Producto', 'Variante', 'SKU', 'Codigo', 'Categoria', 'Unidad', 'Stock', 'Reservado', 'Disponible', 'Costo Unit', 'Precio Venta', 'Valor Costo', 'Valor Venta']
     const rows = products.map(p => [
-      p.name,
+      p.productName,
+      p.variantName || '',
       p.sku,
       p.barcode,
       p.category,
+      p.unitOfMeasure,
       p.quantityOnHand,
       p.quantityReserved,
       p.quantityAvailable,
@@ -209,19 +217,38 @@ export default function StockReportView({ warehouseId, warehouseName, onBack }: 
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `reporte-stock-${warehouseName}-${new Date().toISOString().split('T')[0]}.csv`
+    link.download = `inventario-${warehouseName}-${new Date().toISOString().split('T')[0]}.csv`
     link.click()
     URL.revokeObjectURL(url)
   }
 
-  const getStockBadge = (product: Product) => {
+  const getStockStatus = (product: Product) => {
     if (product.quantityOnHand === 0) {
-      return { label: 'Sin Stock', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' }
+      return {
+        label: 'Sin Stock',
+        color: 'text-red-600 dark:text-red-400',
+        bgColor: 'bg-red-50 dark:bg-red-900/20',
+        borderColor: 'border-red-200 dark:border-red-800'
+      }
     }
     if (product.quantityOnHand <= product.minimumStock) {
-      return { label: 'Stock Bajo', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' }
+      return {
+        label: 'Stock Bajo',
+        color: 'text-amber-600 dark:text-amber-400',
+        bgColor: 'bg-amber-50 dark:bg-amber-900/20',
+        borderColor: 'border-amber-200 dark:border-amber-800'
+      }
     }
-    return { label: 'En Stock', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' }
+    return {
+      label: 'En Stock',
+      color: 'text-green-600 dark:text-green-400',
+      bgColor: 'bg-green-50 dark:bg-green-900/20',
+      borderColor: 'border-green-200 dark:border-green-800'
+    }
+  }
+
+  const formatQuantity = (value: number) => {
+    return Number(value) % 1 === 0 ? value : Number(value).toFixed(2)
   }
 
   if (loading) {
@@ -229,7 +256,7 @@ export default function StockReportView({ warehouseId, warehouseName, onBack }: 
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mx-auto mb-2" />
-          <p className="text-gray-500 dark:text-gray-400">Cargando reporte...</p>
+          <p className="text-gray-500 dark:text-gray-400">Cargando inventario...</p>
         </div>
       </div>
     )
@@ -258,18 +285,21 @@ export default function StockReportView({ warehouseId, warehouseName, onBack }: 
           <button
             onClick={onBack}
             className={cn(
-              'p-2 rounded-lg border transition-colors',
+              'p-2 rounded-xl border transition-all hover:scale-105',
               theme === 'dark'
-                ? 'border-gray-700 hover:bg-gray-800'
-                : 'border-gray-200 hover:bg-gray-100'
+                ? 'border-gray-700 hover:bg-gray-800 hover:border-gray-600'
+                : 'border-gray-200 hover:bg-gray-100 hover:border-gray-300'
             )}
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
           <div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-              Reporte de Stock
-            </h2>
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-indigo-500" />
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                Informe de Inventario
+              </h2>
+            </div>
             <p className="text-sm text-gray-500 dark:text-gray-400">{warehouseName}</p>
           </div>
         </div>
@@ -278,45 +308,48 @@ export default function StockReportView({ warehouseId, warehouseName, onBack }: 
             onClick={() => fetchReport(true)}
             disabled={refreshing}
             className={cn(
-              'p-2 rounded-lg border transition-colors',
+              'p-2.5 rounded-xl border transition-all hover:scale-105',
               theme === 'dark'
                 ? 'border-gray-700 hover:bg-gray-800'
                 : 'border-gray-200 hover:bg-gray-100'
             )}
+            title="Actualizar"
           >
             <RefreshCw className={cn('w-5 h-5', refreshing && 'animate-spin')} />
           </button>
           <button
             onClick={exportToCSV}
             disabled={!products.length}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 transition-all hover:scale-105 shadow-lg shadow-indigo-500/25"
           >
             <Download className="w-4 h-4" />
-            Exportar
+            <span className="hidden sm:inline">Exportar CSV</span>
           </button>
         </div>
       </div>
 
       {/* Summary Cards */}
       {summary && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className={cn(
-              'p-4 rounded-xl border',
-              theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+              'p-4 rounded-2xl border-2 transition-all hover:scale-[1.02]',
+              theme === 'dark'
+                ? 'bg-gradient-to-br from-blue-900/30 to-blue-800/20 border-blue-700/50'
+                : 'bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200'
             )}
           >
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                <Package className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              <div className="p-2.5 rounded-xl bg-blue-500/20">
+                <Boxes className="w-5 h-5 text-blue-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {summary.totalProducts.toLocaleString()}
+                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                  {summary.totalProducts}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Productos</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">Productos</p>
               </div>
             </div>
           </motion.div>
@@ -326,19 +359,21 @@ export default function StockReportView({ warehouseId, warehouseName, onBack }: 
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
             className={cn(
-              'p-4 rounded-xl border',
-              theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+              'p-4 rounded-2xl border-2 transition-all hover:scale-[1.02]',
+              theme === 'dark'
+                ? 'bg-gradient-to-br from-green-900/30 to-green-800/20 border-green-700/50'
+                : 'bg-gradient-to-br from-green-50 to-green-100/50 border-green-200'
             )}
           >
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30">
-                <DollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />
+              <div className="p-2.5 rounded-xl bg-green-500/20">
+                <DollarSign className="w-5 h-5 text-green-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                   ${summary.totalValue.toLocaleString()}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Valor (Costo)</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">Valor Total</p>
               </div>
             </div>
           </motion.div>
@@ -348,19 +383,21 @@ export default function StockReportView({ warehouseId, warehouseName, onBack }: 
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             className={cn(
-              'p-4 rounded-xl border',
-              theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+              'p-4 rounded-2xl border-2 transition-all hover:scale-[1.02]',
+              theme === 'dark'
+                ? 'bg-gradient-to-br from-amber-900/30 to-amber-800/20 border-amber-700/50'
+                : 'bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200'
             )}
           >
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30">
-                <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+              <div className="p-2.5 rounded-xl bg-amber-500/20">
+                <AlertTriangle className="w-5 h-5 text-amber-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
                   {summary.lowStock}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Stock Bajo</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">Stock Bajo</p>
               </div>
             </div>
           </motion.div>
@@ -370,250 +407,267 @@ export default function StockReportView({ warehouseId, warehouseName, onBack }: 
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
             className={cn(
-              'p-4 rounded-xl border',
-              theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+              'p-4 rounded-2xl border-2 transition-all hover:scale-[1.02]',
+              theme === 'dark'
+                ? 'bg-gradient-to-br from-red-900/30 to-red-800/20 border-red-700/50'
+                : 'bg-gradient-to-br from-red-50 to-red-100/50 border-red-200'
             )}
           >
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
-                <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+              <div className="p-2.5 rounded-xl bg-red-500/20">
+                <XCircle className="w-5 h-5 text-red-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                <p className="text-2xl font-bold text-red-600 dark:text-red-400">
                   {summary.outOfStock}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Sin Stock</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">Sin Stock</p>
               </div>
             </div>
           </motion.div>
         </div>
       )}
 
-      {/* Filters */}
+      {/* Search and Filters */}
       <div className={cn(
-        'flex flex-wrap gap-3 p-4 rounded-xl border',
-        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+        'p-4 rounded-2xl border',
+        theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
       )}>
-        <div className="flex-1 min-w-[200px]">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar por nombre, SKU o código..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className={cn(
-                'w-full pl-10 pr-4 py-2 rounded-lg border text-sm',
-                theme === 'dark'
-                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
-                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
-              )}
-            />
-          </div>
-        </div>
-
-        <select
-          value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value)}
-          className={cn(
-            'px-3 py-2 rounded-lg border text-sm min-w-[150px]',
-            theme === 'dark'
-              ? 'bg-gray-700 border-gray-600 text-white'
-              : 'bg-white border-gray-300 text-gray-900'
-          )}
-        >
-          <option value="">Todas las categorías</option>
-          {categories.map(cat => (
-            <option key={cat} value={cat}>{cat}</option>
-          ))}
-        </select>
-
-        <select
-          value={stockFilter}
-          onChange={(e) => setStockFilter(e.target.value)}
-          className={cn(
-            'px-3 py-2 rounded-lg border text-sm min-w-[150px]',
-            theme === 'dark'
-              ? 'bg-gray-700 border-gray-600 text-white'
-              : 'bg-white border-gray-300 text-gray-900'
-          )}
-        >
-          <option value="all">Todo el stock</option>
-          <option value="in-stock">En stock</option>
-          <option value="low-stock">Stock bajo</option>
-          <option value="out-of-stock">Sin stock</option>
-        </select>
-      </div>
-
-      {/* Products Table */}
-      <div className={cn(
-        'rounded-xl border overflow-hidden',
-        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-      )}>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className={theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'}>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  Producto
-                </th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  SKU
-                </th>
-                <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  Stock
-                </th>
-                <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  Costo
-                </th>
-                <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  Valor Total
-                </th>
-                <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                  Estado
-                </th>
-                <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {products.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-8 text-center text-gray-500 dark:text-gray-400">
-                    No se encontraron productos
-                  </td>
-                </tr>
-              ) : (
-                products.map((product, index) => {
-                  const badge = getStockBadge(product)
-                  return (
-                    <motion.tr
-                      key={`${product.productId}-${product.variantId || 'base'}`}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: index * 0.02 }}
-                      className={cn(
-                        'transition-colors',
-                        theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'
-                      )}
-                    >
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          {product.imageUrl ? (
-                            <img
-                              src={product.imageUrl}
-                              alt={product.name}
-                              className="w-10 h-10 rounded-lg object-cover"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                              <Package className="w-5 h-5 text-gray-400" />
-                            </div>
-                          )}
-                          <div>
-                            <p className="font-medium text-gray-900 dark:text-white text-sm">
-                              {product.name}
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {product.category}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-mono text-sm text-gray-600 dark:text-gray-300">
-                          {product.sku || '-'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="font-bold text-gray-900 dark:text-white">
-                          {Number(product.quantityOnHand) % 1 === 0
-                            ? product.quantityOnHand
-                            : Number(product.quantityOnHand).toFixed(2)}
-                        </span>
-                        {product.quantityReserved > 0 && (
-                          <span className="text-xs text-amber-600 dark:text-amber-400 ml-1">
-                            ({Number(product.quantityReserved) % 1 === 0
-                              ? product.quantityReserved
-                              : Number(product.quantityReserved).toFixed(2)} res.)
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <span className="text-sm text-gray-600 dark:text-gray-300">
-                          ${product.costPrice.toFixed(2)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <span className="font-medium text-green-600 dark:text-green-400">
-                          ${product.totalCostValue.toFixed(2)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className={cn('px-2 py-1 rounded-full text-xs font-medium', badge.color)}>
-                          {badge.label}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <button
-                          onClick={() => openMovementModal(product)}
-                          className={cn(
-                            'p-2 rounded-lg transition-colors',
-                            theme === 'dark'
-                              ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
-                              : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'
-                          )}
-                          title="Ver movimientos"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </motion.tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {pagination.totalPages > 1 && (
-          <div className={cn(
-            'flex items-center justify-between px-4 py-3 border-t',
-            theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-          )}>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Mostrando {((pagination.page - 1) * pagination.limit) + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total}
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
-                disabled={pagination.page === 1}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar producto, variante, SKU o codigo..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
                 className={cn(
-                  'p-2 rounded-lg transition-colors disabled:opacity-50',
-                  theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                  'w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm transition-all',
+                  theme === 'dark'
+                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-indigo-500'
+                    : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:bg-white'
                 )}
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="text-sm text-gray-600 dark:text-gray-300">
-                {pagination.page} / {pagination.totalPages}
-              </span>
-              <button
-                onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-                disabled={pagination.page === pagination.totalPages}
-                className={cn(
-                  'p-2 rounded-lg transition-colors disabled:opacity-50',
-                  theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-                )}
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              />
             </div>
           </div>
+
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className={cn(
+              'px-4 py-2.5 rounded-xl border text-sm min-w-[160px] transition-all',
+              theme === 'dark'
+                ? 'bg-gray-700 border-gray-600 text-white'
+                : 'bg-gray-50 border-gray-200 text-gray-900'
+            )}
+          >
+            <option value="">Todas las categorias</option>
+            {categories.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+
+          <select
+            value={stockFilter}
+            onChange={(e) => setStockFilter(e.target.value)}
+            className={cn(
+              'px-4 py-2.5 rounded-xl border text-sm min-w-[140px] transition-all',
+              theme === 'dark'
+                ? 'bg-gray-700 border-gray-600 text-white'
+                : 'bg-gray-50 border-gray-200 text-gray-900'
+            )}
+          >
+            <option value="all">Todo</option>
+            <option value="in-stock">En stock</option>
+            <option value="low-stock">Stock bajo</option>
+            <option value="out-of-stock">Sin stock</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Products List - Card Design */}
+      <div className="space-y-3">
+        {products.length === 0 ? (
+          <div className={cn(
+            'p-12 rounded-2xl border text-center',
+            theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
+          )}>
+            <Package className="w-12 h-12 mx-auto text-gray-400 mb-3" />
+            <p className="text-gray-500 dark:text-gray-400">No se encontraron productos</p>
+          </div>
+        ) : (
+          products.map((product, index) => {
+            const status = getStockStatus(product)
+            return (
+              <motion.div
+                key={`${product.productId}-${product.variantId || 'base'}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.02 }}
+                className={cn(
+                  'p-4 rounded-2xl border-2 transition-all hover:shadow-lg',
+                  status.bgColor,
+                  status.borderColor
+                )}
+              >
+                <div className="flex items-start gap-4">
+                  {/* Image */}
+                  <div className="flex-shrink-0">
+                    {product.imageUrl ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.productName}
+                        className="w-16 h-16 rounded-xl object-cover shadow-md"
+                      />
+                    ) : (
+                      <div className={cn(
+                        'w-16 h-16 rounded-xl flex items-center justify-center',
+                        theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                      )}>
+                        <Package className="w-7 h-7 text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Product Info */}
+                  <div className="flex-1 min-w-0">
+                    {/* Product Name */}
+                    <h3 className="font-bold text-gray-900 dark:text-white text-base truncate">
+                      {product.productName}
+                    </h3>
+
+                    {/* Variant Name */}
+                    {product.variantName && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Tag className="w-3.5 h-3.5 text-indigo-500" />
+                        <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">
+                          {product.variantName}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Category & SKU */}
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <span className={cn(
+                        'px-2 py-0.5 rounded-lg text-xs font-medium',
+                        theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'
+                      )}>
+                        {product.category}
+                      </span>
+                      {product.sku && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                          SKU: {product.sku}
+                        </span>
+                      )}
+                      {product.barcode && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                          Cod: {product.barcode}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Stock & Price */}
+                  <div className="flex-shrink-0 text-right">
+                    <div className={cn('text-2xl font-bold', status.color)}>
+                      {formatQuantity(product.quantityOnHand)}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {product.unitOfMeasure}
+                    </div>
+                    {product.quantityReserved > 0 && (
+                      <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                        {formatQuantity(product.quantityReserved)} reservado
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex-shrink-0">
+                    <button
+                      onClick={() => openMovementModal(product)}
+                      className={cn(
+                        'p-2.5 rounded-xl transition-all hover:scale-110',
+                        theme === 'dark'
+                          ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                          : 'bg-white hover:bg-gray-100 text-gray-600 shadow-sm'
+                      )}
+                      title="Ver movimientos"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Bottom Row - Prices */}
+                <div className={cn(
+                  'mt-3 pt-3 border-t flex items-center justify-between',
+                  theme === 'dark' ? 'border-gray-700/50' : 'border-gray-200/50'
+                )}>
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Costo:</span>
+                      <span className="ml-1 text-sm font-medium text-gray-700 dark:text-gray-300">
+                        ${product.costPrice.toFixed(2)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Precio:</span>
+                      <span className="ml-1 text-sm font-medium text-gray-700 dark:text-gray-300">
+                        ${product.sellingPrice.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <TrendingUp className="w-4 h-4 text-green-500" />
+                    <span className="text-sm font-bold text-green-600 dark:text-green-400">
+                      ${product.totalCostValue.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </motion.div>
+            )
+          })
         )}
       </div>
+
+      {/* Pagination */}
+      {pagination.totalPages > 1 && (
+        <div className={cn(
+          'flex items-center justify-between px-4 py-3 rounded-2xl border',
+          theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
+        )}>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {((pagination.page - 1) * pagination.limit) + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+              disabled={pagination.page === 1}
+              className={cn(
+                'p-2 rounded-xl transition-all disabled:opacity-50',
+                theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+              )}
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-300 min-w-[60px] text-center">
+              {pagination.page} / {pagination.totalPages}
+            </span>
+            <button
+              onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+              disabled={pagination.page === pagination.totalPages}
+              className={cn(
+                'p-2 rounded-xl transition-all disabled:opacity-50',
+                theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+              )}
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Movements Modal */}
       <AnimatePresence>
@@ -626,42 +680,48 @@ export default function StockReportView({ warehouseId, warehouseName, onBack }: 
             onClick={closeMovementModal}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
               className={cn(
-                'w-full max-w-2xl max-h-[80vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col',
+                'w-full max-w-2xl max-h-[80vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col',
                 theme === 'dark' ? 'bg-gray-800' : 'bg-white'
               )}
             >
               {/* Modal Header */}
               <div className={cn(
                 'px-6 py-4 border-b flex items-center justify-between',
-                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                theme === 'dark' ? 'border-gray-700 bg-gray-900/50' : 'border-gray-100 bg-gray-50'
               )}>
                 <div>
                   <h3 className="font-bold text-lg text-gray-900 dark:text-white">
-                    Movimientos
+                    Historial de Movimientos
                   </h3>
                   {movementData && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {movementData.product.name} ({movementData.product.sku})
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                      {movementData.product.name}
                     </p>
                   )}
                 </div>
                 <div className="flex items-center gap-4">
                   {movementData && (
-                    <div className="text-right">
+                    <div className={cn(
+                      'px-4 py-2 rounded-xl',
+                      theme === 'dark' ? 'bg-indigo-900/30' : 'bg-indigo-50'
+                    )}>
                       <p className="text-xs text-gray-500 dark:text-gray-400">Stock Actual</p>
                       <p className="font-bold text-xl text-indigo-600 dark:text-indigo-400">
-                        {movementData.currentStock}
+                        {formatQuantity(movementData.currentStock)}
                       </p>
                     </div>
                   )}
                   <button
                     onClick={closeMovementModal}
-                    className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                    className={cn(
+                      'p-2 rounded-xl transition-colors',
+                      theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-200'
+                    )}
                   >
                     <X className="w-5 h-5 text-gray-500" />
                   </button>
@@ -675,8 +735,9 @@ export default function StockReportView({ warehouseId, warehouseName, onBack }: 
                     <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
                   </div>
                 ) : movementData?.movements.length === 0 ? (
-                  <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-                    No hay movimientos registrados
+                  <div className="text-center py-12">
+                    <Package className="w-12 h-12 mx-auto text-gray-400 mb-3" />
+                    <p className="text-gray-500 dark:text-gray-400">No hay movimientos registrados</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -684,14 +745,14 @@ export default function StockReportView({ warehouseId, warehouseName, onBack }: 
                       <div
                         key={mov.id}
                         className={cn(
-                          'p-3 rounded-xl border',
+                          'p-4 rounded-2xl border transition-all hover:shadow-md',
                           theme === 'dark' ? 'bg-gray-900/50 border-gray-700' : 'bg-gray-50 border-gray-200'
                         )}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className={cn(
-                              'w-8 h-8 rounded-full flex items-center justify-center',
+                              'w-10 h-10 rounded-xl flex items-center justify-center',
                               mov.quantity > 0
                                 ? 'bg-green-100 dark:bg-green-900/30'
                                 : mov.quantity < 0
@@ -699,21 +760,22 @@ export default function StockReportView({ warehouseId, warehouseName, onBack }: 
                                   : 'bg-gray-100 dark:bg-gray-700'
                             )}>
                               {mov.quantity > 0 ? (
-                                <ArrowUp className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                <ArrowUp className="w-5 h-5 text-green-600 dark:text-green-400" />
                               ) : mov.quantity < 0 ? (
-                                <ArrowDown className="w-4 h-4 text-red-600 dark:text-red-400" />
+                                <ArrowDown className="w-5 h-5 text-red-600 dark:text-red-400" />
                               ) : (
-                                <Minus className="w-4 h-4 text-gray-500" />
+                                <Minus className="w-5 h-5 text-gray-500" />
                               )}
                             </div>
                             <div>
-                              <p className="font-medium text-gray-900 dark:text-white text-sm">
+                              <p className="font-semibold text-gray-900 dark:text-white">
                                 {mov.typeLabel}
                               </p>
                               <p className="text-xs text-gray-500 dark:text-gray-400">
                                 {new Date(mov.date).toLocaleString('es-ES', {
                                   day: '2-digit',
-                                  month: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric',
                                   hour: '2-digit',
                                   minute: '2-digit'
                                 })}
@@ -723,22 +785,25 @@ export default function StockReportView({ warehouseId, warehouseName, onBack }: 
                           </div>
                           <div className="text-right">
                             <p className={cn(
-                              'font-bold',
+                              'text-xl font-bold',
                               mov.quantity > 0
                                 ? 'text-green-600 dark:text-green-400'
                                 : mov.quantity < 0
                                   ? 'text-red-600 dark:text-red-400'
                                   : 'text-gray-600 dark:text-gray-400'
                             )}>
-                              {mov.quantity > 0 ? '+' : ''}{Number(mov.quantity) % 1 === 0 ? mov.quantity : Number(mov.quantity).toFixed(2)}
+                              {mov.quantity > 0 ? '+' : ''}{formatQuantity(mov.quantity)}
                             </p>
                             <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {Number(mov.stockBefore) % 1 === 0 ? mov.stockBefore : Number(mov.stockBefore).toFixed(2)} → {Number(mov.stockAfter) % 1 === 0 ? mov.stockAfter : Number(mov.stockAfter).toFixed(2)}
+                              {formatQuantity(mov.stockBefore)} → {formatQuantity(mov.stockAfter)}
                             </p>
                           </div>
                         </div>
                         {(mov.reference || mov.notes) && (
-                          <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                          <div className={cn(
+                            'mt-3 pt-3 border-t',
+                            theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                          )}>
                             {mov.reference && (
                               <p className="text-xs text-indigo-600 dark:text-indigo-400 font-mono">
                                 Ref: {mov.reference}

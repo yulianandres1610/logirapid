@@ -116,12 +116,14 @@ export async function GET(
       SELECT
         p.id as product_id,
         v.id as variant_id,
-        COALESCE(v.variant_name, p.name) as name,
+        p.name as product_name,
+        v.variant_name,
         COALESCE(v.sku, p.sku) as sku,
         COALESCE(v.barcode, p.barcode) as barcode,
         p.category,
         p.image_url,
         v.image_url as variant_image_url,
+        p.unit_of_measure,
         COALESCE(SUM(ws.quantity_on_hand), 0) as quantity_on_hand,
         COALESCE(SUM(ws.quantity_reserved), 0) as quantity_reserved,
         COALESCE(SUM(ws.quantity_on_hand), 0) - COALESCE(SUM(ws.quantity_reserved), 0) as quantity_available,
@@ -134,10 +136,10 @@ export async function GET(
         AND (ws.variant_id = v.id OR (ws.variant_id IS NULL AND v.id IS NULL))
         AND ws.warehouse_id = $${paramIndex}
       ${whereClause}
-      GROUP BY p.id, v.id, p.name, p.sku, p.barcode, p.category, p.image_url, v.image_url,
+      GROUP BY p.id, v.id, p.name, p.sku, p.barcode, p.category, p.image_url, v.image_url, p.unit_of_measure,
                v.variant_name, v.sku, v.barcode, v.cost_price, v.selling_price, p.cost_price, p.selling_price, p.minimum_stock
       ${stockFilterClause}
-      ORDER BY name ASC
+      ORDER BY p.name ASC, v.variant_name ASC NULLS FIRST
       LIMIT $${paramIndex + 1} OFFSET $${paramIndex + 2}
     `
 
@@ -192,11 +194,14 @@ export async function GET(
     const products = productsResult.rows.map(row => ({
       productId: row.product_id,
       variantId: row.variant_id,
-      name: row.name,
+      productName: row.product_name,
+      variantName: row.variant_name || null,
+      name: row.variant_name ? `${row.product_name} - ${row.variant_name}` : row.product_name,
       sku: row.sku || '',
       barcode: row.barcode || '',
       category: row.category || 'Sin categoría',
       imageUrl: row.variant_image_url || row.image_url,
+      unitOfMeasure: row.unit_of_measure || 'unidad',
       quantityOnHand: parseFloat(row.quantity_on_hand) || 0,
       quantityReserved: parseFloat(row.quantity_reserved) || 0,
       quantityAvailable: parseFloat(row.quantity_available) || 0,
