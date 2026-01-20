@@ -238,6 +238,21 @@ export default function TransferValidationView({
     await saveValidation([{ lineId, quantityValidated: newQuantity }])
   }
 
+  // Handle completing a line (set to expected quantity)
+  const handleCompleteLine = async (lineId: number) => {
+    const line = lines.find(l => l.lineId === lineId)
+    if (!line) return
+
+    const newQuantity = line.quantityExpected
+
+    setLines(prev => prev.map(l =>
+      l.lineId === lineId
+        ? { ...l, quantityValidated: newQuantity, isComplete: true }
+        : l
+    ))
+    await saveValidation([{ lineId, quantityValidated: newQuantity }])
+  }
+
   // Handle complete reception
   const handleCompleteClick = () => {
     // Use tolerance-based comparison for floating point precision
@@ -638,6 +653,17 @@ export default function TransferValidationView({
                           className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 flex items-center justify-center text-gray-600 dark:text-gray-300 transition-colors"
                         >
                           <Minus className="w-5 h-5" />
+                        </button>
+                      )}
+
+                      {/* Complete Button - fills to expected quantity */}
+                      {!isComplete && (
+                        <button
+                          onClick={() => handleCompleteLine(line.lineId)}
+                          className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/50 hover:bg-green-200 dark:hover:bg-green-800/50 flex items-center justify-center text-green-600 dark:text-green-400 transition-colors"
+                          title="Completar cantidad"
+                        >
+                          <Check className="w-5 h-5" />
                         </button>
                       )}
 
