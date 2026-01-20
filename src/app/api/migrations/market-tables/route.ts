@@ -61,10 +61,10 @@ export async function POST() {
         supplier_contact VARCHAR(100),
         supplier_reference VARCHAR(100),
 
-        -- Inventory
-        quantity_on_hand INTEGER DEFAULT 0,
-        quantity_expected INTEGER DEFAULT 0,
-        minimum_stock INTEGER DEFAULT 0,
+        -- Inventory (DECIMAL for decimal quantities like kg, lb)
+        quantity_on_hand DECIMAL(15,3) DEFAULT 0,
+        quantity_expected DECIMAL(15,3) DEFAULT 0,
+        minimum_stock DECIMAL(15,3) DEFAULT 0,
 
         -- Status
         is_active BOOLEAN DEFAULT true,
@@ -143,11 +143,11 @@ export async function POST() {
         purchase_id INTEGER NOT NULL REFERENCES market_purchases(id) ON DELETE CASCADE,
         product_id INTEGER NOT NULL REFERENCES market_products(id),
 
-        quantity INTEGER NOT NULL,
+        quantity DECIMAL(15,3) NOT NULL,
         unit_price DECIMAL(10,2) NOT NULL,
         total_price DECIMAL(12,2) NOT NULL,
 
-        quantity_received INTEGER DEFAULT 0,
+        quantity_received DECIMAL(15,3) DEFAULT 0,
 
         created_at TIMESTAMP DEFAULT NOW()
       )
@@ -245,12 +245,12 @@ export async function POST() {
         product_name VARCHAR(255) NOT NULL,
         product_image TEXT,
 
-        quantity INTEGER NOT NULL,
+        quantity DECIMAL(15,3) NOT NULL,
         unit_price DECIMAL(10,2) NOT NULL,
         total_price DECIMAL(12,2) NOT NULL,
 
         -- Preparation status
-        quantity_prepared INTEGER DEFAULT 0,
+        quantity_prepared DECIMAL(15,3) DEFAULT 0,
         is_prepared BOOLEAN DEFAULT false,
 
         created_at TIMESTAMP DEFAULT NOW()
@@ -361,7 +361,7 @@ export async function POST() {
         barcode VARCHAR(100),
         cost_price DECIMAL(10,4),
         selling_price DECIMAL(10,4),
-        quantity_on_hand INTEGER DEFAULT 0,
+        quantity_on_hand DECIMAL(15,3) DEFAULT 0,
         image_url TEXT,
         is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT NOW(),
@@ -457,8 +457,8 @@ export async function POST() {
         product_id INTEGER NOT NULL REFERENCES market_products(id) ON DELETE CASCADE,
         variant_id INTEGER REFERENCES market_product_variants(id) ON DELETE CASCADE,
 
-        quantity_on_hand INTEGER DEFAULT 0,
-        quantity_reserved INTEGER DEFAULT 0,
+        quantity_on_hand DECIMAL(15,3) DEFAULT 0,
+        quantity_reserved DECIMAL(15,3) DEFAULT 0,
 
         -- Ubicación dentro del almacén (opcional)
         location_code VARCHAR(50),
@@ -544,9 +544,9 @@ export async function POST() {
         product_id INTEGER NOT NULL REFERENCES market_products(id),
         variant_id INTEGER REFERENCES market_product_variants(id),
 
-        -- Cantidades
-        quantity_planned INTEGER NOT NULL,
-        quantity_done INTEGER DEFAULT 0,
+        -- Cantidades (DECIMAL for kg, lb, etc.)
+        quantity_planned DECIMAL(15,3) NOT NULL,
+        quantity_done DECIMAL(15,3) DEFAULT 0,
 
         -- Para picking: ubicación
         source_location VARCHAR(50),
