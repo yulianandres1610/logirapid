@@ -477,18 +477,18 @@ function PaymentContent() {
     return payments.reduce((sum, p) => sum + p.amountInUSD, 0)
   }, [payments])
 
-  // Redondear el saldo pendiente a enteros
-  const remainingUSD = Math.round(totals.total - totalPaidUSD)
-  const isFullyPaid = remainingUSD <= 0
+  // Saldo pendiente (sin redondear para mostrar valor exacto)
+  const remainingUSD = totals.total - totalPaidUSD
+  const isFullyPaid = remainingUSD <= 0.001 // Tolerancia para decimales
 
-  // Calculate change - siempre redondeado a enteros
+  // Calculate change - valor exacto sin redondear
   const changeAmount = useMemo(() => {
-    if (remainingUSD < 0) {
+    if (remainingUSD < -0.001) {
       const changeUSD = Math.abs(remainingUSD)
       if (changeCurrency === 'CUP') {
-        return Math.round(changeUSD * rates.CUP_BCC)  // Usar tasa BCC para venta
+        return changeUSD * rates.CUP_BCC  // Usar tasa BCC para venta
       }
-      return Math.round(changeUSD)
+      return changeUSD
     }
     return 0
   }, [remainingUSD, changeCurrency, rates])
@@ -526,17 +526,21 @@ function PaymentContent() {
     setPayments(payments.filter(p => p.id !== id))
   }
 
-  // Set exact amount - redondeado a enteros (usando tasa BCC para venta)
+  // Set exact amount - valor exacto (usando tasa BCC para venta)
   const setExactAmount = () => {
-    if (remainingUSD > 0) {
+    if (remainingUSD > 0.001) {
       let exactAmount = remainingUSD
       if (selectedCurrency === 'CUP') {
-        exactAmount = Math.round(remainingUSD * rates.CUP_BCC)  // Usar tasa BCC para venta
+        exactAmount = remainingUSD * rates.CUP_BCC  // Usar tasa BCC para venta
       } else if (selectedCurrency === 'MLC') {
-        exactAmount = Math.round(remainingUSD * rates.MLC)
+        exactAmount = remainingUSD * rates.MLC
       }
-      // Mostrar como entero (sin decimales)
-      setAmount(String(Math.round(exactAmount)))
+      // Mostrar con 2 decimales para USD/MLC, entero para CUP
+      if (selectedCurrency === 'CUP') {
+        setAmount(String(Math.round(exactAmount)))
+      } else {
+        setAmount(exactAmount.toFixed(2))
+      }
     }
   }
 
@@ -668,19 +672,16 @@ function PaymentContent() {
     }
   }
 
-  // Format currency - TODAS las monedas se redondean a enteros
+  // Format currency - USD y MLC con 2 decimales, CUP entero
   const formatCurrency = (amount: number, currency: 'USD' | 'CUP' | 'MLC' = 'USD') => {
     const symbol = CURRENCIES.find(c => c.id === currency)?.symbol || '$'
-    const rounded = Math.round(amount)
     if (currency === 'CUP') {
-      return `${symbol}${rounded.toLocaleString('es-ES')}`
+      // CUP se muestra como entero (los valores son grandes)
+      return `${symbol}${Math.round(amount).toLocaleString('es-ES')}`
     }
-    // USD y MLC también se redondean a enteros
-    return `${symbol}${rounded.toLocaleString('es-ES')}`
+    // USD y MLC con 2 decimales
+    return `${symbol}${amount.toFixed(2)}`
   }
-
-  // Función de redondeo a entero
-  const roundToWhole = (amount: number): number => Math.round(amount)
 
   // Numpad handler
   const handleNumpad = (key: string) => {
@@ -1008,7 +1009,7 @@ function PaymentContent() {
             </div>
 
             {/* Change Currency */}
-            {remainingUSD < 0 && (
+            {remainingUSD < -0.001 && (
               <div className={`rounded-xl p-4 shadow-sm ${tc.bgCard}`}>
                 <h3 className="font-semibold mb-3">Devolver cambio en:</h3>
                 <div className="grid grid-cols-2 gap-2">
