@@ -479,11 +479,12 @@ function PaymentContent() {
 
   // Saldo pendiente (sin redondear para mostrar valor exacto)
   const remainingUSD = totals.total - totalPaidUSD
-  const isFullyPaid = remainingUSD <= 0.001 // Tolerancia para decimales
+  // Tolerancia de 1 centavo para diferencias de conversión CUP/MLC
+  const isFullyPaid = remainingUSD <= 0.01
 
   // Calculate change - valor exacto sin redondear
   const changeAmount = useMemo(() => {
-    if (remainingUSD < -0.001) {
+    if (remainingUSD < -0.01) {
       const changeUSD = Math.abs(remainingUSD)
       if (changeCurrency === 'CUP') {
         return changeUSD * rates.CUP_BCC  // Usar tasa BCC para venta
@@ -528,7 +529,7 @@ function PaymentContent() {
 
   // Set exact amount - valor exacto (usando tasa BCC para venta)
   const setExactAmount = () => {
-    if (remainingUSD > 0.001) {
+    if (remainingUSD > 0.01) {
       let exactAmount = remainingUSD
       if (selectedCurrency === 'CUP') {
         exactAmount = remainingUSD * rates.CUP_BCC  // Usar tasa BCC para venta
@@ -1009,7 +1010,7 @@ function PaymentContent() {
             </div>
 
             {/* Change Currency */}
-            {remainingUSD < -0.001 && (
+            {remainingUSD < -0.01 && (
               <div className={`rounded-xl p-4 shadow-sm ${tc.bgCard}`}>
                 <h3 className="font-semibold mb-3">Devolver cambio en:</h3>
                 <div className="grid grid-cols-2 gap-2">
