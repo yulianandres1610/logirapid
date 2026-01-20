@@ -738,7 +738,9 @@ export default function MarketInventoryPage() {
                             </td>
                             <td className="py-4 px-4 text-center">
                               <span className="text-sm font-bold text-gray-900 dark:text-white">
-                                {product.quantityOnHand}
+                                {Number(product.quantityOnHand) % 1 === 0
+                                  ? product.quantityOnHand
+                                  : Number(product.quantityOnHand).toFixed(2)}
                               </span>
                             </td>
                             <td className="py-4 px-4 text-center">
@@ -949,14 +951,22 @@ export default function MarketInventoryPage() {
                         theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
                       )}>
                         <p className="text-xs text-gray-500 mb-1">Stock Actual</p>
-                        <p className="text-xl font-bold text-gray-900 dark:text-white">{selectedProduct.quantityOnHand}</p>
+                        <p className="text-xl font-bold text-gray-900 dark:text-white">
+                          {Number(selectedProduct.quantityOnHand) % 1 === 0
+                            ? selectedProduct.quantityOnHand
+                            : Number(selectedProduct.quantityOnHand).toFixed(2)}
+                        </p>
                       </div>
                       <div className={cn(
                         'p-4 rounded-xl',
                         theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
                       )}>
                         <p className="text-xs text-gray-500 mb-1">Stock Mínimo</p>
-                        <p className="text-xl font-bold text-gray-900 dark:text-white">{selectedProduct.minimumStock}</p>
+                        <p className="text-xl font-bold text-gray-900 dark:text-white">
+                          {Number(selectedProduct.minimumStock) % 1 === 0
+                            ? selectedProduct.minimumStock
+                            : Number(selectedProduct.minimumStock).toFixed(2)}
+                        </p>
                       </div>
                     </div>
 

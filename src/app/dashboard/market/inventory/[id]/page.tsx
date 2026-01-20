@@ -728,10 +728,14 @@ export default function ProductDetailPage() {
                       'text-2xl font-bold',
                       status.color === 'green' ? 'text-green-600' : status.color === 'amber' ? 'text-amber-600' : 'text-red-600'
                     )}>
-                      {product.quantityOnHand}
+                      {Number(product.quantityOnHand) % 1 === 0
+                        ? product.quantityOnHand
+                        : Number(product.quantityOnHand).toFixed(2)}
                       <span className="text-sm font-normal text-gray-500 ml-1">{product.unitOfMeasure}</span>
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">Mínimo: {product.minimumStock}</p>
+                    <p className="text-xs text-gray-500 mt-1">Mínimo: {Number(product.minimumStock) % 1 === 0
+                      ? product.minimumStock
+                      : Number(product.minimumStock).toFixed(2)}</p>
                   </motion.div>
                 </div>
 
@@ -852,7 +856,9 @@ export default function ProductDetailPage() {
                           variant.quantityOnHand <= product.minimumStock ? 'text-amber-500' :
                           'text-gray-500'
                         )}>
-                          Stock: {variant.quantityOnHand}
+                          Stock: {Number(variant.quantityOnHand) % 1 === 0
+                            ? variant.quantityOnHand
+                            : Number(variant.quantityOnHand).toFixed(2)}
                         </p>
                       </div>
 
@@ -1048,7 +1054,11 @@ export default function ProductDetailPage() {
                           theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
                         )}>
                           <span className="text-sm text-gray-500">Total: </span>
-                          <span className="text-lg font-bold text-gray-900 dark:text-white">{getTotalWarehouseStock()}</span>
+                          <span className="text-lg font-bold text-gray-900 dark:text-white">
+                            {getTotalWarehouseStock() % 1 === 0
+                              ? getTotalWarehouseStock()
+                              : getTotalWarehouseStock().toFixed(2)}
+                          </span>
                           <span className="text-sm text-gray-500 ml-1">{product.unitOfMeasure}</span>
                         </div>
                       </div>
@@ -1089,11 +1099,19 @@ export default function ProductDetailPage() {
                                   </div>
                                 </div>
                                 <div className="text-right">
-                                  <p className="text-xl font-bold text-gray-900 dark:text-white">{warehouse.quantityOnHand}</p>
+                                  <p className="text-xl font-bold text-gray-900 dark:text-white">
+                                    {Number(warehouse.quantityOnHand) % 1 === 0
+                                      ? warehouse.quantityOnHand
+                                      : Number(warehouse.quantityOnHand).toFixed(2)}
+                                  </p>
                                   <div className="flex items-center gap-2 text-xs text-gray-500">
-                                    <span>Reservado: {warehouse.quantityReserved}</span>
+                                    <span>Reservado: {Number(warehouse.quantityReserved) % 1 === 0
+                                      ? warehouse.quantityReserved
+                                      : Number(warehouse.quantityReserved).toFixed(2)}</span>
                                     <span>|</span>
-                                    <span className="text-emerald-600">Disponible: {warehouse.quantityAvailable}</span>
+                                    <span className="text-emerald-600">Disponible: {Number(warehouse.quantityAvailable) % 1 === 0
+                                      ? warehouse.quantityAvailable
+                                      : Number(warehouse.quantityAvailable).toFixed(2)}</span>
                                   </div>
                                 </div>
                               </div>
@@ -1143,10 +1161,16 @@ export default function ProductDetailPage() {
                                       variant.totalOnHand <= (product?.minimumStock || 0) ? 'text-amber-500' :
                                       'text-purple-600'
                                     )}>
-                                      {variant.totalOnHand}
+                                      {Number(variant.totalOnHand) % 1 === 0
+                                        ? variant.totalOnHand
+                                        : Number(variant.totalOnHand).toFixed(2)}
                                     </p>
                                     <p className="text-xs text-gray-500">
-                                      Disponible: <span className="text-emerald-600 font-medium">{variant.totalAvailable}</span>
+                                      Disponible: <span className="text-emerald-600 font-medium">
+                                        {Number(variant.totalAvailable) % 1 === 0
+                                          ? variant.totalAvailable
+                                          : Number(variant.totalAvailable).toFixed(2)}
+                                      </span>
                                     </p>
                                   </div>
                                 </div>
@@ -1162,7 +1186,7 @@ export default function ProductDetailPage() {
                                           {wh.warehouseName}
                                         </span>
                                         <span className="font-medium text-gray-900 dark:text-white">
-                                          {wh.quantityOnHand} <span className="text-gray-400 font-normal">({wh.quantityAvailable} disp.)</span>
+                                          {Number(wh.quantityOnHand) % 1 === 0 ? wh.quantityOnHand : Number(wh.quantityOnHand).toFixed(2)} <span className="text-gray-400 font-normal">({Number(wh.quantityAvailable) % 1 === 0 ? wh.quantityAvailable : Number(wh.quantityAvailable).toFixed(2)} disp.)</span>
                                         </span>
                                       </div>
                                     ))}
@@ -1309,7 +1333,7 @@ export default function ProductDetailPage() {
                                     <div>
                                       <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Cantidad</p>
                                       <p className="font-bold text-gray-900 dark:text-white">
-                                        {lot.quantityAvailable} <span className="font-normal text-gray-500">/ {lot.quantity}</span>
+                                        {Number(lot.quantityAvailable) % 1 === 0 ? lot.quantityAvailable : Number(lot.quantityAvailable).toFixed(2)} <span className="font-normal text-gray-500">/ {Number(lot.quantity) % 1 === 0 ? lot.quantity : Number(lot.quantity).toFixed(2)}</span>
                                       </p>
                                       <p className="text-xs text-gray-400">{product?.unitOfMeasure || 'unidad'}</p>
                                     </div>

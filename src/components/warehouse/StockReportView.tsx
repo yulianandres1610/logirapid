@@ -528,11 +528,15 @@ export default function StockReportView({ warehouseId, warehouseName, onBack }: 
                       </td>
                       <td className="py-3 px-4 text-center">
                         <span className="font-bold text-gray-900 dark:text-white">
-                          {product.quantityOnHand}
+                          {Number(product.quantityOnHand) % 1 === 0
+                            ? product.quantityOnHand
+                            : Number(product.quantityOnHand).toFixed(2)}
                         </span>
                         {product.quantityReserved > 0 && (
                           <span className="text-xs text-amber-600 dark:text-amber-400 ml-1">
-                            ({product.quantityReserved} res.)
+                            ({Number(product.quantityReserved) % 1 === 0
+                              ? product.quantityReserved
+                              : Number(product.quantityReserved).toFixed(2)} res.)
                           </span>
                         )}
                       </td>
@@ -726,10 +730,10 @@ export default function StockReportView({ warehouseId, warehouseName, onBack }: 
                                   ? 'text-red-600 dark:text-red-400'
                                   : 'text-gray-600 dark:text-gray-400'
                             )}>
-                              {mov.quantity > 0 ? '+' : ''}{mov.quantity}
+                              {mov.quantity > 0 ? '+' : ''}{Number(mov.quantity) % 1 === 0 ? mov.quantity : Number(mov.quantity).toFixed(2)}
                             </p>
                             <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {mov.stockBefore} → {mov.stockAfter}
+                              {Number(mov.stockBefore) % 1 === 0 ? mov.stockBefore : Number(mov.stockBefore).toFixed(2)} → {Number(mov.stockAfter) % 1 === 0 ? mov.stockAfter : Number(mov.stockAfter).toFixed(2)}
                             </p>
                           </div>
                         </div>
