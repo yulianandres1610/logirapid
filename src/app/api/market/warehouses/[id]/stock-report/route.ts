@@ -146,6 +146,7 @@ export async function GET(
     const productsResult = await db.query(productsQuery, queryParams)
 
     // Get total count for pagination
+    // Note: paramIndex points to where warehouseId was added
     const countQuery = `
       SELECT COUNT(DISTINCT COALESCE(v.id::text, p.id::text)) as total
       FROM market_products p
@@ -156,9 +157,8 @@ export async function GET(
       ${whereClause}
     `
 
-    // Remove limit and offset for count
+    // Remove limit and offset for count (warehouseId is already at position paramIndex)
     const countParams = queryParams.slice(0, -2)
-    countParams.push(warehouseId)
     const countResult = await db.query(countQuery, countParams)
     const total = parseInt(countResult.rows[0]?.total) || 0
 
