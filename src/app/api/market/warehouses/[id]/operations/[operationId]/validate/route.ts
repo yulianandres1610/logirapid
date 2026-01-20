@@ -114,10 +114,11 @@ export async function POST(
     }
 
     // Update each line's validated quantity
+    // When lines are grouped by product+variant, we distribute the quantity across all related lines
     for (const line of lines) {
-      // Verify line belongs to this operation
+      // First, find the product_id and variant_id for this line
       const lineCheck = await db.query(`
-        SELECT id, quantity_planned, COALESCE(quantity_validated, 0) as quantity_validated
+        SELECT id, product_id, variant_id, quantity_planned
         FROM market_warehouse_operation_lines
         WHERE id = $1 AND operation_id = $2
       `, [line.lineId, opId])
@@ -126,18 +127,49 @@ export async function POST(
         continue // Skip invalid lines
       }
 
-      // Update validated quantity
-      await db.query(`
-        UPDATE market_warehouse_operation_lines
-        SET quantity_validated = $1
-        WHERE id = $2
-      `, [line.quantityValidated, line.lineId])
+      const { product_id, variant_id } = lineCheck.rows[0]
+
+      // Find all lines for this product+variant in this operation
+      const relatedLines = await db.query(`
+        SELECT id, quantity_planned
+        FROM market_warehouse_operation_lines
+        WHERE operation_id = $1 AND product_id = $2
+          AND (variant_id = $3 OR ($3 IS NULL AND variant_id IS NULL))
+        ORDER BY id
+      `, [opId, product_id, variant_id])
+
+      // Distribute the validated quantity across all related lines
+      let remainingQty = line.quantityValidated
+      for (const relLine of relatedLines.rows) {
+        const linePlanned = parseFloat(relLine.quantity_planned) || 0
+        const lineValidated = Math.min(remainingQty, linePlanned)
+
+        await db.query(`
+          UPDATE market_warehouse_operation_lines
+          SET quantity_validated = $1
+          WHERE id = $2
+        `, [lineValidated, relLine.id])
+
+        remainingQty -= lineValidated
+        if (remainingQty <= 0) remainingQty = 0
+      }
+
+      // If there's still remaining quantity (excess), add it to the last line
+      if (remainingQty > 0 && relatedLines.rows.length > 0) {
+        const lastLineId = relatedLines.rows[relatedLines.rows.length - 1].id
+        const lastLinePlanned = parseFloat(relatedLines.rows[relatedLines.rows.length - 1].quantity_planned) || 0
+        await db.query(`
+          UPDATE market_warehouse_operation_lines
+          SET quantity_validated = $1
+          WHERE id = $2
+        `, [lastLinePlanned + remainingQty, lastLineId])
+      }
     }
 
-    // Get updated lines with validation status (including variant info)
+    // Get updated lines with validation status - GROUP BY product+variant
     const updatedLinesResult = await db.query(`
       SELECT
-        l.id as line_id,
+        MIN(l.id) as line_id,
         l.product_id,
         l.variant_id,
         p.name as product_name,
@@ -146,12 +178,14 @@ export async function POST(
         v.variant_name,
         v.sku as variant_sku,
         v.barcode as variant_barcode,
-        l.quantity_planned as quantity_expected,
-        COALESCE(l.quantity_validated, 0) as quantity_validated
+        SUM(l.quantity_planned) as quantity_expected,
+        SUM(COALESCE(l.quantity_validated, 0)) as quantity_validated,
+        ARRAY_AGG(l.id) as line_ids
       FROM market_warehouse_operation_lines l
       JOIN market_products p ON p.id = l.product_id
       LEFT JOIN market_product_variants v ON v.id = l.variant_id
       WHERE l.operation_id = $1
+      GROUP BY l.product_id, l.variant_id, p.name, p.sku, p.barcode, v.variant_name, v.sku, v.barcode
       ORDER BY p.name, v.variant_name NULLS FIRST
     `, [opId])
 
@@ -160,6 +194,7 @@ export async function POST(
       const qtyValidated = parseFloat(line.quantity_validated) || 0
       return {
         lineId: line.line_id,
+        lineIds: line.line_ids,
         productId: line.product_id,
         variantId: line.variant_id || null,
         productName: line.product_name,
@@ -279,10 +314,10 @@ export async function GET(
 
     const operation = operationResult.rows[0]
 
-    // Get lines (including variant info)
+    // Get lines (including variant info) - GROUP BY product+variant to aggregate quantities
     const linesResult = await db.query(`
       SELECT
-        l.id as line_id,
+        MIN(l.id) as line_id,
         l.product_id,
         l.variant_id,
         p.name as product_name,
@@ -291,12 +326,14 @@ export async function GET(
         v.variant_name,
         v.sku as variant_sku,
         v.barcode as variant_barcode,
-        l.quantity_planned as quantity_expected,
-        COALESCE(l.quantity_validated, 0) as quantity_validated
+        SUM(l.quantity_planned) as quantity_expected,
+        SUM(COALESCE(l.quantity_validated, 0)) as quantity_validated,
+        ARRAY_AGG(l.id) as line_ids
       FROM market_warehouse_operation_lines l
       JOIN market_products p ON p.id = l.product_id
       LEFT JOIN market_product_variants v ON v.id = l.variant_id
       WHERE l.operation_id = $1
+      GROUP BY l.product_id, l.variant_id, p.name, p.sku, p.barcode, v.variant_name, v.sku, v.barcode
       ORDER BY p.name, v.variant_name NULLS FIRST
     `, [opId])
 
@@ -305,6 +342,7 @@ export async function GET(
       const qtyValidated = parseFloat(line.quantity_validated) || 0
       return {
         lineId: line.line_id,
+        lineIds: line.line_ids, // Array of all line IDs for this product+variant
         productId: line.product_id,
         variantId: line.variant_id || null,
         productName: line.product_name,
