@@ -16,6 +16,7 @@ type ReferenceType = 'purchase_order' | 'consignment' | 'none'
 
 interface OperationLine {
   productId: number
+  variantId?: number | null
   quantity: number
   realStock?: number
   scrapReason?: string
@@ -234,12 +235,13 @@ export async function POST(
 
         const product = productCheck.rows[0]
 
-        // Get current stock
+        // Get current stock (considering variant if provided)
         const stockResult = await db.query(`
           SELECT id, quantity_on_hand, quantity_reserved
           FROM market_warehouse_stock
           WHERE warehouse_id = $1 AND product_id = $2
-        `, [warehouseId, line.productId])
+            AND (variant_id = $3 OR ($3 IS NULL AND variant_id IS NULL))
+        `, [warehouseId, line.productId, line.variantId || null])
 
         const currentStock = stockResult.rows.length > 0
           ? parseFloat(stockResult.rows[0].quantity_on_hand) || 0
@@ -289,19 +291,21 @@ export async function POST(
         // For other operations, quantity is the actual change
         const lineQuantity = operationType === 'transfer' ? line.quantity : Math.abs(quantityChange)
 
-        // Create operation line
+        // Create operation line (including variant_id)
         await db.query(`
           INSERT INTO market_warehouse_operation_lines (
             operation_id,
             product_id,
+            variant_id,
             quantity_planned,
             quantity_done,
             scrap_reason,
             line_status
-          ) VALUES ($1, $2, $3, $4, $5, $6)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
         `, [
           operationId,
           line.productId,
+          line.variantId || null,
           lineQuantity,
           operationType === 'transfer' ? 0 : lineQuantity, // For transfers, quantity_done starts at 0
           operationType === 'scrap' ? (line.scrapReason || scrapReason) : null,
@@ -323,9 +327,9 @@ export async function POST(
             // Create stock record with reserved quantity
             await db.query(`
               INSERT INTO market_warehouse_stock (
-                warehouse_id, product_id, quantity_on_hand, quantity_reserved, created_at
-              ) VALUES ($1, $2, 0, $3, NOW())
-            `, [warehouseId, line.productId, line.quantity])
+                warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved, created_at
+              ) VALUES ($1, $2, $3, 0, $4, NOW())
+            `, [warehouseId, line.productId, line.variantId || null, line.quantity])
           }
           // NOTE: Stock is NOT added to destination warehouse here
           // That happens when destination validates the reception
@@ -340,9 +344,9 @@ export async function POST(
           } else {
             await db.query(`
               INSERT INTO market_warehouse_stock (
-                warehouse_id, product_id, quantity_on_hand, quantity_reserved, created_at
-              ) VALUES ($1, $2, $3, 0, NOW())
-            `, [warehouseId, line.productId, newStock])
+                warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved, created_at
+              ) VALUES ($1, $2, $3, $4, 0, NOW())
+            `, [warehouseId, line.productId, line.variantId || null, newStock])
           }
         }
 
@@ -355,6 +359,7 @@ export async function POST(
             INSERT INTO market_stock_movements (
               company_id,
               product_id,
+              variant_id,
               movement_type,
               from_warehouse_id,
               to_warehouse_id,
@@ -367,10 +372,11 @@ export async function POST(
               notes,
               created_by,
               created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
           `, [
             payload.companyId,
             line.productId,
+            line.variantId || null,
             movementType,
             movementType === 'in' ? null : warehouseId,  // from_warehouse_id (null for reception)
             movementType === 'in' ? warehouseId : null,  // to_warehouse_id (set for reception)

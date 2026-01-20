@@ -758,6 +758,7 @@ export default function WarehouseOperationsPage() {
     try {
       const lines = operation.products.map(p => ({
         productId: p.productId,
+        variantId: p.variantId || null,
         quantity: p.quantity,
         realStock: p.realStock,
         scrapReason: operation.scrapReason,
