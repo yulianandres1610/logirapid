@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRightLeft, Trash2, Scale, PackageOpen, Package, RotateCcw, Printer } from 'lucide-react'
+import { ArrowRightLeft, Trash2, Scale, PackageOpen, Package, RotateCcw, Printer, BarChart3 } from 'lucide-react'
 
-export type OperationType = 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer' | 'order_reception' | 'return' | 'print_labels'
+export type OperationType = 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer' | 'order_reception' | 'return' | 'print_labels' | 'stock_report'
 
 interface OperationTypeSelectorProps {
   onSelect: (type: OperationType) => void
@@ -81,6 +81,16 @@ const operationTypes = [
     hoverGradient: 'from-emerald-600 to-green-700',
     bgLight: 'bg-emerald-50',
     textColor: 'text-emerald-600'
+  },
+  {
+    id: 'stock_report' as OperationType,
+    name: 'Reporte',
+    description: 'Ver stock y valoración',
+    icon: BarChart3,
+    gradient: 'from-indigo-500 to-purple-600',
+    hoverGradient: 'from-indigo-600 to-purple-700',
+    bgLight: 'bg-indigo-50',
+    textColor: 'text-indigo-600'
   }
 ]
 
@@ -116,7 +126,7 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
     return () => clearInterval(interval)
   }, [currentWarehouse.id])
 
-  // Separar en filas para el layout: 4 arriba, 3 abajo centradas
+  // Separar en filas para el layout: 4 arriba, 4 abajo
   const topRow = operationTypes.slice(0, 4)
   const bottomRow = operationTypes.slice(4)
 

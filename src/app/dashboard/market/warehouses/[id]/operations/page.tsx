@@ -31,6 +31,7 @@ import ReturnTypeSelector, { type ReturnType } from '@/components/warehouse/Retu
 import SupplierReturnView from '@/components/warehouse/SupplierReturnView'
 import POSReturnReceiveView from '@/components/warehouse/POSReturnReceiveView'
 import PrintLabelsView from '@/components/warehouse/PrintLabelsView'
+import StockReportView from '@/components/warehouse/StockReportView'
 import { PasswordConfirmModal } from '@/components/auth/PasswordConfirmModal'
 
 interface WarehouseData {
@@ -990,7 +991,8 @@ export default function WarehouseOperationsPage() {
                         operation.operationType === 'receive_transfer' ? 'Recibir Transferencia' :
                         operation.operationType === 'order_reception' ? 'Recibir Orden' :
                         operation.operationType === 'return' ? (returnType === 'supplier' ? 'Devolucion a Proveedor' : returnType === 'pos' ? 'Devolucion desde POS' : 'Devoluciones') :
-                        operation.operationType === 'print_labels' ? 'Imprimir Etiquetas' : 'Operacion'}`
+                        operation.operationType === 'print_labels' ? 'Imprimir Etiquetas' :
+                        operation.operationType === 'stock_report' ? 'Reporte de Stock' : 'Operacion'}`
                     : 'Operaciones'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">{warehouse.name}</p>
@@ -1124,6 +1126,13 @@ export default function WarehouseOperationsPage() {
         ) : operation.operationType === 'print_labels' ? (
           /* Print Labels View */
           <PrintLabelsView
+            warehouseId={warehouseId}
+            warehouseName={warehouse.name}
+            onBack={handleBack}
+          />
+        ) : operation.operationType === 'stock_report' ? (
+          /* Stock Report View */
+          <StockReportView
             warehouseId={warehouseId}
             warehouseName={warehouse.name}
             onBack={handleBack}
