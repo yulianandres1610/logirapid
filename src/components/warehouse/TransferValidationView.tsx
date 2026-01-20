@@ -15,6 +15,16 @@ function formatQty(value: number): string {
   return value.toFixed(2)
 }
 
+// Compare two numbers with tolerance for floating point precision
+function areEqual(a: number, b: number, tolerance: number = 0.001): boolean {
+  return Math.abs(a - b) < tolerance
+}
+
+// Check if quantity is complete (with tolerance)
+function isQuantityComplete(validated: number, expected: number): boolean {
+  return validated >= expected - 0.001
+}
+
 interface TransferLine {
   lineId: number
   productId: number
@@ -192,7 +202,7 @@ export default function TransferValidationView({
     const newQuantity = line.quantityValidated + 1
     setLines(prev => prev.map(l =>
       l.lineId === lineId
-        ? { ...l, quantityValidated: newQuantity, isComplete: newQuantity >= l.quantityExpected }
+        ? { ...l, quantityValidated: newQuantity, isComplete: isQuantityComplete(newQuantity, l.quantityExpected) }
         : l
     ))
     await saveValidation([{ lineId, quantityValidated: newQuantity }])
@@ -205,7 +215,7 @@ export default function TransferValidationView({
     const newQuantity = Math.max(0, line.quantityValidated - 1)
     setLines(prev => prev.map(l =>
       l.lineId === lineId
-        ? { ...l, quantityValidated: newQuantity, isComplete: newQuantity >= l.quantityExpected }
+        ? { ...l, quantityValidated: newQuantity, isComplete: isQuantityComplete(newQuantity, l.quantityExpected) }
         : l
     ))
     await saveValidation([{ lineId, quantityValidated: newQuantity }])
@@ -222,7 +232,7 @@ export default function TransferValidationView({
 
     setLines(prev => prev.map(l =>
       l.lineId === lineId
-        ? { ...l, quantityValidated: newQuantity, isComplete: newQuantity >= l.quantityExpected }
+        ? { ...l, quantityValidated: newQuantity, isComplete: isQuantityComplete(newQuantity, l.quantityExpected) }
         : l
     ))
     await saveValidation([{ lineId, quantityValidated: newQuantity }])
@@ -230,13 +240,17 @@ export default function TransferValidationView({
 
   // Handle complete reception
   const handleCompleteClick = () => {
-    const hasDiscrepancies = lines.some(l => l.quantityValidated !== l.quantityExpected)
+    // Use tolerance-based comparison for floating point precision
+    const hasDiscrepancies = lines.some(l => !areEqual(l.quantityValidated, l.quantityExpected))
     if (hasDiscrepancies) {
       setShowDiscrepancyModal(true)
     } else {
       completeReception()
     }
   }
+
+  // Get lines with discrepancies for the modal
+  const discrepancyLines = lines.filter(l => !areEqual(l.quantityValidated, l.quantityExpected))
 
   const completeReception = async (notes?: string) => {
     setCompleting(true)
@@ -554,12 +568,13 @@ export default function TransferValidationView({
         {/* Products List */}
         <div className="flex-1 overflow-y-auto p-6 space-y-3">
           {lines.map((line) => {
-            const isComplete = line.quantityValidated >= line.quantityExpected
-            const hasExcess = line.quantityValidated > line.quantityExpected
+            const isComplete = isQuantityComplete(line.quantityValidated, line.quantityExpected)
+            const hasExcess = line.quantityValidated > line.quantityExpected + 0.001
             const isPartial = line.quantityValidated > 0 && !isComplete
             const isActive = lastScannedProduct === line.productName
             const isExpanded = expandedLineId === line.lineId
             const difference = line.quantityValidated - line.quantityExpected
+            const showDifference = !areEqual(line.quantityValidated, line.quantityExpected) && line.quantityValidated > 0
 
             // Determine status and colors
             let statusIcon = <Circle className="w-5 h-5 text-gray-400 dark:text-gray-500" />
@@ -633,9 +648,9 @@ export default function TransferValidationView({
                           <span className="text-lg text-gray-400 dark:text-gray-500">/</span>
                           <span className="text-lg text-gray-600 dark:text-gray-400">{formatQty(line.quantityExpected)}</span>
                         </div>
-                        {difference !== 0 && (
-                          <span className={`text-xs font-medium ${difference > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-400'}`}>
-                            {difference > 0 ? `+${formatQty(difference)}` : formatQty(difference)}
+                        {showDifference && (
+                          <span className={`text-xs font-medium ${difference > 0.001 ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-400'}`}>
+                            {difference > 0.001 ? `+${formatQty(difference)}` : formatQty(difference)}
                           </span>
                         )}
                       </div>
@@ -744,22 +759,51 @@ export default function TransferValidationView({
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl p-6 max-w-md w-full"
+              className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto"
             >
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
+                <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center">
                   <AlertTriangle className="w-6 h-6 text-amber-600" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg">Discrepancia Detectada</h3>
-                  <p className="text-sm text-gray-500">
-                    Las cantidades no coinciden con lo esperado
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-white">Discrepancia Detectada</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {discrepancyLines.length} producto(s) con diferencias
                   </p>
                 </div>
               </div>
 
+              {/* List of products with discrepancies */}
+              <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl space-y-2 max-h-40 overflow-y-auto">
+                {discrepancyLines.map(line => {
+                  const diff = line.quantityValidated - line.quantityExpected
+                  return (
+                    <div key={line.lineId} className="flex items-center justify-between text-sm">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-gray-800 dark:text-gray-200 truncate block">
+                          {line.productName}
+                        </span>
+                        {line.variantName && (
+                          <span className="text-purple-600 dark:text-purple-400 text-xs">
+                            {line.variantName}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-right ml-2">
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {formatQty(line.quantityValidated)}/{formatQty(line.quantityExpected)}
+                        </span>
+                        <span className={`ml-2 font-bold ${diff > 0 ? 'text-amber-600' : 'text-red-600'}`}>
+                          ({diff > 0 ? '+' : ''}{formatQty(diff)})
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   <MessageSquare className="w-4 h-4 inline mr-2" />
                   Explique las diferencias (obligatorio)
                 </label>
@@ -767,15 +811,15 @@ export default function TransferValidationView({
                   value={discrepancyNotes}
                   onChange={(e) => setDiscrepancyNotes(e.target.value)}
                   placeholder="Ej: Faltaron 2 unidades del producto X debido a..."
-                  className="w-full px-4 py-3 border rounded-xl resize-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                  rows={4}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-xl resize-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  rows={3}
                 />
               </div>
 
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowDiscrepancyModal(false)}
-                  className="flex-1 px-4 py-3 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
+                  className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >
                   Cancelar
                 </button>
@@ -785,7 +829,7 @@ export default function TransferValidationView({
                   className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all ${
                     discrepancyNotes.trim()
                       ? 'bg-amber-500 text-white hover:bg-amber-600'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                   }`}
                 >
                   Confirmar con Nota
