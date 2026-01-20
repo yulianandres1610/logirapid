@@ -5,17 +5,24 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, ArrowRight, Package, Check, AlertTriangle,
   ScanBarcode, CheckCircle, XCircle, MessageSquare,
-  Printer, Calendar
+  Printer, Calendar, Plus, Minus, Circle, Tag
 } from 'lucide-react'
 import { useBarcodeScan } from '@/hooks/useBarcodeScan'
-import ValidationProductCard from './ValidationProductCard'
+
+// Format quantity - show decimals only if not integer
+function formatQty(value: number): string {
+  if (Number.isInteger(value)) return value.toString()
+  return value.toFixed(2)
+}
 
 interface TransferLine {
   lineId: number
   productId: number
+  variantId: number | null
   productName: string
+  variantName: string | null
   sku: string
-  barcode?: string
+  barcode?: string | null
   quantityExpected: number
   quantityValidated: number
   isComplete?: boolean
@@ -72,6 +79,7 @@ export default function TransferValidationView({
   const [lastScannedProduct, setLastScannedProduct] = useState<string | null>(null)
   const [scanFeedback, setScanFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [expandedLineId, setExpandedLineId] = useState<number | null>(null)
   const [completedData, setCompletedData] = useState<{
     operationNumber: string
     sourceWarehouseName: string
@@ -110,11 +118,11 @@ export default function TransferValidationView({
 
   // Handle barcode scan
   const handleBarcodeScan = useCallback(async (barcode: string) => {
-    // Find product by barcode or SKU
+    // Find product by barcode or SKU (including variant info)
     const line = lines.find(l =>
       l.barcode === barcode ||
       l.sku === barcode ||
-      l.sku.toLowerCase() === barcode.toLowerCase()
+      l.sku?.toLowerCase() === barcode.toLowerCase()
     )
 
     if (!line) {
@@ -135,12 +143,13 @@ export default function TransferValidationView({
     ))
 
     // Show feedback
+    const displayName = line.variantName ? `${line.productName} - ${line.variantName}` : line.productName
     if (newQuantity === line.quantityExpected) {
-      setScanFeedback({ type: 'success', message: `${line.productName} - Completo!` })
+      setScanFeedback({ type: 'success', message: `${displayName} - Completo!` })
     } else if (newQuantity > line.quantityExpected) {
-      setScanFeedback({ type: 'error', message: `${line.productName} - Excede cantidad esperada` })
+      setScanFeedback({ type: 'error', message: `${displayName} - Excede cantidad esperada` })
     } else {
-      setScanFeedback({ type: 'success', message: `${line.productName} - ${newQuantity}/${line.quantityExpected}` })
+      setScanFeedback({ type: 'success', message: `${displayName} - ${formatQty(newQuantity)}/${formatQty(line.quantityExpected)}` })
     }
     setTimeout(() => setScanFeedback(null), 1500)
 
@@ -193,7 +202,24 @@ export default function TransferValidationView({
     const line = lines.find(l => l.lineId === lineId)
     if (!line || line.quantityValidated <= 0) return
 
-    const newQuantity = line.quantityValidated - 1
+    const newQuantity = Math.max(0, line.quantityValidated - 1)
+    setLines(prev => prev.map(l =>
+      l.lineId === lineId
+        ? { ...l, quantityValidated: newQuantity, isComplete: newQuantity >= l.quantityExpected }
+        : l
+    ))
+    await saveValidation([{ lineId, quantityValidated: newQuantity }])
+  }
+
+  // Handle direct quantity setting (for decimal input)
+  const handleSetQuantity = async (lineId: number, quantity: number) => {
+    const line = lines.find(l => l.lineId === lineId)
+    if (!line) return
+
+    // Allow up to expected + 5 extra
+    const maxQty = line.quantityExpected + 5
+    const newQuantity = Math.max(0, Math.min(quantity, maxQty))
+
     setLines(prev => prev.map(l =>
       l.lineId === lineId
         ? { ...l, quantityValidated: newQuantity, isComplete: newQuantity >= l.quantityExpected }
@@ -274,6 +300,7 @@ export default function TransferValidationView({
       <tr>
         <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
           <div style="font-weight: 600; color: #111827;">${line.productName}</div>
+          ${line.variantName ? `<div style="font-size: 12px; color: #7c3aed; font-weight: 500;">Variante: ${line.variantName}</div>` : ''}
           <div style="font-size: 12px; color: #6b7280;">SKU: ${line.sku}</div>
           ${line.barcode ? `
             <div style="margin-top: 8px;">
@@ -281,12 +308,12 @@ export default function TransferValidationView({
             </div>
           ` : ''}
         </td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center; font-weight: 500;">${line.quantityExpected}</td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center; font-weight: 600; color: ${line.quantityValidated >= line.quantityExpected ? '#059669' : '#dc2626'};">${line.quantityValidated}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center; font-weight: 500;">${formatQty(line.quantityExpected)}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center; font-weight: 600; color: ${line.quantityValidated >= line.quantityExpected ? '#059669' : '#dc2626'};">${formatQty(line.quantityValidated)}</td>
         <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">
           ${line.quantityValidated >= line.quantityExpected
             ? '<span style="color: #059669;">✓</span>'
-            : `<span style="color: #dc2626;">${line.quantityValidated - line.quantityExpected}</span>`}
+            : `<span style="color: #dc2626;">${formatQty(line.quantityValidated - line.quantityExpected)}</span>`}
         </td>
       </tr>
     `).join('')
@@ -495,7 +522,7 @@ export default function TransferValidationView({
             </div>
             <div className="flex items-center justify-between mt-2 text-xs text-gray-500 dark:text-gray-400">
               <span>{progress.completedLines} de {progress.totalLines} productos completos</span>
-              <span>{progress.totalValidated} de {progress.totalExpected} unidades</span>
+              <span>{formatQty(progress.totalValidated)} de {formatQty(progress.totalExpected)} unidades</span>
             </div>
           </div>
         )}
@@ -526,18 +553,149 @@ export default function TransferValidationView({
 
         {/* Products List */}
         <div className="flex-1 overflow-y-auto p-6 space-y-3">
-          {lines.map((line) => (
-            <ValidationProductCard
-              key={line.lineId}
-              productName={line.productName}
-              sku={line.sku}
-              quantityExpected={line.quantityExpected}
-              quantityValidated={line.quantityValidated}
-              isActive={lastScannedProduct === line.productName}
-              onIncrement={() => handleIncrement(line.lineId)}
-              onDecrement={() => handleDecrement(line.lineId)}
-            />
-          ))}
+          {lines.map((line) => {
+            const isComplete = line.quantityValidated >= line.quantityExpected
+            const hasExcess = line.quantityValidated > line.quantityExpected
+            const isPartial = line.quantityValidated > 0 && !isComplete
+            const isActive = lastScannedProduct === line.productName
+            const isExpanded = expandedLineId === line.lineId
+            const difference = line.quantityValidated - line.quantityExpected
+
+            // Determine status and colors
+            let statusIcon = <Circle className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+            let bgColor = 'bg-white dark:bg-gray-700'
+            let borderColor = 'border-gray-200 dark:border-gray-600'
+
+            if (isComplete && !hasExcess) {
+              statusIcon = <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
+              bgColor = 'bg-green-50 dark:bg-green-900/30'
+              borderColor = 'border-green-300 dark:border-green-600'
+            } else if (hasExcess) {
+              statusIcon = <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+              bgColor = 'bg-amber-50 dark:bg-amber-900/30'
+              borderColor = 'border-amber-300 dark:border-amber-600'
+            } else if (isPartial) {
+              statusIcon = <Circle className="w-5 h-5 text-blue-500 dark:text-blue-400 fill-blue-200 dark:fill-blue-800" />
+              bgColor = 'bg-blue-50 dark:bg-blue-900/30'
+              borderColor = 'border-blue-300 dark:border-blue-600'
+            }
+
+            if (isActive) {
+              borderColor = 'border-purple-500 ring-2 ring-purple-200 dark:ring-purple-800'
+            }
+
+            return (
+              <motion.div
+                key={line.lineId}
+                layout
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`${bgColor} ${borderColor} border rounded-xl transition-all duration-200`}
+              >
+                <div
+                  className="p-4 cursor-pointer"
+                  onClick={() => setExpandedLineId(isExpanded ? null : line.lineId)}
+                >
+                  <div className="flex items-center gap-4">
+                    {/* Status Icon */}
+                    <div className="flex-shrink-0">
+                      {statusIcon}
+                    </div>
+
+                    {/* Product Info */}
+                    <div className="flex-grow min-w-0">
+                      <h4 className="font-medium text-gray-900 dark:text-white truncate">{line.productName}</h4>
+                      {line.variantName && (
+                        <p className="text-sm text-purple-600 dark:text-purple-400 font-medium flex items-center gap-1">
+                          <Tag className="w-3 h-3" />
+                          {line.variantName}
+                        </p>
+                      )}
+                      <p className="text-sm text-gray-500 dark:text-gray-400">SKU: {line.sku}</p>
+                    </div>
+
+                    {/* Quantity Controls */}
+                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                      {/* Decrement Button */}
+                      {line.quantityValidated > 0 && (
+                        <button
+                          onClick={() => handleDecrement(line.lineId)}
+                          className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 flex items-center justify-center text-gray-600 dark:text-gray-300 transition-colors"
+                        >
+                          <Minus className="w-5 h-5" />
+                        </button>
+                      )}
+
+                      {/* Quantity Display */}
+                      <div className="text-center min-w-[90px]">
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-2xl font-bold text-gray-900 dark:text-white">{formatQty(line.quantityValidated)}</span>
+                          <span className="text-lg text-gray-400 dark:text-gray-500">/</span>
+                          <span className="text-lg text-gray-600 dark:text-gray-400">{formatQty(line.quantityExpected)}</span>
+                        </div>
+                        {difference !== 0 && (
+                          <span className={`text-xs font-medium ${difference > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-400'}`}>
+                            {difference > 0 ? `+${formatQty(difference)}` : formatQty(difference)}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Increment Button */}
+                      <button
+                        onClick={() => handleIncrement(line.lineId)}
+                        className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-900/50 hover:bg-purple-200 dark:hover:bg-purple-800/50 flex items-center justify-center text-purple-600 dark:text-purple-400 transition-colors"
+                      >
+                        <Plus className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="mt-3">
+                    <div className="h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          isComplete && !hasExcess ? 'bg-green-500' :
+                          hasExcess ? 'bg-amber-500' :
+                          line.quantityValidated > 0 ? 'bg-blue-500' : 'bg-gray-300'
+                        }`}
+                        style={{ width: `${Math.min(100, (line.quantityValidated / line.quantityExpected) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Expanded Section - Manual Quantity Input */}
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="px-4 pb-4 pt-2 border-t border-gray-200 dark:border-gray-600">
+                        <label className="block text-sm text-gray-500 dark:text-gray-400 mb-2">
+                          Cantidad manual (permite decimales)
+                        </label>
+                        <input
+                          type="number"
+                          value={line.quantityValidated}
+                          onChange={(e) => handleSetQuantity(line.lineId, parseFloat(e.target.value) || 0)}
+                          min={0}
+                          step="any"
+                          className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-center text-xl font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center">
+                          Esperado: {formatQty(line.quantityExpected)} | Max: {formatQty(line.quantityExpected + 5)}
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )
+          })}
         </div>
 
         {/* Footer */}
@@ -710,7 +868,7 @@ export default function TransferValidationView({
                   <div>
                     <span className="text-gray-500 block mb-1">Unidades Recibidas</span>
                     <span className="font-semibold text-green-600">
-                      {completedData.totalReceived} / {completedData.totalExpected}
+                      {formatQty(completedData.totalReceived)} / {formatQty(completedData.totalExpected)}
                     </span>
                   </div>
                 </div>

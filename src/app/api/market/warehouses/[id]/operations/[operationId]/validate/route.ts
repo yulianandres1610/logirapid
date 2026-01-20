@@ -121,26 +121,35 @@ export async function POST(
       `, [line.quantityValidated, line.lineId])
     }
 
-    // Get updated lines with validation status
+    // Get updated lines with validation status (including variant info)
     const updatedLinesResult = await db.query(`
       SELECT
         l.id as line_id,
         l.product_id,
+        l.variant_id,
         p.name as product_name,
         p.sku,
+        p.barcode,
+        v.variant_name,
+        v.sku as variant_sku,
+        v.barcode as variant_barcode,
         l.quantity_planned as quantity_expected,
         COALESCE(l.quantity_validated, 0) as quantity_validated
       FROM market_warehouse_operation_lines l
       JOIN market_products p ON p.id = l.product_id
+      LEFT JOIN market_product_variants v ON v.id = l.variant_id
       WHERE l.operation_id = $1
-      ORDER BY p.name
+      ORDER BY p.name, v.variant_name NULLS FIRST
     `, [opId])
 
     const updatedLines = updatedLinesResult.rows.map(line => ({
       lineId: line.line_id,
       productId: line.product_id,
+      variantId: line.variant_id || null,
       productName: line.product_name,
-      sku: line.sku,
+      variantName: line.variant_name || null,
+      sku: line.variant_sku || line.sku,
+      barcode: line.variant_barcode || line.barcode || null,
       quantityExpected: parseFloat(line.quantity_expected) || 0,
       quantityValidated: parseFloat(line.quantity_validated) || 0,
       isComplete: parseFloat(line.quantity_validated) >= parseFloat(line.quantity_expected)
@@ -250,28 +259,35 @@ export async function GET(
 
     const operation = operationResult.rows[0]
 
-    // Get lines
+    // Get lines (including variant info)
     const linesResult = await db.query(`
       SELECT
         l.id as line_id,
         l.product_id,
+        l.variant_id,
         p.name as product_name,
         p.sku,
         p.barcode,
+        v.variant_name,
+        v.sku as variant_sku,
+        v.barcode as variant_barcode,
         l.quantity_planned as quantity_expected,
         COALESCE(l.quantity_validated, 0) as quantity_validated
       FROM market_warehouse_operation_lines l
       JOIN market_products p ON p.id = l.product_id
+      LEFT JOIN market_product_variants v ON v.id = l.variant_id
       WHERE l.operation_id = $1
-      ORDER BY p.name
+      ORDER BY p.name, v.variant_name NULLS FIRST
     `, [opId])
 
     const lines = linesResult.rows.map(line => ({
       lineId: line.line_id,
       productId: line.product_id,
+      variantId: line.variant_id || null,
       productName: line.product_name,
-      sku: line.sku,
-      barcode: line.barcode,
+      variantName: line.variant_name || null,
+      sku: line.variant_sku || line.sku,
+      barcode: line.variant_barcode || line.barcode || null,
       quantityExpected: parseFloat(line.quantity_expected) || 0,
       quantityValidated: parseFloat(line.quantity_validated) || 0,
       isComplete: parseFloat(line.quantity_validated) >= parseFloat(line.quantity_expected)
