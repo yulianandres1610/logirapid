@@ -101,6 +101,16 @@ export async function POST() {
       console.log('[Migration] market_warehouse_operation_lines.quantity_received already DECIMAL or does not exist')
     }
 
+    try {
+      await db.query(`
+        ALTER TABLE market_warehouse_operation_lines
+        ALTER COLUMN quantity_validated TYPE DECIMAL(15,3) USING quantity_validated::DECIMAL(15,3)
+      `)
+      console.log('[Migration] Changed market_warehouse_operation_lines.quantity_validated to DECIMAL(15,3)')
+    } catch (e) {
+      console.log('[Migration] market_warehouse_operation_lines.quantity_validated already DECIMAL or does not exist')
+    }
+
     // 4. Alter consignment_order_items table
     console.log('[Migration] Altering consignment_order_items table...')
 
