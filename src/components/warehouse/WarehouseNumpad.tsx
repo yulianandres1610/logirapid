@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Delete, Check, X } from 'lucide-react'
+import { Delete, Check } from 'lucide-react'
 
 interface WarehouseNumpadProps {
   value: string
@@ -22,10 +22,25 @@ export default function WarehouseNumpad({
   // Track if user is starting a new number (after clear or initial state)
   const [isNewEntry, setIsNewEntry] = useState(true)
 
+  // Track internal changes to distinguish from external value changes
+  const isInternalChange = useRef(false)
+  const prevValue = useRef(value)
+
   // Reset isNewEntry when value changes externally (e.g., selecting a product)
   useEffect(() => {
-    setIsNewEntry(true)
-  }, [])
+    // If the value changed and it wasn't from our internal onChange calls
+    if (value !== prevValue.current && !isInternalChange.current) {
+      setIsNewEntry(true)
+    }
+    prevValue.current = value
+    isInternalChange.current = false
+  }, [value])
+
+  // Wrapper to track internal changes
+  const handleInternalChange = (newValue: string) => {
+    isInternalChange.current = true
+    onChange(newValue)
+  }
 
   const handleNumberClick = (num: string) => {
     if (disabled) return
@@ -34,13 +49,13 @@ export default function WarehouseNumpad({
     if (num === '.') {
       // If starting new entry, start with "0."
       if (isNewEntry) {
-        onChange('0.')
+        handleInternalChange('0.')
         setIsNewEntry(false)
         return
       }
       // Don't add if already has decimal
       if (value.includes('.')) return
-      onChange(value + '.')
+      handleInternalChange(value + '.')
       return
     }
 
@@ -64,15 +79,15 @@ export default function WarehouseNumpad({
     const numericValue = parseFloat(newValue)
 
     if (maxValue && numericValue > maxValue) {
-      onChange(String(maxValue))
+      handleInternalChange(String(maxValue))
     } else {
-      onChange(newValue)
+      handleInternalChange(newValue)
     }
   }
 
   const handleClear = () => {
     if (disabled) return
-    onChange('0')
+    handleInternalChange('0')
     setIsNewEntry(true)
   }
 
@@ -81,21 +96,21 @@ export default function WarehouseNumpad({
 
     // If in new entry mode, just clear
     if (isNewEntry) {
-      onChange('0')
+      handleInternalChange('0')
       return
     }
 
     if (value.length <= 1) {
-      onChange('0')
+      handleInternalChange('0')
       setIsNewEntry(true)
     } else {
       const newValue = value.slice(0, -1)
       // If we end up with just a decimal point, add leading zero
       if (newValue === '' || newValue === '-') {
-        onChange('0')
+        handleInternalChange('0')
         setIsNewEntry(true)
       } else {
-        onChange(newValue)
+        handleInternalChange(newValue)
       }
     }
   }
