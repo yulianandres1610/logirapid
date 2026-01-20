@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft,
@@ -32,6 +32,7 @@ import SupplierReturnView from '@/components/warehouse/SupplierReturnView'
 import POSReturnReceiveView from '@/components/warehouse/POSReturnReceiveView'
 import PrintLabelsView from '@/components/warehouse/PrintLabelsView'
 import StockReportView from '@/components/warehouse/StockReportView'
+import TransferHistoryView from '@/components/warehouse/TransferHistoryView'
 import { PasswordConfirmModal } from '@/components/auth/PasswordConfirmModal'
 
 interface WarehouseData {
@@ -400,7 +401,13 @@ const initialOperationState: OperationState = {
 export default function WarehouseOperationsPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const warehouseId = parseInt(params.id as string)
+
+  // Get initial values from URL
+  const initialOperationType = searchParams.get('type') as OperationType | null
+  const initialOperationId = searchParams.get('operationId')
+  const initialReturnType = searchParams.get('returnType') as ReturnType | null
 
   const [warehouse, setWarehouse] = useState<WarehouseData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -419,7 +426,26 @@ export default function WarehouseOperationsPage() {
   const [showValidationView, setShowValidationView] = useState(false)
 
   // Return operation state
-  const [returnType, setReturnType] = useState<ReturnType | null>(null)
+  const [returnType, setReturnType] = useState<ReturnType | null>(initialReturnType)
+
+  // History view state
+  const [historyOperationId, setHistoryOperationId] = useState<number | null>(
+    initialOperationId ? parseInt(initialOperationId) : null
+  )
+
+  // Update URL when operation state changes
+  const updateURL = useCallback((type: OperationType | null, opId?: number | null, retType?: ReturnType | null) => {
+    const params = new URLSearchParams()
+    if (type) params.set('type', type)
+    if (opId) params.set('operationId', opId.toString())
+    if (retType) params.set('returnType', retType)
+
+    const newURL = params.toString()
+      ? `/dashboard/market/warehouses/${warehouseId}/operations?${params.toString()}`
+      : `/dashboard/market/warehouses/${warehouseId}/operations`
+
+    router.replace(newURL, { scroll: false })
+  }, [warehouseId, router])
 
   // Password verification for sensitive operations
   const [showPasswordModal, setShowPasswordModal] = useState(false)
@@ -461,6 +487,23 @@ export default function WarehouseOperationsPage() {
     }
   }, [warehouseId])
 
+  // Initialize operation from URL params
+  useEffect(() => {
+    if (initialOperationType && !operation.operationType) {
+      // Initialize state from URL
+      if (initialOperationType === 'return' && initialReturnType) {
+        setOperation({ ...initialOperationState, operationType: initialOperationType })
+        setReturnType(initialReturnType)
+      } else if (initialOperationType === 'receive_transfer') {
+        setOperation({ ...initialOperationState, operationType: initialOperationType })
+        fetchPendingTransfers()
+      } else {
+        setOperation({ ...initialOperationState, operationType: initialOperationType })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOperationType, initialReturnType])
+
   // Fetch pending transfers when receive_transfer is selected
   const fetchPendingTransfers = useCallback(async () => {
     setLoadingTransfers(true)
@@ -500,6 +543,9 @@ export default function WarehouseOperationsPage() {
     } else if (type === 'return') {
       setOperation({ ...initialOperationState, operationType: type })
       setReturnType(null)
+    } else if (type === 'transfer_history') {
+      setOperation({ ...initialOperationState, operationType: type })
+      setHistoryOperationId(null)
     } else {
       setOperation({ ...initialOperationState, operationType: type })
     }
@@ -509,7 +555,11 @@ export default function WarehouseOperationsPage() {
     setSuccess(null)
     setSelectedTransfer(null)
     setShowValidationView(false)
-    setReturnType(null)
+    if (type !== 'return') {
+      setReturnType(null)
+    }
+    // Update URL
+    updateURL(type)
   }
 
   const handlePasswordConfirm = () => {
@@ -527,13 +577,16 @@ export default function WarehouseOperationsPage() {
 
   const handleReturnTypeSelect = (type: ReturnType) => {
     setReturnType(type)
+    updateURL('return', null, type)
   }
 
   const handleReturnBack = () => {
     if (returnType) {
       setReturnType(null)
+      updateURL('return')
     } else {
       setOperation(initialOperationState)
+      updateURL(null)
     }
   }
 
@@ -819,9 +872,13 @@ export default function WarehouseOperationsPage() {
     if (operation.operationType && operation.products.length > 0) {
       if (confirm('Hay productos escaneados. ¿Desea salir sin guardar?')) {
         setOperation(initialOperationState)
+        setHistoryOperationId(null)
+        updateURL(null)
       }
     } else if (operation.operationType) {
       setOperation(initialOperationState)
+      setHistoryOperationId(null)
+      updateURL(null)
     } else {
       // Require password to exit to backend
       setShowExitPasswordModal(true)
@@ -993,7 +1050,8 @@ export default function WarehouseOperationsPage() {
                         operation.operationType === 'order_reception' ? 'Recibir Orden' :
                         operation.operationType === 'return' ? (returnType === 'supplier' ? 'Devolucion a Proveedor' : returnType === 'pos' ? 'Devolucion desde POS' : 'Devoluciones') :
                         operation.operationType === 'print_labels' ? 'Imprimir Etiquetas' :
-                        operation.operationType === 'stock_report' ? 'Reporte de Stock' : 'Operacion'}`
+                        operation.operationType === 'stock_report' ? 'Reporte de Stock' :
+                        operation.operationType === 'transfer_history' ? 'Historial de Transferencias' : 'Operacion'}`
                     : 'Operaciones'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">{warehouse.name}</p>
@@ -1067,6 +1125,9 @@ export default function WarehouseOperationsPage() {
                 transfers={pendingTransfers}
                 onSelectTransfer={handleSelectTransferForValidation}
                 loading={loadingTransfers}
+                onViewHistory={() => {
+                  proceedWithOperation('transfer_history')
+                }}
               />
 
               <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
@@ -1137,6 +1198,18 @@ export default function WarehouseOperationsPage() {
             warehouseId={warehouseId}
             warehouseName={warehouse.name}
             onBack={handleBack}
+          />
+        ) : operation.operationType === 'transfer_history' ? (
+          /* Transfer History View */
+          <TransferHistoryView
+            warehouseId={warehouseId}
+            warehouseName={warehouse.name}
+            onBack={handleBack}
+            initialOperationId={historyOperationId}
+            onSelectOperation={(opId) => {
+              setHistoryOperationId(opId || null)
+              updateURL('transfer_history', opId || null)
+            }}
           />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1224,6 +1297,7 @@ export default function WarehouseOperationsPage() {
                     destinationWarehouse: warehouse
                   }))}
                   disabled={submitting}
+                  onViewHistory={() => proceedWithOperation('transfer_history')}
                 />
               )}
 

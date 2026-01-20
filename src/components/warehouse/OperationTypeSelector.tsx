@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRightLeft, Trash2, Scale, PackageOpen, Package, RotateCcw, Printer, BarChart3 } from 'lucide-react'
+import { ArrowRightLeft, Trash2, Scale, PackageOpen, Package, RotateCcw, Printer, BarChart3, History } from 'lucide-react'
 
-export type OperationType = 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer' | 'order_reception' | 'return' | 'print_labels' | 'stock_report'
+export type OperationType = 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer' | 'order_reception' | 'return' | 'print_labels' | 'stock_report' | 'transfer_history'
 
 interface OperationTypeSelectorProps {
   onSelect: (type: OperationType) => void
@@ -51,6 +51,16 @@ const operationTypes = [
     hoverGradient: 'from-purple-600 to-indigo-700',
     bgLight: 'bg-purple-50',
     textColor: 'text-purple-600'
+  },
+  {
+    id: 'transfer_history' as OperationType,
+    name: 'Historial',
+    description: 'Ver historial de transferencias',
+    icon: History,
+    gradient: 'from-slate-500 to-gray-600',
+    hoverGradient: 'from-slate-600 to-gray-700',
+    bgLight: 'bg-slate-50',
+    textColor: 'text-slate-600'
   },
   {
     id: 'order_reception' as OperationType,
@@ -126,9 +136,9 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
     return () => clearInterval(interval)
   }, [currentWarehouse.id])
 
-  // Separar en filas para el layout: 4 arriba, 4 abajo
-  const topRow = operationTypes.slice(0, 4)
-  const bottomRow = operationTypes.slice(4)
+  // Separar en filas para el layout: 5 arriba, 4 abajo
+  const topRow = operationTypes.slice(0, 5)
+  const bottomRow = operationTypes.slice(5)
 
   const renderCard = (op: typeof operationTypes[0], index: number) => {
     const Icon = op.icon
@@ -183,14 +193,14 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
   return (
     <div className="flex items-center justify-center min-h-[60vh] p-4 w-full">
       <div className="flex flex-col items-center gap-4">
-        {/* Fila superior: 4 elementos */}
+        {/* Fila superior: 5 elementos */}
         <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
           {topRow.map((op, index) => renderCard(op, index))}
         </div>
 
-        {/* Fila inferior: 3 elementos centrados */}
+        {/* Fila inferior: 4 elementos centrados */}
         <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
-          {bottomRow.map((op, index) => renderCard(op, index + 4))}
+          {bottomRow.map((op, index) => renderCard(op, index + 5))}
         </div>
       </div>
     </div>

@@ -337,6 +337,16 @@ export async function GET(
       ORDER BY p.name, v.variant_name NULLS FIRST
     `, [opId])
 
+    // Log for debugging
+    console.log(`[Validate GET] Operation ${opId}: Found ${linesResult.rows.length} grouped product lines`)
+    if (linesResult.rows.length > 0) {
+      console.log('[Validate GET] Sample products:', linesResult.rows.slice(0, 5).map(r => ({
+        product: r.product_name,
+        variant: r.variant_name,
+        qty: r.quantity_expected
+      })))
+    }
+
     const lines = linesResult.rows.map(line => {
       const qtyExpected = parseFloat(line.quantity_expected) || 0
       const qtyValidated = parseFloat(line.quantity_validated) || 0

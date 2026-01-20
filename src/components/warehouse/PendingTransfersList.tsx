@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Package, ArrowRight, Clock, User, ChevronRight } from 'lucide-react'
+import { Package, ArrowRight, Clock, User, ChevronRight, History } from 'lucide-react'
 
 interface TransferLine {
   lineId: number
@@ -34,12 +34,14 @@ interface PendingTransfersListProps {
   transfers: PendingTransfer[]
   onSelectTransfer: (transfer: PendingTransfer) => void
   loading?: boolean
+  onViewHistory?: () => void
 }
 
 export default function PendingTransfersList({
   transfers,
   onSelectTransfer,
-  loading = false
+  loading = false,
+  onViewHistory
 }: PendingTransfersListProps) {
   if (loading) {
     return (
@@ -68,9 +70,20 @@ export default function PendingTransfersList({
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
           Transferencias Pendientes
         </h2>
-        <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded-full text-sm font-medium">
-          {transfers.length} pendiente{transfers.length !== 1 ? 's' : ''}
-        </span>
+        <div className="flex items-center gap-3">
+          {onViewHistory && (
+            <button
+              onClick={onViewHistory}
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            >
+              <History className="w-4 h-4" />
+              Historial
+            </button>
+          )}
+          <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded-full text-sm font-medium">
+            {transfers.length} pendiente{transfers.length !== 1 ? 's' : ''}
+          </span>
+        </div>
       </div>
 
       <div className="space-y-3">

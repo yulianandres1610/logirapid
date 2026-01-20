@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Warehouse, ChevronDown, Loader2, MapPin } from 'lucide-react'
+import { Warehouse, ChevronDown, Loader2, MapPin, History } from 'lucide-react'
 
 interface WarehouseOption {
   id: number
@@ -27,13 +27,15 @@ interface DestinationWarehouseSelectorProps {
   selectedWarehouseId: number | null
   onSelect: (warehouseId: number | null, warehouse: SelectedWarehouse | null) => void
   disabled?: boolean
+  onViewHistory?: () => void
 }
 
 export default function DestinationWarehouseSelector({
   currentWarehouseId,
   selectedWarehouseId,
   onSelect,
-  disabled = false
+  disabled = false,
+  onViewHistory
 }: DestinationWarehouseSelectorProps) {
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([])
   const [loading, setLoading] = useState(true)
@@ -133,9 +135,21 @@ export default function DestinationWarehouseSelector({
         <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mt-2">
-        Almacen de Destino
-      </label>
+      <div className="flex items-center justify-between mt-2">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          Almacen de Destino
+        </label>
+        {onViewHistory && (
+          <button
+            type="button"
+            onClick={onViewHistory}
+            className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+          >
+            <History className="w-3.5 h-3.5" />
+            Ver historial
+          </button>
+        )}
+      </div>
 
       {/* Dropdown */}
       {isOpen && (
