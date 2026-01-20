@@ -374,6 +374,8 @@ function PaymentContent() {
   const [rates, setRates] = useState<ExchangeRates>(DEFAULT_RATES)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [allowedPaymentMethods, setAllowedPaymentMethods] = useState<string[]>(['cash', 'card', 'transfer', 'credit'])
+  const [allowedCurrencies, setAllowedCurrencies] = useState<string[]>(['USD', 'CUP', 'MLC'])
 
   // Initialize client-side
   useEffect(() => {
@@ -429,6 +431,65 @@ function PaymentContent() {
       setError('Error al cargar datos del carrito')
     }
   }, [isClient])
+
+  // Load terminal configuration (payment methods & currencies)
+  useEffect(() => {
+    if (!isClient || !terminalId) return
+
+    const loadTerminalConfig = async () => {
+      try {
+        // Try to get from localStorage cache first
+        const cachedConfig = localStorage.getItem(`pos_terminal_config_${terminalId}`)
+        if (cachedConfig) {
+          const config = JSON.parse(cachedConfig)
+          if (Array.isArray(config.paymentMethods) && config.paymentMethods.length > 0) {
+            setAllowedPaymentMethods(config.paymentMethods)
+            // Set initial method to first allowed method
+            const firstAllowed = config.paymentMethods[0] as 'cash' | 'card' | 'transfer' | 'credit'
+            setSelectedMethod(firstAllowed)
+          }
+          if (Array.isArray(config.acceptedCurrencies) && config.acceptedCurrencies.length > 0) {
+            setAllowedCurrencies(config.acceptedCurrencies)
+            if (config.defaultCurrency) {
+              setSelectedCurrency(config.defaultCurrency as 'USD' | 'CUP' | 'MLC')
+            }
+          }
+        }
+
+        // If online, fetch fresh config
+        if (navigator.onLine) {
+          const response = await fetch(`/api/market/pos/terminals/${terminalId}`)
+          const data = await response.json()
+          if (data.success && data.data) {
+            const terminal = data.data
+            if (Array.isArray(terminal.paymentMethods) && terminal.paymentMethods.length > 0) {
+              setAllowedPaymentMethods(terminal.paymentMethods)
+              // Set initial method to first allowed method if current is not allowed
+              if (!terminal.paymentMethods.includes(selectedMethod)) {
+                setSelectedMethod(terminal.paymentMethods[0] as 'cash' | 'card' | 'transfer' | 'credit')
+              }
+            }
+            if (Array.isArray(terminal.acceptedCurrencies) && terminal.acceptedCurrencies.length > 0) {
+              setAllowedCurrencies(terminal.acceptedCurrencies)
+              if (terminal.defaultCurrency && !terminal.acceptedCurrencies.includes(selectedCurrency)) {
+                setSelectedCurrency(terminal.defaultCurrency as 'USD' | 'CUP' | 'MLC')
+              }
+            }
+            // Cache the config
+            localStorage.setItem(`pos_terminal_config_${terminalId}`, JSON.stringify({
+              paymentMethods: terminal.paymentMethods,
+              acceptedCurrencies: terminal.acceptedCurrencies,
+              defaultCurrency: terminal.defaultCurrency
+            }))
+          }
+        }
+      } catch (e) {
+        console.error('[Payment] Error loading terminal config:', e)
+      }
+    }
+
+    loadTerminalConfig()
+  }, [isClient, terminalId])
 
   // Load exchange rates
   useEffect(() => {
@@ -880,8 +941,8 @@ function PaymentContent() {
               {/* Payment Method */}
               <div className="mb-4">
                 <label className={`text-sm ${tc.textMuted} mb-2 block`}>Método de Pago</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {PAYMENT_METHODS.map((method) => {
+                <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${Math.min(allowedPaymentMethods.length, 4)}, 1fr)` }}>
+                  {PAYMENT_METHODS.filter(m => allowedPaymentMethods.includes(m.id)).map((method) => {
                     const MethodIcon = method.Icon
                     const isDisabled = !isOnline && !method.offlineEnabled
                     return (
@@ -913,8 +974,8 @@ function PaymentContent() {
                     1 USD = {rates.CUP_BCC} CUP | {rates.MLC.toFixed(2)} MLC
                   </span>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {CURRENCIES.map((currency) => (
+                <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${Math.min(allowedCurrencies.length, 3)}, 1fr)` }}>
+                  {CURRENCIES.filter(c => allowedCurrencies.includes(c.id)).map((currency) => (
                     <button
                       key={currency.id}
                       onClick={() => setSelectedCurrency(currency.id as Payment['currency'])}
