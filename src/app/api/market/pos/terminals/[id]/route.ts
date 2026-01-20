@@ -45,14 +45,18 @@ export async function GET(
     const companyId = payload.companyId
     const terminalId = parseInt(id)
 
-    // Asegurar que la columna payment_methods existe
+    // Asegurar que las columnas necesarias existen
     try {
       await db.query(`
         ALTER TABLE market_pos_terminals
         ADD COLUMN IF NOT EXISTS payment_methods TEXT[] DEFAULT '{cash,card,transfer,credit}'
       `)
+      await db.query(`
+        ALTER TABLE market_pos_terminals
+        ADD COLUMN IF NOT EXISTS default_print_service_id INTEGER REFERENCES print_services(id)
+      `)
     } catch {
-      // Column might already exist
+      // Columns might already exist
     }
 
     // Get terminal
@@ -62,10 +66,13 @@ export async function GET(
         w.name as warehouse_name,
         w.code as warehouse_code,
         w.address as warehouse_address,
-        p.name as pricelist_name
+        p.name as pricelist_name,
+        ps.service_name as print_service_name,
+        ps.service_code as print_service_code
       FROM market_pos_terminals t
       LEFT JOIN market_warehouses w ON t.warehouse_id = w.id
       LEFT JOIN market_pricelists p ON t.pricelist_id = p.id
+      LEFT JOIN print_services ps ON t.default_print_service_id = ps.id
       WHERE t.id = $1 AND t.company_id = $2
     `, [terminalId, companyId])
 
@@ -162,6 +169,9 @@ export async function GET(
         defaultCurrency: terminal.default_currency,
         acceptedCurrencies: acceptedCurrencies,
         paymentMethods: paymentMethods,
+        defaultPrintServiceId: terminal.default_print_service_id || null,
+        defaultPrintServiceName: terminal.print_service_name || null,
+        defaultPrintServiceCode: terminal.print_service_code || null,
         isActive: terminal.is_active,
         createdAt: terminal.created_at,
         updatedAt: terminal.updated_at,
@@ -261,6 +271,7 @@ export async function PUT(
       defaultCurrency,
       acceptedCurrencies,
       paymentMethods,
+      defaultPrintServiceId,
       isActive,
       users // Array of { userId, permissions }
     } = body
@@ -334,6 +345,10 @@ export async function PUT(
         ? `{${methodsArray.join(',')}}`
         : '{cash,card,transfer,credit}'
       values.push(pgArray)
+    }
+    if (defaultPrintServiceId !== undefined) {
+      updates.push(`default_print_service_id = $${paramIndex++}`)
+      values.push(defaultPrintServiceId || null)
     }
     if (isActive !== undefined) {
       updates.push(`is_active = $${paramIndex++}`)
