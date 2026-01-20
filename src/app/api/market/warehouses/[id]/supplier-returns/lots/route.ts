@@ -113,7 +113,7 @@ export async function GET(
       lotInventoryId: parseInt(row.lot_inventory_id),
       lotNumber: row.lot_number,
       expirationDate: row.expiration_date,
-      quantityAvailable: parseInt(row.quantity_available),
+      quantityAvailable: parseFloat(row.quantity_available) || 0,
       unitCost: parseFloat(row.unit_cost),
       receivedAt: row.received_at,
       orderLineId: parseInt(row.order_line_id),

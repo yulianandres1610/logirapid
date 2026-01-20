@@ -151,11 +151,11 @@ export async function GET(request: NextRequest) {
           isActive: row.is_active,
           allowNegativeStock: row.allow_negative_stock,
           productsCount: parseInt(row.products_count) || 0,
-          totalStock: parseInt(row.total_stock) || 0,
+          totalStock: parseFloat(row.total_stock) || 0,
           // Stock fields when productId is provided
-          stockOnHand: row.stock_on_hand != null ? parseInt(row.stock_on_hand) : 0,
-          stockReserved: row.stock_reserved != null ? parseInt(row.stock_reserved) : 0,
-          stockAvailable: row.stock_available != null ? parseInt(row.stock_available) : 0,
+          stockOnHand: row.stock_on_hand != null ? parseFloat(row.stock_on_hand) : 0,
+          stockReserved: row.stock_reserved != null ? parseFloat(row.stock_reserved) : 0,
+          stockAvailable: row.stock_available != null ? parseFloat(row.stock_available) : 0,
           createdAt: row.created_at,
           updatedAt: row.updated_at
         })),

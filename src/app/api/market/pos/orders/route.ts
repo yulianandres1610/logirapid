@@ -469,7 +469,7 @@ export async function POST(request: NextRequest) {
         for (const lot of consignmentLots.rows) {
           if (remainingQty <= 0) break
 
-          const availableQty = parseInt(lot.quantity_available)
+          const availableQty = parseFloat(lot.quantity_available) || 0
           const toDeduct = Math.min(remainingQty, availableQty)
           const unitCost = parseFloat(lot.unit_cost)
 
@@ -564,7 +564,7 @@ export async function POST(request: NextRequest) {
           for (const lot of purchaseLots.rows) {
             if (remainingQty <= 0) break
 
-            const availableQty = parseInt(lot.quantity_available)
+            const availableQty = parseFloat(lot.quantity_available) || 0
             const toDeduct = Math.min(remainingQty, availableQty)
             const unitCost = parseFloat(lot.unit_cost)
 

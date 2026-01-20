@@ -56,7 +56,7 @@ export default function ScannedProductCard({
   }
 
   const handleQuantityInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value) || 0
+    const value = parseFloat(e.target.value) || 0
     if (value >= 0) {
       if (maxQuantity && value > maxQuantity) {
         onQuantityChange(maxQuantity)
@@ -67,7 +67,7 @@ export default function ScannedProductCard({
   }
 
   const handleRealStockInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value) || 0
+    const value = parseFloat(e.target.value) || 0
     if (value >= 0 && onRealStockChange) {
       onRealStockChange(value)
     }
@@ -139,6 +139,7 @@ export default function ScannedProductCard({
                 value={product.realStock ?? ''}
                 onChange={handleRealStockInput}
                 min="0"
+                step="any"
                 className="w-16 text-center text-sm font-medium bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-900 dark:text-white"
               />
             </div>
@@ -163,8 +164,9 @@ export default function ScannedProductCard({
               type="number"
               value={product.quantity}
               onChange={handleQuantityInput}
-              min="1"
+              min="0.001"
               max={maxQuantity}
+              step="any"
               className="w-14 text-center text-lg font-bold bg-transparent border-b-2 border-gray-300 dark:border-gray-600 focus:border-purple-500 outline-none text-gray-900 dark:text-white"
             />
 

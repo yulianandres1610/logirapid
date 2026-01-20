@@ -92,28 +92,33 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Get lines and check validation status
+    // Get lines grouped by product+variant and check validation status
     const linesResult = await db.query(`
       SELECT
-        l.id as line_id,
+        MIN(l.id) as line_id,
         l.product_id,
+        l.variant_id,
         p.name as product_name,
         p.sku,
-        l.quantity_planned as quantity_expected,
-        COALESCE(l.quantity_validated, 0) as quantity_validated
+        v.variant_name,
+        SUM(l.quantity_planned) as quantity_expected,
+        SUM(COALESCE(l.quantity_validated, 0)) as quantity_validated
       FROM market_warehouse_operation_lines l
       JOIN market_products p ON p.id = l.product_id
+      LEFT JOIN market_product_variants v ON v.id = l.variant_id
       WHERE l.operation_id = $1
+      GROUP BY l.product_id, l.variant_id, p.name, p.sku, v.variant_name
     `, [opId])
 
     const lines = linesResult.rows
 
-    // Check if there are discrepancies
+    // Check if there are discrepancies (with tolerance for floating point)
+    const TOLERANCE = 0.001
     let hasDiscrepancies = false
     for (const line of lines) {
       const expected = parseFloat(line.quantity_expected) || 0
       const validated = parseFloat(line.quantity_validated) || 0
-      if (expected !== validated) {
+      if (Math.abs(expected - validated) >= TOLERANCE) {
         hasDiscrepancies = true
         break
       }
@@ -145,18 +150,20 @@ export async function POST(
       const sourceWarehouseId = operation.source_warehouse_id
       const destinationWarehouseId = operation.destination_warehouse_id
 
-      // Process each line
+      // Process each line (grouped by product+variant)
       for (const line of lines) {
         const productId = line.product_id
+        const variantId = line.variant_id || null
         const expectedQuantity = parseFloat(line.quantity_expected) || 0
         const validatedQuantity = parseFloat(line.quantity_validated) || 0
 
-        // Get current stock in source warehouse
+        // Get current stock in source warehouse (including variant)
         const sourceStockResult = await db.query(`
           SELECT id, quantity_on_hand, quantity_reserved
           FROM market_warehouse_stock
           WHERE warehouse_id = $1 AND product_id = $2
-        `, [sourceWarehouseId, productId])
+            AND (variant_id = $3 OR ($3 IS NULL AND variant_id IS NULL))
+        `, [sourceWarehouseId, productId, variantId])
 
         if (sourceStockResult.rows.length > 0) {
           const sourceStock = sourceStockResult.rows[0]
@@ -176,14 +183,15 @@ export async function POST(
           // Record stock movement for source (out)
           await db.query(`
             INSERT INTO market_stock_movements (
-              company_id, product_id, movement_type,
+              company_id, product_id, variant_id, movement_type,
               from_warehouse_id, to_warehouse_id,
               quantity, quantity_before, quantity_after,
               operation_id, reference_type, reference_id, notes, created_by, created_at
-            ) VALUES ($1, $2, 'transfer_out', $3, $4, $5, $6, $7, $8, 'warehouse_operation', $9, $10, $11, NOW())
+            ) VALUES ($1, $2, $3, 'transfer_out', $4, $5, $6, $7, $8, $9, 'warehouse_operation', $10, $11, $12, NOW())
           `, [
             payload.companyId,
             productId,
+            variantId,
             sourceWarehouseId,
             destinationWarehouseId,
             -validatedQuantity,
@@ -196,12 +204,13 @@ export async function POST(
           ])
         }
 
-        // Add stock to destination warehouse
+        // Add stock to destination warehouse (including variant)
         const destStockResult = await db.query(`
           SELECT id, quantity_on_hand
           FROM market_warehouse_stock
           WHERE warehouse_id = $1 AND product_id = $2
-        `, [destinationWarehouseId, productId])
+            AND (variant_id = $3 OR ($3 IS NULL AND variant_id IS NULL))
+        `, [destinationWarehouseId, productId, variantId])
 
         let destCurrentStock = 0
         if (destStockResult.rows.length > 0) {
@@ -216,22 +225,23 @@ export async function POST(
         } else {
           await db.query(`
             INSERT INTO market_warehouse_stock (
-              warehouse_id, product_id, quantity_on_hand, quantity_reserved, created_at
-            ) VALUES ($1, $2, $3, 0, NOW())
-          `, [destinationWarehouseId, productId, validatedQuantity])
+              warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved, created_at
+            ) VALUES ($1, $2, $3, $4, 0, NOW())
+          `, [destinationWarehouseId, productId, variantId, validatedQuantity])
         }
 
         // Record stock movement for destination (in)
         await db.query(`
           INSERT INTO market_stock_movements (
-            company_id, product_id, movement_type,
+            company_id, product_id, variant_id, movement_type,
             from_warehouse_id, to_warehouse_id,
             quantity, quantity_before, quantity_after,
             operation_id, reference_type, reference_id, notes, created_by, created_at
-          ) VALUES ($1, $2, 'transfer_in', $3, $4, $5, $6, $7, $8, 'warehouse_operation', $9, $10, $11, NOW())
+          ) VALUES ($1, $2, $3, 'transfer_in', $4, $5, $6, $7, $8, $9, 'warehouse_operation', $10, $11, $12, NOW())
         `, [
           payload.companyId,
           productId,
+          variantId,
           sourceWarehouseId,
           destinationWarehouseId,
           validatedQuantity,

@@ -184,7 +184,7 @@ export async function POST(
         WHERE warehouse_id = $1 AND product_id = $2
       `, [warehouseId, productId])
 
-      const quantityBefore = stockResult.rows.length > 0 ? parseInt(stockResult.rows[0].quantity_on_hand) : 0
+      const quantityBefore = stockResult.rows.length > 0 ? parseFloat(stockResult.rows[0].quantity_on_hand) || 0 : 0
       const quantityAfter = quantityBefore - quantity
 
       // Update warehouse stock

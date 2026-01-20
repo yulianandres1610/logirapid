@@ -289,7 +289,7 @@ export async function POST(
         const productId = parseInt(orderLine.product_id)
         const variantId = orderLine.variant_id ? parseInt(orderLine.variant_id) : null
         const unitCost = parseFloat(orderLine.unit_cost) || 0
-        const qtyReceived = parseInt(String(line.quantityReceived))
+        const qtyReceived = parseFloat(String(line.quantityReceived)) || 0
 
         await db.query(`
           INSERT INTO consignment_lot_inventory (
@@ -491,7 +491,7 @@ export async function POST(
         // Create FIFO inventory entry for purchase
         const purchaseProductId = parseInt(purchaseLine.product_id)
         const purchaseVariantId = purchaseLine.variant_id ? parseInt(purchaseLine.variant_id) : null
-        const purchaseQty = parseInt(String(line.quantityReceived))
+        const purchaseQty = parseFloat(String(line.quantityReceived)) || 0
         const purchaseUnitCost = parseFloat(purchaseLine.unit_price) || 0
 
         await db.query(`
