@@ -48,9 +48,9 @@ export async function GET(
 
     // Calculate totals
     const totals = stockResult.rows.reduce((acc, row) => ({
-      totalOnHand: acc.totalOnHand + (parseInt(row.quantity_on_hand) || 0),
-      totalReserved: acc.totalReserved + (parseInt(row.quantity_reserved) || 0),
-      totalAvailable: acc.totalAvailable + (parseInt(row.quantity_available) || 0)
+      totalOnHand: acc.totalOnHand + (parseFloat(row.quantity_on_hand) || 0),
+      totalReserved: acc.totalReserved + (parseFloat(row.quantity_reserved) || 0),
+      totalAvailable: acc.totalAvailable + (parseFloat(row.quantity_available) || 0)
     }), { totalOnHand: 0, totalReserved: 0, totalAvailable: 0 })
 
     // Get all active warehouses to show which ones don't have stock
@@ -70,9 +70,9 @@ export async function GET(
         warehouseCode: warehouse.code,
         isCentral: warehouse.is_central,
         city: warehouse.city,
-        quantityOnHand: stockData ? parseInt(stockData.quantity_on_hand) : 0,
-        quantityReserved: stockData ? parseInt(stockData.quantity_reserved) : 0,
-        quantityAvailable: stockData ? parseInt(stockData.quantity_available) : 0,
+        quantityOnHand: stockData ? parseFloat(stockData.quantity_on_hand) : 0,
+        quantityReserved: stockData ? parseFloat(stockData.quantity_reserved) : 0,
+        quantityAvailable: stockData ? parseFloat(stockData.quantity_available) : 0,
         locationCode: stockData?.location_code || null,
         lastMovementAt: stockData?.last_movement_at || null,
         isCurrentWarehouse: currentWarehouseIdNum ? warehouse.id === currentWarehouseIdNum : false
@@ -132,8 +132,8 @@ export async function GET(
       }
       const variant = variantStockMap.get(row.variant_id)!
       if (row.warehouse_id) {
-        const qty = parseInt(row.quantity_on_hand) || 0
-        const reserved = parseInt(row.quantity_reserved) || 0
+        const qty = parseFloat(row.quantity_on_hand) || 0
+        const reserved = parseFloat(row.quantity_reserved) || 0
         variant.totalOnHand += qty
         variant.totalReserved += reserved
         variant.totalAvailable += qty - reserved

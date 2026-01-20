@@ -288,9 +288,9 @@ export async function GET(request: NextRequest) {
             supplierReference: row.supplier_reference,
             quantityOnHand: hasVariants
               ? variants.reduce((sum, v) => sum + v.stock, 0)
-              : parseInt(row.quantity_on_hand) || 0,
-            quantityExpected: parseInt(row.quantity_expected) || 0,
-            minimumStock: parseInt(row.minimum_stock) || 0,
+              : parseFloat(row.quantity_on_hand) || 0,
+            quantityExpected: parseFloat(row.quantity_expected) || 0,
+            minimumStock: parseFloat(row.minimum_stock) || 0,
             isActive: row.is_active,
             unitOfMeasure: row.unit_of_measure || 'unidad',
             odooProductId: row.odoo_product_id,
