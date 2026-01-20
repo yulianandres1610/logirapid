@@ -118,6 +118,8 @@ export default function CloseSessionPage() {
   const [error, setError] = useState<string | null>(null)
   const [countMissing, setCountMissing] = useState(false)
   const [countPendingApproval, setCountPendingApproval] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [forceClosing, setForceClosing] = useState(false)
 
   // Denomination counts
   const [usdCounts, setUsdCounts] = useState<Record<number, number>>({})
@@ -136,6 +138,24 @@ export default function CloseSessionPage() {
     cup: calculateTotal(cupCounts, CUP_DENOMINATIONS),
     mlc: calculateTotal(mlcCounts, MLC_DENOMINATIONS)
   }
+
+  // Check if user is admin
+  useEffect(() => {
+    const checkAdminRole = async () => {
+      try {
+        const response = await fetch('/api/auth/me')
+        const data = await response.json()
+        if (data.success && data.user) {
+          const role = data.user.role
+          const isAdminRole = role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'MARKET_MANAGER'
+          setIsAdmin(isAdminRole)
+        }
+      } catch (err) {
+        console.error('Error checking role:', err)
+      }
+    }
+    checkAdminRole()
+  }, [])
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -244,6 +264,46 @@ export default function CloseSessionPage() {
     }
   }
 
+  // Admin force close without count
+  const handleForceClose = async () => {
+    if (!isAdmin) return
+
+    setForceClosing(true)
+    try {
+      // Get session ID first
+      const sessionsRes = await fetch(`/api/market/pos/sessions?terminalId=${terminalId}&status=open`)
+      const sessionsData = await sessionsRes.json()
+
+      if (!sessionsData.success || sessionsData.data.sessions.length === 0) {
+        setError('No hay sesión abierta')
+        return
+      }
+
+      const sessionId = sessionsData.data.sessions[0].id
+
+      const response = await fetch(`/api/market/pos/sessions/${sessionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'force-close',
+          closingNotes: 'Cerrado por administrador sin conteo de inventario'
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        router.push('/dashboard/market/pos')
+      } else {
+        setError(data.error || 'Error al cerrar sesión')
+      }
+    } catch (err) {
+      setError('Error de conexión')
+    } finally {
+      setForceClosing(false)
+    }
+  }
+
   // Increment/Decrement denomination count
   const updateCount = (currency: CurrencyTab, value: number, delta: number) => {
     if (currency === 'usd') {
@@ -324,23 +384,41 @@ export default function CloseSessionPage() {
               <p className="text-gray-500 mb-6">
                 Antes de cerrar la caja, debes completar el conteo de inventario del almacén.
               </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)}
-                  className={cn(
-                    'flex-1 py-2.5 rounded-xl font-medium',
-                    theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'
-                  )}
-                >
-                  Volver al POS
-                </button>
-                <button
-                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}/count`)}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium shadow-lg shadow-blue-500/25 hover:from-blue-600 hover:to-blue-700 flex items-center justify-center gap-2"
-                >
-                  <ClipboardCheck className="w-4 h-4" />
-                  Ir a Contar
-                </button>
+              <div className="flex flex-col gap-3">
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)}
+                    className={cn(
+                      'flex-1 py-2.5 rounded-xl font-medium',
+                      theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'
+                    )}
+                  >
+                    Volver al POS
+                  </button>
+                  <button
+                    onClick={() => router.push(`/dashboard/market/pos/${terminalId}/count`)}
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium shadow-lg shadow-blue-500/25 hover:from-blue-600 hover:to-blue-700 flex items-center justify-center gap-2"
+                  >
+                    <ClipboardCheck className="w-4 h-4" />
+                    Ir a Contar
+                  </button>
+                </div>
+
+                {/* Admin force close option */}
+                {isAdmin && (
+                  <button
+                    onClick={handleForceClose}
+                    disabled={forceClosing}
+                    className="w-full py-2.5 rounded-xl bg-red-600/20 border border-red-600/50 text-red-400 font-medium hover:bg-red-600/30 flex items-center justify-center gap-2"
+                  >
+                    {forceClosing ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4" />
+                    )}
+                    Cerrar sin Conteo (Solo Admin)
+                  </button>
+                )}
               </div>
             </motion.div>
           </div>
@@ -391,22 +469,40 @@ export default function CloseSessionPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)}
-                  className={cn(
-                    'flex-1 py-2.5 rounded-xl font-medium',
-                    theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'
-                  )}
-                >
-                  Volver al POS
-                </button>
-                <button
-                  onClick={() => router.push('/dashboard/market/pos/inventory-counts')}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium"
-                >
-                  Ver Estado
-                </button>
+              <div className="flex flex-col gap-3">
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)}
+                    className={cn(
+                      'flex-1 py-2.5 rounded-xl font-medium',
+                      theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'
+                    )}
+                  >
+                    Volver al POS
+                  </button>
+                  <button
+                    onClick={() => router.push('/dashboard/market/pos/inventory-counts')}
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white font-medium"
+                  >
+                    Ver Estado
+                  </button>
+                </div>
+
+                {/* Admin force close option */}
+                {isAdmin && (
+                  <button
+                    onClick={handleForceClose}
+                    disabled={forceClosing}
+                    className="w-full py-2.5 rounded-xl bg-red-600/20 border border-red-600/50 text-red-400 font-medium hover:bg-red-600/30 flex items-center justify-center gap-2"
+                  >
+                    {forceClosing ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4" />
+                    )}
+                    Cerrar sin Conteo (Solo Admin)
+                  </button>
+                )}
               </div>
             </motion.div>
           </div>

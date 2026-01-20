@@ -344,6 +344,70 @@ export async function PUT(
       })
     }
 
+    // Force close without inventory count (Admin only)
+    if (action === 'force-close') {
+      // Check admin permission
+      const isAdmin = ['ADMIN', 'SUPER_ADMIN', 'MARKET_MANAGER'].includes(payload.role)
+      if (!isAdmin) {
+        return NextResponse.json({
+          success: false,
+          error: 'Solo administradores pueden forzar el cierre'
+        }, { status: 403 })
+      }
+
+      if (session.status !== 'open') {
+        return NextResponse.json({
+          success: false,
+          error: 'La sesión ya está cerrada'
+        }, { status: 400 })
+      }
+
+      const { closingNotes } = body
+
+      // Calculate totals from orders
+      const totalsResult = await db.query(`
+        SELECT
+          SUM(total_amount) FILTER (WHERE status = 'paid') as total_sales,
+          SUM(total_amount) FILTER (WHERE status = 'refunded') as total_refunds,
+          COUNT(*) FILTER (WHERE status = 'paid') as total_orders
+        FROM market_pos_orders
+        WHERE pos_session_id = $1
+      `, [sessionId])
+
+      const totals = totalsResult.rows[0]
+
+      // Force close session without cash count
+      await db.query(`
+        UPDATE market_pos_sessions SET
+          status = 'closed',
+          closed_by = $1,
+          closed_at = NOW(),
+          closing_cash_usd = NULL,
+          closing_cash_cup = NULL,
+          closing_cash_mlc = NULL,
+          total_sales = $2,
+          total_refunds = $3,
+          total_orders = $4,
+          cash_difference = NULL,
+          closing_notes = $5
+        WHERE id = $6
+      `, [
+        userId,
+        parseFloat(totals.total_sales) || 0,
+        parseFloat(totals.total_refunds) || 0,
+        parseInt(totals.total_orders) || 0,
+        closingNotes || 'Cerrado forzado por administrador sin conteo',
+        sessionId
+      ])
+
+      console.log('[POS Sessions] Force closed session by admin:', session.session_code)
+
+      return NextResponse.json({
+        success: true,
+        message: 'Sesión cerrada por administrador'
+      })
+    }
+
     return NextResponse.json({
       success: false,
       error: 'Acción no válida'
