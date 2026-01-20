@@ -40,6 +40,13 @@ export async function GET(
     const { id } = await params
     const warehouseId = parseInt(id)
 
+    // Ensure customer_name column exists
+    try {
+      await db.query(`ALTER TABLE pos_returns ADD COLUMN IF NOT EXISTS customer_name VARCHAR(255)`)
+    } catch {
+      // Column may already exist
+    }
+
     const result = await db.query(`
       SELECT
         pr.id,
