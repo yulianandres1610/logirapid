@@ -334,39 +334,37 @@ export async function POST(request: NextRequest) {
         const variantId = line.variantId ? parseInt(line.variantId) : null
 
         if (productId) {
-          // Check if product tracks inventory
+          // Get product name for error messages
           const productCheck = await db.query(
-            'SELECT name, track_inventory FROM market_products WHERE id = $1',
+            'SELECT name FROM market_products WHERE id = $1',
             [productId]
           )
 
-          if (productCheck.rows[0]?.track_inventory) {
-            // Check warehouse stock availability
-            const stockCheck = await db.query(`
-              SELECT COALESCE(quantity_on_hand, 0) as available
-              FROM market_warehouse_stock
-              WHERE product_id = $1 AND warehouse_id = $2
-                AND (variant_id = $3 OR (variant_id IS NULL AND $3::int IS NULL))
-            `, [productId, warehouseId, variantId])
+          // Check warehouse stock availability (all products track inventory)
+          const stockCheck = await db.query(`
+            SELECT COALESCE(quantity_on_hand, 0) as available
+            FROM market_warehouse_stock
+            WHERE product_id = $1 AND warehouse_id = $2
+              AND (variant_id = $3 OR (variant_id IS NULL AND $3::int IS NULL))
+          `, [productId, warehouseId, variantId])
 
-            const availableStock = parseFloat(stockCheck.rows[0]?.available) || 0
-            const productName = productCheck.rows[0]?.name || `Producto ${productId}`
+          const availableStock = parseFloat(stockCheck.rows[0]?.available) || 0
+          const productName = productCheck.rows[0]?.name || `Producto ${productId}`
 
-            if (availableStock < quantity) {
-              console.log('[POS Orders] Insufficient stock:', {
-                productId,
-                productName,
-                variantId,
-                requested: quantity,
-                available: availableStock,
-                warehouseId
-              })
+          if (availableStock < quantity) {
+            console.log('[POS Orders] Insufficient stock:', {
+              productId,
+              productName,
+              variantId,
+              requested: quantity,
+              available: availableStock,
+              warehouseId
+            })
 
-              return NextResponse.json({
-                success: false,
-                error: `Stock insuficiente para "${productName}". Disponible: ${availableStock}, Solicitado: ${quantity}`
-              }, { status: 400 })
-            }
+            return NextResponse.json({
+              success: false,
+              error: `Stock insuficiente para "${productName}". Disponible: ${availableStock}, Solicitado: ${quantity}`
+            }, { status: 400 })
           }
         }
       }

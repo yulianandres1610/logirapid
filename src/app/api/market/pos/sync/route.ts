@@ -167,37 +167,36 @@ export async function POST(request: NextRequest) {
 
             if (productId) {
               const productCheck = await db.query(
-                'SELECT name, track_inventory FROM market_products WHERE id = $1',
+                'SELECT name FROM market_products WHERE id = $1',
                 [productId]
               )
 
-              if (productCheck.rows[0]?.track_inventory) {
-                const stockCheck = await db.query(`
-                  SELECT COALESCE(quantity_on_hand, 0) as available
-                  FROM market_warehouse_stock
-                  WHERE product_id = $1 AND warehouse_id = $2
-                `, [productId, warehouseId])
+              // Check stock availability (all products track inventory)
+              const stockCheck = await db.query(`
+                SELECT COALESCE(quantity_on_hand, 0) as available
+                FROM market_warehouse_stock
+                WHERE product_id = $1 AND warehouse_id = $2
+              `, [productId, warehouseId])
 
-                const availableStock = parseFloat(stockCheck.rows[0]?.available) || 0
+              const availableStock = parseFloat(stockCheck.rows[0]?.available) || 0
 
-                if (availableStock < quantity) {
-                  const productName = productCheck.rows[0]?.name || `Producto ${productId}`
-                  console.log('[POS Sync] Insufficient stock for offline order:', {
-                    offlineId: order.offlineId,
-                    productId,
-                    productName,
-                    requested: quantity,
-                    available: availableStock
-                  })
+              if (availableStock < quantity) {
+                const productName = productCheck.rows[0]?.name || `Producto ${productId}`
+                console.log('[POS Sync] Insufficient stock for offline order:', {
+                  offlineId: order.offlineId,
+                  productId,
+                  productName,
+                  requested: quantity,
+                  available: availableStock
+                })
 
-                  results.failed++
-                  results.errors.push({
-                    offlineId: order.offlineId,
-                    error: `Stock insuficiente para "${productName}". Disponible: ${availableStock}`
-                  })
-                  hasStockError = true
-                  break // Exit line loop
-                }
+                results.failed++
+                results.errors.push({
+                  offlineId: order.offlineId,
+                  error: `Stock insuficiente para "${productName}". Disponible: ${availableStock}`
+                })
+                hasStockError = true
+                break // Exit line loop
               }
             }
           }
