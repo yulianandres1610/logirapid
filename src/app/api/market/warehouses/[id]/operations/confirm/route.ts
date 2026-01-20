@@ -167,12 +167,22 @@ export async function POST(
     await db.query('BEGIN')
 
     try {
-      // Generate operation number
-      const opCountResult = await db.query(`
-        SELECT COUNT(*) as count FROM market_warehouse_operations WHERE company_id = $1
+      // Generate operation number based on MAX existing number (not COUNT)
+      const currentYear = new Date().getFullYear()
+      const opMaxResult = await db.query(`
+        SELECT MAX(
+          CAST(
+            SUBSTRING(operation_number FROM 'OP-${currentYear}-(\\d+)')
+            AS INTEGER
+          )
+        ) as max_num
+        FROM market_warehouse_operations
+        WHERE company_id = $1
+          AND operation_number LIKE 'OP-${currentYear}-%'
       `, [payload.companyId])
-      const opCount = parseInt(opCountResult.rows[0].count) + 1
-      const operationNumber = `OP-${new Date().getFullYear()}-${String(opCount).padStart(6, '0')}`
+      const maxNum = parseInt(opMaxResult.rows[0].max_num) || 0
+      const nextNum = maxNum + 1
+      const operationNumber = `OP-${currentYear}-${String(nextNum).padStart(6, '0')}`
 
       // Map operation type to database format
       const dbOperationType = operationType === 'reception' ? 'in' :
