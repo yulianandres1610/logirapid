@@ -652,7 +652,7 @@ export default function AuditCountPage() {
     <div className={`min-h-screen min-h-[100dvh] flex flex-col ${tc.bg} ${tc.text}`}>
       {/* Header - Fixed on mobile for app-like feel */}
       <header className={`${tc.bgAlt} border-b ${tc.border} sticky top-0 z-40`}>
-        <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 safe-area-inset">
+        <div className="flex items-center justify-between px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 safe-area-inset">
           <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
             <motion.button
               onClick={goBack}

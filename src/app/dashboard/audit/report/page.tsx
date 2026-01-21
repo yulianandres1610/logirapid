@@ -361,8 +361,8 @@ export default function AuditReportPage() {
 
       <div className="min-h-screen flex flex-col bg-gray-900 text-white">
         {/* Header */}
-        <header className="bg-gray-800 border-b border-gray-700 no-print">
-          <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 py-3 lg:py-4 max-w-7xl mx-auto w-full">
+        <header className="bg-gray-800 border-b border-gray-700 no-print sticky top-0 z-40">
+          <div className="flex items-center justify-between px-4 lg:px-6 py-3 lg:py-4 lg:max-w-7xl lg:mx-auto w-full">
             <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
               <motion.button
                 onClick={goBackToCount}
@@ -388,8 +388,8 @@ export default function AuditReportPage() {
         </header>
 
         {/* Info Bar */}
-        <div className="px-3 sm:px-4 lg:px-6 py-2 lg:py-3 bg-gray-800/50 border-b border-gray-700/50 no-print">
-          <div className="flex flex-wrap items-center gap-3 sm:gap-4 lg:gap-6 text-xs sm:text-sm lg:text-base text-gray-400 max-w-7xl mx-auto">
+        <div className="px-4 lg:px-6 py-2 lg:py-3 bg-gray-800/50 border-b border-gray-700/50 no-print">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 lg:gap-6 text-xs sm:text-sm lg:text-base text-gray-400 lg:max-w-7xl lg:mx-auto">
             <span className="flex items-center gap-1.5">
               <Warehouse className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
               {countData.warehouseName}
@@ -406,8 +406,8 @@ export default function AuditReportPage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="p-3 sm:p-4 lg:p-6 no-print">
-          <div className="max-w-7xl mx-auto">
+        <div className="px-4 py-3 lg:p-6 no-print">
+          <div className="lg:max-w-7xl lg:mx-auto">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -514,8 +514,8 @@ export default function AuditReportPage() {
 
         {/* Section Header - Only Differences */}
         {linesWithDifferences.length > 0 && (
-          <div className="px-3 sm:px-4 lg:px-6 py-2 lg:py-3 border-y border-gray-700/50 bg-gray-800/30 no-print">
-            <div className="flex items-center gap-2 text-amber-400 max-w-7xl mx-auto">
+          <div className="px-4 lg:px-6 py-2 lg:py-3 border-y border-gray-700/50 bg-gray-800/30 no-print">
+            <div className="flex items-center gap-2 text-amber-400 lg:max-w-7xl lg:mx-auto">
               <AlertTriangle className="w-4 h-4 lg:w-5 lg:h-5" />
               <span className="text-sm lg:text-base font-medium">Productos con Diferencias ({linesWithDifferences.length})</span>
             </div>
@@ -523,7 +523,7 @@ export default function AuditReportPage() {
         )}
 
         {/* Products List - Only with differences */}
-        <div className="flex-1 overflow-auto px-3 sm:px-4 lg:px-6 pb-3 lg:pb-6">
+        <div className="flex-1 overflow-auto px-4 lg:px-6 pb-[100px] sm:pb-[80px]">
           <div className="max-w-7xl mx-auto">
             {linesWithDifferences.length === 0 ? (
               <motion.div
@@ -689,9 +689,9 @@ export default function AuditReportPage() {
           </div>
         </div>
 
-        {/* Footer */}
-        <footer className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 bg-gray-800 border-t border-gray-700 no-print">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 lg:gap-4 max-w-7xl mx-auto">
+        {/* Footer - Fixed at bottom, edge-to-edge on mobile */}
+        <footer className="fixed bottom-0 left-0 right-0 z-30 bg-gray-800 border-t border-gray-700 no-print pb-[env(safe-area-inset-bottom)]">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 lg:gap-4 px-4 lg:px-6 py-3 lg:max-w-7xl lg:mx-auto">
             <button
               onClick={goBackToCount}
               disabled={completing}
