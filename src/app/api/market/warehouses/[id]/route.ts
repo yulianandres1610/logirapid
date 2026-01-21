@@ -11,6 +11,22 @@ interface JWTPayload {
   companyName: string
 }
 
+// Run migration to add print service column to warehouses
+async function ensurePrintServiceColumn() {
+  try {
+    await db.query(`
+      ALTER TABLE market_warehouses
+      ADD COLUMN IF NOT EXISTS default_print_service_id INTEGER REFERENCES print_services(id)
+    `)
+  } catch (error) {
+    // Column might already exist or print_services table doesn't exist yet
+    console.log('[Warehouse Migration] Print service column check:', error)
+  }
+}
+
+// Initialize migration
+ensurePrintServiceColumn()
+
 /**
  * GET /api/market/warehouses/[id]
  * Get a specific warehouse
@@ -54,9 +70,13 @@ export async function GET(
     const result = await db.query(`
       SELECT
         mw.*,
+        ps.name as print_service_name,
+        ps.code as print_service_code,
+        ps.url as print_service_url,
         (SELECT COUNT(*) FROM market_warehouse_stock mws WHERE mws.warehouse_id = mw.id) as products_count,
         (SELECT COALESCE(SUM(mws.quantity_on_hand), 0) FROM market_warehouse_stock mws WHERE mws.warehouse_id = mw.id) as total_stock
       FROM market_warehouses mw
+      LEFT JOIN print_services ps ON ps.id = mw.default_print_service_id
       WHERE mw.id = $1 AND mw.company_id = $2
     `, [warehouseId, payload.companyId])
 
@@ -91,6 +111,10 @@ export async function GET(
         allowNegativeStock: row.allow_negative_stock,
         productsCount: parseInt(row.products_count) || 0,
         totalStock: parseInt(row.total_stock) || 0,
+        defaultPrintServiceId: row.default_print_service_id,
+        printServiceName: row.print_service_name,
+        printServiceCode: row.print_service_code,
+        printServiceUrl: row.print_service_url,
         createdAt: row.created_at,
         updatedAt: row.updated_at
       }
@@ -175,7 +199,8 @@ export async function PUT(
       phone,
       email,
       isActive,
-      allowNegativeStock
+      allowNegativeStock,
+      defaultPrintServiceId
     } = body
 
     // Validate required fields
@@ -225,8 +250,9 @@ export async function PUT(
         email = $14,
         is_active = $15,
         allow_negative_stock = $16,
+        default_print_service_id = $17,
         updated_at = NOW()
-      WHERE id = $17 AND company_id = $18
+      WHERE id = $18 AND company_id = $19
     `, [
       name,
       code,
@@ -244,6 +270,7 @@ export async function PUT(
       email || null,
       isActive ?? true,
       allowNegativeStock ?? false,
+      defaultPrintServiceId || null,
       warehouseId,
       payload.companyId
     ])

@@ -243,8 +243,19 @@ export default function MarketPurchasesPage() {
     }).format(value)
   }
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('es-ES', {
+  const formatDate = (date: string | null | undefined) => {
+    if (!date) return ''
+    // Parse date safely to avoid timezone issues with DATE type from PostgreSQL
+    // When date is "YYYY-MM-DD", new Date() interprets it as UTC which shifts the day
+    let d: Date
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      const [year, month, day] = date.split('-').map(Number)
+      d = new Date(year, month - 1, day) // month is 0-indexed
+    } else {
+      d = new Date(date)
+    }
+    if (isNaN(d.getTime())) return ''
+    return d.toLocaleDateString('es-ES', {
       day: '2-digit',
       month: 'short',
       year: 'numeric'

@@ -316,16 +316,29 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
     return `${symbol}${value.toFixed(2)}`
   }
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('es-ES', {
+  const formatDate = (date: string | null | undefined) => {
+    if (!date) return ''
+    // Parse date safely to avoid timezone issues with DATE type from PostgreSQL
+    let d: Date
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      const [year, month, day] = date.split('-').map(Number)
+      d = new Date(year, month - 1, day)
+    } else {
+      d = new Date(date)
+    }
+    if (isNaN(d.getTime())) return ''
+    return d.toLocaleDateString('es-ES', {
       day: '2-digit',
       month: 'long',
       year: 'numeric'
     })
   }
 
-  const formatDateTime = (date: string) => {
-    return new Date(date).toLocaleString('es-ES', {
+  const formatDateTime = (date: string | null | undefined) => {
+    if (!date) return ''
+    const d = new Date(date)
+    if (isNaN(d.getTime())) return ''
+    return d.toLocaleString('es-ES', {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -1074,7 +1087,7 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                                 )}>{line.lotNumber}</p>
                                 {line.expirationDate && (
                                   <p className="text-xs text-amber-500">
-                                    Vence: {new Date(line.expirationDate).toLocaleDateString('es-ES')}
+                                    Vence: {formatDate(line.expirationDate)}
                                   </p>
                                 )}
                               </div>

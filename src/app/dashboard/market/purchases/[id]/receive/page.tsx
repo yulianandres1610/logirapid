@@ -26,7 +26,7 @@ import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
-import { cn } from '@/lib/utils'
+import { cn, formatDateShort } from '@/lib/utils'
 
 type Step = 'warehouse' | 'products' | 'review'
 
@@ -617,7 +617,7 @@ export default function ReceivePurchasePage() {
                           <div className="flex items-center gap-4 mt-2 text-sm">
                             <span className="text-gray-500 flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
-                              {new Date(purchase.purchaseDate).toLocaleDateString('es-ES')}
+                              {formatDateShort(purchase.purchaseDate)}
                             </span>
                             <span className={cn(
                               "font-medium",
@@ -870,7 +870,7 @@ export default function ReceivePurchasePage() {
                                 {line.expirationDate && (
                                   <span className="flex items-center gap-1">
                                     <Calendar className="w-3 h-3" />
-                                    Vence: {new Date(line.expirationDate).toLocaleDateString('es-ES')}
+                                    Vence: {formatDateShort(line.expirationDate)}
                                   </span>
                                 )}
                               </div>

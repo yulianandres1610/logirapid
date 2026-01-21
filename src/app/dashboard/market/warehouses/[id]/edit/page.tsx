@@ -15,7 +15,8 @@ import {
   Loader2,
   Building,
   Settings,
-  CheckCircle
+  CheckCircle,
+  Printer
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -40,6 +41,14 @@ interface WarehouseForm {
   email: string
   isActive: boolean
   allowNegativeStock: boolean
+  defaultPrintServiceId: number | null
+}
+
+interface PrintService {
+  id: number
+  name: string
+  code: string
+  url: string
 }
 
 const WAREHOUSE_TYPES = [
@@ -64,6 +73,8 @@ export default function EditWarehousePage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
+  const [printServices, setPrintServices] = useState<PrintService[]>([])
+
   const [form, setForm] = useState<WarehouseForm>({
     name: '',
     code: '',
@@ -80,17 +91,28 @@ export default function EditWarehousePage() {
     phone: '',
     email: '',
     isActive: true,
-    allowNegativeStock: false
+    allowNegativeStock: false,
+    defaultPrintServiceId: null
   })
 
   useEffect(() => {
-    const fetchWarehouse = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch(`/api/market/warehouses/${params.id}`)
-        const data = await response.json()
+        // Fetch warehouse and print services in parallel
+        const [warehouseRes, printServicesRes] = await Promise.all([
+          fetch(`/api/market/warehouses/${params.id}`),
+          fetch('/api/market/print-services')
+        ])
 
-        if (data.success) {
-          const w = data.data
+        const warehouseData = await warehouseRes.json()
+        const printServicesData = await printServicesRes.json()
+
+        if (printServicesData.success && printServicesData.data) {
+          setPrintServices(printServicesData.data)
+        }
+
+        if (warehouseData.success) {
+          const w = warehouseData.data
           setForm({
             name: w.name || '',
             code: w.code || '',
@@ -107,10 +129,11 @@ export default function EditWarehousePage() {
             phone: w.phone || '',
             email: w.email || '',
             isActive: w.isActive ?? true,
-            allowNegativeStock: w.allowNegativeStock || false
+            allowNegativeStock: w.allowNegativeStock || false,
+            defaultPrintServiceId: w.defaultPrintServiceId || null
           })
         } else {
-          setError(data.error || 'Error al cargar el almacén')
+          setError(warehouseData.error || 'Error al cargar el almacén')
         }
       } catch (err) {
         console.error('Error fetching warehouse:', err)
@@ -121,7 +144,7 @@ export default function EditWarehousePage() {
     }
 
     if (params.id) {
-      fetchWarehouse()
+      fetchData()
     }
   }, [params.id])
 
@@ -539,18 +562,48 @@ export default function EditWarehousePage() {
                   <Settings className="w-5 h-5 text-amber-500" />
                   Configuración
                 </h3>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.allowNegativeStock}
-                    onChange={(e) => setForm({ ...form, allowNegativeStock: e.target.checked })}
-                    className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-500"
-                  />
-                  <div>
-                    <span className="font-medium">Permitir Stock Negativo</span>
-                    <p className="text-sm text-gray-500">Permite que el inventario tenga cantidades negativas</p>
+                <div className="space-y-4">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.allowNegativeStock}
+                      onChange={(e) => setForm({ ...form, allowNegativeStock: e.target.checked })}
+                      className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-500"
+                    />
+                    <div>
+                      <span className="font-medium">Permitir Stock Negativo</span>
+                      <p className="text-sm text-gray-500">Permite que el inventario tenga cantidades negativas</p>
+                    </div>
+                  </label>
+
+                  {/* Print Service */}
+                  <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Printer className="w-5 h-5 text-blue-500" />
+                      <span className="font-medium">Servicio de Impresión</span>
+                    </div>
+                    <p className="text-sm text-gray-500 mb-3">
+                      Selecciona el servicio de impresión que se usará para imprimir documentos en este almacén
+                    </p>
+                    <select
+                      value={form.defaultPrintServiceId || ''}
+                      onChange={(e) => setForm({ ...form, defaultPrintServiceId: e.target.value ? parseInt(e.target.value) : null })}
+                      className={cn(
+                        'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                        theme === 'dark'
+                          ? 'bg-gray-800/50 border-gray-700 text-white focus:ring-blue-500/20'
+                          : 'bg-white border-gray-200 text-gray-900 focus:ring-blue-500/20'
+                      )}
+                    >
+                      <option value="">Sin servicio de impresión</option>
+                      {printServices.map(ps => (
+                        <option key={ps.id} value={ps.id}>
+                          {ps.name} ({ps.code})
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                </label>
+                </div>
               </motion.div>
 
               {/* Actions */}

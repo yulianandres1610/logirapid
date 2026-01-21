@@ -4,6 +4,7 @@ import React, { useRef } from 'react'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import { PurchaseOrder } from '@/lib/package-types'
+import { formatDate } from '@/lib/utils'
 
 interface PurchaseOrderInvoiceProps {
   order: PurchaseOrder
@@ -60,11 +61,7 @@ export function PurchaseOrderInvoice({ order, isVisible }: PurchaseOrderInvoiceP
             <div>
               <h1 className="text-3xl font-bold text-gray-800">FACTURA</h1>
               <p className="text-gray-600 mt-2">Orden de Compra: {order.order_number}</p>
-              <p className="text-gray-600">Fecha: {new Date(order.order_date).toLocaleDateString('es-ES', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              })}</p>
+              <p className="text-gray-600">Fecha: {formatDate(order.order_date)}</p>
             </div>
             <div className="text-right">
               <div className="text-sm text-gray-600 mb-2">LogiRapid Logistics</div>
@@ -138,28 +135,28 @@ export function PurchaseOrderInvoice({ order, isVisible }: PurchaseOrderInvoiceP
             {order.budget_request_date && (
               <p className="text-gray-700">
                 <strong>Fecha Solicitud Presupuesto:</strong>{' '}
-                {new Date(order.budget_request_date).toLocaleDateString('es-ES')}
+                {formatDate(order.budget_request_date)}
               </p>
             )}
 
             {order.purchase_date && (
               <p className="text-gray-700">
                 <strong>Fecha Compra:</strong>{' '}
-                {new Date(order.purchase_date).toLocaleDateString('es-ES')}
+                {formatDate(order.purchase_date)}
               </p>
             )}
 
             {order.received_date && (
               <p className="text-gray-700">
                 <strong>Fecha Recepción:</strong>{' '}
-                {new Date(order.received_date).toLocaleDateString('es-ES')}
+                {formatDate(order.received_date)}
               </p>
             )}
 
             {order.expected_delivery && (
               <p className="text-gray-700">
                 <strong>Entrega Esperada:</strong>{' '}
-                {new Date(order.expected_delivery).toLocaleDateString('es-ES')}
+                {formatDate(order.expected_delivery)}
               </p>
             )}
           </div>

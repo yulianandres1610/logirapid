@@ -68,10 +68,14 @@ export async function GET(request: NextRequest) {
       query = `
         SELECT
           mw.*,
+          ps.name as print_service_name,
+          ps.code as print_service_code,
+          ps.url as print_service_url,
           COALESCE(mws.quantity_on_hand, 0) as stock_on_hand,
           COALESCE(mws.quantity_reserved, 0) as stock_reserved,
           COALESCE(mws.quantity_on_hand, 0) - COALESCE(mws.quantity_reserved, 0) as stock_available
         FROM market_warehouses mw
+        LEFT JOIN print_services ps ON ps.id = mw.default_print_service_id
         LEFT JOIN market_warehouse_stock mws ON mws.warehouse_id = mw.id AND mws.product_id = $${paramIndex}
         WHERE mw.company_id = $1 AND mw.is_active = true
       `
@@ -81,9 +85,13 @@ export async function GET(request: NextRequest) {
       query = `
         SELECT
           mw.*,
+          ps.name as print_service_name,
+          ps.code as print_service_code,
+          ps.url as print_service_url,
           (SELECT COUNT(*) FROM market_warehouse_stock mws WHERE mws.warehouse_id = mw.id) as products_count,
           (SELECT COALESCE(SUM(mws.quantity_on_hand), 0) FROM market_warehouse_stock mws WHERE mws.warehouse_id = mw.id) as total_stock
         FROM market_warehouses mw
+        LEFT JOIN print_services ps ON ps.id = mw.default_print_service_id
         WHERE mw.company_id = $1
       `
     }
@@ -150,6 +158,10 @@ export async function GET(request: NextRequest) {
           email: row.email,
           isActive: row.is_active,
           allowNegativeStock: row.allow_negative_stock,
+          defaultPrintServiceId: row.default_print_service_id,
+          printServiceName: row.print_service_name,
+          printServiceCode: row.print_service_code,
+          printServiceUrl: row.print_service_url,
           productsCount: parseInt(row.products_count) || 0,
           totalStock: parseFloat(row.total_stock) || 0,
           // Stock fields when productId is provided
@@ -223,7 +235,8 @@ export async function POST(request: NextRequest) {
       managerName,
       phone,
       email,
-      allowNegativeStock = false
+      allowNegativeStock = false,
+      defaultPrintServiceId
     } = body
 
     // Validate required fields
@@ -260,18 +273,18 @@ export async function POST(request: NextRequest) {
         company_id, code, name, is_central, warehouse_type,
         address, city, state, municipality, country,
         latitude, longitude, manager_name, phone, email,
-        is_active, allow_negative_stock, created_by, created_at, updated_at
+        is_active, allow_negative_stock, default_print_service_id, created_by, created_at, updated_at
       ) VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15,
-        true, $16, $17, NOW(), NOW()
+        true, $16, $17, $18, NOW(), NOW()
       ) RETURNING id
     `, [
       companyId, code, name, isCentral, warehouseType,
       address || null, city || null, state || null, municipality || null, country,
       latitude || null, longitude || null, managerName || null, phone || null, email || null,
-      allowNegativeStock, userId
+      allowNegativeStock, defaultPrintServiceId || null, userId
     ])
 
     return NextResponse.json({

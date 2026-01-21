@@ -241,6 +241,28 @@ export async function POST(request: NextRequest) {
         resolvedServiceId = resolvedServiceId || configResult.rows[0].print_service_id
         resolvedPrinterId = resolvedPrinterId || configResult.rows[0].printer_id
       }
+
+      // If still no service and warehouseId provided, check warehouse's default print service
+      if (!resolvedServiceId && warehouseId) {
+        const warehouseResult = await db.query(
+          'SELECT default_print_service_id FROM market_warehouses WHERE id = $1 AND company_id = $2',
+          [warehouseId, payload.companyId]
+        )
+        if (warehouseResult.rows.length > 0 && warehouseResult.rows[0].default_print_service_id) {
+          resolvedServiceId = warehouseResult.rows[0].default_print_service_id
+        }
+      }
+
+      // If still no service and posTerminalId provided, check terminal's default print service
+      if (!resolvedServiceId && posTerminalId) {
+        const terminalResult = await db.query(
+          'SELECT default_print_service_id FROM market_pos_terminals WHERE id = $1 AND company_id = $2',
+          [posTerminalId, payload.companyId]
+        )
+        if (terminalResult.rows.length > 0 && terminalResult.rows[0].default_print_service_id) {
+          resolvedServiceId = terminalResult.rows[0].default_print_service_id
+        }
+      }
     }
 
     // Verify service belongs to company if provided

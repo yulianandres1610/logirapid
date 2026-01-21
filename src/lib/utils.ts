@@ -12,8 +12,31 @@ export function formatCurrency(amount: number, currency = 'USD'): string {
   }).format(amount)
 }
 
-export function formatDate(date: Date | string): string {
-  const d = new Date(date)
+/**
+ * Parse a date string safely, avoiding timezone issues with DATE type from PostgreSQL.
+ * When date is in format "YYYY-MM-DD", JavaScript's Date() interprets it as UTC midnight,
+ * which can cause the date to shift by one day in local timezones.
+ * This function handles that by parsing the date components directly.
+ */
+export function parseDateSafe(date: Date | string | null | undefined): Date | null {
+  if (!date) return null
+
+  if (date instanceof Date) return date
+
+  // If it's a date-only string (YYYY-MM-DD), parse it as local time to avoid timezone shift
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const [year, month, day] = date.split('-').map(Number)
+    return new Date(year, month - 1, day) // month is 0-indexed
+  }
+
+  // For datetime strings or other formats, use standard parsing
+  return new Date(date)
+}
+
+export function formatDate(date: Date | string | null | undefined): string {
+  const d = parseDateSafe(date)
+  if (!d || isNaN(d.getTime())) return ''
+
   return new Intl.DateTimeFormat('es-ES', {
     year: 'numeric',
     month: 'long',
@@ -21,8 +44,24 @@ export function formatDate(date: Date | string): string {
   }).format(d)
 }
 
-export function formatDateTime(date: Date | string): string {
+export function formatDateShort(date: Date | string | null | undefined): string {
+  const d = parseDateSafe(date)
+  if (!d || isNaN(d.getTime())) return ''
+
+  return new Intl.DateTimeFormat('es-ES', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  }).format(d)
+}
+
+export function formatDateTime(date: Date | string | null | undefined): string {
+  if (!date) return ''
+
+  // For datetime, use standard parsing since it includes time info
   const d = new Date(date)
+  if (isNaN(d.getTime())) return ''
+
   return new Intl.DateTimeFormat('es-ES', {
     year: 'numeric',
     month: 'short',
