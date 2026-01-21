@@ -33,6 +33,7 @@ import { generateConsignmentReceiptEscpos } from '../documents/consignment-recei
 import { generateUnifiedReception, UnifiedReceptionData } from '../documents/unified-reception'
 import { generateUnifiedReceptionEscpos } from '../documents/unified-reception-escpos'
 import { generateTransferReceipt, TransferReceiptData } from '../documents/transfer-receipt'
+import { generateAuditCountReport, AuditCountReportData } from '../documents/audit-count-report'
 
 const execAsync = promisify(exec)
 
@@ -245,6 +246,7 @@ class JobProcessor {
       case 'pos_receipt':
       case 'sales_report':
       case 'inventory_count_report':
+      case 'audit_count_report':
       case 'cash_register_report':
         // Prefer thermal printers for receipts and reports
         return printerService.getThermalPrinters()[0] || printerService.getDefaultPrinter()
@@ -374,6 +376,14 @@ class JobProcessor {
         }
         return generateInventoryCountReport(data as unknown as InventoryCountReportData)
 
+      case 'audit_count_report':
+        // Audit count reports use ESC/POS for thermal printers
+        // Use the same PDF as inventory_count_report for standard printers (or create specialized one)
+        if (usePdf) {
+          return generateInventoryCountReportPdf(data as unknown as InventoryCountReportData)
+        }
+        return generateAuditCountReport(data as unknown as AuditCountReportData)
+
       case 'cash_register_report':
         // Use PDF for standard printers, ESC/POS for thermal
         if (usePdf) {
@@ -452,7 +462,7 @@ class JobProcessor {
                       printer.printerType !== 'standard' &&
                       ['pos_receipt', 'unified_reception'].includes(job.documentType)
     const isReceiptOrReport = ['purchase_invoice', 'invoice', 'sales_report',
-                               'inventory_count_report', 'cash_register_report',
+                               'inventory_count_report', 'audit_count_report', 'cash_register_report',
                                'warehouse_operation', 'unified_reception'].includes(job.documentType)
     const isPdfOnly = ['consignment_receipt', 'transfer_receipt'].includes(job.documentType)
 
