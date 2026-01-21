@@ -753,7 +753,7 @@ export default function AuditCountPage() {
       )}
 
       {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden pb-[120px] lg:pb-[100px]">
         {/* Left panel - Counted products */}
         <div className={`${mobileView === 'list' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[340px] xl:w-[400px] 2xl:w-[450px] border-r border-gray-700 flex-col bg-gray-850 relative`}>
           {/* Desktop search */}
@@ -990,54 +990,58 @@ export default function AuditCountPage() {
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 bg-gray-800 border-t border-gray-700 safe-area-bottom">
+      {/* Footer - Fixed at bottom, edge-to-edge on mobile */}
+      <footer className="fixed bottom-0 left-0 right-0 z-30 bg-gray-800 border-t border-gray-700 pb-[env(safe-area-inset-bottom)]">
         {/* Progress bar - clickable to show pending products */}
-        <div className="mb-2.5 sm:mb-3 lg:mb-4 max-w-4xl mx-auto">
-          <button
-            onClick={() => setShowPendingModal(true)}
-            className="w-full h-6 sm:h-5 lg:h-6 bg-gray-700 rounded-full overflow-hidden relative group cursor-pointer hover:ring-2 hover:ring-amber-500/50 transition-all active:scale-[0.99] touch-manipulation"
-            title={`${countingProgress.remaining} productos pendientes - Toca para ver`}
-          >
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${countingProgress.percentage}%` }}
-              transition={{ duration: 0.5, ease: 'easeOut' }}
-              className={`h-full ${countingProgress.isComplete ? 'bg-gradient-to-r from-green-500 to-green-400' : 'bg-gradient-to-r from-amber-600 to-amber-400'}`}
-            />
-            <span className="absolute inset-0 flex items-center justify-center text-xs sm:text-xs font-bold text-white drop-shadow-md">
-              {countingProgress.percentage}% ({countingProgress.remaining} pendientes)
-            </span>
-          </button>
+        <div className="px-4 sm:px-4 lg:px-6 pt-2.5 pb-2">
+          <div className="lg:max-w-4xl lg:mx-auto">
+            <button
+              onClick={() => setShowPendingModal(true)}
+              className="w-full h-6 bg-gray-700 rounded-full overflow-hidden relative group cursor-pointer hover:ring-2 hover:ring-amber-500/50 transition-all active:scale-[0.99] touch-manipulation"
+              title={`${countingProgress.remaining} productos pendientes - Toca para ver`}
+            >
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${countingProgress.percentage}%` }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+                className={`h-full ${countingProgress.isComplete ? 'bg-gradient-to-r from-green-500 to-green-400' : 'bg-gradient-to-r from-amber-600 to-amber-400'}`}
+              />
+              <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-md">
+                {countingProgress.percentage}% ({countingProgress.remaining} pendientes)
+              </span>
+            </button>
+          </div>
         </div>
 
-        <div className="flex flex-row items-center justify-between gap-2 sm:gap-3 max-w-4xl mx-auto">
-          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-4">
-            <Package className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-gray-400" />
-            <span className="text-sm sm:text-base">
-              <span className="font-bold text-base sm:text-lg lg:text-2xl">{countingProgress.counted}</span>
-              <span className="text-gray-400 ml-0.5 sm:ml-1 text-xs sm:text-sm lg:text-lg">/ {countingProgress.total}</span>
-            </span>
-          </div>
+        <div className="px-4 sm:px-4 lg:px-6 pb-3">
+          <div className="flex flex-row items-center justify-between gap-2 lg:max-w-4xl lg:mx-auto">
+            <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-4">
+              <Package className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-gray-400" />
+              <span className="text-sm sm:text-base">
+                <span className="font-bold text-base sm:text-lg lg:text-2xl">{countingProgress.counted}</span>
+                <span className="text-gray-400 ml-0.5 sm:ml-1 text-xs sm:text-sm lg:text-lg">/ {countingProgress.total}</span>
+              </span>
+            </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
-            <button
-              onClick={saveCount}
-              disabled={saving || countedProducts.length === 0}
-              className="px-3 sm:px-4 lg:px-5 py-2.5 sm:py-2.5 lg:py-3 bg-gray-700 rounded-xl font-medium hover:bg-gray-600 active:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 sm:gap-2 text-sm sm:text-base touch-manipulation active:scale-[0.98]"
-            >
-              {saving ? <Loader2 className="w-4 h-4 lg:w-5 lg:h-5 animate-spin" /> : <Check className="w-4 h-4 lg:w-5 lg:h-5" />}
-              <span className="hidden sm:inline">Guardar</span>
-            </button>
+            <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
+              <button
+                onClick={saveCount}
+                disabled={saving || countedProducts.length === 0}
+                className="px-3 sm:px-4 lg:px-5 py-2.5 lg:py-3 bg-gray-700 rounded-xl font-medium hover:bg-gray-600 active:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 sm:gap-2 text-sm sm:text-base touch-manipulation active:scale-[0.98]"
+              >
+                {saving ? <Loader2 className="w-4 h-4 lg:w-5 lg:h-5 animate-spin" /> : <Check className="w-4 h-4 lg:w-5 lg:h-5" />}
+                <span className="hidden sm:inline">Guardar</span>
+              </button>
 
-            <button
-              onClick={goToReport}
-              disabled={saving || countedProducts.length === 0}
-              className="px-4 sm:px-5 lg:px-8 py-2.5 sm:py-2.5 lg:py-3 bg-amber-600 rounded-xl font-semibold hover:bg-amber-500 active:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 sm:gap-2 text-sm sm:text-base lg:text-lg shadow-lg shadow-amber-600/20 touch-manipulation active:scale-[0.98]"
-            >
-              <span>Reporte</span>
-              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
-            </button>
+              <button
+                onClick={goToReport}
+                disabled={saving || countedProducts.length === 0}
+                className="px-4 sm:px-5 lg:px-8 py-2.5 lg:py-3 bg-amber-600 rounded-xl font-semibold hover:bg-amber-500 active:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 sm:gap-2 text-sm sm:text-base lg:text-lg shadow-lg shadow-amber-600/20 touch-manipulation active:scale-[0.98]"
+              >
+                <span>Reporte</span>
+                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
+              </button>
+            </div>
           </div>
         </div>
       </footer>

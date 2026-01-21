@@ -124,7 +124,7 @@ export default function AuditDashboardPage() {
   return (
     <div className="min-h-[100dvh] flex flex-col">
       {/* Warehouses Grid */}
-      <div className="flex-1 flex flex-col justify-center px-4 py-6 sm:py-8">
+      <div className="flex-1 flex flex-col justify-center px-4 py-4 sm:py-6 lg:py-4 lg:justify-start lg:pt-8">
         {warehouses.length === 0 ? (
           <div className="bg-gray-800 rounded-xl p-8 text-center max-w-md mx-auto w-full">
             <Warehouse className="w-16 h-16 text-gray-600 mx-auto mb-4" />
