@@ -379,12 +379,12 @@ export default function AuditCountPage() {
     }
   }, [products, selectProduct])
 
-  // Barcode scanner detection hook
+  // Barcode scanner detection hook - works with physical scanners (keyboard emulation)
   useBarcodeScan({
     onScan: handleBarcodeScan,
     onError: (error) => console.warn('Barcode scan:', error),
     minLength: 3,
-    maxTimeBetweenKeys: 50,
+    maxTimeBetweenKeys: 100, // Increased for slower physical scanners on phones
     enabled: !loading && !selectedProduct
   })
 

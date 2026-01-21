@@ -24,17 +24,30 @@ export function useBarcodeScan(options: UseBarcodeScanOptions) {
     onScan,
     onError,
     minLength = 3,
-    maxTimeBetweenKeys = 50,
+    maxTimeBetweenKeys = 100, // Increased default for slower physical scanners
     enabled = true
   } = options
 
   const bufferRef = useRef('')
   const lastKeyTimeRef = useRef(0)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const scanStartTimeRef = useRef(0)
 
   const resetBuffer = useCallback(() => {
     bufferRef.current = ''
+    scanStartTimeRef.current = 0
   }, [])
+
+  const processBarcode = useCallback((barcode: string, event?: KeyboardEvent) => {
+    const trimmed = barcode.trim()
+    if (trimmed.length >= minLength) {
+      if (event) {
+        event.preventDefault()
+      }
+      onScan(trimmed)
+    }
+    resetBuffer()
+  }, [minLength, onScan, resetBuffer])
 
   const handleKeyPress = useCallback((event: KeyboardEvent) => {
     if (!enabled) return
@@ -42,9 +55,10 @@ export function useBarcodeScan(options: UseBarcodeScanOptions) {
     // Ignore if focus is on an input/textarea (unless it's the search input)
     const target = event.target as HTMLElement
     const tagName = target.tagName.toLowerCase()
-    const isSearchInput = target.getAttribute('placeholder')?.toLowerCase().includes('buscar') ||
-                          target.getAttribute('placeholder')?.toLowerCase().includes('escanear')
+    const placeholder = target.getAttribute('placeholder')?.toLowerCase() || ''
+    const isSearchInput = placeholder.includes('buscar') || placeholder.includes('escanear') || placeholder.includes('search')
 
+    // Allow scanning from inputs that are search-related
     if ((tagName === 'input' || tagName === 'textarea') && !isSearchInput) {
       return
     }
@@ -57,42 +71,50 @@ export function useBarcodeScan(options: UseBarcodeScanOptions) {
       clearTimeout(timeoutRef.current)
     }
 
-    // Check if this is a continuation of scanner input
-    if (currentTime - lastKeyTimeRef.current < maxTimeBetweenKeys) {
-      // Continue building barcode
-      if (key === 'Enter') {
-        // End of barcode
-        const barcode = bufferRef.current.trim()
-        if (barcode.length >= minLength) {
-          event.preventDefault()
-          onScan(barcode)
-        }
-        resetBuffer()
-      } else if (key.length === 1) {
-        // Add character to buffer
-        bufferRef.current += key
+    // Check if this is a continuation of scanner input (or start of new scan)
+    const timeSinceLastKey = currentTime - lastKeyTimeRef.current
+    const isRapidInput = timeSinceLastKey < maxTimeBetweenKeys
+
+    if (key === 'Enter') {
+      // End of barcode - process if we have content
+      if (bufferRef.current.length > 0) {
+        processBarcode(bufferRef.current, event)
       }
-    } else {
-      // Start new scan
-      if (key.length === 1) {
-        bufferRef.current = key
+    } else if (key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      // Add printable character to buffer
+      if (isRapidInput || bufferRef.current.length === 0) {
+        // Continue or start building barcode
+        if (bufferRef.current.length === 0) {
+          scanStartTimeRef.current = currentTime
+        }
+        bufferRef.current += key
       } else {
-        resetBuffer()
+        // Too slow - start new scan
+        bufferRef.current = key
+        scanStartTimeRef.current = currentTime
       }
     }
 
     lastKeyTimeRef.current = currentTime
 
-    // Set timeout to clear buffer after inactivity
+    // Set timeout to auto-process buffer (some scanners don't send Enter)
     timeoutRef.current = setTimeout(() => {
-      // If we have a buffer but no Enter was pressed, might be incomplete scan
       if (bufferRef.current.length >= minLength) {
-        if (onError) {
+        // Calculate average time per character
+        const totalTime = Date.now() - scanStartTimeRef.current
+        const avgTimePerChar = totalTime / bufferRef.current.length
+
+        // If typing was fast enough (scanner-like), process it
+        if (avgTimePerChar < maxTimeBetweenKeys) {
+          processBarcode(bufferRef.current)
+        } else if (onError) {
           onError('Escaneo incompleto detectado')
+          resetBuffer()
         }
+      } else {
+        resetBuffer()
       }
-      resetBuffer()
-    }, 200)
+    }, 250) // Wait a bit longer for Enter key
 
   }, [enabled, maxTimeBetweenKeys, minLength, onScan, onError, resetBuffer])
 
