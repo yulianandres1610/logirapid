@@ -677,8 +677,8 @@ export default function AuditCountPage() {
   }
 
   return (
-    <div className={`min-h-screen min-h-[100dvh] flex flex-col ${tc.bg} ${tc.text}`}>
-      {/* CSS to prevent iOS zoom on input focus */}
+    <div className={`h-screen h-[100dvh] flex flex-col overflow-hidden ${tc.bg} ${tc.text}`}>
+      {/* CSS to prevent iOS zoom on input focus and fix tall screen layouts */}
       <style jsx global>{`
         /* Prevent iOS zoom on input focus */
         @supports (-webkit-touch-callout: none) {
@@ -697,34 +697,34 @@ export default function AuditCountPage() {
         }
       `}</style>
       {/* Header - Fixed at top, never scrolls */}
-      <header className={`${tc.bgAlt} border-b ${tc.border} fixed top-0 left-0 right-0 z-40 pt-[env(safe-area-inset-top)]`}>
-        {/* Mobile Header - Tall for touch-friendly buttons */}
-        <div className="lg:hidden flex items-center h-[72px] px-2">
+      <header className={`${tc.bgAlt} border-b ${tc.border} fixed top-0 left-0 right-0 z-40`} style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+        {/* Mobile Header - Compact for tall screens like Galaxy A26 */}
+        <div className="lg:hidden flex items-center h-[56px] sm:h-[64px] px-1.5 sm:px-2">
           {/* Back button */}
           <motion.button
             onClick={goBack}
-            className="w-12 h-12 flex items-center justify-center rounded-xl hover:bg-gray-700/50 active:bg-gray-700 transition-colors"
+            className="w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-xl hover:bg-gray-700/50 active:bg-gray-700 transition-colors flex-shrink-0"
             whileTap={{ scale: 0.95 }}
           >
-            <ChevronLeft className="w-7 h-7" />
+            <ChevronLeft className="w-6 h-6 sm:w-7 sm:h-7" />
           </motion.button>
 
-          {/* Warehouse info */}
-          <div className="flex items-center gap-1.5 min-w-0 px-1">
-            <Warehouse className="w-4 h-4 flex-shrink-0 text-gray-400" />
-            <span className="text-sm truncate max-w-[80px] text-gray-300">{warehouse?.name}</span>
+          {/* Warehouse info - hidden on very small screens */}
+          <div className="hidden xs:flex items-center gap-1 min-w-0 px-1">
+            <Warehouse className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+            <span className="text-xs truncate max-w-[60px] sm:max-w-[80px] text-gray-300">{warehouse?.name}</span>
           </div>
 
           {/* Search input */}
-          <div className="flex-1 relative mx-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+          <div className="flex-1 relative mx-1.5 sm:mx-2">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
             <input
               ref={mobileSearchRef}
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar..."
-              className={`w-full pl-10 pr-3 py-3 ${tc.inputAlt} rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-gray-500 border border-gray-600`}
+              className={`w-full pl-8 sm:pl-10 pr-2 py-2 sm:py-2.5 ${tc.inputAlt} rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-gray-500 border border-gray-600`}
               disabled={!!selectedProduct}
             />
           </div>
@@ -732,19 +732,19 @@ export default function AuditCountPage() {
           {/* Camera scanner button */}
           <motion.button
             onClick={() => setShowCameraScanner(true)}
-            className="w-12 h-12 flex items-center justify-center rounded-xl hover:bg-gray-700/50 active:bg-gray-700 transition-colors"
+            className="w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-xl hover:bg-gray-700/50 active:bg-gray-700 transition-colors flex-shrink-0"
             whileTap={{ scale: 0.95 }}
             title="Escanear con cámara"
           >
-            <Camera className="w-6 h-6 text-amber-500" />
+            <Camera className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500" />
           </motion.button>
 
           {/* Status indicator */}
-          <div className="w-10 flex items-center justify-center">
+          <div className="w-8 sm:w-10 flex items-center justify-center flex-shrink-0">
             {isOnline ? (
-              <Wifi className="w-5 h-5 text-green-500" />
+              <Wifi className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
             ) : (
-              <WifiOff className="w-5 h-5 text-yellow-500" />
+              <WifiOff className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500" />
             )}
           </div>
         </div>
@@ -817,11 +817,11 @@ export default function AuditCountPage() {
         </div>
       )}
 
-      {/* Spacer for fixed header */}
-      <div className="h-[72px] lg:h-[73px] flex-shrink-0 pt-[env(safe-area-inset-top)]" />
+      {/* Spacer for fixed header - includes safe area */}
+      <div className="flex-shrink-0 h-[56px] sm:h-[64px] lg:h-[73px]" style={{ marginTop: 'env(safe-area-inset-top, 0px)' }} />
 
-      {/* Main content */}
-      <div className="flex-1 flex overflow-hidden pb-[120px] lg:pb-[100px]">
+      {/* Main content - dynamic padding for footer */}
+      <div className="flex-1 flex overflow-hidden" style={{ paddingBottom: 'calc(100px + env(safe-area-inset-bottom, 0px))' }}>
         {/* Desktop: Left panel - Counted products (only visible on desktop) */}
         <div className="hidden lg:flex w-[340px] xl:w-[400px] 2xl:w-[450px] border-r border-gray-700 flex-col bg-gray-850 relative">
           {/* Desktop search */}
@@ -936,12 +936,12 @@ export default function AuditCountPage() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex-1 flex flex-col p-3 sm:p-4 lg:p-6 xl:p-8 max-w-2xl mx-auto w-full"
+              className="flex-1 flex flex-col p-2 sm:p-3 lg:p-6 xl:p-8 max-w-2xl mx-auto w-full overflow-auto"
             >
-              {/* Product info */}
-              <div className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5 mb-3 sm:mb-4 lg:mb-5">
-                <div className="flex gap-4 lg:gap-6">
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 lg:w-28 lg:h-28 flex-shrink-0 rounded-xl overflow-hidden bg-gray-700">
+              {/* Product info - compact on mobile */}
+              <div className="bg-gray-800 rounded-xl p-2.5 sm:p-3 lg:p-5 mb-2 sm:mb-3 lg:mb-5 flex-shrink-0">
+                <div className="flex gap-3 lg:gap-6">
+                  <div className="w-14 h-14 sm:w-20 sm:h-20 lg:w-28 lg:h-28 flex-shrink-0 rounded-xl overflow-hidden bg-gray-700">
                     {/* Show variant image if selected, otherwise product image */}
                     {(selectedVariant?.imageUrl || selectedProduct.imageUrl) ? (
                       <img
@@ -951,21 +951,21 @@ export default function AuditCountPage() {
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <Package className="w-10 h-10 text-gray-500" />
+                        <Package className="w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-gray-500" />
                       </div>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start">
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-lg sm:text-xl font-semibold truncate">
+                        <h3 className="text-base sm:text-lg lg:text-xl font-semibold truncate">
                           {selectedVariant ? `${selectedProduct.name} - ${selectedVariant.name}` : selectedProduct.name}
                         </h3>
-                        <p className="text-gray-400 text-sm truncate">
+                        <p className="text-gray-400 text-xs sm:text-sm truncate">
                           {selectedVariant?.sku || selectedProduct.sku || selectedVariant?.barcode || selectedProduct.barcode || 'Sin codigo'}
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Stock sistema: {selectedVariant?.stock ?? selectedProduct.stock}
+                        <p className="text-xs text-gray-500 mt-0.5 sm:mt-1">
+                          Stock: {selectedVariant?.stock ?? selectedProduct.stock}
                         </p>
                       </div>
                       <button
@@ -975,24 +975,24 @@ export default function AuditCountPage() {
                           setNumpadValue('')
                           setEditingIndex(null)
                         }}
-                        className="p-2 hover:bg-gray-700 rounded-lg flex-shrink-0 ml-2"
+                        className="p-1.5 sm:p-2 hover:bg-gray-700 rounded-lg flex-shrink-0 ml-1"
                       >
-                        <X className="w-5 h-5" />
+                        <X className="w-4 h-4 sm:w-5 sm:h-5" />
                       </button>
                     </div>
                   </div>
                 </div>
 
-                {/* Variant selector - only show if product has variants */}
+                {/* Variant selector - compact on mobile */}
                 {selectedProduct.variants && selectedProduct.variants.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-gray-700">
-                    <p className="text-xs text-gray-500 mb-2">Selecciona variante:</p>
-                    <div className="flex flex-wrap gap-2">
+                  <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-gray-700">
+                    <p className="text-[10px] sm:text-xs text-gray-500 mb-1.5 sm:mb-2">Variante:</p>
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
                       {selectedProduct.variants.map((variant) => (
                         <button
                           key={variant.id}
                           onClick={() => setSelectedVariant(variant)}
-                          className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
+                          className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all ${
                             selectedVariant?.id === variant.id
                               ? 'bg-amber-600 text-white'
                               : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
@@ -1002,11 +1002,11 @@ export default function AuditCountPage() {
                             <img
                               src={variant.imageUrl}
                               alt={variant.name}
-                              className="w-6 h-6 rounded object-cover"
+                              className="w-5 h-5 sm:w-6 sm:h-6 rounded object-cover"
                             />
                           )}
-                          <span className="text-sm font-medium">{variant.name}</span>
-                          <span className="text-xs opacity-70">({variant.stock})</span>
+                          <span className="text-xs sm:text-sm font-medium">{variant.name}</span>
+                          <span className="text-[10px] sm:text-xs opacity-70">({variant.stock})</span>
                         </button>
                       ))}
                     </div>
@@ -1014,16 +1014,16 @@ export default function AuditCountPage() {
                 )}
               </div>
 
-              {/* Quantity display */}
-              <div className="bg-gray-800 rounded-xl p-4 lg:p-6 mb-3 sm:mb-4 lg:mb-5 text-center">
-                <p className="text-xs sm:text-sm lg:text-base text-gray-400 mb-2 lg:mb-3">CANTIDAD CONTADA</p>
-                <div className="text-4xl sm:text-5xl lg:text-6xl font-bold text-amber-400 font-mono">
+              {/* Quantity display - compact on mobile */}
+              <div className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-6 mb-2 sm:mb-3 lg:mb-5 text-center flex-shrink-0">
+                <p className="text-[10px] sm:text-xs lg:text-base text-gray-400 mb-1 sm:mb-2 lg:mb-3">CANTIDAD CONTADA</p>
+                <div className="text-3xl sm:text-4xl lg:text-6xl font-bold text-amber-400 font-mono">
                   {numpadValue || '0'}
                 </div>
               </div>
 
-              {/* Numpad */}
-              <div className="grid grid-cols-4 gap-2 lg:gap-3 max-w-lg mx-auto w-full">
+              {/* Numpad - optimized for tall mobile screens */}
+              <div className="grid grid-cols-4 gap-1.5 sm:gap-2 lg:gap-3 max-w-lg mx-auto w-full flex-shrink-0">
                 {['7', '8', '9', 'C', '4', '5', '6', 'DEL', '1', '2', '3', 'ENTER', '.', '0', '00', ''].map((key) => {
                   if (key === '') return <div key="empty" />
 
@@ -1035,10 +1035,10 @@ export default function AuditCountPage() {
                     <button
                       key={key}
                       onClick={() => handleNumpad(key)}
-                      className={`${bgColor} text-white py-3 sm:py-4 lg:py-5 rounded-xl text-lg sm:text-xl lg:text-2xl font-bold transition-all active:scale-95 flex items-center justify-center touch-manipulation`}
+                      className={`${bgColor} text-white py-2.5 sm:py-3 lg:py-5 rounded-xl text-base sm:text-lg lg:text-2xl font-bold transition-all active:scale-95 flex items-center justify-center touch-manipulation`}
                     >
-                      {key === 'DEL' ? <Delete className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7" /> :
-                       key === 'ENTER' ? <CornerDownLeft className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7" /> : key}
+                      {key === 'DEL' ? <Delete className="w-4 h-4 sm:w-5 sm:h-5 lg:w-7 lg:h-7" /> :
+                       key === 'ENTER' ? <CornerDownLeft className="w-4 h-4 sm:w-5 sm:h-5 lg:w-7 lg:h-7" /> : key}
                     </button>
                   )
                 })}
@@ -1125,14 +1125,14 @@ export default function AuditCountPage() {
         </div>
       </div>
 
-      {/* Footer - Fixed at bottom, edge-to-edge on mobile */}
-      <footer className="fixed bottom-0 left-0 right-0 z-30 bg-gray-800 border-t border-gray-700 pb-[env(safe-area-inset-bottom)]">
+      {/* Footer - Fixed at bottom, compact on mobile for tall screens */}
+      <footer className="fixed bottom-0 left-0 right-0 z-30 bg-gray-800 border-t border-gray-700" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         {/* Progress bar - clickable to show pending products */}
-        <div className="px-4 sm:px-4 lg:px-6 pt-2.5 pb-2">
+        <div className="px-3 sm:px-4 lg:px-6 pt-2 pb-1.5 sm:pt-2.5 sm:pb-2">
           <div className="lg:max-w-4xl lg:mx-auto">
             <button
               onClick={() => setShowPendingModal(true)}
-              className="w-full h-6 bg-gray-700 rounded-full overflow-hidden relative group cursor-pointer hover:ring-2 hover:ring-amber-500/50 transition-all active:scale-[0.99] touch-manipulation"
+              className="w-full h-5 sm:h-6 bg-gray-700 rounded-full overflow-hidden relative group cursor-pointer hover:ring-2 hover:ring-amber-500/50 transition-all active:scale-[0.99] touch-manipulation"
               title={`${countingProgress.remaining} productos pendientes - Toca para ver`}
             >
               <motion.div
@@ -1141,40 +1141,40 @@ export default function AuditCountPage() {
                 transition={{ duration: 0.5, ease: 'easeOut' }}
                 className={`h-full ${countingProgress.isComplete ? 'bg-gradient-to-r from-green-500 to-green-400' : 'bg-gradient-to-r from-amber-600 to-amber-400'}`}
               />
-              <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-md">
+              <span className="absolute inset-0 flex items-center justify-center text-[10px] sm:text-xs font-bold text-white drop-shadow-md">
                 {countingProgress.percentage}% ({countingProgress.remaining} pendientes)
               </span>
             </button>
           </div>
         </div>
 
-        <div className="px-4 sm:px-4 lg:px-6 pb-3">
+        <div className="px-3 sm:px-4 lg:px-6 pb-2 sm:pb-3">
           <div className="flex flex-row items-center justify-between gap-2 lg:max-w-4xl lg:mx-auto">
-            <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-4">
-              <Package className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-gray-400" />
-              <span className="text-sm sm:text-base">
-                <span className="font-bold text-base sm:text-lg lg:text-2xl">{countingProgress.counted}</span>
-                <span className="text-gray-400 ml-0.5 sm:ml-1 text-xs sm:text-sm lg:text-lg">/ {countingProgress.total}</span>
+            <div className="flex items-center gap-1 sm:gap-2 lg:gap-4">
+              <Package className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-6 lg:h-6 text-gray-400" />
+              <span className="text-xs sm:text-sm lg:text-base">
+                <span className="font-bold text-sm sm:text-base lg:text-2xl">{countingProgress.counted}</span>
+                <span className="text-gray-400 ml-0.5 text-[10px] sm:text-xs lg:text-lg">/ {countingProgress.total}</span>
               </span>
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
+            <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-4">
               <button
                 onClick={saveCount}
                 disabled={saving || countedProducts.length === 0}
-                className="px-3 sm:px-4 lg:px-5 py-2.5 lg:py-3 bg-gray-700 rounded-xl font-medium hover:bg-gray-600 active:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 sm:gap-2 text-sm sm:text-base touch-manipulation active:scale-[0.98]"
+                className="px-2.5 sm:px-3 lg:px-5 py-2 sm:py-2.5 lg:py-3 bg-gray-700 rounded-xl font-medium hover:bg-gray-600 active:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 sm:gap-1.5 text-xs sm:text-sm lg:text-base touch-manipulation active:scale-[0.98]"
               >
-                {saving ? <Loader2 className="w-4 h-4 lg:w-5 lg:h-5 animate-spin" /> : <Check className="w-4 h-4 lg:w-5 lg:h-5" />}
+                {saving ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 animate-spin" /> : <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />}
                 <span className="hidden sm:inline">Guardar</span>
               </button>
 
               <button
                 onClick={goToReport}
                 disabled={saving || countedProducts.length === 0}
-                className="px-4 sm:px-5 lg:px-8 py-2.5 lg:py-3 bg-amber-600 rounded-xl font-semibold hover:bg-amber-500 active:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 sm:gap-2 text-sm sm:text-base lg:text-lg shadow-lg shadow-amber-600/20 touch-manipulation active:scale-[0.98]"
+                className="px-3 sm:px-4 lg:px-8 py-2 sm:py-2.5 lg:py-3 bg-amber-600 rounded-xl font-semibold hover:bg-amber-500 active:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 sm:gap-1.5 text-xs sm:text-sm lg:text-lg shadow-lg shadow-amber-600/20 touch-manipulation active:scale-[0.98]"
               >
                 <span>Reporte</span>
-                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
+                <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-6 lg:h-6" />
               </button>
             </div>
           </div>
