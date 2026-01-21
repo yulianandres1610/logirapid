@@ -475,11 +475,12 @@ function PaymentContent() {
                 setSelectedCurrency(terminal.defaultCurrency as 'USD' | 'CUP' | 'MLC')
               }
             }
-            // Cache the config
+            // Cache the config (including print service for receipt page)
             localStorage.setItem(`pos_terminal_config_${terminalId}`, JSON.stringify({
               paymentMethods: terminal.paymentMethods,
               acceptedCurrencies: terminal.acceptedCurrencies,
-              defaultCurrency: terminal.defaultCurrency
+              defaultCurrency: terminal.defaultCurrency,
+              defaultPrintServiceId: terminal.defaultPrintServiceId || null
             }))
           }
         }
