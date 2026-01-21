@@ -68,9 +68,8 @@ export async function GET(request: NextRequest) {
       query = `
         SELECT
           mw.*,
-          ps.name as print_service_name,
-          ps.code as print_service_code,
-          ps.url as print_service_url,
+          ps.service_name as print_service_name,
+          ps.service_code as print_service_code,
           COALESCE(mws.quantity_on_hand, 0) as stock_on_hand,
           COALESCE(mws.quantity_reserved, 0) as stock_reserved,
           COALESCE(mws.quantity_on_hand, 0) - COALESCE(mws.quantity_reserved, 0) as stock_available
@@ -85,9 +84,8 @@ export async function GET(request: NextRequest) {
       query = `
         SELECT
           mw.*,
-          ps.name as print_service_name,
-          ps.code as print_service_code,
-          ps.url as print_service_url,
+          ps.service_name as print_service_name,
+          ps.service_code as print_service_code,
           (SELECT COUNT(*) FROM market_warehouse_stock mws WHERE mws.warehouse_id = mw.id) as products_count,
           (SELECT COALESCE(SUM(mws.quantity_on_hand), 0) FROM market_warehouse_stock mws WHERE mws.warehouse_id = mw.id) as total_stock
         FROM market_warehouses mw
@@ -161,7 +159,6 @@ export async function GET(request: NextRequest) {
           defaultPrintServiceId: row.default_print_service_id,
           printServiceName: row.print_service_name,
           printServiceCode: row.print_service_code,
-          printServiceUrl: row.print_service_url,
           productsCount: parseInt(row.products_count) || 0,
           totalStock: parseFloat(row.total_stock) || 0,
           // Stock fields when productId is provided
