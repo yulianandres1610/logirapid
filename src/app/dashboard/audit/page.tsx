@@ -122,18 +122,18 @@ export default function AuditDashboardPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 lg:space-y-8 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Selecciona un Almacén</h1>
-          <p className="text-gray-400 mt-1">Elige el almacén que deseas auditar</p>
+          <h1 className="text-2xl lg:text-3xl font-bold text-white">Selecciona un Almacén</h1>
+          <p className="text-gray-400 mt-1 lg:text-lg">Elige el almacén que deseas auditar</p>
         </div>
         <button
           onClick={fetchWarehouses}
-          className="flex items-center space-x-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+          className="flex items-center space-x-2 px-4 py-2 lg:px-5 lg:py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className="w-4 h-4 lg:w-5 lg:h-5" />
           <span>Actualizar</span>
         </button>
       </div>
@@ -146,14 +146,14 @@ export default function AuditDashboardPage() {
           <p className="text-gray-500 text-sm mt-2">Contacta al administrador para configurar almacenes</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-5">
           {warehouses.map((warehouse, index) => (
             <motion.div
               key={warehouse.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
-              className="bg-gray-800 rounded-xl p-6 border border-gray-700 hover:border-amber-500/50 transition-all group"
+              className="bg-gray-800 rounded-xl p-5 lg:p-6 border border-gray-700 hover:border-amber-500/50 transition-all group"
             >
               {/* Warehouse Header */}
               <div className="flex items-start justify-between mb-4">
@@ -220,12 +220,14 @@ export default function AuditDashboardPage() {
 
       {/* Recent Counts */}
       {recentCounts.length > 0 && (
-        <div className="mt-8">
+        <div className="mt-6 lg:mt-8">
           <div className="flex items-center space-x-2 mb-4">
-            <History className="w-5 h-5 text-gray-400" />
-            <h2 className="text-lg font-semibold text-white">Conteos Recientes</h2>
+            <History className="w-5 h-5 lg:w-6 lg:h-6 text-gray-400" />
+            <h2 className="text-lg lg:text-xl font-semibold text-white">Conteos Recientes</h2>
           </div>
-          <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+
+          {/* Mobile View - Cards */}
+          <div className="lg:hidden bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
             <div className="divide-y divide-gray-700">
               {recentCounts.map((count) => (
                 <div
@@ -254,6 +256,65 @@ export default function AuditDashboardPage() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Desktop View - Table */}
+          <div className="hidden lg:block bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-gray-700/50">
+                <tr>
+                  <th className="text-left px-6 py-4 text-sm font-semibold text-gray-400 uppercase tracking-wider">Estado</th>
+                  <th className="text-left px-6 py-4 text-sm font-semibold text-gray-400 uppercase tracking-wider">Conteo</th>
+                  <th className="text-left px-6 py-4 text-sm font-semibold text-gray-400 uppercase tracking-wider">Almacén</th>
+                  <th className="text-center px-6 py-4 text-sm font-semibold text-gray-400 uppercase tracking-wider">Productos</th>
+                  <th className="text-center px-6 py-4 text-sm font-semibold text-gray-400 uppercase tracking-wider">Diferencias</th>
+                  <th className="text-right px-6 py-4 text-sm font-semibold text-gray-400 uppercase tracking-wider">Fecha</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700">
+                {recentCounts.map((count) => (
+                  <tr
+                    key={count.id}
+                    className="hover:bg-gray-700/30 transition-colors"
+                  >
+                    <td className="px-6 py-4">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        count.productsWithDifferences > 0 ? 'bg-red-500/20' : 'bg-green-500/20'
+                      }`}>
+                        {count.productsWithDifferences > 0 ? (
+                          <AlertCircle className="w-5 h-5 text-red-400" />
+                        ) : (
+                          <CheckCircle2 className="w-5 h-5 text-green-400" />
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="font-medium text-white">{count.countNumber}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-gray-300">{count.warehouseName}</p>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full bg-gray-700 text-white font-medium">
+                        {count.totalProducts}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full font-medium ${
+                        count.productsWithDifferences > 0
+                          ? 'bg-red-500/20 text-red-400'
+                          : 'bg-green-500/20 text-green-400'
+                      }`}>
+                        {count.productsWithDifferences}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <p className="text-gray-400">{formatDate(count.completedAt)}</p>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

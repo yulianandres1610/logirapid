@@ -362,180 +362,183 @@ export default function AuditReportPage() {
       <div className="min-h-screen flex flex-col bg-gray-900 text-white">
         {/* Header */}
         <header className="bg-gray-800 border-b border-gray-700 no-print">
-          <div className="flex items-center justify-between px-3 sm:px-4 py-3">
-            <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 py-3 lg:py-4 max-w-7xl mx-auto w-full">
+            <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
               <motion.button
                 onClick={goBackToCount}
-                className="p-2 hover:bg-gray-700 rounded-xl transition-colors"
+                className="p-2 lg:p-2.5 hover:bg-gray-700 rounded-xl transition-colors"
                 whileTap={{ scale: 0.95 }}
               >
-                <ChevronLeft className="w-5 h-5" />
+                <ChevronLeft className="w-5 h-5 lg:w-6 lg:h-6" />
               </motion.button>
               <div className="min-w-0">
-                <h1 className="font-semibold text-sm sm:text-base truncate">Reporte de Conteo</h1>
-                <p className="text-xs text-gray-400 truncate">{countData.countNumber}</p>
+                <h1 className="font-semibold text-sm sm:text-base lg:text-xl truncate">Reporte de Conteo</h1>
+                <p className="text-xs lg:text-sm text-gray-400 truncate">{countData.countNumber}</p>
               </div>
             </div>
             <motion.button
               onClick={handlePrint}
-              className="p-2.5 bg-gray-700 hover:bg-gray-600 rounded-xl transition-colors flex items-center gap-2"
+              className="p-2.5 lg:px-4 lg:py-2.5 bg-gray-700 hover:bg-gray-600 rounded-xl transition-colors flex items-center gap-2"
               whileTap={{ scale: 0.95 }}
             >
               <Printer className="w-5 h-5" />
-              <span className="hidden sm:inline text-sm font-medium">Imprimir</span>
+              <span className="hidden sm:inline text-sm lg:text-base font-medium">Imprimir</span>
             </motion.button>
           </div>
         </header>
 
         {/* Info Bar */}
-        <div className="px-3 sm:px-4 py-2 bg-gray-800/50 border-b border-gray-700/50 no-print">
-          <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-gray-400">
+        <div className="px-3 sm:px-4 lg:px-6 py-2 lg:py-3 bg-gray-800/50 border-b border-gray-700/50 no-print">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 lg:gap-6 text-xs sm:text-sm lg:text-base text-gray-400 max-w-7xl mx-auto">
             <span className="flex items-center gap-1.5">
-              <Warehouse className="w-3.5 h-3.5" />
+              <Warehouse className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
               {countData.warehouseName}
             </span>
             <span className="flex items-center gap-1.5">
-              <Hash className="w-3.5 h-3.5" />
+              <Hash className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
               {countData.countNumber}
             </span>
             <span className="flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5" />
+              <Calendar className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
               {countData.startedAt ? new Date(countData.startedAt).toLocaleDateString('es-ES') : new Date().toLocaleDateString('es-ES')}
             </span>
           </div>
         </div>
 
         {/* Summary Cards */}
-        <div className="p-3 sm:p-4 no-print">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-gray-800 rounded-xl p-3 sm:p-4"
-            >
-              <div className="flex items-center gap-2 text-gray-400 mb-1">
-                <Package className="w-4 h-4" />
-                <span className="text-xs">Contados</span>
-              </div>
-              <p className="text-xl sm:text-2xl font-bold">{totals?.totalProducts}</p>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.05 }}
-              className="bg-gray-800 rounded-xl p-3 sm:p-4"
-            >
-              <div className="flex items-center gap-2 text-gray-400 mb-1">
-                <AlertTriangle className="w-4 h-4" />
-                <span className="text-xs">Diferencias</span>
-              </div>
-              <p className={`text-xl sm:text-2xl font-bold ${totals?.productsWithDifferences ? 'text-amber-400' : 'text-green-400'}`}>
-                {totals?.productsWithDifferences}
-              </p>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.1 }}
-              className="bg-gray-800 rounded-xl p-3 sm:p-4"
-            >
-              <div className="flex items-center gap-2 text-green-400 mb-1">
-                <TrendingUp className="w-4 h-4" />
-                <span className="text-xs">Sobrantes</span>
-              </div>
-              <p className="text-xl sm:text-2xl font-bold text-green-400">{totals?.productsWithExcess || 0}</p>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.15 }}
-              className="bg-gray-800 rounded-xl p-3 sm:p-4"
-            >
-              <div className="flex items-center gap-2 text-red-400 mb-1">
-                <TrendingDown className="w-4 h-4" />
-                <span className="text-xs">Faltantes</span>
-              </div>
-              <p className="text-xl sm:text-2xl font-bold text-red-400">{totals?.productsWithShortage || 0}</p>
-            </motion.div>
-          </div>
-
-          {/* Valuation Summary */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mt-3">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.2 }}
-              className="bg-gradient-to-r from-amber-900/30 to-amber-800/20 border border-amber-700/30 rounded-xl p-3 sm:p-4"
-            >
-              <div className="flex items-center gap-2 text-amber-400 mb-2">
-                <DollarSign className="w-4 h-4" />
-                <span className="text-xs font-medium">Valoracion a Costo</span>
-              </div>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-gray-500 text-xs">Stock Contado</p>
-                  <p className="font-bold text-white">${(totals?.totalStockAtCost || 0).toFixed(2)}</p>
+        <div className="p-3 sm:p-4 lg:p-6 no-print">
+          <div className="max-w-7xl mx-auto">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5"
+              >
+                <div className="flex items-center gap-2 text-gray-400 mb-1 lg:mb-2">
+                  <Package className="w-4 h-4 lg:w-5 lg:h-5" />
+                  <span className="text-xs lg:text-sm">Contados</span>
                 </div>
-                <div>
-                  <p className="text-gray-500 text-xs">Faltantes</p>
-                  <p className="font-bold text-red-400">-${(totals?.totalShortageValueCost || 0).toFixed(2)}</p>
-                </div>
-              </div>
-            </motion.div>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold">{totals?.totalProducts}</p>
+              </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.25 }}
-              className="bg-gradient-to-r from-blue-900/30 to-blue-800/20 border border-blue-700/30 rounded-xl p-3 sm:p-4"
-            >
-              <div className="flex items-center gap-2 text-blue-400 mb-2">
-                <DollarSign className="w-4 h-4" />
-                <span className="text-xs font-medium">Valoracion a Venta</span>
-              </div>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-gray-500 text-xs">Stock Contado</p>
-                  <p className="font-bold text-white">${(totals?.totalStockAtSale || 0).toFixed(2)}</p>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.05 }}
+                className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5"
+              >
+                <div className="flex items-center gap-2 text-gray-400 mb-1 lg:mb-2">
+                  <AlertTriangle className="w-4 h-4 lg:w-5 lg:h-5" />
+                  <span className="text-xs lg:text-sm">Diferencias</span>
                 </div>
-                <div>
-                  <p className="text-gray-500 text-xs">Faltantes</p>
-                  <p className="font-bold text-red-400">-${(totals?.totalShortageValueSale || 0).toFixed(2)}</p>
+                <p className={`text-xl sm:text-2xl lg:text-3xl font-bold ${totals?.productsWithDifferences ? 'text-amber-400' : 'text-green-400'}`}>
+                  {totals?.productsWithDifferences}
+                </p>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.1 }}
+                className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5"
+              >
+                <div className="flex items-center gap-2 text-green-400 mb-1 lg:mb-2">
+                  <TrendingUp className="w-4 h-4 lg:w-5 lg:h-5" />
+                  <span className="text-xs lg:text-sm">Sobrantes</span>
                 </div>
-              </div>
-            </motion.div>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-400">{totals?.productsWithExcess || 0}</p>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.15 }}
+                className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5"
+              >
+                <div className="flex items-center gap-2 text-red-400 mb-1 lg:mb-2">
+                  <TrendingDown className="w-4 h-4 lg:w-5 lg:h-5" />
+                  <span className="text-xs lg:text-sm">Faltantes</span>
+                </div>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-red-400">{totals?.productsWithShortage || 0}</p>
+              </motion.div>
+            </div>
+
+            {/* Valuation Summary */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 lg:gap-4 mt-3 lg:mt-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.2 }}
+                className="bg-gradient-to-r from-amber-900/30 to-amber-800/20 border border-amber-700/30 rounded-xl p-3 sm:p-4 lg:p-5"
+              >
+                <div className="flex items-center gap-2 text-amber-400 mb-2 lg:mb-3">
+                  <DollarSign className="w-4 h-4 lg:w-5 lg:h-5" />
+                  <span className="text-xs lg:text-sm font-medium">Valoracion a Costo</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 lg:gap-4 text-sm lg:text-base">
+                  <div>
+                    <p className="text-gray-500 text-xs lg:text-sm">Stock Contado</p>
+                    <p className="font-bold text-white text-base lg:text-lg">${(totals?.totalStockAtCost || 0).toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 text-xs lg:text-sm">Faltantes</p>
+                    <p className="font-bold text-red-400 text-base lg:text-lg">-${(totals?.totalShortageValueCost || 0).toFixed(2)}</p>
+                  </div>
+                </div>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.25 }}
+                className="bg-gradient-to-r from-blue-900/30 to-blue-800/20 border border-blue-700/30 rounded-xl p-3 sm:p-4 lg:p-5"
+              >
+                <div className="flex items-center gap-2 text-blue-400 mb-2 lg:mb-3">
+                  <DollarSign className="w-4 h-4 lg:w-5 lg:h-5" />
+                  <span className="text-xs lg:text-sm font-medium">Valoracion a Venta</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 lg:gap-4 text-sm lg:text-base">
+                  <div>
+                    <p className="text-gray-500 text-xs lg:text-sm">Stock Contado</p>
+                    <p className="font-bold text-white text-base lg:text-lg">${(totals?.totalStockAtSale || 0).toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 text-xs lg:text-sm">Faltantes</p>
+                    <p className="font-bold text-red-400 text-base lg:text-lg">-${(totals?.totalShortageValueSale || 0).toFixed(2)}</p>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
           </div>
         </div>
 
         {/* Section Header - Only Differences */}
         {linesWithDifferences.length > 0 && (
-          <div className="px-3 sm:px-4 py-2 border-y border-gray-700/50 bg-gray-800/30 no-print">
-            <div className="flex items-center gap-2 text-amber-400">
-              <AlertTriangle className="w-4 h-4" />
-              <span className="text-sm font-medium">Productos con Diferencias ({linesWithDifferences.length})</span>
+          <div className="px-3 sm:px-4 lg:px-6 py-2 lg:py-3 border-y border-gray-700/50 bg-gray-800/30 no-print">
+            <div className="flex items-center gap-2 text-amber-400 max-w-7xl mx-auto">
+              <AlertTriangle className="w-4 h-4 lg:w-5 lg:h-5" />
+              <span className="text-sm lg:text-base font-medium">Productos con Diferencias ({linesWithDifferences.length})</span>
             </div>
           </div>
         )}
 
         {/* Products List - Only with differences */}
-        <div className="flex-1 overflow-auto px-3 sm:px-4 pb-3">
-          {linesWithDifferences.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-green-500/10 border border-green-500/30 rounded-xl p-6 text-center mt-4"
-            >
-              <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-green-400" />
-              <p className="font-semibold text-green-300 text-lg">Conteo sin diferencias!</p>
-              <p className="text-sm text-green-200/70 mt-1">Todos los productos coinciden con el sistema.</p>
-            </motion.div>
-          ) : (
-            <>
-              {/* Mobile View - Cards */}
-              <div className="sm:hidden space-y-2 mt-2">
+        <div className="flex-1 overflow-auto px-3 sm:px-4 lg:px-6 pb-3 lg:pb-6">
+          <div className="max-w-7xl mx-auto">
+            {linesWithDifferences.length === 0 ? (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-green-500/10 border border-green-500/30 rounded-xl p-6 lg:p-8 text-center mt-4"
+              >
+                <CheckCircle2 className="w-12 h-12 lg:w-16 lg:h-16 mx-auto mb-3 text-green-400" />
+                <p className="font-semibold text-green-300 text-lg lg:text-xl">Conteo sin diferencias!</p>
+                <p className="text-sm lg:text-base text-green-200/70 mt-1">Todos los productos coinciden con el sistema.</p>
+              </motion.div>
+            ) : (
+              <>
+                {/* Mobile View - Cards */}
+                <div className="lg:hidden space-y-2 mt-2">
                 {linesWithDifferences.map((line, index) => {
                   const isExcess = line.difference < 0
                   const isShortage = line.difference > 0
@@ -595,7 +598,7 @@ export default function AuditReportPage() {
               </div>
 
               {/* Desktop View - Table */}
-              <div className="hidden sm:block bg-gray-800 rounded-xl overflow-hidden mt-2">
+              <div className="hidden lg:block bg-gray-800 rounded-xl overflow-hidden mt-3">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gray-700/50">
@@ -668,7 +671,7 @@ export default function AuditReportPage() {
               </div>
 
               {/* Mobile Totals Summary */}
-              <div className="sm:hidden mt-3 bg-gray-800 rounded-xl p-3">
+              <div className="lg:hidden mt-3 bg-gray-800 rounded-xl p-3">
                 <p className="text-xs text-gray-500 text-center mb-2">TOTAL DIFERENCIAS</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="text-center">
@@ -683,15 +686,16 @@ export default function AuditReportPage() {
               </div>
             </>
           )}
+          </div>
         </div>
 
         {/* Footer */}
-        <footer className="px-3 sm:px-4 py-3 sm:py-4 bg-gray-800 border-t border-gray-700 no-print">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+        <footer className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 bg-gray-800 border-t border-gray-700 no-print">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 lg:gap-4 max-w-7xl mx-auto">
             <button
               onClick={goBackToCount}
               disabled={completing}
-              className="flex-1 sm:flex-initial px-4 py-2.5 sm:py-3 bg-gray-700 rounded-xl font-medium hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
+              className="flex-1 sm:flex-initial px-4 lg:px-5 py-2.5 sm:py-3 bg-gray-700 rounded-xl font-medium hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
             >
               <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
               Volver a Contar
@@ -701,7 +705,7 @@ export default function AuditReportPage() {
               <button
                 onClick={completeCount}
                 disabled={completing}
-                className="flex-[2] sm:flex-initial px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-amber-500 to-amber-600 rounded-xl font-semibold hover:from-amber-600 hover:to-amber-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base shadow-lg shadow-amber-500/25"
+                className="flex-[2] sm:flex-initial px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3 bg-gradient-to-r from-amber-500 to-amber-600 rounded-xl font-semibold hover:from-amber-600 hover:to-amber-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base lg:text-lg shadow-lg shadow-amber-500/25"
               >
                 {completing ? (
                   <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
@@ -714,7 +718,7 @@ export default function AuditReportPage() {
             ) : (
               <button
                 onClick={goToDashboard}
-                className="flex-[2] sm:flex-initial px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-green-500 to-green-600 rounded-xl font-semibold hover:from-green-600 hover:to-green-700 flex items-center justify-center gap-2 text-sm sm:text-base shadow-lg shadow-green-500/25"
+                className="flex-[2] sm:flex-initial px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3 bg-gradient-to-r from-green-500 to-green-600 rounded-xl font-semibold hover:from-green-600 hover:to-green-700 flex items-center justify-center gap-2 text-sm sm:text-base lg:text-lg shadow-lg shadow-green-500/25"
               >
                 <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span>Conteo Completado</span>

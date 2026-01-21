@@ -649,62 +649,61 @@ export default function AuditCountPage() {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col ${tc.bg} ${tc.text}`}>
-      {/* Header */}
-      <header className={`${tc.bgAlt} border-b ${tc.border}`}>
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3 lg:py-4">
-          <div className="flex items-center gap-3 lg:gap-4">
+    <div className={`min-h-screen min-h-[100dvh] flex flex-col ${tc.bg} ${tc.text}`}>
+      {/* Header - Fixed on mobile for app-like feel */}
+      <header className={`${tc.bgAlt} border-b ${tc.border} sticky top-0 z-40`}>
+        <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 safe-area-inset">
+          <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
             <motion.button
               onClick={goBack}
-              className="p-2.5 hover:bg-gray-700 rounded-xl transition-colors bg-gray-700/50 lg:bg-gray-700/30"
-              whileHover={{ scale: 1.05 }}
+              className="p-2 sm:p-2.5 hover:bg-gray-700 rounded-xl transition-colors bg-gray-700/50 lg:bg-gray-700/30 active:scale-95"
               whileTap={{ scale: 0.95 }}
             >
               <ChevronLeft className="w-5 h-5 lg:w-6 lg:h-6" />
             </motion.button>
-            <div>
+            <div className="min-w-0">
               <h1 className="hidden lg:block font-semibold text-lg">Conteo de Inventario</h1>
-              <div className="flex items-center gap-2 text-sm lg:text-sm text-gray-400">
-                <Warehouse className="w-4 h-4" />
-                <span>{warehouse?.name}</span>
+              <div className="flex items-center gap-1.5 text-xs sm:text-sm lg:text-sm text-gray-400">
+                <Warehouse className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                <span className="truncate max-w-[150px] sm:max-w-none">{warehouse?.name}</span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             {/* Mobile search input */}
-            <div className="lg:hidden flex-1 relative max-w-[200px]">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+            <div className="lg:hidden flex-1 relative max-w-[140px] sm:max-w-[200px]">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
               <input
                 ref={mobileSearchRef}
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar..."
-                className={`w-full pl-8 pr-3 py-1.5 ${tc.inputAlt} rounded-lg text-xs focus:outline-none focus:border-amber-500 placeholder-gray-500`}
+                className={`w-full pl-7 pr-2 py-2 ${tc.inputAlt} rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-gray-500 border border-gray-600`}
                 disabled={!!selectedProduct}
               />
             </div>
 
-            {isOnline ? (
-              <Wifi className="w-4 h-4 text-green-500" />
-            ) : (
-              <WifiOff className="w-4 h-4 text-yellow-500" />
-            )}
+            <div className="flex items-center gap-1">
+              {isOnline ? (
+                <Wifi className="w-4 h-4 text-green-500" />
+              ) : (
+                <WifiOff className="w-4 h-4 text-yellow-500" />
+              )}
+            </div>
 
             <motion.button
               onClick={() => setMobileView(mobileView === 'input' ? 'list' : 'input')}
-              className="lg:hidden p-2.5 bg-gray-700 rounded-xl relative shadow-lg border border-gray-600"
-              whileHover={{ scale: 1.05, backgroundColor: '#4B5563' }}
+              className="lg:hidden p-2.5 sm:p-3 bg-gray-700 rounded-xl relative shadow-lg border border-gray-600 active:scale-95"
               whileTap={{ scale: 0.95 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 17 }}
             >
               <List className="w-5 h-5" />
               {countedProducts.length > 0 && (
                 <motion.span
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
-                  className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-medium shadow-md"
+                  className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-[10px] sm:text-xs min-w-[20px] h-5 rounded-full flex items-center justify-center font-bold shadow-md px-1"
                 >
                   {countedProducts.length}
                 </motion.span>
@@ -715,26 +714,27 @@ export default function AuditCountPage() {
 
         {/* Mobile search results dropdown */}
         {search && filteredProducts.length > 0 && !selectedProduct && (
-          <div className="lg:hidden absolute left-0 right-0 top-full z-50 mx-3 mt-1 bg-gray-800 rounded-xl border border-gray-700 shadow-2xl overflow-hidden max-h-64 overflow-auto">
+          <div className="lg:hidden absolute left-0 right-0 top-full z-50 mx-2 sm:mx-3 mt-1 bg-gray-800 rounded-xl border border-gray-700 shadow-2xl overflow-hidden max-h-[50vh] overflow-auto">
             {filteredProducts.map(product => (
               <button
                 key={product.id}
                 onClick={() => selectProduct(product)}
-                className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-gray-700 active:bg-gray-600 transition-colors border-b border-gray-700/50 last:border-0"
+                className="w-full px-3 py-3 flex items-center gap-3 hover:bg-gray-700 active:bg-gray-600 transition-colors border-b border-gray-700/50 last:border-0 touch-manipulation"
               >
-                <div className="w-10 h-10 flex-shrink-0 rounded-lg overflow-hidden bg-gray-700">
+                <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-gray-700">
                   {product.imageUrl ? (
                     <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <Package className="w-4 h-4 text-gray-500" />
+                      <Package className="w-5 h-5 text-gray-500" />
                     </div>
                   )}
                 </div>
                 <div className="text-left min-w-0 flex-1">
-                  <p className="font-medium truncate text-sm">{product.name}</p>
-                  <p className="text-xs text-gray-400 truncate">{product.sku || product.barcode || 'Sin codigo'}</p>
+                  <p className="font-medium truncate text-sm sm:text-base">{product.name}</p>
+                  <p className="text-xs sm:text-sm text-gray-400 truncate">{product.sku || product.barcode || 'Sin codigo'}</p>
                 </div>
+                <ChevronRight className="w-5 h-5 text-gray-500 flex-shrink-0" />
               </button>
             ))}
           </div>
@@ -755,7 +755,7 @@ export default function AuditCountPage() {
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left panel - Counted products */}
-        <div className={`${mobileView === 'list' ? 'flex' : 'hidden'} lg:flex w-full lg:w-80 xl:w-96 border-r border-gray-700 flex-col bg-gray-850 relative`}>
+        <div className={`${mobileView === 'list' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[340px] xl:w-[400px] 2xl:w-[450px] border-r border-gray-700 flex-col bg-gray-850 relative`}>
           {/* Desktop search */}
           <div className="hidden lg:block p-3 border-b border-gray-700 relative">
             <div className="relative">
@@ -814,7 +814,7 @@ export default function AuditCountPage() {
             <span className="text-xs bg-gray-700 px-2 py-1 rounded-full">{countedProducts.length}</span>
           </div>
 
-          <div className="flex-1 overflow-auto p-2 space-y-2">
+          <div className="flex-1 overflow-auto p-2 lg:p-3 space-y-2 overscroll-contain">
             <AnimatePresence>
               {countedProducts.map((item, index) => (
                 <motion.div
@@ -822,10 +822,10 @@ export default function AuditCountPage() {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="bg-gray-800 rounded-lg p-3"
+                  className="bg-gray-800 rounded-xl p-3 lg:p-4"
                 >
                   <div className="flex gap-3">
-                    <div className="w-14 h-14 flex-shrink-0 rounded-lg overflow-hidden bg-gray-700">
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 flex-shrink-0 rounded-xl overflow-hidden bg-gray-700">
                       {item.productImage ? (
                         <img
                           src={item.productImage}
@@ -841,20 +841,20 @@ export default function AuditCountPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate text-sm sm:text-base">{item.productName}</p>
                       <p className="text-xs text-gray-400 truncate">{item.productSku || item.productBarcode || 'Sin codigo'}</p>
-                      <p className="text-xl font-bold text-amber-400 mt-1">{item.countedQuantity}</p>
+                      <p className="text-2xl font-bold text-amber-400 mt-1">{item.countedQuantity}</p>
                     </div>
-                    <div className="flex flex-col gap-1 flex-shrink-0">
+                    <div className="flex flex-col gap-1.5 flex-shrink-0">
                       <button
                         onClick={() => editCountedProduct(index)}
-                        className="p-2 hover:bg-gray-700 rounded-lg text-amber-400 active:bg-gray-600"
+                        className="p-2.5 hover:bg-gray-700 rounded-xl text-amber-400 active:bg-gray-600 touch-manipulation"
                       >
-                        <Edit3 className="w-4 h-4" />
+                        <Edit3 className="w-5 h-5" />
                       </button>
                       <button
                         onClick={() => removeCountedProduct(index)}
-                        className="p-2 hover:bg-gray-700 rounded-lg text-red-400 active:bg-gray-600"
+                        className="p-2.5 hover:bg-gray-700 rounded-xl text-red-400 active:bg-gray-600 touch-manipulation"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
@@ -863,19 +863,19 @@ export default function AuditCountPage() {
             </AnimatePresence>
 
             {countedProducts.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>No hay productos contados</p>
-                <p className="text-sm">Escanee o busque un producto</p>
+              <div className="text-center py-12 text-gray-500">
+                <Package className="w-16 h-16 mx-auto mb-3 opacity-30" />
+                <p className="font-medium text-gray-400">No hay productos contados</p>
+                <p className="text-sm mt-1">Escanee o busque un producto</p>
               </div>
             )}
           </div>
 
           {/* Mobile: button to switch to input */}
-          <div className="lg:hidden p-3 border-t border-gray-700">
+          <div className="lg:hidden p-3 border-t border-gray-700 safe-area-bottom">
             <button
               onClick={() => setMobileView('input')}
-              className="w-full py-3 bg-amber-600 rounded-xl font-medium flex items-center justify-center gap-2"
+              className="w-full py-3.5 bg-amber-600 rounded-xl font-semibold flex items-center justify-center gap-2 text-white shadow-lg shadow-amber-600/25 active:scale-[0.98] touch-manipulation"
             >
               <Search className="w-5 h-5" />
               Agregar Producto
@@ -884,18 +884,18 @@ export default function AuditCountPage() {
         </div>
 
         {/* Right panel - Numpad */}
-        <div className={`${mobileView === 'input' ? 'flex' : 'hidden'} lg:flex flex-1 flex-col p-3 sm:p-4`}>
+        <div className={`${mobileView === 'input' ? 'flex' : 'hidden'} lg:flex flex-1 flex-col p-3 sm:p-4 lg:p-6 xl:p-8`}>
           {/* Selected product - Quantity input */}
           {selectedProduct && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex-1 flex flex-col"
+              className="flex-1 flex flex-col max-w-2xl mx-auto w-full"
             >
               {/* Product info */}
-              <div className="bg-gray-800 rounded-xl p-3 sm:p-4 mb-3 sm:mb-4">
-                <div className="flex gap-4">
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0 rounded-xl overflow-hidden bg-gray-700">
+              <div className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5 mb-3 sm:mb-4 lg:mb-5">
+                <div className="flex gap-4 lg:gap-6">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 lg:w-28 lg:h-28 flex-shrink-0 rounded-xl overflow-hidden bg-gray-700">
                     {selectedProduct.imageUrl ? (
                       <img
                         src={selectedProduct.imageUrl}
@@ -939,15 +939,15 @@ export default function AuditCountPage() {
               </div>
 
               {/* Quantity display */}
-              <div className="bg-gray-800 rounded-xl p-4 mb-3 sm:mb-4 text-center">
-                <p className="text-xs sm:text-sm text-gray-400 mb-2">CANTIDAD CONTADA</p>
-                <div className="text-4xl sm:text-5xl font-bold text-amber-400 font-mono">
+              <div className="bg-gray-800 rounded-xl p-4 lg:p-6 mb-3 sm:mb-4 lg:mb-5 text-center">
+                <p className="text-xs sm:text-sm lg:text-base text-gray-400 mb-2 lg:mb-3">CANTIDAD CONTADA</p>
+                <div className="text-4xl sm:text-5xl lg:text-6xl font-bold text-amber-400 font-mono">
                   {numpadValue || '0'}
                 </div>
               </div>
 
               {/* Numpad */}
-              <div className="grid grid-cols-4 gap-2 max-w-md mx-auto w-full">
+              <div className="grid grid-cols-4 gap-2 lg:gap-3 max-w-lg mx-auto w-full">
                 {['7', '8', '9', 'C', '4', '5', '6', 'DEL', '1', '2', '3', 'ENTER', '.', '0', '00', ''].map((key) => {
                   if (key === '') return <div key="empty" />
 
@@ -965,10 +965,10 @@ export default function AuditCountPage() {
                     <button
                       key={key}
                       onClick={() => handleNumpad(key)}
-                      className={`${bgColor} text-white py-3 sm:py-4 rounded-xl text-lg sm:text-xl font-bold transition-all active:scale-95 flex items-center justify-center touch-manipulation`}
+                      className={`${bgColor} text-white py-3 sm:py-4 lg:py-5 rounded-xl text-lg sm:text-xl lg:text-2xl font-bold transition-all active:scale-95 flex items-center justify-center touch-manipulation`}
                     >
-                      {key === 'DEL' ? <Delete className="w-5 h-5 sm:w-6 sm:h-6" /> :
-                       key === 'ENTER' ? <CornerDownLeft className="w-5 h-5 sm:w-6 sm:h-6" /> :
+                      {key === 'DEL' ? <Delete className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7" /> :
+                       key === 'ENTER' ? <CornerDownLeft className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7" /> :
                        key}
                     </button>
                   )
@@ -979,11 +979,11 @@ export default function AuditCountPage() {
 
           {/* Empty state when no product selected */}
           {!selectedProduct && (
-            <div className="flex-1 flex items-center justify-center text-gray-500">
-              <div className="text-center px-4">
-                <Package className="w-16 h-16 mx-auto mb-4 opacity-20" />
+            <div className="flex-1 flex items-center justify-center text-gray-500 p-4">
+              <div className="text-center">
+                <Package className="w-20 h-20 mx-auto mb-4 opacity-20" />
                 <p className="text-lg font-medium text-gray-400">Escanea o busca un producto</p>
-                <p className="text-sm mt-1">Usa el buscador de arriba para agregar productos al conteo</p>
+                <p className="text-sm mt-2 text-gray-500 max-w-xs mx-auto">Usa el buscador o escanea el código de barras para agregar productos al conteo</p>
               </div>
             </div>
           )}
@@ -991,12 +991,12 @@ export default function AuditCountPage() {
       </div>
 
       {/* Footer */}
-      <footer className="px-3 sm:px-4 py-3 bg-gray-800 border-t border-gray-700">
+      <footer className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 bg-gray-800 border-t border-gray-700 safe-area-bottom">
         {/* Progress bar - clickable to show pending products */}
-        <div className="mb-3">
+        <div className="mb-2.5 sm:mb-3 lg:mb-4 max-w-4xl mx-auto">
           <button
             onClick={() => setShowPendingModal(true)}
-            className="w-full h-5 bg-gray-700 rounded-full overflow-hidden relative group cursor-pointer hover:ring-2 hover:ring-amber-500/50 transition-all"
+            className="w-full h-6 sm:h-5 lg:h-6 bg-gray-700 rounded-full overflow-hidden relative group cursor-pointer hover:ring-2 hover:ring-amber-500/50 transition-all active:scale-[0.99] touch-manipulation"
             title={`${countingProgress.remaining} productos pendientes - Toca para ver`}
           >
             <motion.div
@@ -1005,43 +1005,38 @@ export default function AuditCountPage() {
               transition={{ duration: 0.5, ease: 'easeOut' }}
               className={`h-full ${countingProgress.isComplete ? 'bg-gradient-to-r from-green-500 to-green-400' : 'bg-gradient-to-r from-amber-600 to-amber-400'}`}
             />
-            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-md">
-              {countingProgress.percentage}%
+            <span className="absolute inset-0 flex items-center justify-center text-xs sm:text-xs font-bold text-white drop-shadow-md">
+              {countingProgress.percentage}% ({countingProgress.remaining} pendientes)
             </span>
           </button>
-          {countingProgress.remaining > 0 && (
-            <p className="text-xs text-center text-gray-500 mt-1">
-              Toca la barra para ver los {countingProgress.remaining} productos pendientes
-            </p>
-          )}
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2 sm:gap-4 justify-center sm:justify-start">
-            <Package className="w-5 h-5 text-gray-400" />
-            <span>
-              <span className="font-bold text-lg sm:text-xl">{countingProgress.counted}</span>
-              <span className="text-gray-400 ml-1 text-sm sm:text-base">/ {countingProgress.total} productos</span>
+        <div className="flex flex-row items-center justify-between gap-2 sm:gap-3 max-w-4xl mx-auto">
+          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-4">
+            <Package className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-gray-400" />
+            <span className="text-sm sm:text-base">
+              <span className="font-bold text-base sm:text-lg lg:text-2xl">{countingProgress.counted}</span>
+              <span className="text-gray-400 ml-0.5 sm:ml-1 text-xs sm:text-sm lg:text-lg">/ {countingProgress.total}</span>
             </span>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
             <button
               onClick={saveCount}
               disabled={saving || countedProducts.length === 0}
-              className="flex-1 sm:flex-initial px-3 sm:px-4 py-2.5 bg-gray-700 rounded-xl font-medium hover:bg-gray-600 active:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
+              className="px-3 sm:px-4 lg:px-5 py-2.5 sm:py-2.5 lg:py-3 bg-gray-700 rounded-xl font-medium hover:bg-gray-600 active:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 sm:gap-2 text-sm sm:text-base touch-manipulation active:scale-[0.98]"
             >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              {saving ? <Loader2 className="w-4 h-4 lg:w-5 lg:h-5 animate-spin" /> : <Check className="w-4 h-4 lg:w-5 lg:h-5" />}
               <span className="hidden sm:inline">Guardar</span>
             </button>
 
             <button
               onClick={goToReport}
               disabled={saving || countedProducts.length === 0}
-              className="flex-1 sm:flex-initial px-4 sm:px-6 py-2.5 bg-amber-600 rounded-xl font-semibold hover:bg-amber-500 active:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
+              className="px-4 sm:px-5 lg:px-8 py-2.5 sm:py-2.5 lg:py-3 bg-amber-600 rounded-xl font-semibold hover:bg-amber-500 active:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 sm:gap-2 text-sm sm:text-base lg:text-lg shadow-lg shadow-amber-600/20 touch-manipulation active:scale-[0.98]"
             >
-              Ver Reporte
-              <ChevronRight className="w-5 h-5" />
+              <span>Reporte</span>
+              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
             </button>
           </div>
         </div>
@@ -1062,7 +1057,7 @@ export default function AuditCountPage() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: '100%', opacity: 0 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="bg-gray-800 w-full sm:w-[500px] sm:max-w-[90vw] max-h-[80vh] rounded-t-2xl sm:rounded-2xl overflow-hidden"
+              className="bg-gray-800 w-full sm:w-[500px] lg:w-[600px] sm:max-w-[90vw] max-h-[80vh] rounded-t-2xl sm:rounded-2xl overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}
