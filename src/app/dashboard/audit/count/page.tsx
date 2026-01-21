@@ -19,7 +19,6 @@ import {
   CornerDownLeft,
   Delete,
   ChevronRight,
-  List,
   Warehouse,
   Camera
 } from 'lucide-react'
@@ -131,8 +130,6 @@ export default function AuditCountPage() {
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
 
-  // Mobile: toggle between list view and input view
-  const [mobileView, setMobileView] = useState<'input' | 'list'>('input')
 
   // Modal for pending products
   const [showPendingModal, setShowPendingModal] = useState(false)
@@ -263,13 +260,12 @@ export default function AuditCountPage() {
     loadData()
   }, [warehouseId])
 
-  // Auto-focus search input (desktop or mobile depending on viewport)
+  // Auto-focus search input (desktop only - don't open keyboard on mobile)
   useEffect(() => {
     if (!loading && !selectedProduct) {
       const isMobile = window.innerWidth < 1024
-      if (isMobile && mobileSearchRef.current) {
-        mobileSearchRef.current.focus()
-      } else if (searchInputRef.current) {
+      // Only auto-focus on desktop to support keyboard barcode scanners
+      if (!isMobile && searchInputRef.current) {
         searchInputRef.current.focus()
       }
     }
@@ -366,7 +362,6 @@ export default function AuditCountPage() {
     setSelectedProduct(product)
     setSearch('')
     setNumpadValue('')
-    setMobileView('input')
   }, [])
 
   // Handle barcode scan - auto select product for counting
@@ -443,14 +438,7 @@ export default function AuditCountPage() {
           setSelectedVariant(null)
           setNumpadValue('')
           setEditingIndex(null)
-          setTimeout(() => {
-            const isMobile = window.innerWidth < 1024
-            if (isMobile && mobileSearchRef.current) {
-              mobileSearchRef.current.focus()
-            } else if (searchInputRef.current) {
-              searchInputRef.current.focus()
-            }
-          }, 100)
+          // Don't auto-focus search on mobile to avoid opening keyboard
         }
       }
     } else if (key === '.' && !numpadValue.includes('.')) {
@@ -477,14 +465,6 @@ export default function AuditCountPage() {
           setSelectedVariant(null)
           setNumpadValue('')
           setEditingIndex(null)
-          setTimeout(() => {
-            const isMobile = window.innerWidth < 1024
-            if (isMobile && mobileSearchRef.current) {
-              mobileSearchRef.current.focus()
-            } else if (searchInputRef.current) {
-              searchInputRef.current.focus()
-            }
-          }, 100)
         }
       }
     }
@@ -528,15 +508,6 @@ export default function AuditCountPage() {
         console.error('[Delete] Error al guardar:', err)
       }
     }
-
-    setTimeout(() => {
-      const isMobile = window.innerWidth < 1024
-      if (isMobile && mobileSearchRef.current) {
-        mobileSearchRef.current.focus()
-      } else if (searchInputRef.current) {
-        searchInputRef.current.focus()
-      }
-    }, 100)
   }, [countedProducts, selectedProduct, warehouseId, countId])
 
   // Edit counted product
@@ -547,7 +518,6 @@ export default function AuditCountPage() {
       setSelectedProduct(fullProduct)
       setNumpadValue(product.countedQuantity.toString())
       setEditingIndex(index)
-      setMobileView('input')
     }
   }, [countedProducts, products])
 
@@ -717,31 +687,13 @@ export default function AuditCountPage() {
           </motion.button>
 
           {/* Status indicator */}
-          <div className="w-8 flex items-center justify-center">
+          <div className="w-10 flex items-center justify-center">
             {isOnline ? (
               <Wifi className="w-5 h-5 text-green-500" />
             ) : (
               <WifiOff className="w-5 h-5 text-yellow-500" />
             )}
           </div>
-
-          {/* List toggle button */}
-          <motion.button
-            onClick={() => setMobileView(mobileView === 'input' ? 'list' : 'input')}
-            className="w-12 h-12 flex items-center justify-center rounded-xl hover:bg-gray-700/50 active:bg-gray-700 transition-colors relative"
-            whileTap={{ scale: 0.95 }}
-          >
-            <List className="w-6 h-6" />
-            {countedProducts.length > 0 && (
-              <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="absolute top-1 right-1 bg-amber-500 text-white text-[10px] min-w-[20px] h-[20px] rounded-full flex items-center justify-center font-bold shadow-md px-1"
-              >
-                {countedProducts.length}
-              </motion.span>
-            )}
-          </motion.button>
         </div>
 
         {/* Desktop Header */}
@@ -814,10 +766,10 @@ export default function AuditCountPage() {
 
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden pb-[120px] lg:pb-[100px]">
-        {/* Left panel - Counted products */}
-        <div className={`${mobileView === 'list' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[340px] xl:w-[400px] 2xl:w-[450px] border-r border-gray-700 flex-col bg-gray-850 relative`}>
+        {/* Desktop: Left panel - Counted products (only visible on desktop) */}
+        <div className="hidden lg:flex w-[340px] xl:w-[400px] 2xl:w-[450px] border-r border-gray-700 flex-col bg-gray-850 relative">
           {/* Desktop search */}
-          <div className="hidden lg:block p-3 border-b border-gray-700 relative">
+          <div className="p-3 border-b border-gray-700 relative">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
@@ -874,24 +826,20 @@ export default function AuditCountPage() {
             <span className="text-xs bg-gray-700 px-2 py-1 rounded-full">{countedProducts.length}</span>
           </div>
 
-          <div className="flex-1 overflow-auto p-2 lg:p-3 space-y-2 overscroll-contain">
+          <div className="flex-1 overflow-auto p-3 space-y-2 overscroll-contain">
             <AnimatePresence>
               {countedProducts.map((item, index) => (
                 <motion.div
-                  key={`${item.productId}-${index}`}
+                  key={`desktop-${item.productId}-${index}`}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="bg-gray-800 rounded-xl p-3 lg:p-4"
+                  className="bg-gray-800 rounded-xl p-4"
                 >
                   <div className="flex gap-3">
-                    <div className="w-14 h-14 sm:w-16 sm:h-16 flex-shrink-0 rounded-xl overflow-hidden bg-gray-700">
+                    <div className="w-16 h-16 flex-shrink-0 rounded-xl overflow-hidden bg-gray-700">
                       {item.productImage ? (
-                        <img
-                          src={item.productImage}
-                          alt={item.productName}
-                          className="w-full h-full object-cover"
-                        />
+                        <img src={item.productImage} alt={item.productName} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <Package className="w-6 h-6 text-gray-500" />
@@ -899,21 +847,15 @@ export default function AuditCountPage() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate text-sm sm:text-base">{item.productName}</p>
-                      <p className="text-xs text-gray-400 truncate">{item.productSku || item.productBarcode || 'Sin codigo'}</p>
+                      <p className="font-medium truncate">{item.productName}</p>
+                      <p className="text-xs text-gray-400 truncate">{item.productSku || 'Sin codigo'}</p>
                       <p className="text-2xl font-bold text-amber-400 mt-1">{item.countedQuantity}</p>
                     </div>
                     <div className="flex flex-col gap-1.5 flex-shrink-0">
-                      <button
-                        onClick={() => editCountedProduct(index)}
-                        className="p-2.5 hover:bg-gray-700 rounded-xl text-amber-400 active:bg-gray-600 touch-manipulation"
-                      >
+                      <button onClick={() => editCountedProduct(index)} className="p-2.5 hover:bg-gray-700 rounded-xl text-amber-400">
                         <Edit3 className="w-5 h-5" />
                       </button>
-                      <button
-                        onClick={() => removeCountedProduct(index)}
-                        className="p-2.5 hover:bg-gray-700 rounded-xl text-red-400 active:bg-gray-600 touch-manipulation"
-                      >
+                      <button onClick={() => removeCountedProduct(index)} className="p-2.5 hover:bg-gray-700 rounded-xl text-red-400">
                         <Trash2 className="w-5 h-5" />
                       </button>
                     </div>
@@ -926,42 +868,26 @@ export default function AuditCountPage() {
               <div className="text-center py-12 text-gray-500">
                 <Package className="w-16 h-16 mx-auto mb-3 opacity-30" />
                 <p className="font-medium text-gray-400">No hay productos contados</p>
-                <p className="text-sm mt-1">Escanee o busque un producto</p>
               </div>
             )}
           </div>
-
-          {/* Mobile: button to switch to input */}
-          <div className="lg:hidden p-3 border-t border-gray-700 safe-area-bottom">
-            <button
-              onClick={() => setMobileView('input')}
-              className="w-full py-3.5 bg-amber-600 rounded-xl font-semibold flex items-center justify-center gap-2 text-white shadow-lg shadow-amber-600/25 active:scale-[0.98] touch-manipulation"
-            >
-              <Search className="w-5 h-5" />
-              Agregar Producto
-            </button>
-          </div>
         </div>
 
-        {/* Right panel - Numpad */}
-        <div className={`${mobileView === 'input' ? 'flex' : 'hidden'} lg:flex flex-1 flex-col p-3 sm:p-4 lg:p-6 xl:p-8`}>
-          {/* Selected product - Quantity input */}
+        {/* Mobile & Desktop: Main panel */}
+        <div className="flex flex-1 flex-col">
+          {/* When product is selected: show numpad */}
           {selectedProduct && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex-1 flex flex-col max-w-2xl mx-auto w-full"
+              className="flex-1 flex flex-col p-3 sm:p-4 lg:p-6 xl:p-8 max-w-2xl mx-auto w-full"
             >
               {/* Product info */}
               <div className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5 mb-3 sm:mb-4 lg:mb-5">
                 <div className="flex gap-4 lg:gap-6">
                   <div className="w-20 h-20 sm:w-24 sm:h-24 lg:w-28 lg:h-28 flex-shrink-0 rounded-xl overflow-hidden bg-gray-700">
                     {selectedProduct.imageUrl ? (
-                      <img
-                        src={selectedProduct.imageUrl}
-                        alt={selectedProduct.name}
-                        className="w-full h-full object-cover"
-                      />
+                      <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <Package className="w-10 h-10 text-gray-500" />
@@ -980,14 +906,6 @@ export default function AuditCountPage() {
                           setSelectedProduct(null)
                           setNumpadValue('')
                           setEditingIndex(null)
-                          setTimeout(() => {
-                            const isMobile = window.innerWidth < 1024
-                            if (isMobile && mobileSearchRef.current) {
-                              mobileSearchRef.current.focus()
-                            } else if (searchInputRef.current) {
-                              searchInputRef.current.focus()
-                            }
-                          }, 100)
                         }}
                         className="p-2 hover:bg-gray-700 rounded-lg flex-shrink-0 ml-2"
                       >
@@ -1012,14 +930,8 @@ export default function AuditCountPage() {
                   if (key === '') return <div key="empty" />
 
                   let bgColor = 'bg-gray-700 hover:bg-gray-600 active:bg-gray-500'
-
-                  if (key === 'C') {
-                    bgColor = 'bg-red-600 hover:bg-red-500 active:bg-red-400'
-                  } else if (key === 'DEL') {
-                    bgColor = 'bg-amber-600 hover:bg-amber-500 active:bg-amber-400'
-                  } else if (key === 'ENTER') {
-                    bgColor = 'bg-amber-600 hover:bg-amber-500 active:bg-amber-400'
-                  }
+                  if (key === 'C') bgColor = 'bg-red-600 hover:bg-red-500 active:bg-red-400'
+                  else if (key === 'DEL' || key === 'ENTER') bgColor = 'bg-amber-600 hover:bg-amber-500 active:bg-amber-400'
 
                   return (
                     <button
@@ -1028,8 +940,7 @@ export default function AuditCountPage() {
                       className={`${bgColor} text-white py-3 sm:py-4 lg:py-5 rounded-xl text-lg sm:text-xl lg:text-2xl font-bold transition-all active:scale-95 flex items-center justify-center touch-manipulation`}
                     >
                       {key === 'DEL' ? <Delete className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7" /> :
-                       key === 'ENTER' ? <CornerDownLeft className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7" /> :
-                       key}
+                       key === 'ENTER' ? <CornerDownLeft className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7" /> : key}
                     </button>
                   )
                 })}
@@ -1037,13 +948,79 @@ export default function AuditCountPage() {
             </motion.div>
           )}
 
-          {/* Empty state when no product selected */}
+          {/* When no product selected: show list of counted products (mobile) or empty state (desktop) */}
           {!selectedProduct && (
-            <div className="flex-1 flex items-center justify-center text-gray-500 p-4">
-              <div className="text-center">
-                <Package className="w-20 h-20 mx-auto mb-4 opacity-20" />
-                <p className="text-lg font-medium text-gray-400">Escanea o busca un producto</p>
-                <p className="text-sm mt-2 text-gray-500 max-w-xs mx-auto">Usa el buscador o escanea el código de barras para agregar productos al conteo</p>
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Mobile: Show counted products list */}
+              <div className="lg:hidden flex-1 flex flex-col overflow-hidden">
+                {countedProducts.length > 0 ? (
+                  <>
+                    <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
+                      <h2 className="font-semibold flex items-center gap-2">
+                        <ClipboardList className="w-5 h-5" />
+                        Productos Contados
+                      </h2>
+                      <span className="text-sm bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full font-medium">
+                        {countedProducts.length}
+                      </span>
+                    </div>
+                    <div className="flex-1 overflow-auto p-3 space-y-2 overscroll-contain">
+                      <AnimatePresence>
+                        {countedProducts.map((item, index) => (
+                          <motion.div
+                            key={`mobile-${item.productId}-${index}`}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="bg-gray-800 rounded-xl p-3"
+                          >
+                            <div className="flex gap-3">
+                              <div className="w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden bg-gray-700">
+                                {item.productImage ? (
+                                  <img src={item.productImage} alt={item.productName} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <Package className="w-6 h-6 text-gray-500" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium truncate text-sm">{item.productName}</p>
+                                <p className="text-xs text-gray-400 truncate">{item.productSku || 'Sin codigo'}</p>
+                                <p className="text-xl font-bold text-amber-400 mt-0.5">{item.countedQuantity}</p>
+                              </div>
+                              <div className="flex flex-col gap-1 flex-shrink-0">
+                                <button onClick={() => editCountedProduct(index)} className="p-2 hover:bg-gray-700 rounded-lg text-amber-400 touch-manipulation">
+                                  <Edit3 className="w-5 h-5" />
+                                </button>
+                                <button onClick={() => removeCountedProduct(index)} className="p-2 hover:bg-gray-700 rounded-lg text-red-400 touch-manipulation">
+                                  <Trash2 className="w-5 h-5" />
+                                </button>
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </AnimatePresence>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center p-4">
+                    <div className="text-center">
+                      <Package className="w-20 h-20 mx-auto mb-4 opacity-20 text-gray-500" />
+                      <p className="text-lg font-medium text-gray-400">Escanea o busca un producto</p>
+                      <p className="text-sm mt-2 text-gray-500 max-w-xs mx-auto">Usa el buscador o el escáner de cámara para agregar productos</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop: Empty state (list is in left panel) */}
+              <div className="hidden lg:flex flex-1 items-center justify-center p-4">
+                <div className="text-center">
+                  <Package className="w-20 h-20 mx-auto mb-4 opacity-20 text-gray-500" />
+                  <p className="text-lg font-medium text-gray-400">Selecciona un producto</p>
+                  <p className="text-sm mt-2 text-gray-500 max-w-xs mx-auto">Busca o escanea un producto para ingresar la cantidad</p>
+                </div>
               </div>
             </div>
           )}
