@@ -335,6 +335,11 @@ class PrinterService {
       name.includes('tm-p') || // Epson TM-P series (portable thermal)
       name.includes('tsp') || // Star TSP series
       name.includes('sp700') || // Star SP700
+      name.includes('rongta') || // RONGTA thermal printers
+      name.includes('xprinter') || // XPrinter thermal printers
+      name.includes('munbyn') || // MUNBYN thermal printers
+      name.includes('80mm') || // Generic 80mm thermal printers
+      name.includes('58mm') || // Generic 58mm thermal printers
       name.includes('receipt') ||
       name.includes('ticket') ||
       name.includes('termica') ||
@@ -343,7 +348,9 @@ class PrinterService {
       displayName.includes('thermal') ||
       displayName.includes('tm-t') ||
       displayName.includes('tm-m') ||
-      displayName.includes('tsp')
+      displayName.includes('tsp') ||
+      displayName.includes('rongta') ||
+      displayName.includes('80mm')
 
     // Exclude regular inkjet/laser printers that might match other patterns
     const isRegularPrinter =
