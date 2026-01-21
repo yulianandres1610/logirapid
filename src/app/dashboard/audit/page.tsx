@@ -122,22 +122,7 @@ export default function AuditDashboardPage() {
   }
 
   return (
-    <div className="space-y-6 lg:space-y-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-white">Selecciona un Almacén</h1>
-          <p className="text-gray-400 mt-1 lg:text-lg">Elige el almacén que deseas auditar</p>
-        </div>
-        <button
-          onClick={fetchWarehouses}
-          className="flex items-center space-x-2 px-4 py-2 lg:px-5 lg:py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-        >
-          <RefreshCw className="w-4 h-4 lg:w-5 lg:h-5" />
-          <span>Actualizar</span>
-        </button>
-      </div>
-
+    <div className="space-y-6 lg:space-y-8 max-w-5xl mx-auto px-4">
       {/* Warehouses Grid */}
       {warehouses.length === 0 ? (
         <div className="bg-gray-800 rounded-xl p-8 text-center">
@@ -146,14 +131,14 @@ export default function AuditDashboardPage() {
           <p className="text-gray-500 text-sm mt-2">Contacta al administrador para configurar almacenes</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5 justify-items-center">
           {warehouses.map((warehouse, index) => (
             <motion.div
               key={warehouse.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
-              className="bg-gray-800 rounded-xl p-5 lg:p-6 border border-gray-700 hover:border-amber-500/50 transition-all group"
+              className="bg-gray-800 rounded-xl p-5 lg:p-6 border border-gray-700 hover:border-amber-500/50 transition-all group w-full max-w-sm"
             >
               {/* Warehouse Header */}
               <div className="flex items-start justify-between mb-4">
