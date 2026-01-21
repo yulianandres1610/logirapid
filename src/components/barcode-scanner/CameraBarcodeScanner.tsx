@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Html5Qrcode, Html5QrcodeScannerState, Html5QrcodeSupportedFormats } from 'html5-qrcode'
-import { X, Camera, Flashlight, FlashlightOff, SwitchCamera, Loader2, QrCode, Barcode } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { Html5Qrcode } from 'html5-qrcode'
+import { X, Loader2, Flashlight, FlashlightOff } from 'lucide-react'
+import { motion } from 'framer-motion'
 
 interface CameraBarcodeScannerProps {
   isOpen: boolean
@@ -22,112 +22,66 @@ export default function CameraBarcodeScanner({
   const [error, setError] = useState<string | null>(null)
   const [torchEnabled, setTorchEnabled] = useState(false)
   const [hasTorch, setHasTorch] = useState(false)
-  const [cameras, setCameras] = useState<{ id: string; label: string }[]>([])
-  const [currentCameraIndex, setCurrentCameraIndex] = useState(0)
 
   const scannerRef = useRef<Html5Qrcode | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
   const lastScannedRef = useRef<string>('')
   const lastScannedTimeRef = useRef<number>(0)
+  const mountedRef = useRef(true)
 
-  // Get available cameras
-  const getCameras = useCallback(async () => {
-    try {
-      const devices = await Html5Qrcode.getCameras()
-      if (devices && devices.length > 0) {
-        setCameras(devices)
-        // Prefer back camera
-        const backCameraIndex = devices.findIndex(
-          d => d.label.toLowerCase().includes('back') ||
-               d.label.toLowerCase().includes('trasera') ||
-               d.label.toLowerCase().includes('environment')
-        )
-        setCurrentCameraIndex(backCameraIndex >= 0 ? backCameraIndex : 0)
-        return devices
-      } else {
-        throw new Error('No se encontraron cámaras disponibles')
+  // Cleanup scanner
+  const cleanupScanner = useCallback(async () => {
+    if (scannerRef.current) {
+      try {
+        const state = scannerRef.current.getState()
+        if (state === 2) { // SCANNING state
+          await scannerRef.current.stop()
+        }
+        scannerRef.current.clear()
+      } catch (err) {
+        console.warn('Cleanup error:', err)
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al acceder a la cámara'
-      setError(message)
-      onError?.(message)
-      return []
+      scannerRef.current = null
     }
-  }, [onError])
+  }, [])
 
   // Start scanner
-  const startScanner = useCallback(async (cameraId?: string) => {
-    if (!containerRef.current) return
+  const startScanner = useCallback(async () => {
+    if (!mountedRef.current) return
 
     try {
       setIsInitializing(true)
       setError(null)
 
-      // Stop existing scanner
-      if (scannerRef.current) {
-        const state = scannerRef.current.getState()
-        if (state === Html5QrcodeScannerState.SCANNING) {
-          await scannerRef.current.stop()
-        }
-      }
+      // Cleanup previous instance
+      await cleanupScanner()
 
-      // Create new scanner with support for all formats
-      const scanner = new Html5Qrcode('barcode-scanner-container', {
-        verbose: false,
-        formatsToSupport: [
-          // QR Codes
-          Html5QrcodeSupportedFormats.QR_CODE,
-          // 1D Barcodes
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39,
-          Html5QrcodeSupportedFormats.CODE_93,
-          Html5QrcodeSupportedFormats.CODABAR,
-          Html5QrcodeSupportedFormats.ITF,
-          // 2D Codes
-          Html5QrcodeSupportedFormats.DATA_MATRIX,
-          Html5QrcodeSupportedFormats.AZTEC,
-          Html5QrcodeSupportedFormats.PDF_417
-        ]
+      // Wait for DOM
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      const container = document.getElementById('qr-reader')
+      if (!container || !mountedRef.current) return
+
+      // Create scanner instance
+      const scanner = new Html5Qrcode('qr-reader', {
+        verbose: false
       })
       scannerRef.current = scanner
 
-      // Get cameras if not already
-      let availableCameras = cameras
-      if (cameras.length === 0) {
-        availableCameras = await getCameras()
-      }
-
-      const cameraToUse = cameraId || availableCameras[currentCameraIndex]?.id
-
-      if (!cameraToUse) {
-        throw new Error('No se encontró ninguna cámara')
-      }
-
-      // Configuration for scanning - square box for QR and wide for barcodes
-      const config = {
-        fps: 15,
-        qrbox: { width: 280, height: 220 },
-        aspectRatio: 1.0,
-        disableFlip: false,
-        experimentalFeatures: {
-          useBarCodeDetectorIfSupported: true
-        }
-      }
-
-      // Start scanning
+      // Start with back camera using facingMode
       await scanner.start(
-        cameraToUse,
-        config,
+        { facingMode: 'environment' },
+        {
+          fps: 10,
+          qrbox: { width: 280, height: 120 },
+          aspectRatio: 1.777778,
+          disableFlip: false
+        },
         (decodedText) => {
-          // Debounce - prevent scanning same code too quickly
+          // Debounce
           const now = Date.now()
           if (
             decodedText === lastScannedRef.current &&
-            now - lastScannedTimeRef.current < 3000
+            now - lastScannedTimeRef.current < 2000
           ) {
             return
           }
@@ -135,71 +89,41 @@ export default function CameraBarcodeScanner({
           lastScannedRef.current = decodedText
           lastScannedTimeRef.current = now
 
-          // Vibrate on successful scan
+          // Vibrate
           if ('vibrate' in navigator) {
-            navigator.vibrate(100)
-          }
-
-          // Play success sound
-          try {
-            const audioContext = new AudioContext()
-            const oscillator = audioContext.createOscillator()
-            const gainNode = audioContext.createGain()
-            oscillator.connect(gainNode)
-            gainNode.connect(audioContext.destination)
-            oscillator.frequency.value = 1200
-            oscillator.type = 'sine'
-            gainNode.gain.value = 0.1
-            oscillator.start()
-            setTimeout(() => oscillator.stop(), 100)
-          } catch {
-            // Ignore audio errors
+            navigator.vibrate([50, 50, 50])
           }
 
           onScan(decodedText)
           onClose()
         },
-        (errorMessage) => {
-          // Ignore continuous scanning errors (normal behavior)
-          if (!errorMessage.includes('No QR code found') &&
-              !errorMessage.includes('No barcode') &&
-              !errorMessage.includes('NotFoundException')) {
-            console.warn('Scan error:', errorMessage)
-          }
+        () => {
+          // Ignore scan errors - they happen continuously when no code is found
         }
       )
 
-      // Check torch capability
+      // Check torch support
       try {
         const capabilities = scanner.getRunningTrackCameraCapabilities()
-        setHasTorch(capabilities.torchFeature().isSupported())
+        const torch = capabilities.torchFeature()
+        setHasTorch(torch.isSupported())
       } catch {
         setHasTorch(false)
       }
 
-      setIsInitializing(false)
+      if (mountedRef.current) {
+        setIsInitializing(false)
+      }
     } catch (err) {
-      console.error('Scanner start error:', err)
-      const message = err instanceof Error ? err.message : 'Error al iniciar la cámara'
-      setError(message)
-      onError?.(message)
-      setIsInitializing(false)
-    }
-  }, [cameras, currentCameraIndex, getCameras, onClose, onError, onScan])
-
-  // Stop scanner
-  const stopScanner = useCallback(async () => {
-    if (scannerRef.current) {
-      try {
-        const state = scannerRef.current.getState()
-        if (state === Html5QrcodeScannerState.SCANNING) {
-          await scannerRef.current.stop()
-        }
-      } catch (err) {
-        console.warn('Error stopping scanner:', err)
+      console.error('Scanner error:', err)
+      if (mountedRef.current) {
+        const message = err instanceof Error ? err.message : 'Error al iniciar cámara'
+        setError(message)
+        onError?.(message)
+        setIsInitializing(false)
       }
     }
-  }, [])
+  }, [cleanupScanner, onClose, onError, onScan])
 
   // Toggle torch
   const toggleTorch = useCallback(async () => {
@@ -208,176 +132,159 @@ export default function CameraBarcodeScanner({
     try {
       const capabilities = scannerRef.current.getRunningTrackCameraCapabilities()
       const torch = capabilities.torchFeature()
-
       if (torch.isSupported()) {
-        await torch.apply(!torchEnabled)
-        setTorchEnabled(!torchEnabled)
+        const newState = !torchEnabled
+        await torch.apply(newState)
+        setTorchEnabled(newState)
       }
     } catch (err) {
-      console.warn('Torch toggle error:', err)
+      console.warn('Torch error:', err)
     }
   }, [hasTorch, torchEnabled])
 
-  // Switch camera
-  const switchCamera = useCallback(async () => {
-    if (cameras.length <= 1) return
-
-    const nextIndex = (currentCameraIndex + 1) % cameras.length
-    setCurrentCameraIndex(nextIndex)
-    setTorchEnabled(false)
-    await startScanner(cameras[nextIndex].id)
-  }, [cameras, currentCameraIndex, startScanner])
-
-  // Initialize scanner when opened
+  // Handle open/close
   useEffect(() => {
+    mountedRef.current = true
+
     if (isOpen) {
       startScanner()
-    } else {
-      stopScanner()
     }
 
     return () => {
-      stopScanner()
+      mountedRef.current = false
+      cleanupScanner()
     }
-  }, [isOpen, startScanner, stopScanner])
+  }, [isOpen, startScanner, cleanupScanner])
 
   // Handle close
-  const handleClose = useCallback(() => {
-    stopScanner()
+  const handleClose = useCallback(async () => {
+    await cleanupScanner()
     onClose()
-  }, [onClose, stopScanner])
+  }, [cleanupScanner, onClose])
 
   if (!isOpen) return null
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] bg-black"
-      >
-        {/* Scanner container */}
-        <div
-          ref={containerRef}
-          id="barcode-scanner-container"
-          className="w-full h-full"
-        />
+    <div className="fixed inset-0 z-[100] bg-black">
+      {/* Scanner styles to override library defaults */}
+      <style jsx global>{`
+        #qr-reader {
+          width: 100% !important;
+          height: 100% !important;
+          border: none !important;
+          background: black !important;
+        }
+        #qr-reader video {
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: cover !important;
+          position: absolute !important;
+          top: 0 !important;
+          left: 0 !important;
+        }
+        #qr-reader__scan_region {
+          position: absolute !important;
+          top: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          bottom: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+        #qr-reader__scan_region video {
+          max-width: none !important;
+          max-height: none !important;
+        }
+        #qr-reader__dashboard {
+          display: none !important;
+        }
+        #qr-shaded-region {
+          border-width: 60px 40px !important;
+          border-color: rgba(0,0,0,0.6) !important;
+        }
+        #qr-reader__scan_region > img {
+          display: none !important;
+        }
+      `}</style>
 
-        {/* Overlay UI */}
-        <div className="absolute inset-0 pointer-events-none">
-          {/* Top bar */}
-          <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between pointer-events-auto safe-area-inset">
+      {/* Scanner container - full screen */}
+      <div id="qr-reader" className="absolute inset-0" />
+
+      {/* Custom overlay */}
+      <div className="absolute inset-0 pointer-events-none">
+        {/* Top bar */}
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-4 pt-12 pointer-events-auto z-10">
+          <motion.button
+            onClick={handleClose}
+            className="w-12 h-12 flex items-center justify-center bg-black/60 backdrop-blur rounded-full text-white active:bg-black/80"
+            whileTap={{ scale: 0.9 }}
+          >
+            <X className="w-6 h-6" />
+          </motion.button>
+
+          {hasTorch && (
             <motion.button
-              onClick={handleClose}
-              className="p-3 bg-black/50 backdrop-blur-sm rounded-full text-white hover:bg-black/70 transition-colors"
-              whileTap={{ scale: 0.95 }}
+              onClick={toggleTorch}
+              className={`w-12 h-12 flex items-center justify-center backdrop-blur rounded-full text-white ${
+                torchEnabled ? 'bg-amber-500' : 'bg-black/60 active:bg-black/80'
+              }`}
+              whileTap={{ scale: 0.9 }}
             >
-              <X className="w-6 h-6" />
-            </motion.button>
-
-            <div className="flex items-center gap-2">
-              {/* Torch button */}
-              {hasTorch && (
-                <motion.button
-                  onClick={toggleTorch}
-                  className={`p-3 backdrop-blur-sm rounded-full text-white transition-colors ${
-                    torchEnabled ? 'bg-amber-500' : 'bg-black/50 hover:bg-black/70'
-                  }`}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  {torchEnabled ? (
-                    <Flashlight className="w-6 h-6" />
-                  ) : (
-                    <FlashlightOff className="w-6 h-6" />
-                  )}
-                </motion.button>
-              )}
-
-              {/* Switch camera button */}
-              {cameras.length > 1 && (
-                <motion.button
-                  onClick={switchCamera}
-                  className="p-3 bg-black/50 backdrop-blur-sm rounded-full text-white hover:bg-black/70 transition-colors"
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <SwitchCamera className="w-6 h-6" />
-                </motion.button>
-              )}
-            </div>
-          </div>
-
-          {/* Scanning viewfinder overlay */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            {/* Darkened areas around viewfinder */}
-            <div className="absolute inset-0 bg-black/40" />
-
-            {/* Viewfinder cutout - slightly square for both QR and barcodes */}
-            <div className="relative w-[300px] h-[240px] z-10">
-              {/* Clear center */}
-              <div className="absolute inset-0 bg-transparent" style={{ boxShadow: '0 0 0 9999px rgba(0,0,0,0.4)' }} />
-
-              {/* Corner markers */}
-              <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-amber-500 rounded-tl-xl" />
-              <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-amber-500 rounded-tr-xl" />
-              <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-amber-500 rounded-bl-xl" />
-              <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-amber-500 rounded-br-xl" />
-
-              {/* Scanning line animation */}
-              <motion.div
-                className="absolute left-4 right-4 h-0.5 bg-gradient-to-r from-transparent via-amber-500 to-transparent"
-                initial={{ top: '10%' }}
-                animate={{ top: ['10%', '90%', '10%'] }}
-                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-              />
-
-              {/* Format indicators */}
-              <div className="absolute -bottom-8 left-0 right-0 flex items-center justify-center gap-4">
-                <div className="flex items-center gap-1 text-white/60 text-xs">
-                  <Barcode className="w-4 h-4" />
-                  <span>Barras</span>
-                </div>
-                <div className="flex items-center gap-1 text-white/60 text-xs">
-                  <QrCode className="w-4 h-4" />
-                  <span>QR</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom instructions */}
-          <div className="absolute bottom-0 left-0 right-0 pb-10 pt-4 bg-gradient-to-t from-black/80 to-transparent pointer-events-auto safe-area-bottom">
-            <div className="text-center">
-              {isInitializing ? (
-                <div className="flex flex-col items-center gap-2">
-                  <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
-                  <p className="text-white/80 text-sm">Iniciando cámara...</p>
-                </div>
-              ) : error ? (
-                <div className="flex flex-col items-center gap-3 px-4">
-                  <Camera className="w-10 h-10 text-red-400" />
-                  <p className="text-red-400 text-sm">{error}</p>
-                  <button
-                    onClick={() => startScanner()}
-                    className="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium"
-                  >
-                    Reintentar
-                  </button>
-                </div>
+              {torchEnabled ? (
+                <Flashlight className="w-6 h-6" />
               ) : (
-                <div className="flex flex-col items-center gap-1">
-                  <div className="flex items-center gap-2">
-                    <Barcode className="w-5 h-5 text-amber-500" />
-                    <QrCode className="w-5 h-5 text-amber-500" />
-                  </div>
-                  <p className="text-white font-medium">Escanea el código</p>
-                  <p className="text-white/60 text-sm">Código de barras o QR</p>
-                </div>
+                <FlashlightOff className="w-6 h-6" />
               )}
-            </div>
+            </motion.button>
+          )}
+        </div>
+
+        {/* Scan area indicator */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="relative w-72 h-32">
+            {/* Corner brackets */}
+            <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-amber-500 rounded-tl-lg" />
+            <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-amber-500 rounded-tr-lg" />
+            <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-amber-500 rounded-bl-lg" />
+            <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-amber-500 rounded-br-lg" />
+
+            {/* Scanning line */}
+            <motion.div
+              className="absolute left-2 right-2 h-0.5 bg-amber-500 shadow-lg shadow-amber-500/50"
+              animate={{ top: ['0%', '100%', '0%'] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+            />
           </div>
         </div>
-      </motion.div>
-    </AnimatePresence>
+
+        {/* Bottom info */}
+        <div className="absolute bottom-0 left-0 right-0 pb-16 pt-8 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
+          <div className="text-center px-4">
+            {isInitializing ? (
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+                <p className="text-white text-base">Iniciando cámara...</p>
+              </div>
+            ) : error ? (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-red-400 text-sm">{error}</p>
+                <button
+                  onClick={() => startScanner()}
+                  className="px-6 py-3 bg-amber-500 text-white rounded-xl text-base font-medium pointer-events-auto active:bg-amber-600"
+                >
+                  Reintentar
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-1">
+                <p className="text-white text-lg font-medium">Apunta al código de barras</p>
+                <p className="text-white/60 text-sm">Mantén el código dentro del recuadro</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }

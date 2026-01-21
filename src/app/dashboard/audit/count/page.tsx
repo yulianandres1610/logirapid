@@ -655,6 +655,24 @@ export default function AuditCountPage() {
 
   return (
     <div className={`min-h-screen min-h-[100dvh] flex flex-col ${tc.bg} ${tc.text}`}>
+      {/* CSS to prevent iOS zoom on input focus */}
+      <style jsx global>{`
+        /* Prevent iOS zoom on input focus */
+        @supports (-webkit-touch-callout: none) {
+          input, select, textarea {
+            font-size: 16px !important;
+          }
+        }
+        /* Prevent double-tap zoom */
+        * {
+          touch-action: manipulation;
+        }
+        /* Ensure numpad buttons don't trigger zoom */
+        .numpad-btn {
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
+        }
+      `}</style>
       {/* Header - Edge-to-edge unified design */}
       <header className={`${tc.bgAlt} border-b ${tc.border} sticky top-0 z-40`}>
         {/* Mobile Header - Unified edge-to-edge design */}
@@ -683,7 +701,7 @@ export default function AuditCountPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar producto..."
-              className={`w-full pl-8 pr-3 py-2 ${tc.inputAlt} rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 placeholder-gray-500 border border-gray-600`}
+              className={`w-full pl-8 pr-3 py-2 ${tc.inputAlt} rounded-lg text-base focus:outline-none focus:ring-1 focus:ring-amber-500 placeholder-gray-500 border border-gray-600`}
               disabled={!!selectedProduct}
             />
           </div>
@@ -808,7 +826,7 @@ export default function AuditCountPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar o escanear..."
-                className={`w-full pl-9 pr-8 py-2 ${tc.inputAlt} rounded-lg text-sm focus:outline-none focus:border-amber-500 placeholder-gray-500`}
+                className={`w-full pl-9 pr-8 py-2.5 ${tc.inputAlt} rounded-lg text-base focus:outline-none focus:border-amber-500 placeholder-gray-500`}
                 disabled={!!selectedProduct}
               />
               {search && (
