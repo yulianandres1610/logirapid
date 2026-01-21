@@ -1,9 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { LogOut, ClipboardCheck, Warehouse, History } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { usePathname } from 'next/navigation'
+import { LogOut, ClipboardCheck } from 'lucide-react'
 
 interface User {
   id: number
@@ -20,12 +19,14 @@ export default function AuditLayout({
 }: {
   children: React.ReactNode
 }) {
-  const router = useRouter()
+  const pathname = usePathname()
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  // Pages that should be full-width without the layout header
+  const isFullWidthPage = pathname?.includes('/count') || pathname?.includes('/report')
+
   useEffect(() => {
-    // Get user from localStorage
     const storedUser = localStorage.getItem('user')
     if (storedUser) {
       try {
@@ -39,7 +40,6 @@ export default function AuditLayout({
   }, [])
 
   const handleLogout = async () => {
-    // Clear cookies
     const cookiesToClear = [
       'auth-token', 'user-id', 'user-name', 'user-email',
       'user-role', 'user-company-id', 'user-company-name', 'user-company-type'
@@ -50,11 +50,8 @@ export default function AuditLayout({
       document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.logirapid.com`
     })
 
-    // Clear localStorage
     localStorage.removeItem('user')
     localStorage.removeItem('auth-token')
-
-    // Redirect to login
     window.location.href = '/audit/login'
   }
 
@@ -66,6 +63,12 @@ export default function AuditLayout({
     )
   }
 
+  // Full-width pages (count, report) - no layout header, no padding
+  if (isFullWidthPage) {
+    return <>{children}</>
+  }
+
+  // Dashboard page - with layout header and padding
   return (
     <div className="min-h-screen bg-gray-900">
       {/* Header */}

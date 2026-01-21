@@ -673,10 +673,10 @@ export default function AuditCountPage() {
           -webkit-tap-highlight-color: transparent;
         }
       `}</style>
-      {/* Header - Edge-to-edge unified design */}
+      {/* Header - Edge-to-edge */}
       <header className={`${tc.bgAlt} border-b ${tc.border} sticky top-0 z-40`}>
-        {/* Mobile Header - Unified edge-to-edge design */}
-        <div className="lg:hidden flex items-center h-14 safe-area-inset">
+        {/* Mobile Header */}
+        <div className="lg:hidden flex items-center h-14">
           {/* Back button - Edge aligned */}
           <motion.button
             onClick={goBack}
