@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
 
     const warehouse = warehouseCheck.rows[0]
 
-    // Get all products with stock in this warehouse
+    // Get all products with stock in this warehouse (only products without variants or base stock)
     const result = await db.query(`
       SELECT
         p.id,
@@ -79,10 +79,82 @@ export async function GET(request: NextRequest) {
         p.selling_price,
         COALESCE(mws.quantity_on_hand, 0) as stock
       FROM market_products p
-      LEFT JOIN market_warehouse_stock mws ON p.id = mws.product_id AND mws.warehouse_id = $1
+      LEFT JOIN market_warehouse_stock mws ON p.id = mws.product_id AND mws.warehouse_id = $1 AND mws.variant_id IS NULL
       WHERE p.company_id = $2 AND p.is_active = true
       ORDER BY p.name ASC
     `, [warehouseId, payload.companyId])
+
+    // Get variants for all products with their warehouse stock
+    const variantsResult = await db.query(`
+      SELECT
+        v.id,
+        v.product_id,
+        v.variant_name as name,
+        v.sku,
+        v.barcode,
+        v.selling_price,
+        v.cost_price,
+        v.image_url,
+        v.is_active,
+        COALESCE(ws.quantity_on_hand, 0) as stock
+      FROM market_product_variants v
+      JOIN market_products p ON v.product_id = p.id
+      LEFT JOIN market_warehouse_stock ws ON v.product_id = ws.product_id AND v.id = ws.variant_id AND ws.warehouse_id = $1
+      WHERE p.company_id = $2 AND v.is_active = true
+      ORDER BY v.product_id, v.variant_name ASC
+    `, [warehouseId, payload.companyId])
+
+    // Group variants by product
+    const variantsByProduct: Record<number, Array<{
+      id: number
+      name: string
+      sku: string
+      barcode: string | null
+      imageUrl: string | null
+      costPrice: number
+      sellingPrice: number
+      stock: number
+    }>> = {}
+
+    for (const v of variantsResult.rows) {
+      if (!variantsByProduct[v.product_id]) {
+        variantsByProduct[v.product_id] = []
+      }
+      variantsByProduct[v.product_id].push({
+        id: v.id,
+        name: v.name || v.sku || `Variante ${v.id}`,
+        sku: v.sku || '',
+        barcode: v.barcode || null,
+        imageUrl: v.image_url || null,
+        costPrice: parseFloat(v.cost_price) || 0,
+        sellingPrice: parseFloat(v.selling_price) || 0,
+        stock: parseFloat(v.stock) || 0
+      })
+    }
+
+    // Build products with variants
+    const products = result.rows.map(p => {
+      const variants = variantsByProduct[p.id] || []
+      const hasVariants = variants.length > 0
+
+      // Calculate total stock for product with variants
+      const totalStock = hasVariants
+        ? variants.reduce((sum, v) => sum + v.stock, 0)
+        : parseFloat(p.stock) || 0
+
+      return {
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+        barcode: p.barcode,
+        imageUrl: p.image_url,
+        costPrice: parseFloat(p.cost_price) || 0,
+        sellingPrice: parseFloat(p.selling_price) || 0,
+        stock: totalStock,
+        hasVariants,
+        variants: hasVariants ? variants : undefined
+      }
+    })
 
     return NextResponse.json({
       success: true,
@@ -91,17 +163,8 @@ export async function GET(request: NextRequest) {
           id: warehouse.id,
           name: warehouse.name
         },
-        products: result.rows.map(p => ({
-          id: p.id,
-          name: p.name,
-          sku: p.sku,
-          barcode: p.barcode,
-          imageUrl: p.image_url,
-          costPrice: parseFloat(p.cost_price) || 0,
-          sellingPrice: parseFloat(p.selling_price) || 0,
-          stock: parseFloat(p.stock) || 0
-        })),
-        totalProducts: result.rows.length
+        products,
+        totalProducts: products.length
       }
     })
 

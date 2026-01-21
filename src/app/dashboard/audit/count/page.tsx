@@ -71,6 +71,9 @@ interface ProductVariant {
   name: string
   sku: string
   barcode: string | null
+  imageUrl: string | null
+  costPrice: number
+  sellingPrice: number
   stock: number
 }
 
@@ -197,6 +200,17 @@ export default function AuditCountPage() {
           sellingPrice?: number
           stock?: number
           imageUrl?: string
+          hasVariants?: boolean
+          variants?: Array<{
+            id: number
+            name: string
+            sku: string
+            barcode: string | null
+            imageUrl: string | null
+            costPrice: number
+            sellingPrice: number
+            stock: number
+          }>
         }) => ({
           id: p.id,
           name: p.name || 'Sin nombre',
@@ -205,7 +219,17 @@ export default function AuditCountPage() {
           costPrice: p.costPrice || 0,
           sellingPrice: p.sellingPrice || 0,
           stock: p.stock || 0,
-          imageUrl: p.imageUrl || null
+          imageUrl: p.imageUrl || null,
+          variants: p.variants?.map(v => ({
+            id: v.id,
+            name: v.name,
+            sku: v.sku,
+            barcode: v.barcode,
+            imageUrl: v.imageUrl,
+            costPrice: v.costPrice || 0,
+            sellingPrice: v.sellingPrice || 0,
+            stock: v.stock || 0
+          }))
         })))
 
         // Check for existing in-progress count
@@ -366,18 +390,42 @@ export default function AuditCountPage() {
 
   // Handle barcode scan - auto select product for counting
   const handleBarcodeScan = useCallback((barcode: string) => {
-    const product = products.find(p =>
-      p.barcode?.toLowerCase() === barcode.toLowerCase() ||
-      p.sku?.toLowerCase() === barcode.toLowerCase()
+    const lowerBarcode = barcode.toLowerCase()
+
+    // First search in products
+    let product = products.find(p =>
+      p.barcode?.toLowerCase() === lowerBarcode ||
+      p.sku?.toLowerCase() === lowerBarcode
     )
 
+    // If not found, search in variants
+    let foundVariant: ProductVariant | null = null
+    if (!product) {
+      for (const p of products) {
+        if (p.variants) {
+          const variant = p.variants.find(v =>
+            v.barcode?.toLowerCase() === lowerBarcode ||
+            v.sku?.toLowerCase() === lowerBarcode
+          )
+          if (variant) {
+            product = p
+            foundVariant = variant
+            break
+          }
+        }
+      }
+    }
+
     if (product) {
-      selectProduct(product)
+      setSelectedProduct(product)
+      setSelectedVariant(foundVariant)
+      setSearch('')
+      setNumpadValue('')
     } else {
       setError(`Producto no encontrado: ${barcode}`)
       setTimeout(() => setError(null), 3000)
     }
-  }, [products, selectProduct])
+  }, [products])
 
   // Barcode scanner detection hook - works with physical scanners (keyboard emulation)
   useBarcodeScan({
@@ -419,6 +467,11 @@ export default function AuditCountPage() {
             const productBarcode = selectedVariant?.barcode || selectedProduct.barcode
             const expectedStock = selectedVariant?.stock ?? selectedProduct.stock
 
+            // Use variant image/prices if available, otherwise fallback to product
+            const productImage = selectedVariant?.imageUrl || selectedProduct.imageUrl
+            const costPrice = selectedVariant?.costPrice ?? selectedProduct.costPrice
+            const sellingPrice = selectedVariant?.sellingPrice ?? selectedProduct.sellingPrice
+
             setCountedProducts(prev => [{
               productId: selectedProduct.id,
               variantId: variantId,
@@ -426,9 +479,9 @@ export default function AuditCountPage() {
               productName: productName,
               productSku: productSku,
               productBarcode: productBarcode,
-              productImage: selectedProduct.imageUrl,
-              costPrice: selectedProduct.costPrice,
-              sellingPrice: selectedProduct.sellingPrice,
+              productImage: productImage,
+              costPrice: costPrice,
+              sellingPrice: sellingPrice,
               systemQuantity: expectedStock,
               countedQuantity: quantity
             }, ...prev])
@@ -889,8 +942,13 @@ export default function AuditCountPage() {
               <div className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5 mb-3 sm:mb-4 lg:mb-5">
                 <div className="flex gap-4 lg:gap-6">
                   <div className="w-20 h-20 sm:w-24 sm:h-24 lg:w-28 lg:h-28 flex-shrink-0 rounded-xl overflow-hidden bg-gray-700">
-                    {selectedProduct.imageUrl ? (
-                      <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="w-full h-full object-cover" />
+                    {/* Show variant image if selected, otherwise product image */}
+                    {(selectedVariant?.imageUrl || selectedProduct.imageUrl) ? (
+                      <img
+                        src={selectedVariant?.imageUrl || selectedProduct.imageUrl || ''}
+                        alt={selectedVariant?.name || selectedProduct.name}
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <Package className="w-10 h-10 text-gray-500" />
@@ -900,13 +958,20 @@ export default function AuditCountPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start">
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-lg sm:text-xl font-semibold truncate">{selectedProduct.name}</h3>
-                        <p className="text-gray-400 text-sm truncate">{selectedProduct.sku || selectedProduct.barcode || 'Sin codigo'}</p>
-                        <p className="text-xs text-gray-500 mt-1">Stock sistema: {selectedProduct.stock}</p>
+                        <h3 className="text-lg sm:text-xl font-semibold truncate">
+                          {selectedVariant ? `${selectedProduct.name} - ${selectedVariant.name}` : selectedProduct.name}
+                        </h3>
+                        <p className="text-gray-400 text-sm truncate">
+                          {selectedVariant?.sku || selectedProduct.sku || selectedVariant?.barcode || selectedProduct.barcode || 'Sin codigo'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Stock sistema: {selectedVariant?.stock ?? selectedProduct.stock}
+                        </p>
                       </div>
                       <button
                         onClick={() => {
                           setSelectedProduct(null)
+                          setSelectedVariant(null)
                           setNumpadValue('')
                           setEditingIndex(null)
                         }}
@@ -917,6 +982,36 @@ export default function AuditCountPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Variant selector - only show if product has variants */}
+                {selectedProduct.variants && selectedProduct.variants.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-700">
+                    <p className="text-xs text-gray-500 mb-2">Selecciona variante:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedProduct.variants.map((variant) => (
+                        <button
+                          key={variant.id}
+                          onClick={() => setSelectedVariant(variant)}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
+                            selectedVariant?.id === variant.id
+                              ? 'bg-amber-600 text-white'
+                              : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                          }`}
+                        >
+                          {variant.imageUrl && (
+                            <img
+                              src={variant.imageUrl}
+                              alt={variant.name}
+                              className="w-6 h-6 rounded object-cover"
+                            />
+                          )}
+                          <span className="text-sm font-medium">{variant.name}</span>
+                          <span className="text-xs opacity-70">({variant.stock})</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Quantity display */}
