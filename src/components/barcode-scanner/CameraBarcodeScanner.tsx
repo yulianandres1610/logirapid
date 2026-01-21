@@ -93,10 +93,7 @@ export default function CameraBarcodeScanner({
           facingMode: 'environment',
           width: { ideal: 1920 },
           height: { ideal: 1080 },
-          focusMode: { ideal: 'continuous' } as unknown as ConstrainDOMString,
-          // @ts-expect-error - torch is not in the standard types
-          torch: false
-        },
+        } as MediaTrackConstraints,
         audio: false
       })
 
