@@ -643,8 +643,8 @@ export default function AuditCountPage() {
           -webkit-tap-highlight-color: transparent;
         }
       `}</style>
-      {/* Header - Edge-to-edge */}
-      <header className={`${tc.bgAlt} border-b ${tc.border} sticky top-0 z-40 pt-[env(safe-area-inset-top)]`}>
+      {/* Header - Fixed at top, never scrolls */}
+      <header className={`${tc.bgAlt} border-b ${tc.border} fixed top-0 left-0 right-0 z-40 pt-[env(safe-area-inset-top)]`}>
         {/* Mobile Header - Tall for touch-friendly buttons */}
         <div className="lg:hidden flex items-center h-[72px] px-2">
           {/* Back button */}
@@ -763,6 +763,9 @@ export default function AuditCountPage() {
           </button>
         </div>
       )}
+
+      {/* Spacer for fixed header */}
+      <div className="h-[72px] lg:h-[73px] flex-shrink-0 pt-[env(safe-area-inset-top)]" />
 
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden pb-[120px] lg:pb-[100px]">
