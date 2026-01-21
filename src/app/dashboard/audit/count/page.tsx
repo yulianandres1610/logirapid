@@ -674,69 +674,69 @@ export default function AuditCountPage() {
         }
       `}</style>
       {/* Header - Edge-to-edge */}
-      <header className={`${tc.bgAlt} border-b ${tc.border} sticky top-0 z-40`}>
-        {/* Mobile Header */}
-        <div className="lg:hidden flex items-center h-14">
-          {/* Back button - Edge aligned */}
+      <header className={`${tc.bgAlt} border-b ${tc.border} sticky top-0 z-40 pt-[env(safe-area-inset-top)]`}>
+        {/* Mobile Header - Tall for touch-friendly buttons */}
+        <div className="lg:hidden flex items-center h-[72px] px-2">
+          {/* Back button */}
           <motion.button
             onClick={goBack}
-            className="h-full px-3 flex items-center justify-center hover:bg-gray-700/50 active:bg-gray-700 transition-colors"
+            className="w-12 h-12 flex items-center justify-center rounded-xl hover:bg-gray-700/50 active:bg-gray-700 transition-colors"
             whileTap={{ scale: 0.95 }}
           >
-            <ChevronLeft className="w-6 h-6" />
+            <ChevronLeft className="w-7 h-7" />
           </motion.button>
 
-          {/* Warehouse info - Compact */}
-          <div className="flex items-center gap-1.5 min-w-0 pr-2">
+          {/* Warehouse info */}
+          <div className="flex items-center gap-1.5 min-w-0 px-1">
             <Warehouse className="w-4 h-4 flex-shrink-0 text-gray-400" />
-            <span className="text-sm truncate max-w-[100px] text-gray-300">{warehouse?.name}</span>
+            <span className="text-sm truncate max-w-[80px] text-gray-300">{warehouse?.name}</span>
           </div>
 
-          {/* Search input - Expanded */}
-          <div className="flex-1 relative mx-1">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          {/* Search input */}
+          <div className="flex-1 relative mx-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
             <input
               ref={mobileSearchRef}
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar producto..."
-              className={`w-full pl-8 pr-3 py-2 ${tc.inputAlt} rounded-lg text-base focus:outline-none focus:ring-1 focus:ring-amber-500 placeholder-gray-500 border border-gray-600`}
+              placeholder="Buscar..."
+              className={`w-full pl-10 pr-3 py-3 ${tc.inputAlt} rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-gray-500 border border-gray-600`}
               disabled={!!selectedProduct}
             />
           </div>
 
-          {/* Camera scanner button - Mobile only */}
+          {/* Camera scanner button */}
           <motion.button
             onClick={() => setShowCameraScanner(true)}
-            className="h-full px-2.5 flex items-center justify-center hover:bg-gray-700/50 active:bg-gray-700 transition-colors"
+            className="w-12 h-12 flex items-center justify-center rounded-xl hover:bg-gray-700/50 active:bg-gray-700 transition-colors"
             whileTap={{ scale: 0.95 }}
             title="Escanear con cámara"
           >
-            <Camera className="w-5 h-5 text-amber-500" />
+            <Camera className="w-6 h-6 text-amber-500" />
           </motion.button>
 
           {/* Status indicator */}
-          <div className="px-1.5">
+          <div className="w-8 flex items-center justify-center">
             {isOnline ? (
-              <Wifi className="w-4 h-4 text-green-500" />
+              <Wifi className="w-5 h-5 text-green-500" />
             ) : (
-              <WifiOff className="w-4 h-4 text-yellow-500" />
+              <WifiOff className="w-5 h-5 text-yellow-500" />
             )}
           </div>
 
-          {/* List toggle button - Edge aligned */}
+          {/* List toggle button */}
           <motion.button
             onClick={() => setMobileView(mobileView === 'input' ? 'list' : 'input')}
-            className="h-full px-3 flex items-center justify-center hover:bg-gray-700/50 active:bg-gray-700 transition-colors relative"
+            className="w-12 h-12 flex items-center justify-center rounded-xl hover:bg-gray-700/50 active:bg-gray-700 transition-colors relative"
             whileTap={{ scale: 0.95 }}
           >
-            <List className="w-5 h-5" />
+            <List className="w-6 h-6" />
             {countedProducts.length > 0 && (
               <motion.span
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
-                className="absolute top-2 right-1.5 bg-amber-500 text-white text-[10px] min-w-[18px] h-[18px] rounded-full flex items-center justify-center font-bold shadow-md px-0.5"
+                className="absolute top-1 right-1 bg-amber-500 text-white text-[10px] min-w-[20px] h-[20px] rounded-full flex items-center justify-center font-bold shadow-md px-1"
               >
                 {countedProducts.length}
               </motion.span>
@@ -774,7 +774,7 @@ export default function AuditCountPage() {
 
         {/* Mobile search results dropdown */}
         {search && filteredProducts.length > 0 && !selectedProduct && (
-          <div className="lg:hidden absolute left-0 right-0 top-14 z-50 bg-gray-800 border-b border-gray-700 shadow-2xl overflow-hidden max-h-[50vh] overflow-auto">
+          <div className="lg:hidden absolute left-0 right-0 top-full z-50 bg-gray-800 border-b border-gray-700 shadow-2xl overflow-hidden max-h-[50vh] overflow-auto">
             {filteredProducts.map(product => (
               <button
                 key={product.id}
