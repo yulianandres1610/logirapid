@@ -32,10 +32,12 @@ export function useBarcodeScan(options: UseBarcodeScanOptions) {
   const lastKeyTimeRef = useRef(0)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const scanStartTimeRef = useRef(0)
+  const keyCountRef = useRef(0)
 
   const resetBuffer = useCallback(() => {
     bufferRef.current = ''
     scanStartTimeRef.current = 0
+    keyCountRef.current = 0
   }, [])
 
   const processBarcode = useCallback((barcode: string, event?: KeyboardEvent) => {
@@ -44,6 +46,7 @@ export function useBarcodeScan(options: UseBarcodeScanOptions) {
       if (event) {
         event.preventDefault()
       }
+      console.log('[Barcode Scanner] Detected:', trimmed)
       onScan(trimmed)
     }
     resetBuffer()
@@ -66,7 +69,7 @@ export function useBarcodeScan(options: UseBarcodeScanOptions) {
     const currentTime = Date.now()
     const key = event.key
 
-    // Clear timeout
+    // Clear any existing timeout
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current)
     }
@@ -80,43 +83,54 @@ export function useBarcodeScan(options: UseBarcodeScanOptions) {
       if (bufferRef.current.length > 0) {
         processBarcode(bufferRef.current, event)
       }
-    } else if (key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
-      // Add printable character to buffer
+      return
+    }
+
+    // Only process printable characters (single char, no modifiers)
+    if (key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
       if (isRapidInput || bufferRef.current.length === 0) {
         // Continue or start building barcode
         if (bufferRef.current.length === 0) {
           scanStartTimeRef.current = currentTime
+          keyCountRef.current = 0
         }
         bufferRef.current += key
+        keyCountRef.current++
       } else {
-        // Too slow - start new scan
+        // Too slow between keys - start new scan
         bufferRef.current = key
         scanStartTimeRef.current = currentTime
+        keyCountRef.current = 1
       }
     }
 
     lastKeyTimeRef.current = currentTime
 
-    // Set timeout to auto-process buffer (some scanners don't send Enter)
+    // Auto-process buffer after short delay (for scanners without Enter)
+    // Use shorter timeout since scanners are fast
     timeoutRef.current = setTimeout(() => {
       if (bufferRef.current.length >= minLength) {
-        // Calculate average time per character
         const totalTime = Date.now() - scanStartTimeRef.current
-        const avgTimePerChar = totalTime / bufferRef.current.length
+        const avgTimePerChar = bufferRef.current.length > 1 ? totalTime / (bufferRef.current.length - 1) : 0
 
-        // If typing was fast enough (scanner-like), process it
-        if (avgTimePerChar < maxTimeBetweenKeys) {
+        // Process if:
+        // 1. Average time per char is fast enough (scanner speed), OR
+        // 2. Buffer length suggests it's a barcode (8+ chars typed rapidly)
+        const isScannerSpeed = avgTimePerChar < maxTimeBetweenKeys * 1.5
+        const looksLikeBarcode = bufferRef.current.length >= 8 && avgTimePerChar < 150
+
+        if (isScannerSpeed || looksLikeBarcode) {
           processBarcode(bufferRef.current)
-        } else if (onError) {
-          onError('Escaneo incompleto detectado')
+        } else {
+          // Not scanner input - clear buffer silently
           resetBuffer()
         }
       } else {
         resetBuffer()
       }
-    }, 250) // Wait a bit longer for Enter key
+    }, 150) // Short timeout - scanners are fast, no need to wait for Enter
 
-  }, [enabled, maxTimeBetweenKeys, minLength, onScan, onError, resetBuffer])
+  }, [enabled, maxTimeBetweenKeys, minLength, processBarcode, resetBuffer])
 
   useEffect(() => {
     if (!enabled) return
