@@ -71,6 +71,9 @@ interface ProductVariant {
   name: string
   sku: string
   barcode: string | null
+  imageUrl: string | null
+  costPrice: number
+  sellingPrice: number
   stock: number
 }
 
@@ -216,14 +219,45 @@ export default function InventoryCountPage() {
           const productsData = await productsRes.json()
           if (productsData.success && productsData.data) {
             const productsArray = Array.isArray(productsData.data.products) ? productsData.data.products : []
-            setProducts(productsArray.map((p: { id: number; name: string; sku?: string; barcode?: string; price?: number; sellingPrice?: number; stock?: number; imageUrl?: string }) => ({
+            setProducts(productsArray.map((p: {
+              id: number
+              name: string
+              sku?: string
+              barcode?: string
+              price?: number
+              sellingPrice?: number
+              stock?: number
+              imageUrl?: string
+              hasVariants?: boolean
+              variants?: Array<{
+                id: number
+                name: string
+                sku: string
+                barcode: string | null
+                imageUrl: string | null
+                costPrice?: number
+                sellingPrice?: number
+                price?: number
+                stock: number
+              }>
+            }) => ({
               id: p.id,
               name: p.name || 'Sin nombre',
               sku: p.sku || '',
               barcode: p.barcode || '',
               sellingPrice: p.price || p.sellingPrice || 0,
               stock: p.stock || 0,
-              imageUrl: p.imageUrl || null
+              imageUrl: p.imageUrl || null,
+              variants: p.variants?.map(v => ({
+                id: v.id,
+                name: v.name,
+                sku: v.sku,
+                barcode: v.barcode,
+                imageUrl: v.imageUrl,
+                costPrice: v.costPrice || 0,
+                sellingPrice: v.sellingPrice || v.price || 0,
+                stock: v.stock || 0
+              }))
             })))
           }
         }
@@ -369,18 +403,42 @@ export default function InventoryCountPage() {
 
   // Handle barcode scan - auto select product for counting
   const handleBarcodeScan = useCallback((barcode: string) => {
-    const product = products.find(p =>
-      p.barcode?.toLowerCase() === barcode.toLowerCase() ||
-      p.sku?.toLowerCase() === barcode.toLowerCase()
+    const lowerBarcode = barcode.toLowerCase()
+
+    // First search in products
+    let product = products.find(p =>
+      p.barcode?.toLowerCase() === lowerBarcode ||
+      p.sku?.toLowerCase() === lowerBarcode
     )
 
+    // If not found, search in variants
+    let foundVariant: ProductVariant | null = null
+    if (!product) {
+      for (const p of products) {
+        if (p.variants) {
+          const variant = p.variants.find(v =>
+            v.barcode?.toLowerCase() === lowerBarcode ||
+            v.sku?.toLowerCase() === lowerBarcode
+          )
+          if (variant) {
+            product = p
+            foundVariant = variant
+            break
+          }
+        }
+      }
+    }
+
     if (product) {
-      selectProduct(product)
+      setSelectedProduct(product)
+      setSelectedVariant(foundVariant)
+      setSearch('')
+      setNumpadValue('')
     } else {
       setError(`Producto no encontrado: ${barcode}`)
       setTimeout(() => setError(null), 3000)
     }
-  }, [products, selectProduct])
+  }, [products])
 
   // Barcode scanner detection hook - works with physical scanners (keyboard emulation)
   useBarcodeScan({
@@ -422,6 +480,10 @@ export default function InventoryCountPage() {
             const productBarcode = selectedVariant?.barcode || selectedProduct.barcode
             const expectedStock = selectedVariant?.stock ?? selectedProduct.stock
 
+            // Use variant image/price if available, otherwise fallback to product
+            const productImage = selectedVariant?.imageUrl || selectedProduct.imageUrl
+            const unitPrice = selectedVariant?.sellingPrice ?? selectedProduct.sellingPrice
+
             setCountedProducts(prev => [{
               productId: selectedProduct.id,
               variantId: variantId,
@@ -429,8 +491,8 @@ export default function InventoryCountPage() {
               productName: productName,
               productSku: productSku,
               productBarcode: productBarcode,
-              productImage: selectedProduct.imageUrl,
-              unitPrice: selectedProduct.sellingPrice,
+              productImage: productImage,
+              unitPrice: unitPrice,
               countedQuantity: quantity,
               expectedQuantity: expectedStock
             }, ...prev])
@@ -892,8 +954,13 @@ export default function InventoryCountPage() {
               <div className="bg-gray-800 rounded-xl p-2.5 sm:p-3 lg:p-5 mb-2 sm:mb-3 lg:mb-5 flex-shrink-0">
                 <div className="flex gap-3 lg:gap-6">
                   <div className="w-14 h-14 sm:w-20 sm:h-20 lg:w-28 lg:h-28 flex-shrink-0 rounded-xl overflow-hidden bg-gray-700">
-                    {selectedProduct.imageUrl ? (
-                      <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="w-full h-full object-cover" />
+                    {/* Show variant image if selected, otherwise product image */}
+                    {(selectedVariant?.imageUrl || selectedProduct.imageUrl) ? (
+                      <img
+                        src={selectedVariant?.imageUrl || selectedProduct.imageUrl || ''}
+                        alt={selectedVariant?.name || selectedProduct.name}
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <Package className="w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-gray-500" />
@@ -903,13 +970,20 @@ export default function InventoryCountPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start">
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-base sm:text-lg lg:text-xl font-semibold truncate">{selectedProduct.name}</h3>
-                        <p className="text-gray-400 text-xs sm:text-sm truncate">{selectedProduct.sku || selectedProduct.barcode || 'Sin codigo'}</p>
-                        <p className="text-xs text-gray-500 mt-0.5 sm:mt-1">Stock: {selectedProduct.stock}</p>
+                        <h3 className="text-base sm:text-lg lg:text-xl font-semibold truncate">
+                          {selectedVariant ? `${selectedProduct.name} - ${selectedVariant.name}` : selectedProduct.name}
+                        </h3>
+                        <p className="text-gray-400 text-xs sm:text-sm truncate">
+                          {selectedVariant?.sku || selectedProduct.sku || selectedVariant?.barcode || selectedProduct.barcode || 'Sin codigo'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5 sm:mt-1">
+                          Stock: {selectedVariant?.stock ?? selectedProduct.stock}
+                        </p>
                       </div>
                       <button
                         onClick={() => {
                           setSelectedProduct(null)
+                          setSelectedVariant(null)
                           setNumpadValue('')
                           setEditingIndex(null)
                         }}
@@ -920,6 +994,36 @@ export default function InventoryCountPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Variant selector - compact on mobile */}
+                {selectedProduct.variants && selectedProduct.variants.length > 0 && (
+                  <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-gray-700">
+                    <p className="text-[10px] sm:text-xs text-gray-500 mb-1.5 sm:mb-2">Variante:</p>
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                      {selectedProduct.variants.map((variant) => (
+                        <button
+                          key={variant.id}
+                          onClick={() => setSelectedVariant(variant)}
+                          className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all ${
+                            selectedVariant?.id === variant.id
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                          }`}
+                        >
+                          {variant.imageUrl && (
+                            <img
+                              src={variant.imageUrl}
+                              alt={variant.name}
+                              className="w-5 h-5 sm:w-6 sm:h-6 rounded object-cover"
+                            />
+                          )}
+                          <span className="text-xs sm:text-sm font-medium">{variant.name}</span>
+                          <span className="text-[10px] sm:text-xs opacity-70">({variant.stock})</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Quantity display - compact on mobile */}
