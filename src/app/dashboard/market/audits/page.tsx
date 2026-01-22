@@ -18,7 +18,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Package,
-  Eye
+  Eye,
+  Trash2
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -152,6 +153,23 @@ export default function AuditsPage() {
       setLoadingDetail(false)
     }
   }, [])
+
+  const deleteCount = async (countId: number, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm('¿Eliminar este conteo de auditoría? Esta acción no se puede deshacer.')) return
+
+    try {
+      const res = await fetch(`/api/audit/counts?countId=${countId}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (data.success) {
+        fetchCounts(true)
+      } else {
+        alert(data.error || 'Error al eliminar')
+      }
+    } catch {
+      alert('Error de conexión')
+    }
+  }
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-'
@@ -496,7 +514,7 @@ export default function AuditsPage() {
                       <th className="text-right py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Faltantes</th>
                       <th className="text-right py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Sobrantes</th>
                       <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Detalle</th>
+                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -639,20 +657,31 @@ export default function AuditsPage() {
                             )}
                           </td>
                           <td className="py-4 px-4 text-center">
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
-                              onClick={() => fetchDetail(count.id)}
-                              disabled={loadingDetail}
-                              className="p-2 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
-                              title="Ver detalle"
-                            >
-                              {loadingDetail ? (
-                                <Loader2 className="w-4 h-4 text-purple-500 animate-spin" />
-                              ) : (
-                                <Eye className="w-4 h-4 text-purple-500" />
-                              )}
-                            </motion.button>
+                            <div className="flex items-center justify-center gap-1">
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => fetchDetail(count.id)}
+                                disabled={loadingDetail}
+                                className="p-2 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                                title="Ver detalle"
+                              >
+                                {loadingDetail ? (
+                                  <Loader2 className="w-4 h-4 text-purple-500 animate-spin" />
+                                ) : (
+                                  <Eye className="w-4 h-4 text-purple-500" />
+                                )}
+                              </motion.button>
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={(e) => deleteCount(count.id, e)}
+                                className="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-4 h-4 text-red-500" />
+                              </motion.button>
+                            </div>
                           </td>
                         </motion.tr>
                       ))

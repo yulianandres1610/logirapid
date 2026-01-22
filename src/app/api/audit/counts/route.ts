@@ -457,3 +457,65 @@ export async function POST(request: NextRequest) {
     }, { status: 500 })
   }
 }
+
+/**
+ * DELETE /api/audit/counts
+ * Delete a count (MARKET_MANAGER only)
+ * Query param: countId
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const cookieStore = await cookies()
+    const authToken = cookieStore.get('auth-token')?.value
+
+    if (!authToken) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
+    }
+
+    let payload: JWTPayload
+    try {
+      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+      payload = jwt.verify(authToken, secret) as JWTPayload
+    } catch {
+      return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 })
+    }
+
+    if (payload.companyType !== 'market' || payload.role !== 'MARKET_MANAGER') {
+      return NextResponse.json({ success: false, error: 'Solo administradores pueden eliminar conteos' }, { status: 403 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const countId = searchParams.get('countId')
+
+    if (!countId) {
+      return NextResponse.json({ success: false, error: 'countId requerido' }, { status: 400 })
+    }
+
+    // Verify count exists and belongs to company
+    const countCheck = await db.query(
+      'SELECT id FROM audit_counts WHERE id = $1 AND company_id = $2',
+      [countId, payload.companyId]
+    )
+
+    if (countCheck.rows.length === 0) {
+      return NextResponse.json({ success: false, error: 'Conteo no encontrado' }, { status: 404 })
+    }
+
+    // Delete lines, history, then count
+    await db.query('DELETE FROM audit_count_lines WHERE count_id = $1', [countId])
+    await db.query('DELETE FROM audit_count_history WHERE count_id = $1', [countId])
+    await db.query('DELETE FROM audit_counts WHERE id = $1', [countId])
+
+    return NextResponse.json({
+      success: true,
+      message: 'Conteo eliminado correctamente'
+    })
+
+  } catch (error) {
+    console.error('[Audit Counts API] DELETE Error:', error)
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al eliminar conteo'
+    }, { status: 500 })
+  }
+}
