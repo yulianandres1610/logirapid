@@ -63,7 +63,12 @@ export async function GET(request: NextRequest) {
     }
 
     const effectiveWarehouseId = warehouseId ? parseInt(warehouseId) : terminalConfig?.warehouse_id
-    const effectivePricelistId = pricelistId ? parseInt(pricelistId) : terminalConfig?.pricelist_id
+
+    // Check if pricelist should be used
+    // Can be disabled via query param ?usePricelist=false or terminal setting use_pricelist=false
+    const usePricelistParam = searchParams.get('usePricelist')
+    const usePricelist = usePricelistParam !== 'false' && terminalConfig?.use_pricelist !== false
+    const effectivePricelistId = usePricelist ? (pricelistId ? parseInt(pricelistId) : terminalConfig?.pricelist_id) : null
 
     // Get products with inventory for the specified warehouse
     const params: (number | null)[] = [companyId]
@@ -238,13 +243,17 @@ export async function GET(request: NextRequest) {
     // Build products with calculated prices and variants
     const products = productsResult.rows.map(p => {
       const pricelistItem = pricelistItems[p.id]
-      let finalPrice = parseFloat(p.sale_price) || 0
+      const basePrice = parseFloat(p.sale_price) || 0
+      let finalPrice = basePrice
+      let priceSource: 'base' | 'pricelist_fixed' | 'pricelist_discount' = 'base'
 
       if (pricelistItem) {
         if (pricelistItem.price !== undefined) {
           finalPrice = pricelistItem.price
+          priceSource = 'pricelist_fixed'
         } else if (pricelistItem.discountPercent !== undefined) {
-          finalPrice = finalPrice * (1 - pricelistItem.discountPercent / 100)
+          finalPrice = basePrice * (1 - pricelistItem.discountPercent / 100)
+          priceSource = 'pricelist_discount'
         }
       }
 
@@ -261,6 +270,12 @@ export async function GET(request: NextRequest) {
         ? variants.reduce((sum, v) => sum + v.totalStock, 0)
         : parseFloat(p.total_stock) || 0
 
+      // Log if price differs from base for debugging
+      const calculatedPrice = Math.round(finalPrice * 100) / 100
+      if (calculatedPrice !== basePrice && priceSource !== 'base') {
+        console.log(`[POS Products] Product "${p.name}" (ID: ${p.id}): basePrice=${basePrice}, finalPrice=${calculatedPrice}, source=${priceSource}`)
+      }
+
       return {
         id: p.id,
         name: p.name,
@@ -270,8 +285,9 @@ export async function GET(request: NextRequest) {
         categoryId: p.category ? categoryMap[p.category] || null : null,
         categoryName: p.category || null,
         unit: p.unit,
-        basePrice: parseFloat(p.sale_price) || 0,
-        price: Math.round(finalPrice * 100) / 100,
+        basePrice: basePrice,
+        price: calculatedPrice,
+        priceSource: priceSource !== 'base' ? priceSource : undefined, // Only include if modified
         costPrice: parseFloat(p.cost_price) || 0,
         taxRate: parseFloat(p.tax_rate) || 0,
         imageUrl: p.image_url,
@@ -318,6 +334,7 @@ export async function GET(request: NextRequest) {
           warehouseName: terminalConfig.warehouse_name,
           pricelistId: terminalConfig.pricelist_id,
           pricelistName: terminalConfig.pricelist_name,
+          pricelistActive: effectivePricelistId !== null, // Whether pricelist is being used
           allowPriceEdit: terminalConfig.allow_price_edit,
           allowDiscount: terminalConfig.allow_discount,
           maxDiscountPercent: parseFloat(terminalConfig.max_discount_percent) || 100,
