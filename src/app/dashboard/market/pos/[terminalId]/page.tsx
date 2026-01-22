@@ -41,7 +41,8 @@ import {
   EyeOff,
   Info,
   Warehouse,
-  MapPin
+  MapPin,
+  RefreshCw
 } from 'lucide-react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
@@ -178,6 +179,7 @@ export default function POSTerminalPage() {
   const [processingPayment, setProcessingPayment] = useState(false)
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0)
   const [isSyncing, setIsSyncing] = useState(false)
+  const [isRefreshingProducts, setIsRefreshingProducts] = useState(false)
 
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState<string>('cash')
@@ -613,6 +615,37 @@ export default function POSTerminalPage() {
       console.error('[POS] Error syncing orders:', e)
     } finally {
       setIsSyncing(false)
+    }
+  }
+
+  // Refresh products from server (force reload)
+  const refreshProducts = async () => {
+    if (!isOnline || isRefreshingProducts) return
+
+    setIsRefreshingProducts(true)
+    try {
+      console.log('[POS] Refreshing products from server...')
+      const productsRes = await fetch(`/api/market/pos/products?terminalId=${terminalId}`)
+      const productsData = await productsRes.json()
+
+      if (productsData.success) {
+        setProducts(productsData.data.products)
+        setCategories(productsData.data.categories)
+        setTerminal(productsData.data.terminal)
+
+        // Update cache
+        await saveProducts(productsData.data.products)
+        await saveCategories(productsData.data.categories)
+        localStorage.setItem(`pos_terminal_${terminalId}`, JSON.stringify(productsData.data.terminal))
+
+        console.log('[POS] Products refreshed:', productsData.data.products.length, 'products')
+      } else {
+        console.error('[POS] Error refreshing products:', productsData.error)
+      }
+    } catch (e) {
+      console.error('[POS] Error refreshing products:', e)
+    } finally {
+      setIsRefreshingProducts(false)
     }
   }
 
@@ -1246,6 +1279,22 @@ export default function POSTerminalPage() {
             <span className="hidden sm:inline">{isOnline ? 'Online' : 'Offline'}</span>
             {isSyncing && <Loader2 className="w-3 h-3 animate-spin" />}
           </div>
+
+          {/* Refresh Products Button */}
+          <button
+            onClick={refreshProducts}
+            disabled={!isOnline || isRefreshingProducts}
+            title="Actualizar productos"
+            className={cn(
+              'flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm transition-all',
+              isOnline
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50'
+                : 'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-600 cursor-not-allowed'
+            )}
+          >
+            <RefreshCw className={cn('w-3 h-3 sm:w-4 sm:h-4', isRefreshingProducts && 'animate-spin')} />
+            <span className="hidden lg:inline">{isRefreshingProducts ? 'Actualizando...' : 'Actualizar'}</span>
+          </button>
 
           {/* Pending Orders Badge */}
           {pendingOrdersCount > 0 && (

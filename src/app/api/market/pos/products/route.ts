@@ -160,6 +160,8 @@ export async function GET(request: NextRequest) {
 
       isDefaultPricelist = pricelistCheck.rows[0]?.is_default === true
 
+      console.log(`[POS Products] Pricelist check: id=${effectivePricelistId}, isDefault=${isDefaultPricelist}`)
+
       // Only load pricelist items if it's NOT the default pricelist
       if (!isDefaultPricelist) {
         const pricelistResult = await db.query(`
@@ -283,9 +285,12 @@ export async function GET(request: NextRequest) {
         ? variants.reduce((sum, v) => sum + v.totalStock, 0)
         : parseFloat(p.total_stock) || 0
 
+      // IMPORTANTE: El precio final NO debe tener redondeo si no hay pricelist activo
+      // Si priceSource === 'base', usar basePrice directamente para evitar errores de punto flotante
+      const calculatedPrice = priceSource === 'base' ? basePrice : Math.round(finalPrice * 100) / 100
+
       // Log if price differs from base for debugging
-      const calculatedPrice = Math.round(finalPrice * 100) / 100
-      if (calculatedPrice !== basePrice && priceSource !== 'base') {
+      if (calculatedPrice !== basePrice) {
         console.log(`[POS Products] Product "${p.name}" (ID: ${p.id}): basePrice=${basePrice}, finalPrice=${calculatedPrice}, source=${priceSource}`)
       }
 

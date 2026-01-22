@@ -70,6 +70,7 @@ export default function PrintLabelsView({
 
         if (data.success && data.data?.products) {
           // Transform POS products data
+          // IMPORTANTE: Usar basePrice (precio de la ficha) en lugar de price (precio calculado con pricelist)
           const productsList = data.data.products.map((item: {
             id: number
             name: string
@@ -77,6 +78,7 @@ export default function PrintLabelsView({
             sku: string
             barcode: string | null
             imageUrl: string | null
+            basePrice: number
             price: number
             costPrice: number
             unit: string
@@ -90,7 +92,7 @@ export default function PrintLabelsView({
             sku: item.sku,
             barcode: item.barcode,
             imageUrl: item.imageUrl,
-            sellingPrice: item.price,
+            sellingPrice: item.basePrice, // Usar basePrice para etiquetas, no price
             costPrice: item.costPrice,
             unit: item.unit,
             category: item.categoryName,
