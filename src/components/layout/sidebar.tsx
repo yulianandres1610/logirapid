@@ -44,7 +44,8 @@ import {
   Calculator,
   Receipt,
   FileCheck,
-  TrendingUp
+  TrendingUp,
+  ClipboardCheck
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -565,6 +566,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: Monitor, label: "Terminales POS", href: "/dashboard/market/reports/pos-terminals" },
       ]
     },
+    { icon: ClipboardCheck, label: "Auditoría", href: "/dashboard/market/audits", requiredRole: 'MARKET_MANAGER' },
     { icon: Tag, label: "Listas de Precios", href: "/dashboard/market/pricelists" },
     { icon: Wallet, label: "Mi Wallet", href: "/dashboard/market/wallet" },
     { icon: Truck, label: "Entregas", href: "/dashboard/market/deliveries" },
