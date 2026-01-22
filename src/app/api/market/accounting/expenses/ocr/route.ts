@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { createClient } from '@supabase/supabase-js'
 
 // API Key para Gemini (misma que el resto del proyecto)
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
@@ -46,10 +47,46 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { fileBase64, mimeType: providedMimeType } = body
+    const { fileBase64, mimeType: providedMimeType, storagePath } = body
 
     // Soporte para el parámetro anterior (imageBase64) para compatibilidad
-    const base64Input = fileBase64 || body.imageBase64
+    let base64Input = fileBase64 || body.imageBase64
+
+    // If storagePath provided, fetch file from Supabase Storage
+    if (!base64Input && storagePath) {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+      if (!supabaseUrl || !supabaseServiceKey) {
+        return NextResponse.json({
+          success: false,
+          error: 'Almacenamiento no configurado'
+        }, { status: 500 })
+      }
+
+      const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+        auth: { autoRefreshToken: false, persistSession: false }
+      })
+
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from('company-private-documents')
+        .download(storagePath)
+
+      if (downloadError || !fileData) {
+        console.error('[OCR] Error downloading from storage:', downloadError)
+        return NextResponse.json({
+          success: false,
+          error: 'Error al obtener archivo del almacenamiento'
+        }, { status: 400 })
+      }
+
+      const buffer = Buffer.from(await fileData.arrayBuffer())
+      const detectedMime = storagePath.endsWith('.pdf') ? 'application/pdf'
+        : storagePath.endsWith('.png') ? 'image/png'
+        : storagePath.endsWith('.webp') ? 'image/webp'
+        : 'image/jpeg'
+      base64Input = `data:${detectedMime};base64,${buffer.toString('base64')}`
+      console.log('[OCR] Fetched file from storage:', { storagePath, mimeType: detectedMime, size: buffer.length })
+    }
 
     if (!base64Input) {
       return NextResponse.json({

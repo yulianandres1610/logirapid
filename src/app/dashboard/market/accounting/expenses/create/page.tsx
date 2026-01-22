@@ -407,6 +407,77 @@ export default function CreateExpensePage() {
     setProcessingOCR(false)
   }
 
+  // Process file uploaded via phone with OCR
+  const processPhoneUploadWithOCR = async (storagePath: string) => {
+    setProcessingOCR(true)
+    setOcrResult(null)
+    setErrors(prev => ({ ...prev, ocr: '' }))
+
+    try {
+      console.log('[OCR] Processing phone upload:', storagePath)
+
+      const response = await fetch('/api/market/accounting/expenses/ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storagePath })
+      })
+
+      const result = await response.json()
+      console.log('[OCR] Phone upload API Response:', result)
+
+      if (response.ok && result.success && result.data) {
+        const detectedCurrency = result.data.detectedCurrency as SupportedCurrency | null
+        const currencyConfidence = result.data.currencyConfidence || 0
+
+        if (!detectedCurrency || currencyConfidence < 0.7) {
+          setPendingOcrData({
+            data: result.data,
+            detectedCurrency,
+            currencyHints: result.data.currencyHints
+          })
+          setShowCurrencyModal(true)
+          setProcessingOCR(false)
+          return
+        }
+
+        let processedData = result.data
+        if (detectedCurrency !== 'USD') {
+          const rates = { USD_CUP, USD_MLC }
+          const totalConversion = convertToUSD(result.data.total || result.data.amount || 0, detectedCurrency, rates)
+          const subtotalConversion = convertToUSD(result.data.subtotal || 0, detectedCurrency, rates)
+          const taxConversion = convertToUSD(result.data.tax || 0, detectedCurrency, rates)
+          const amountConversion = result.data.amount ? convertToUSD(result.data.amount, detectedCurrency, rates) : null
+
+          const convertedItems = (result.data.items || []).map((item: ExtractedItem) => ({
+            ...item,
+            amount: convertToUSD(item.amount, detectedCurrency, rates).convertedAmount
+          }))
+
+          processedData = {
+            ...result.data,
+            items: convertedItems,
+            total: totalConversion.convertedAmount,
+            subtotal: subtotalConversion.convertedAmount,
+            tax: taxConversion.convertedAmount,
+            amount: amountConversion?.convertedAmount || totalConversion.convertedAmount,
+            originalCurrency: detectedCurrency,
+            originalTotal: result.data.total || result.data.amount || 0,
+            conversionRate: totalConversion.rate
+          }
+        }
+
+        await processOcrResult(processedData)
+      } else {
+        const errorMsg = result.error || 'Error al procesar el recibo'
+        setErrors(prev => ({ ...prev, ocr: errorMsg }))
+      }
+    } catch (error) {
+      console.error('[OCR] Phone upload error:', error)
+      setErrors(prev => ({ ...prev, ocr: 'Error de conexion al procesar el recibo' }))
+    }
+    setProcessingOCR(false)
+  }
+
   // Process OCR result after currency is determined
   const processOcrResult = async (data: NonNullable<typeof ocrResult>) => {
     setOcrResult(data)
@@ -2036,9 +2107,11 @@ export default function CreateExpensePage() {
           onClose={() => setShowPhoneUpload(false)}
           purpose="expense_receipt"
           referenceType="expense"
-          onUploadComplete={(fileUrl) => {
+          onUploadComplete={async (fileUrl) => {
             setPhoneReceiptPath(fileUrl)
             setShowPhoneUpload(false)
+            // Trigger OCR processing from the uploaded file
+            await processPhoneUploadWithOCR(fileUrl)
           }}
         />
     </div>
