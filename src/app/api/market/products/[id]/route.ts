@@ -122,7 +122,7 @@ export async function GET(
         supplier_reference as "supplierReference",
         quantity_on_hand as "quantityOnHand",
         quantity_expected as "quantityExpected",
-        minimum_stock as "minimumStock",
+        minimum_stock::integer as "minimumStock",
         is_active as "isActive",
         unit_of_measure as "unitOfMeasure",
         created_at as "createdAt",
@@ -327,7 +327,7 @@ export async function PUT(
       supplierName || null,
       supplierContact || null,
       supplierReference || null,
-      minimumStock || 5,
+      parseInt(minimumStock) || 5,
       isActive !== false,
       productId,
       parseInt(companyId)

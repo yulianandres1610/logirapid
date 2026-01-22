@@ -209,7 +209,7 @@ export async function GET(
       sellingPrice: parseFloat(row.selling_price) || 0,
       totalCostValue: (parseFloat(row.quantity_on_hand) || 0) * (parseFloat(row.cost_price) || 0),
       totalSellingValue: (parseFloat(row.quantity_on_hand) || 0) * (parseFloat(row.selling_price) || 0),
-      minimumStock: parseFloat(row.minimum_stock) || 0
+      minimumStock: parseInt(row.minimum_stock) || 0
     }))
 
     return NextResponse.json({

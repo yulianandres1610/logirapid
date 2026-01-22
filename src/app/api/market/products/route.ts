@@ -290,7 +290,7 @@ export async function GET(request: NextRequest) {
               ? variants.reduce((sum, v) => sum + v.stock, 0)
               : parseFloat(row.quantity_on_hand) || 0,
             quantityExpected: parseFloat(row.quantity_expected) || 0,
-            minimumStock: parseFloat(row.minimum_stock) || 0,
+            minimumStock: parseInt(row.minimum_stock) || 0,
             isActive: row.is_active,
             unitOfMeasure: row.unit_of_measure || 'unidad',
             odooProductId: row.odoo_product_id,
@@ -436,7 +436,7 @@ export async function POST(request: NextRequest) {
       companyId, name, description || null, imageUrl || null, category || null, unitOfMeasure || 'unidad',
       costPrice, sellingPrice, currency, finalSku, finalBarcode,
       supplierName || null, supplierContact || null, supplierReference || null,
-      minimumStock, userId
+      parseInt(minimumStock) || 0, userId
     ])
 
     const productId = result.rows[0].id
