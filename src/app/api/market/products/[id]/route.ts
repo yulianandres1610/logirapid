@@ -12,6 +12,24 @@ interface JWTPayload {
   companyName: string
 }
 
+/**
+ * Generate EAN-13 barcode
+ */
+function generateBarcode(): string {
+  const prefix = '200' // Internal use prefix
+  const random = Math.floor(Math.random() * 1000000000).toString().padStart(9, '0')
+  const base = prefix + random
+
+  // Calculate check digit
+  let sum = 0
+  for (let i = 0; i < 12; i++) {
+    sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3)
+  }
+  const checkDigit = (10 - (sum % 10)) % 10
+
+  return base + checkDigit
+}
+
 // Utility function to log product changes
 async function logProductChange(
   productId: number,
@@ -396,8 +414,8 @@ export async function PUT(
 
       for (const v of variants) {
         try {
-          // Generate barcode if empty
-          const variantBarcode = v.barcode || `${barcode || sku || productId}-V${Date.now()}`
+          // Generate barcode if empty (EAN-13 format)
+          const variantBarcode = v.barcode || generateBarcode()
           // Generate SKU if empty
           const variantSku = v.sku || `${sku || `PRD${productId}`}-${v.name?.replace(/\s+/g, '-').substring(0, 10) || 'VAR'}`
 
