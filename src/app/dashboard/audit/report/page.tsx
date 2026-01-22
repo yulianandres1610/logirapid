@@ -244,7 +244,8 @@ export default function AuditReportPage() {
           printServiceId: selectedPrinter.serviceId,
           printerId: selectedPrinter.printerId,
           sourceType: 'audit_count',
-          sourceId: countData.id
+          sourceId: countData.id,
+          warehouseId: countData.warehouseId
         })
       })
 

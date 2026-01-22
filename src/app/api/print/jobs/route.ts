@@ -194,7 +194,8 @@ export async function POST(request: NextRequest) {
       'invoice',               // Factura general
       'purchase_invoice',      // Factura de compra
       'sales_report',          // Reporte de ventas
-      'inventory_count_report', // Reporte de conteo de inventario
+      'inventory_count_report', // Reporte de conteo de inventario POS
+      'audit_count_report',     // Reporte de conteo de auditoría
       'cash_register_report',  // Reporte de caja/arqueo
       'warehouse_operation',   // Operación de almacén (recepción, transferencia, scrap, ajuste)
       'consignment_receipt',   // Recibo de orden de consignación para almacén
