@@ -148,18 +148,31 @@ export async function GET(request: NextRequest) {
     })
 
     // Get pricelist items if a pricelist is specified
+    // BUT if pricelist is "default" (is_default = true), use product base prices
     let pricelistItems: Record<number, { price?: number; discountPercent?: number }> = {}
+    let isDefaultPricelist = false
+
     if (effectivePricelistId) {
-      const pricelistResult = await db.query(`
-        SELECT product_id, fixed_price, discount_percent
-        FROM market_pricelist_items
-        WHERE pricelist_id = $1
+      // First check if this is the default pricelist
+      const pricelistCheck = await db.query(`
+        SELECT is_default FROM market_pricelists WHERE id = $1
       `, [effectivePricelistId])
 
-      for (const item of pricelistResult.rows) {
-        pricelistItems[item.product_id] = {
-          price: item.fixed_price ? parseFloat(item.fixed_price) : undefined,
-          discountPercent: item.discount_percent ? parseFloat(item.discount_percent) : undefined
+      isDefaultPricelist = pricelistCheck.rows[0]?.is_default === true
+
+      // Only load pricelist items if it's NOT the default pricelist
+      if (!isDefaultPricelist) {
+        const pricelistResult = await db.query(`
+          SELECT product_id, fixed_price, discount_percent
+          FROM market_pricelist_items
+          WHERE pricelist_id = $1
+        `, [effectivePricelistId])
+
+        for (const item of pricelistResult.rows) {
+          pricelistItems[item.product_id] = {
+            price: item.fixed_price ? parseFloat(item.fixed_price) : undefined,
+            discountPercent: item.discount_percent ? parseFloat(item.discount_percent) : undefined
+          }
         }
       }
     }
@@ -334,7 +347,8 @@ export async function GET(request: NextRequest) {
           warehouseName: terminalConfig.warehouse_name,
           pricelistId: terminalConfig.pricelist_id,
           pricelistName: terminalConfig.pricelist_name,
-          pricelistActive: effectivePricelistId !== null, // Whether pricelist is being used
+          pricelistActive: effectivePricelistId !== null && !isDefaultPricelist, // Only active if not default
+          isDefaultPricelist: isDefaultPricelist, // Using default = use product base prices
           allowPriceEdit: terminalConfig.allow_price_edit,
           allowDiscount: terminalConfig.allow_discount,
           maxDiscountPercent: parseFloat(terminalConfig.max_discount_percent) || 100,
