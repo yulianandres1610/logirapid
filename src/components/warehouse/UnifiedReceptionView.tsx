@@ -430,6 +430,23 @@ export default function UnifiedReceptionView({
     }
   }
 
+  // Receive all - set all lines to their pending quantity
+  const receiveAll = () => {
+    if (!detectedOrder) return
+
+    const newReceivedLines = new Map(receivedLines)
+    detectedOrder.lines.forEach(line => {
+      const current = newReceivedLines.get(line.lineId)
+      if (current) {
+        newReceivedLines.set(line.lineId, {
+          ...current,
+          quantityReceived: line.quantityPending
+        })
+      }
+    })
+    setReceivedLines(newReceivedLines)
+  }
+
   // Process reception
   const handleProcessReception = async () => {
     if (!detectedOrder) return
@@ -1328,6 +1345,22 @@ export default function UnifiedReceptionView({
                 )}
               >
                 Cancelar
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={receiveAll}
+                disabled={processing || totalToReceive >= totalExpected}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-3 rounded-xl transition-all font-medium',
+                  theme === 'dark'
+                    ? 'bg-blue-900/50 text-blue-300 hover:bg-blue-900/70'
+                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200',
+                  (processing || totalToReceive >= totalExpected) && 'opacity-50 cursor-not-allowed'
+                )}
+              >
+                <Package className="w-5 h-5" />
+                Recibir Todo
               </motion.button>
               <motion.button
                 whileHover={{ scale: 1.02 }}
