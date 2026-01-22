@@ -86,6 +86,11 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
 
+    // Allow public upload page (phone upload via QR)
+    if (pathname.startsWith('/upload/')) {
+      return NextResponse.next()
+    }
+
     // Allow market API routes (including consignments, purchases, order-invoices, uploads, migrations, ai, print, users)
     if (pathname.startsWith('/api/market') ||
         pathname.startsWith('/api/auth') ||

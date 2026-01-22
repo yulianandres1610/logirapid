@@ -10,10 +10,12 @@ import {
   Image as ImageIcon,
   AlertCircle,
   CheckCircle,
-  Loader2
+  Loader2,
+  Smartphone
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { PhoneUploadModal } from '@/components/uploads/PhoneUploadModal'
 
 export interface InvoiceFile {
   id: string
@@ -34,6 +36,7 @@ interface InvoiceUploaderProps {
   invoices: InvoiceFile[]
   onInvoicesChange: (invoices: InvoiceFile[]) => void
   orderType: 'consignment' | 'purchase'
+  orderId?: number
   disabled?: boolean
   className?: string
 }
@@ -62,11 +65,13 @@ export function InvoiceUploader({
   invoices,
   onInvoicesChange,
   orderType,
+  orderId,
   disabled = false,
   className
 }: InvoiceUploaderProps) {
   const { theme } = useTheme()
   const [dragActive, setDragActive] = useState(false)
+  const [showPhoneUpload, setShowPhoneUpload] = useState(false)
 
   const handleFiles = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files)
@@ -143,6 +148,20 @@ export function InvoiceUploader({
     onInvoicesChange(invoices.filter(inv => inv.id !== id))
   }, [invoices, onInvoicesChange])
 
+  const handlePhoneUploadComplete = useCallback((fileUrl: string, fileName: string) => {
+    const newInvoice: InvoiceFile = {
+      id: generateId(),
+      name: fileName || 'foto-telefono.jpg',
+      size: 0,
+      type: fileName?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+      uploaded: true,
+      storagePath: fileUrl,
+      uploadedAt: new Date().toISOString()
+    }
+    onInvoicesChange([...invoices, newInvoice])
+    setShowPhoneUpload(false)
+  }, [invoices, onInvoicesChange])
+
   const isPdf = (type: string) => type === 'application/pdf'
 
   return (
@@ -212,6 +231,23 @@ export function InvoiceUploader({
           </div>
         </label>
       </div>
+
+      {/* Phone Upload Button */}
+      {!disabled && (
+        <button
+          type="button"
+          onClick={() => setShowPhoneUpload(true)}
+          className={cn(
+            'w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-dashed transition-all',
+            theme === 'dark'
+              ? 'border-gray-600 text-gray-300 hover:border-blue-500 hover:text-blue-400 hover:bg-blue-900/10'
+              : 'border-gray-300 text-gray-600 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50'
+          )}
+        >
+          <Smartphone className="w-5 h-5" />
+          <span className="font-medium">Subir con Telefono</span>
+        </button>
+      )}
 
       {/* Invoice List */}
       {invoices.length > 0 && (
@@ -360,6 +396,16 @@ export function InvoiceUploader({
           </div>
         </div>
       </div>
+
+      {/* Phone Upload Modal */}
+      <PhoneUploadModal
+        isOpen={showPhoneUpload}
+        onClose={() => setShowPhoneUpload(false)}
+        purpose="purchase_invoice"
+        referenceType={orderType === 'purchase' ? 'purchase' : 'consignment'}
+        referenceId={orderId}
+        onUploadComplete={handlePhoneUploadComplete}
+      />
     </div>
   )
 }

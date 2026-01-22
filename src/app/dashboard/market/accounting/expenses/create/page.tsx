@@ -22,12 +22,14 @@ import {
   Brain,
   Scan,
   Zap,
-  Layers
+  Layers,
+  Smartphone
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 import { CurrencyDetectionModal } from '@/components/market/CurrencyDetectionModal'
+import { PhoneUploadModal } from '@/components/uploads/PhoneUploadModal'
 import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
 import {
   convertToUSD,
@@ -163,6 +165,8 @@ export default function CreateExpensePage() {
   } | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [uploadingReceipt, setUploadingReceipt] = useState(false)
+  const [showPhoneUpload, setShowPhoneUpload] = useState(false)
+  const [phoneReceiptPath, setPhoneReceiptPath] = useState<string | null>(null)
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
 
@@ -715,9 +719,9 @@ export default function CreateExpensePage() {
 
     setLoading(true)
     try {
-      // Upload receipt if exists
-      let receiptPath: string | null = null
-      if (formData.receiptFile) {
+      // Upload receipt if exists (phone upload takes priority)
+      let receiptPath: string | null = phoneReceiptPath
+      if (!receiptPath && formData.receiptFile) {
         receiptPath = await uploadReceiptToS3()
       }
 
@@ -1411,6 +1415,35 @@ export default function CreateExpensePage() {
                       {errors.file && (
                         <p className="mt-2 text-sm text-red-500">{errors.file}</p>
                       )}
+
+                      {/* Phone Upload Button - OCR */}
+                      {!formData.receiptFile && !phoneReceiptPath && (
+                        <button
+                          type="button"
+                          onClick={() => setShowPhoneUpload(true)}
+                          className={cn(
+                            'mt-3 w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border-2 border-dashed transition-all text-sm',
+                            'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400',
+                            'hover:border-blue-500 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-400'
+                          )}
+                        >
+                          <Smartphone className="w-4 h-4" />
+                          <span className="font-medium">Subir con Telefono</span>
+                        </button>
+                      )}
+                      {phoneReceiptPath && !formData.receiptFile && (
+                        <div className="mt-3 flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                          <Check className="w-4 h-4 text-green-500" />
+                          <span className="text-sm text-green-700 dark:text-green-400 flex-1">Recibo subido desde telefono</span>
+                          <button
+                            type="button"
+                            onClick={() => setPhoneReceiptPath(null)}
+                            className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
+                          >
+                            <X className="w-4 h-4 text-red-500" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1476,6 +1509,35 @@ export default function CreateExpensePage() {
                           </div>
                         )}
                       </div>
+
+                      {/* Phone Upload Button */}
+                      {!phoneReceiptPath && (
+                        <button
+                          type="button"
+                          onClick={() => setShowPhoneUpload(true)}
+                          className={cn(
+                            'mt-2 w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border-2 border-dashed transition-all text-sm',
+                            'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400',
+                            'hover:border-blue-500 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-400'
+                          )}
+                        >
+                          <Smartphone className="w-4 h-4" />
+                          <span className="font-medium">Subir con Telefono</span>
+                        </button>
+                      )}
+                      {phoneReceiptPath && (
+                        <div className="mt-2 flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                          <Check className="w-4 h-4 text-green-500" />
+                          <span className="text-sm text-green-700 dark:text-green-400 flex-1">Recibo subido desde telefono</span>
+                          <button
+                            type="button"
+                            onClick={() => setPhoneReceiptPath(null)}
+                            className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
+                          >
+                            <X className="w-4 h-4 text-red-500" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1967,6 +2029,17 @@ export default function CreateExpensePage() {
           total={pendingOcrData?.data.total || pendingOcrData?.data.amount || 0}
           rates={{ USD_CUP, USD_MLC }}
           ratesTimestamp={ratesTimestamp}
+        />
+
+        <PhoneUploadModal
+          isOpen={showPhoneUpload}
+          onClose={() => setShowPhoneUpload(false)}
+          purpose="expense_receipt"
+          referenceType="expense"
+          onUploadComplete={(fileUrl) => {
+            setPhoneReceiptPath(fileUrl)
+            setShowPhoneUpload(false)
+          }}
         />
     </div>
   )
