@@ -57,7 +57,7 @@ export async function GET(
         COALESCE(o.received_at, o.updated_at) as received_at,
         s.supplier_code as supplier_code,
         s.name as supplier_name,
-        u.name as received_by_name,
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as received_by_name,
         (SELECT COALESCE(SUM(quantity_received), 0) FROM consignment_order_lines WHERE order_id = o.id) as total_units,
         (SELECT COUNT(*) FROM consignment_order_lines WHERE order_id = o.id AND quantity_received > 0) as total_lines
       FROM consignment_orders o
@@ -100,7 +100,7 @@ export async function GET(
         COALESCE(p.received_date, p.updated_at) as received_at,
         COALESCE(ms.supplier_code, 'PROV') as supplier_code,
         COALESCE(p.supplier_name, ms.name, 'Proveedor') as supplier_name,
-        u.name as received_by_name,
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as received_by_name,
         (SELECT COALESCE(SUM(quantity_received), 0) FROM market_purchase_lines WHERE purchase_id = p.id) as total_units,
         (SELECT COUNT(*) FROM market_purchase_lines WHERE purchase_id = p.id AND quantity_received > 0) as total_lines
       FROM market_purchases p

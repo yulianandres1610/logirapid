@@ -65,7 +65,7 @@ export async function GET(
           s.name as supplier_name,
           w.name as warehouse_name,
           w.code as warehouse_code,
-          u.name as received_by_name
+          COALESCE(u.firstname || ' ' || u.lastname, u.email) as received_by_name
         FROM consignment_orders o
         JOIN market_suppliers s ON s.id = o.supplier_id
         LEFT JOIN market_warehouses w ON w.id = o.warehouse_id
@@ -175,7 +175,7 @@ export async function GET(
           COALESCE(p.supplier_name, ms.name, 'Proveedor') as supplier_name,
           w.name as warehouse_name,
           w.code as warehouse_code,
-          u.name as received_by_name
+          COALESCE(u.firstname || ' ' || u.lastname, u.email) as received_by_name
         FROM market_purchases p
         LEFT JOIN market_suppliers ms ON ms.id = p.supplier_id
         LEFT JOIN market_warehouses w ON w.id = p.warehouse_id
