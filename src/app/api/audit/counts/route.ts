@@ -71,7 +71,8 @@ export async function GET(request: NextRequest) {
         SELECT
           ac.*,
           mw.name as warehouse_name,
-          u.email as counted_by_email
+          u.email as counted_by_email,
+          COALESCE(u.firstname || ' ' || u.lastname, u.email) as counted_by_name
         FROM audit_counts ac
         JOIN market_warehouses mw ON ac.warehouse_id = mw.id
         LEFT JOIN users u ON ac.counted_by = u.id
@@ -106,6 +107,7 @@ export async function GET(request: NextRequest) {
           totalStockAtCost: parseFloat(count.total_stock_at_cost) || 0,
           totalStockAtSale: parseFloat(count.total_stock_at_sale) || 0,
           countedByEmail: count.counted_by_email,
+          countedByName: count.counted_by_name,
           startedAt: count.started_at,
           completedAt: count.completed_at,
           lines: linesResult.rows.map(l => ({
@@ -165,7 +167,8 @@ export async function GET(request: NextRequest) {
         ac.total_stock_at_sale,
         ac.started_at,
         ac.completed_at,
-        u.email as counted_by_email
+        u.email as counted_by_email,
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as counted_by_name
       FROM audit_counts ac
       JOIN market_warehouses mw ON ac.warehouse_id = mw.id
       LEFT JOIN users u ON ac.counted_by = u.id
@@ -207,6 +210,7 @@ export async function GET(request: NextRequest) {
           totalStockAtCost: parseFloat(c.total_stock_at_cost) || 0,
           totalStockAtSale: parseFloat(c.total_stock_at_sale) || 0,
           countedByEmail: c.counted_by_email,
+          countedByName: c.counted_by_name,
           startedAt: c.started_at,
           completedAt: c.completed_at
         }))

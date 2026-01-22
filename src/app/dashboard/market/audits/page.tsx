@@ -52,6 +52,7 @@ interface AuditCount {
   totalStockAtCost: number
   totalStockAtSale: number
   countedByEmail: string
+  countedByName: string
   startedAt: string
   completedAt: string | null
   lines?: AuditCountLine[]
@@ -323,7 +324,14 @@ export default function AuditsPage() {
                         )}>
                           {count.countNumber}
                         </p>
-                        <div className="flex items-center gap-2 mt-0.5">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
+                          <span className={cn(
+                            'text-xs flex items-center gap-1',
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                          )}>
+                            <User className="w-3 h-3" />
+                            {count.countedByName}
+                          </span>
                           <span className={cn(
                             'text-xs flex items-center gap-1',
                             theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
@@ -335,9 +343,18 @@ export default function AuditsPage() {
                             'text-xs flex items-center gap-1',
                             theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
                           )}>
-                            <Calendar className="w-3 h-3" />
-                            {formatDate(count.completedAt || count.startedAt)}
+                            <Clock className="w-3 h-3" />
+                            Inicio: {formatDate(count.startedAt)}
                           </span>
+                          {count.completedAt && (
+                            <span className={cn(
+                              'text-xs flex items-center gap-1',
+                              theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                            )}>
+                              <CheckCircle2 className="w-3 h-3" />
+                              Fin: {formatDate(count.completedAt)}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -466,7 +483,7 @@ export default function AuditsPage() {
                               )}>
                                 <span className="flex items-center gap-1">
                                   <User className="w-3 h-3" />
-                                  {selectedCount.countedByEmail}
+                                  {selectedCount.countedByName}
                                 </span>
                                 <span className="flex items-center gap-1">
                                   <Calendar className="w-3 h-3" />
