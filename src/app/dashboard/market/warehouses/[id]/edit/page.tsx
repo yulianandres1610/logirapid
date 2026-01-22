@@ -48,7 +48,7 @@ interface PrintService {
   id: number
   name: string
   code: string
-  url: string
+  status?: string
 }
 
 const WAREHOUSE_TYPES = [
