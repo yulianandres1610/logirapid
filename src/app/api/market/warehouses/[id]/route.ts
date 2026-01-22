@@ -11,22 +11,6 @@ interface JWTPayload {
   companyName: string
 }
 
-// Run migration to add print service column to warehouses
-async function ensurePrintServiceColumn() {
-  try {
-    await db.query(`
-      ALTER TABLE market_warehouses
-      ADD COLUMN IF NOT EXISTS default_print_service_id INTEGER REFERENCES print_services(id)
-    `)
-  } catch (error) {
-    // Column might already exist or print_services table doesn't exist yet
-    console.log('[Warehouse Migration] Print service column check:', error)
-  }
-}
-
-// Initialize migration
-ensurePrintServiceColumn()
-
 /**
  * GET /api/market/warehouses/[id]
  * Get a specific warehouse
