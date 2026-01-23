@@ -693,8 +693,15 @@ export default function POSTerminalPage() {
     const discounts = cart.reduce((sum, item) => sum + item.discountAmount, 0)
     const total = cart.reduce((sum, item) => sum + item.total, 0)
     const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0)
-    return { subtotal, discounts, total, itemCount }
-  }, [cart])
+    // CUP: redondear por unidad primero, luego multiplicar por cantidad
+    const totalCUP = cart.reduce((sum, item) => {
+      const unitCUP = Math.round(item.unitPrice * USD_CUP_BCC)
+      const lineCUP = unitCUP * item.quantity
+      const discountCUP = Math.round(item.discountAmount * USD_CUP_BCC)
+      return sum + lineCUP - discountCUP
+    }, 0)
+    return { subtotal, discounts, total, itemCount, totalCUP }
+  }, [cart, USD_CUP_BCC])
 
   // Handle exit confirmation with password
   const handleExitRequest = (destination: string = '/dashboard/market/pos', actionLabel: string = 'Salir del POS') => {
@@ -1376,7 +1383,7 @@ export default function POSTerminalPage() {
                   </span>
                 )}
               </div>
-              <span className="font-bold text-lg">${cartTotals.total.toFixed(2)} <span className="text-xs text-green-600 font-normal">(${Math.round(cartTotals.total * USD_CUP_BCC).toLocaleString()} CUP)</span></span>
+              <span className="font-bold text-lg">${cartTotals.total.toFixed(2)} <span className="text-xs text-green-600 font-normal">(${cartTotals.totalCUP.toLocaleString()} CUP)</span></span>
             </div>
             {showMobileCart ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
           </button>
@@ -1561,7 +1568,7 @@ export default function POSTerminalPage() {
                 <div className="text-right">
                   <span>${cartTotals.total.toFixed(2)}</span>
                   <p className="text-xs lg:text-sm font-normal text-green-600">
-                    ${Math.round(cartTotals.total * USD_CUP_BCC).toLocaleString()} CUP
+                    ${cartTotals.totalCUP.toLocaleString()} CUP
                   </p>
                 </div>
               </div>
@@ -1618,7 +1625,7 @@ export default function POSTerminalPage() {
                 )}
               >
                 <CreditCard className="w-4 h-4 lg:w-5 lg:h-5" />
-                <span>${cartTotals.total.toFixed(2)} <span className="text-[10px] lg:text-xs opacity-80">(${Math.round(cartTotals.total * USD_CUP_BCC).toLocaleString()} CUP)</span></span>
+                <span>${cartTotals.total.toFixed(2)} <span className="text-[10px] lg:text-xs opacity-80">(${cartTotals.totalCUP.toLocaleString()} CUP)</span></span>
               </button>
             </div>
           </div>
@@ -1828,7 +1835,7 @@ export default function POSTerminalPage() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-2xl font-bold">Cobrar ${cartTotals.total.toFixed(2)}</h3>
-                  <p className="text-sm text-green-600 font-normal">${Math.round(cartTotals.total * USD_CUP_BCC).toLocaleString()} CUP</p>
+                  <p className="text-sm text-green-600 font-normal">${cartTotals.totalCUP.toLocaleString()} CUP</p>
                 </div>
                 <button
                   onClick={() => setShowPaymentModal(false)}

@@ -531,9 +531,19 @@ function ReceiptContent() {
     return `$${amount.toFixed(2)}`
   }
 
-  // Convert USD to CUP
+  // Convert USD to CUP (simple rounding for single amounts)
   const toCUP = (amountUSD: number): number => {
     return Math.round(amountUSD * exchangeRate)
+  }
+
+  // Calculate total CUP using per-unit rounding (round unit price first, then multiply by quantity)
+  const calcOrderTotalCUP = (lines: OrderLine[]): number => {
+    return lines.reduce((sum, line) => {
+      const unitCUP = Math.round(line.unitPrice * exchangeRate)
+      const lineCUP = unitCUP * line.quantity
+      const discountCUP = Math.round(line.discountAmount * exchangeRate)
+      return sum + lineCUP - discountCUP
+    }, 0)
   }
 
   // Format dual currency (USD with CUP equivalent)
@@ -704,7 +714,7 @@ function ReceiptContent() {
             // Tasa de cambio
             exchangeRate: exchangeRate,
             exchangeCurrency: 'CUP',
-            totalInLocalCurrency: toCUP(order.totalAmount),
+            totalInLocalCurrency: calcOrderTotalCUP(order.lines),
             // Pagos con detalle de efectivo
             payments: order.payments.map(p => ({
               method: p.method === 'cash' ? 'Efectivo' :
@@ -790,7 +800,7 @@ function ReceiptContent() {
             // Tasa de cambio
             exchangeRate: exchangeRate,
             exchangeCurrency: 'CUP',
-            totalInLocalCurrency: toCUP(order?.totalAmount || 0),
+            totalInLocalCurrency: calcOrderTotalCUP(order?.lines || []),
             // Pagos con detalle de efectivo
             payments: order?.payments.map(p => ({
               method: p.method === 'cash' ? 'Efectivo' :
@@ -940,7 +950,7 @@ function ReceiptContent() {
                 total: order.totalAmount,
                 exchangeRate: exchangeRate,
                 exchangeCurrency: 'CUP',
-                totalInLocalCurrency: Math.round(order.totalAmount * exchangeRate),
+                totalInLocalCurrency: calcOrderTotalCUP(order.lines),
                 payments: order.payments.map(p => ({
                   method: p.method === 'cash' ? 'Efectivo' :
                           p.method === 'card' ? 'Tarjeta' :
@@ -996,8 +1006,10 @@ function ReceiptContent() {
   const printReceipt = () => {
     if (!order) return
 
-    const totalCUP = toCUP(order.totalAmount)
-    const subtotalCUP = toCUP(order.subtotal)
+    const totalCUP = calcOrderTotalCUP(order.lines)
+    const subtotalCUP = order.lines.reduce((sum, line) => {
+      return sum + Math.round(line.unitPrice * exchangeRate) * line.quantity
+    }, 0)
 
     const receiptContent = `
 ================================
@@ -1174,7 +1186,7 @@ ${order.payments.map(p =>
                     <span>${(order?.totalAmount || 0).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-end text-lg text-blue-400">
-                    <span>{toCUP(order?.totalAmount || 0).toLocaleString('es-ES')} CUP</span>
+                    <span>{calcOrderTotalCUP(order?.lines || []).toLocaleString('es-ES')} CUP</span>
                   </div>
                 </div>
               </div>

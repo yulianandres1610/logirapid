@@ -531,8 +531,15 @@ function PaymentContent() {
     const subtotal = cart.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)
     const discount = cart.reduce((sum, item) => sum + item.discountAmount, 0)
     const total = subtotal - discount
-    return { subtotal, discount, total }
-  }, [cart])
+    // CUP: redondear por unidad primero, luego multiplicar por cantidad
+    const totalCUP = cart.reduce((sum, item) => {
+      const unitCUP = Math.round(item.unitPrice * rates.CUP_BCC)
+      const lineCUP = unitCUP * item.quantity
+      const discountCUP = Math.round(item.discountAmount * rates.CUP_BCC)
+      return sum + lineCUP - discountCUP
+    }, 0)
+    return { subtotal, discount, total, totalCUP }
+  }, [cart, rates.CUP_BCC])
 
   // Calculate total paid in USD
   const totalPaidUSD = useMemo(() => {
@@ -590,19 +597,18 @@ function PaymentContent() {
   }
 
   // Set exact amount - valor exacto (usando tasa BCC para venta)
+  // CUP: usa redondeo por unidad (precio unitario redondeado × cantidad)
   const setExactAmount = () => {
     if (remainingUSD > 0.01) {
-      let exactAmount = remainingUSD
       if (selectedCurrency === 'CUP') {
-        exactAmount = remainingUSD * rates.CUP_BCC  // Usar tasa BCC para venta
+        // Calcular pendiente CUP usando redondeo por unidad
+        const paidCUP = Math.round(totalPaidUSD * rates.CUP_BCC)
+        const remainingCUP = Math.max(0, totals.totalCUP - paidCUP)
+        setAmount(String(remainingCUP))
       } else if (selectedCurrency === 'MLC') {
-        exactAmount = remainingUSD * rates.MLC
-      }
-      // Mostrar con 2 decimales para USD/MLC, entero para CUP
-      if (selectedCurrency === 'CUP') {
-        setAmount(String(Math.round(exactAmount)))
+        setAmount((remainingUSD * rates.MLC).toFixed(2))
       } else {
-        setAmount(exactAmount.toFixed(2))
+        setAmount(remainingUSD.toFixed(2))
       }
     }
   }
@@ -838,19 +844,22 @@ function PaymentContent() {
             <div className={`rounded-xl p-4 shadow-sm ${tc.bgCard}`}>
               <h2 className="text-lg font-semibold mb-4">Resumen de Orden</h2>
               <div className="space-y-2 max-h-48 overflow-auto">
-                {cart.map((item, idx) => (
-                  <div key={idx} className="flex justify-between text-sm">
-                    <span className="truncate flex-1">
-                      {item.productName} x{item.quantity}
-                    </span>
-                    <div className="ml-2 text-right">
-                      <span>{formatCurrency(item.total)}</span>
-                      <span className="text-xs text-green-500 ml-1">
-                        ({formatCurrency(item.total * rates.CUP_BCC, 'CUP')})
+                {cart.map((item, idx) => {
+                  const lineCUP = Math.round(item.unitPrice * rates.CUP_BCC) * item.quantity
+                  return (
+                    <div key={idx} className="flex justify-between text-sm">
+                      <span className="truncate flex-1">
+                        {item.productName} x{item.quantity}
                       </span>
+                      <div className="ml-2 text-right">
+                        <span>{formatCurrency(item.total)}</span>
+                        <span className="text-xs text-green-500 ml-1">
+                          ({formatCurrency(lineCUP, 'CUP')})
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
               <div className={`mt-4 pt-4 border-t ${tc.border} space-y-2`}>
                 <div className="flex justify-between">
@@ -868,7 +877,7 @@ function PaymentContent() {
                   <div className="text-right">
                     <span>{formatCurrency(totals.total)}</span>
                     <p className="text-sm font-normal text-green-500">
-                      {formatCurrency(totals.total * rates.CUP_BCC, 'CUP')}
+                      {formatCurrency(totals.totalCUP, 'CUP')}
                     </p>
                   </div>
                 </div>
@@ -931,7 +940,7 @@ function PaymentContent() {
                     </span>
                     {remainingUSD > 0 && (
                       <p className="text-xs font-normal opacity-80">
-                        ({formatCurrency(remainingUSD * rates.CUP_BCC, 'CUP')})
+                        ({formatCurrency(Math.max(0, totals.totalCUP - Math.round(totalPaidUSD * rates.CUP_BCC)), 'CUP')})
                       </p>
                     )}
                   </div>
