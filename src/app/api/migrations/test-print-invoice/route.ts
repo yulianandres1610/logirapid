@@ -75,21 +75,18 @@ export async function GET() {
       await db.query(`
         INSERT INTO print_jobs (
           job_number, company_id, print_service_id, printer_id,
-          document_type, source_type, source_id, document_data,
-          copies, priority, status, requested_by, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, NOW())
+          document_type, document_data,
+          copies, priority, status, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', NOW())
       `, [
         jobNumber,
         row.company_id,
         row.service_id,
         row.printer_id,
         'purchase_invoice',
-        null, // source_type
-        null, // source_id
         JSON.stringify(testInvoiceData),
         1,    // copies
-        1,    // priority
-        1     // requested_by (system user)
+        1     // priority
       ])
 
       jobsSent.push({
