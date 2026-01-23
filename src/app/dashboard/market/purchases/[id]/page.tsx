@@ -27,7 +27,8 @@ import {
   AlertCircle,
   Ban,
   History,
-  Send
+  Send,
+  Edit3
 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -656,35 +657,205 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                       {order.validatedAt && ` el ${formatDateTime(order.validatedAt)}`}
                     </p>
                   </div>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleResubmit}
-                    disabled={resubmitting}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors shrink-0',
-                      resubmitting
-                        ? 'bg-blue-400 cursor-not-allowed'
-                        : 'bg-blue-600 hover:bg-blue-700',
-                      'text-white'
-                    )}
-                  >
-                    {resubmitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Reenviando...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-4 h-4" />
-                        Reenviar a Revisión
-                      </>
-                    )}
-                  </motion.button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Link href={`/dashboard/market/purchases/create?editId=${order.id}`}>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className={cn(
+                          'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors',
+                          theme === 'dark'
+                            ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        )}
+                      >
+                        <Edit3 className="w-4 h-4" />
+                        Editar Orden
+                      </motion.button>
+                    </Link>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleResubmit}
+                      disabled={resubmitting}
+                      className={cn(
+                        'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors',
+                        resubmitting
+                          ? 'bg-blue-400 cursor-not-allowed'
+                          : 'bg-blue-600 hover:bg-blue-700',
+                        'text-white'
+                      )}
+                    >
+                      {resubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Reenviando...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          Reenviar a Revisión
+                        </>
+                      )}
+                    </motion.button>
+                  </div>
                 </div>
               </div>
             </motion.div>
           )}
+
+          {/* Activity Log */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className={cn(
+              'max-w-6xl mx-auto mb-6 p-6 rounded-2xl border',
+              theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+            )}
+          >
+            <div className="flex items-center gap-3 mb-5">
+              <div className={cn(
+                'p-2 rounded-xl',
+                theme === 'dark' ? 'bg-indigo-900/30' : 'bg-indigo-100'
+              )}>
+                <History className="w-5 h-5 text-indigo-500" />
+              </div>
+              <h3 className={cn(
+                'font-semibold',
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>Historial de Actividad</h3>
+            </div>
+
+            <div className="relative">
+              {/* Timeline line */}
+              <div className={cn(
+                'absolute left-[17px] top-2 bottom-2 w-0.5',
+                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+              )} />
+
+              <div className="space-y-4">
+                {/* Created */}
+                <div className="flex items-start gap-4 relative">
+                  <div className={cn(
+                    'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                    theme === 'dark' ? 'bg-blue-900/50 ring-4 ring-gray-800' : 'bg-blue-100 ring-4 ring-white'
+                  )}>
+                    <FileText className="w-4 h-4 text-blue-500" />
+                  </div>
+                  <div className="pt-1">
+                    <p className={cn(
+                      'text-sm font-medium',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>Orden creada</p>
+                    <p className="text-xs text-gray-500">
+                      por {order.createdByName}
+                      {order.createdByRole && <span className="ml-1 opacity-60">({order.createdByRole})</span>}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(order.createdAt)}</p>
+                  </div>
+                </div>
+
+                {/* Validated/Rejected */}
+                {order.validatedAt && (
+                  <div className="flex items-start gap-4 relative">
+                    <div className={cn(
+                      'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                      order.validationStatus === 'rejected'
+                        ? theme === 'dark' ? 'bg-red-900/50 ring-4 ring-gray-800' : 'bg-red-100 ring-4 ring-white'
+                        : theme === 'dark' ? 'bg-green-900/50 ring-4 ring-gray-800' : 'bg-green-100 ring-4 ring-white'
+                    )}>
+                      {order.validationStatus === 'rejected'
+                        ? <Ban className="w-4 h-4 text-red-500" />
+                        : <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      }
+                    </div>
+                    <div className="pt-1">
+                      <p className={cn(
+                        'text-sm font-medium',
+                        order.validationStatus === 'rejected'
+                          ? theme === 'dark' ? 'text-red-300' : 'text-red-700'
+                          : theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        {order.validationStatus === 'rejected' ? 'Orden rechazada' : 'Orden aprobada'}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        por {order.validatedByName}
+                      </p>
+                      {order.rejectionReason && (
+                        <p className={cn(
+                          'text-xs mt-1 italic',
+                          theme === 'dark' ? 'text-red-400' : 'text-red-600'
+                        )}>
+                          &quot;{order.rejectionReason}&quot;
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(order.validatedAt)}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Accepted */}
+                {order.acceptedByName && order.acceptedAt && (
+                  <div className="flex items-start gap-4 relative">
+                    <div className={cn(
+                      'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                      theme === 'dark' ? 'bg-green-900/50 ring-4 ring-gray-800' : 'bg-green-100 ring-4 ring-white'
+                    )}>
+                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    </div>
+                    <div className="pt-1">
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>Orden aceptada</p>
+                      <p className="text-xs text-gray-500">por {order.acceptedByName}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(order.acceptedAt)}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Received */}
+                {order.receivedByName && order.receivedDate && (
+                  <div className="flex items-start gap-4 relative">
+                    <div className={cn(
+                      'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                      theme === 'dark' ? 'bg-emerald-900/50 ring-4 ring-gray-800' : 'bg-emerald-100 ring-4 ring-white'
+                    )}>
+                      <Package className="w-4 h-4 text-emerald-500" />
+                    </div>
+                    <div className="pt-1">
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>Mercancía recibida</p>
+                      <p className="text-xs text-gray-500">por {order.receivedByName}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{formatDate(order.receivedDate)}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Pending validation status */}
+                {order.validationStatus === 'pending_validation' && !order.validatedAt && (
+                  <div className="flex items-start gap-4 relative">
+                    <div className={cn(
+                      'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                      theme === 'dark' ? 'bg-orange-900/50 ring-4 ring-gray-800' : 'bg-orange-100 ring-4 ring-white'
+                    )}>
+                      <Clock className="w-4 h-4 text-orange-500 animate-pulse" />
+                    </div>
+                    <div className="pt-1">
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-orange-300' : 'text-orange-700'
+                      )}>Pendiente de aprobación</p>
+                      <p className="text-xs text-gray-500">Esperando revisión de un administrador</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
 
           {/* Content */}
           <div className="max-w-6xl mx-auto space-y-6">
@@ -750,159 +921,6 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                       </div>
                     )
                   })}
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Activity Log */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-              className={cn(
-                'p-6 rounded-2xl border',
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
-              )}
-            >
-              <div className="flex items-center gap-3 mb-5">
-                <div className={cn(
-                  'p-2 rounded-xl',
-                  theme === 'dark' ? 'bg-indigo-900/30' : 'bg-indigo-100'
-                )}>
-                  <History className="w-5 h-5 text-indigo-500" />
-                </div>
-                <h3 className={cn(
-                  'font-semibold',
-                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                )}>Historial de Actividad</h3>
-              </div>
-
-              <div className="relative">
-                {/* Timeline line */}
-                <div className={cn(
-                  'absolute left-[17px] top-2 bottom-2 w-0.5',
-                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                )} />
-
-                <div className="space-y-4">
-                  {/* Created */}
-                  <div className="flex items-start gap-4 relative">
-                    <div className={cn(
-                      'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
-                      theme === 'dark' ? 'bg-blue-900/50 ring-4 ring-gray-800' : 'bg-blue-100 ring-4 ring-white'
-                    )}>
-                      <FileText className="w-4 h-4 text-blue-500" />
-                    </div>
-                    <div className="pt-1">
-                      <p className={cn(
-                        'text-sm font-medium',
-                        theme === 'dark' ? 'text-white' : 'text-gray-900'
-                      )}>Orden creada</p>
-                      <p className="text-xs text-gray-500">
-                        por {order.createdByName}
-                        {order.createdByRole && <span className="ml-1 opacity-60">({order.createdByRole})</span>}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(order.createdAt)}</p>
-                    </div>
-                  </div>
-
-                  {/* Validated/Rejected */}
-                  {order.validatedAt && (
-                    <div className="flex items-start gap-4 relative">
-                      <div className={cn(
-                        'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
-                        order.validationStatus === 'rejected'
-                          ? theme === 'dark' ? 'bg-red-900/50 ring-4 ring-gray-800' : 'bg-red-100 ring-4 ring-white'
-                          : theme === 'dark' ? 'bg-green-900/50 ring-4 ring-gray-800' : 'bg-green-100 ring-4 ring-white'
-                      )}>
-                        {order.validationStatus === 'rejected'
-                          ? <Ban className="w-4 h-4 text-red-500" />
-                          : <CheckCircle2 className="w-4 h-4 text-green-500" />
-                        }
-                      </div>
-                      <div className="pt-1">
-                        <p className={cn(
-                          'text-sm font-medium',
-                          order.validationStatus === 'rejected'
-                            ? theme === 'dark' ? 'text-red-300' : 'text-red-700'
-                            : theme === 'dark' ? 'text-white' : 'text-gray-900'
-                        )}>
-                          {order.validationStatus === 'rejected' ? 'Orden rechazada' : 'Orden aprobada'}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          por {order.validatedByName}
-                        </p>
-                        {order.rejectionReason && (
-                          <p className={cn(
-                            'text-xs mt-1 italic',
-                            theme === 'dark' ? 'text-red-400' : 'text-red-600'
-                          )}>
-                            &quot;{order.rejectionReason}&quot;
-                          </p>
-                        )}
-                        <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(order.validatedAt)}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Accepted */}
-                  {order.acceptedByName && order.acceptedAt && (
-                    <div className="flex items-start gap-4 relative">
-                      <div className={cn(
-                        'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
-                        theme === 'dark' ? 'bg-green-900/50 ring-4 ring-gray-800' : 'bg-green-100 ring-4 ring-white'
-                      )}>
-                        <CheckCircle2 className="w-4 h-4 text-green-500" />
-                      </div>
-                      <div className="pt-1">
-                        <p className={cn(
-                          'text-sm font-medium',
-                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                        )}>Orden aceptada</p>
-                        <p className="text-xs text-gray-500">por {order.acceptedByName}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(order.acceptedAt)}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Received */}
-                  {order.receivedByName && order.receivedDate && (
-                    <div className="flex items-start gap-4 relative">
-                      <div className={cn(
-                        'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
-                        theme === 'dark' ? 'bg-emerald-900/50 ring-4 ring-gray-800' : 'bg-emerald-100 ring-4 ring-white'
-                      )}>
-                        <Package className="w-4 h-4 text-emerald-500" />
-                      </div>
-                      <div className="pt-1">
-                        <p className={cn(
-                          'text-sm font-medium',
-                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                        )}>Mercancía recibida</p>
-                        <p className="text-xs text-gray-500">por {order.receivedByName}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{formatDate(order.receivedDate)}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Pending validation status */}
-                  {order.validationStatus === 'pending_validation' && !order.validatedAt && (
-                    <div className="flex items-start gap-4 relative">
-                      <div className={cn(
-                        'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
-                        theme === 'dark' ? 'bg-orange-900/50 ring-4 ring-gray-800' : 'bg-orange-100 ring-4 ring-white'
-                      )}>
-                        <Clock className="w-4 h-4 text-orange-500 animate-pulse" />
-                      </div>
-                      <div className="pt-1">
-                        <p className={cn(
-                          'text-sm font-medium',
-                          theme === 'dark' ? 'text-orange-300' : 'text-orange-700'
-                        )}>Pendiente de aprobación</p>
-                        <p className="text-xs text-gray-500">Esperando revisión de un administrador</p>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             </motion.div>

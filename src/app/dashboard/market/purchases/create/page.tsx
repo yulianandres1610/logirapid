@@ -261,10 +261,15 @@ export default function CreatePurchasePage() {
   }>>([])
   const [pendingSaveAction, setPendingSaveAction] = useState<(() => void) | null>(null)
 
+  // Edit mode
+  const editId = searchParams.get('editId')
+  const [isEditMode, setIsEditMode] = useState(!!editId)
+  const [editLoading, setEditLoading] = useState(!!editId)
+
   // Read initial step from URL (validate it's a valid step)
   const validSteps: Step[] = ['method', 'scan', 'review-scan', 'supplier', 'products', 'invoices', 'review']
   const urlStep = searchParams.get('step') as Step
-  const initialStep = urlStep && validSteps.includes(urlStep) ? urlStep : 'method'
+  const initialStep = editId ? 'products' : (urlStep && validSteps.includes(urlStep) ? urlStep : 'method')
   const [currentStep, setCurrentStep] = useState<Step>(initialStep)
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -417,6 +422,105 @@ export default function CreatePurchasePage() {
     }
     fetchData()
   }, [])
+
+  // Load purchase data in edit mode
+  useEffect(() => {
+    if (!editId) return
+
+    const loadPurchase = async () => {
+      setEditLoading(true)
+      try {
+        const response = await fetch(`/api/market/purchases/${editId}`)
+        const data = await response.json()
+        if (data.success) {
+          const purchase = data.data
+          setIsEditMode(true)
+          setEntryMethod('manual')
+
+          // Set supplier
+          if (purchase.supplierId) {
+            setSelectedSupplier({
+              id: purchase.supplierId,
+              supplierCode: purchase.supplierCode || '',
+              name: purchase.supplierName,
+              phone: purchase.supplierPhone || null,
+              email: purchase.supplierEmail || null,
+              address: purchase.supplierAddress || null,
+              city: null,
+              state: null,
+              fullAddress: purchase.supplierAddress || ''
+            })
+          }
+
+          // Set warehouse
+          if (purchase.warehouseId && purchase.warehouseName) {
+            setSelectedWarehouse({
+              id: purchase.warehouseId,
+              code: '',
+              name: purchase.warehouseName
+            })
+          }
+
+          // Set dates and notes
+          if (purchase.purchaseDate) {
+            const d = purchase.purchaseDate.split('T')[0]
+            setPurchaseDate(d)
+          }
+          if (purchase.expectedDate) {
+            const d = purchase.expectedDate.split('T')[0]
+            setExpectedDate(d)
+          }
+          if (purchase.notes) setNotes(purchase.notes)
+          if (purchase.currency) setCurrency(purchase.currency)
+
+          // Set purchase lines
+          if (purchase.lines && purchase.lines.length > 0) {
+            const lines: PurchaseLine[] = purchase.lines.map((line: {
+              productId: number
+              variantId: number | null
+              variantName: string | null
+              variantSku: string | null
+              productName: string
+              productSku: string
+              productBarcode: string | null
+              productImage: string | null
+              quantity: number
+              unitPrice: number
+              totalPrice: number
+            }) => ({
+              productId: line.productId,
+              variantId: line.variantId || null,
+              variantName: line.variantName || null,
+              variantSku: line.variantSku || null,
+              product: {
+                id: line.productId,
+                name: line.productName,
+                sku: line.productSku || '',
+                barcode: line.productBarcode || null,
+                imageUrl: line.productImage || null,
+                costPrice: line.unitPrice,
+                sellingPrice: 0,
+                currency: purchase.currency || 'USD',
+                quantityOnHand: 0
+              },
+              quantity: line.quantity,
+              unitPrice: line.unitPrice,
+              totalPrice: line.totalPrice
+            }))
+            setPurchaseLines(lines)
+          }
+
+          setCurrentStep('products')
+        }
+      } catch (error) {
+        console.error('Error loading purchase for edit:', error)
+      } finally {
+        setEditLoading(false)
+      }
+    }
+
+    loadPurchase()
+  }, [editId])
 
   // Filter suppliers locally with flexible matching
   const filteredSuppliers = useMemo(() => {
@@ -1588,12 +1692,15 @@ export default function CreatePurchasePage() {
 
       console.log('[Submit Purchase] New products to create:', newProducts)
 
-      const response = await fetch('/api/market/purchases', {
-        method: 'POST',
+      const apiUrl = isEditMode ? `/api/market/purchases/${editId}` : '/api/market/purchases'
+      const apiMethod = isEditMode ? 'PUT' : 'POST'
+
+      const response = await fetch(apiUrl, {
+        method: apiMethod,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           supplierId: selectedSupplier!.id,
-          supplierName: selectedSupplier!.name, // For auto-creating new suppliers
+          supplierName: selectedSupplier!.name,
           supplierContact: selectedSupplier!.phone,
           supplierAddress: selectedSupplier!.fullAddress,
           warehouseId: selectedWarehouse?.id || null,
@@ -1613,17 +1720,17 @@ export default function CreatePurchasePage() {
       })
       const data = await response.json()
       if (data.success) {
-        const purchaseId = data.data.id
+        const purchaseId = isEditMode ? editId : data.data.id
 
-        // Upload invoices if any
-        if (invoiceFiles.length > 0) {
+        // Upload invoices if any (only for new purchases)
+        if (!isEditMode && invoiceFiles.length > 0) {
           try {
             const formData = new FormData()
             invoiceFiles.forEach(inv => {
               formData.append('files', inv.file)
             })
             formData.append('orderType', 'purchase')
-            formData.append('orderId', purchaseId.toString())
+            formData.append('orderId', purchaseId!.toString())
 
             await fetch('/api/upload/order-invoices', {
               method: 'POST',
@@ -1631,17 +1738,20 @@ export default function CreatePurchasePage() {
             })
           } catch (uploadError) {
             console.error('Error uploading invoices:', uploadError)
-            // Continue even if invoice upload fails
           }
         }
 
-        router.push('/dashboard/market/purchases')
+        if (isEditMode) {
+          router.push(`/dashboard/market/purchases/${editId}`)
+        } else {
+          router.push('/dashboard/market/purchases')
+        }
       } else {
-        setErrors({ submit: data.error || 'Error al crear la compra' })
+        setErrors({ submit: data.error || (isEditMode ? 'Error al actualizar la compra' : 'Error al crear la compra') })
       }
     } catch (error) {
-      console.error('Error creating purchase:', error)
-      setErrors({ submit: 'Error al crear la compra' })
+      console.error('Error saving purchase:', error)
+      setErrors({ submit: isEditMode ? 'Error al actualizar la compra' : 'Error al crear la compra' })
     } finally {
       setLoading(false)
     }
@@ -1723,6 +1833,20 @@ export default function CreatePurchasePage() {
     }
   }, [currentStep])
 
+  if (editLoading) {
+    return (
+      <div className={cn(
+        "min-h-screen flex items-center justify-center",
+        theme === 'dark' ? 'bg-[#1a2332]' : 'bg-gray-50'
+      )}>
+        <div className="text-center">
+          <Loader2 className="w-10 h-10 animate-spin text-blue-500 mx-auto mb-4" />
+          <p className="text-gray-500">Cargando orden para editar...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={cn(
           "min-h-screen pt-12 sm:pt-16 lg:pt-20 pb-20 px-4 sm:px-6 lg:px-8",
@@ -1764,7 +1888,7 @@ export default function CreatePurchasePage() {
                 "text-2xl sm:text-3xl font-bold",
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               )}>
-                Nueva Orden de Compra
+                {isEditMode ? 'Editar Orden de Compra' : 'Nueva Orden de Compra'}
               </h1>
             </div>
 
@@ -3796,7 +3920,7 @@ export default function CreatePurchasePage() {
                     {loading ? (
                       <><Loader2 className="w-5 h-5 animate-spin" />Creando...</>
                     ) : (
-                      <><Check className="w-5 h-5" />Crear Compra</>
+                      <><Check className="w-5 h-5" />{isEditMode ? 'Guardar Cambios' : 'Crear Compra'}</>
                     )}
                   </motion.button>
                 ) : (
