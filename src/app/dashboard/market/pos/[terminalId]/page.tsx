@@ -2228,6 +2228,7 @@ export default function POSTerminalPage() {
         onSelect={handleVariantSelect}
         mode="sale"
         currency={paymentCurrency}
+        warehouseId={terminal?.warehouseId}
       />
 
       {/* Product Details Modal */}

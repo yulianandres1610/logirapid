@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Search, Package, AlertCircle, Check, Barcode } from 'lucide-react'
+import { X, Search, Package, AlertCircle, Check, Barcode, Info, ArrowLeft, Warehouse, MapPin, Loader2 } from 'lucide-react'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 import { useBarcodeScan } from '@/hooks/useBarcodeScan'
@@ -18,6 +18,13 @@ export interface Variant {
   imageUrl: string | null
 }
 
+interface WarehouseStockInfo {
+  warehouseId: number
+  warehouseName: string
+  quantityOnHand: number
+  isCurrentWarehouse: boolean
+}
+
 interface VariantSelectorModalProps {
   isOpen: boolean
   onClose: () => void
@@ -31,6 +38,7 @@ interface VariantSelectorModalProps {
   mode?: 'sale' | 'purchase' | 'receive' | 'count'
   showOutOfStock?: boolean // Show variants with 0 stock (for purchases/receiving)
   currency?: string
+  warehouseId?: number // Current POS warehouse for stock info
 }
 
 export function VariantSelectorModal({
@@ -40,19 +48,79 @@ export function VariantSelectorModal({
   onSelect,
   mode = 'sale',
   showOutOfStock = false,
-  currency = 'USD'
+  currency = 'USD',
+  warehouseId
 }: VariantSelectorModalProps) {
   const { theme } = useTheme()
   const [search, setSearch] = useState('')
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null)
+  const [detailVariant, setDetailVariant] = useState<Variant | null>(null)
+  const [variantStocks, setVariantStocks] = useState<WarehouseStockInfo[]>([])
+  const [loadingStocks, setLoadingStocks] = useState(false)
 
   // Reset state when modal opens/closes
   useEffect(() => {
     if (isOpen) {
       setSearch('')
       setSelectedVariant(null)
+      setDetailVariant(null)
+      setVariantStocks([])
     }
   }, [isOpen])
+
+  // Fetch variant stock info
+  const showVariantDetails = useCallback(async (variant: Variant, e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    if (!product) return
+
+    setDetailVariant(variant)
+    setLoadingStocks(true)
+    setVariantStocks([])
+
+    try {
+      const res = await fetch(`/api/market/products/${product.id}/stock?currentWarehouseId=${warehouseId || ''}`)
+      const data = await res.json()
+
+      if (data.success && data.data.variantStock) {
+        const variantData = data.data.variantStock.find(
+          (v: { variantId: number }) => v.variantId === variant.id
+        )
+        if (variantData && variantData.byWarehouse) {
+          setVariantStocks(variantData.byWarehouse.map((w: {
+            warehouseId: number
+            warehouseName: string
+            quantityOnHand: number
+            isCurrentWarehouse: boolean
+          }) => ({
+            warehouseId: w.warehouseId,
+            warehouseName: w.warehouseName,
+            quantityOnHand: w.quantityOnHand,
+            isCurrentWarehouse: w.isCurrentWarehouse
+          })))
+        } else {
+          // No variant-specific data, show product-level warehouses
+          if (data.data.warehouses) {
+            setVariantStocks(data.data.warehouses.map((w: {
+              warehouseId: number
+              warehouseName: string
+              quantityOnHand: number
+              isCurrentWarehouse: boolean
+            }) => ({
+              warehouseId: w.warehouseId,
+              warehouseName: w.warehouseName,
+              quantityOnHand: w.quantityOnHand,
+              isCurrentWarehouse: w.isCurrentWarehouse
+            })))
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[VariantSelector] Error fetching stock:', error)
+    } finally {
+      setLoadingStocks(false)
+    }
+  }, [product, warehouseId])
 
   // Filter variants based on search
   const filteredVariants = product?.variants.filter(variant => {
@@ -224,6 +292,25 @@ export function VariantSelectorModal({
                               : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
                       )}
                     >
+                      {/* Info button */}
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onPointerDown={(e) => { e.stopPropagation(); e.preventDefault() }}
+                        onClick={(e) => showVariantDetails(variant, e)}
+                        onKeyDown={(e) => e.key === 'Enter' && showVariantDetails(variant, e as unknown as React.MouseEvent)}
+                        className={cn(
+                          'absolute top-2 left-2 w-6 h-6 rounded-full flex items-center justify-center transition-all z-20 cursor-pointer',
+                          theme === 'dark'
+                            ? 'bg-gray-600/90 hover:bg-blue-600 text-gray-300 hover:text-white'
+                            : 'bg-white/95 hover:bg-blue-500 text-gray-600 hover:text-white',
+                          'shadow-md border',
+                          theme === 'dark' ? 'border-gray-500' : 'border-gray-300'
+                        )}
+                      >
+                        <Info className="w-3.5 h-3.5" />
+                      </div>
+
                       {/* Variant Image */}
                       <div className={cn(
                         'w-full aspect-square rounded-lg overflow-hidden mb-3 flex items-center justify-center',
@@ -303,6 +390,167 @@ export function VariantSelectorModal({
               Escanea el código para seleccionar rápidamente
             </span>
           </div>
+
+          {/* Variant Stock Detail Overlay */}
+          <AnimatePresence>
+            {detailVariant && (
+              <motion.div
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                className={cn(
+                  'absolute inset-0 flex flex-col rounded-2xl overflow-hidden z-10',
+                  theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                )}
+              >
+                {/* Detail Header */}
+                <div className={cn(
+                  'px-6 py-4 border-b flex items-center gap-3 flex-shrink-0',
+                  theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
+                )}>
+                  <button
+                    onClick={() => setDetailVariant(null)}
+                    className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-gray-500" />
+                  </button>
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className={cn(
+                      'w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center',
+                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                    )}>
+                      {detailVariant.imageUrl ? (
+                        <img src={detailVariant.imageUrl} alt={detailVariant.name} className="w-full h-full object-cover" />
+                      ) : product.imageUrl ? (
+                        <img src={product.imageUrl} alt={detailVariant.name} className="w-full h-full object-cover opacity-50" />
+                      ) : (
+                        <Package className="w-5 h-5 text-gray-400" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-gray-900 dark:text-white truncate">
+                        {detailVariant.name}
+                      </h3>
+                      <p className="text-xs text-gray-500 font-mono truncate">
+                        {detailVariant.sku}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-lg font-bold text-emerald-600 flex-shrink-0">
+                    {symbol}{Number(detailVariant.price).toFixed(2)}
+                  </p>
+                </div>
+
+                {/* Stock Content */}
+                <div className="flex-1 overflow-y-auto p-6">
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <Warehouse className="w-4 h-4" />
+                    Stock por Almacén
+                  </h4>
+
+                  {loadingStocks ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                      <span className="ml-2 text-gray-500">Cargando stock...</span>
+                    </div>
+                  ) : variantStocks.length === 0 ? (
+                    <p className="text-sm text-gray-500 text-center py-4">
+                      No hay datos de stock disponibles
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {variantStocks.map((warehouse) => (
+                        <div
+                          key={warehouse.warehouseId}
+                          className={cn(
+                            'flex items-center justify-between p-3 rounded-xl border-2 transition-all',
+                            warehouse.isCurrentWarehouse
+                              ? theme === 'dark'
+                                ? 'border-blue-500 bg-blue-900/20'
+                                : 'border-blue-500 bg-blue-50'
+                              : theme === 'dark'
+                                ? 'border-gray-700 bg-gray-700/50'
+                                : 'border-gray-200 bg-gray-50'
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            {warehouse.isCurrentWarehouse && (
+                              <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
+                                <MapPin className="w-4 h-4 text-white" />
+                              </div>
+                            )}
+                            <div>
+                              <p className={cn(
+                                'font-medium',
+                                warehouse.isCurrentWarehouse
+                                  ? 'text-blue-600 dark:text-blue-400'
+                                  : 'text-gray-900 dark:text-white'
+                              )}>
+                                {warehouse.warehouseName}
+                                {warehouse.isCurrentWarehouse && (
+                                  <span className="ml-2 text-xs font-normal text-blue-500">(Actual)</span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          <div className={cn(
+                            'text-right',
+                            warehouse.quantityOnHand <= 0
+                              ? 'text-red-500'
+                              : warehouse.quantityOnHand <= 5
+                                ? 'text-amber-500'
+                                : 'text-green-500'
+                          )}>
+                            <p className="text-xl font-bold">{warehouse.quantityOnHand}</p>
+                            <p className="text-xs">unidades</p>
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Total */}
+                      <div className={cn(
+                        'flex items-center justify-between p-3 rounded-xl mt-3',
+                        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
+                      )}>
+                        <p className="font-semibold text-gray-900 dark:text-white">
+                          Stock Total
+                        </p>
+                        <p className="text-xl font-bold text-blue-500">
+                          {variantStocks.reduce((sum, w) => sum + w.quantityOnHand, 0)}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Detail Footer */}
+                <div className={cn(
+                  'px-6 py-4 border-t flex-shrink-0',
+                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                )}>
+                  <button
+                    onClick={() => {
+                      setDetailVariant(null)
+                      handleSelect(detailVariant)
+                    }}
+                    disabled={mode === 'sale' && detailVariant.stock <= 0 && !showOutOfStock}
+                    className={cn(
+                      'w-full py-3 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2',
+                      mode === 'sale' && detailVariant.stock <= 0 && !showOutOfStock
+                        ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 cursor-not-allowed'
+                        : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                    )}
+                  >
+                    {mode === 'sale' && detailVariant.stock <= 0 && !showOutOfStock
+                      ? 'Sin Stock'
+                      : 'Seleccionar Variante'
+                    }
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       </motion.div>
     </AnimatePresence>
