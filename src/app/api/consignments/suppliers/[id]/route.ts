@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
-import bcrypt from 'bcryptjs'
 import { db } from '@/lib/database'
 
 interface JWTPayload {
@@ -57,21 +56,11 @@ export async function GET(
     const result = await db.query(`
       SELECT
         s.*,
-        u.id as linked_user_id,
-        u.firstname as linked_user_firstname,
-        u.lastname as linked_user_lastname,
-        u.email as linked_user_email,
-        (SELECT COUNT(*) FROM consignment_orders WHERE supplier_id = s.id) as total_orders,
-        (SELECT COALESCE(SUM(total_cost), 0) FROM consignment_orders WHERE supplier_id = s.id) as total_consigned,
-        (SELECT COALESCE(SUM(total_sold), 0) FROM consignment_orders WHERE supplier_id = s.id) as total_sold,
-        w.balance_available,
-        w.balance_pending,
-        w.total_earned,
-        w.total_paid,
-        w.total_returned
-      FROM consignment_suppliers s
-      LEFT JOIN consignment_supplier_wallets w ON w.supplier_id = s.id
-      LEFT JOIN users u ON u.id = s.user_id
+        COALESCE((SELECT COUNT(*) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_orders,
+        COALESCE((SELECT SUM(total_cost) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_consigned,
+        COALESCE((SELECT SUM(total_sold) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_sold,
+        COALESCE((SELECT SUM(total_paid) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_paid
+      FROM market_suppliers s
       WHERE s.id = $1 AND s.company_id = $2
     `, [supplierId, payload.companyId])
 
@@ -85,22 +74,24 @@ export async function GET(
     const s = result.rows[0]
     const supplier = {
       id: s.id,
-      code: s.code,
+      code: s.supplier_code,
+      supplierCode: s.supplier_code,
       name: s.name,
       legalName: s.legal_name,
       taxId: s.tax_id,
-      contactName: s.contact_name,
+      contactName: s.contact_person,
       email: s.email,
       phone: s.phone,
+      mobile: s.mobile,
       address: s.address,
-      username: s.username,
-      userId: s.user_id,
-      linkedUser: s.linked_user_id ? {
-        id: s.linked_user_id,
-        name: `${s.linked_user_firstname || ''} ${s.linked_user_lastname || ''}`.trim(),
-        email: s.linked_user_email
-      } : null,
-      hasPassword: !!s.password_hash,
+      city: s.city,
+      state: s.state,
+      country: s.country,
+      postalCode: s.postal_code,
+      paymentTerms: s.payment_terms,
+      creditLimit: parseFloat(s.credit_limit) || 0,
+      notes: s.notes,
+      rating: s.rating || 3,
       isActive: s.is_active,
       createdAt: s.created_at,
       updatedAt: s.updated_at,
@@ -108,11 +99,8 @@ export async function GET(
         totalOrders: parseInt(s.total_orders) || 0,
         totalConsigned: parseFloat(s.total_consigned) || 0,
         totalSold: parseFloat(s.total_sold) || 0,
-        balanceAvailable: parseFloat(s.balance_available) || 0,
-        balancePending: parseFloat(s.balance_pending) || 0,
-        totalEarned: parseFloat(s.total_earned) || 0,
         totalPaid: parseFloat(s.total_paid) || 0,
-        totalReturned: parseFloat(s.total_returned) || 0
+        balanceAvailable: (parseFloat(s.total_sold) || 0) - (parseFloat(s.total_paid) || 0)
       }
     }
 
@@ -147,9 +135,7 @@ export async function PUT(
     const { id } = await params
     const supplierId = parseInt(id)
     const body = await request.json()
-    const { name, legalName, taxId, contactName, email, phone, address, username, password, isActive, userId } = body
-
-    console.log('[Supplier PUT] Attempting update for supplier:', supplierId, 'user companyId:', payload.companyId, 'role:', payload.role)
+    const { code, name, legalName, taxId, contactName, email, phone, address, isActive } = body
 
     // MARKET_COMERCIAL no puede editar proveedores
     if (payload.role === 'MARKET_COMERCIAL') {
@@ -159,100 +145,49 @@ export async function PUT(
       }, { status: 403 })
     }
 
-    // Roles que pueden editar proveedores de cualquier empresa
-    const superRoles = ['SUPER_ADMIN', 'ADMIN']
-    // Roles que pueden editar proveedores de su empresa
-    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKET_ADMIN', 'MARKET_MANAGER', 'USER']
-
-    if (!allowedRoles.includes(payload.role)) {
-      return NextResponse.json({
-        success: false,
-        error: 'No tiene permisos para editar proveedores'
-      }, { status: 403 })
-    }
-
     // Verificar que el proveedor existe y pertenece a la empresa
-    let existing
-    if (superRoles.includes(payload.role)) {
-      // SUPER_ADMIN y ADMIN pueden editar proveedores de cualquier empresa
-      existing = await db.query(
-        'SELECT id, username, company_id FROM consignment_suppliers WHERE id = $1',
-        [supplierId]
-      )
-    } else {
-      // Otros roles solo pueden editar proveedores de su empresa
-      existing = await db.query(
-        'SELECT id, username, company_id FROM consignment_suppliers WHERE id = $1 AND company_id = $2',
-        [supplierId, payload.companyId]
-      )
-    }
+    const existing = await db.query(
+      'SELECT id, company_id FROM market_suppliers WHERE id = $1 AND company_id = $2',
+      [supplierId, payload.companyId]
+    )
 
     if (existing.rows.length === 0) {
-      console.log('[Supplier PUT] Supplier not found. ID:', supplierId, 'Company:', payload.companyId)
       return NextResponse.json({
         success: false,
         error: 'Proveedor no encontrado'
       }, { status: 404 })
     }
 
-    // Use supplier's actual company_id for the update
-    const supplierCompanyId = existing.rows[0].company_id
-
-    // Si cambia el username, verificar que sea único
-    if (username && username !== existing.rows[0].username) {
-      const usernameCheck = await db.query(
-        'SELECT id FROM consignment_suppliers WHERE username = $1 AND id != $2',
-        [username, supplierId]
+    // Si cambia el código, verificar que sea único en la empresa
+    if (code) {
+      const codeCheck = await db.query(
+        'SELECT id FROM market_suppliers WHERE supplier_code = $1 AND company_id = $2 AND id != $3',
+        [code, payload.companyId, supplierId]
       )
-      if (usernameCheck.rows.length > 0) {
+      if (codeCheck.rows.length > 0) {
         return NextResponse.json({
           success: false,
-          error: 'El nombre de usuario ya está en uso'
+          error: 'El código de proveedor ya está en uso'
         }, { status: 400 })
       }
     }
 
-    // Si tiene userId, verificar que el usuario existe y no está vinculado a otro proveedor
-    if (userId) {
-      const userCheck = await db.query(
-        'SELECT id FROM users WHERE id = $1',
-        [userId]
-      )
-      if (userCheck.rows.length === 0) {
-        return NextResponse.json({
-          success: false,
-          error: 'Usuario no encontrado'
-        }, { status: 400 })
-      }
-
-      const linkedCheck = await db.query(
-        'SELECT id FROM consignment_suppliers WHERE user_id = $1 AND id != $2',
-        [userId, supplierId]
-      )
-      if (linkedCheck.rows.length > 0) {
-        return NextResponse.json({
-          success: false,
-          error: 'Este usuario ya está vinculado a otro proveedor'
-        }, { status: 400 })
-      }
-    }
-
-    // Preparar actualización
-    let query = `
-      UPDATE consignment_suppliers SET
-        name = COALESCE($1, name),
-        legal_name = $2,
-        tax_id = $3,
-        contact_name = $4,
-        email = $5,
-        phone = $6,
-        address = $7,
-        username = $8,
+    // Actualizar proveedor
+    await db.query(`
+      UPDATE market_suppliers SET
+        supplier_code = COALESCE($1, supplier_code),
+        name = COALESCE($2, name),
+        legal_name = $3,
+        tax_id = $4,
+        contact_person = $5,
+        email = $6,
+        phone = $7,
+        address = $8,
         is_active = COALESCE($9, is_active),
-        user_id = $10,
         updated_at = NOW()
-    `
-    const params_arr: (string | number | boolean | null)[] = [
+      WHERE id = $10 AND company_id = $11
+    `, [
+      code || null,
       name,
       legalName || null,
       taxId || null,
@@ -260,23 +195,10 @@ export async function PUT(
       email || null,
       phone || null,
       address || null,
-      username || null,
       isActive,
-      userId || null
-    ]
-
-    // Si hay nueva contraseña, incluirla
-    // Use supplierCompanyId for the WHERE clause (allows SUPER_ADMIN to update any supplier)
-    if (password) {
-      const passwordHash = await bcrypt.hash(password, 10)
-      query += `, password_hash = $11 WHERE id = $12 AND company_id = $13`
-      params_arr.push(passwordHash, supplierId, supplierCompanyId)
-    } else {
-      query += ` WHERE id = $11 AND company_id = $12`
-      params_arr.push(supplierId, supplierCompanyId)
-    }
-
-    await db.query(query, params_arr)
+      supplierId,
+      payload.companyId
+    ])
 
     return NextResponse.json({
       success: true,
@@ -295,7 +217,6 @@ export async function PUT(
 /**
  * DELETE /api/consignments/suppliers/[id]
  * Eliminar proveedor (solo si no tiene ordenes)
- * MARKET_COMERCIAL no puede eliminar proveedores
  */
 export async function DELETE(
   request: NextRequest,
@@ -320,7 +241,7 @@ export async function DELETE(
 
     // Verificar que el proveedor existe
     const existing = await db.query(
-      'SELECT id FROM consignment_suppliers WHERE id = $1 AND company_id = $2',
+      'SELECT id FROM market_suppliers WHERE id = $1 AND company_id = $2',
       [supplierId, payload.companyId]
     )
     if (existing.rows.length === 0) {
@@ -342,11 +263,15 @@ export async function DELETE(
       }, { status: 400 })
     }
 
-    // Eliminar wallet primero
-    await db.query('DELETE FROM consignment_supplier_wallets WHERE supplier_id = $1', [supplierId])
+    // Eliminar wallet si existe
+    try {
+      await db.query('DELETE FROM consignment_supplier_wallets WHERE supplier_id = $1', [supplierId])
+    } catch {
+      // wallet might not exist
+    }
 
     // Eliminar proveedor
-    await db.query('DELETE FROM consignment_suppliers WHERE id = $1', [supplierId])
+    await db.query('DELETE FROM market_suppliers WHERE id = $1 AND company_id = $2', [supplierId, payload.companyId])
 
     return NextResponse.json({
       success: true,
