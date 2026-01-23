@@ -839,14 +839,11 @@ export default function ConsignmentsPage() {
                               </div>
                             </td>
                             <td className="py-4 px-4">
-                              <div className="flex items-center gap-2">
-                                <div className={cn(
-                                  'w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold',
-                                  theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
-                                )}>
-                                  {order.supplier.code}
-                                </div>
-                                <span className="text-sm text-gray-700 dark:text-gray-300">{order.supplier.name}</span>
+                              <div>
+                                <p className="text-sm font-medium text-gray-900 dark:text-white">{order.supplier.name}</p>
+                                {order.supplier.code && (
+                                  <p className="text-xs text-gray-500 font-mono">{order.supplier.code}</p>
+                                )}
                               </div>
                             </td>
                             <td className="py-4 px-4">
