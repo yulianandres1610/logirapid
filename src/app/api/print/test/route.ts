@@ -530,7 +530,7 @@ export async function GET(request: NextRequest) {
 
       // Get printers
       const printers = await db.query(
-        'SELECT id, printer_name, printer_type, is_online, is_default, last_seen_at FROM print_service_printers WHERE print_service_id = $1',
+        'SELECT id, printer_name, printer_type, is_online, is_default FROM print_service_printers WHERE print_service_id = $1',
         [service.id]
       )
 
