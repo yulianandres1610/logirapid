@@ -247,6 +247,9 @@ export async function POST(request: NextRequest) {
 
     const session = sessionCheck.rows[0]
 
+    // SIEMPRE usar el warehouse del terminal, no el que envía el cliente
+    const effectiveWarehouseId = session.terminal_warehouse_id || warehouseId
+
     if (payload.role !== 'SUPER_ADMIN' && session.company_id !== payload.companyId) {
       return NextResponse.json({
         success: false,
@@ -273,7 +276,7 @@ export async function POST(request: NextRequest) {
         UPDATE market_inventory_counts
         SET warehouse_id = $1, notes = $2, updated_at = NOW()
         WHERE id = $3
-      `, [warehouseId, notes, countId])
+      `, [effectiveWarehouseId, notes, countId])
 
       const countData = await db.query(`SELECT count_number FROM market_inventory_counts WHERE id = $1`, [countId])
       countNumber = countData.rows[0].count_number
@@ -300,7 +303,7 @@ export async function POST(request: NextRequest) {
           status, counted_by, started_at, notes
         ) VALUES ($1, $2, $3, $4, 'in_progress', $5, NOW(), $6)
         RETURNING id
-      `, [payload.companyId, sessionId, warehouseId, countNumber, payload.userId, notes])
+      `, [payload.companyId, sessionId, effectiveWarehouseId, countNumber, payload.userId, notes])
 
       countId = insertResult.rows[0].id
     }
@@ -336,7 +339,7 @@ export async function POST(request: NextRequest) {
         SELECT product_id, variant_id, COALESCE(quantity_on_hand, 0) as stock
         FROM market_warehouse_stock
         WHERE warehouse_id = $1 AND product_id = ANY($2::int[])
-      `, [warehouseId, productIds])
+      `, [effectiveWarehouseId, productIds])
 
       // Mapa de stock con clave compuesta: productId:variantId
       const stockMap: Record<string, number> = {}
@@ -469,7 +472,7 @@ export async function POST(request: NextRequest) {
         `, [
           payload.companyId,
           operationNumber,
-          warehouseId,
+          effectiveWarehouseId,
           countId,
           `Ajuste por conteo de cierre POS - Sesión #${session.session_code || sessionId}`,
           payload.userId
@@ -542,7 +545,7 @@ export async function POST(request: NextRequest) {
         id: countId,
         countNumber,
         status: finalCount.rows[0].status,
-        warehouseId,
+        warehouseId: effectiveWarehouseId,
         warehouseName: finalCount.rows[0].warehouse_name,
         totalProducts: finalCount.rows[0].total_products,
         productsWithDifferences: finalCount.rows[0].products_with_differences,
