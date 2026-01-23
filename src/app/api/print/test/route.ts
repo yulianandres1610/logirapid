@@ -387,10 +387,192 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    if (action === 'print-label-test') {
+      const serviceCode = searchParams.get('serviceCode')
+      const printerName = searchParams.get('printerName')
+
+      if (!serviceCode) {
+        return NextResponse.json({
+          success: false,
+          error: 'serviceCode es requerido (ej: PRS-2026-1369)'
+        }, { status: 400 })
+      }
+
+      // Find service by code
+      const serviceResult = await db.query(
+        'SELECT id, company_id, status FROM print_services WHERE service_code = $1',
+        [serviceCode]
+      )
+
+      if (serviceResult.rows.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: `Servicio ${serviceCode} no encontrado`
+        }, { status: 404 })
+      }
+
+      const service = serviceResult.rows[0]
+
+      // Find printer by name or get first label printer
+      let printerQuery = `
+        SELECT id, printer_name, printer_type, is_online
+        FROM print_service_printers
+        WHERE print_service_id = $1
+      `
+      const printerParams: (number | string)[] = [service.id]
+
+      if (printerName) {
+        printerQuery += ` AND printer_name ILIKE $2`
+        printerParams.push(`%${printerName}%`)
+      } else {
+        printerQuery += ` AND (printer_type IN ('label_barcode', 'label_4x6') OR printer_name ILIKE '%label%' OR printer_name ILIKE '%barcode%' OR printer_name ILIKE '%etiqueta%')`
+      }
+      printerQuery += ' LIMIT 1'
+
+      const printerResult = await db.query(printerQuery, printerParams)
+
+      if (printerResult.rows.length === 0) {
+        // Show available printers for debugging
+        const allPrinters = await db.query(
+          'SELECT id, printer_name, printer_type, is_online FROM print_service_printers WHERE print_service_id = $1',
+          [service.id]
+        )
+        return NextResponse.json({
+          success: false,
+          error: printerName
+            ? `Impresora "${printerName}" no encontrada en servicio ${serviceCode}`
+            : `No se encontró impresora de etiquetas en servicio ${serviceCode}`,
+          availablePrinters: allPrinters.rows
+        }, { status: 404 })
+      }
+
+      const printer = printerResult.rows[0]
+
+      // Create a test product_label job
+      const jobNumber = `TEST-LBL-${Date.now()}`
+      const testLabelData = {
+        productName: 'PRODUCTO DE PRUEBA',
+        sku: 'TEST-SKU-001',
+        barcode: '2001234567890',
+        barcodeType: 'ean13',
+        includePrice: true,
+        priceCUP: 2500,
+        currency: 'CUP',
+        unitOfMeasure: 'unidad',
+        category: 'Test',
+        description: 'Etiqueta de prueba',
+        labelSize: 'medium'
+      }
+
+      const result = await db.query(`
+        INSERT INTO print_jobs (
+          job_number, company_id, print_service_id, printer_id,
+          document_type, source_type, document_data, copies,
+          status, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', NOW())
+        RETURNING id
+      `, [
+        jobNumber,
+        service.company_id,
+        service.id,
+        printer.id,
+        'product_label',
+        'test',
+        JSON.stringify(testLabelData),
+        1
+      ])
+
+      await db.query(`
+        INSERT INTO print_job_history (print_job_id, event_type, event_data, created_at)
+        VALUES ($1, 'created', $2, NOW())
+      `, [result.rows[0].id, JSON.stringify({ test: true, serviceCode, printerName: printer.printer_name })])
+
+      return NextResponse.json({
+        success: true,
+        message: `Etiqueta de prueba enviada a ${printer.printer_name}`,
+        data: {
+          jobId: result.rows[0].id,
+          jobNumber,
+          documentType: 'product_label',
+          serviceCode,
+          serviceStatus: service.status,
+          printerName: printer.printer_name,
+          printerType: printer.printer_type,
+          printerOnline: printer.is_online
+        },
+        nextStep: 'El servicio de impresión debería procesar este trabajo en los próximos segundos.'
+      })
+    }
+
+    if (action === 'diagnose') {
+      const serviceCode = searchParams.get('serviceCode')
+
+      if (!serviceCode) {
+        return NextResponse.json({
+          success: false,
+          error: 'serviceCode es requerido'
+        }, { status: 400 })
+      }
+
+      const serviceResult = await db.query(
+        'SELECT id, company_id, status, last_seen_at FROM print_services WHERE service_code = $1',
+        [serviceCode]
+      )
+
+      if (serviceResult.rows.length === 0) {
+        return NextResponse.json({ success: false, error: `Servicio ${serviceCode} no encontrado` }, { status: 404 })
+      }
+
+      const service = serviceResult.rows[0]
+      const now = new Date()
+      const lastSeen = service.last_seen_at ? new Date(service.last_seen_at) : null
+      const isConnected = lastSeen && (now.getTime() - lastSeen.getTime()) < 120000 // 2 min
+
+      // Get printers
+      const printers = await db.query(
+        'SELECT id, printer_name, printer_type, is_online, is_default, last_seen_at FROM print_service_printers WHERE print_service_id = $1',
+        [service.id]
+      )
+
+      // Get job stats
+      const jobStats = await db.query(`
+        SELECT status, COUNT(*) as count
+        FROM print_jobs
+        WHERE print_service_id = $1
+        GROUP BY status
+      `, [service.id])
+
+      // Get last 10 jobs
+      const recentJobs = await db.query(`
+        SELECT id, job_number, document_type, status, error_message, attempts, max_attempts, created_at, sent_at, completed_at
+        FROM print_jobs
+        WHERE print_service_id = $1
+        ORDER BY created_at DESC
+        LIMIT 10
+      `, [service.id])
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          service: {
+            id: service.id,
+            code: serviceCode,
+            status: service.status,
+            lastSeenAt: service.last_seen_at,
+            isConnected,
+            timeSinceLastSeen: lastSeen ? `${Math.round((now.getTime() - lastSeen.getTime()) / 1000)}s` : 'never'
+          },
+          printers: printers.rows,
+          jobStats: jobStats.rows,
+          recentJobs: recentJobs.rows
+        }
+      })
+    }
+
     return NextResponse.json({
       success: false,
       error: 'Acción no válida',
-      validActions: ['status', 'print-test', 'print-sales-report', 'print-warehouse-operation', 'list-all', 'cleanup']
+      validActions: ['status', 'print-test', 'print-label-test', 'print-sales-report', 'print-warehouse-operation', 'list-all', 'cleanup', 'diagnose']
     })
 
   } catch (error) {

@@ -102,7 +102,8 @@ export async function middleware(request: NextRequest) {
         pathname.startsWith('/api/print') ||
         pathname.startsWith('/api/users') ||
         pathname.startsWith('/api/audit') ||
-        pathname.startsWith('/api/companies')) {
+        pathname.startsWith('/api/companies') ||
+        pathname.startsWith('/api/webhooks')) {
       return NextResponse.next()
     }
 
