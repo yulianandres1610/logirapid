@@ -268,24 +268,27 @@ export default function MarketPurchasesPage() {
       const response = await fetch('/api/print/services?includeOffline=false')
       const data = await response.json()
       if (data.success && data.data?.services) {
-        // Filter services that are active and have printers
-        // Accept any printer type (thermal_80mm preferred, but allow all)
+        // Filter services to include thermal and standard printers (not label printers)
         const activeServices = data.data.services
           .filter((s: { status: string; printers?: unknown[] }) => s.status === 'active' && s.printers && s.printers.length > 0)
+          .map((service: PrintService) => ({
+            ...service,
+            printers: service.printers.filter((p: { printerType: string }) =>
+              p.printerType === 'thermal_80mm' || p.printerType === 'standard'
+            )
+          }))
+          .filter((s: PrintService) => s.printers.length > 0)
 
         setPrintServices(activeServices)
 
-        // Auto-select first available printer (prefer thermal, then any online)
+        // Auto-select first available printer (prefer thermal, then standard)
         for (const service of activeServices) {
-          // First try thermal printers
           let availablePrinter = service.printers.find((p: { isOnline: boolean; printerType: string }) =>
             p.isOnline && p.printerType === 'thermal_80mm'
           )
-          // If no thermal, try any online printer
           if (!availablePrinter) {
             availablePrinter = service.printers.find((p: { isOnline: boolean }) => p.isOnline)
           }
-          // If still nothing, try any printer
           if (!availablePrinter && service.printers.length > 0) {
             availablePrinter = service.printers[0]
           }
