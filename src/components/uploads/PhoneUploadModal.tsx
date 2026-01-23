@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 interface PhoneUploadModalProps {
   isOpen: boolean
   onClose: () => void
-  purpose: 'purchase_invoice' | 'expense_receipt'
+  purpose: 'purchase_invoice' | 'expense_receipt' | 'product_image'
   referenceType?: 'purchase' | 'expense' | 'consignment'
   referenceId?: number
   onUploadComplete: (fileUrl: string, fileName: string) => void

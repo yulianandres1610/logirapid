@@ -22,11 +22,15 @@ import {
   Scale,
   Sparkles,
   Wand2,
-  AlertTriangle
+  AlertTriangle,
+  Smartphone,
+  Crop
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import { PhoneUploadModal } from '@/components/uploads/PhoneUploadModal'
+import { ImageAdjustModal } from '@/components/market/ImageAdjustModal'
 import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
 
 type Step = 'info' | 'image' | 'pricing' | 'variants' | 'review'
@@ -147,6 +151,8 @@ export default function CreateProductPage() {
   const [cleaningImage, setCleaningImage] = useState(false)
   const [generatingVariantImage, setGeneratingVariantImage] = useState<string | null>(null) // variant id being generated
   const [cleaningVariantImage, setCleaningVariantImage] = useState<string | null>(null) // variant id being cleaned
+  const [showPhoneUpload, setShowPhoneUpload] = useState(false)
+  const [showImageAdjust, setShowImageAdjust] = useState(false)
   const [imagePrompt, setImagePrompt] = useState('') // Descripción para generar imagen del producto
   const [variantImagePrompts, setVariantImagePrompts] = useState<Record<string, string>>({}) // Descripción para generar imagen de variantes
 
@@ -618,6 +624,35 @@ export default function CreateProductPage() {
       setSelectedExistingImage(null)
       setUseExistingImage(false)
     }
+  }
+
+  // Handle phone upload complete
+  const handlePhoneUploadComplete = async (fileUrl: string) => {
+    setShowPhoneUpload(false)
+    try {
+      // fileUrl is the storage path, fetch the public URL
+      const response = await fetch(`/api/upload/image?path=${encodeURIComponent(fileUrl)}`)
+      if (response.ok) {
+        const data = await response.json()
+        const publicUrl = data.url || fileUrl
+        setFormData(prev => ({ ...prev, imageUrl: publicUrl, imageFile: null }))
+      } else {
+        // Use the fileUrl directly as it might already be a public URL
+        setFormData(prev => ({ ...prev, imageUrl: fileUrl, imageFile: null }))
+      }
+      setExistingImages([])
+      setSelectedExistingImage(null)
+      setUseExistingImage(false)
+    } catch {
+      // Fallback: use the URL as-is
+      setFormData(prev => ({ ...prev, imageUrl: fileUrl, imageFile: null }))
+    }
+  }
+
+  // Handle image adjust confirm
+  const handleImageAdjustConfirm = (adjustedBase64: string) => {
+    setFormData(prev => ({ ...prev, imageUrl: adjustedBase64, imageFile: null }))
+    setShowImageAdjust(false)
   }
 
   const validateStep = (step: Step): boolean => {
@@ -1740,6 +1775,25 @@ export default function CreateProductPage() {
                                 </>
                               )}
                             </motion.button>
+
+                            {/* Adjust Image Button */}
+                            <motion.button
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setShowImageAdjust(true)
+                              }}
+                              className={cn(
+                                "w-full py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 font-medium transition-all text-sm",
+                                theme === 'dark'
+                                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                              )}
+                            >
+                              <Crop className="w-4 h-4" />
+                              Ajustar imagen
+                            </motion.button>
                           </div>
                         ) : (
                           <div className="space-y-3">
@@ -1766,6 +1820,26 @@ export default function CreateProductPage() {
                           </div>
                         )}
                       </motion.div>
+                    )}
+
+                    {/* Phone Upload Button */}
+                    {!formData.imageUrl && existingImages.length === 0 && (
+                      <div className="flex justify-center">
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => setShowPhoneUpload(true)}
+                          className={cn(
+                            "w-full py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-medium transition-all",
+                            theme === 'dark'
+                              ? 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+                              : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                          )}
+                        >
+                          <Smartphone className="w-5 h-5" />
+                          Subir con Teléfono
+                        </motion.button>
+                      </div>
                     )}
 
                     {/* AI Options */}
@@ -2921,6 +2995,25 @@ export default function CreateProductPage() {
               </>
             )}
           </AnimatePresence>
+
+          {/* Phone Upload Modal */}
+          <PhoneUploadModal
+            isOpen={showPhoneUpload}
+            onClose={() => setShowPhoneUpload(false)}
+            purpose="product_image"
+            onUploadComplete={handlePhoneUploadComplete}
+          />
+
+          {/* Image Adjust Modal */}
+          {formData.imageUrl && (
+            <ImageAdjustModal
+              isOpen={showImageAdjust}
+              onClose={() => setShowImageAdjust(false)}
+              imageUrl={formData.imageUrl}
+              onConfirm={handleImageAdjustConfirm}
+              theme={theme}
+            />
+          )}
         </div>
   )
 }

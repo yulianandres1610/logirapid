@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const validPurposes = ['purchase_invoice', 'expense_receipt']
+    const validPurposes = ['purchase_invoice', 'expense_receipt', 'product_image']
     if (!validPurposes.includes(purpose)) {
       return NextResponse.json({
         success: false,
