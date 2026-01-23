@@ -342,31 +342,68 @@ export async function POST(request: NextRequest) {
           const productName = productCheck.rows[0]?.name || `Producto ${productId}`
 
           // Check warehouse stock availability (only the POS terminal's warehouse matters)
-          const stockCheck = await db.query(`
-            SELECT COALESCE(quantity_on_hand, 0) as available
-            FROM market_warehouse_stock
-            WHERE product_id = $1 AND warehouse_id = $2
-              AND (variant_id = $3 OR (variant_id IS NULL AND $3::int IS NULL))
-          `, [productId, warehouseId, variantId])
+          // First try variant-specific stock, then product-level stock
+          let availableStock = 0
+          let stockRecordFound = false
 
-          let availableStock: number
+          if (variantId) {
+            // Check variant-specific warehouse stock
+            const variantStockCheck = await db.query(`
+              SELECT COALESCE(quantity_on_hand, 0) as available
+              FROM market_warehouse_stock
+              WHERE product_id = $1 AND warehouse_id = $2 AND variant_id = $3
+            `, [productId, warehouseId, variantId])
 
-          if (stockCheck.rows.length > 0) {
-            // Warehouse stock record exists - use it
-            availableStock = parseFloat(stockCheck.rows[0]?.available) || 0
+            if (variantStockCheck.rows.length > 0) {
+              availableStock = parseFloat(variantStockCheck.rows[0]?.available) || 0
+              stockRecordFound = true
+            } else {
+              // No variant-specific record - check product-level warehouse stock
+              const productStockCheck = await db.query(`
+                SELECT COALESCE(quantity_on_hand, 0) as available
+                FROM market_warehouse_stock
+                WHERE product_id = $1 AND warehouse_id = $2 AND variant_id IS NULL
+              `, [productId, warehouseId])
+
+              if (productStockCheck.rows.length > 0) {
+                availableStock = parseFloat(productStockCheck.rows[0]?.available) || 0
+                stockRecordFound = true
+              }
+            }
           } else {
-            // No warehouse stock record - check global stock and auto-initialize warehouse record
-            const globalStock = parseFloat(productCheck.rows[0]?.global_stock) || 0
-            if (globalStock > 0) {
-              // Product has global stock but no warehouse record - create it
+            // No variant - check product-level warehouse stock
+            const stockCheck = await db.query(`
+              SELECT COALESCE(quantity_on_hand, 0) as available
+              FROM market_warehouse_stock
+              WHERE product_id = $1 AND warehouse_id = $2 AND variant_id IS NULL
+            `, [productId, warehouseId])
+
+            if (stockCheck.rows.length > 0) {
+              availableStock = parseFloat(stockCheck.rows[0]?.available) || 0
+              stockRecordFound = true
+            }
+          }
+
+          // If no warehouse record found, try to auto-initialize from variant/product stock
+          if (!stockRecordFound) {
+            let fallbackStock = 0
+            if (variantId) {
+              const variantCheck = await db.query(
+                'SELECT COALESCE(quantity_on_hand, 0) as variant_stock FROM market_product_variants WHERE id = $1',
+                [variantId]
+              )
+              fallbackStock = parseFloat(variantCheck.rows[0]?.variant_stock) || 0
+            } else {
+              fallbackStock = parseFloat(productCheck.rows[0]?.global_stock) || 0
+            }
+
+            if (fallbackStock > 0) {
               await db.query(`
                 INSERT INTO market_warehouse_stock (product_id, warehouse_id, variant_id, quantity_on_hand, created_at, updated_at)
                 VALUES ($1, $2, $3, $4, NOW(), NOW())
-              `, [productId, warehouseId, variantId || null, globalStock])
-              availableStock = globalStock
-              console.log('[POS Orders] Auto-initialized warehouse stock:', { productId, productName, warehouseId, stock: globalStock })
-            } else {
-              availableStock = 0
+              `, [productId, warehouseId, variantId || null, fallbackStock])
+              availableStock = fallbackStock
+              console.log('[POS Orders] Auto-initialized warehouse stock:', { productId, productName, variantId, warehouseId, stock: fallbackStock })
             }
           }
 
@@ -461,7 +498,7 @@ export async function POST(request: NextRequest) {
         `, [productId])
         const quantityBefore = parseFloat(currentStockResult.rows[0]?.quantity_on_hand) || 0
 
-        // 1. First try FIFO from consignment lots
+        // 1. First try FIFO from consignment lots (variant-specific or product-level)
         const consignmentLots = await db.query(`
           SELECT
             cli.id as lot_id,
@@ -475,7 +512,7 @@ export async function POST(request: NextRequest) {
             AND cli.product_id = $2
             AND cli.company_id = $3
             AND cli.quantity_available > 0
-            ${variantId ? 'AND cli.variant_id = $4' : 'AND cli.variant_id IS NULL'}
+            ${variantId ? 'AND (cli.variant_id = $4 OR cli.variant_id IS NULL)' : 'AND cli.variant_id IS NULL'}
           ORDER BY cli.received_at ASC
           FOR UPDATE
         `, variantId
@@ -571,7 +608,7 @@ export async function POST(request: NextRequest) {
               AND pli.product_id = $2
               AND pli.company_id = $3
               AND pli.quantity_available > 0
-              ${variantId ? 'AND pli.variant_id = $4' : 'AND pli.variant_id IS NULL'}
+              ${variantId ? 'AND (pli.variant_id = $4 OR pli.variant_id IS NULL)' : 'AND pli.variant_id IS NULL'}
             ORDER BY pli.received_at ASC
             FOR UPDATE
           `, variantId
@@ -613,12 +650,22 @@ export async function POST(request: NextRequest) {
             WHERE id = $2
           `, [quantityToReduce, variantId])
 
-          // Update warehouse stock for variant
-          await db.query(`
+          // Try to update variant-specific warehouse stock first
+          const variantStockResult = await db.query(`
             UPDATE market_warehouse_stock
             SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
             WHERE product_id = $2 AND variant_id = $3 AND warehouse_id = $4
+            RETURNING id
           `, [quantityToReduce, productId, variantId, warehouseId])
+
+          // If no variant-specific row, deduct from product-level warehouse stock
+          if (variantStockResult.rows.length === 0) {
+            await db.query(`
+              UPDATE market_warehouse_stock
+              SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
+              WHERE product_id = $2 AND warehouse_id = $3 AND variant_id IS NULL
+            `, [quantityToReduce, productId, warehouseId])
+          }
         } else {
           // Update warehouse stock for product without variant
           await db.query(`
