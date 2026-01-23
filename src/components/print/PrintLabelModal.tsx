@@ -109,13 +109,18 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
     setLoading(true)
     setError(null)
     try {
-      const url = warehouseId
+      // Try filtering by warehouse first, fallback to all services
+      let url = warehouseId
         ? `/api/print/services?includeOffline=false&warehouseId=${warehouseId}`
         : '/api/print/services?includeOffline=false'
-      const response = await fetch(url, {
-        credentials: 'include'
-      })
-      const data = await response.json()
+      let response = await fetch(url, { credentials: 'include' })
+      let data = await response.json()
+
+      // If no services found for this warehouse, try without filter
+      if (data.success && warehouseId && (!data.data?.services || data.data.services.length === 0)) {
+        response = await fetch('/api/print/services?includeOffline=false', { credentials: 'include' })
+        data = await response.json()
+      }
 
       if (!data.success) {
         setError(data.error || 'Error al cargar servicios de impresión')
