@@ -1161,35 +1161,44 @@ ${order.payments.map(p =>
               </div>
 
               <div className={`border-t border-b ${tc.border} py-4 my-4 space-y-2`}>
-                {order?.lines.map((line, idx) => (
-                  <div key={idx}>
-                    <p className="font-medium">{line.productName}</p>
-                    <div className={`flex justify-between ${tc.textMuted}`}>
-                      <span>{line.quantity} x {formatCurrency(line.unitPrice)}</span>
-                      <span>{formatCurrency(line.total)}</span>
+                {order?.lines.map((line, idx) => {
+                  const lineCUP = roundCUP(line.unitPrice * exchangeRate) * line.quantity
+                  return (
+                    <div key={idx}>
+                      <div className="flex justify-between">
+                        <span className="font-medium truncate flex-1">{line.productName} x{line.quantity}</span>
+                        <div className="ml-2 text-right">
+                          <span>{formatCurrency(line.total)}</span>
+                          <span className="text-xs text-green-500 ml-1">
+                            ({lineCUP.toLocaleString('es-ES')} CUP)
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
 
               <div className="space-y-1">
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
-                  <span>{formatDualCurrency(order?.subtotal || 0)}</span>
+                  <span>{formatCurrency(order?.subtotal || 0)}</span>
                 </div>
                 {(order?.discountAmount || 0) > 0 && (
                   <div className="flex justify-between text-green-500">
                     <span>Descuento:</span>
-                    <span>-{formatDualCurrency(order?.discountAmount || 0)}</span>
+                    <span>-{formatCurrency(order?.discountAmount || 0)}</span>
                   </div>
                 )}
                 <div className={`flex flex-col pt-2 border-t ${tc.border}`}>
                   <div className="flex justify-between text-xl font-bold">
                     <span>TOTAL:</span>
-                    <span>${(order?.totalAmount || 0).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-end text-lg text-blue-400">
-                    <span>{calcOrderTotalCUP(order?.lines || []).toLocaleString('es-ES')} CUP</span>
+                    <div className="text-right">
+                      <span>{formatCurrency(order?.totalAmount || 0)}</span>
+                      <p className="text-sm font-normal text-green-500">
+                        {calcOrderTotalCUP(order?.lines || []).toLocaleString('es-ES')} CUP
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
