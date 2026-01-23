@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   Clock,
   CheckCircle,
-  DollarSign,
   Warehouse,
   Calendar,
   User,
@@ -23,10 +22,12 @@ import {
   Receipt,
   Building2,
   MapPin,
-  Hash,
   XCircle,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Ban,
+  History,
+  Send
 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -86,6 +87,10 @@ interface PurchaseOrder {
   acceptedByName: string | null
   acceptedAt: string | null
   needsAcceptance: boolean
+  validationStatus: string
+  validatedByName: string | null
+  validatedAt: string | null
+  rejectionReason: string | null
   createdAt: string
   lines: PurchaseLine[]
 }
@@ -175,6 +180,7 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
   const [pendingInvoices, setPendingInvoices] = useState<InvoiceFile[]>([])
   const [uploadingInvoices, setUploadingInvoices] = useState(false)
   const [accepting, setAccepting] = useState(false)
+  const [resubmitting, setResubmitting] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
 
   // Get user role from cookies
@@ -308,6 +314,33 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
       showNotification('error', 'Error de conexión', 'No se pudo aceptar la orden. Intenta de nuevo.')
     } finally {
       setAccepting(false)
+    }
+  }
+
+  const handleResubmit = async () => {
+    if (!order) return
+
+    setResubmitting(true)
+    try {
+      const response = await fetch(`/api/market/purchases/${order.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'resubmit' })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        showNotification('success', 'Reenviada a revisión', 'La orden ha sido reenviada para revisión')
+        fetchOrder()
+      } else {
+        showNotification('error', 'Error', data.error || 'Error al reenviar la orden')
+      }
+    } catch (err) {
+      console.error('Error resubmitting order:', err)
+      showNotification('error', 'Error de conexión', 'No se pudo reenviar la orden. Intenta de nuevo.')
+    } finally {
+      setResubmitting(false)
     }
   }
 
@@ -502,13 +535,19 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                         <StatusIcon className="w-3.5 h-3.5" />
                         {statusConfig.label}
                       </span>
-                      {order.needsAcceptance && (
+                      {order.validationStatus === 'rejected' && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                          <Ban className="w-3.5 h-3.5" />
+                          Rechazada
+                        </span>
+                      )}
+                      {order.validationStatus === 'pending_validation' && order.needsAcceptance && (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
                           <AlertCircle className="w-3.5 h-3.5" />
                           Pendiente Aceptación
                         </span>
                       )}
-                      {order.acceptedByName && (
+                      {order.acceptedByName && order.validationStatus !== 'rejected' && (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           Aceptada
@@ -531,8 +570,8 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
 
                 {/* Right: Total + Accept Button */}
                 <div className="flex items-center gap-4">
-                  {/* Botón Aceptar - Solo visible para MARKET_MANAGER, ADMIN, SUPER_ADMIN (NO comerciales) */}
-                  {order.needsAcceptance && userRole && ['MARKET_MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(userRole) && (
+                  {/* Botón Aceptar - Solo visible para MARKET_MANAGER, ADMIN, SUPER_ADMIN (NO comerciales) y no rechazadas */}
+                  {order.needsAcceptance && order.validationStatus !== 'rejected' && userRole && ['MARKET_MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(userRole) && (
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
@@ -575,6 +614,77 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
               </div>
             </motion.div>
           </div>
+
+          {/* Rejection Banner */}
+          {order.validationStatus === 'rejected' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="max-w-6xl mx-auto mb-6"
+            >
+              <div className={cn(
+                'p-5 rounded-2xl border',
+                theme === 'dark' ? 'bg-red-900/20 border-red-800/50' : 'bg-red-50 border-red-200'
+              )}>
+                <div className="flex items-start gap-4">
+                  <div className={cn(
+                    'w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
+                    theme === 'dark' ? 'bg-red-900/50' : 'bg-red-100'
+                  )}>
+                    <Ban className="w-5 h-5 text-red-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className={cn(
+                      'font-semibold mb-1',
+                      theme === 'dark' ? 'text-red-300' : 'text-red-800'
+                    )}>
+                      Orden Rechazada
+                    </h3>
+                    {order.rejectionReason && (
+                      <p className={cn(
+                        'text-sm mb-2',
+                        theme === 'dark' ? 'text-red-400' : 'text-red-600'
+                      )}>
+                        <span className="font-medium">Motivo:</span> {order.rejectionReason}
+                      </p>
+                    )}
+                    <p className={cn(
+                      'text-xs',
+                      theme === 'dark' ? 'text-red-500' : 'text-red-500'
+                    )}>
+                      {order.validatedByName && `Rechazada por ${order.validatedByName}`}
+                      {order.validatedAt && ` el ${formatDateTime(order.validatedAt)}`}
+                    </p>
+                  </div>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleResubmit}
+                    disabled={resubmitting}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors shrink-0',
+                      resubmitting
+                        ? 'bg-blue-400 cursor-not-allowed'
+                        : 'bg-blue-600 hover:bg-blue-700',
+                      'text-white'
+                    )}
+                  >
+                    {resubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Reenviando...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        Reenviar a Revisión
+                      </>
+                    )}
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
           {/* Content */}
           <div className="max-w-6xl mx-auto space-y-6">
@@ -640,6 +750,159 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                       </div>
                     )
                   })}
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Activity Log */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+              className={cn(
+                'p-6 rounded-2xl border',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <div className="flex items-center gap-3 mb-5">
+                <div className={cn(
+                  'p-2 rounded-xl',
+                  theme === 'dark' ? 'bg-indigo-900/30' : 'bg-indigo-100'
+                )}>
+                  <History className="w-5 h-5 text-indigo-500" />
+                </div>
+                <h3 className={cn(
+                  'font-semibold',
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                )}>Historial de Actividad</h3>
+              </div>
+
+              <div className="relative">
+                {/* Timeline line */}
+                <div className={cn(
+                  'absolute left-[17px] top-2 bottom-2 w-0.5',
+                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                )} />
+
+                <div className="space-y-4">
+                  {/* Created */}
+                  <div className="flex items-start gap-4 relative">
+                    <div className={cn(
+                      'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                      theme === 'dark' ? 'bg-blue-900/50 ring-4 ring-gray-800' : 'bg-blue-100 ring-4 ring-white'
+                    )}>
+                      <FileText className="w-4 h-4 text-blue-500" />
+                    </div>
+                    <div className="pt-1">
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>Orden creada</p>
+                      <p className="text-xs text-gray-500">
+                        por {order.createdByName}
+                        {order.createdByRole && <span className="ml-1 opacity-60">({order.createdByRole})</span>}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(order.createdAt)}</p>
+                    </div>
+                  </div>
+
+                  {/* Validated/Rejected */}
+                  {order.validatedAt && (
+                    <div className="flex items-start gap-4 relative">
+                      <div className={cn(
+                        'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                        order.validationStatus === 'rejected'
+                          ? theme === 'dark' ? 'bg-red-900/50 ring-4 ring-gray-800' : 'bg-red-100 ring-4 ring-white'
+                          : theme === 'dark' ? 'bg-green-900/50 ring-4 ring-gray-800' : 'bg-green-100 ring-4 ring-white'
+                      )}>
+                        {order.validationStatus === 'rejected'
+                          ? <Ban className="w-4 h-4 text-red-500" />
+                          : <CheckCircle2 className="w-4 h-4 text-green-500" />
+                        }
+                      </div>
+                      <div className="pt-1">
+                        <p className={cn(
+                          'text-sm font-medium',
+                          order.validationStatus === 'rejected'
+                            ? theme === 'dark' ? 'text-red-300' : 'text-red-700'
+                            : theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>
+                          {order.validationStatus === 'rejected' ? 'Orden rechazada' : 'Orden aprobada'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          por {order.validatedByName}
+                        </p>
+                        {order.rejectionReason && (
+                          <p className={cn(
+                            'text-xs mt-1 italic',
+                            theme === 'dark' ? 'text-red-400' : 'text-red-600'
+                          )}>
+                            &quot;{order.rejectionReason}&quot;
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(order.validatedAt)}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Accepted */}
+                  {order.acceptedByName && order.acceptedAt && (
+                    <div className="flex items-start gap-4 relative">
+                      <div className={cn(
+                        'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                        theme === 'dark' ? 'bg-green-900/50 ring-4 ring-gray-800' : 'bg-green-100 ring-4 ring-white'
+                      )}>
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      </div>
+                      <div className="pt-1">
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>Orden aceptada</p>
+                        <p className="text-xs text-gray-500">por {order.acceptedByName}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(order.acceptedAt)}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Received */}
+                  {order.receivedByName && order.receivedDate && (
+                    <div className="flex items-start gap-4 relative">
+                      <div className={cn(
+                        'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                        theme === 'dark' ? 'bg-emerald-900/50 ring-4 ring-gray-800' : 'bg-emerald-100 ring-4 ring-white'
+                      )}>
+                        <Package className="w-4 h-4 text-emerald-500" />
+                      </div>
+                      <div className="pt-1">
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>Mercancía recibida</p>
+                        <p className="text-xs text-gray-500">por {order.receivedByName}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{formatDate(order.receivedDate)}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pending validation status */}
+                  {order.validationStatus === 'pending_validation' && !order.validatedAt && (
+                    <div className="flex items-start gap-4 relative">
+                      <div className={cn(
+                        'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                        theme === 'dark' ? 'bg-orange-900/50 ring-4 ring-gray-800' : 'bg-orange-100 ring-4 ring-white'
+                      )}>
+                        <Clock className="w-4 h-4 text-orange-500 animate-pulse" />
+                      </div>
+                      <div className="pt-1">
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-orange-300' : 'text-orange-700'
+                        )}>Pendiente de aprobación</p>
+                        <p className="text-xs text-gray-500">Esperando revisión de un administrador</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>

@@ -106,6 +106,10 @@ export async function GET(
         mp.notes,
         mp.created_at,
         mp.updated_at,
+        mp.validation_status,
+        mp.validated_by,
+        mp.validated_at,
+        mp.rejection_reason,
         ms.name as supplier_registered_name,
         ms.supplier_code,
         ms.phone as supplier_phone,
@@ -118,7 +122,8 @@ export async function GET(
         COALESCE(u3.firstname || ' ' || u3.lastname, u3.email) as received_by_name,
         COALESCE(u4.firstname || ' ' || u4.lastname, u4.email) as accepted_by_name,
         mp.accepted_by,
-        mp.accepted_at
+        mp.accepted_at,
+        COALESCE(u5.firstname || ' ' || u5.lastname, u5.email) as validated_by_name
       FROM market_purchases mp
       LEFT JOIN market_suppliers ms ON mp.supplier_id = ms.id
       LEFT JOIN market_warehouses mw ON mp.warehouse_id = mw.id
@@ -126,6 +131,7 @@ export async function GET(
       LEFT JOIN users u2 ON mp.confirmed_by = u2.id
       LEFT JOIN users u3 ON mp.received_by = u3.id
       LEFT JOIN users u4 ON mp.accepted_by = u4.id
+      LEFT JOIN users u5 ON mp.validated_by = u5.id
       WHERE mp.id = $1 AND mp.company_id = $2
     `, [purchaseId, companyId])
 
@@ -197,8 +203,12 @@ export async function GET(
         receivedByName: purchase.received_by_name,
         acceptedByName: purchase.accepted_by_name || null,
         acceptedAt: purchase.accepted_at || null,
-        // Indica si la orden necesita aceptación (creada por comercial y aún no aceptada)
-        needsAcceptance: purchase.created_by_role === 'MARKET_COMERCIAL' && !purchase.accepted_by,
+        validationStatus: purchase.validation_status || 'confirmed',
+        validatedByName: purchase.validated_by_name || null,
+        validatedAt: purchase.validated_at || null,
+        rejectionReason: purchase.rejection_reason || null,
+        // Indica si la orden necesita aceptación (creada por comercial, aún no aceptada, y no rechazada)
+        needsAcceptance: purchase.created_by_role === 'MARKET_COMERCIAL' && !purchase.accepted_by && purchase.validation_status !== 'rejected',
         lines: linesResult.rows.map(line => ({
           id: line.id,
           productId: line.product_id,
@@ -276,7 +286,7 @@ export async function PUT(
 
     // Get current purchase
     const purchaseResult = await db.query(`
-      SELECT id, status, company_id, warehouse_id FROM market_purchases WHERE id = $1
+      SELECT id, status, company_id, warehouse_id, validation_status FROM market_purchases WHERE id = $1
     `, [purchaseId])
 
     if (purchaseResult.rows.length === 0) {
@@ -364,6 +374,32 @@ export async function PUT(
       return NextResponse.json({
         success: true,
         message: 'Orden de compra aceptada exitosamente'
+      })
+    }
+
+    // Resubmit rejected order for review
+    if (action === 'resubmit') {
+      // Check if order is rejected
+      if (purchase.validation_status !== 'rejected') {
+        return NextResponse.json({
+          success: false,
+          error: 'Solo se pueden reenviar a revisión órdenes rechazadas'
+        }, { status: 400 })
+      }
+
+      await db.query(`
+        UPDATE market_purchases
+        SET validation_status = 'pending_validation',
+            validated_by = NULL,
+            validated_at = NULL,
+            rejection_reason = NULL,
+            updated_at = NOW()
+        WHERE id = $1
+      `, [purchaseId])
+
+      return NextResponse.json({
+        success: true,
+        message: 'Orden reenviada a revisión exitosamente'
       })
     }
 
