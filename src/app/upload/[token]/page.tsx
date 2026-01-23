@@ -11,7 +11,8 @@ interface TokenInfo {
 
 const PURPOSE_LABELS: Record<string, string> = {
   purchase_invoice: 'Factura de Compra',
-  expense_receipt: 'Recibo de Gasto'
+  expense_receipt: 'Recibo de Gasto',
+  product_image: 'Imagen de Producto'
 }
 
 export default function MobileUploadPage({ params }: { params: Promise<{ token: string }> }) {

@@ -16,6 +16,60 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif', 'application/pdf']
 
 /**
+ * GET /api/upload/image?path=xxx&bucket=yyy
+ * Returns a signed URL for a stored file
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const path = searchParams.get('path')
+    const bucket = searchParams.get('bucket') || BUCKET_NAME
+
+    if (!path) {
+      return NextResponse.json(
+        { success: false, error: 'path es requerido' },
+        { status: 400 }
+      )
+    }
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return NextResponse.json(
+        { success: false, error: 'Almacenamiento no configurado' },
+        { status: 500 }
+      )
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    })
+
+    // Generate a signed URL valid for 1 hour
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(path, 3600)
+
+    if (error || !data?.signedUrl) {
+      console.error('[GET Image] Error getting signed URL:', error)
+      return NextResponse.json(
+        { success: false, error: 'No se pudo obtener la URL del archivo' },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      url: data.signedUrl
+    })
+  } catch (error: any) {
+    console.error('[GET Image] Error:', error)
+    return NextResponse.json(
+      { success: false, error: error.message || 'Error al obtener URL' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
  * POST /api/upload/image
  * Sube una imagen genérica a Supabase Storage
  */

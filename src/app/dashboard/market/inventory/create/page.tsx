@@ -630,21 +630,37 @@ export default function CreateProductPage() {
   const handlePhoneUploadComplete = async (fileUrl: string) => {
     setShowPhoneUpload(false)
     try {
-      // fileUrl is the storage path, fetch the public URL
-      const response = await fetch(`/api/upload/image?path=${encodeURIComponent(fileUrl)}`)
+      // fileUrl is the Supabase storage path in 'company-private-documents' bucket
+      const response = await fetch(
+        `/api/upload/image?path=${encodeURIComponent(fileUrl)}&bucket=company-private-documents`
+      )
       if (response.ok) {
         const data = await response.json()
-        const publicUrl = data.url || fileUrl
-        setFormData(prev => ({ ...prev, imageUrl: publicUrl, imageFile: null }))
-      } else {
-        // Use the fileUrl directly as it might already be a public URL
-        setFormData(prev => ({ ...prev, imageUrl: fileUrl, imageFile: null }))
+        if (data.success && data.url) {
+          // Load the image and convert to base64 for canvas-based adjustment
+          const imgResponse = await fetch(data.url)
+          const blob = await imgResponse.blob()
+          const reader = new FileReader()
+          reader.onload = () => {
+            const base64 = reader.result as string
+            setFormData(prev => ({ ...prev, imageUrl: base64, imageFile: null }))
+            setExistingImages([])
+            setSelectedExistingImage(null)
+            setUseExistingImage(false)
+            // Auto-open the image adjust modal
+            setTimeout(() => setShowImageAdjust(true), 300)
+          }
+          reader.readAsDataURL(blob)
+          return
+        }
       }
+      // Fallback: use the storage path directly (won't show preview but won't crash)
+      setFormData(prev => ({ ...prev, imageUrl: fileUrl, imageFile: null }))
       setExistingImages([])
       setSelectedExistingImage(null)
       setUseExistingImage(false)
-    } catch {
-      // Fallback: use the URL as-is
+    } catch (err) {
+      console.error('[Phone Upload] Error loading image:', err)
       setFormData(prev => ({ ...prev, imageUrl: fileUrl, imageFile: null }))
     }
   }
