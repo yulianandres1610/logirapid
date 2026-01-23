@@ -350,11 +350,12 @@ export default function InventoryCountReportPage() {
   }, [])
 
   // Calculate totals
+  // difference = expected - counted: positivo = FALTANTE, negativo = SOBRANTE
   const totals = countData ? {
     totalProducts: countData.lines.length,
     productsWithDifferences: countData.lines.filter(l => l.difference !== 0).length,
-    productsWithExcess: countData.lines.filter(l => l.difference > 0).length,
-    productsWithShortage: countData.lines.filter(l => l.difference < 0).length,
+    productsWithExcess: countData.lines.filter(l => l.difference < 0).length,    // negativo = sobrante (contó de más)
+    productsWithShortage: countData.lines.filter(l => l.difference > 0).length,  // positivo = faltante (contó de menos)
     totalDifferenceValue: countData.lines.reduce((sum, l) => sum + l.differenceValue, 0),
     totalExpected: countData.lines.reduce((sum, l) => sum + l.expectedQuantity, 0),
     totalCounted: countData.lines.reduce((sum, l) => sum + l.countedQuantity, 0),
@@ -537,8 +538,8 @@ export default function InventoryCountReportPage() {
           <div className="sm:hidden space-y-2">
             {countData.lines.map((line, index) => {
               const hasDifference = line.difference !== 0
-              const isExcess = line.difference > 0
-              const isShortage = line.difference < 0
+              const isExcess = line.difference < 0   // negativo = sobrante (contó de más)
+              const isShortage = line.difference > 0  // positivo = faltante (contó de menos)
 
               return (
                 <motion.div
@@ -606,8 +607,8 @@ export default function InventoryCountReportPage() {
                 <tbody className="divide-y divide-gray-700/50">
                   {countData.lines.map((line, index) => {
                     const hasDifference = line.difference !== 0
-                    const isExcess = line.difference > 0
-                    const isShortage = line.difference < 0
+                    const isExcess = line.difference < 0   // negativo = sobrante
+                    const isShortage = line.difference > 0  // positivo = faltante
 
                     return (
                       <tr
@@ -651,8 +652,8 @@ export default function InventoryCountReportPage() {
                       {(totals?.totalCounted || 0) - (totals?.totalExpected || 0)}
                     </td>
                     <td className={`px-4 py-3 text-right font-mono ${
-                      (totals?.totalDifferenceValue || 0) > 0 ? 'text-green-400' :
-                      (totals?.totalDifferenceValue || 0) < 0 ? 'text-red-400' : 'text-gray-400'
+                      (totals?.totalDifferenceValue || 0) > 0 ? 'text-red-400' :
+                      (totals?.totalDifferenceValue || 0) < 0 ? 'text-green-400' : 'text-gray-400'
                     }`}>
                       ${(totals?.totalDifferenceValue || 0).toFixed(2)}
                     </td>
@@ -702,7 +703,7 @@ export default function InventoryCountReportPage() {
                   </p>
                   <p className="text-xs sm:text-sm text-amber-200/70 mt-1">
                     Se creará un ajuste por{' '}
-                    <span className={`font-bold ${totals.totalDifferenceValue >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    <span className={`font-bold ${totals.totalDifferenceValue > 0 ? 'text-red-400' : totals.totalDifferenceValue < 0 ? 'text-green-400' : 'text-gray-400'}`}>
                       ${totals.totalDifferenceValue.toFixed(2)}
                     </span>
                   </p>
@@ -840,7 +841,7 @@ export default function InventoryCountReportPage() {
             </thead>
             <tbody>
               {countData.lines.map((line, index) => (
-                <tr key={index} style={{ background: line.difference !== 0 ? (line.difference > 0 ? '#d4edda' : '#f8d7da') : 'white' }}>
+                <tr key={index} style={{ background: line.difference !== 0 ? (line.difference > 0 ? '#f8d7da' : '#d4edda') : 'white' }}>
                   <td>
                     <div>{line.productName}</div>
                     <div style={{ fontSize: '10px', color: '#666' }}>{line.productSku || line.productBarcode}</div>
@@ -848,10 +849,10 @@ export default function InventoryCountReportPage() {
                   <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{line.expectedQuantity}</td>
                   <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{line.soldToday || 0}</td>
                   <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold' }}>{line.countedQuantity}</td>
-                  <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: line.difference > 0 ? '#155724' : line.difference < 0 ? '#721c24' : '#666' }}>
+                  <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: line.difference > 0 ? '#721c24' : line.difference < 0 ? '#155724' : '#666' }}>
                     {line.difference > 0 ? '+' : ''}{line.difference}
                   </td>
-                  <td style={{ textAlign: 'right', fontFamily: 'monospace', color: line.difference > 0 ? '#155724' : line.difference < 0 ? '#721c24' : '#666' }}>
+                  <td style={{ textAlign: 'right', fontFamily: 'monospace', color: line.difference > 0 ? '#721c24' : line.difference < 0 ? '#155724' : '#666' }}>
                     ${line.differenceValue.toFixed(2)}
                   </td>
                 </tr>
@@ -864,7 +865,7 @@ export default function InventoryCountReportPage() {
                 <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{totals?.totalSold || 0}</td>
                 <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{totals?.totalCounted}</td>
                 <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{(totals?.totalCounted || 0) - (totals?.totalExpected || 0)}</td>
-                <td style={{ textAlign: 'right', fontFamily: 'monospace', color: (totals?.totalDifferenceValue || 0) >= 0 ? '#155724' : '#721c24' }}>
+                <td style={{ textAlign: 'right', fontFamily: 'monospace', color: (totals?.totalDifferenceValue || 0) > 0 ? '#721c24' : (totals?.totalDifferenceValue || 0) < 0 ? '#155724' : '#666' }}>
                   ${(totals?.totalDifferenceValue || 0).toFixed(2)}
                 </td>
               </tr>

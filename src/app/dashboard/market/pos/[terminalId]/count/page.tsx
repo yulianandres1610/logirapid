@@ -268,6 +268,7 @@ export default function InventoryCountPage() {
         if (countData.success && countData.data && countData.data.lines) {
           const loadedProducts = countData.data.lines.map((l: {
             productId: number
+            variantId?: number | null
             productName: string
             productSku?: string
             productBarcode?: string
@@ -277,6 +278,8 @@ export default function InventoryCountPage() {
             expectedQuantity?: number
           }) => ({
             productId: l.productId,
+            variantId: l.variantId || null,
+            variantName: null, // Se reconstruye del nombre completo
             productName: l.productName || 'Producto',
             productSku: l.productSku || '',
             productBarcode: l.productBarcode || '',

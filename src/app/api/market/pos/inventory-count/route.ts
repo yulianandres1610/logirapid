@@ -310,21 +310,24 @@ export async function POST(request: NextRequest) {
       // Eliminar líneas anteriores
       await db.query(`DELETE FROM market_inventory_count_lines WHERE count_id = $1`, [countId])
 
-      // Obtener ventas del día para calcular expected
+      // Obtener ventas del día agrupadas por producto Y variante
       const salesResult = await db.query(`
         SELECT
           ol.product_id,
+          ol.variant_id,
           SUM(ol.quantity) as total_sold
         FROM market_pos_order_lines ol
         JOIN market_pos_orders o ON ol.order_id = o.id
         WHERE o.pos_session_id = $1
           AND o.status IN ('paid', 'completed')
-        GROUP BY ol.product_id
+        GROUP BY ol.product_id, ol.variant_id
       `, [sessionId])
 
-      const salesMap: Record<number, number> = {}
+      // Mapa de ventas con clave compuesta: productId:variantId
+      const salesMap: Record<string, number> = {}
       salesResult.rows.forEach(row => {
-        salesMap[row.product_id] = parseFloat(row.total_sold) || 0
+        const key = `${row.product_id}:${row.variant_id || 'null'}`
+        salesMap[key] = parseFloat(row.total_sold) || 0
       })
 
       // Obtener stock actual del almacén (productos y variantes)
@@ -349,9 +352,16 @@ export async function POST(request: NextRequest) {
       // Positivo = FALTANTE (hay menos de lo esperado)
       // Negativo = SOBRANTE (hay más de lo esperado)
       for (const line of lines) {
-        const soldToday = salesMap[line.productId] || 0
+        const salesKey = `${line.productId}:${line.variantId || 'null'}`
+        const soldToday = salesMap[salesKey] || 0
         const stockKey = `${line.productId}:${line.variantId || 'null'}`
-        const currentStock = stockMap[stockKey] || 0
+        // Buscar stock: primero variante-específico, luego fallback a producto (variant_id IS NULL)
+        let currentStock = stockMap[stockKey] || 0
+        if (currentStock === 0 && line.variantId) {
+          // Si no hay stock de variante, usar stock a nivel de producto
+          const productKey = `${line.productId}:null`
+          currentStock = stockMap[productKey] || 0
+        }
         // Stock esperado = Stock inicial del día - Vendido = (currentStock + soldToday) - soldToday = currentStock
         const expectedQuantity = currentStock
         const countedQuantity = line.countedQuantity || 0
