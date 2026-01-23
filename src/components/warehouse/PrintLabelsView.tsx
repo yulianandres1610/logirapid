@@ -117,8 +117,8 @@ export default function PrintLabelsView({
 
     const term = searchTerm.toLowerCase().trim()
     return products.filter(product =>
-      product.name.toLowerCase().includes(term) ||
-      product.sku.toLowerCase().includes(term) ||
+      (product.name && product.name.toLowerCase().includes(term)) ||
+      (product.sku && product.sku.toLowerCase().includes(term)) ||
       (product.barcode && product.barcode.toLowerCase().includes(term)) ||
       (product.description && product.description.toLowerCase().includes(term))
     )
@@ -320,6 +320,7 @@ export default function PrintLabelsView({
         <PrintLabelModal
           isOpen={showPrintModal}
           onClose={handlePrintModalClose}
+          warehouseId={warehouseId}
           productData={{
             productName: selectedProduct.name,
             sku: selectedProduct.sku,

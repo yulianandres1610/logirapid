@@ -51,10 +51,11 @@ interface PrintLabelModalProps {
   isOpen: boolean
   onClose: () => void
   productData: ProductLabelData
+  warehouseId?: number
   onPrintSuccess?: (jobNumber: string) => void
 }
 
-export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }: PrintLabelModalProps) {
+export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onPrintSuccess }: PrintLabelModalProps) {
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
   const exchangeRates = useMarketExchangeRates()
@@ -108,7 +109,10 @@ export function PrintLabelModal({ isOpen, onClose, productData, onPrintSuccess }
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/print/services?includeOffline=false', {
+      const url = warehouseId
+        ? `/api/print/services?includeOffline=false&warehouseId=${warehouseId}`
+        : '/api/print/services?includeOffline=false'
+      const response = await fetch(url, {
         credentials: 'include'
       })
       const data = await response.json()

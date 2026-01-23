@@ -101,7 +101,8 @@ export async function middleware(request: NextRequest) {
         pathname.startsWith('/api/ai') ||
         pathname.startsWith('/api/print') ||
         pathname.startsWith('/api/users') ||
-        pathname.startsWith('/api/audit')) {
+        pathname.startsWith('/api/audit') ||
+        pathname.startsWith('/api/companies')) {
       return NextResponse.next()
     }
 
