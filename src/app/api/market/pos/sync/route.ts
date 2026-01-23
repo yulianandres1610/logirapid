@@ -167,18 +167,22 @@ export async function POST(request: NextRequest) {
 
             if (productId) {
               const productCheck = await db.query(
-                'SELECT name FROM market_products WHERE id = $1',
+                'SELECT name, COALESCE(quantity_on_hand, 0) as global_stock FROM market_products WHERE id = $1',
                 [productId]
               )
 
-              // Check stock availability (all products track inventory)
+              // Check warehouse stock availability
               const stockCheck = await db.query(`
                 SELECT COALESCE(quantity_on_hand, 0) as available
                 FROM market_warehouse_stock
                 WHERE product_id = $1 AND warehouse_id = $2
               `, [productId, warehouseId])
 
-              const availableStock = parseFloat(stockCheck.rows[0]?.available) || 0
+              // If no warehouse stock record exists, fall back to product's global stock
+              const hasWarehouseRecord = stockCheck.rows.length > 0
+              const availableStock = hasWarehouseRecord
+                ? parseFloat(stockCheck.rows[0]?.available) || 0
+                : parseFloat(productCheck.rows[0]?.global_stock) || 0
 
               if (availableStock < quantity) {
                 const productName = productCheck.rows[0]?.name || `Producto ${productId}`
@@ -187,7 +191,8 @@ export async function POST(request: NextRequest) {
                   productId,
                   productName,
                   requested: quantity,
-                  available: availableStock
+                  available: availableStock,
+                  usedGlobalFallback: !hasWarehouseRecord
                 })
 
                 results.failed++

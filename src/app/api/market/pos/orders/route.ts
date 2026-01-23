@@ -334,13 +334,13 @@ export async function POST(request: NextRequest) {
         const variantId = line.variantId ? parseInt(line.variantId) : null
 
         if (productId) {
-          // Get product name for error messages
+          // Get product name and global stock for error messages / fallback
           const productCheck = await db.query(
-            'SELECT name FROM market_products WHERE id = $1',
+            'SELECT name, COALESCE(quantity_on_hand, 0) as global_stock FROM market_products WHERE id = $1',
             [productId]
           )
 
-          // Check warehouse stock availability (all products track inventory)
+          // Check warehouse stock availability
           const stockCheck = await db.query(`
             SELECT COALESCE(quantity_on_hand, 0) as available
             FROM market_warehouse_stock
@@ -348,7 +348,11 @@ export async function POST(request: NextRequest) {
               AND (variant_id = $3 OR (variant_id IS NULL AND $3::int IS NULL))
           `, [productId, warehouseId, variantId])
 
-          const availableStock = parseFloat(stockCheck.rows[0]?.available) || 0
+          // If no warehouse stock record exists, fall back to product's global stock
+          const hasWarehouseRecord = stockCheck.rows.length > 0
+          const availableStock = hasWarehouseRecord
+            ? parseFloat(stockCheck.rows[0]?.available) || 0
+            : parseFloat(productCheck.rows[0]?.global_stock) || 0
           const productName = productCheck.rows[0]?.name || `Producto ${productId}`
 
           if (availableStock < quantity) {
@@ -358,7 +362,8 @@ export async function POST(request: NextRequest) {
               variantId,
               requested: quantity,
               available: availableStock,
-              warehouseId
+              warehouseId,
+              usedGlobalFallback: !hasWarehouseRecord
             })
 
             return NextResponse.json({
