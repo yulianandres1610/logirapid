@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
     let paramIndex = 2
 
     if (warehouseId) {
-      query += ` AND ps.warehouse_id = $${paramIndex}`
+      query += ` AND (ps.warehouse_id = $${paramIndex} OR ps.id = (SELECT default_print_service_id FROM market_warehouses WHERE id = $${paramIndex} AND company_id = $1))`
       params.push(parseInt(warehouseId))
       paramIndex++
     }

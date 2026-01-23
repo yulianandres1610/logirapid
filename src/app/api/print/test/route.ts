@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
         SELECT
           ps.id,
           ps.company_id,
+          ps.warehouse_id,
           ps.service_code,
           ps.service_name,
           ps.status,
