@@ -1376,7 +1376,7 @@ export default function POSTerminalPage() {
                   </span>
                 )}
               </div>
-              <span className="font-bold text-lg">${cartTotals.total.toFixed(2)}</span>
+              <span className="font-bold text-lg">${cartTotals.total.toFixed(2)} <span className="text-xs text-green-600 font-normal">(${Math.round(cartTotals.total * USD_CUP_BCC).toLocaleString()} CUP)</span></span>
             </div>
             {showMobileCart ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
           </button>
@@ -1558,7 +1558,12 @@ export default function POSTerminalPage() {
               )}
               <div className="flex justify-between text-lg lg:text-xl font-bold pt-1 lg:pt-2 border-t border-gray-200 dark:border-gray-600">
                 <span>Total</span>
-                <span>${cartTotals.total.toFixed(2)}</span>
+                <div className="text-right">
+                  <span>${cartTotals.total.toFixed(2)}</span>
+                  <p className="text-xs lg:text-sm font-normal text-green-600">
+                    ${Math.round(cartTotals.total * USD_CUP_BCC).toLocaleString()} CUP
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -1613,7 +1618,7 @@ export default function POSTerminalPage() {
                 )}
               >
                 <CreditCard className="w-4 h-4 lg:w-5 lg:h-5" />
-                ${cartTotals.total.toFixed(2)}
+                <span>${cartTotals.total.toFixed(2)} <span className="text-[10px] lg:text-xs opacity-80">(${Math.round(cartTotals.total * USD_CUP_BCC).toLocaleString()} CUP)</span></span>
               </button>
             </div>
           </div>
@@ -1821,7 +1826,10 @@ export default function POSTerminalPage() {
               )}
             >
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold">Cobrar ${cartTotals.total.toFixed(2)}</h3>
+                <div>
+                  <h3 className="text-2xl font-bold">Cobrar ${cartTotals.total.toFixed(2)}</h3>
+                  <p className="text-sm text-green-600 font-normal">${Math.round(cartTotals.total * USD_CUP_BCC).toLocaleString()} CUP</p>
+                </div>
                 <button
                   onClick={() => setShowPaymentModal(false)}
                   disabled={processingPayment}

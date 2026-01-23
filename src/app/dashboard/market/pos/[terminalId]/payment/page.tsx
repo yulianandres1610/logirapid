@@ -843,7 +843,12 @@ function PaymentContent() {
                     <span className="truncate flex-1">
                       {item.productName} x{item.quantity}
                     </span>
-                    <span className="ml-2">{formatCurrency(item.total)}</span>
+                    <div className="ml-2 text-right">
+                      <span>{formatCurrency(item.total)}</span>
+                      <span className="text-xs text-green-500 ml-1">
+                        ({formatCurrency(item.total * rates.CUP_BCC, 'CUP')})
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -860,7 +865,12 @@ function PaymentContent() {
                 )}
                 <div className="flex justify-between text-xl font-bold">
                   <span>TOTAL:</span>
-                  <span>{formatCurrency(totals.total)}</span>
+                  <div className="text-right">
+                    <span>{formatCurrency(totals.total)}</span>
+                    <p className="text-sm font-normal text-green-500">
+                      {formatCurrency(totals.total * rates.CUP_BCC, 'CUP')}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -912,12 +922,19 @@ function PaymentContent() {
                 </div>
                 <div className={`flex justify-between font-bold ${remainingUSD > 0 ? 'text-red-500' : 'text-green-500'}`}>
                   <span>{remainingUSD > 0 ? 'Pendiente:' : 'Cambio:'}</span>
-                  <span>
-                    {remainingUSD > 0
-                      ? formatCurrency(remainingUSD)
-                      : formatCurrency(changeAmount, changeCurrency)
-                    }
-                  </span>
+                  <div className="text-right">
+                    <span>
+                      {remainingUSD > 0
+                        ? formatCurrency(remainingUSD)
+                        : formatCurrency(changeAmount, changeCurrency)
+                      }
+                    </span>
+                    {remainingUSD > 0 && (
+                      <p className="text-xs font-normal opacity-80">
+                        ({formatCurrency(remainingUSD * rates.CUP_BCC, 'CUP')})
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
