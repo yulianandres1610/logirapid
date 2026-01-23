@@ -385,6 +385,14 @@ export async function PUT(
         }, { status: 400 })
       }
 
+      // Check if order was rejected - cannot receive rejected purchases
+      if (purchase.validation_status === 'rejected') {
+        return NextResponse.json({
+          success: false,
+          error: 'No se pueden recibir compras rechazadas. Esta compra fue rechazada por un administrador.'
+        }, { status: 400 })
+      }
+
       // Use warehouseId from request body if provided, otherwise use the one from purchase
       const targetWarehouseId = warehouseId || purchase.warehouse_id
 

@@ -416,6 +416,27 @@ export async function POST(
         }, { status: 400 })
       }
 
+      if (purchase.status === 'cancelled') {
+        return NextResponse.json({
+          success: false,
+          error: 'No se pueden recibir compras canceladas'
+        }, { status: 400 })
+      }
+
+      if (purchase.validation_status === 'rejected') {
+        return NextResponse.json({
+          success: false,
+          error: 'No se pueden recibir compras rechazadas. Esta compra fue rechazada por un administrador.'
+        }, { status: 400 })
+      }
+
+      if (purchase.validation_status === 'pending_validation') {
+        return NextResponse.json({
+          success: false,
+          error: 'Esta compra está pendiente de aprobación. Debe ser aprobada antes de poder recibirla.'
+        }, { status: 400 })
+      }
+
       orderNumber = purchase.purchase_number
       supplierCode = purchase.supplier_code || 'PROV'
       supplierName = purchase.supplier_name || 'Proveedor'
