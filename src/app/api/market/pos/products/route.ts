@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
           COALESCE(p.image_url, pi.image_url) as image_url,
           p.is_active,
           true as track_inventory,
-          COALESCE(ws.quantity_on_hand, p.quantity_on_hand, 0) as stock,
+          COALESCE(ws.quantity_on_hand, 0) as stock,
           p.quantity_on_hand as total_stock
         FROM market_products p
         LEFT JOIN market_warehouse_stock ws ON p.id = ws.product_id AND ws.warehouse_id = $2 AND ws.variant_id IS NULL
@@ -218,7 +218,7 @@ export async function GET(request: NextRequest) {
         v.selling_price as price,
         v.image_url,
         v.is_active,
-        COALESCE(ws.quantity_on_hand, v.quantity_on_hand, 0) as stock,
+        COALESCE(ws.quantity_on_hand, 0) as stock,
         v.quantity_on_hand as total_stock
       FROM market_product_variants v
       JOIN market_products p ON v.product_id = p.id
