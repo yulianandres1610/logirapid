@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
         const totalAmount = subtotal - totalDiscount + totalTax
         const warehouseId = order.warehouseId || defaultWarehouseId
 
-        // Validate stock availability before creating order
+        // Validate stock availability in the POS terminal's warehouse before creating order
         let hasStockError = false
         if (warehouseId) {
           for (const line of order.lines) {
@@ -166,23 +166,23 @@ export async function POST(request: NextRequest) {
             const productId = parseInt(String(line.productId)) || null
 
             if (productId) {
+              // Get product name for error messages
               const productCheck = await db.query(
-                'SELECT name, COALESCE(quantity_on_hand, 0) as global_stock FROM market_products WHERE id = $1',
+                'SELECT name FROM market_products WHERE id = $1',
                 [productId]
               )
 
-              // Check warehouse stock availability
+              // Check warehouse stock availability (only the POS terminal's warehouse matters)
               const stockCheck = await db.query(`
                 SELECT COALESCE(quantity_on_hand, 0) as available
                 FROM market_warehouse_stock
                 WHERE product_id = $1 AND warehouse_id = $2
               `, [productId, warehouseId])
 
-              // If no warehouse stock record exists, fall back to product's global stock
-              const hasWarehouseRecord = stockCheck.rows.length > 0
-              const availableStock = hasWarehouseRecord
+              // If no warehouse stock record exists, available = 0
+              const availableStock = stockCheck.rows.length > 0
                 ? parseFloat(stockCheck.rows[0]?.available) || 0
-                : parseFloat(productCheck.rows[0]?.global_stock) || 0
+                : 0
 
               if (availableStock < quantity) {
                 const productName = productCheck.rows[0]?.name || `Producto ${productId}`
@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
                   productName,
                   requested: quantity,
                   available: availableStock,
-                  usedGlobalFallback: !hasWarehouseRecord
+                  warehouseId
                 })
 
                 results.failed++
@@ -273,27 +273,25 @@ export async function POST(request: NextRequest) {
             line.promotionName || null
           ])
 
-          // Update inventory if warehouse specified
+          // Update inventory - deduct from the POS terminal's warehouse stock
           if (warehouseId && line.productId) {
-            // Try warehouse stock first, fallback to product quantity
-            const stockResult = await db.query(`
+            // Deduct from warehouse stock
+            await db.query(`
               UPDATE market_warehouse_stock
-              SET quantity_on_hand = quantity_on_hand - $1, updated_at = NOW()
+              SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
               WHERE product_id = $2 AND warehouse_id = $3
-              RETURNING id
             `, [line.quantity || 1, line.productId, warehouseId])
 
-            if (stockResult.rows.length === 0) {
-              await db.query(`
-                UPDATE market_products
-                SET quantity_on_hand = quantity_on_hand - $1, updated_at = NOW()
-                WHERE id = $2
-              `, [line.quantity || 1, line.productId])
-            }
+            // Also update global product stock for tracking
+            await db.query(`
+              UPDATE market_products
+              SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
+              WHERE id = $2
+            `, [line.quantity || 1, line.productId])
           } else if (line.productId) {
             await db.query(`
               UPDATE market_products
-              SET quantity_on_hand = quantity_on_hand - $1, updated_at = NOW()
+              SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
               WHERE id = $2
             `, [line.quantity || 1, line.productId])
           }

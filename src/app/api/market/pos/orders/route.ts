@@ -326,7 +326,7 @@ export async function POST(request: NextRequest) {
 
     const totalAmount = subtotal - totalDiscount + totalTax
 
-    // Validate stock availability in warehouse before creating order
+    // Validate stock availability in the POS terminal's warehouse before creating order
     if (warehouseId) {
       for (const line of lines) {
         const quantity = parseFloat(line.quantity) || 1
@@ -334,13 +334,13 @@ export async function POST(request: NextRequest) {
         const variantId = line.variantId ? parseInt(line.variantId) : null
 
         if (productId) {
-          // Get product name and global stock for error messages / fallback
+          // Get product name for error messages
           const productCheck = await db.query(
-            'SELECT name, COALESCE(quantity_on_hand, 0) as global_stock FROM market_products WHERE id = $1',
+            'SELECT name FROM market_products WHERE id = $1',
             [productId]
           )
 
-          // Check warehouse stock availability
+          // Check warehouse stock availability (only the POS terminal's warehouse matters)
           const stockCheck = await db.query(`
             SELECT COALESCE(quantity_on_hand, 0) as available
             FROM market_warehouse_stock
@@ -348,11 +348,10 @@ export async function POST(request: NextRequest) {
               AND (variant_id = $3 OR (variant_id IS NULL AND $3::int IS NULL))
           `, [productId, warehouseId, variantId])
 
-          // If no warehouse stock record exists, fall back to product's global stock
-          const hasWarehouseRecord = stockCheck.rows.length > 0
-          const availableStock = hasWarehouseRecord
+          // If no warehouse stock record exists, available = 0
+          const availableStock = stockCheck.rows.length > 0
             ? parseFloat(stockCheck.rows[0]?.available) || 0
-            : parseFloat(productCheck.rows[0]?.global_stock) || 0
+            : 0
           const productName = productCheck.rows[0]?.name || `Producto ${productId}`
 
           if (availableStock < quantity) {
@@ -362,8 +361,7 @@ export async function POST(request: NextRequest) {
               variantId,
               requested: quantity,
               available: availableStock,
-              warehouseId,
-              usedGlobalFallback: !hasWarehouseRecord
+              warehouseId
             })
 
             return NextResponse.json({
