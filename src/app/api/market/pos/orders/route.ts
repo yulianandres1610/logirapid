@@ -334,11 +334,12 @@ export async function POST(request: NextRequest) {
         const variantId = line.variantId ? parseInt(line.variantId) : null
 
         if (productId) {
-          // Get product name for error messages
+          // Get product info
           const productCheck = await db.query(
-            'SELECT name FROM market_products WHERE id = $1',
+            'SELECT name, COALESCE(quantity_on_hand, 0) as global_stock FROM market_products WHERE id = $1',
             [productId]
           )
+          const productName = productCheck.rows[0]?.name || `Producto ${productId}`
 
           // Check warehouse stock availability (only the POS terminal's warehouse matters)
           const stockCheck = await db.query(`
@@ -348,11 +349,26 @@ export async function POST(request: NextRequest) {
               AND (variant_id = $3 OR (variant_id IS NULL AND $3::int IS NULL))
           `, [productId, warehouseId, variantId])
 
-          // If no warehouse stock record exists, available = 0
-          const availableStock = stockCheck.rows.length > 0
-            ? parseFloat(stockCheck.rows[0]?.available) || 0
-            : 0
-          const productName = productCheck.rows[0]?.name || `Producto ${productId}`
+          let availableStock: number
+
+          if (stockCheck.rows.length > 0) {
+            // Warehouse stock record exists - use it
+            availableStock = parseFloat(stockCheck.rows[0]?.available) || 0
+          } else {
+            // No warehouse stock record - check global stock and auto-initialize warehouse record
+            const globalStock = parseFloat(productCheck.rows[0]?.global_stock) || 0
+            if (globalStock > 0) {
+              // Product has global stock but no warehouse record - create it
+              await db.query(`
+                INSERT INTO market_warehouse_stock (product_id, warehouse_id, variant_id, quantity_on_hand, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, NOW(), NOW())
+              `, [productId, warehouseId, variantId || null, globalStock])
+              availableStock = globalStock
+              console.log('[POS Orders] Auto-initialized warehouse stock:', { productId, productName, warehouseId, stock: globalStock })
+            } else {
+              availableStock = 0
+            }
+          }
 
           if (availableStock < quantity) {
             console.log('[POS Orders] Insufficient stock:', {

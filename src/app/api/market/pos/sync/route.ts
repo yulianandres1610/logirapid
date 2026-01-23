@@ -166,9 +166,9 @@ export async function POST(request: NextRequest) {
             const productId = parseInt(String(line.productId)) || null
 
             if (productId) {
-              // Get product name for error messages
+              // Get product info
               const productCheck = await db.query(
-                'SELECT name FROM market_products WHERE id = $1',
+                'SELECT name, COALESCE(quantity_on_hand, 0) as global_stock FROM market_products WHERE id = $1',
                 [productId]
               )
 
@@ -179,10 +179,24 @@ export async function POST(request: NextRequest) {
                 WHERE product_id = $1 AND warehouse_id = $2
               `, [productId, warehouseId])
 
-              // If no warehouse stock record exists, available = 0
-              const availableStock = stockCheck.rows.length > 0
-                ? parseFloat(stockCheck.rows[0]?.available) || 0
-                : 0
+              let availableStock: number
+
+              if (stockCheck.rows.length > 0) {
+                availableStock = parseFloat(stockCheck.rows[0]?.available) || 0
+              } else {
+                // No warehouse stock record - check global stock and auto-initialize
+                const globalStock = parseFloat(productCheck.rows[0]?.global_stock) || 0
+                if (globalStock > 0) {
+                  await db.query(`
+                    INSERT INTO market_warehouse_stock (product_id, warehouse_id, variant_id, quantity_on_hand, created_at, updated_at)
+                    VALUES ($1, $2, NULL, $3, NOW(), NOW())
+                  `, [productId, warehouseId, globalStock])
+                  availableStock = globalStock
+                  console.log('[POS Sync] Auto-initialized warehouse stock:', { productId, warehouseId, stock: globalStock })
+                } else {
+                  availableStock = 0
+                }
+              }
 
               if (availableStock < quantity) {
                 const productName = productCheck.rows[0]?.name || `Producto ${productId}`
