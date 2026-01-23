@@ -144,6 +144,9 @@ interface WarehouseStock {
   isCurrentWarehouse: boolean
 }
 
+// Redondear CUP al múltiplo de 5 más cercano (convención cubana)
+const roundCUP = (amount: number): number => Math.round(amount / 5) * 5
+
 export default function POSTerminalPage() {
   const { theme } = useTheme()
   const { user } = useAuth()
@@ -693,11 +696,11 @@ export default function POSTerminalPage() {
     const discounts = cart.reduce((sum, item) => sum + item.discountAmount, 0)
     const total = cart.reduce((sum, item) => sum + item.total, 0)
     const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0)
-    // CUP: redondear por unidad primero, luego multiplicar por cantidad
+    // CUP: redondear al múltiplo de 5 más cercano (convención cubana)
     const totalCUP = cart.reduce((sum, item) => {
-      const unitCUP = Math.round(item.unitPrice * USD_CUP_BCC)
+      const unitCUP = roundCUP(item.unitPrice * USD_CUP_BCC)
       const lineCUP = unitCUP * item.quantity
-      const discountCUP = Math.round(item.discountAmount * USD_CUP_BCC)
+      const discountCUP = roundCUP(item.discountAmount * USD_CUP_BCC)
       return sum + lineCUP - discountCUP
     }, 0)
     return { subtotal, discounts, total, itemCount, totalCUP }
@@ -1732,7 +1735,7 @@ export default function POSTerminalPage() {
 
                     {/* Precios en otras monedas (tasa BCC para venta) */}
                     <div className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 space-y-0">
-                      <p className="text-green-600">${Math.round(product.price * USD_CUP_BCC).toLocaleString()} CUP</p>
+                      <p className="text-green-600">${roundCUP(product.price * USD_CUP_BCC).toLocaleString()} CUP</p>
                       <p className="text-purple-600">${(product.price * USD_MLC).toFixed(2)} MLC</p>
                     </div>
 
@@ -2275,7 +2278,7 @@ export default function POSTerminalPage() {
                   </p>
                   {/* Precios en otras monedas (tasa BCC para venta) */}
                   <div className="flex gap-3 mt-1 text-sm">
-                    <span className="text-green-600">${Math.round(selectedProductForDetails.price * USD_CUP_BCC).toLocaleString()} CUP <span className="text-gray-400 text-xs">(BCC)</span></span>
+                    <span className="text-green-600">${roundCUP(selectedProductForDetails.price * USD_CUP_BCC).toLocaleString()} CUP <span className="text-gray-400 text-xs">(BCC)</span></span>
                     <span className="text-purple-600">${(selectedProductForDetails.price * USD_MLC).toFixed(2)} MLC</span>
                   </div>
                 </div>

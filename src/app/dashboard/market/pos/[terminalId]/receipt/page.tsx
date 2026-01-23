@@ -290,6 +290,9 @@ const AlertIcon = () => (
   </svg>
 )
 
+// Redondear CUP al múltiplo de 5 más cercano (convención cubana)
+const roundCUP = (amount: number): number => Math.round(amount / 5) * 5
+
 function ReceiptContent() {
   const router = useRouter()
   const params = useParams()
@@ -531,17 +534,17 @@ function ReceiptContent() {
     return `$${amount.toFixed(2)}`
   }
 
-  // Convert USD to CUP (simple rounding for single amounts)
+  // Convert USD to CUP (redondear al múltiplo de 5 más cercano)
   const toCUP = (amountUSD: number): number => {
-    return Math.round(amountUSD * exchangeRate)
+    return roundCUP(amountUSD * exchangeRate)
   }
 
-  // Calculate total CUP using per-unit rounding (round unit price first, then multiply by quantity)
+  // Calculate total CUP using per-unit rounding (redondear al múltiplo de 5)
   const calcOrderTotalCUP = (lines: OrderLine[]): number => {
     return lines.reduce((sum, line) => {
-      const unitCUP = Math.round(line.unitPrice * exchangeRate)
+      const unitCUP = roundCUP(line.unitPrice * exchangeRate)
       const lineCUP = unitCUP * line.quantity
-      const discountCUP = Math.round(line.discountAmount * exchangeRate)
+      const discountCUP = roundCUP(line.discountAmount * exchangeRate)
       return sum + lineCUP - discountCUP
     }, 0)
   }
@@ -1008,7 +1011,7 @@ function ReceiptContent() {
 
     const totalCUP = calcOrderTotalCUP(order.lines)
     const subtotalCUP = order.lines.reduce((sum, line) => {
-      return sum + Math.round(line.unitPrice * exchangeRate) * line.quantity
+      return sum + roundCUP(line.unitPrice * exchangeRate) * line.quantity
     }, 0)
 
     const receiptContent = `

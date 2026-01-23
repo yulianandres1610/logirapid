@@ -264,6 +264,9 @@ const DEFAULT_RATES: ExchangeRates = {
   MLC: 1.11
 }
 
+// Redondear CUP al múltiplo de 5 más cercano (convención cubana)
+const roundCUP = (amount: number): number => Math.round(amount / 5) * 5
+
 // Simple SVG icons inline
 const BackIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -535,11 +538,11 @@ function PaymentContent() {
     const subtotal = cart.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)
     const discount = cart.reduce((sum, item) => sum + item.discountAmount, 0)
     const total = subtotal - discount
-    // CUP: redondear por unidad primero, luego multiplicar por cantidad
+    // CUP: redondear al múltiplo de 5 más cercano (convención cubana)
     const totalCUP = cart.reduce((sum, item) => {
-      const unitCUP = Math.round(item.unitPrice * rates.CUP_BCC)
+      const unitCUP = roundCUP(item.unitPrice * rates.CUP_BCC)
       const lineCUP = unitCUP * item.quantity
-      const discountCUP = Math.round(item.discountAmount * rates.CUP_BCC)
+      const discountCUP = roundCUP(item.discountAmount * rates.CUP_BCC)
       return sum + lineCUP - discountCUP
     }, 0)
     return { subtotal, discount, total, totalCUP }
@@ -560,7 +563,7 @@ function PaymentContent() {
     if (remainingUSD < -0.01) {
       const changeUSD = Math.abs(remainingUSD)
       if (changeCurrency === 'CUP') {
-        return changeUSD * rates.CUP_BCC  // Usar tasa BCC para venta
+        return roundCUP(changeUSD * rates.CUP_BCC)  // Redondear al múltiplo de 5
       }
       return changeUSD
     }
@@ -605,8 +608,8 @@ function PaymentContent() {
   const setExactAmount = () => {
     if (remainingUSD > 0.01) {
       if (selectedCurrency === 'CUP') {
-        // Calcular pendiente CUP usando redondeo por unidad
-        const paidCUP = Math.round(totalPaidUSD * rates.CUP_BCC)
+        // Calcular pendiente CUP usando redondeo al múltiplo de 5
+        const paidCUP = roundCUP(totalPaidUSD * rates.CUP_BCC)
         const remainingCUP = Math.max(0, totals.totalCUP - paidCUP)
         setAmount(String(remainingCUP))
       } else if (selectedCurrency === 'MLC') {
@@ -855,7 +858,7 @@ function PaymentContent() {
               <h2 className="text-lg font-semibold mb-4">Resumen de Orden</h2>
               <div className="space-y-2 max-h-48 overflow-auto">
                 {cart.map((item, idx) => {
-                  const lineCUP = Math.round(item.unitPrice * rates.CUP_BCC) * item.quantity
+                  const lineCUP = roundCUP(item.unitPrice * rates.CUP_BCC) * item.quantity
                   return (
                     <div key={idx} className="flex justify-between text-sm">
                       <span className="truncate flex-1">
@@ -950,7 +953,7 @@ function PaymentContent() {
                     </span>
                     {remainingUSD > 0 && (
                       <p className="text-xs font-normal opacity-80">
-                        ({formatCurrency(Math.max(0, totals.totalCUP - Math.round(totalPaidUSD * rates.CUP_BCC)), 'CUP')})
+                        ({formatCurrency(Math.max(0, totals.totalCUP - roundCUP(totalPaidUSD * rates.CUP_BCC)), 'CUP')})
                       </p>
                     )}
                   </div>
@@ -1126,7 +1129,7 @@ function PaymentContent() {
                       changeCurrency === 'CUP' ? 'bg-blue-500 text-white' : tc.button
                     }`}
                   >
-                    CUP ({formatCurrency(Math.abs(remainingUSD) * rates.CUP_BCC, 'CUP')})
+                    CUP ({formatCurrency(roundCUP(Math.abs(remainingUSD) * rates.CUP_BCC), 'CUP')})
                   </button>
                 </div>
               </div>
