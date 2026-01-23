@@ -200,6 +200,9 @@ const saveOrderToIndexedDB = async (order: PendingOrderData): Promise<void> => {
 // Interfaces
 interface CartItem {
   productId: number
+  variantId?: number | null
+  variantName?: string | null
+  variantSku?: string | null
   productName: string
   productSku: string
   quantity: number
@@ -227,6 +230,7 @@ interface PendingOrderData {
   currency: string
   lines: Array<{
     productId: number
+    variantId?: number | null
     productName: string
     productSku: string
     quantity: number
@@ -623,8 +627,11 @@ function PaymentContent() {
     try {
       const orderLines = cart.map(item => ({
         productId: item.productId,
-        productName: item.productName,
-        productSku: item.productSku,
+        variantId: item.variantId || null,
+        productName: item.variantName
+          ? `${item.productName} - ${item.variantName}`
+          : item.productName,
+        productSku: item.variantSku || item.productSku,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         discountPercent: item.discountPercent,
@@ -706,8 +713,11 @@ function PaymentContent() {
             currency: 'USD',
             lines: cart.map(item => ({
               productId: item.productId,
-              productName: item.productName,
-              productSku: item.productSku,
+              variantId: item.variantId || null,
+              productName: item.variantName
+                ? `${item.productName} - ${item.variantName}`
+                : item.productName,
+              productSku: item.variantSku || item.productSku,
               quantity: item.quantity,
               unitPrice: item.unitPrice,
               discountPercent: item.discountPercent,
@@ -849,7 +859,7 @@ function PaymentContent() {
                   return (
                     <div key={idx} className="flex justify-between text-sm">
                       <span className="truncate flex-1">
-                        {item.productName} x{item.quantity}
+                        {item.variantName ? `${item.productName} - ${item.variantName}` : item.productName} x{item.quantity}
                       </span>
                       <div className="ml-2 text-right">
                         <span>{formatCurrency(item.total)}</span>
