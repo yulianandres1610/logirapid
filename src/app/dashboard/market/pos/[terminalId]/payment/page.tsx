@@ -641,13 +641,28 @@ function PaymentContent() {
         discountAmount: item.discountAmount
       }))
 
-      const orderPayments = payments.map(p => ({
-        method: p.method,
-        amount: p.amountInUSD,
-        currency: p.currency,
-        amountTendered: p.method === 'cash' ? p.amount : null,
-        changeAmount: changeAmount > 0 ? (changeCurrency === 'USD' ? changeAmount : changeAmount / rates.CUP_BCC) : null
-      }))
+      const orderPayments = payments.map(p => {
+        let paymentChange: number | null = null
+        if (p.method === 'cash' && changeAmount > 0) {
+          // Store change in payment's currency for correct receipt display
+          if (changeCurrency === p.currency) {
+            paymentChange = changeAmount
+          } else if (p.currency === 'CUP' && changeCurrency === 'USD') {
+            paymentChange = roundCUP(changeAmount * rates.CUP_BCC)
+          } else if (p.currency === 'USD' && changeCurrency === 'CUP') {
+            paymentChange = changeAmount / rates.CUP_BCC
+          } else {
+            paymentChange = changeAmount
+          }
+        }
+        return {
+          method: p.method,
+          amount: p.amountInUSD,
+          currency: p.currency,
+          amountTendered: p.method === 'cash' ? p.amount : null,
+          changeAmount: paymentChange
+        }
+      })
 
       // OFFLINE MODE: Save to IndexedDB
       if (!isOnline) {
@@ -726,13 +741,27 @@ function PaymentContent() {
               discountPercent: item.discountPercent,
               discountAmount: item.discountAmount
             })),
-            payments: payments.map(p => ({
-              method: p.method,
-              amount: p.amountInUSD,
-              currency: p.currency,
-              amountTendered: p.method === 'cash' ? p.amount : null,
-              changeAmount: null
-            })),
+            payments: payments.map(p => {
+              let paymentChange: number | null = null
+              if (p.method === 'cash' && changeAmount > 0) {
+                if (changeCurrency === p.currency) {
+                  paymentChange = changeAmount
+                } else if (p.currency === 'CUP' && changeCurrency === 'USD') {
+                  paymentChange = roundCUP(changeAmount * rates.CUP_BCC)
+                } else if (p.currency === 'USD' && changeCurrency === 'CUP') {
+                  paymentChange = changeAmount / rates.CUP_BCC
+                } else {
+                  paymentChange = changeAmount
+                }
+              }
+              return {
+                method: p.method,
+                amount: p.amountInUSD,
+                currency: p.currency,
+                amountTendered: p.method === 'cash' ? p.amount : null,
+                changeAmount: paymentChange
+              }
+            }),
             total: totals.total,
             createdAt: new Date().toISOString(),
             synced: false

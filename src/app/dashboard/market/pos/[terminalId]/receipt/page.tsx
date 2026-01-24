@@ -1038,9 +1038,16 @@ TOTAL:       $${order.totalAmount.toFixed(2)}
 Tasa: 1 USD = ${exchangeRate} CUP
 --------------------------------
 Pagos:
-${order.payments.map(p =>
-`  ${getPaymentMethodLabel(p.method)}: ${p.currency === 'CUP' ? `${Math.round(p.amount).toLocaleString('es-ES')} CUP` : `$${p.amount.toFixed(2)} ${p.currency}`}`
-).join('\n')}
+${order.payments.map(p => {
+  let line = `  ${getPaymentMethodLabel(p.method)}: $${p.amount.toFixed(2)}`
+  if (p.amountTendered && p.amountTendered > 0) {
+    line += `\n  Entregado: ${p.currency === 'CUP' ? `${Math.round(p.amountTendered).toLocaleString('es-ES')} CUP` : `$${p.amountTendered.toFixed(2)} USD`}`
+  }
+  if (p.changeAmount && p.changeAmount > 0) {
+    line += `\n  Cambio: ${p.currency === 'CUP' ? `${Math.round(p.changeAmount).toLocaleString('es-ES')} CUP` : `$${p.changeAmount.toFixed(2)} USD`}`
+  }
+  return line
+}).join('\n')}
 ================================
      Gracias por su compra!
 ================================
