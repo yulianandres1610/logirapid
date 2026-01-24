@@ -1,588 +1,303 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
-  Calculator,
-  RefreshCw,
-  Calendar,
-  DollarSign,
+  Construction,
+  Sparkles,
+  ArrowLeft,
+  Rocket,
+  BarChart3,
   TrendingUp,
-  TrendingDown,
+  PieChart,
+  Calculator,
   Receipt,
   Wallet,
-  Users,
-  ArrowRight,
-  FileCheck,
-  BarChart3,
-  PieChart
+  LineChart
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
-
-interface DashboardData {
-  period: {
-    type: string
-    startDate: string
-    endDate: string
-  }
-  summary: {
-    totalSales: number
-    posSales: number
-    posOrderCount: number
-    orderSales: number
-    onlineOrderCount: number
-    totalExpenses: number
-    expenseCount: number
-    totalPayroll: number
-    pendingPayroll: number
-    totalCOGS: number
-    grossProfit: number
-    netProfit: number
-    profitMargin: number
-  }
-  employees: {
-    activeCount: number
-    terminatedCount: number
-  }
-  pendingRequests: {
-    count: number
-    amount: number
-  }
-  expensesByCategory: Array<{
-    categoryName: string
-    accountingType: string
-    total: number
-  }>
-  allTimeExpenses?: {
-    total: number
-    count: number
-    firstDate: string
-    lastDate: string
-  }
-  topEmployees: Array<{
-    employeeCode: string
-    name: string
-    orderCount: number
-    totalSales: number
-  }>
-  charts: {
-    dailySales: Array<{ date: string; sales: number }>
-    dailyExpenses: Array<{ date: string; expenses: number }>
-  }
-}
-
-// Animated number component
-function AnimatedNumber({ value, decimals = 0, prefix = '' }: { value: number; decimals?: number; prefix?: string }) {
-  const [display, setDisplay] = useState(0)
-
-  useEffect(() => {
-    const duration = 1000
-    const start = Date.now()
-    const startVal = display
-
-    const animate = () => {
-      const elapsed = Date.now() - start
-      const progress = Math.min(elapsed / duration, 1)
-      const eased = 1 - Math.pow(1 - progress, 3)
-      setDisplay(startVal + (value - startVal) * eased)
-      if (progress < 1) requestAnimationFrame(animate)
-    }
-
-    requestAnimationFrame(animate)
-  }, [value])
-
-  const formatted = decimals > 0
-    ? display.toFixed(decimals)
-    : Math.round(display).toLocaleString()
-
-  return <span className="tabular-nums">{prefix}{formatted}</span>
-}
-
-// Metric Card Component
-function MetricCard({
-  title,
-  value,
-  subtitle,
-  icon: Icon,
-  color = 'blue',
-  delay = 0,
-  trend,
-  href
-}: {
-  title: string
-  value: string | number
-  subtitle?: string
-  icon: any
-  color?: 'blue' | 'green' | 'amber' | 'purple' | 'red' | 'cyan' | 'emerald'
-  delay?: number
-  trend?: 'up' | 'down'
-  href?: string
-}) {
-  const colors = {
-    blue: 'from-blue-500 to-blue-600',
-    green: 'from-green-500 to-green-600',
-    emerald: 'from-emerald-500 to-emerald-600',
-    amber: 'from-amber-500 to-amber-600',
-    purple: 'from-purple-500 to-purple-600',
-    red: 'from-red-500 to-red-600',
-    cyan: 'from-cyan-500 to-cyan-600'
-  }
-
-  const content = (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay }}
-      className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${colors[color]} p-5 text-white shadow-lg ${href ? 'hover:scale-[1.02] cursor-pointer transition-transform' : ''}`}
-    >
-      <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-      <div className="relative">
-        <div className="flex items-start justify-between mb-3">
-          <div className="p-2.5 rounded-xl bg-white/20 backdrop-blur-sm">
-            <Icon className="w-5 h-5" />
-          </div>
-          {trend && (
-            <div className={`flex items-center gap-1 text-xs ${trend === 'up' ? 'text-green-200' : 'text-red-200'}`}>
-              {trend === 'up' ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-            </div>
-          )}
-        </div>
-        <p className="text-3xl font-bold mb-1">
-          {typeof value === 'number' ? <AnimatedNumber value={value} prefix="$" /> : value}
-        </p>
-        <p className="text-sm font-medium text-white/90">{title}</p>
-        {subtitle && <p className="text-xs text-white/70 mt-0.5">{subtitle}</p>}
-      </div>
-    </motion.div>
-  )
-
-  return href ? <Link href={href}>{content}</Link> : content
-}
-
-// Quick Action Button
-function QuickAction({
-  title,
-  description,
-  icon: Icon,
-  href,
-  color,
-  badge,
-  delay = 0
-}: {
-  title: string
-  description: string
-  icon: any
-  href: string
-  color: string
-  badge?: number
-  delay?: number
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay }}
-      className="h-full"
-    >
-      <Link href={href} className="block h-full">
-        <div className={`relative group h-full p-4 rounded-2xl bg-gradient-to-br ${color} text-white hover:scale-[1.02] transition-all cursor-pointer shadow-lg flex items-center gap-3`}>
-          {badge !== undefined && badge > 0 && (
-            <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center shadow-lg">
-              {badge}
-            </div>
-          )}
-          <div className="p-2.5 rounded-xl bg-white/20 backdrop-blur-sm flex-shrink-0">
-            <Icon className="w-5 h-5" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-sm">{title}</p>
-            <p className="text-xs text-white/80 truncate">{description}</p>
-          </div>
-          <ArrowRight className="w-4 h-4 opacity-70 group-hover:translate-x-1 transition-transform flex-shrink-0" />
-        </div>
-      </Link>
-    </motion.div>
-  )
-}
+import { useTheme } from '@/contexts/theme-context'
+import { cn } from '@/lib/utils'
 
 export default function AccountingDashboardPage() {
-  const [data, setData] = useState<DashboardData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [period, setPeriod] = useState<'week' | 'month' | 'year'>('month')
-
-  useEffect(() => {
-    fetchDashboardData()
-  }, [period])
-
-  const fetchDashboardData = async (silent = false) => {
-    if (!silent) setLoading(true)
-    else setRefreshing(true)
-
-    try {
-      const response = await fetch(`/api/market/accounting/dashboard?period=${period}`)
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success) {
-          setData(result.data)
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching dashboard:', error)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }
-
-  const periodLabels = {
-    week: 'Esta Semana',
-    month: 'Este Mes',
-    year: 'Este Año'
-  }
-
-  if (loading) {
-    return (
-      <ProtectedRoute>
-        <DashboardLayout>
-          <div className="p-6">
-            <div className="animate-pulse space-y-6">
-              <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded-2xl" />
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="h-32 bg-gray-200 dark:bg-gray-700 rounded-2xl" />
-                ))}
-              </div>
-            </div>
-          </div>
-        </DashboardLayout>
-      </ProtectedRoute>
-    )
-  }
+  const { theme } = useTheme()
 
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-          >
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                <Calculator className="w-8 h-8 text-blue-600" />
-                Contabilidad
-              </h1>
-              <p className="text-gray-500 dark:text-gray-400 flex items-center gap-2 mt-1">
-                <Calendar className="w-4 h-4" />
-                {periodLabels[period]} - Conciliación de ventas y gastos
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              {/* Period Selector */}
-              <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-                {(['week', 'month', 'year'] as const).map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => setPeriod(p)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                      period === p
-                        ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                    }`}
-                  >
-                    {p === 'week' ? 'Semana' : p === 'month' ? 'Mes' : 'Año'}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => fetchDashboardData(true)}
-                disabled={refreshing}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
+        <div className="min-h-[80vh] p-6 flex flex-col items-center justify-center">
+          {/* Back Button */}
+          <div className="w-full max-w-2xl mb-8">
+            <Link href="/dashboard/market">
+              <motion.button
+                whileHover={{ scale: 1.02, x: -5 }}
+                whileTap={{ scale: 0.98 }}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
+                  theme === 'dark'
+                    ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
+                    : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+                )}
               >
-                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              </button>
+                <ArrowLeft className="w-5 h-5" />
+                <span>Volver al Dashboard</span>
+              </motion.button>
+            </Link>
+          </div>
+
+          {/* Main Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className={cn(
+              'w-full max-w-2xl rounded-3xl p-8 md:p-12 text-center relative overflow-hidden',
+              theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-xl'
+            )}
+          >
+            {/* Background Decorations */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+                className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-full blur-3xl"
+              />
+              <motion.div
+                animate={{ rotate: -360 }}
+                transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
+                className="absolute -bottom-20 -left-20 w-48 h-48 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-full blur-3xl"
+              />
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
+                className="absolute top-1/2 -right-10 w-32 h-32 bg-gradient-to-br from-emerald-500/15 to-teal-500/15 rounded-full blur-3xl"
+              />
             </div>
-          </motion.div>
 
-          {/* Summary Metrics */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard
-              title="Ventas Totales"
-              value={data?.summary?.totalSales || 0}
-              subtitle={`${(data?.summary?.posOrderCount || 0) + (data?.summary?.onlineOrderCount || 0)} órdenes`}
-              icon={DollarSign}
-              color="blue"
-              delay={0}
-            />
-            <MetricCard
-              title="Gastos"
-              value={(data?.summary?.totalExpenses || 0) > 0
-                ? (data?.summary?.totalExpenses || 0)
-                : (data?.allTimeExpenses?.total || 0)}
-              subtitle={(data?.summary?.expenseCount || 0) > 0
-                ? `${data?.summary?.expenseCount || 0} registros`
-                : (data?.allTimeExpenses?.count || 0) > 0
-                  ? `${data?.allTimeExpenses?.count} total (fuera del período)`
-                  : 'Sin registros'}
-              icon={Receipt}
-              color="red"
-              delay={0.1}
-              href="/dashboard/market/accounting/expenses"
-            />
-            <MetricCard
-              title="Nómina"
-              value={data?.summary?.totalPayroll || 0}
-              subtitle={data?.summary?.pendingPayroll ? `$${data.summary.pendingPayroll.toLocaleString()} pendiente` : 'Todo pagado'}
-              icon={Users}
-              color="purple"
-              delay={0.2}
-              href="/dashboard/market/accounting/payroll"
-            />
-            <MetricCard
-              title="Ganancia Neta"
-              value={data?.summary?.netProfit || 0}
-              subtitle={`${data?.summary?.profitMargin || 0}% margen`}
-              icon={TrendingUp}
-              color={data?.summary?.netProfit && data.summary.netProfit >= 0 ? 'emerald' : 'red'}
-              delay={0.3}
-              trend={data?.summary?.netProfit && data.summary.netProfit >= 0 ? 'up' : 'down'}
-            />
-          </div>
+            {/* Construction Icon with Animation */}
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 200, delay: 0.2 }}
+              className="relative z-10 mb-6"
+            >
+              <div className="relative inline-flex">
+                <motion.div
+                  animate={{
+                    rotate: [0, -10, 10, -10, 0],
+                    y: [0, -5, 0]
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    repeatDelay: 1
+                  }}
+                  className="w-24 h-24 md:w-32 md:h-32 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl flex items-center justify-center shadow-lg"
+                >
+                  <Calculator className="w-12 h-12 md:w-16 md:h-16 text-white" />
+                </motion.div>
 
-          {/* Quick Actions */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <QuickAction
-              title="Registrar Gasto"
-              description="Nuevo gasto con IA"
-              icon={Receipt}
-              href="/dashboard/market/accounting/expenses"
-              color="from-orange-500 to-orange-600"
-              delay={0.1}
-            />
-            <QuickAction
-              title="Crear Nómina"
-              description="Calcular pagos"
-              icon={Wallet}
-              href="/dashboard/market/accounting/payroll"
-              color="from-purple-500 to-purple-600"
-              delay={0.15}
-            />
-            <QuickAction
-              title="Gestionar Empleados"
-              description={`${data?.employees?.activeCount || 0} activos`}
-              icon={Users}
-              href="/dashboard/market/accounting/employees"
-              color="from-blue-500 to-blue-600"
-              delay={0.2}
-            />
-            <QuickAction
-              title="Solicitudes"
-              description="Revisar pagos"
-              icon={FileCheck}
-              href="/dashboard/market/accounting/requests"
-              color="from-emerald-500 to-emerald-600"
-              badge={data?.pendingRequests?.count}
-              delay={0.25}
-            />
-          </div>
+                {/* Floating Sparkles */}
+                <motion.div
+                  animate={{
+                    y: [-10, 10, -10],
+                    opacity: [1, 0.5, 1],
+                    rotate: [0, 180, 360]
+                  }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                  className="absolute -top-3 -right-3"
+                >
+                  <Sparkles className="w-7 h-7 text-blue-400" />
+                </motion.div>
+                <motion.div
+                  animate={{
+                    y: [10, -10, 10],
+                    opacity: [0.5, 1, 0.5],
+                    scale: [1, 1.2, 1]
+                  }}
+                  transition={{ duration: 2.5, repeat: Infinity, delay: 0.5 }}
+                  className="absolute -bottom-2 -left-3"
+                >
+                  <Sparkles className="w-5 h-5 text-indigo-400" />
+                </motion.div>
 
-          {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Expenses by Category */}
+                {/* Floating coins */}
+                <motion.div
+                  animate={{
+                    y: [-15, 5, -15],
+                    x: [0, 5, 0],
+                    opacity: [0.8, 1, 0.8]
+                  }}
+                  transition={{ duration: 2, repeat: Infinity, delay: 0.3 }}
+                  className="absolute -top-4 left-0"
+                >
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center shadow-md">
+                    <span className="text-[10px] font-bold text-white">$</span>
+                  </div>
+                </motion.div>
+                <motion.div
+                  animate={{
+                    y: [5, -15, 5],
+                    x: [0, -5, 0],
+                    opacity: [0.6, 1, 0.6]
+                  }}
+                  transition={{ duration: 2.5, repeat: Infinity, delay: 0.8 }}
+                  className="absolute -bottom-3 right-2"
+                >
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-400 to-green-500 flex items-center justify-center shadow-md">
+                    <span className="text-[9px] font-bold text-white">$</span>
+                  </div>
+                </motion.div>
+              </div>
+            </motion.div>
+
+            {/* Badge */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6"
+              className="relative z-10 mb-4"
             >
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-xl">
-                    <PieChart className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900 dark:text-white">Gastos por Categoría</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Distribución del período</p>
-                  </div>
-                </div>
-                <Link
-                  href="/dashboard/market/accounting/expenses"
-                  className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-                >
-                  Ver todos <ArrowRight className="w-4 h-4" />
-                </Link>
-              </div>
-              <div className="space-y-3">
-                {data?.expensesByCategory && data.expensesByCategory.length > 0 ? (
-                  data.expensesByCategory.slice(0, 6).map((cat, idx) => {
-                    const maxTotal = Math.max(...data.expensesByCategory.map(c => c.total))
-                    const percentage = maxTotal > 0 ? (cat.total / maxTotal) * 100 : 0
-                    const typeColors: Record<string, string> = {
-                      cogs: 'bg-blue-500',
-                      opex: 'bg-amber-500',
-                      capex: 'bg-purple-500'
-                    }
-                    return (
-                      <div key={idx} className="flex items-center gap-3">
-                        <div className="w-24 text-sm text-gray-600 dark:text-gray-400 truncate">
-                          {cat.categoryName}
-                        </div>
-                        <div className="flex-1 h-3 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${percentage}%` }}
-                            transition={{ delay: 0.4 + idx * 0.05, duration: 0.5 }}
-                            className={`h-full ${typeColors[cat.accountingType] || 'bg-gray-500'} rounded-full`}
-                          />
-                        </div>
-                        <div className="w-20 text-right text-sm font-semibold text-gray-900 dark:text-white">
-                          ${cat.total.toLocaleString()}
-                        </div>
-                      </div>
-                    )
-                  })
-                ) : (
-                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                    No hay gastos registrados en este período
-                  </div>
-                )}
-              </div>
+              <span className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 text-blue-600 dark:text-blue-400 rounded-full text-sm font-semibold">
+                <Rocket className="w-4 h-4" />
+                En Desarrollo
+              </span>
             </motion.div>
 
-            {/* Top Employees */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.35 }}
-              className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6"
-            >
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
-                  <BarChart3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-900 dark:text-white">Top Vendedores</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Por ventas POS</p>
-                </div>
-              </div>
-              <div className="space-y-4">
-                {data?.topEmployees && data.topEmployees.length > 0 ? (
-                  data.topEmployees.map((emp, idx) => (
-                    <div key={idx} className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                        idx === 0 ? 'bg-amber-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-amber-700' : 'bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-300'
-                      }`}>
-                        {idx + 1}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-white truncate">{emp.name}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{emp.orderCount} órdenes</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-900 dark:text-white">
-                          ${emp.totalSales.toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
-                    No hay ventas en este período
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </div>
-
-          {/* Pending Payment Requests */}
-          {data?.pendingRequests && data.pendingRequests.count > 0 && (
-            <motion.div
+            {/* Title */}
+            <motion.h1
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
-              className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-6"
+              className="relative z-10 text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-4"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-amber-100 dark:bg-amber-900/50 rounded-xl">
-                    <FileCheck className="w-6 h-6 text-amber-600 dark:text-amber-400" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900 dark:text-white">
-                      {data.pendingRequests.count} Solicitudes Pendientes
-                    </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Total: ${data.pendingRequests.amount.toLocaleString()} en solicitudes de pago
-                    </p>
-                  </div>
-                </div>
-                <Link
-                  href="/dashboard/market/accounting/requests"
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-medium transition-colors flex items-center gap-2"
+              Modulo de Contabilidad
+            </motion.h1>
+
+            {/* Description */}
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className="relative z-10 text-gray-600 dark:text-gray-300 text-lg mb-8 max-w-md mx-auto"
+            >
+              Estamos construyendo un sistema contable completo para tu negocio.
+              Muy pronto tendras control total de tus finanzas.
+            </motion.p>
+
+            {/* Features Coming Soon */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className="relative z-10 grid grid-cols-2 md:grid-cols-4 gap-3 mb-8"
+            >
+              {[
+                { icon: BarChart3, label: 'Dashboard financiero', color: 'from-blue-500 to-blue-600' },
+                { icon: Receipt, label: 'Control de gastos', color: 'from-orange-500 to-red-500' },
+                { icon: Wallet, label: 'Gestion de nomina', color: 'from-purple-500 to-purple-600' },
+                { icon: LineChart, label: 'Reportes avanzados', color: 'from-emerald-500 to-teal-500' }
+              ].map((feature, index) => (
+                <motion.div
+                  key={feature.label}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.7 + index * 0.1 }}
+                  whileHover={{ scale: 1.05, y: -3 }}
+                  className={cn(
+                    'p-4 rounded-2xl cursor-default',
+                    theme === 'dark' ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-50 hover:bg-gray-100'
+                  )}
                 >
-                  Revisar
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
+                  <div className={cn(
+                    'w-10 h-10 rounded-xl bg-gradient-to-br flex items-center justify-center mx-auto mb-2',
+                    feature.color
+                  )}>
+                    <feature.icon className="w-5 h-5 text-white" />
+                  </div>
+                  <p className="text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {feature.label}
+                  </p>
+                </motion.div>
+              ))}
+            </motion.div>
+
+            {/* Animated Chart Preview */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.85 }}
+              className={cn(
+                'relative z-10 mb-6 p-4 rounded-2xl',
+                theme === 'dark' ? 'bg-gray-700/30' : 'bg-gray-50'
+              )}
+            >
+              <div className="flex items-end justify-center gap-2 h-20">
+                {[40, 65, 45, 80, 55, 70, 90, 60, 75, 85, 50, 95].map((height, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ height: 0 }}
+                    animate={{ height: `${height}%` }}
+                    transition={{
+                      delay: 1 + i * 0.08,
+                      duration: 0.6,
+                      ease: 'easeOut'
+                    }}
+                    className={cn(
+                      'w-3 md:w-4 rounded-t-md',
+                      i % 3 === 0 ? 'bg-gradient-to-t from-blue-500 to-blue-400' :
+                      i % 3 === 1 ? 'bg-gradient-to-t from-indigo-500 to-indigo-400' :
+                      'bg-gradient-to-t from-purple-500 to-purple-400'
+                    )}
+                  />
+                ))}
+              </div>
+              <div className="flex justify-between mt-2">
+                <span className="text-[10px] text-gray-400">Ene</span>
+                <span className="text-[10px] text-gray-400">Jun</span>
+                <span className="text-[10px] text-gray-400">Dic</span>
               </div>
             </motion.div>
-          )}
 
-          {/* Summary Cards */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.45 }}
-            className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6"
-          >
-            <h3 className="font-bold text-gray-900 dark:text-white mb-4">Resumen del Período</h3>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
-                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  ${(data?.summary?.posSales || 0).toLocaleString()}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Ventas POS</p>
+            {/* Progress Bar Animation */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.2 }}
+              className="relative z-10"
+            >
+              <p className="text-sm text-gray-500 mb-2">Progreso del desarrollo</p>
+              <div className={cn(
+                'h-3 rounded-full overflow-hidden',
+                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+              )}>
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: '35%' }}
+                  transition={{ duration: 1.5, delay: 1.3, ease: 'easeOut' }}
+                  className="h-full bg-gradient-to-r from-blue-400 via-indigo-500 to-blue-400 rounded-full relative overflow-hidden"
+                >
+                  <motion.div
+                    animate={{ x: ['-100%', '100%'] }}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                  />
+                </motion.div>
               </div>
-              <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-xl">
-                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                  ${(data?.summary?.orderSales || 0).toLocaleString()}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Ventas Online</p>
-              </div>
-              <div className="text-center p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl">
-                <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                  ${(data?.summary?.totalCOGS || 0).toLocaleString()}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Costo Mercancía</p>
-              </div>
-              <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl">
-                <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                  ${(data?.summary?.grossProfit || 0).toLocaleString()}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Ganancia Bruta</p>
-              </div>
-              <div className={`text-center p-4 rounded-xl ${
-                (data?.summary?.netProfit || 0) >= 0
-                  ? 'bg-emerald-50 dark:bg-emerald-900/20'
-                  : 'bg-red-50 dark:bg-red-900/20'
-              }`}>
-                <p className={`text-2xl font-bold ${
-                  (data?.summary?.netProfit || 0) >= 0
-                    ? 'text-emerald-600 dark:text-emerald-400'
-                    : 'text-red-600 dark:text-red-400'
-                }`}>
-                  ${Math.abs(data?.summary?.netProfit || 0).toLocaleString()}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {(data?.summary?.netProfit || 0) >= 0 ? 'Ganancia Neta' : 'Pérdida Neta'}
-                </p>
-              </div>
-            </div>
+              <p className="text-xs text-gray-500 mt-2">35% completado</p>
+            </motion.div>
           </motion.div>
+
+          {/* Footer Message */}
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.5 }}
+            className="mt-8 text-gray-500 text-sm"
+          >
+            Gracias por tu paciencia mientras construimos esta herramienta
+          </motion.p>
         </div>
       </DashboardLayout>
     </ProtectedRoute>
