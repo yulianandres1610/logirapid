@@ -44,6 +44,7 @@ interface Product {
 }
 
 interface PricelistItem {
+  id: number // Unique tier ID
   productId: number
   productName: string
   productSku: string
@@ -75,6 +76,7 @@ export default function CreatePricelistPage() {
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [productSearch, setProductSearch] = useState('')
   const [items, setItems] = useState<PricelistItem[]>([])
+  const [nextTierId, setNextTierId] = useState(1)
 
   // Submission state
   const [submitting, setSubmitting] = useState(false)
@@ -131,9 +133,12 @@ export default function CreatePricelistPage() {
   }
 
   const addProduct = (product: Product) => {
-    if (items.some(i => i.productId === product.id)) return
+    // Allow adding same product if it doesn't have a tier with minQuantity=1 yet
+    const existingTiers = items.filter(i => i.productId === product.id)
+    const defaultMinQty = existingTiers.length === 0 ? 1 : Math.max(...existingTiers.map(t => t.minQuantity)) + 1
 
     setItems(prev => [...prev, {
+      id: nextTierId,
       productId: product.id,
       productName: product.name,
       productSku: product.sku,
@@ -142,17 +147,41 @@ export default function CreatePricelistPage() {
       fixedPrice: product.sellingPrice,
       discountPercent: null,
       discountAmount: null,
-      minQuantity: 1
+      minQuantity: defaultMinQty
     }])
+    setNextTierId(prev => prev + 1)
   }
 
-  const removeProduct = (productId: number) => {
+  const addTier = (product: { id: number; name: string; sku: string; sellingPrice: number }) => {
+    const existingTiers = items.filter(i => i.productId === product.id)
+    const nextMinQty = existingTiers.length > 0 ? Math.max(...existingTiers.map(t => t.minQuantity)) + 5 : 1
+
+    setItems(prev => [...prev, {
+      id: nextTierId,
+      productId: product.id,
+      productName: product.name,
+      productSku: product.sku,
+      basePrice: product.sellingPrice,
+      priceType: 'fixed',
+      fixedPrice: product.sellingPrice,
+      discountPercent: null,
+      discountAmount: null,
+      minQuantity: nextMinQty
+    }])
+    setNextTierId(prev => prev + 1)
+  }
+
+  const removeTier = (tierId: number) => {
+    setItems(prev => prev.filter(i => i.id !== tierId))
+  }
+
+  const removeAllTiersForProduct = (productId: number) => {
     setItems(prev => prev.filter(i => i.productId !== productId))
   }
 
-  const updateItem = (productId: number, updates: Partial<PricelistItem>) => {
+  const updateItem = (tierId: number, updates: Partial<PricelistItem>) => {
     setItems(prev => prev.map(item =>
-      item.productId === productId
+      item.id === tierId
         ? { ...item, ...updates }
         : item
     ))
@@ -200,10 +229,16 @@ export default function CreatePricelistPage() {
   }
 
   const filteredProducts = products.filter(p =>
-    !items.some(i => i.productId === p.id) &&
     (p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
      p.sku?.toLowerCase().includes(productSearch.toLowerCase()))
   )
+
+  // Group items by product for display
+  const productGroups = items.reduce<Record<number, PricelistItem[]>>((acc, item) => {
+    if (!acc[item.productId]) acc[item.productId] = []
+    acc[item.productId].push(item)
+    return acc
+  }, {})
 
   return (
     
@@ -518,7 +553,9 @@ export default function CreatePricelistPage() {
 
                     {/* Selected Products */}
                     <div className="space-y-3">
-                      <p className="text-sm text-gray-500">{items.length} producto(s) agregado(s)</p>
+                      <p className="text-sm text-gray-500">
+                        {Object.keys(productGroups).length} producto(s), {items.length} escalón(es)
+                      </p>
 
                       {items.length === 0 ? (
                         <div className={cn(
@@ -529,114 +566,153 @@ export default function CreatePricelistPage() {
                           <p className="text-gray-500">Busca y agrega productos para definir precios especiales</p>
                         </div>
                       ) : (
-                        <div className="space-y-3 max-h-80 overflow-y-auto">
-                          {items.map(item => (
-                            <motion.div
-                              key={item.productId}
-                              layout
-                              className={cn(
-                                'p-4 rounded-xl border',
-                                theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
-                              )}
-                            >
-                              <div className="flex items-start justify-between mb-3">
-                                <div>
-                                  <p className={cn(
-                                    'font-medium',
-                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                  )}>
-                                    {item.productName}
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    Precio base: ${item.basePrice.toFixed(2)}
-                                  </p>
-                                </div>
-                                <button
-                                  onClick={() => removeProduct(item.productId)}
-                                  className="p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-
-                              <div className="grid grid-cols-3 gap-3">
-                                <div>
-                                  <label className="text-xs text-gray-500 block mb-1">Tipo</label>
-                                  <select
-                                    value={item.priceType}
-                                    onChange={(e) => updateItem(item.productId, { priceType: e.target.value as any })}
-                                    className={cn(
-                                      'w-full px-2 py-1.5 rounded-lg border text-sm',
-                                      theme === 'dark'
-                                        ? 'bg-gray-800 border-gray-600 text-white'
-                                        : 'bg-white border-gray-200'
-                                    )}
-                                  >
-                                    <option value="fixed">Precio Fijo</option>
-                                    <option value="discount_percent">% Descuento</option>
-                                    <option value="discount_amount">$ Descuento</option>
-                                  </select>
-                                </div>
-
-                                <div>
-                                  <label className="text-xs text-gray-500 block mb-1">
-                                    {item.priceType === 'fixed' ? 'Precio' :
-                                     item.priceType === 'discount_percent' ? '% Desc.' : '$ Desc.'}
-                                  </label>
-                                  <div className="relative">
-                                    {item.priceType === 'fixed' ? (
-                                      <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                    ) : item.priceType === 'discount_percent' ? (
-                                      <Percent className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                    ) : (
-                                      <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                    )}
-                                    <input
-                                      type="number"
-                                      step="0.0001"
-                                      value={
-                                        item.priceType === 'fixed' ? item.fixedPrice || '' :
-                                        item.priceType === 'discount_percent' ? item.discountPercent || '' :
-                                        item.discountAmount || ''
-                                      }
-                                      onChange={(e) => {
-                                        const val = e.target.value ? parseFloat(e.target.value) : null
-                                        if (item.priceType === 'fixed') {
-                                          updateItem(item.productId, { fixedPrice: val })
-                                        } else if (item.priceType === 'discount_percent') {
-                                          updateItem(item.productId, { discountPercent: val })
-                                        } else {
-                                          updateItem(item.productId, { discountAmount: val })
-                                        }
-                                      }}
-                                      className={cn(
-                                        'w-full pl-7 pr-2 py-1.5 rounded-lg border text-sm',
-                                        theme === 'dark'
-                                          ? 'bg-gray-800 border-gray-600 text-white'
-                                          : 'bg-white border-gray-200'
-                                      )}
-                                    />
+                        <div className="space-y-4 max-h-[28rem] overflow-y-auto">
+                          {Object.entries(productGroups).map(([productId, tiers]) => {
+                            const firstTier = tiers[0]
+                            const sortedTiers = [...tiers].sort((a, b) => a.minQuantity - b.minQuantity)
+                            return (
+                              <motion.div
+                                key={productId}
+                                layout
+                                className={cn(
+                                  'p-4 rounded-xl border',
+                                  theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
+                                )}
+                              >
+                                <div className="flex items-start justify-between mb-3">
+                                  <div>
+                                    <p className={cn(
+                                      'font-medium',
+                                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                    )}>
+                                      {firstTier.productName}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                      Precio base: ${firstTier.basePrice.toFixed(2)} | {sortedTiers.length} escalón(es)
+                                    </p>
                                   </div>
+                                  <button
+                                    onClick={() => removeAllTiersForProduct(parseInt(productId))}
+                                    className="p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
+                                    title="Eliminar producto y todos sus escalones"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
                                 </div>
 
-                                <div>
-                                  <label className="text-xs text-gray-500 block mb-1">Cant. Mín.</label>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    value={item.minQuantity}
-                                    onChange={(e) => updateItem(item.productId, { minQuantity: parseInt(e.target.value) || 1 })}
-                                    className={cn(
-                                      'w-full px-2 py-1.5 rounded-lg border text-sm',
-                                      theme === 'dark'
-                                        ? 'bg-gray-800 border-gray-600 text-white'
-                                        : 'bg-white border-gray-200'
-                                    )}
-                                  />
+                                <div className="space-y-2">
+                                  {sortedTiers.map((item) => (
+                                    <div key={item.id} className={cn(
+                                      'grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-end p-2 rounded-lg',
+                                      theme === 'dark' ? 'bg-gray-800/50' : 'bg-white'
+                                    )}>
+                                      <div>
+                                        <label className="text-[10px] text-gray-500 block mb-0.5">Cant. Mín.</label>
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          value={item.minQuantity}
+                                          onChange={(e) => updateItem(item.id, { minQuantity: parseInt(e.target.value) || 1 })}
+                                          className={cn(
+                                            'w-full px-2 py-1.5 rounded-lg border text-sm',
+                                            theme === 'dark'
+                                              ? 'bg-gray-900 border-gray-600 text-white'
+                                              : 'bg-gray-50 border-gray-200'
+                                          )}
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <label className="text-[10px] text-gray-500 block mb-0.5">
+                                          {item.priceType === 'fixed' ? 'Precio $' :
+                                           item.priceType === 'discount_percent' ? '% Desc.' : '$ Desc.'}
+                                        </label>
+                                        <div className="flex gap-1">
+                                          <select
+                                            value={item.priceType}
+                                            onChange={(e) => updateItem(item.id, { priceType: e.target.value as any })}
+                                            className={cn(
+                                              'w-20 px-1 py-1.5 rounded-lg border text-xs',
+                                              theme === 'dark'
+                                                ? 'bg-gray-900 border-gray-600 text-white'
+                                                : 'bg-gray-50 border-gray-200'
+                                            )}
+                                          >
+                                            <option value="fixed">Fijo</option>
+                                            <option value="discount_percent">%</option>
+                                            <option value="discount_amount">-$</option>
+                                          </select>
+                                          <input
+                                            type="number"
+                                            step="0.01"
+                                            value={
+                                              item.priceType === 'fixed' ? item.fixedPrice || '' :
+                                              item.priceType === 'discount_percent' ? item.discountPercent || '' :
+                                              item.discountAmount || ''
+                                            }
+                                            onChange={(e) => {
+                                              const val = e.target.value ? parseFloat(e.target.value) : null
+                                              if (item.priceType === 'fixed') {
+                                                updateItem(item.id, { fixedPrice: val })
+                                              } else if (item.priceType === 'discount_percent') {
+                                                updateItem(item.id, { discountPercent: val })
+                                              } else {
+                                                updateItem(item.id, { discountAmount: val })
+                                              }
+                                            }}
+                                            className={cn(
+                                              'flex-1 min-w-0 px-2 py-1.5 rounded-lg border text-sm',
+                                              theme === 'dark'
+                                                ? 'bg-gray-900 border-gray-600 text-white'
+                                                : 'bg-gray-50 border-gray-200'
+                                            )}
+                                          />
+                                        </div>
+                                      </div>
+
+                                      <div className="text-xs text-gray-500 pb-1.5">
+                                        {item.priceType === 'fixed' && item.fixedPrice
+                                          ? `$${item.fixedPrice.toFixed(2)}`
+                                          : item.priceType === 'discount_percent' && item.discountPercent
+                                            ? `$${(firstTier.basePrice * (1 - item.discountPercent / 100)).toFixed(2)}`
+                                            : item.priceType === 'discount_amount' && item.discountAmount
+                                              ? `$${Math.max(0, firstTier.basePrice - item.discountAmount).toFixed(2)}`
+                                              : ''}
+                                      </div>
+
+                                      {sortedTiers.length > 1 && (
+                                        <button
+                                          onClick={() => removeTier(item.id)}
+                                          className="p-1 text-red-400 hover:text-red-500 rounded"
+                                          title="Eliminar escalón"
+                                        >
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  ))}
                                 </div>
-                              </div>
-                            </motion.div>
-                          ))}
+
+                                <button
+                                  onClick={() => addTier({
+                                    id: parseInt(productId),
+                                    name: firstTier.productName,
+                                    sku: firstTier.productSku,
+                                    sellingPrice: firstTier.basePrice
+                                  })}
+                                  className={cn(
+                                    'mt-2 w-full flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                                    theme === 'dark'
+                                      ? 'text-blue-400 hover:bg-blue-900/20 border border-blue-800'
+                                      : 'text-blue-600 hover:bg-blue-50 border border-blue-200'
+                                  )}
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  Agregar escalón
+                                </button>
+                              </motion.div>
+                            )
+                          })}
                         </div>
                       )}
                     </div>

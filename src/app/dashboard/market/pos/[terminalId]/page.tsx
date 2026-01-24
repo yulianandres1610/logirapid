@@ -62,6 +62,14 @@ import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
 import { VariantSelectorModal, Variant } from '@/components/market/VariantSelectorModal'
 import { CashierLoginModal, AuthenticatedEmployee } from '@/components/market/pos/CashierLoginModal'
 
+interface PriceTier {
+  minQuantity: number
+  priceType: string
+  fixedPrice?: number
+  discountPercent?: number
+  discountAmount?: number
+}
+
 interface ProductVariant {
   id: number
   name: string
@@ -91,6 +99,7 @@ interface Product {
   trackInventory: boolean
   hasVariants: boolean
   variants?: ProductVariant[]
+  priceTiers?: PriceTier[]
 }
 
 interface Category {
@@ -109,6 +118,9 @@ interface CartItem {
   variantBarcode: string | null
   quantity: number
   unitPrice: number
+  originalPrice: number
+  pricelistApplied: boolean
+  pricelistTierLabel?: string
   discountPercent: number
   discountAmount: number
   total: number
@@ -531,7 +543,10 @@ export default function POSTerminalPage() {
                   unitPrice: item.unitPrice,
                   discountPercent: item.discountPercent,
                   discountAmount: item.discountAmount,
-                  total: item.total
+                  total: item.total,
+                  originalPrice: item.originalPrice ?? item.unitPrice,
+                  pricelistApplied: item.pricelistApplied ?? false,
+                  pricelistTierLabel: item.pricelistTierLabel
                 })
               }
             }
@@ -696,6 +711,13 @@ export default function POSTerminalPage() {
     const discounts = cart.reduce((sum, item) => sum + item.discountAmount, 0)
     const total = cart.reduce((sum, item) => sum + item.total, 0)
     const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0)
+    // Wholesale savings: difference between original price and tier price
+    const wholesaleSavings = cart.reduce((sum, item) => {
+      if (item.pricelistApplied && item.originalPrice > item.unitPrice) {
+        return sum + (item.originalPrice - item.unitPrice) * item.quantity
+      }
+      return sum
+    }, 0)
     // CUP: redondear al múltiplo de 5 más cercano (convención cubana)
     const totalCUP = cart.reduce((sum, item) => {
       const unitCUP = roundCUP(item.unitPrice * USD_CUP_BCC)
@@ -703,7 +725,7 @@ export default function POSTerminalPage() {
       const discountCUP = roundCUP(item.discountAmount * USD_CUP_BCC)
       return sum + lineCUP - discountCUP
     }, 0)
-    return { subtotal, discounts, total, itemCount, totalCUP }
+    return { subtotal, discounts, total, itemCount, totalCUP, wholesaleSavings }
   }, [cart, USD_CUP_BCC])
 
   // Handle exit confirmation with password
@@ -749,6 +771,51 @@ export default function POSTerminalPage() {
     }
   }
 
+  // Evaluate pricelist tier based on quantity
+  const applyPricelistTier = useCallback((product: Product, quantity: number, variantPrice?: number): {
+    unitPrice: number
+    applied: boolean
+    tierLabel?: string
+  } => {
+    const basePrice = variantPrice ?? product.basePrice
+    if (!product.priceTiers || product.priceTiers.length === 0) {
+      return { unitPrice: variantPrice ?? product.price, applied: false }
+    }
+
+    // Sort tiers by min_quantity descending to find the highest applicable tier
+    const sortedTiers = [...product.priceTiers].sort((a, b) => b.minQuantity - a.minQuantity)
+
+    // Find the tier with the highest minQuantity that the current quantity meets
+    const applicableTier = sortedTiers.find(t => quantity >= t.minQuantity)
+
+    if (!applicableTier) {
+      return { unitPrice: variantPrice ?? product.price, applied: false }
+    }
+
+    // If only tier is min_quantity=1, it's the base pricelist price (already applied to product.price)
+    if (applicableTier.minQuantity <= 1 && sortedTiers.length === 1) {
+      return { unitPrice: variantPrice ?? product.price, applied: false }
+    }
+
+    let unitPrice = basePrice
+    if (applicableTier.priceType === 'fixed' && applicableTier.fixedPrice !== undefined) {
+      unitPrice = applicableTier.fixedPrice
+    } else if (applicableTier.priceType === 'discount_percent' && applicableTier.discountPercent !== undefined) {
+      unitPrice = basePrice * (1 - applicableTier.discountPercent / 100)
+    } else if (applicableTier.priceType === 'discount_amount' && applicableTier.discountAmount !== undefined) {
+      unitPrice = Math.max(0, basePrice - applicableTier.discountAmount)
+    }
+
+    unitPrice = Math.round(unitPrice * 100) / 100
+    const applied = applicableTier.minQuantity > 1 && unitPrice < basePrice
+
+    return {
+      unitPrice,
+      applied,
+      tierLabel: applied ? `${applicableTier.minQuantity}+ uds` : undefined
+    }
+  }, [])
+
   // Add product to cart (with optional variant)
   const addToCart = useCallback((product: Product, variant: ProductVariant | null = null) => {
     // Get price and stock from variant if provided, otherwise from product
@@ -776,7 +843,7 @@ export default function POSTerminalPage() {
 
       if (existingIndex >= 0) {
         const updated = [...prev]
-        const item = updated[existingIndex]
+        const item = { ...updated[existingIndex] }
         const newQuantity = item.quantity + 1
 
         // Validate stock for quantity increase
@@ -787,10 +854,26 @@ export default function POSTerminalPage() {
         }
 
         item.quantity = newQuantity
+
+        // Re-evaluate pricelist tier with new quantity
+        const tierResult = applyPricelistTier(product, newQuantity, variant?.price)
+        item.unitPrice = tierResult.unitPrice
+        item.pricelistApplied = tierResult.applied
+        item.pricelistTierLabel = tierResult.tierLabel
+
+        // Recalculate discount and total
+        if (item.discountPercent > 0) {
+          item.discountAmount = (item.quantity * item.unitPrice) * (item.discountPercent / 100)
+        }
         item.total = (item.quantity * item.unitPrice) - item.discountAmount
+
+        updated[existingIndex] = item
         setSelectedCartIndex(existingIndex)
         return updated
       } else {
+        // Evaluate tier for initial quantity of 1
+        const tierResult = applyPricelistTier(product, 1, variant?.price)
+
         const newItem: CartItem = {
           product,
           variantId: variant?.id ?? null,
@@ -798,10 +881,13 @@ export default function POSTerminalPage() {
           variantSku: variant?.sku ?? null,
           variantBarcode: variant?.barcode ?? null,
           quantity: 1,
-          unitPrice: price,
+          unitPrice: tierResult.unitPrice,
+          originalPrice: variant?.price ?? product.basePrice,
+          pricelistApplied: tierResult.applied,
+          pricelistTierLabel: tierResult.tierLabel,
           discountPercent: 0,
           discountAmount: 0,
-          total: price
+          total: tierResult.unitPrice
         }
         setSelectedCartIndex(prev.length)
         return [...prev, newItem]
@@ -809,7 +895,7 @@ export default function POSTerminalPage() {
     })
     setNumpadValue('')
     setNumpadMode('quantity')
-  }, [])
+  }, [applyPricelistTier])
 
   // Handle barcode scan - auto add to cart (like Odoo)
   const handleBarcodeScan = useCallback((barcode: string) => {
@@ -983,8 +1069,12 @@ export default function POSTerminalPage() {
 
       // Validate stock if updating quantity
       if (updates.quantity !== undefined && currentItem.product.trackInventory) {
-        if (updates.quantity > currentItem.product.stock) {
-          setError(`Stock insuficiente. Disponible: ${currentItem.product.stock}`)
+        const variantStock = currentItem.variantId
+          ? currentItem.product.variants?.find(v => v.id === currentItem.variantId)?.stock
+          : undefined
+        const effectiveStock = variantStock ?? currentItem.product.stock
+        if (updates.quantity > effectiveStock) {
+          setError(`Stock insuficiente. Disponible: ${effectiveStock}`)
           setTimeout(() => setError(null), 3000)
           return prev
         }
@@ -995,6 +1085,23 @@ export default function POSTerminalPage() {
 
       const item = { ...currentItem, ...updates }
 
+      // Re-evaluate pricelist tier when quantity changes (unless price was manually set)
+      if (updates.quantity !== undefined && !updates.unitPrice) {
+        const variantPrice = currentItem.variantId
+          ? currentItem.product.variants?.find(v => v.id === currentItem.variantId)?.price
+          : undefined
+        const tierResult = applyPricelistTier(currentItem.product, item.quantity, variantPrice)
+        item.unitPrice = tierResult.unitPrice
+        item.pricelistApplied = tierResult.applied
+        item.pricelistTierLabel = tierResult.tierLabel
+      }
+
+      // If price was manually edited, disable pricelist tier
+      if (updates.unitPrice !== undefined) {
+        item.pricelistApplied = false
+        item.pricelistTierLabel = undefined
+      }
+
       // Recalculate totals
       if (item.discountPercent > 0) {
         item.discountAmount = (item.quantity * item.unitPrice) * (item.discountPercent / 100)
@@ -1004,7 +1111,7 @@ export default function POSTerminalPage() {
       updated[index] = item
       return updated
     })
-  }, [])
+  }, [applyPricelistTier])
 
   // Remove from cart
   const removeFromCart = useCallback((index: number) => {
@@ -1088,6 +1195,7 @@ export default function POSTerminalPage() {
           productSku: item.variantSku || item.product.sku,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
+          originalPrice: item.pricelistApplied ? item.originalPrice : undefined,
           discountPercent: item.discountPercent,
           discountAmount: item.discountAmount
         })),
@@ -1427,9 +1535,23 @@ export default function POSTerminalPage() {
                           {item.variantName
                             ? `${item.product.name} - ${item.variantName}`
                             : item.product.name}
+                          {item.pricelistApplied && item.pricelistTierLabel && (
+                            <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">
+                              {item.pricelistTierLabel}
+                            </span>
+                          )}
                         </p>
                         <p className="text-[10px] lg:text-xs text-gray-500">
-                          {item.quantity} x ${item.unitPrice.toFixed(2)}
+                          {item.quantity} x{' '}
+                          {item.pricelistApplied && item.originalPrice > item.unitPrice ? (
+                            <>
+                              <span className="line-through text-gray-400">${item.originalPrice.toFixed(2)}</span>
+                              {' '}
+                              <span className="text-emerald-600 dark:text-emerald-400 font-medium">${item.unitPrice.toFixed(2)}</span>
+                            </>
+                          ) : (
+                            <>${item.unitPrice.toFixed(2)}</>
+                          )}
                           {item.discountPercent > 0 && (
                             <span className="text-green-500 ml-1">-{item.discountPercent}%</span>
                           )}
@@ -1560,6 +1682,12 @@ export default function POSTerminalPage() {
                 <span className="text-gray-500">Subtotal ({cartTotals.itemCount})</span>
                 <span>${cartTotals.subtotal.toFixed(2)}</span>
               </div>
+              {cartTotals.wholesaleSavings > 0 && (
+                <div className="flex justify-between text-xs lg:text-sm text-emerald-600 dark:text-emerald-400">
+                  <span>Precio mayorista</span>
+                  <span>-${cartTotals.wholesaleSavings.toFixed(2)}</span>
+                </div>
+              )}
               {cartTotals.discounts > 0 && (
                 <div className="flex justify-between text-xs lg:text-sm text-green-500">
                   <span>Descuentos</span>

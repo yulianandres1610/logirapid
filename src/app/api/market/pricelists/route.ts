@@ -160,6 +160,24 @@ export async function POST(request: NextRequest) {
 
     // Add items if provided
     if (items && items.length > 0) {
+      // Validate no duplicate min_quantity for the same product
+      const tierMap = new Map<string, number[]>()
+      for (const item of items) {
+        if (item.productId) {
+          const key = String(item.productId)
+          const quantities = tierMap.get(key) || []
+          const minQty = item.minQuantity || 1
+          if (quantities.includes(minQty)) {
+            return NextResponse.json({
+              success: false,
+              error: `Cantidad mínima duplicada (${minQty}) para el mismo producto`
+            }, { status: 400 })
+          }
+          quantities.push(minQty)
+          tierMap.set(key, quantities)
+        }
+      }
+
       for (const item of items) {
         await db.query(`
           INSERT INTO market_pricelist_items (

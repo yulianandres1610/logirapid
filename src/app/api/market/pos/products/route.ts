@@ -149,7 +149,14 @@ export async function GET(request: NextRequest) {
 
     // Get pricelist items if a pricelist is specified
     // BUT if pricelist is "default" (is_default = true), use product base prices
-    let pricelistItems: Record<number, { price?: number; discountPercent?: number }> = {}
+    interface PricelistTier {
+      minQuantity: number
+      priceType: string
+      fixedPrice?: number
+      discountPercent?: number
+      discountAmount?: number
+    }
+    let pricelistTiers: Record<number, PricelistTier[]> = {}
     let isDefaultPricelist = false
 
     if (effectivePricelistId) {
@@ -165,16 +172,24 @@ export async function GET(request: NextRequest) {
       // Only load pricelist items if it's NOT the default pricelist
       if (!isDefaultPricelist) {
         const pricelistResult = await db.query(`
-          SELECT product_id, fixed_price, discount_percent
+          SELECT product_id, price_type, fixed_price, discount_percent, discount_amount, min_quantity
           FROM market_pricelist_items
           WHERE pricelist_id = $1
+          ORDER BY product_id, min_quantity ASC
         `, [effectivePricelistId])
 
         for (const item of pricelistResult.rows) {
-          pricelistItems[item.product_id] = {
-            price: item.fixed_price ? parseFloat(item.fixed_price) : undefined,
-            discountPercent: item.discount_percent ? parseFloat(item.discount_percent) : undefined
+          const productId = item.product_id
+          if (!pricelistTiers[productId]) {
+            pricelistTiers[productId] = []
           }
+          pricelistTiers[productId].push({
+            minQuantity: parseInt(item.min_quantity) || 1,
+            priceType: item.price_type || 'fixed',
+            fixedPrice: item.fixed_price ? parseFloat(item.fixed_price) : undefined,
+            discountPercent: item.discount_percent ? parseFloat(item.discount_percent) : undefined,
+            discountAmount: item.discount_amount ? parseFloat(item.discount_amount) : undefined
+          })
         }
       }
     }
@@ -257,18 +272,25 @@ export async function GET(request: NextRequest) {
 
     // Build products with calculated prices and variants
     const products = productsResult.rows.map(p => {
-      const pricelistItem = pricelistItems[p.id]
+      const tiers = pricelistTiers[p.id] || []
       const basePrice = parseFloat(p.sale_price) || 0
       let finalPrice = basePrice
       let priceSource: 'base' | 'pricelist_fixed' | 'pricelist_discount' = 'base'
 
-      if (pricelistItem) {
-        if (pricelistItem.price !== undefined) {
-          finalPrice = pricelistItem.price
-          priceSource = 'pricelist_fixed'
-        } else if (pricelistItem.discountPercent !== undefined) {
-          finalPrice = basePrice * (1 - pricelistItem.discountPercent / 100)
-          priceSource = 'pricelist_discount'
+      // Apply the lowest tier (min_quantity <= 1) as the default price
+      if (tiers.length > 0) {
+        const defaultTier = tiers.find(t => t.minQuantity <= 1) || (tiers.length === 1 && tiers[0].minQuantity <= 1 ? tiers[0] : null)
+        if (defaultTier) {
+          if (defaultTier.priceType === 'fixed' && defaultTier.fixedPrice !== undefined) {
+            finalPrice = defaultTier.fixedPrice
+            priceSource = 'pricelist_fixed'
+          } else if (defaultTier.priceType === 'discount_percent' && defaultTier.discountPercent !== undefined) {
+            finalPrice = basePrice * (1 - defaultTier.discountPercent / 100)
+            priceSource = 'pricelist_discount'
+          } else if (defaultTier.priceType === 'discount_amount' && defaultTier.discountAmount !== undefined) {
+            finalPrice = Math.max(0, basePrice - defaultTier.discountAmount)
+            priceSource = 'pricelist_fixed'
+          }
         }
       }
 
@@ -306,6 +328,7 @@ export async function GET(request: NextRequest) {
         basePrice: basePrice,
         price: calculatedPrice,
         priceSource: priceSource !== 'base' ? priceSource : undefined, // Only include if modified
+        priceTiers: tiers.length > 0 ? tiers : undefined, // All quantity tiers for this product
         costPrice: parseFloat(p.cost_price) || 0,
         taxRate: parseFloat(p.tax_rate) || 0,
         imageUrl: p.image_url,

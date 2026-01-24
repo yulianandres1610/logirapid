@@ -76,7 +76,7 @@ export async function GET(
       FROM market_pricelist_items mpi
       LEFT JOIN market_products mp ON mp.id = mpi.product_id
       WHERE mpi.pricelist_id = $1
-      ORDER BY mp.name ASC NULLS LAST
+      ORDER BY mpi.product_id ASC, mpi.min_quantity ASC NULLS LAST
     `, [pricelistId])
 
     const items = itemsResult.rows.map(item => ({
@@ -230,6 +230,24 @@ export async function PUT(
 
     // Update items if provided
     if (items !== undefined) {
+      // Validate no duplicate min_quantity for the same product
+      const tierMap = new Map<string, number[]>()
+      for (const item of items) {
+        if (item.productId) {
+          const key = String(item.productId)
+          const quantities = tierMap.get(key) || []
+          const minQty = item.minQuantity || 1
+          if (quantities.includes(minQty)) {
+            return NextResponse.json({
+              success: false,
+              error: `Cantidad mínima duplicada (${minQty}) para el mismo producto`
+            }, { status: 400 })
+          }
+          quantities.push(minQty)
+          tierMap.set(key, quantities)
+        }
+      }
+
       // Delete existing items
       await db.query('DELETE FROM market_pricelist_items WHERE pricelist_id = $1', [pricelistId])
 

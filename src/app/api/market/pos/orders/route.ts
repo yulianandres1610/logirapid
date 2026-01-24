@@ -5,17 +5,20 @@ import { db } from '@/lib/database'
 
 // Ensure employee_id column exists (migration)
 let migrationRun = false
-async function ensureEmployeeIdColumn() {
+async function ensureMigrations() {
   if (migrationRun) return
   try {
     await db.query(`
       ALTER TABLE market_pos_orders
       ADD COLUMN IF NOT EXISTS employee_id INTEGER REFERENCES market_employees(id)
     `)
-    console.log('[POS Orders] employee_id column ensured')
+    await db.query(`
+      ALTER TABLE market_pos_order_lines
+      ADD COLUMN IF NOT EXISTS original_price DECIMAL(12,2)
+    `)
+    console.log('[POS Orders] Migrations ensured (employee_id, original_price)')
     migrationRun = true
   } catch (error) {
-    // Column might already exist or table structure issue
     console.error('[POS Orders] Migration error (may be safe to ignore):', error)
     migrationRun = true
   }
@@ -235,8 +238,8 @@ export async function POST(request: NextRequest) {
     const companyId = payload.companyId
     const userId = payload.userId
 
-    // Ensure employee_id column exists
-    await ensureEmployeeIdColumn()
+    // Ensure migrations
+    await ensureMigrations()
 
     const body = await request.json()
     const {
@@ -707,16 +710,17 @@ export async function POST(request: NextRequest) {
       }
 
       // Insert order line with traceability fields
+      const originalPrice = line.originalPrice ? parseFloat(line.originalPrice) : null
       await db.query(`
         INSERT INTO market_pos_order_lines (
           order_id, product_id, variant_id, product_name, product_sku,
-          quantity, unit_price,
+          quantity, unit_price, original_price,
           discount_percent, discount_amount,
           subtotal, tax_amount, total,
           promotion_id, promotion_name,
           supplier_id, lot_id, cost_price, is_consignment,
           created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
       `, [
         orderId,
         productId,
@@ -725,6 +729,7 @@ export async function POST(request: NextRequest) {
         line.productSku || null,
         quantity,
         unitPrice,
+        originalPrice,
         discountPercent,
         lineDiscount,
         lineSubtotal,

@@ -7,6 +7,7 @@ interface ReceiptLine {
   productName: string
   quantity: number
   unitPrice: number
+  originalPrice?: number
   total: number
   discount?: number
 }
@@ -151,6 +152,12 @@ export function generateThermalReceipt(data: ReceiptData): string {
     const remaining = LINE_WIDTH - detail.length - total.length
     lines.push(detail + ' '.repeat(Math.max(1, remaining)) + total)
 
+    // Wholesale price info
+    if (line.originalPrice && line.originalPrice > line.unitPrice) {
+      const savings = (line.originalPrice - line.unitPrice) * line.quantity
+      lines.push(`  Mayorista (antes ${formatCurrency(line.originalPrice, data.currency)}, ahorro ${formatCurrency(savings, data.currency)})`)
+    }
+
     // Discount if any
     if (line.discount && line.discount > 0) {
       const discountStr = `  Descuento: -${formatCurrency(line.discount, data.currency)}`
@@ -245,18 +252,24 @@ export function generateHTMLReceipt(data: ReceiptData): string {
     </style>
   `
 
-  const linesHTML = data.lines.map(line => `
+  const linesHTML = data.lines.map(line => {
+    const hasWholesale = line.originalPrice && line.originalPrice > line.unitPrice
+    const savings = hasWholesale ? (line.originalPrice! - line.unitPrice) * line.quantity : 0
+    return `
     <div class="line">
       <div class="line-name">${escapeHTML(line.productName)}</div>
       <div class="line-detail">
         <span>${line.quantity} x ${formatCurrency(line.unitPrice, data.currency)}</span>
         <span>${formatCurrency(line.total, data.currency)}</span>
       </div>
+      ${hasWholesale ? `
+        <div class="line-discount" style="color: #059669;">Mayorista (antes ${formatCurrency(line.originalPrice!, data.currency)}, ahorro ${formatCurrency(savings, data.currency)})</div>
+      ` : ''}
       ${line.discount && line.discount > 0 ? `
         <div class="line-discount">Descuento: -${formatCurrency(line.discount, data.currency)}</div>
       ` : ''}
     </div>
-  `).join('')
+  `}).join('')
 
   const paymentsHTML = data.payments.map(p => {
     const methodNames: Record<string, string> = {

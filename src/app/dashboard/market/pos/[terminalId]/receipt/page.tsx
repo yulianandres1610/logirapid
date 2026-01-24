@@ -223,6 +223,7 @@ interface OrderLine {
   productSku: string
   quantity: number
   unitPrice: number
+  originalPrice?: number
   discountAmount: number
   total: number
 }
@@ -709,6 +710,7 @@ function ReceiptContent() {
               name: l.productName,
               quantity: l.quantity,
               price: l.unitPrice,
+              originalPrice: l.originalPrice,
               total: l.total
             })),
             subtotal: order.subtotal,
@@ -795,6 +797,7 @@ function ReceiptContent() {
               name: l.productName,
               quantity: l.quantity,
               price: l.unitPrice,
+              originalPrice: l.originalPrice,
               total: l.total
             })),
             subtotal: order?.subtotal,
@@ -946,6 +949,7 @@ function ReceiptContent() {
                   name: l.productName,
                   quantity: l.quantity,
                   price: l.unitPrice,
+                  originalPrice: l.originalPrice,
                   total: l.total
                 })),
                 subtotal: order.subtotal,
@@ -1023,10 +1027,14 @@ Ticket: ${order.orderNumber}
 Cajero: ${order.createdByName}
 ${order.customerName ? `Cliente: ${order.customerName}` : ''}
 --------------------------------
-${order.lines.map(line =>
-`${line.productName}
-  ${line.quantity} x $${line.unitPrice.toFixed(2)} = $${line.total.toFixed(2)}`
-).join('\n')}
+${order.lines.map(line => {
+  let text = `${line.productName}\n  ${line.quantity} x $${line.unitPrice.toFixed(2)} = $${line.total.toFixed(2)}`
+  if (line.originalPrice && line.originalPrice > line.unitPrice) {
+    const savings = (line.originalPrice - line.unitPrice) * line.quantity
+    text += `\n  Mayorista (antes $${line.originalPrice.toFixed(2)}, ahorro $${savings.toFixed(2)})`
+  }
+  return text
+}).join('\n')}
 --------------------------------
 Subtotal:    $${order.subtotal.toFixed(2)}
              ${subtotalCUP.toLocaleString('es-ES')} CUP
@@ -1170,6 +1178,7 @@ ${order.payments.map(p => {
               <div className={`border-t border-b ${tc.border} py-4 my-4 space-y-2`}>
                 {order?.lines.map((line, idx) => {
                   const lineCUP = roundCUP(line.unitPrice * exchangeRate) * line.quantity
+                  const hasWholesale = line.originalPrice && line.originalPrice > line.unitPrice
                   return (
                     <div key={idx}>
                       <div className="flex justify-between">
@@ -1181,6 +1190,11 @@ ${order.payments.map(p => {
                           </span>
                         </div>
                       </div>
+                      {hasWholesale && (
+                        <div className="text-xs text-emerald-600 dark:text-emerald-400 pl-2">
+                          Mayorista (antes {formatCurrency(line.originalPrice!)}, ahorro {formatCurrency((line.originalPrice! - line.unitPrice) * line.quantity)})
+                        </div>
+                      )}
                     </div>
                   )
                 })}

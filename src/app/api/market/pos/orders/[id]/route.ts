@@ -133,6 +133,7 @@ export async function GET(
           imageUrl: line.image_url,
           quantity: parseFloat(line.quantity) || 1,
           unitPrice: parseFloat(line.unit_price) || 0,
+          originalPrice: line.original_price ? parseFloat(line.original_price) : undefined,
           discountPercent: parseFloat(line.discount_percent) || 0,
           discountAmount: parseFloat(line.discount_amount) || 0,
           subtotal: parseFloat(line.subtotal) || 0,
