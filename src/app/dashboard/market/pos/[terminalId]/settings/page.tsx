@@ -27,7 +27,8 @@ import {
   Lock,
   Unlock,
   Zap,
-  Printer
+  Printer,
+  Tag
 } from 'lucide-react'
 import { useRouter, useParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
@@ -96,6 +97,14 @@ interface WarehouseOption {
   code: string
 }
 
+interface PricelistOption {
+  id: number
+  name: string
+  code: string | null
+  itemsCount: number
+  isActive: boolean
+}
+
 type TabType = 'general' | 'payments' | 'permissions' | 'users'
 
 const TABS: { id: TabType; label: string; icon: React.ElementType }[] = [
@@ -141,12 +150,14 @@ export default function POSSettingsPage() {
   const [defaultCurrency, setDefaultCurrency] = useState('USD')
   const [acceptedCurrencies, setAcceptedCurrencies] = useState<string[]>(['USD', 'CUP', 'MLC'])
   const [acceptedPaymentMethods, setAcceptedPaymentMethods] = useState<string[]>(['cash', 'card', 'transfer', 'credit'])
+  const [pricelistId, setPricelistId] = useState<number | null>(null)
   const [defaultPrintServiceId, setDefaultPrintServiceId] = useState<number | null>(null)
   const [isActive, setIsActive] = useState(true)
   const [assignedUsers, setAssignedUsers] = useState<TerminalUser[]>([])
 
   // Available data
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([])
+  const [pricelists, setPricelists] = useState<PricelistOption[]>([])
   const [printServices, setPrintServices] = useState<PrintService[]>([])
   const [companyUsers, setCompanyUsers] = useState<CompanyUser[]>([])
   const [showAddUser, setShowAddUser] = useState(false)
@@ -177,6 +188,7 @@ export default function POSSettingsPage() {
         setAcceptedCurrencies(Array.isArray(currencies) ? currencies : ['USD', 'CUP', 'MLC'])
         const payments = t.paymentMethods
         setAcceptedPaymentMethods(Array.isArray(payments) ? payments : ['cash', 'card', 'transfer', 'credit'])
+        setPricelistId(t.pricelistId || null)
         setDefaultPrintServiceId(t.defaultPrintServiceId || null)
         setIsActive(t.isActive ?? true)
         setAssignedUsers(Array.isArray(t.users) ? t.users : [])
@@ -186,6 +198,14 @@ export default function POSSettingsPage() {
         if (warehousesData.success) {
           const wh = warehousesData.data?.warehouses || warehousesData.data
           setWarehouses(Array.isArray(wh) ? wh : [])
+        }
+
+        // Fetch pricelists
+        const pricelistsRes = await fetch('/api/market/pricelists')
+        const pricelistsData = await pricelistsRes.json()
+        if (pricelistsData.success) {
+          const pls = pricelistsData.data?.pricelists || pricelistsData.data || []
+          setPricelists(Array.isArray(pls) ? pls : [])
         }
 
         // Fetch print services
@@ -230,6 +250,7 @@ export default function POSSettingsPage() {
         body: JSON.stringify({
           name,
           warehouseId,
+          pricelistId,
           allowPriceEdit,
           allowDiscount,
           maxDiscountPercent,
@@ -553,6 +574,43 @@ export default function POSSettingsPage() {
                       <p className="text-xs text-green-500 mt-1 flex items-center gap-1">
                         <Check className="w-3 h-3" />
                         Inventario vinculado a: {selectedWarehouse.name}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Pricelist */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-2">
+                      Lista de Precios (Mayorista)
+                    </label>
+                    <div className="relative">
+                      <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <select
+                        value={pricelistId || ''}
+                        onChange={(e) => setPricelistId(e.target.value ? parseInt(e.target.value) : null)}
+                        className={cn(
+                          'w-full pl-12 pr-4 py-3 rounded-xl border-2 transition-all focus:outline-none focus:ring-0 appearance-none',
+                          theme === 'dark'
+                            ? 'bg-gray-700 border-gray-600 focus:border-blue-500 text-white'
+                            : 'bg-gray-50 border-gray-200 focus:border-blue-500'
+                        )}
+                      >
+                        <option value="">Sin lista de precios</option>
+                        {pricelists.filter(pl => pl.isActive).map(pl => (
+                          <option key={pl.id} value={pl.id}>
+                            {pl.name} {pl.code ? `(${pl.code})` : ''} - {pl.itemsCount} productos
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {pricelistId ? (
+                      <p className="text-xs text-green-500 mt-1 flex items-center gap-1">
+                        <Check className="w-3 h-3" />
+                        Los precios se ajustarán automáticamente por cantidad
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-400 mt-1">
+                        Sin lista asignada, se usarán los precios base de cada producto
                       </p>
                     )}
                   </div>
