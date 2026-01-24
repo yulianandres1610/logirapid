@@ -24,6 +24,7 @@ export function DashboardLayout({ children, hideSidebar = false }: DashboardLayo
   })
   // Mobile sidebar state (separate from desktop collapsed state)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [supportChatOpen, setSupportChatOpen] = useState(false)
   const { theme } = useTheme()
   const { user } = useAuth()
 
@@ -140,6 +141,7 @@ export function DashboardLayout({ children, hideSidebar = false }: DashboardLayo
               onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
               sidebarCollapsed={sidebarCollapsed}
               mobileMenuOpen={mobileMenuOpen}
+              onOpenAssistant={() => setSupportChatOpen(true)}
             />
           </div>
         )}
@@ -170,6 +172,8 @@ export function DashboardLayout({ children, hideSidebar = false }: DashboardLayo
             companyId: parseInt(user.companyId || '0') || 0,
             companyName: user.name || 'Usuario'
           }}
+          isOpen={supportChatOpen}
+          onClose={() => setSupportChatOpen(false)}
         />
       )}
     </div>

@@ -31,7 +31,8 @@ import {
   LayoutDashboard,
   CreditCard,
   MapPin,
-  BarChart3
+  BarChart3,
+  Bot
 } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -86,9 +87,10 @@ interface HeaderProps {
   onToggleMobileMenu?: () => void
   sidebarCollapsed: boolean
   mobileMenuOpen?: boolean
+  onOpenAssistant?: () => void
 }
 
-export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, mobileMenuOpen }: HeaderProps) {
+export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, mobileMenuOpen, onOpenAssistant }: HeaderProps) {
   const router = useRouter()
   const { user } = useAuth()
   const { theme, toggleTheme } = useTheme()
@@ -782,6 +784,25 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
                 )}
               </AnimatePresence>
             </div>
+
+            {/* AI Assistant */}
+            {onOpenAssistant && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onOpenAssistant}
+                className={cn(
+                  "relative hover:bg-white/10 transition-all duration-300 rounded-lg md:rounded-xl w-9 h-9 md:w-10 md:h-10",
+                  theme === 'dark'
+                    ? "text-gray-400 hover:text-white hover:border-blue-500/30"
+                    : "text-gray-600 hover:text-blue-600 hover:bg-blue-50"
+                )}
+                title="Asistente IA"
+              >
+                <Bot className="w-4 md:w-5 h-4 md:h-5" />
+                <span className="absolute inset-0 rounded-full animate-ping bg-blue-400 opacity-30" />
+              </Button>
+            )}
 
             {/* User menu */}
             <div className="relative">

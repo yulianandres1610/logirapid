@@ -28,6 +28,8 @@ interface SupportChatProps {
     companyId: number
     companyName: string
   }
+  isOpen?: boolean
+  onClose?: () => void
 }
 
 // Typing Indicator Component - 3 dots animation
@@ -178,10 +180,15 @@ const FormattedMessage = ({ content, isDark }: { content: string; isDark: boolea
   return <div className="text-sm leading-relaxed">{formatText(content)}</div>
 }
 
-export default function SupportChat({ userContext }: SupportChatProps) {
+export default function SupportChat({ userContext, isOpen: externalIsOpen, onClose }: SupportChatProps) {
   const { theme } = useTheme()
   const pathname = usePathname()
-  const [isOpen, setIsOpen] = useState(false)
+  const [internalIsOpen, setInternalIsOpen] = useState(false)
+  const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen
+  const handleClose = () => {
+    if (onClose) onClose()
+    else setInternalIsOpen(false)
+  }
   const [messages, setMessages] = useState<SupportMessage[]>([])
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -447,23 +454,6 @@ export default function SupportChat({ userContext }: SupportChatProps) {
 
   return (
     <>
-      {/* Floating Button - Brand Blue Color (solid, no gradient) */}
-      <motion.button
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-lg flex items-center justify-center bg-[#3B82F6] hover:bg-[#2563EB] transition-colors"
-        style={{
-          boxShadow: '0 4px 20px rgba(59, 130, 246, 0.5)'
-        }}
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.95 }}
-        animate={isOpen ? { opacity: 0, scale: 0 } : { opacity: 1, scale: 1 }}
-        title="Necesitas ayuda?"
-      >
-        <HelpCircle className="w-6 h-6 text-white" />
-        {/* Pulse animation */}
-        <span className="absolute inset-0 rounded-full animate-ping bg-blue-400 opacity-30" />
-      </motion.button>
-
       {/* Chat Widget */}
       <AnimatePresence>
         {isOpen && (
@@ -508,7 +498,7 @@ export default function SupportChat({ userContext }: SupportChatProps) {
                   </button>
                 )}
                 <button
-                  onClick={() => setIsOpen(false)}
+                  onClick={handleClose}
                   className="p-2 rounded-lg transition-colors hover:bg-white/20 text-white/80"
                 >
                   <X className="w-5 h-5" />
