@@ -33,7 +33,10 @@ import {
   Eye,
   Percent,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Ban,
+  Send,
+  History
 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -105,6 +108,11 @@ interface ConsignmentOrder {
   acceptedByName: string | null
   acceptedAt: string | null
   needsAcceptance: boolean
+  // Validation fields
+  validationStatus: 'pending_validation' | 'confirmed' | 'rejected'
+  rejectionReason: string | null
+  validatedByName: string | null
+  validatedAt: string | null
   createdAt: string
   lines: OrderLine[]
 }
@@ -182,6 +190,7 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
   const [pendingInvoices, setPendingInvoices] = useState<InvoiceFile[]>([])
   const [uploadingInvoices, setUploadingInvoices] = useState(false)
   const [accepting, setAccepting] = useState(false)
+  const [resubmitting, setResubmitting] = useState(false)
 
   useEffect(() => {
     fetchOrder()
@@ -302,6 +311,33 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
       showNotification('error', 'Error de conexión', 'No se pudo aceptar la orden. Intenta de nuevo.')
     } finally {
       setAccepting(false)
+    }
+  }
+
+  const handleResubmit = async () => {
+    if (!order) return
+
+    setResubmitting(true)
+    try {
+      const response = await fetch(`/api/consignments/orders/${order.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'resubmit' })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        showNotification('success', 'Orden reenviada', 'La orden ha sido reenviada a revisión')
+        fetchOrder() // Refresh order data
+      } else {
+        showNotification('error', 'Error', data.error || 'Error al reenviar la orden')
+      }
+    } catch (err) {
+      console.error('Error resubmitting order:', err)
+      showNotification('error', 'Error de conexión', 'No se pudo reenviar la orden. Intenta de nuevo.')
+    } finally {
+      setResubmitting(false)
     }
   }
 
@@ -486,13 +522,19 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
                         <StatusIcon className="w-3.5 h-3.5" />
                         {statusConfig.label}
                       </span>
-                      {order.needsAcceptance && (
+                      {order.validationStatus === 'rejected' && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                          <Ban className="w-3.5 h-3.5" />
+                          Rechazada
+                        </span>
+                      )}
+                      {order.needsAcceptance && order.validationStatus !== 'rejected' && (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
                           <AlertCircle className="w-3.5 h-3.5" />
                           Pendiente Aceptación
                         </span>
                       )}
-                      {order.acceptedByName && (
+                      {order.acceptedByName && order.validationStatus !== 'rejected' && (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           Aceptada
@@ -558,6 +600,94 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
               </div>
             </motion.div>
           </div>
+
+          {/* Rejection Banner */}
+          {order.validationStatus === 'rejected' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="max-w-6xl mx-auto mb-6"
+            >
+              <div className={cn(
+                'p-5 rounded-2xl border',
+                theme === 'dark' ? 'bg-red-900/20 border-red-800/50' : 'bg-red-50 border-red-200'
+              )}>
+                <div className="flex items-start gap-4">
+                  <div className={cn(
+                    'w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
+                    theme === 'dark' ? 'bg-red-900/50' : 'bg-red-100'
+                  )}>
+                    <Ban className="w-5 h-5 text-red-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className={cn(
+                      'font-semibold mb-1',
+                      theme === 'dark' ? 'text-red-300' : 'text-red-800'
+                    )}>
+                      Orden Rechazada
+                    </h3>
+                    {order.rejectionReason && (
+                      <p className={cn(
+                        'text-sm mb-2',
+                        theme === 'dark' ? 'text-red-400' : 'text-red-600'
+                      )}>
+                        <span className="font-medium">Motivo:</span> {order.rejectionReason}
+                      </p>
+                    )}
+                    <p className={cn(
+                      'text-xs',
+                      theme === 'dark' ? 'text-red-500' : 'text-red-500'
+                    )}>
+                      {order.validatedByName && `Rechazada por ${order.validatedByName}`}
+                      {order.validatedAt && ` el ${formatDateTime(order.validatedAt)}`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Link href={`/dashboard/market/consignments/create?editId=${order.id}`}>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className={cn(
+                          'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors',
+                          theme === 'dark'
+                            ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        )}
+                      >
+                        <Edit3 className="w-4 h-4" />
+                        Editar Orden
+                      </motion.button>
+                    </Link>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleResubmit}
+                      disabled={resubmitting}
+                      className={cn(
+                        'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors',
+                        resubmitting
+                          ? 'bg-blue-400 cursor-not-allowed'
+                          : 'bg-blue-600 hover:bg-blue-700',
+                        'text-white'
+                      )}
+                    >
+                      {resubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Reenviando...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          Reenviar a Revisión
+                        </>
+                      )}
+                    </motion.button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
           {/* Content */}
           <div className="max-w-6xl mx-auto space-y-6">

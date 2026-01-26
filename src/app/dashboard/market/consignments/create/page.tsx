@@ -249,6 +249,11 @@ export default function CreateConsignmentOrderPage() {
   const searchParams = useSearchParams()
   const pathname = usePathname()
 
+  // Edit mode
+  const editId = searchParams.get('editId')
+  const [isEditMode, setIsEditMode] = useState(!!editId)
+  const [editLoading, setEditLoading] = useState(!!editId)
+
   // Exchange rates for currency conversion
   const { USD_CUP, USD_MLC, timestamp: ratesTimestamp } = useMarketExchangeRates()
 
@@ -271,8 +276,8 @@ export default function CreateConsignmentOrderPage() {
   }>>([])
   const [pendingSaveAction, setPendingSaveAction] = useState<(() => void) | null>(null)
 
-  // Read initial step from URL
-  const initialStep = (searchParams.get('step') as Step) || 'method'
+  // Read initial step from URL - start at 'products' when editing
+  const initialStep = editId ? 'products' : ((searchParams.get('step') as Step) || 'method')
   const [currentStep, setCurrentStep] = useState<Step>(initialStep)
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -433,6 +438,89 @@ export default function CreateConsignmentOrderPage() {
     }
     fetchData()
   }, [])
+
+  // Load consignment order in edit mode
+  useEffect(() => {
+    if (!editId) return
+
+    const loadOrder = async () => {
+      setEditLoading(true)
+      try {
+        const response = await fetch(`/api/consignments/orders/${editId}`)
+        const data = await response.json()
+        if (data.success) {
+          const order = data.data
+          setIsEditMode(true)
+          setEntryMethod('manual')
+
+          // Set supplier
+          if (order.supplier) {
+            setSelectedSupplier({
+              id: order.supplier.id,
+              supplierCode: order.supplier.code || '',
+              name: order.supplier.name,
+              phone: order.supplier.phone || null,
+              email: order.supplier.email || null,
+              address: null,
+              city: null,
+              state: null,
+              fullAddress: ''
+            })
+          }
+
+          // Set warehouse
+          if (order.warehouse) {
+            setSelectedWarehouse({
+              id: order.warehouse.id,
+              code: order.warehouse.code || '',
+              name: order.warehouse.name
+            })
+          }
+
+          // Set date and notes
+          if (order.consignmentDate) {
+            const d = order.consignmentDate.split('T')[0]
+            setConsignmentDate(d)
+          }
+          if (order.notes) setNotes(order.notes)
+
+          // Set order lines
+          if (order.lines && order.lines.length > 0) {
+            const lines: OrderLine[] = order.lines.map((line: {
+              product: { id: number; name: string; sku: string; barcode: string | null; imageUrl: string | null }
+              variantId: number | null
+              variantName: string | null
+              variantSku: string | null
+              quantityOrdered: number
+              unitCost: number
+              unitPrice: number
+            }) => ({
+              productId: line.product.id,
+              productName: line.product.name,
+              productSku: line.product.sku || '',
+              productBarcode: line.product.barcode || '',
+              productImage: line.product.imageUrl || null,
+              variantId: line.variantId || undefined,
+              variantName: line.variantName || undefined,
+              variantSku: line.variantSku || undefined,
+              quantity: line.quantityOrdered,
+              unitCost: line.unitCost,
+              unitPrice: line.unitPrice
+            }))
+            setOrderLines(lines)
+          }
+
+          setCurrentStep('products')
+        }
+      } catch (error) {
+        console.error('Error loading consignment for edit:', error)
+      } finally {
+        setEditLoading(false)
+      }
+    }
+
+    loadOrder()
+  }, [editId])
 
   // Search products
   const searchProducts = useCallback(async (query: string) => {
@@ -1620,8 +1708,9 @@ export default function CreateConsignmentOrderPage() {
         isNewProduct: l.isNewProduct
       })))
 
-      const response = await fetch('/api/consignments/orders', {
-        method: 'POST',
+      const apiUrl = isEditMode ? `/api/consignments/orders/${editId}` : '/api/consignments/orders'
+      const response = await fetch(apiUrl, {
+        method: isEditMode ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           supplierId: selectedSupplier?.id,
@@ -1643,7 +1732,7 @@ export default function CreateConsignmentOrderPage() {
 
       const data = await response.json()
       if (data.success) {
-        const orderId = data.data.id
+        const orderId = isEditMode ? editId : data.data.id
 
         // Upload invoices if any
         if (invoiceFiles.length > 0) {

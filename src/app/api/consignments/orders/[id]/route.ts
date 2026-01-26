@@ -3,11 +3,16 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
 
-// Ensure accepted_by and accepted_at columns exist
+// Ensure validation columns exist
 async function ensureColumns() {
   try {
     await db.query(`ALTER TABLE consignment_orders ADD COLUMN IF NOT EXISTS accepted_by INTEGER REFERENCES users(id)`)
     await db.query(`ALTER TABLE consignment_orders ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP WITH TIME ZONE`)
+    // Validation columns for rejection workflow
+    await db.query(`ALTER TABLE consignment_orders ADD COLUMN IF NOT EXISTS validation_status VARCHAR(50) DEFAULT 'pending_validation'`)
+    await db.query(`ALTER TABLE consignment_orders ADD COLUMN IF NOT EXISTS rejection_reason TEXT`)
+    await db.query(`ALTER TABLE consignment_orders ADD COLUMN IF NOT EXISTS validated_by INTEGER REFERENCES users(id)`)
+    await db.query(`ALTER TABLE consignment_orders ADD COLUMN IF NOT EXISTS validated_at TIMESTAMP WITH TIME ZONE`)
   } catch (e) {
     // Columns might already exist, ignore
   }
@@ -67,6 +72,11 @@ export async function GET(
         COALESCE(u2.firstname || ' ' || u2.lastname, u2.email) as accepted_by_name,
         o.accepted_by,
         o.accepted_at,
+        o.validation_status,
+        o.rejection_reason,
+        o.validated_by,
+        o.validated_at,
+        COALESCE(u3.firstname || ' ' || u3.lastname, u3.email) as validated_by_name,
         COALESCE((
           SELECT SUM(ol.quantity_sold * ol.unit_price)
           FROM consignment_order_lines ol
@@ -77,6 +87,7 @@ export async function GET(
       JOIN market_warehouses w ON w.id = o.warehouse_id
       LEFT JOIN users u ON u.id = o.created_by
       LEFT JOIN users u2 ON u2.id = o.accepted_by
+      LEFT JOIN users u3 ON u3.id = o.validated_by
       WHERE o.id = $1 AND o.company_id = $2
     `, [orderId, payload.companyId])
 
@@ -155,6 +166,11 @@ export async function GET(
       acceptedByName: o.accepted_by_name || null,
       acceptedAt: o.accepted_at || null,
       needsAcceptance: o.created_by_role === 'MARKET_COMERCIAL' && !o.accepted_by,
+      // Validation fields
+      validationStatus: o.validation_status || 'pending_validation',
+      rejectionReason: o.rejection_reason || null,
+      validatedByName: o.validated_by_name || null,
+      validatedAt: o.validated_at || null,
       createdAt: o.created_at,
       lines: linesResult.rows.map(l => ({
         id: l.id,
@@ -248,6 +264,8 @@ export async function PUT(
         SET accepted_by = $1,
             accepted_at = NOW(),
             validation_status = 'confirmed',
+            validated_by = $1,
+            validated_at = NOW(),
             updated_at = NOW()
         WHERE id = $2
       `, [payload.userId, orderId])
@@ -255,6 +273,132 @@ export async function PUT(
       return NextResponse.json({
         success: true,
         message: 'Orden de consignación aceptada exitosamente'
+      })
+    }
+
+    // Handle reject action
+    if (action === 'reject') {
+      const { rejectionReason } = body
+
+      // Only MARKET_ADMIN, MARKET_MANAGER, MANAGER, ADMIN, SUPER_ADMIN can reject
+      const canReject = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKET_ADMIN', 'MARKET_MANAGER'].includes(payload.role)
+      if (!canReject) {
+        return NextResponse.json({
+          success: false,
+          error: 'No tiene permisos para rechazar órdenes'
+        }, { status: 403 })
+      }
+
+      await db.query(`
+        UPDATE consignment_orders
+        SET validation_status = 'rejected',
+            rejection_reason = $1,
+            validated_by = $2,
+            validated_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $3
+      `, [rejectionReason || 'Sin motivo especificado', payload.userId, orderId])
+
+      return NextResponse.json({
+        success: true,
+        message: 'Orden de consignación rechazada'
+      })
+    }
+
+    // Handle resubmit action (for rejected orders)
+    if (action === 'resubmit') {
+      // Check if order is rejected
+      const orderCheck = await db.query(
+        'SELECT validation_status FROM consignment_orders WHERE id = $1',
+        [orderId]
+      )
+
+      if (orderCheck.rows[0]?.validation_status !== 'rejected') {
+        return NextResponse.json({
+          success: false,
+          error: 'Solo se pueden reenviar a revisión órdenes rechazadas'
+        }, { status: 400 })
+      }
+
+      await db.query(`
+        UPDATE consignment_orders
+        SET validation_status = 'pending_validation',
+            validated_by = NULL,
+            validated_at = NULL,
+            rejection_reason = NULL,
+            updated_at = NOW()
+        WHERE id = $1
+      `, [orderId])
+
+      return NextResponse.json({
+        success: true,
+        message: 'Orden reenviada a revisión exitosamente'
+      })
+    }
+
+    // Handle edit action (full order update with lines)
+    const { lines, supplierId, warehouseId, consignmentDate } = body
+    if (lines && Array.isArray(lines)) {
+      // Check order can be edited (pending or rejected status)
+      const orderStatus = existing.rows[0].status
+      const validationStatus = await db.query(
+        'SELECT validation_status FROM consignment_orders WHERE id = $1',
+        [orderId]
+      )
+      const vs = validationStatus.rows[0]?.validation_status
+
+      // Allow edit if rejected or pending
+      if (orderStatus !== 'pending' && vs !== 'rejected') {
+        return NextResponse.json({
+          success: false,
+          error: 'Solo se pueden editar órdenes pendientes o rechazadas'
+        }, { status: 400 })
+      }
+
+      // Delete existing lines
+      await db.query('DELETE FROM consignment_order_lines WHERE order_id = $1', [orderId])
+
+      // Insert new lines
+      let totalItems = 0
+      let totalUnits = 0
+      let totalCost = 0
+
+      for (const line of lines) {
+        if (line.productId > 0) {
+          await db.query(`
+            INSERT INTO consignment_order_lines (
+              order_id, product_id, variant_id, quantity_ordered, unit_cost, unit_price
+            ) VALUES ($1, $2, $3, $4, $5, $6)
+          `, [orderId, line.productId, line.variantId || null, line.quantity, line.unitCost, line.unitPrice || 0])
+
+          totalItems++
+          totalUnits += line.quantity
+          totalCost += line.quantity * line.unitCost
+        }
+      }
+
+      // Update order totals and reset validation status to pending
+      await db.query(`
+        UPDATE consignment_orders
+        SET supplier_id = COALESCE($1, supplier_id),
+            warehouse_id = COALESCE($2, warehouse_id),
+            consignment_date = COALESCE($3, consignment_date),
+            notes = COALESCE($4, notes),
+            total_items = $5,
+            total_units = $6,
+            total_cost = $7,
+            validation_status = 'pending_validation',
+            validated_by = NULL,
+            validated_at = NULL,
+            rejection_reason = NULL,
+            updated_at = NOW()
+        WHERE id = $8
+      `, [supplierId, warehouseId, consignmentDate, notes, totalItems, totalUnits, totalCost, orderId])
+
+      return NextResponse.json({
+        success: true,
+        message: 'Orden actualizada exitosamente',
+        data: { id: orderId }
       })
     }
 
