@@ -40,6 +40,23 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || ''
     const excludeCurrentUser = searchParams.get('excludeSelf') !== 'false'
 
+    // Build query dynamically to handle optional parameters
+    const params: (string | number)[] = [payload.companyId]
+    let paramIndex = 2
+
+    let whereClause = `WHERE (u.status IS NULL OR u.status != 'inactive')`
+
+    if (excludeCurrentUser) {
+      whereClause += ` AND u.id != $${paramIndex}`
+      params.push(payload.userId)
+      paramIndex++
+    }
+
+    if (search) {
+      whereClause += ` AND (u.name ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex})`
+      params.push(`%${search}%`)
+    }
+
     // Get all users in the company
     const result = await db.query(`
       SELECT
@@ -57,9 +74,7 @@ export async function GET(request: NextRequest) {
       FROM users u
       JOIN user_companies uc ON uc.user_id = u.id AND uc.company_id = $1
       LEFT JOIN chat_presence p ON p.user_id = u.id
-      WHERE u.status != 'inactive'
-        ${excludeCurrentUser ? `AND u.id != $2` : ''}
-        ${search ? `AND (u.name ILIKE $3 OR u.email ILIKE $3)` : ''}
+      ${whereClause}
       ORDER BY
         CASE
           WHEN p.last_seen_at > NOW() - INTERVAL '2 minutes' THEN 0
@@ -67,10 +82,7 @@ export async function GET(request: NextRequest) {
           ELSE 2
         END,
         u.name ASC
-    `, search
-      ? [payload.companyId, payload.userId, `%${search}%`]
-      : [payload.companyId, payload.userId]
-    )
+    `, params)
 
     const users = result.rows.map(u => ({
       id: u.id,
@@ -78,7 +90,7 @@ export async function GET(request: NextRequest) {
       email: u.email,
       role: u.role,
       presence: {
-        status: u.computed_status,
+        status: u.computed_status || 'offline',
         lastSeenAt: u.last_seen_at
       }
     }))

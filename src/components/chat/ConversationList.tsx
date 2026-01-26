@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react'
 import { useTheme } from '@/contexts/theme-context'
 import { useChatContext } from '@/contexts/ChatContext'
 import { cn } from '@/lib/utils'
-import { Search, Plus, User, Users, Megaphone, Loader2 } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Search, Plus, User, Users, Megaphone, Loader2, MessageSquarePlus } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -33,13 +34,13 @@ export function ConversationList({ onNewConversation }: ConversationListProps) {
   const getConversationIcon = (type: string) => {
     switch (type) {
       case 'private':
-        return <User className="w-4 h-4" />
+        return <User className="w-5 h-5" />
       case 'group':
-        return <Users className="w-4 h-4" />
+        return <Users className="w-5 h-5" />
       case 'channel':
-        return <Megaphone className="w-4 h-4" />
+        return <Megaphone className="w-5 h-5" />
       default:
-        return <User className="w-4 h-4" />
+        return <User className="w-5 h-5" />
     }
   }
 
@@ -51,7 +52,7 @@ export function ConversationList({ onNewConversation }: ConversationListProps) {
   }
 
   const getLastMessagePreview = (conv: typeof conversations[0]) => {
-    if (!conv.lastMessage) return 'Sin mensajes'
+    if (!conv.lastMessage) return 'Sin mensajes aun'
     const msg = conv.lastMessage
     switch (msg.message_type) {
       case 'image':
@@ -61,7 +62,7 @@ export function ConversationList({ onNewConversation }: ConversationListProps) {
       case 'file':
         return '📎 Archivo'
       default:
-        return msg.content?.substring(0, 50) || ''
+        return msg.content?.substring(0, 40) + (msg.content && msg.content.length > 40 ? '...' : '') || ''
     }
   }
 
@@ -76,151 +77,193 @@ export function ConversationList({ onNewConversation }: ConversationListProps) {
     }
   }
 
+  const getAvatarGradient = (name: string, type: string) => {
+    if (type === 'channel') return 'from-purple-500 to-pink-500'
+    if (type === 'group') return 'from-blue-500 to-cyan-500'
+
+    const colors = [
+      'from-pink-500 to-rose-500',
+      'from-violet-500 to-purple-500',
+      'from-blue-500 to-cyan-500',
+      'from-emerald-500 to-teal-500',
+      'from-orange-500 to-amber-500',
+    ]
+    const index = name.charCodeAt(0) % colors.length
+    return colors[index]
+  }
+
   return (
-    <div className="flex flex-col h-[calc(100%-3.5rem)]">
+    <div className="flex flex-col h-[calc(100%-4rem)]">
       {/* Search and new button */}
-      <div className="p-3 flex gap-2">
+      <div className="p-4 flex gap-2">
         <div className={cn(
-          'flex-1 relative rounded-lg',
-          theme === 'dark' ? 'bg-gray-700' : 'bg-white border border-gray-200'
+          'flex-1 relative rounded-xl overflow-hidden',
+          theme === 'dark'
+            ? 'bg-gray-800/50 focus-within:bg-gray-800 focus-within:ring-2 focus-within:ring-blue-500/50'
+            : 'bg-white focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:shadow-lg border border-gray-200'
         )}>
           <Search className={cn(
             'absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4',
-            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+            theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
           )} />
           <input
             type="text"
-            placeholder="Buscar..."
+            placeholder="Buscar chat..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className={cn(
-              'w-full pl-9 pr-3 py-2 text-sm bg-transparent rounded-lg outline-none',
-              theme === 'dark' ? 'text-white placeholder-gray-400' : 'text-gray-900 placeholder-gray-500'
+              'w-full pl-10 pr-4 py-3 text-sm bg-transparent outline-none',
+              theme === 'dark' ? 'text-white placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'
             )}
           />
         </div>
-        <button
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           onClick={() => onNewConversation('private')}
           className={cn(
-            'p-2 rounded-lg transition-colors',
-            theme === 'dark'
-              ? 'bg-blue-600 hover:bg-blue-700 text-white'
-              : 'bg-blue-500 hover:bg-blue-600 text-white'
+            'p-3 rounded-xl transition-all',
+            'bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600',
+            'text-white shadow-lg shadow-blue-500/25'
           )}
         >
-          <Plus className="w-5 h-5" />
-        </button>
+          <MessageSquarePlus className="w-5 h-5" />
+        </motion.button>
       </div>
 
       {/* Conversation list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto px-2">
         {isLoadingConversations && conversations.length === 0 ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className={cn(
-              'w-6 h-6 animate-spin',
-              theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-            )} />
+          <div className="flex items-center justify-center py-12">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+            >
+              <Loader2 className={cn(
+                'w-8 h-8',
+                theme === 'dark' ? 'text-blue-400' : 'text-blue-500'
+              )} />
+            </motion.div>
           </div>
         ) : conversations.length === 0 ? (
-          <div className="px-4 py-8 text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="px-4 py-12 text-center"
+          >
+            <div className={cn(
+              'w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center',
+              theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+            )}>
+              <MessageSquarePlus className={cn(
+                'w-8 h-8',
+                theme === 'dark' ? 'text-gray-600' : 'text-gray-400'
+              )} />
+            </div>
             <p className={cn(
-              'text-sm mb-2',
+              'text-sm mb-3',
               theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
             )}>
               No hay conversaciones
             </p>
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => onNewConversation('private')}
               className={cn(
-                'text-sm font-medium',
-                theme === 'dark' ? 'text-blue-400' : 'text-blue-500'
+                'text-sm font-semibold px-4 py-2 rounded-lg',
+                theme === 'dark'
+                  ? 'text-blue-400 hover:bg-blue-500/10'
+                  : 'text-blue-500 hover:bg-blue-50'
               )}
             >
               Iniciar una conversacion
-            </button>
-          </div>
+            </motion.button>
+          </motion.div>
         ) : (
-          conversations.map(conv => (
-            <button
-              key={conv.id}
-              onClick={() => selectConversation(conv.id)}
-              className={cn(
-                'w-full px-4 py-3 flex items-start gap-3 transition-colors text-left border-b',
-                theme === 'dark' ? 'border-gray-700' : 'border-gray-100',
-                activeConversation?.id === conv.id
-                  ? theme === 'dark'
-                    ? 'bg-gray-700'
-                    : 'bg-blue-50'
-                  : theme === 'dark'
-                    ? 'hover:bg-gray-700/50'
-                    : 'hover:bg-gray-50'
-              )}
-            >
-              {/* Avatar */}
-              <div className={cn(
-                'w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0',
-                conv.type === 'channel'
-                  ? theme === 'dark' ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600'
-                  : conv.type === 'group'
-                    ? theme === 'dark' ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'
-                    : theme === 'dark' ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-600'
-              )}>
-                {conv.avatarUrl ? (
-                  <img src={conv.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
-                ) : conv.type === 'private' && conv.otherParticipant ? (
-                  <span className="text-lg font-semibold">
-                    {conv.otherParticipant.name.charAt(0).toUpperCase()}
-                  </span>
-                ) : (
-                  getConversationIcon(conv.type)
+          <AnimatePresence>
+            {conversations.map((conv, index) => (
+              <motion.button
+                key={conv.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ delay: index * 0.03 }}
+                onClick={() => selectConversation(conv.id)}
+                className={cn(
+                  'w-full p-3 flex items-center gap-3 transition-all text-left rounded-xl mb-1 group',
+                  activeConversation?.id === conv.id
+                    ? theme === 'dark'
+                      ? 'bg-gradient-to-r from-blue-600/20 to-cyan-600/20 border border-blue-500/30'
+                      : 'bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200'
+                    : theme === 'dark'
+                      ? 'hover:bg-white/5'
+                      : 'hover:bg-gray-50'
                 )}
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-1">
-                  <span className={cn(
-                    'font-semibold truncate',
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+              >
+                {/* Avatar */}
+                <div className="relative">
+                  <div className={cn(
+                    'w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold shadow-lg',
+                    'bg-gradient-to-br',
+                    getAvatarGradient(getConversationName(conv), conv.type)
                   )}>
-                    {getConversationName(conv)}
-                  </span>
-                  {conv.lastMessage && (
-                    <span className={cn(
-                      'text-xs flex-shrink-0 ml-2',
-                      theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
-                    )}>
-                      {formatTime(conv.lastMessage.created_at)}
-                    </span>
+                    {conv.avatarUrl ? (
+                      <img src={conv.avatarUrl} alt="" className="w-full h-full rounded-xl object-cover" />
+                    ) : conv.type === 'private' && conv.otherParticipant ? (
+                      <span className="text-lg">
+                        {conv.otherParticipant.name.charAt(0).toUpperCase()}
+                      </span>
+                    ) : (
+                      getConversationIcon(conv.type)
+                    )}
+                  </div>
+                  {conv.unreadCount > 0 && (
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className={cn(
+                        'absolute -top-1 -right-1 min-w-5 h-5 px-1.5 rounded-full flex items-center justify-center',
+                        'bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold shadow-lg'
+                      )}
+                    >
+                      {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
+                    </motion.div>
                   )}
                 </div>
-                <div className="flex items-center justify-between">
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={cn(
+                      'font-semibold truncate',
+                      activeConversation?.id === conv.id
+                        ? theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                        : theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      {getConversationName(conv)}
+                    </span>
+                    {conv.lastMessage && (
+                      <span className={cn(
+                        'text-xs flex-shrink-0 ml-2',
+                        theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                      )}>
+                        {formatTime(conv.lastMessage.created_at)}
+                      </span>
+                    )}
+                  </div>
                   <p className={cn(
                     'text-sm truncate',
-                    theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                    conv.unreadCount > 0
+                      ? theme === 'dark' ? 'text-gray-300 font-medium' : 'text-gray-700 font-medium'
+                      : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
                   )}>
                     {getLastMessagePreview(conv)}
                   </p>
-                  {conv.unreadCount > 0 && (
-                    <span className={cn(
-                      'ml-2 px-2 py-0.5 text-xs font-semibold rounded-full flex-shrink-0',
-                      'bg-blue-500 text-white'
-                    )}>
-                      {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
-                    </span>
-                  )}
                 </div>
-                {conv.type !== 'private' && (
-                  <p className={cn(
-                    'text-xs mt-1',
-                    theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
-                  )}>
-                    {conv.participantCount} {conv.participantCount === 1 ? 'miembro' : 'miembros'}
-                  </p>
-                )}
-              </div>
-            </button>
-          ))
+              </motion.button>
+            ))}
+          </AnimatePresence>
         )}
       </div>
     </div>

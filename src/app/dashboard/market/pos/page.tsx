@@ -289,6 +289,26 @@ export default function MarketPOSPage() {
 
       // Build report data
       const today = new Date()
+
+      // Aggregate payments by currency for salesByCurrency
+      const paymentsByMethod = sessionData?.paymentsByMethod || []
+      const currencyTotals: Record<string, { amount: number; transactionCount: number }> = {}
+
+      for (const p of paymentsByMethod) {
+        const currency = p.currency || 'USD'
+        if (!currencyTotals[currency]) {
+          currencyTotals[currency] = { amount: 0, transactionCount: 0 }
+        }
+        currencyTotals[currency].amount += p.amount || 0
+        currencyTotals[currency].transactionCount += p.count || 0
+      }
+
+      const salesByCurrency = Object.entries(currencyTotals).map(([currency, data]) => ({
+        currency,
+        amount: data.amount,
+        transactionCount: data.transactionCount
+      }))
+
       const reportData: Record<string, unknown> = {
         terminalId: terminal.id,
         terminalCode: terminal.code,
@@ -303,12 +323,14 @@ export default function MarketPOSPage() {
         grossSales: sessionData?.summary?.totalSales || 0,
         discounts: sessionData?.summary?.totalDiscounts || 0,
         netSales: (sessionData?.summary?.totalSales || 0) - (sessionData?.summary?.totalDiscounts || 0),
-        // Payment breakdown
-        salesByPayment: sessionData?.payments?.map((p: { paymentMethod: string; currency: string; totalAmount: number; count: number }) => ({
-          paymentMethod: `${p.paymentMethod} (${p.currency})`,
+        // Payment breakdown by method+currency
+        salesByPayment: paymentsByMethod.map((p: { method: string; currency: string; amount: number; count: number }) => ({
+          paymentMethod: `${p.method} (${p.currency})`,
           transactionCount: p.count,
-          total: p.totalAmount
-        })) || [],
+          total: p.amount
+        })),
+        // Sales breakdown by currency
+        salesByCurrency,
         // Top products
         topProducts: salesData?.sales?.slice(0, 10).map((s: { productName: string; totalSold: number; totalAmount: number }) => ({
           name: s.productName,

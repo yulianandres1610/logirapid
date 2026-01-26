@@ -6,8 +6,9 @@ import { useChatContext } from '@/contexts/ChatContext'
 import { cn } from '@/lib/utils'
 import { MessageBubble } from './MessageBubble'
 import { MessageInput } from './MessageInput'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
-  User, Users, Megaphone, Settings, Pin, Loader2, ChevronDown
+  User, Users, Megaphone, Settings, Pin, Loader2, ChevronDown, MoreVertical
 } from 'lucide-react'
 
 interface ReplyingTo {
@@ -91,161 +92,247 @@ export function ChatThread() {
     return activeConversation.name || 'Sin nombre'
   }
 
+  const getHeaderGradient = () => {
+    switch (activeConversation?.type) {
+      case 'channel':
+        return 'from-purple-500 to-pink-500'
+      case 'group':
+        return 'from-blue-500 to-cyan-500'
+      default:
+        return 'from-emerald-500 to-teal-500'
+    }
+  }
+
+  const getAvatarInitial = () => {
+    const name = getConversationName()
+    return name.charAt(0).toUpperCase()
+  }
+
   if (!activeConversation) return null
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
       {/* Header */}
-      <div className={cn(
-        'h-14 px-4 flex items-center justify-between border-b flex-shrink-0',
-        theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
-      )}>
-        <div className="flex items-center gap-3">
-          <div className={cn(
-            'w-10 h-10 rounded-full flex items-center justify-center',
-            activeConversation.type === 'channel'
-              ? theme === 'dark' ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600'
-              : activeConversation.type === 'group'
-                ? theme === 'dark' ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'
-                : theme === 'dark' ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-600'
-          )}>
-            {getConversationIcon()}
-          </div>
+      <motion.div
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className={cn(
+          'h-16 px-5 flex items-center justify-between border-b flex-shrink-0',
+          theme === 'dark'
+            ? 'border-gray-800 bg-gradient-to-r from-gray-900/80 to-gray-950/80 backdrop-blur-xl'
+            : 'border-gray-100 bg-gradient-to-r from-white/80 to-gray-50/80 backdrop-blur-xl'
+        )}
+      >
+        <div className="flex items-center gap-4">
+          <motion.div
+            whileHover={{ scale: 1.05 }}
+            className={cn(
+              'w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg',
+              'bg-gradient-to-br',
+              getHeaderGradient()
+            )}
+          >
+            {activeConversation.avatarUrl ? (
+              <img src={activeConversation.avatarUrl} alt="" className="w-full h-full rounded-xl object-cover" />
+            ) : activeConversation.type === 'private' ? (
+              getAvatarInitial()
+            ) : (
+              getConversationIcon()
+            )}
+          </motion.div>
           <div>
             <h2 className={cn(
-              'font-semibold',
+              'font-bold text-lg',
               theme === 'dark' ? 'text-white' : 'text-gray-900'
             )}>
               {getConversationName()}
             </h2>
             <p className={cn(
-              'text-xs',
+              'text-xs flex items-center gap-2',
               theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
             )}>
-              {activeConversation.type === 'private'
-                ? 'Chat privado'
-                : `${participants.length} miembros`}
+              {activeConversation.type === 'private' ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  En linea
+                </>
+              ) : (
+                <>
+                  <Users className="w-3 h-3" />
+                  {participants.length} miembros
+                </>
+              )}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           {pinnedMessages.length > 0 && (
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => setShowPinnedMessages(!showPinnedMessages)}
               className={cn(
-                'p-2 rounded-lg flex items-center gap-1 text-sm transition-colors',
+                'px-3 py-2 rounded-xl flex items-center gap-2 text-sm font-medium transition-all',
                 showPinnedMessages
-                  ? theme === 'dark' ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-100 text-yellow-600'
-                  : theme === 'dark' ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/25'
+                  : theme === 'dark'
+                    ? 'hover:bg-gray-800 text-gray-400'
+                    : 'hover:bg-gray-100 text-gray-500'
               )}
             >
               <Pin className="w-4 h-4" />
               <span>{pinnedMessages.length}</span>
-            </button>
+            </motion.button>
           )}
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             className={cn(
-              'p-2 rounded-lg transition-colors',
-              theme === 'dark' ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+              'p-2.5 rounded-xl transition-all',
+              theme === 'dark' ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
             )}
           >
-            <Settings className="w-5 h-5" />
-          </button>
+            <MoreVertical className="w-5 h-5" />
+          </motion.button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Pinned messages banner */}
-      {showPinnedMessages && pinnedMessages.length > 0 && (
-        <div className={cn(
-          'p-3 border-b max-h-48 overflow-y-auto',
-          theme === 'dark' ? 'bg-yellow-900/20 border-yellow-900/50' : 'bg-yellow-50 border-yellow-200'
-        )}>
-          <div className="flex items-center gap-2 mb-2">
-            <Pin className={cn(
-              'w-4 h-4',
-              theme === 'dark' ? 'text-yellow-400' : 'text-yellow-600'
-            )} />
-            <span className={cn(
-              'text-sm font-semibold',
-              theme === 'dark' ? 'text-yellow-400' : 'text-yellow-700'
-            )}>
-              Mensajes fijados
-            </span>
-          </div>
-          {pinnedMessages.map(msg => (
-            <div
-              key={msg.id}
-              className={cn(
-                'p-2 rounded-lg text-sm mb-1 last:mb-0',
-                theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-              )}
-            >
-              <span className={cn(
-                'font-medium',
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              )}>
-                {msg.sender.name}:
-              </span>{' '}
-              <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}>
-                {msg.content?.substring(0, 100)}
-              </span>
+      <AnimatePresence>
+        {showPinnedMessages && pinnedMessages.length > 0 && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className={cn(
+              'border-b overflow-hidden',
+              theme === 'dark'
+                ? 'bg-gradient-to-r from-amber-900/20 to-orange-900/20 border-amber-800/30'
+                : 'bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200'
+            )}
+          >
+            <div className="p-4 max-h-48 overflow-y-auto">
+              <div className="flex items-center gap-2 mb-3">
+                <div className={cn(
+                  'w-6 h-6 rounded-lg flex items-center justify-center',
+                  'bg-gradient-to-br from-amber-500 to-orange-500'
+                )}>
+                  <Pin className="w-3.5 h-3.5 text-white" />
+                </div>
+                <span className={cn(
+                  'text-sm font-bold',
+                  theme === 'dark' ? 'text-amber-400' : 'text-amber-700'
+                )}>
+                  Mensajes fijados
+                </span>
+              </div>
+              {pinnedMessages.map((msg, index) => (
+                <motion.div
+                  key={msg.id}
+                  initial={{ x: -20, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ delay: index * 0.05 }}
+                  className={cn(
+                    'p-3 rounded-xl text-sm mb-2 last:mb-0 border-l-2 border-amber-500',
+                    theme === 'dark' ? 'bg-gray-800/50' : 'bg-white shadow-sm'
+                  )}
+                >
+                  <span className={cn(
+                    'font-semibold',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>
+                    {msg.sender.name}:
+                  </span>{' '}
+                  <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}>
+                    {msg.content?.substring(0, 100)}
+                  </span>
+                </motion.div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Messages */}
       <div
         ref={messagesContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-4 py-4"
+        className={cn(
+          'flex-1 overflow-y-auto px-4 py-4',
+          theme === 'dark'
+            ? 'bg-gradient-to-b from-gray-950 to-gray-900'
+            : 'bg-gradient-to-b from-gray-50/50 to-white'
+        )}
       >
         {/* Loading more */}
         {isLoadingMessages && (
-          <div className="flex justify-center py-4">
-            <Loader2 className={cn(
-              'w-6 h-6 animate-spin',
-              theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-            )} />
-          </div>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex justify-center py-4"
+          >
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+            >
+              <Loader2 className={cn(
+                'w-6 h-6',
+                theme === 'dark' ? 'text-blue-400' : 'text-blue-500'
+              )} />
+            </motion.div>
+          </motion.div>
         )}
 
         {/* Messages */}
-        {messages.map((message, index) => {
-          const prevMessage = messages[index - 1]
-          const showSender = !prevMessage ||
-            prevMessage.sender.id !== message.sender.id ||
-            new Date(message.createdAt).getTime() - new Date(prevMessage.createdAt).getTime() > 300000
+        <AnimatePresence>
+          {messages.map((message, index) => {
+            const prevMessage = messages[index - 1]
+            const showSender = !prevMessage ||
+              prevMessage.sender.id !== message.sender.id ||
+              new Date(message.createdAt).getTime() - new Date(prevMessage.createdAt).getTime() > 300000
 
-          return (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              showSender={showSender}
-              onReply={() => handleReply(message)}
-              isOwnMessage={false} // Will be determined in the component
-            />
-          )
-        })}
+            return (
+              <motion.div
+                key={message.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(index * 0.02, 0.3) }}
+              >
+                <MessageBubble
+                  message={message}
+                  showSender={showSender}
+                  onReply={() => handleReply(message)}
+                  isOwnMessage={false}
+                />
+              </motion.div>
+            )
+          })}
+        </AnimatePresence>
 
         <div ref={messagesEndRef} />
       </div>
 
       {/* Scroll to bottom button */}
-      {showScrollButton && (
-        <button
-          onClick={scrollToBottom}
-          className={cn(
-            'absolute bottom-24 right-8 p-2 rounded-full shadow-lg transition-all',
-            theme === 'dark'
-              ? 'bg-gray-700 hover:bg-gray-600 text-white'
-              : 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200'
-          )}
-        >
-          <ChevronDown className="w-5 h-5" />
-        </button>
-      )}
+      <AnimatePresence>
+        {showScrollButton && (
+          <motion.button
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={scrollToBottom}
+            className={cn(
+              'absolute bottom-24 right-6 p-3 rounded-full shadow-lg transition-all z-10',
+              'bg-gradient-to-r from-blue-500 to-cyan-500 text-white',
+              'shadow-blue-500/25 hover:shadow-blue-500/40'
+            )}
+          >
+            <ChevronDown className="w-5 h-5" />
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       {/* Input */}
       <MessageInput
