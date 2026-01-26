@@ -1725,17 +1725,44 @@ export default function CreatePurchasePage() {
         // Upload invoices if any (only for new purchases)
         if (!isEditMode && invoiceFiles.length > 0) {
           try {
-            const formData = new FormData()
-            invoiceFiles.forEach(inv => {
-              formData.append('files', inv.file)
-            })
-            formData.append('orderType', 'purchase')
-            formData.append('orderId', purchaseId!.toString())
+            // Separate phone-uploaded invoices (already in storage) from local files
+            const localFileInvoices = invoiceFiles.filter(inv => inv.file && !inv.storagePath)
+            const phoneUploadedInvoices = invoiceFiles.filter(inv => inv.storagePath && inv.uploaded)
 
-            await fetch('/api/upload/order-invoices', {
-              method: 'POST',
-              body: formData
-            })
+            // Upload local files
+            if (localFileInvoices.length > 0) {
+              const formData = new FormData()
+              localFileInvoices.forEach(inv => {
+                if (inv.file) {
+                  formData.append('files', inv.file)
+                }
+              })
+              formData.append('orderType', 'purchase')
+              formData.append('orderId', purchaseId!.toString())
+
+              await fetch('/api/upload/order-invoices', {
+                method: 'POST',
+                body: formData
+              })
+            }
+
+            // Register phone-uploaded invoices (already in storage)
+            if (phoneUploadedInvoices.length > 0) {
+              await fetch('/api/upload/order-invoices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  orderType: 'purchase',
+                  orderId: purchaseId,
+                  existingFiles: phoneUploadedInvoices.map(inv => ({
+                    storagePath: inv.storagePath,
+                    fileName: inv.name,
+                    fileType: inv.type,
+                    fileSize: inv.size || 0
+                  }))
+                })
+              })
+            }
           } catch (uploadError) {
             console.error('Error uploading invoices:', uploadError)
           }

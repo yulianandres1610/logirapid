@@ -79,6 +79,87 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    // Check if this is a JSON request (for registering already-uploaded files from phone)
+    const contentType = request.headers.get('content-type') || ''
+
+    if (contentType.includes('application/json')) {
+      // Handle JSON request - register existing files uploaded via phone
+      const body = await request.json()
+      const { orderType, orderId, existingFiles } = body
+
+      if (!orderType || !['consignment', 'purchase'].includes(orderType)) {
+        return NextResponse.json({
+          success: false,
+          error: 'orderType debe ser "consignment" o "purchase"'
+        }, { status: 400 })
+      }
+
+      if (!orderId) {
+        return NextResponse.json({
+          success: false,
+          error: 'orderId es requerido'
+        }, { status: 400 })
+      }
+
+      if (!existingFiles || !Array.isArray(existingFiles) || existingFiles.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'No se proporcionaron archivos existentes'
+        }, { status: 400 })
+      }
+
+      console.log(`[ORDER INVOICES] Registering ${existingFiles.length} phone-uploaded file(s) for ${orderType} ${orderId}`)
+
+      const registeredInvoices: any[] = []
+
+      for (const file of existingFiles) {
+        try {
+          const insertQuery = orderType === 'consignment'
+            ? `INSERT INTO order_invoices (consignment_order_id, file_name, original_name, storage_path, file_type, file_size, company_id, uploaded_by)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`
+            : `INSERT INTO order_invoices (purchase_id, file_name, original_name, storage_path, file_type, file_size, company_id, uploaded_by)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`
+
+          const fileName = file.storagePath.split('/').pop() || file.fileName
+
+          const result = await db.query(insertQuery, [
+            parseInt(orderId),
+            fileName,
+            file.fileName,
+            file.storagePath,
+            file.fileType || 'image/jpeg',
+            file.fileSize || 0,
+            payload.companyId,
+            payload.userId
+          ])
+
+          registeredInvoices.push({
+            id: result.rows[0].id,
+            fileName: fileName,
+            originalName: file.fileName,
+            storagePath: file.storagePath,
+            fileType: file.fileType,
+            fileSize: file.fileSize
+          })
+        } catch (dbError) {
+          console.error('[ORDER INVOICES] Error registering phone-uploaded file:', dbError)
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          invoices: registeredInvoices,
+          registeredCount: registeredInvoices.length,
+          totalCount: existingFiles.length,
+          orderType,
+          orderId: parseInt(orderId)
+        },
+        message: 'Archivos registrados exitosamente'
+      })
+    }
+
+    // Handle FormData request - upload new files
     const formData = await request.formData()
     const files = formData.getAll('files') as File[]
     const orderType = formData.get('orderType') as 'consignment' | 'purchase'
