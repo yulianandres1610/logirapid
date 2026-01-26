@@ -31,7 +31,7 @@ export function MessageInput({
   userRole
 }: MessageInputProps) {
   const { theme } = useTheme()
-  const { sendMessage, activeConversation } = useChatContext()
+  const { sendMessage, activeConversation, pendingChat } = useChatContext()
 
   const [content, setContent] = useState('')
   const [isSending, setIsSending] = useState(false)
@@ -49,7 +49,7 @@ export function MessageInput({
   const canPost = conversationType !== 'channel' || userRole === 'admin'
 
   const handleSend = async () => {
-    if (!content.trim() || isSending || !activeConversation) return
+    if (!content.trim() || isSending || (!activeConversation && !pendingChat)) return
 
     setIsSending(true)
     try {
@@ -69,7 +69,7 @@ export function MessageInput({
   }
 
   const handleFileUpload = async (file: File, messageType: 'image' | 'file' | 'audio') => {
-    if (!activeConversation) return
+    if (!activeConversation && !pendingChat) return
 
     const formData = new FormData()
     formData.append('file', file)
