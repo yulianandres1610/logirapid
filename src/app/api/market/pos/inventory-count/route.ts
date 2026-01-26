@@ -355,6 +355,8 @@ export async function POST(request: NextRequest) {
       const stockMap: Record<string, number> = {}
       // También mantener suma de todas las variantes por producto (para conteos sin variant_id)
       const stockSumByProduct: Record<number, number> = {}
+      // Stock a nivel producto (variant_id IS NULL) - puede ser stock antiguo no migrado
+      const productLevelStock: Record<number, number> = {}
 
       stockResult.rows.forEach(row => {
         const productId = parseInt(row.product_id)
@@ -367,6 +369,9 @@ export async function POST(request: NextRequest) {
         // Si es un registro de variante (variant_id no es null), sumar al total del producto
         if (variantId !== null) {
           stockSumByProduct[productId] = (stockSumByProduct[productId] || 0) + stockQty
+        } else {
+          // Guardar stock a nivel producto (sin variante)
+          productLevelStock[productId] = stockQty
         }
       })
 
@@ -388,18 +393,25 @@ export async function POST(request: NextRequest) {
 
         // Buscar stock según el tipo de línea:
         // 1. Si la línea tiene variant_id específico, buscar stock de esa variante
+        //    IMPORTANTE: También sumar stock a nivel producto si existe (stock antiguo no migrado)
         // 2. Si la línea NO tiene variant_id (conteo agregado de producto):
         //    a. Primero buscar registro de stock a nivel producto (variant_id IS NULL)
         //    b. Si no existe, SUMAR todos los stocks de variantes del producto
         let currentStock = stockMap[stockKey] || 0
 
-        if (currentStock === 0 && !line.variantId) {
-          // No hay stock a nivel producto, usar suma de variantes
+        if (line.variantId) {
+          // Contando una variante específica
+          // También sumar stock a nivel producto si existe - puede ser stock antiguo no migrado
+          // cuando se agregaron variantes al producto
+          const oldProductStock = productLevelStock[line.productId] || 0
+          if (oldProductStock > 0) {
+            console.log(`[Inventory Count] Producto ${line.productId} variante ${line.variantId}: sumando stock nivel producto (${oldProductStock}) + stock variante (${currentStock})`)
+            currentStock += oldProductStock
+          }
+        } else if (currentStock === 0) {
+          // Contando producto sin variante y no hay stock a nivel producto
+          // Usar suma de todas las variantes
           currentStock = stockSumByProduct[line.productId] || 0
-        } else if (currentStock === 0 && line.variantId) {
-          // Si buscamos una variante específica y no hay, intentar nivel producto
-          const productKey = `${line.productId}:null`
-          currentStock = stockMap[productKey] || 0
         }
         // Stock esperado = Stock inicial del día - Vendido = (currentStock + soldToday) - soldToday = currentStock
         const expectedQuantity = currentStock

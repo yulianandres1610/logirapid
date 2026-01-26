@@ -254,6 +254,23 @@ export async function POST(request: NextRequest) {
               SET quantity_on_hand = $1, updated_at = NOW()
               WHERE id = $2
             `, [line.counted_quantity, line.variant_id])
+
+            // IMPORTANTE: Si hay stock "huérfano" a nivel producto (sin variant_id),
+            // debemos eliminarlo porque ya fue incluido en el conteo de la variante
+            // Esto evita duplicación futura del stock
+            const orphanStock = await db.query(`
+              SELECT id, quantity_on_hand FROM market_warehouse_stock
+              WHERE product_id = $1 AND warehouse_id = $2 AND variant_id IS NULL
+            `, [line.product_id, count.warehouse_id])
+
+            if (orphanStock.rows.length > 0 && parseFloat(orphanStock.rows[0].quantity_on_hand) > 0) {
+              console.log(`[Inventory Count Approve] Limpiando stock huérfano (sin variante) para producto ${line.product_id}: ${orphanStock.rows[0].quantity_on_hand} unidades`)
+              await db.query(`
+                UPDATE market_warehouse_stock
+                SET quantity_on_hand = 0, updated_at = NOW()
+                WHERE product_id = $1 AND warehouse_id = $2 AND variant_id IS NULL
+              `, [line.product_id, count.warehouse_id])
+            }
           } else {
             // Update main product stock (only if no variant)
             await db.query(`
