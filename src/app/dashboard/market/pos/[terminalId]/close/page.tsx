@@ -1,9 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { motion } from 'framer-motion'
 import {
-  DollarSign,
   ChevronLeft,
   CheckCircle,
   AlertCircle,
@@ -17,7 +15,11 @@ import {
   AlertTriangle,
   Plus,
   Minus,
-  X
+  X,
+  CreditCard,
+  Banknote,
+  ShoppingCart,
+  Percent
 } from 'lucide-react'
 import { useRouter, useParams } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -61,7 +63,6 @@ interface InventoryCountSummary {
   completedAt: string | null
 }
 
-// Denominations for each currency
 const USD_DENOMINATIONS = [
   { value: 100, label: '$100' },
   { value: 50, label: '$50' },
@@ -79,8 +80,6 @@ const CUP_DENOMINATIONS = [
   { value: 100, label: '100' },
   { value: 50, label: '50' },
   { value: 20, label: '20' },
-  { value: 10, label: '10' },
-  { value: 5, label: '5' },
 ]
 
 const MLC_DENOMINATIONS = [
@@ -110,14 +109,12 @@ export default function CloseSessionPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [forceClosing, setForceClosing] = useState(false)
 
-  // Denomination counts
   const [usdCounts, setUsdCounts] = useState<Record<number, number>>({})
   const [cupCounts, setCupCounts] = useState<Record<number, number>>({})
   const [mlcCounts, setMlcCounts] = useState<Record<number, number>>({})
   const [activeTab, setActiveTab] = useState<CurrencyTab>('usd')
   const [closingNotes, setClosingNotes] = useState('')
 
-  // Calculate totals from denominations
   const calculateTotal = useCallback((counts: Record<number, number>, denominations: typeof USD_DENOMINATIONS) => {
     return denominations.reduce((sum, d) => sum + (counts[d.value] || 0) * d.value, 0)
   }, [])
@@ -128,7 +125,6 @@ export default function CloseSessionPage() {
     mlc: calculateTotal(mlcCounts, MLC_DENOMINATIONS)
   }
 
-  // Check if user is admin
   useEffect(() => {
     const checkAdminRole = async () => {
       try {
@@ -136,8 +132,7 @@ export default function CloseSessionPage() {
         const data = await response.json()
         if (data.success && data.user) {
           const role = data.user.role
-          const isAdminRole = role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'MARKET_MANAGER'
-          setIsAdmin(isAdminRole)
+          setIsAdmin(role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'MARKET_MANAGER')
         }
       } catch (err) {
         console.error('Error checking role:', err)
@@ -158,8 +153,6 @@ export default function CloseSessionPage() {
         }
 
         const openSession = sessionsData.data.sessions[0]
-
-        // Check if inventory count exists
         const countRes = await fetch(`/api/market/pos/inventory-count?sessionId=${openSession.id}&status=any`)
         const countData = await countRes.json()
 
@@ -177,33 +170,12 @@ export default function CloseSessionPage() {
 
         if (countData.data.status === 'completed' && countData.data.productsWithDifferences > 0) {
           setCountPendingApproval(true)
-          setInventoryCount({
-            id: countData.data.id,
-            countNumber: countData.data.countNumber,
-            status: countData.data.status,
-            warehouseName: countData.data.warehouseName,
-            totalProducts: countData.data.totalProducts || 0,
-            productsWithDifferences: countData.data.productsWithDifferences || 0,
-            totalDifferenceValue: countData.data.totalDifferenceValue || 0,
-            adjustmentOperationId: countData.data.adjustmentOperationId,
-            completedAt: countData.data.completedAt
-          })
+          setInventoryCount(countData.data)
           setLoading(false)
           return
         }
 
-        setInventoryCount({
-          id: countData.data.id,
-          countNumber: countData.data.countNumber,
-          status: countData.data.status,
-          warehouseName: countData.data.warehouseName,
-          totalProducts: countData.data.totalProducts || 0,
-          productsWithDifferences: countData.data.productsWithDifferences || 0,
-          totalDifferenceValue: countData.data.totalDifferenceValue || 0,
-          adjustmentOperationId: countData.data.adjustmentOperationId,
-          completedAt: countData.data.completedAt
-        })
-
+        setInventoryCount(countData.data)
         const detailsRes = await fetch(`/api/market/pos/sessions/${openSession.id}`)
         const detailsData = await detailsRes.json()
 
@@ -224,7 +196,6 @@ export default function CloseSessionPage() {
 
   const handleCloseSession = async () => {
     if (!session) return
-
     setClosing(true)
     try {
       const response = await fetch(`/api/market/pos/sessions/${session.id}`, {
@@ -238,9 +209,7 @@ export default function CloseSessionPage() {
           closingNotes
         })
       })
-
       const data = await response.json()
-
       if (data.success) {
         router.push('/dashboard/market/pos')
       } else {
@@ -253,23 +222,17 @@ export default function CloseSessionPage() {
     }
   }
 
-  // Admin force close without count
   const handleForceClose = async () => {
     if (!isAdmin) return
-
     setForceClosing(true)
     try {
-      // Get session ID first
       const sessionsRes = await fetch(`/api/market/pos/sessions?terminalId=${terminalId}&status=open`)
       const sessionsData = await sessionsRes.json()
-
       if (!sessionsData.success || sessionsData.data.sessions.length === 0) {
         setError('No hay sesión abierta')
         return
       }
-
       const sessionId = sessionsData.data.sessions[0].id
-
       const response = await fetch(`/api/market/pos/sessions/${sessionId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -278,9 +241,7 @@ export default function CloseSessionPage() {
           closingNotes: 'Cerrado por administrador sin conteo de inventario'
         })
       })
-
       const data = await response.json()
-
       if (data.success) {
         router.push('/dashboard/market/pos')
       } else {
@@ -293,31 +254,17 @@ export default function CloseSessionPage() {
     }
   }
 
-  // Increment/Decrement denomination count
   const updateCount = (currency: CurrencyTab, value: number, delta: number) => {
-    if (currency === 'usd') {
-      setUsdCounts(prev => ({ ...prev, [value]: Math.max(0, (prev[value] || 0) + delta) }))
-    } else if (currency === 'cup') {
-      setCupCounts(prev => ({ ...prev, [value]: Math.max(0, (prev[value] || 0) + delta) }))
-    } else {
-      setMlcCounts(prev => ({ ...prev, [value]: Math.max(0, (prev[value] || 0) + delta) }))
-    }
+    const setFn = currency === 'usd' ? setUsdCounts : currency === 'cup' ? setCupCounts : setMlcCounts
+    setFn(prev => ({ ...prev, [value]: Math.max(0, (prev[value] || 0) + delta) }))
   }
 
   const setCount = (currency: CurrencyTab, value: number, count: number) => {
-    if (currency === 'usd') {
-      setUsdCounts(prev => ({ ...prev, [value]: Math.max(0, count) }))
-    } else if (currency === 'cup') {
-      setCupCounts(prev => ({ ...prev, [value]: Math.max(0, count) }))
-    } else {
-      setMlcCounts(prev => ({ ...prev, [value]: Math.max(0, count) }))
-    }
+    const setFn = currency === 'usd' ? setUsdCounts : currency === 'cup' ? setCupCounts : setMlcCounts
+    setFn(prev => ({ ...prev, [value]: Math.max(0, count) }))
   }
 
-  // Calculate differences - including inventory shortage
   const inventoryShortage = session?.inventoryShortageValue || 0
-
-  // El faltante de inventario se SUMA al efectivo esperado (el cajero debe reponer)
   const adjustedExpectedCash = session ? {
     usd: session.expectedCash.usd + inventoryShortage,
     cup: session.expectedCash.cup,
@@ -337,65 +284,26 @@ export default function CloseSessionPage() {
       <ProtectedRoute>
         <DashboardLayout hideSidebar>
           <div className="min-h-screen flex items-center justify-center">
-            <div className="text-center">
-              <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" />
-              <p className="text-gray-500">Cargando sesión...</p>
-            </div>
+            <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
           </div>
         </DashboardLayout>
       </ProtectedRoute>
     )
   }
 
-  // Inventory count required
   if (countMissing) {
     return (
       <ProtectedRoute>
         <DashboardLayout hideSidebar>
           <div className="min-h-screen flex items-center justify-center p-4">
-            <div className={cn(
-              'w-full max-w-sm rounded-2xl border shadow-xl p-6 text-center',
-              theme === 'dark'
-                ? 'bg-gray-800 border-gray-700'
-                : 'bg-white border-gray-200'
-            )}>
-              <div className={cn(
-                'w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center',
-                theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100'
-              )}>
-                <AlertTriangle className="w-8 h-8 text-amber-500" />
-              </div>
-              <h2 className="text-xl font-bold mb-2">Conteo Requerido</h2>
-              <p className="text-gray-500 text-sm mb-6">
-                Completa el conteo de inventario antes de cerrar.
-              </p>
-              <div className="space-y-3">
-                <button
-                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}/count`)}
-                  className="w-full py-3 rounded-xl bg-blue-500 text-white font-bold flex items-center justify-center gap-2"
-                >
-                  <ClipboardCheck className="w-5 h-5" />
-                  Ir a Contar
-                </button>
-                <button
-                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)}
-                  className={cn(
-                    'w-full py-3 rounded-xl font-medium',
-                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                  )}
-                >
-                  Volver al POS
-                </button>
-                {isAdmin && (
-                  <button
-                    onClick={handleForceClose}
-                    disabled={forceClosing}
-                    className="w-full py-3 rounded-xl bg-red-500/20 border border-red-500/50 text-red-400 font-medium flex items-center justify-center gap-2"
-                  >
-                    {forceClosing ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
-                    Cerrar sin Conteo
-                  </button>
-                )}
+            <div className={cn('w-full max-w-sm rounded-xl border p-6 text-center', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+              <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-amber-500" />
+              <h2 className="text-lg font-bold mb-2">Conteo Requerido</h2>
+              <p className="text-sm text-gray-500 mb-4">Completa el conteo de inventario antes de cerrar.</p>
+              <div className="space-y-2">
+                <button onClick={() => router.push(`/dashboard/market/pos/${terminalId}/count`)} className="w-full py-3 bg-blue-500 text-white rounded-lg font-medium">Ir a Contar</button>
+                <button onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)} className={cn('w-full py-3 rounded-lg', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100')}>Volver</button>
+                {isAdmin && <button onClick={handleForceClose} disabled={forceClosing} className="w-full py-3 rounded-lg bg-red-500/20 text-red-400 border border-red-500/50">{forceClosing ? 'Cerrando...' : 'Cerrar sin Conteo'}</button>}
               </div>
             </div>
           </div>
@@ -404,58 +312,18 @@ export default function CloseSessionPage() {
     )
   }
 
-  // Waiting for admin approval
   if (countPendingApproval && inventoryCount) {
     return (
       <ProtectedRoute>
         <DashboardLayout hideSidebar>
           <div className="min-h-screen flex items-center justify-center p-4">
-            <div className={cn(
-              'w-full max-w-sm rounded-2xl border shadow-xl p-6 text-center',
-              theme === 'dark'
-                ? 'bg-gray-800 border-gray-700'
-                : 'bg-white border-gray-200'
-            )}>
-              <div className={cn(
-                'w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center',
-                theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100'
-              )}>
-                <Clock className="w-8 h-8 text-amber-500" />
-              </div>
-              <h2 className="text-xl font-bold mb-2">Pendiente de Aprobación</h2>
-              <p className="text-gray-500 text-sm mb-4">
-                El conteo tiene diferencias y espera revisión.
-              </p>
-              <div className={cn(
-                'rounded-xl p-3 mb-6 text-left text-sm',
-                theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-100'
-              )}>
-                <p className="text-gray-400 mb-2">{inventoryCount.countNumber}</p>
-                <div className="flex justify-between">
-                  <span>Con diferencias:</span>
-                  <span className="font-bold text-amber-500">{inventoryCount.productsWithDifferences}</span>
-                </div>
-              </div>
-              <div className="space-y-3">
-                <button
-                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)}
-                  className={cn(
-                    'w-full py-3 rounded-xl font-medium',
-                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                  )}
-                >
-                  Volver al POS
-                </button>
-                {isAdmin && (
-                  <button
-                    onClick={handleForceClose}
-                    disabled={forceClosing}
-                    className="w-full py-3 rounded-xl bg-red-500/20 border border-red-500/50 text-red-400 font-medium flex items-center justify-center gap-2"
-                  >
-                    {forceClosing ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
-                    Cerrar sin Aprobación
-                  </button>
-                )}
+            <div className={cn('w-full max-w-sm rounded-xl border p-6 text-center', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+              <Clock className="w-12 h-12 mx-auto mb-4 text-amber-500" />
+              <h2 className="text-lg font-bold mb-2">Pendiente de Aprobación</h2>
+              <p className="text-sm text-gray-500 mb-4">El conteo tiene {inventoryCount.productsWithDifferences} productos con diferencias.</p>
+              <div className="space-y-2">
+                <button onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)} className={cn('w-full py-3 rounded-lg', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100')}>Volver</button>
+                {isAdmin && <button onClick={handleForceClose} disabled={forceClosing} className="w-full py-3 rounded-lg bg-red-500/20 text-red-400 border border-red-500/50">{forceClosing ? 'Cerrando...' : 'Cerrar sin Aprobación'}</button>}
               </div>
             </div>
           </div>
@@ -472,12 +340,7 @@ export default function CloseSessionPage() {
             <div className="text-center">
               <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-500" />
               <p className="text-red-500 mb-4">{error || 'Sesión no encontrada'}</p>
-              <button
-                onClick={() => router.push('/dashboard/market/pos')}
-                className="px-4 py-2 bg-blue-500 text-white rounded-lg"
-              >
-                Volver
-              </button>
+              <button onClick={() => router.push('/dashboard/market/pos')} className="px-4 py-2 bg-blue-500 text-white rounded-lg">Volver</button>
             </div>
           </div>
         </DashboardLayout>
@@ -485,329 +348,313 @@ export default function CloseSessionPage() {
     )
   }
 
-  const getDenominations = () => {
-    if (activeTab === 'usd') return USD_DENOMINATIONS
-    if (activeTab === 'cup') return CUP_DENOMINATIONS
-    return MLC_DENOMINATIONS
-  }
-
-  const getCounts = () => {
-    if (activeTab === 'usd') return usdCounts
-    if (activeTab === 'cup') return cupCounts
-    return mlcCounts
-  }
-
-  const formatCurrency = (value: number, currency: CurrencyTab) => {
-    if (currency === 'cup') return value.toFixed(0)
-    return value.toFixed(2)
-  }
+  const getDenominations = () => activeTab === 'usd' ? USD_DENOMINATIONS : activeTab === 'cup' ? CUP_DENOMINATIONS : MLC_DENOMINATIONS
+  const getCounts = () => activeTab === 'usd' ? usdCounts : activeTab === 'cup' ? cupCounts : mlcCounts
+  const fmt = (v: number, c: CurrencyTab) => c === 'cup' ? v.toFixed(0) : v.toFixed(2)
 
   return (
     <ProtectedRoute>
       <DashboardLayout hideSidebar>
-        <div className="min-h-screen flex flex-col">
+        <div className="h-screen flex flex-col overflow-hidden">
           {/* Header */}
-          <div className={cn(
-            'sticky top-0 z-10 px-4 py-3 border-b',
-            theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
-          )}>
-            <div className="max-w-5xl mx-auto flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => router.back()}
-                  className="p-2 -ml-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <div>
-                  <h1 className="font-bold">Cierre de Caja</h1>
-                  <p className="text-xs text-gray-500">{session.terminalName}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-gray-500">Ventas del día</p>
-                <p className="font-bold text-green-500">${session.summary.totalSales.toFixed(2)}</p>
+          <div className={cn('flex-shrink-0 px-4 py-3 border-b flex items-center justify-between', theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200')}>
+            <div className="flex items-center gap-3">
+              <button onClick={() => router.back()} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <div>
+                <h1 className="font-bold text-lg">Cierre de Caja</h1>
+                <p className="text-xs text-gray-500">{session.sessionCode} • {session.terminalName}</p>
               </div>
             </div>
           </div>
 
           {/* Main Content */}
           <div className="flex-1 overflow-auto">
-            <div className="max-w-5xl mx-auto p-4 space-y-4">
-              {/* Faltante de inventario - Alerta */}
-              {inventoryShortage > 0 && (
-                <div className={cn(
-                  'rounded-xl p-4 border-l-4 border-red-500',
-                  theme === 'dark' ? 'bg-red-900/20' : 'bg-red-50'
-                )}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Package className="w-5 h-5 text-red-500" />
-                      <div>
-                        <p className="font-medium text-red-500">Faltante de Inventario</p>
-                        <p className="text-xs text-gray-500">Se suma al efectivo esperado</p>
+            <div className="max-w-7xl mx-auto p-4">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                {/* Left: Session Summary */}
+                <div className="lg:col-span-4 space-y-4">
+                  {/* Session Info */}
+                  <div className={cn('rounded-xl border p-4', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                    <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
+                      <Receipt className="w-4 h-4" /> Resumen de Sesión
+                    </h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Apertura</span>
+                        <span>{new Date(session.openedAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
-                    </div>
-                    <p className="text-xl font-bold text-red-500">${inventoryShortage.toFixed(2)}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Currency Selector */}
-              <div className="grid grid-cols-3 gap-2">
-                {(['usd', 'cup', 'mlc'] as const).map(currency => {
-                  const diff = differences[currency]
-                  const isActive = activeTab === currency
-                  return (
-                    <button
-                      key={currency}
-                      onClick={() => setActiveTab(currency)}
-                      className={cn(
-                        'p-3 rounded-xl text-center transition-all',
-                        isActive
-                          ? 'bg-blue-500 text-white shadow-lg'
-                          : theme === 'dark'
-                            ? 'bg-gray-800 hover:bg-gray-700'
-                            : 'bg-gray-100 hover:bg-gray-200'
-                      )}
-                    >
-                      <p className="text-lg font-bold uppercase">{currency}</p>
-                      <p className={cn(
-                        'text-sm font-mono',
-                        isActive ? 'text-blue-100' : 'text-gray-500'
-                      )}>
-                        ${formatCurrency(closingCash[currency], currency)}
-                      </p>
-                      <p className={cn(
-                        'text-xs font-mono mt-1',
-                        diff === 0 ? (isActive ? 'text-blue-200' : 'text-gray-400') :
-                        diff > 0 ? 'text-green-400' : 'text-red-400'
-                      )}>
-                        {diff >= 0 ? '+' : ''}{formatCurrency(diff, currency)}
-                      </p>
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* Denominations */}
-              <div className={cn(
-                'rounded-xl border p-4',
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-              )}>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                  {getDenominations().map(d => {
-                    const count = getCounts()[d.value] || 0
-                    return (
-                      <div
-                        key={d.value}
-                        className={cn(
-                          'rounded-xl p-3 text-center transition-all',
-                          count > 0
-                            ? 'bg-blue-500/20 border-2 border-blue-500'
-                            : theme === 'dark'
-                              ? 'bg-gray-700 border-2 border-transparent'
-                              : 'bg-gray-50 border-2 border-transparent'
-                        )}
-                      >
-                        <p className="font-bold text-lg mb-2">{d.label}</p>
-
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => updateCount(activeTab, d.value, -1)}
-                            disabled={count === 0}
-                            className={cn(
-                              'w-10 h-10 rounded-lg flex items-center justify-center transition-colors',
-                              count === 0
-                                ? 'opacity-30'
-                                : theme === 'dark'
-                                  ? 'bg-gray-600 hover:bg-gray-500 active:bg-gray-400'
-                                  : 'bg-gray-200 hover:bg-gray-300 active:bg-gray-400'
-                            )}
-                          >
-                            <Minus className="w-5 h-5" />
-                          </button>
-
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            value={count}
-                            onChange={e => setCount(activeTab, d.value, parseInt(e.target.value) || 0)}
-                            className={cn(
-                              'w-14 h-10 text-center font-bold text-lg rounded-lg border-2',
-                              theme === 'dark'
-                                ? 'bg-gray-900 border-gray-600 focus:border-blue-500'
-                                : 'bg-white border-gray-200 focus:border-blue-500',
-                              'focus:outline-none'
-                            )}
-                          />
-
-                          <button
-                            onClick={() => updateCount(activeTab, d.value, 1)}
-                            className={cn(
-                              'w-10 h-10 rounded-lg flex items-center justify-center transition-colors',
-                              'bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white'
-                            )}
-                          >
-                            <Plus className="w-5 h-5" />
-                          </button>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Órdenes pagadas</span>
+                        <span className="font-medium">{session.summary.paidOrders}</span>
+                      </div>
+                      {session.summary.voidedOrders > 0 && (
+                        <div className="flex justify-between text-amber-500">
+                          <span>Anuladas</span>
+                          <span>{session.summary.voidedOrders}</span>
                         </div>
-
-                        {count > 0 && (
-                          <p className="text-xs text-blue-400 mt-2 font-mono">
-                            = ${formatCurrency(count * d.value, activeTab)}
-                          </p>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Summary Row */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className={cn(
-                  'rounded-xl p-4 text-center',
-                  theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
-                )}>
-                  <p className="text-xs text-gray-500 mb-1">Contado</p>
-                  <p className="text-xl font-bold font-mono">
-                    ${formatCurrency(closingCash[activeTab], activeTab)}
-                  </p>
-                </div>
-                <div className={cn(
-                  'rounded-xl p-4 text-center',
-                  theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-50'
-                )}>
-                  <p className="text-xs text-blue-400 mb-1">Esperado</p>
-                  <p className="text-xl font-bold font-mono text-blue-500">
-                    ${formatCurrency(adjustedExpectedCash[activeTab], activeTab)}
-                  </p>
-                </div>
-                <div className={cn(
-                  'rounded-xl p-4 text-center',
-                  differences[activeTab] === 0
-                    ? theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
-                    : differences[activeTab] > 0
-                      ? 'bg-green-500/20'
-                      : 'bg-red-500/20'
-                )}>
-                  <p className="text-xs text-gray-500 mb-1">Diferencia</p>
-                  <p className={cn(
-                    'text-xl font-bold font-mono',
-                    differences[activeTab] === 0 ? '' :
-                    differences[activeTab] > 0 ? 'text-green-500' : 'text-red-500'
-                  )}>
-                    {differences[activeTab] >= 0 ? '+' : ''}
-                    ${formatCurrency(differences[activeTab], activeTab)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Total Difference */}
-              <div className={cn(
-                'rounded-xl p-4',
-                Math.abs(totalDifferenceUsd) < 0.01
-                  ? theme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'
-                  : totalDifferenceUsd > 0
-                    ? theme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'
-                    : theme === 'dark' ? 'bg-red-900/20' : 'bg-red-50'
-              )}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">Diferencia Total (USD equiv.)</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      {totalDifferenceUsd > 0 ? (
-                        <TrendingUp className="w-6 h-6 text-green-500" />
-                      ) : totalDifferenceUsd < 0 ? (
-                        <TrendingDown className="w-6 h-6 text-red-500" />
-                      ) : (
-                        <CheckCircle className="w-6 h-6 text-green-500" />
                       )}
-                      <p className={cn(
-                        'text-3xl font-bold font-mono',
-                        Math.abs(totalDifferenceUsd) < 0.01 ? 'text-green-500' :
-                        totalDifferenceUsd > 0 ? 'text-green-500' : 'text-red-500'
-                      )}>
-                        {totalDifferenceUsd >= 0 ? '+' : ''}${totalDifferenceUsd.toFixed(2)}
-                      </p>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-gray-700/50 space-y-2">
+                      <div className="flex justify-between text-green-500">
+                        <span className="flex items-center gap-1"><ShoppingCart className="w-3 h-3" /> Ventas</span>
+                        <span className="font-bold">${session.summary.totalSales.toFixed(2)}</span>
+                      </div>
+                      {session.summary.totalDiscounts > 0 && (
+                        <div className="flex justify-between text-amber-500">
+                          <span className="flex items-center gap-1"><Percent className="w-3 h-3" /> Descuentos</span>
+                          <span>-${session.summary.totalDiscounts.toFixed(2)}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="text-right text-xs text-gray-500">
-                    <p>USD: {differences.usd >= 0 ? '+' : ''}${differences.usd.toFixed(2)}</p>
-                    <p>CUP: {differences.cup >= 0 ? '+' : ''}${differences.cup.toFixed(0)}</p>
-                    <p>MLC: {differences.mlc >= 0 ? '+' : ''}${differences.mlc.toFixed(2)}</p>
+
+                  {/* Payments by Method */}
+                  {session.paymentsByMethod.length > 0 && (
+                    <div className={cn('rounded-xl border p-4', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                      <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
+                        <CreditCard className="w-4 h-4" /> Pagos Recibidos
+                      </h3>
+                      <div className="space-y-2">
+                        {session.paymentsByMethod.map((p, i) => (
+                          <div key={i} className="flex justify-between text-sm">
+                            <span className="text-gray-500 capitalize">{p.method} <span className="text-xs">({p.currency})</span></span>
+                            <span className="font-mono">${p.amount.toFixed(2)} <span className="text-xs text-gray-500">×{p.count}</span></span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Opening Cash */}
+                  <div className={cn('rounded-xl border p-4', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                    <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
+                      <Banknote className="w-4 h-4" /> Efectivo Inicial
+                    </h3>
+                    <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                      <div className={cn('p-2 rounded-lg', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100')}>
+                        <p className="text-xs text-gray-500">USD</p>
+                        <p className="font-mono font-bold">${session.openingCash.usd.toFixed(2)}</p>
+                      </div>
+                      <div className={cn('p-2 rounded-lg', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100')}>
+                        <p className="text-xs text-gray-500">CUP</p>
+                        <p className="font-mono font-bold">${session.openingCash.cup.toFixed(0)}</p>
+                      </div>
+                      <div className={cn('p-2 rounded-lg', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100')}>
+                        <p className="text-xs text-gray-500">MLC</p>
+                        <p className="font-mono font-bold">${session.openingCash.mlc.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Inventory Shortage */}
+                  {inventoryShortage > 0 && (
+                    <div className="rounded-xl border-2 border-red-500 bg-red-500/10 p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Package className="w-5 h-5 text-red-500" />
+                          <div>
+                            <p className="font-bold text-red-500">Faltante Inventario</p>
+                            <p className="text-xs text-gray-400">Se suma al esperado</p>
+                          </div>
+                        </div>
+                        <p className="text-xl font-bold text-red-500">${inventoryShortage.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Notes */}
+                  <div className={cn('rounded-xl border p-4', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                    <label className="text-sm text-gray-500 mb-2 block">Notas del cierre</label>
+                    <textarea
+                      value={closingNotes}
+                      onChange={(e) => setClosingNotes(e.target.value)}
+                      rows={2}
+                      placeholder="Observaciones..."
+                      className={cn('w-full px-3 py-2 rounded-lg border text-sm resize-none', theme === 'dark' ? 'bg-gray-900 border-gray-600' : 'bg-gray-50 border-gray-200', 'focus:outline-none focus:ring-1 focus:ring-blue-500')}
+                    />
+                  </div>
+                </div>
+
+                {/* Right: Cash Count */}
+                <div className="lg:col-span-8 space-y-4">
+                  {/* Currency Tabs */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['usd', 'cup', 'mlc'] as const).map(c => {
+                      const isActive = activeTab === c
+                      const diff = differences[c]
+                      return (
+                        <button
+                          key={c}
+                          onClick={() => setActiveTab(c)}
+                          className={cn(
+                            'p-4 rounded-xl text-center transition-all border-2',
+                            isActive
+                              ? 'bg-blue-500 border-blue-500 text-white'
+                              : theme === 'dark'
+                                ? 'bg-gray-800 border-gray-700 hover:border-gray-600'
+                                : 'bg-white border-gray-200 hover:border-gray-300'
+                          )}
+                        >
+                          <p className="text-2xl font-bold uppercase">{c}</p>
+                          <p className={cn('text-lg font-mono', isActive ? 'text-blue-100' : 'text-gray-500')}>
+                            ${fmt(closingCash[c], c)}
+                          </p>
+                          <div className={cn(
+                            'mt-2 pt-2 border-t text-sm',
+                            isActive ? 'border-blue-400/50' : 'border-gray-600/50'
+                          )}>
+                            <div className="flex justify-between">
+                              <span className={isActive ? 'text-blue-200' : 'text-gray-500'}>Esperado</span>
+                              <span className="font-mono">${fmt(adjustedExpectedCash[c], c)}</span>
+                            </div>
+                            <div className="flex justify-between mt-1">
+                              <span className={isActive ? 'text-blue-200' : 'text-gray-500'}>Diferencia</span>
+                              <span className={cn(
+                                'font-mono font-bold',
+                                diff === 0 ? '' : diff > 0 ? 'text-green-400' : 'text-red-400'
+                              )}>
+                                {diff >= 0 ? '+' : ''}{fmt(diff, c)}
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {/* Denominations */}
+                  <div className={cn('rounded-xl border p-4', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-2">
+                      {getDenominations().map(d => {
+                        const count = getCounts()[d.value] || 0
+                        return (
+                          <div
+                            key={d.value}
+                            className={cn(
+                              'rounded-lg p-3 text-center border-2 transition-all',
+                              count > 0
+                                ? 'bg-blue-500/20 border-blue-500'
+                                : theme === 'dark'
+                                  ? 'bg-gray-700 border-gray-600'
+                                  : 'bg-gray-50 border-gray-200'
+                            )}
+                          >
+                            <p className="font-bold mb-2">{d.label}</p>
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => updateCount(activeTab, d.value, -1)}
+                                disabled={count === 0}
+                                className={cn(
+                                  'w-8 h-8 rounded flex items-center justify-center',
+                                  count === 0 ? 'opacity-30' : theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-200 hover:bg-gray-300'
+                                )}
+                              >
+                                <Minus className="w-4 h-4" />
+                              </button>
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                value={count}
+                                onChange={e => setCount(activeTab, d.value, parseInt(e.target.value) || 0)}
+                                className={cn(
+                                  'w-12 h-8 text-center font-bold rounded border',
+                                  theme === 'dark' ? 'bg-gray-900 border-gray-600' : 'bg-white border-gray-200',
+                                  'focus:outline-none focus:ring-1 focus:ring-blue-500'
+                                )}
+                              />
+                              <button
+                                onClick={() => updateCount(activeTab, d.value, 1)}
+                                className="w-8 h-8 rounded flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white"
+                              >
+                                <Plus className="w-4 h-4" />
+                              </button>
+                            </div>
+                            {count > 0 && (
+                              <p className="text-xs text-blue-400 mt-1 font-mono">= ${fmt(count * d.value, activeTab)}</p>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Total Difference */}
+                  <div className={cn(
+                    'rounded-xl border-2 p-4',
+                    Math.abs(totalDifferenceUsd) < 0.01
+                      ? 'border-green-500 bg-green-500/10'
+                      : totalDifferenceUsd > 0
+                        ? 'border-green-500 bg-green-500/10'
+                        : 'border-red-500 bg-red-500/10'
+                  )}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-400 mb-1">Diferencia Total (equivalente USD)</p>
+                        <div className="flex items-center gap-2">
+                          {totalDifferenceUsd > 0 ? (
+                            <TrendingUp className="w-8 h-8 text-green-500" />
+                          ) : totalDifferenceUsd < 0 ? (
+                            <TrendingDown className="w-8 h-8 text-red-500" />
+                          ) : (
+                            <CheckCircle className="w-8 h-8 text-green-500" />
+                          )}
+                          <p className={cn(
+                            'text-4xl font-bold font-mono',
+                            Math.abs(totalDifferenceUsd) < 0.01 ? 'text-green-500' :
+                            totalDifferenceUsd > 0 ? 'text-green-500' : 'text-red-500'
+                          )}>
+                            {totalDifferenceUsd >= 0 ? '+' : ''}${totalDifferenceUsd.toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right space-y-1">
+                        <div className={cn('px-3 py-1 rounded text-sm font-mono', differences.usd === 0 ? 'bg-gray-700' : differences.usd > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400')}>
+                          USD: {differences.usd >= 0 ? '+' : ''}${differences.usd.toFixed(2)}
+                        </div>
+                        <div className={cn('px-3 py-1 rounded text-sm font-mono', differences.cup === 0 ? 'bg-gray-700' : differences.cup > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400')}>
+                          CUP: {differences.cup >= 0 ? '+' : ''}${differences.cup.toFixed(0)}
+                        </div>
+                        <div className={cn('px-3 py-1 rounded text-sm font-mono', differences.mlc === 0 ? 'bg-gray-700' : differences.mlc > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400')}>
+                          MLC: {differences.mlc >= 0 ? '+' : ''}${differences.mlc.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-
-              {/* Notes */}
-              <div>
-                <label className="block text-sm text-gray-500 mb-2">Notas (opcional)</label>
-                <textarea
-                  value={closingNotes}
-                  onChange={(e) => setClosingNotes(e.target.value)}
-                  rows={2}
-                  placeholder="Observaciones del cierre..."
-                  className={cn(
-                    'w-full px-4 py-3 rounded-xl border resize-none',
-                    theme === 'dark'
-                      ? 'bg-gray-800 border-gray-700 focus:border-blue-500'
-                      : 'bg-white border-gray-200 focus:border-blue-500',
-                    'focus:outline-none focus:ring-1 focus:ring-blue-500'
-                  )}
-                />
-              </div>
-
-              {/* Error */}
-              {error && (
-                <div className="p-4 rounded-xl bg-red-500/20 border border-red-500/50 flex items-center gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-                  <p className="text-red-500">{error}</p>
-                  <button onClick={() => setError(null)} className="ml-auto">
-                    <X className="w-4 h-4 text-red-500" />
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 
-          {/* Fixed Bottom Actions */}
-          <div className={cn(
-            'sticky bottom-0 p-4 border-t',
-            theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
-          )}>
-            <div className="max-w-5xl mx-auto flex gap-3">
+          {/* Error */}
+          {error && (
+            <div className="px-4 pb-2">
+              <div className="max-w-7xl mx-auto p-3 rounded-lg bg-red-500/20 border border-red-500/50 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500" />
+                <span className="text-red-500 text-sm flex-1">{error}</span>
+                <button onClick={() => setError(null)}><X className="w-4 h-4 text-red-500" /></button>
+              </div>
+            </div>
+          )}
+
+          {/* Footer Actions */}
+          <div className={cn('flex-shrink-0 p-4 border-t', theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200')}>
+            <div className="max-w-7xl mx-auto flex gap-3">
               <button
                 onClick={() => router.back()}
                 disabled={closing}
-                className={cn(
-                  'flex-1 py-4 rounded-xl font-medium text-lg',
-                  theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'
-                )}
+                className={cn('flex-1 py-4 rounded-xl font-medium', theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200')}
               >
                 Cancelar
               </button>
               <button
                 onClick={handleCloseSession}
                 disabled={closing}
-                className={cn(
-                  'flex-[2] py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2',
-                  'bg-blue-500 hover:bg-blue-600 text-white',
-                  closing && 'opacity-70'
-                )}
+                className={cn('flex-[2] py-4 rounded-xl font-bold flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 text-white', closing && 'opacity-70')}
               >
-                {closing ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Cerrando...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-5 h-5" />
-                    Cerrar Caja
-                  </>
-                )}
+                {closing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                {closing ? 'Cerrando...' : 'Cerrar Caja'}
               </button>
             </div>
           </div>
