@@ -338,12 +338,33 @@ export async function POST(
             WHERE warehouse_id = $2 AND product_id = $3 AND (variant_id = $4 OR ($4 IS NULL AND variant_id IS NULL))
           `, [qtyReceived, warehouseId, productId, variantId])
         } else {
+          // Si estamos creando un registro para una variante, verificar si hay stock
+          // "huérfano" a nivel producto que debemos migrar para evitar duplicación
+          let migratedStock = 0
+          if (variantId) {
+            const orphanStock = await db.query(`
+              SELECT id, quantity_on_hand FROM market_warehouse_stock
+              WHERE warehouse_id = $1 AND product_id = $2 AND variant_id IS NULL
+            `, [warehouseId, productId])
+
+            if (orphanStock.rows.length > 0 && parseFloat(orphanStock.rows[0].quantity_on_hand) > 0) {
+              migratedStock = parseFloat(orphanStock.rows[0].quantity_on_hand)
+              console.log(`[Unified Receive] Migrando stock huérfano a variante (consignación): producto ${productId}, variante ${variantId}, stock ${migratedStock}`)
+              // Poner a 0 el stock a nivel producto
+              await db.query(`
+                UPDATE market_warehouse_stock
+                SET quantity_on_hand = 0, updated_at = NOW()
+                WHERE id = $1
+              `, [orphanStock.rows[0].id])
+            }
+          }
+
           await db.query(`
             INSERT INTO market_warehouse_stock (
               warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved,
               last_movement_at, created_at, updated_at
             ) VALUES ($1, $2, $3, $4, 0, NOW(), NOW(), NOW())
-          `, [warehouseId, productId, variantId, qtyReceived])
+          `, [warehouseId, productId, variantId, qtyReceived + migratedStock])
         }
 
         // Actualizar costo promedio del producto basado en últimas 5 recepciones
@@ -570,12 +591,33 @@ export async function POST(
             WHERE warehouse_id = $2 AND product_id = $3 AND (variant_id = $4 OR ($4 IS NULL AND variant_id IS NULL))
           `, [purchaseQty, warehouseId, purchaseProductId, purchaseVariantId])
         } else {
+          // Si estamos creando un registro para una variante, verificar si hay stock
+          // "huérfano" a nivel producto que debemos migrar para evitar duplicación
+          let migratedStock = 0
+          if (purchaseVariantId) {
+            const orphanStock = await db.query(`
+              SELECT id, quantity_on_hand FROM market_warehouse_stock
+              WHERE warehouse_id = $1 AND product_id = $2 AND variant_id IS NULL
+            `, [warehouseId, purchaseProductId])
+
+            if (orphanStock.rows.length > 0 && parseFloat(orphanStock.rows[0].quantity_on_hand) > 0) {
+              migratedStock = parseFloat(orphanStock.rows[0].quantity_on_hand)
+              console.log(`[Unified Receive] Migrando stock huérfano a variante: producto ${purchaseProductId}, variante ${purchaseVariantId}, stock ${migratedStock}`)
+              // Poner a 0 el stock a nivel producto
+              await db.query(`
+                UPDATE market_warehouse_stock
+                SET quantity_on_hand = 0, updated_at = NOW()
+                WHERE id = $1
+              `, [orphanStock.rows[0].id])
+            }
+          }
+
           await db.query(`
             INSERT INTO market_warehouse_stock (
               warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved,
               last_movement_at, created_at, updated_at
             ) VALUES ($1, $2, $3, $4, 0, NOW(), NOW(), NOW())
-          `, [warehouseId, purchaseProductId, purchaseVariantId, purchaseQty])
+          `, [warehouseId, purchaseProductId, purchaseVariantId, purchaseQty + migratedStock])
         }
 
         // Actualizar costo promedio del producto basado en últimas 5 recepciones
