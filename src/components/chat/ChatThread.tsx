@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { MessageBubble } from './MessageBubble'
 import { MessageInput } from './MessageInput'
 import {
-  User, Users, Megaphone, Pin, Loader2, ChevronDown, MoreVertical
+  User, Users, Megaphone, Pin, Loader2, ChevronDown, MoreVertical, ArrowLeft
 } from 'lucide-react'
 
 interface ReplyingTo {
@@ -16,7 +16,11 @@ interface ReplyingTo {
   senderName: string
 }
 
-export function ChatThread() {
+interface ChatThreadProps {
+  onBack?: () => void
+}
+
+export function ChatThread({ onBack }: ChatThreadProps) {
   const { theme } = useTheme()
   const {
     activeConversation,
@@ -113,12 +117,23 @@ export function ChatThread() {
     <div className="flex flex-col h-full relative">
       {/* Header */}
       <div className={cn(
-        'h-14 px-4 flex items-center justify-between border-b flex-shrink-0',
+        'h-12 px-3 flex items-center justify-between border-b flex-shrink-0',
         theme === 'dark' ? 'border-gray-800 bg-gray-900' : 'border-gray-200 bg-white'
       )}>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className={cn(
+                'md:hidden p-1.5 rounded-lg transition-colors',
+                theme === 'dark' ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+              )}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          )}
           <div className={cn(
-            'w-9 h-9 rounded-full flex items-center justify-center text-white font-medium text-sm',
+            'w-8 h-8 rounded-full flex items-center justify-center text-white font-medium text-xs',
             getAvatarBg()
           )}>
             {activeConversation.avatarUrl ? (

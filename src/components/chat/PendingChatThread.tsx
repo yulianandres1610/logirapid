@@ -5,9 +5,13 @@ import { useTheme } from '@/contexts/theme-context'
 import { useChatContext } from '@/contexts/ChatContext'
 import { cn } from '@/lib/utils'
 import { MessageInput } from './MessageInput'
-import { X, User } from 'lucide-react'
+import { X, ArrowLeft } from 'lucide-react'
 
-export function PendingChatThread() {
+interface PendingChatThreadProps {
+  onBack?: () => void
+}
+
+export function PendingChatThread({ onBack }: PendingChatThreadProps) {
   const { theme } = useTheme()
   const { pendingChat, cancelPendingChat } = useChatContext()
 
@@ -25,23 +29,39 @@ export function PendingChatThread() {
     return colors[index]
   }
 
+  const handleCancel = () => {
+    cancelPendingChat()
+    if (onBack) onBack()
+  }
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className={cn(
-        'h-14 px-4 flex items-center justify-between border-b flex-shrink-0',
+        'h-12 px-3 flex items-center justify-between border-b flex-shrink-0',
         theme === 'dark' ? 'border-gray-800 bg-gray-900' : 'border-gray-200 bg-white'
       )}>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {onBack && (
+            <button
+              onClick={handleCancel}
+              className={cn(
+                'md:hidden p-1.5 rounded-lg transition-colors',
+                theme === 'dark' ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+              )}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          )}
           <div className={cn(
-            'w-9 h-9 rounded-full flex items-center justify-center text-white font-medium text-sm',
+            'w-8 h-8 rounded-full flex items-center justify-center text-white font-medium text-xs',
             getAvatarBg(pendingChat.user.name)
           )}>
             {pendingChat.user.name.charAt(0).toUpperCase()}
           </div>
-          <div>
+          <div className="min-w-0">
             <h2 className={cn(
-              'font-semibold text-sm',
+              'font-semibold text-sm truncate',
               theme === 'dark' ? 'text-white' : 'text-gray-900'
             )}>
               {pendingChat.user.name}
@@ -56,9 +76,9 @@ export function PendingChatThread() {
         </div>
 
         <button
-          onClick={cancelPendingChat}
+          onClick={handleCancel}
           className={cn(
-            'p-2 rounded-lg transition-colors',
+            'hidden md:block p-1.5 rounded-lg transition-colors',
             theme === 'dark' ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
           )}
         >
