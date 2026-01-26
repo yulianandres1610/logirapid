@@ -32,7 +32,8 @@ import {
   CreditCard,
   MapPin,
   BarChart3,
-  Bot
+  Bot,
+  MessageSquare
 } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -227,6 +228,8 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
         return <AlertTriangle className="w-4 h-4 text-yellow-500" />
       case 'info':
         return <Info className="w-4 h-4 text-blue-500" />
+      case 'chat':
+        return <MessageSquare className="w-4 h-4 text-emerald-500" />
       default:
         return <Info className="w-4 h-4 text-gray-500" />
     }
@@ -731,6 +734,10 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
                             onClick={() => {
                               markAsRead(notification.id)
                               setShowNotifications(false)
+                              // Call onClick handler if exists (for chat notifications)
+                              if (notification.onClick) {
+                                notification.onClick()
+                              }
                             }}
                             className={cn(
                               "p-4 border-b cursor-pointer transition-all duration-200",

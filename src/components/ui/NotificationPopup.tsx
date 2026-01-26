@@ -1,13 +1,13 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
-import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react'
+import { X, CheckCircle, AlertCircle, AlertTriangle, Info, MessageSquare } from 'lucide-react'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface PopupNotification {
   id: string
-  type: 'success' | 'error' | 'warning' | 'info'
+  type: 'success' | 'error' | 'warning' | 'info' | 'chat'
   title: string
   message: string
   autoHideTime: number
@@ -59,6 +59,8 @@ export default function NotificationPopup() {
         return <AlertTriangle className="w-5 h-5 text-yellow-500" />
       case 'info':
         return <Info className="w-5 h-5 text-blue-500" />
+      case 'chat':
+        return <MessageSquare className="w-5 h-5 text-emerald-500" />
       default:
         return <Info className="w-5 h-5 text-gray-500" />
     }
@@ -74,6 +76,8 @@ export default function NotificationPopup() {
         return 'border-l-yellow-500'
       case 'info':
         return 'border-l-blue-500'
+      case 'chat':
+        return 'border-l-emerald-500'
       default:
         return 'border-l-gray-500'
     }
@@ -89,6 +93,8 @@ export default function NotificationPopup() {
         return 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-400 dark:border-yellow-500'
       case 'info':
         return 'bg-blue-100 dark:bg-blue-900/30 border border-blue-400 dark:border-blue-500'
+      case 'chat':
+        return 'bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-400 dark:border-emerald-500'
       default:
         return 'bg-gray-100 dark:bg-gray-900/30 border border-gray-300 dark:border-gray-600'
     }

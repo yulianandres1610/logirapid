@@ -8,6 +8,7 @@ import { useTheme } from '@/contexts/theme-context'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import SupportChat from '@/components/support/SupportChat'
+import { ChatNotificationListener } from '@/components/chat/ChatNotificationListener'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -176,6 +177,9 @@ export function DashboardLayout({ children, hideSidebar = false }: DashboardLayo
           onClose={() => setSupportChatOpen(false)}
         />
       )}
+
+      {/* Global Chat Notification Listener */}
+      {user && <ChatNotificationListener />}
     </div>
   )
 }

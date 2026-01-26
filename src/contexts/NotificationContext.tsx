@@ -4,16 +4,17 @@ import React, { createContext, useContext, useState, useCallback, ReactNode } fr
 
 export interface Notification {
   id: string
-  type: 'success' | 'error' | 'warning' | 'info'
+  type: 'success' | 'error' | 'warning' | 'info' | 'chat'
   title: string
   message: string
   timestamp: Date
   read: boolean
+  onClick?: () => void
 }
 
 interface NotificationContextType {
   notifications: Notification[]
-  showNotification: (type: 'success' | 'error' | 'warning' | 'info', title: string, message: string) => void
+  showNotification: (type: 'success' | 'error' | 'warning' | 'info' | 'chat', title: string, message: string, onClick?: () => void) => void
   markAsRead: (id: string) => void
   clearNotifications: () => void
   getUnreadCount: () => number
@@ -25,9 +26,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([])
 
   const showNotification = useCallback((
-    type: 'success' | 'error' | 'warning' | 'info',
+    type: 'success' | 'error' | 'warning' | 'info' | 'chat',
     title: string,
-    message: string
+    message: string,
+    onClick?: () => void
   ) => {
     const newNotification: Notification = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
@@ -35,7 +37,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       title,
       message,
       timestamp: new Date(),
-      read: false
+      read: false,
+      onClick
     }
 
     setNotifications(prev => [newNotification, ...prev])
