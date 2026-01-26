@@ -32,7 +32,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Token invalido' }, { status: 401 })
     }
 
-    if (payload.companyType !== 'market') {
+    // Allow market companies to access chat users
+    // companyType might not be set in all tokens, so we check if it's market OR undefined
+    if (payload.companyType && payload.companyType !== 'market') {
       return NextResponse.json({ success: false, error: 'Acceso denegado' }, { status: 403 })
     }
 

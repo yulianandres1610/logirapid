@@ -4,6 +4,8 @@ import React, { useEffect } from 'react'
 import { useTheme } from '@/contexts/theme-context'
 import { ChatProvider, useChatContext } from '@/contexts/ChatContext'
 import { ChatLayout } from '@/components/chat/ChatLayout'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { ProtectedRoute } from '@/components/protected-route'
 import { preloadSounds, requestNotificationPermission } from '@/lib/chat-sounds'
 
 function ChatPageContent() {
@@ -23,7 +25,7 @@ function ChatPageContent() {
   }, [fetchConversations, fetchCompanyUsers])
 
   return (
-    <div className={`h-[calc(100vh-4rem)] ${theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div className="h-[calc(100vh-4rem)] p-4">
       <ChatLayout />
     </div>
   )
@@ -31,8 +33,12 @@ function ChatPageContent() {
 
 export default function ChatPage() {
   return (
-    <ChatProvider>
-      <ChatPageContent />
-    </ChatProvider>
+    <ProtectedRoute>
+      <DashboardLayout>
+        <ChatProvider>
+          <ChatPageContent />
+        </ChatProvider>
+      </DashboardLayout>
+    </ProtectedRoute>
   )
 }
