@@ -35,7 +35,8 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Token invalido' }, { status: 401 })
     }
 
-    if (payload.companyType !== 'market') {
+    // Allow market companies (companyType might not be set)
+    if (payload.companyType && payload.companyType !== 'market') {
       return NextResponse.json({ success: false, error: 'Acceso denegado' }, { status: 403 })
     }
 
@@ -70,7 +71,7 @@ export async function GET(
         (
           SELECT json_agg(json_build_object(
             'id', u.id,
-            'name', u.name,
+            'name', COALESCE(NULLIF(TRIM(COALESCE(u.firstname, '') || ' ' || COALESCE(u.lastname, '')), ''), u.email),
             'email', u.email,
             'role', cp.role,
             'joinedAt', cp.joined_at

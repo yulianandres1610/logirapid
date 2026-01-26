@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      whereClause += ` AND (u.name ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex})`
+      whereClause += ` AND (COALESCE(u.firstname || ' ' || u.lastname, u.email) ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex})`
       params.push(`%${search}%`)
     }
 
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     const result = await db.query(`
       SELECT
         u.id,
-        u.name,
+        COALESCE(NULLIF(TRIM(COALESCE(u.firstname, '') || ' ' || COALESCE(u.lastname, '')), ''), u.email) as name,
         u.email,
         uc.role,
         COALESCE(p.status, 'offline') as presence_status,
@@ -83,12 +83,12 @@ export async function GET(request: NextRequest) {
           WHEN p.last_seen_at > NOW() - INTERVAL '5 minutes' THEN 1
           ELSE 2
         END,
-        u.name ASC
+        COALESCE(u.firstname, u.email) ASC
     `, params)
 
     const users = result.rows.map(u => ({
       id: u.id,
-      name: u.name,
+      name: u.name || u.email,
       email: u.email,
       role: u.role,
       presence: {

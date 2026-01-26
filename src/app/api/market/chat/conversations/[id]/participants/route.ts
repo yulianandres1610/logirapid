@@ -35,7 +35,8 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Token invalido' }, { status: 401 })
     }
 
-    if (payload.companyType !== 'market') {
+    // Allow market companies (companyType might not be set)
+    if (payload.companyType && payload.companyType !== 'market') {
       return NextResponse.json({ success: false, error: 'Acceso denegado' }, { status: 403 })
     }
 
@@ -62,7 +63,7 @@ export async function GET(
         p.role,
         p.joined_at,
         p.is_muted,
-        u.name,
+        COALESCE(NULLIF(TRIM(COALESCE(u.firstname, '') || ' ' || COALESCE(u.lastname, '')), ''), u.email) as name,
         u.email,
         COALESCE(pr.status, 'offline') as presence_status,
         pr.last_seen_at
@@ -70,13 +71,13 @@ export async function GET(
       JOIN users u ON u.id = p.user_id
       LEFT JOIN chat_presence pr ON pr.user_id = p.user_id
       WHERE p.conversation_id = $1
-      ORDER BY p.role DESC, u.name ASC
+      ORDER BY p.role DESC, COALESCE(u.firstname, u.email) ASC
     `, [conversationId])
 
     const participants = result.rows.map(p => ({
       id: p.id,
       userId: p.user_id,
-      name: p.name,
+      name: p.name || p.email,
       email: p.email,
       role: p.role,
       joinedAt: p.joined_at,
@@ -125,7 +126,8 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Token invalido' }, { status: 401 })
     }
 
-    if (payload.companyType !== 'market') {
+    // Allow market companies (companyType might not be set)
+    if (payload.companyType && payload.companyType !== 'market') {
       return NextResponse.json({ success: false, error: 'Acceso denegado' }, { status: 403 })
     }
 
@@ -229,7 +231,8 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Token invalido' }, { status: 401 })
     }
 
-    if (payload.companyType !== 'market') {
+    // Allow market companies (companyType might not be set)
+    if (payload.companyType && payload.companyType !== 'market') {
       return NextResponse.json({ success: false, error: 'Acceso denegado' }, { status: 403 })
     }
 

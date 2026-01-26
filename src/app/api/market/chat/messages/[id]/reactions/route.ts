@@ -35,7 +35,8 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Token invalido' }, { status: 401 })
     }
 
-    if (payload.companyType !== 'market') {
+    // Allow market companies (companyType might not be set)
+    if (payload.companyType && payload.companyType !== 'market') {
       return NextResponse.json({ success: false, error: 'Acceso denegado' }, { status: 403 })
     }
 
@@ -76,7 +77,7 @@ export async function POST(
 
     // Get all reactions for this message
     const reactions = await db.query(`
-      SELECT r.emoji, r.user_id, u.name as user_name
+      SELECT r.emoji, r.user_id, COALESCE(NULLIF(TRIM(COALESCE(u.firstname, '') || ' ' || COALESCE(u.lastname, '')), ''), u.email) as user_name
       FROM chat_reactions r
       JOIN users u ON u.id = r.user_id
       WHERE r.message_id = $1
@@ -127,7 +128,8 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Token invalido' }, { status: 401 })
     }
 
-    if (payload.companyType !== 'market') {
+    // Allow market companies (companyType might not be set)
+    if (payload.companyType && payload.companyType !== 'market') {
       return NextResponse.json({ success: false, error: 'Acceso denegado' }, { status: 403 })
     }
 
@@ -148,7 +150,7 @@ export async function DELETE(
 
     // Get remaining reactions
     const reactions = await db.query(`
-      SELECT r.emoji, r.user_id, u.name as user_name
+      SELECT r.emoji, r.user_id, COALESCE(NULLIF(TRIM(COALESCE(u.firstname, '') || ' ' || COALESCE(u.lastname, '')), ''), u.email) as user_name
       FROM chat_reactions r
       JOIN users u ON u.id = r.user_id
       WHERE r.message_id = $1

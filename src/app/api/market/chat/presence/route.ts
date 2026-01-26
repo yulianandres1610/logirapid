@@ -32,7 +32,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Token invalido' }, { status: 401 })
     }
 
-    if (payload.companyType !== 'market') {
+    // Allow market companies (companyType might not be set)
+    if (payload.companyType && payload.companyType !== 'market') {
       return NextResponse.json({ success: false, error: 'Acceso denegado' }, { status: 403 })
     }
 
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
         p.status,
         p.custom_status,
         p.last_seen_at,
-        u.name,
+        COALESCE(NULLIF(TRIM(COALESCE(u.firstname, '') || ' ' || COALESCE(u.lastname, '')), ''), u.email) as name,
         u.email,
         CASE
           WHEN p.last_seen_at > NOW() - INTERVAL '2 minutes' THEN 'online'
@@ -59,12 +60,12 @@ export async function GET(request: NextRequest) {
           WHEN p.last_seen_at > NOW() - INTERVAL '5 minutes' THEN 1
           ELSE 2
         END,
-        u.name ASC
+        COALESCE(u.firstname, u.email) ASC
     `, [payload.companyId])
 
     const users = result.rows.map(p => ({
       userId: p.user_id,
-      name: p.name,
+      name: p.name || p.email,
       email: p.email,
       status: p.computed_status,
       customStatus: p.custom_status,
@@ -106,7 +107,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Token invalido' }, { status: 401 })
     }
 
-    if (payload.companyType !== 'market') {
+    // Allow market companies (companyType might not be set)
+    if (payload.companyType && payload.companyType !== 'market') {
       return NextResponse.json({ success: false, error: 'Acceso denegado' }, { status: 403 })
     }
 

@@ -32,8 +32,8 @@ export function ChatLayout() {
 
   return (
     <div className={cn(
-      'flex h-full overflow-hidden rounded-xl border',
-      theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
+      'flex h-full overflow-hidden',
+      theme === 'dark' ? 'bg-gray-900' : 'bg-white'
     )}>
       {/* Left sidebar - Presence list */}
       <div className={cn(

@@ -32,8 +32,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Token invalido' }, { status: 401 })
     }
 
-    // Only market companies can use chat
-    if (payload.companyType !== 'market') {
+    // Allow market companies (companyType might not be set)
+    if (payload.companyType && payload.companyType !== 'market') {
       return NextResponse.json({ success: false, error: 'Acceso denegado' }, { status: 403 })
     }
 
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
           WHEN c.type = 'private' THEN (
             SELECT json_build_object(
               'id', u.id,
-              'name', u.name,
+              'name', COALESCE(NULLIF(TRIM(COALESCE(u.firstname, '') || ' ' || COALESCE(u.lastname, '')), ''), u.email),
               'email', u.email
             )
             FROM chat_participants op
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
         ${search ? `AND (c.name ILIKE $3 OR EXISTS (
           SELECT 1 FROM chat_participants cp
           JOIN users u ON u.id = cp.user_id
-          WHERE cp.conversation_id = c.id AND u.name ILIKE $3
+          WHERE cp.conversation_id = c.id AND COALESCE(u.firstname || ' ' || u.lastname, u.email) ILIKE $3
         ))` : ''}
       ORDER BY
         COALESCE((
@@ -161,7 +161,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Token invalido' }, { status: 401 })
     }
 
-    if (payload.companyType !== 'market') {
+    // Allow market companies (companyType might not be set)
+    if (payload.companyType && payload.companyType !== 'market') {
       return NextResponse.json({ success: false, error: 'Acceso denegado' }, { status: 403 })
     }
 

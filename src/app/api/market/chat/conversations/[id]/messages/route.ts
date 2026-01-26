@@ -35,7 +35,8 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Token invalido' }, { status: 401 })
     }
 
-    if (payload.companyType !== 'market') {
+    // Allow market companies (companyType might not be set)
+    if (payload.companyType && payload.companyType !== 'market') {
       return NextResponse.json({ success: false, error: 'Acceso denegado' }, { status: 403 })
     }
 
@@ -77,13 +78,13 @@ export async function GET(
         m.created_at,
         m.edited_at,
         m.sender_id,
-        u.name as sender_name,
+        COALESCE(NULLIF(TRIM(COALESCE(u.firstname, '') || ' ' || COALESCE(u.lastname, '')), ''), u.email) as sender_name,
         u.email as sender_email,
         (
           SELECT json_agg(json_build_object(
             'emoji', r.emoji,
             'userId', r.user_id,
-            'userName', ru.name
+            'userName', COALESCE(NULLIF(TRIM(COALESCE(ru.firstname, '') || ' ' || COALESCE(ru.lastname, '')), ''), ru.email)
           ))
           FROM chat_reactions r
           JOIN users ru ON ru.id = r.user_id
@@ -93,7 +94,7 @@ export async function GET(
           SELECT json_build_object(
             'id', rm.id,
             'content', rm.content,
-            'senderName', rmu.name
+            'senderName', COALESCE(NULLIF(TRIM(COALESCE(rmu.firstname, '') || ' ' || COALESCE(rmu.lastname, '')), ''), rmu.email)
           )
           FROM chat_messages rm
           JOIN users rmu ON rmu.id = rm.sender_id
@@ -194,7 +195,8 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Token invalido' }, { status: 401 })
     }
 
-    if (payload.companyType !== 'market') {
+    // Allow market companies (companyType might not be set)
+    if (payload.companyType && payload.companyType !== 'market') {
       return NextResponse.json({ success: false, error: 'Acceso denegado' }, { status: 403 })
     }
 
@@ -278,14 +280,14 @@ export async function POST(
 
     // Get sender info
     const senderResult = await db.query(`
-      SELECT name, email FROM users WHERE id = $1
+      SELECT COALESCE(NULLIF(TRIM(COALESCE(firstname, '') || ' ' || COALESCE(lastname, '')), ''), email) as name, email FROM users WHERE id = $1
     `, [payload.userId])
 
     // Get reply_to message if exists
     let replyToMessage = null
     if (replyToId) {
       const replyResult = await db.query(`
-        SELECT m.id, m.content, u.name as sender_name
+        SELECT m.id, m.content, COALESCE(NULLIF(TRIM(COALESCE(u.firstname, '') || ' ' || COALESCE(u.lastname, '')), ''), u.email) as sender_name
         FROM chat_messages m
         JOIN users u ON u.id = m.sender_id
         WHERE m.id = $1
