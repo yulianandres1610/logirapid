@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await db.query(`
-      SELECT id, status, file_url, file_name, expires_at, uploaded_at
+      SELECT id, status, file_url, file_name, file_size, file_type, expires_at, uploaded_at
       FROM upload_tokens
       WHERE token = $1 AND company_id = $2
     `, [token, payload.companyId])
@@ -69,6 +69,8 @@ export async function GET(request: NextRequest) {
         status: tokenData.status,
         fileUrl: tokenData.file_url,
         fileName: tokenData.file_name,
+        fileSize: tokenData.file_size ? parseInt(tokenData.file_size) : 0,
+        fileType: tokenData.file_type || 'image/jpeg',
         expired: isExpired,
         uploadedAt: tokenData.uploaded_at
       }

@@ -109,11 +109,20 @@ export async function POST(request: NextRequest) {
       }
 
       console.log(`[ORDER INVOICES] Registering ${existingFiles.length} phone-uploaded file(s) for ${orderType} ${orderId}`)
+      console.log('[ORDER INVOICES] Files to register:', JSON.stringify(existingFiles, null, 2))
 
       const registeredInvoices: any[] = []
+      const errors: string[] = []
 
       for (const file of existingFiles) {
         try {
+          // Validate that storagePath exists
+          if (!file.storagePath) {
+            console.error('[ORDER INVOICES] Missing storagePath for file:', file.fileName)
+            errors.push(`${file.fileName}: No tiene storagePath`)
+            continue
+          }
+
           // First check if this file is already registered (to avoid duplicates)
           const columnName = orderType === 'consignment' ? 'consignment_order_id' : 'purchase_id'
           const existingCheck = await db.query(
@@ -155,6 +164,8 @@ export async function POST(request: NextRequest) {
             payload.userId
           ])
 
+          console.log('[ORDER INVOICES] Successfully registered:', file.storagePath, '-> id:', result.rows[0].id)
+
           registeredInvoices.push({
             id: result.rows[0].id,
             fileName: fileName,
@@ -165,11 +176,18 @@ export async function POST(request: NextRequest) {
           })
         } catch (dbError) {
           console.error('[ORDER INVOICES] Error registering phone-uploaded file:', dbError)
+          errors.push(`${file.fileName}: ${dbError instanceof Error ? dbError.message : 'Error al registrar'}`)
         }
       }
 
+      console.log('[ORDER INVOICES] Registration complete:', {
+        registered: registeredInvoices.length,
+        errors: errors.length,
+        total: existingFiles.length
+      })
+
       return NextResponse.json({
-        success: true,
+        success: registeredInvoices.length > 0 || errors.length === 0,
         data: {
           invoices: registeredInvoices,
           registeredCount: registeredInvoices.length,
@@ -177,7 +195,10 @@ export async function POST(request: NextRequest) {
           orderType,
           orderId: parseInt(orderId)
         },
-        message: 'Archivos registrados exitosamente'
+        message: errors.length > 0
+          ? `${registeredInvoices.length}/${existingFiles.length} archivos registrados`
+          : 'Archivos registrados exitosamente',
+        ...(errors.length > 0 ? { errors } : {})
       })
     }
 

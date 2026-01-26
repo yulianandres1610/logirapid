@@ -69,6 +69,17 @@ export async function GET() {
       results.push('Index on status+expires_at created')
     } catch { results.push('Index on status+expires_at already exists') }
 
+    // Add file_size and file_type columns if they don't exist
+    try {
+      await db.query(`ALTER TABLE upload_tokens ADD COLUMN IF NOT EXISTS file_size BIGINT`)
+      results.push('Column file_size added')
+    } catch { results.push('Column file_size already exists') }
+
+    try {
+      await db.query(`ALTER TABLE upload_tokens ADD COLUMN IF NOT EXISTS file_type VARCHAR(100)`)
+      results.push('Column file_type added')
+    } catch { results.push('Column file_type already exists') }
+
     return NextResponse.json({
       success: true,
       message: 'Migration completed',

@@ -12,7 +12,7 @@ interface PhoneUploadModalProps {
   purpose: 'purchase_invoice' | 'expense_receipt' | 'product_image'
   referenceType?: 'purchase' | 'expense' | 'consignment'
   referenceId?: number
-  onUploadComplete: (fileUrl: string, fileName: string) => void
+  onUploadComplete: (fileUrl: string, fileName: string, fileSize?: number, fileType?: string) => void
 }
 
 type TokenStatus = 'creating' | 'ready' | 'uploaded' | 'expired' | 'error'
@@ -91,7 +91,7 @@ export function PhoneUploadModal({
               clearInterval(pollingRef.current)
               pollingRef.current = null
             }
-            onUploadComplete(data.data.fileUrl, data.data.fileName)
+            onUploadComplete(data.data.fileUrl, data.data.fileName, data.data.fileSize, data.data.fileType)
             // Auto-close after 2 seconds
             setTimeout(() => {
               if (mountedRef.current) onClose()

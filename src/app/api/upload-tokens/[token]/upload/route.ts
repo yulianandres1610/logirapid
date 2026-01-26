@@ -142,15 +142,17 @@ export async function POST(
       }, { status: 500 })
     }
 
-    // Update token with file info
+    // Update token with file info (including size and type)
     await db.query(`
       UPDATE upload_tokens
       SET status = 'uploaded',
           file_url = $1,
           file_name = $2,
+          file_size = $3,
+          file_type = $4,
           uploaded_at = NOW()
-      WHERE id = $3
-    `, [storagePath, file.name, tokenData.id])
+      WHERE id = $5
+    `, [storagePath, file.name, file.size, file.type, tokenData.id])
 
     // If we have a reference_id, also save to order_invoices
     if (tokenData.reference_type && tokenData.reference_id) {
@@ -182,14 +184,22 @@ export async function POST(
       }
     }
 
-    console.log(`[Upload Token] File uploaded successfully: ${storagePath}`)
+    console.log(`[Upload Token] File uploaded successfully:`, {
+      storagePath,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      tokenId: tokenData.id
+    })
 
     return NextResponse.json({
       success: true,
       message: 'Archivo subido exitosamente',
       data: {
         fileName: file.name,
-        storagePath
+        storagePath,
+        fileSize: file.size,
+        fileType: file.type
       }
     })
 
