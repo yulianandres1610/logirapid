@@ -45,7 +45,8 @@ import {
   Receipt,
   FileCheck,
   TrendingUp,
-  ClipboardCheck
+  ClipboardCheck,
+  MessageCircle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -540,6 +541,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       ]
     },
     { icon: Users, label: "Empleados", href: "/dashboard/market/accounting/employees" },
+    { icon: MessageCircle, label: "Conversaciones", href: "/dashboard/market/chat" },
     {
       icon: Calculator,
       label: "Contabilidad",
