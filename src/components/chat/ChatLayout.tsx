@@ -4,21 +4,20 @@ import React, { useState, useEffect } from 'react'
 import { useTheme } from '@/contexts/theme-context'
 import { useChatContext } from '@/contexts/ChatContext'
 import { cn } from '@/lib/utils'
-import { ConversationList } from './ConversationList'
 import { ChatThread } from './ChatThread'
 import { PendingChatThread } from './PendingChatThread'
 import { PresenceList } from './PresenceList'
 import { NewConversationModal } from './NewConversationModal'
-import { MessageSquare, Users, ArrowLeft } from 'lucide-react'
+import { MessageSquare, Users } from 'lucide-react'
 
-type MobileView = 'users' | 'conversations' | 'chat'
+type MobileView = 'users' | 'chat'
 
 export function ChatLayout() {
   const { theme } = useTheme()
   const { activeConversation, pendingChat, fetchCompanyUsers, updatePresence } = useChatContext()
   const [showNewConversation, setShowNewConversation] = useState(false)
   const [newConversationType, setNewConversationType] = useState<'private' | 'group' | 'channel'>('private')
-  const [mobileView, setMobileView] = useState<MobileView>('conversations')
+  const [mobileView, setMobileView] = useState<MobileView>('users')
 
   // Fetch users on mount and set up presence
   useEffect(() => {
@@ -42,7 +41,7 @@ export function ChatLayout() {
   }
 
   const handleBackToList = () => {
-    setMobileView('conversations')
+    setMobileView('users')
   }
 
   return (
@@ -50,9 +49,10 @@ export function ChatLayout() {
       'flex h-full overflow-hidden',
       theme === 'dark' ? 'bg-gray-900' : 'bg-white'
     )}>
-      {/* Left sidebar - Presence list (hidden on mobile) */}
+      {/* Left sidebar - Users list */}
       <div className={cn(
-        'hidden lg:flex w-60 flex-shrink-0 border-r flex-col',
+        'w-full md:w-72 flex-shrink-0 border-r flex-col',
+        mobileView === 'users' ? 'flex' : 'hidden md:flex',
         theme === 'dark' ? 'border-gray-800 bg-gray-900' : 'border-gray-200 bg-gray-50'
       )}>
         {/* Header */}
@@ -73,32 +73,6 @@ export function ChatLayout() {
           </div>
         </div>
         <PresenceList onStartChat={handleNewConversation} />
-      </div>
-
-      {/* Middle - Conversation list */}
-      <div className={cn(
-        'w-full md:w-72 flex-shrink-0 border-r flex-col',
-        mobileView === 'conversations' ? 'flex' : 'hidden md:flex',
-        theme === 'dark' ? 'border-gray-800' : 'border-gray-200'
-      )}>
-        {/* Header */}
-        <div className={cn(
-          'h-12 px-3 flex items-center gap-2 border-b flex-shrink-0',
-          theme === 'dark' ? 'border-gray-800' : 'border-gray-200'
-        )}>
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-blue-500 flex-shrink-0">
-            <MessageSquare className="w-3.5 h-3.5 text-white" />
-          </div>
-          <div className="min-w-0">
-            <h2 className={cn(
-              'font-semibold text-sm truncate',
-              theme === 'dark' ? 'text-white' : 'text-gray-900'
-            )}>
-              Conversaciones
-            </h2>
-          </div>
-        </div>
-        <ConversationList onNewConversation={handleNewConversation} />
       </div>
 
       {/* Right - Chat thread */}
@@ -133,7 +107,7 @@ export function ChatLayout() {
                 'text-sm',
                 theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
               )}>
-                Selecciona una conversacion para comenzar
+                Selecciona un usuario para comenzar
               </p>
             </div>
           </div>
