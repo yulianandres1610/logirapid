@@ -25,7 +25,7 @@ function ChatPageContent() {
   }, [fetchConversations, fetchCompanyUsers])
 
   return (
-    <div className="h-[calc(100vh-4rem)] -m-6">
+    <div className="h-[calc(100vh-4rem-1.5rem)] md:h-[calc(100vh-4rem-3rem)] -m-3 md:-m-6">
       <ChatLayout />
     </div>
   )

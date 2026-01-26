@@ -60,12 +60,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all users in the company
+    // Note: user_companies table uses 'userid' and 'companyid' (no underscores)
     const result = await db.query(`
       SELECT
         u.id,
         COALESCE(NULLIF(TRIM(COALESCE(u.firstname, '') || ' ' || COALESCE(u.lastname, '')), ''), u.email) as name,
         u.email,
-        uc.role,
+        u.role,
         COALESCE(p.status, 'offline') as presence_status,
         CASE
           WHEN p.last_seen_at > NOW() - INTERVAL '2 minutes' THEN 'online'
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
         END as computed_status,
         p.last_seen_at
       FROM users u
-      JOIN user_companies uc ON uc.user_id = u.id AND uc.company_id = $1
+      JOIN user_companies uc ON uc.userid = u.id AND uc.companyid = $1
       LEFT JOIN chat_presence p ON p.user_id = u.id
       ${whereClause}
       ORDER BY

@@ -141,7 +141,7 @@ export function PresenceList({ onStartChat }: PresenceListProps) {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100%-3.5rem)]">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Search */}
       <div className="p-3">
         <div className={cn(

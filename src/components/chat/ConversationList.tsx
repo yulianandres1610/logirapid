@@ -92,7 +92,7 @@ export function ConversationList({ onNewConversation }: ConversationListProps) {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100%-3.5rem)]">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Search and new button */}
       <div className="p-3 flex gap-2">
         <div className={cn(

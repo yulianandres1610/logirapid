@@ -172,7 +172,7 @@ export async function POST(
         WHERE id = $1
           AND EXISTS (
             SELECT 1 FROM user_companies
-            WHERE user_id = $1 AND company_id = $2
+            WHERE userid = $1 AND companyid = $2
           )
       `, [userId, payload.companyId])
 
