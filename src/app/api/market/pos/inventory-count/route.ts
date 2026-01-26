@@ -328,9 +328,19 @@ export async function POST(request: NextRequest) {
 
       // Mapa de ventas con clave compuesta: productId:variantId
       const salesMap: Record<string, number> = {}
+      // También mantener suma de ventas por producto (para conteos sin variant_id)
+      const salesSumByProduct: Record<number, number> = {}
+
       salesResult.rows.forEach(row => {
-        const key = `${row.product_id}:${row.variant_id || 'null'}`
-        salesMap[key] = parseFloat(row.total_sold) || 0
+        const productId = parseInt(row.product_id)
+        const variantId = row.variant_id
+        const soldQty = parseFloat(row.total_sold) || 0
+
+        const key = `${productId}:${variantId || 'null'}`
+        salesMap[key] = soldQty
+
+        // Sumar todas las ventas al total del producto
+        salesSumByProduct[productId] = (salesSumByProduct[productId] || 0) + soldQty
       })
 
       // Obtener stock actual del almacén (productos y variantes)
@@ -343,9 +353,21 @@ export async function POST(request: NextRequest) {
 
       // Mapa de stock con clave compuesta: productId:variantId
       const stockMap: Record<string, number> = {}
+      // También mantener suma de todas las variantes por producto (para conteos sin variant_id)
+      const stockSumByProduct: Record<number, number> = {}
+
       stockResult.rows.forEach(row => {
-        const key = `${row.product_id}:${row.variant_id || 'null'}`
-        stockMap[key] = parseFloat(row.stock) || 0
+        const productId = parseInt(row.product_id)
+        const variantId = row.variant_id
+        const stockQty = parseFloat(row.stock) || 0
+
+        const key = `${productId}:${variantId || 'null'}`
+        stockMap[key] = stockQty
+
+        // Si es un registro de variante (variant_id no es null), sumar al total del producto
+        if (variantId !== null) {
+          stockSumByProduct[productId] = (stockSumByProduct[productId] || 0) + stockQty
+        }
       })
 
       // Insertar nuevas líneas
@@ -356,12 +378,26 @@ export async function POST(request: NextRequest) {
       // Negativo = SOBRANTE (hay más de lo esperado)
       for (const line of lines) {
         const salesKey = `${line.productId}:${line.variantId || 'null'}`
-        const soldToday = salesMap[salesKey] || 0
+        // Ventas del día: si no hay variant_id, usar suma de todas las variantes
+        let soldToday = salesMap[salesKey] || 0
+        if (soldToday === 0 && !line.variantId) {
+          soldToday = salesSumByProduct[line.productId] || 0
+        }
+
         const stockKey = `${line.productId}:${line.variantId || 'null'}`
-        // Buscar stock: primero variante-específico, luego fallback a producto (variant_id IS NULL)
+
+        // Buscar stock según el tipo de línea:
+        // 1. Si la línea tiene variant_id específico, buscar stock de esa variante
+        // 2. Si la línea NO tiene variant_id (conteo agregado de producto):
+        //    a. Primero buscar registro de stock a nivel producto (variant_id IS NULL)
+        //    b. Si no existe, SUMAR todos los stocks de variantes del producto
         let currentStock = stockMap[stockKey] || 0
-        if (currentStock === 0 && line.variantId) {
-          // Si no hay stock de variante, usar stock a nivel de producto
+
+        if (currentStock === 0 && !line.variantId) {
+          // No hay stock a nivel producto, usar suma de variantes
+          currentStock = stockSumByProduct[line.productId] || 0
+        } else if (currentStock === 0 && line.variantId) {
+          // Si buscamos una variante específica y no hay, intentar nivel producto
           const productKey = `${line.productId}:null`
           currentStock = stockMap[productKey] || 0
         }
