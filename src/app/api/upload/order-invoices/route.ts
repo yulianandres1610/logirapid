@@ -114,6 +114,28 @@ export async function POST(request: NextRequest) {
 
       for (const file of existingFiles) {
         try {
+          // First check if this file is already registered (to avoid duplicates)
+          const columnName = orderType === 'consignment' ? 'consignment_order_id' : 'purchase_id'
+          const existingCheck = await db.query(
+            `SELECT id FROM order_invoices WHERE ${columnName} = $1 AND storage_path = $2`,
+            [parseInt(orderId), file.storagePath]
+          )
+
+          if (existingCheck.rows.length > 0) {
+            // Already registered, skip but include in response
+            console.log(`[ORDER INVOICES] File already registered: ${file.storagePath}`)
+            registeredInvoices.push({
+              id: existingCheck.rows[0].id,
+              fileName: file.storagePath.split('/').pop() || file.fileName,
+              originalName: file.fileName,
+              storagePath: file.storagePath,
+              fileType: file.fileType,
+              fileSize: file.fileSize,
+              alreadyExists: true
+            })
+            continue
+          }
+
           const insertQuery = orderType === 'consignment'
             ? `INSERT INTO order_invoices (consignment_order_id, file_name, original_name, storage_path, file_type, file_size, company_id, uploaded_by)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`
