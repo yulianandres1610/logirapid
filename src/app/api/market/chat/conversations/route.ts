@@ -95,6 +95,10 @@ export async function GET(request: NextRequest) {
       JOIN chat_participants p ON p.conversation_id = c.id
       WHERE p.user_id = $1
         AND c.company_id = $2
+        AND (
+          c.type != 'private'
+          OR EXISTS (SELECT 1 FROM chat_messages WHERE conversation_id = c.id)
+        )
         ${search ? `AND (c.name ILIKE $3 OR EXISTS (
           SELECT 1 FROM chat_participants cp
           JOIN users u ON u.id = cp.user_id
