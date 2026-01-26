@@ -381,6 +381,22 @@ export async function POST(request: NextRequest) {
       // Entonces: difference = Stock actual - Contado
       // Positivo = FALTANTE (hay menos de lo esperado)
       // Negativo = SOBRANTE (hay más de lo esperado)
+
+      // IMPORTANTE: Contar cuántas variantes de cada producto están siendo contadas
+      // para evitar duplicar el stock a nivel producto
+      const variantsPerProduct: Record<number, number[]> = {}
+      for (const line of lines) {
+        if (line.variantId) {
+          if (!variantsPerProduct[line.productId]) {
+            variantsPerProduct[line.productId] = []
+          }
+          variantsPerProduct[line.productId].push(line.variantId)
+        }
+      }
+
+      // Track de productos cuyo stock a nivel producto ya fue asignado
+      const productStockAssigned: Set<number> = new Set()
+
       for (const line of lines) {
         const salesKey = `${line.productId}:${line.variantId || 'null'}`
         // Ventas del día: si no hay variant_id, usar suma de todas las variantes
@@ -393,7 +409,6 @@ export async function POST(request: NextRequest) {
 
         // Buscar stock según el tipo de línea:
         // 1. Si la línea tiene variant_id específico, buscar stock de esa variante
-        //    IMPORTANTE: También sumar stock a nivel producto si existe (stock antiguo no migrado)
         // 2. Si la línea NO tiene variant_id (conteo agregado de producto):
         //    a. Primero buscar registro de stock a nivel producto (variant_id IS NULL)
         //    b. Si no existe, SUMAR todos los stocks de variantes del producto
@@ -401,12 +416,23 @@ export async function POST(request: NextRequest) {
 
         if (line.variantId) {
           // Contando una variante específica
-          // También sumar stock a nivel producto si existe - puede ser stock antiguo no migrado
-          // cuando se agregaron variantes al producto
+          // Solo sumar stock a nivel producto si:
+          // 1. Hay stock a nivel producto
+          // 2. Es la PRIMERA variante de este producto que procesamos (evitar duplicación)
+          // 3. Solo hay UNA variante siendo contada de este producto (si hay múltiples, no podemos saber a cuál asignar)
           const oldProductStock = productLevelStock[line.productId] || 0
-          if (oldProductStock > 0) {
-            console.log(`[Inventory Count] Producto ${line.productId} variante ${line.variantId}: sumando stock nivel producto (${oldProductStock}) + stock variante (${currentStock})`)
-            currentStock += oldProductStock
+          const variantsBeingCounted = variantsPerProduct[line.productId]?.length || 0
+
+          if (oldProductStock > 0 && !productStockAssigned.has(line.productId)) {
+            if (variantsBeingCounted === 1) {
+              // Solo una variante siendo contada, podemos sumar el stock huérfano
+              console.log(`[Inventory Count] Producto ${line.productId} variante ${line.variantId}: sumando stock nivel producto (${oldProductStock}) + stock variante (${currentStock})`)
+              currentStock += oldProductStock
+              productStockAssigned.add(line.productId)
+            } else {
+              // Múltiples variantes siendo contadas, NO sumar para evitar duplicación
+              console.warn(`[Inventory Count] ADVERTENCIA: Producto ${line.productId} tiene ${variantsBeingCounted} variantes siendo contadas Y stock huérfano (${oldProductStock}). No se suma para evitar duplicación. Use /api/market/stock-audit para corregir.`)
+            }
           }
         } else if (currentStock === 0) {
           // Contando producto sin variante y no hay stock a nivel producto
