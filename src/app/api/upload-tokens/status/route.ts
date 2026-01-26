@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const BUCKET_NAME = 'company-private-documents'
 
 interface JWTPayload {
   userId: number
@@ -63,6 +68,22 @@ export async function GET(request: NextRequest) {
       tokenData.status = 'expired'
     }
 
+    // Generate signed URL for preview if file was uploaded
+    let signedUrl = null
+    if (tokenData.status === 'uploaded' && tokenData.file_url && supabaseUrl && supabaseServiceKey) {
+      try {
+        const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+          auth: { autoRefreshToken: false, persistSession: false }
+        })
+        const { data } = await supabase.storage
+          .from(BUCKET_NAME)
+          .createSignedUrl(tokenData.file_url, 3600) // 1 hour
+        signedUrl = data?.signedUrl || null
+      } catch (e) {
+        console.error('[Upload Token Status] Error creating signed URL:', e)
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -71,6 +92,7 @@ export async function GET(request: NextRequest) {
         fileName: tokenData.file_name,
         fileSize: tokenData.file_size ? parseInt(tokenData.file_size) : 0,
         fileType: tokenData.file_type || 'image/jpeg',
+        signedUrl, // URL for preview
         expired: isExpired,
         uploadedAt: tokenData.uploaded_at
       }

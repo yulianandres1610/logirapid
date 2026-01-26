@@ -148,15 +148,18 @@ export function InvoiceUploader({
     onInvoicesChange(invoices.filter(inv => inv.id !== id))
   }, [invoices, onInvoicesChange])
 
-  const handlePhoneUploadComplete = useCallback((fileUrl: string, fileName: string, fileSize?: number, fileType?: string) => {
-    console.log('[InvoiceUploader] Phone upload complete:', { fileUrl, fileName, fileSize, fileType })
+  const handlePhoneUploadComplete = useCallback((fileUrl: string, fileName: string, fileSize?: number, fileType?: string, signedUrl?: string) => {
+    console.log('[InvoiceUploader] Phone upload complete:', { fileUrl, fileName, fileSize, fileType, signedUrl })
+    const detectedType = fileType || (fileName?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg')
     const newInvoice: InvoiceFile = {
       id: generateId(),
       name: fileName || 'foto-telefono.jpg',
       size: fileSize || 0,
-      type: fileType || (fileName?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'),
+      type: detectedType,
       uploaded: true,
       storagePath: fileUrl,
+      // Use signedUrl as preview for images
+      preview: detectedType.startsWith('image/') ? signedUrl : undefined,
       uploadedAt: new Date().toISOString()
     }
     console.log('[InvoiceUploader] Created invoice:', newInvoice)
