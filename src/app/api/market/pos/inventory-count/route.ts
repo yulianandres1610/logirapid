@@ -411,10 +411,8 @@ export async function POST(request: NextRequest) {
         // El valor de la diferencia: positivo = pérdida (faltante), negativo = ganancia (sobrante)
         const differenceValue = difference * unitPrice
 
-        // Nombre del producto incluyendo variante si aplica
-        const displayName = line.variantName
-          ? `${line.productName} - ${line.variantName}`
-          : (line.productName || '')
+        // El nombre del producto ya viene formateado desde el cliente (incluye variante si aplica)
+        const displayName = line.productName || ''
 
         await db.query(`
           INSERT INTO market_inventory_count_lines (
