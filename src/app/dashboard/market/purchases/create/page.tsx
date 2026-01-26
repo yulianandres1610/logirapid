@@ -1725,43 +1725,69 @@ export default function CreatePurchasePage() {
         // Upload invoices if any (only for new purchases)
         if (!isEditMode && invoiceFiles.length > 0) {
           try {
+            console.log('[Purchase Create] Processing invoices:', invoiceFiles.map(inv => ({
+              name: inv.name,
+              hasFile: !!inv.file,
+              hasStoragePath: !!inv.storagePath,
+              uploaded: inv.uploaded
+            })))
+
             // Separate phone-uploaded invoices (already in storage) from local files
-            const localFileInvoices = invoiceFiles.filter(inv => inv.file && !inv.storagePath)
+            // Phone uploads have storagePath set and uploaded=true, but NO File object
+            const localFileInvoices = invoiceFiles.filter(inv => inv.file instanceof File && !inv.storagePath)
             const phoneUploadedInvoices = invoiceFiles.filter(inv => inv.storagePath && inv.uploaded)
 
-            // Upload local files
+            console.log('[Purchase Create] Local files:', localFileInvoices.length, 'Phone uploads:', phoneUploadedInvoices.length)
+
+            // Upload local files (only if we have actual File objects to upload)
             if (localFileInvoices.length > 0) {
               const formData = new FormData()
+              let filesAdded = 0
               localFileInvoices.forEach(inv => {
-                if (inv.file) {
+                if (inv.file instanceof File) {
                   formData.append('files', inv.file)
+                  filesAdded++
                 }
               })
-              formData.append('orderType', 'purchase')
-              formData.append('orderId', purchaseId!.toString())
 
-              await fetch('/api/upload/order-invoices', {
-                method: 'POST',
-                body: formData
-              })
+              // Only make request if we actually have files to upload
+              if (filesAdded > 0) {
+                formData.append('orderType', 'purchase')
+                formData.append('orderId', purchaseId!.toString())
+
+                const uploadResponse = await fetch('/api/upload/order-invoices', {
+                  method: 'POST',
+                  body: formData
+                })
+                const uploadResult = await uploadResponse.json()
+                console.log('[Purchase Create] Local upload result:', uploadResult)
+              }
             }
 
             // Register phone-uploaded invoices (already in storage)
             if (phoneUploadedInvoices.length > 0) {
-              await fetch('/api/upload/order-invoices', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  orderType: 'purchase',
-                  orderId: purchaseId,
-                  existingFiles: phoneUploadedInvoices.map(inv => ({
-                    storagePath: inv.storagePath,
-                    fileName: inv.name,
-                    fileType: inv.type,
-                    fileSize: inv.size || 0
-                  }))
+              const existingFiles = phoneUploadedInvoices
+                .filter(inv => inv.storagePath) // Extra safety check
+                .map(inv => ({
+                  storagePath: inv.storagePath,
+                  fileName: inv.name,
+                  fileType: inv.type || 'image/jpeg',
+                  fileSize: inv.size || 0
+                }))
+
+              if (existingFiles.length > 0) {
+                const registerResponse = await fetch('/api/upload/order-invoices', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    orderType: 'purchase',
+                    orderId: purchaseId,
+                    existingFiles
+                  })
                 })
-              })
+                const registerResult = await registerResponse.json()
+                console.log('[Purchase Create] Phone upload register result:', registerResult)
+              }
             }
           } catch (uploadError) {
             console.error('Error uploading invoices:', uploadError)
