@@ -547,259 +547,286 @@ export default function CloseSessionPage() {
   return (
     <ProtectedRoute>
       <DashboardLayout hideSidebar>
-        <div className="min-h-screen p-4 md:p-6">
-          <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
-            {/* Header */}
+        <div className="h-screen flex flex-col overflow-hidden">
+          {/* Compact Header */}
+          <div className={cn(
+            'flex-shrink-0 px-4 py-2 border-b flex items-center justify-between',
+            theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
+          )}>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => router.back()}
                 className={cn(
-                  'p-2 rounded-lg transition-colors',
-                  theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
+                  'p-2 rounded-lg transition-colors touch-manipulation',
+                  theme === 'dark' ? 'hover:bg-gray-800 active:bg-gray-700' : 'hover:bg-gray-100 active:bg-gray-200'
                 )}
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="text-xl md:text-2xl font-bold">Arqueo de Caja</h1>
-                <p className="text-sm text-gray-500">{session.sessionCode} • {session.terminalName}</p>
+                <h1 className="text-lg font-bold">Arqueo de Caja</h1>
+                <p className="text-xs text-gray-500">{session.sessionCode} • {session.terminalName}</p>
               </div>
             </div>
 
-            <div className="grid lg:grid-cols-2 gap-4 md:gap-6">
-              {/* Left Column - Cash Count */}
+            {/* Total Difference Badge in Header */}
+            <div className={cn(
+              'px-4 py-2 rounded-lg',
+              Math.abs(totalDifferenceUsd) < 0.01
+                ? 'bg-green-500/20 text-green-400'
+                : totalDifferenceUsd > 0
+                ? 'bg-green-500/20 text-green-400'
+                : 'bg-red-500/20 text-red-400'
+            )}>
+              <span className="text-xs text-gray-400 mr-2">Diferencia:</span>
+              <span className="font-bold font-mono">
+                {totalDifferenceUsd >= 0 ? '+' : ''}${totalDifferenceUsd.toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          {/* Main Content - Full Height */}
+          <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-0">
+            {/* Left Panel - Cash Count (takes more space) */}
+            <div className={cn(
+              'lg:col-span-7 xl:col-span-8 flex flex-col border-r overflow-hidden',
+              theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-gray-50 border-gray-200'
+            )}>
+              {/* Currency Tabs */}
               <div className={cn(
-                'rounded-2xl border shadow-lg overflow-hidden',
-                theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                'flex-shrink-0 grid grid-cols-3 border-b',
+                theme === 'dark' ? 'border-gray-800' : 'border-gray-200'
               )}>
-                {/* Currency Tabs */}
-                <div className="flex border-b border-gray-700">
-                  {(['usd', 'cup', 'mlc'] as const).map(currency => (
-                    <button
-                      key={currency}
-                      onClick={() => setActiveTab(currency)}
-                      className={cn(
-                        'flex-1 py-3 px-4 text-sm font-medium transition-colors relative',
-                        activeTab === currency
-                          ? 'text-blue-500'
-                          : theme === 'dark' ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
-                      )}
-                    >
-                      <span className="uppercase">{currency}</span>
-                      <span className="block text-xs mt-0.5 font-mono">
-                        {currency === 'usd' && `$${closingCash.usd.toFixed(2)}`}
-                        {currency === 'cup' && `$${closingCash.cup.toFixed(0)}`}
-                        {currency === 'mlc' && `$${closingCash.mlc.toFixed(2)}`}
-                      </span>
-                      {activeTab === currency && (
-                        <motion.div
-                          layoutId="activeTab"
-                          className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"
-                        />
-                      )}
-                    </button>
-                  ))}
-                </div>
+                {(['usd', 'cup', 'mlc'] as const).map(currency => (
+                  <button
+                    key={currency}
+                    onClick={() => setActiveTab(currency)}
+                    className={cn(
+                      'py-3 px-2 font-medium transition-colors relative touch-manipulation',
+                      activeTab === currency
+                        ? theme === 'dark' ? 'bg-gray-800 text-blue-400' : 'bg-white text-blue-600'
+                        : theme === 'dark' ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
+                    )}
+                  >
+                    <span className="text-lg font-bold uppercase">{currency}</span>
+                    <span className="block text-sm font-mono mt-0.5">
+                      {currency === 'cup' ? `$${closingCash[currency].toFixed(0)}` : `$${closingCash[currency].toFixed(2)}`}
+                    </span>
+                    {activeTab === currency && (
+                      <motion.div
+                        layoutId="activeTab"
+                        className="absolute bottom-0 left-0 right-0 h-1 bg-blue-500"
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
 
-                {/* Denominations Grid */}
-                <div className="p-3 md:p-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {getDenominations().map(d => {
-                      const count = getCounts()[d.value] || 0
-                      const subtotal = count * d.value
-                      return (
-                        <div
-                          key={d.value}
-                          className={cn(
-                            'rounded-xl p-2 md:p-3 transition-colors',
-                            count > 0
-                              ? theme === 'dark' ? 'bg-blue-900/30 border border-blue-700/50' : 'bg-blue-50 border border-blue-200'
-                              : theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                          )}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-bold text-sm">{d.label}</span>
-                            <span className="text-xs text-gray-500">
-                              {activeTab === 'cup' ? `$${subtotal.toFixed(0)}` : `$${subtotal.toFixed(2)}`}
+              {/* Denominations Grid - Scrollable */}
+              <div className="flex-1 overflow-y-auto p-3">
+                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                  {getDenominations().map(d => {
+                    const count = getCounts()[d.value] || 0
+                    const subtotal = count * d.value
+                    return (
+                      <div
+                        key={d.value}
+                        className={cn(
+                          'rounded-lg p-2 transition-all touch-manipulation select-none',
+                          count > 0
+                            ? theme === 'dark' ? 'bg-blue-900/40 border-2 border-blue-600' : 'bg-blue-100 border-2 border-blue-400'
+                            : theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+                        )}
+                      >
+                        {/* Denomination Label */}
+                        <div className="text-center mb-2">
+                          <span className="font-bold text-base">{d.label}</span>
+                          {count > 0 && (
+                            <span className={cn(
+                              'block text-xs font-mono',
+                              theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                            )}>
+                              = {activeTab === 'cup' ? `$${subtotal.toFixed(0)}` : `$${subtotal.toFixed(2)}`}
                             </span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => updateCount(activeTab, d.value, -1)}
-                              disabled={count === 0}
-                              className={cn(
-                                'p-1.5 rounded-lg transition-colors',
-                                count === 0
-                                  ? 'opacity-30 cursor-not-allowed'
-                                  : theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-200 hover:bg-gray-300'
-                              )}
-                            >
-                              <Minus className="w-3 h-3" />
-                            </button>
-                            <input
-                              type="number"
-                              min="0"
-                              value={count}
-                              onChange={e => setCount(activeTab, d.value, parseInt(e.target.value) || 0)}
-                              className={cn(
-                                'flex-1 text-center font-mono font-bold py-1 rounded-lg w-12',
-                                theme === 'dark' ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300',
-                                'border focus:outline-none focus:ring-1 focus:ring-blue-500'
-                              )}
-                            />
-                            <button
-                              onClick={() => updateCount(activeTab, d.value, 1)}
-                              className={cn(
-                                'p-1.5 rounded-lg transition-colors',
-                                theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-200 hover:bg-gray-300'
-                              )}
-                            >
-                              <Plus className="w-3 h-3" />
-                            </button>
-                          </div>
+                          )}
                         </div>
-                      )
-                    })}
-                  </div>
 
-                  {/* Currency Total */}
-                  <div className={cn(
-                    'mt-4 p-4 rounded-xl',
-                    theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-100'
-                  )}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500">Total {activeTab.toUpperCase()}</span>
-                      <span className="text-2xl font-bold font-mono">
-                        {activeTab === 'cup' ? `$${closingCash[activeTab].toFixed(0)}` : `$${closingCash[activeTab].toFixed(2)}`}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-600/50">
-                      <span className="text-xs text-gray-500">Esperado</span>
-                      <span className="text-sm font-mono text-blue-400">
-                        {activeTab === 'cup' ? `$${adjustedExpectedCash[activeTab].toFixed(0)}` : `$${adjustedExpectedCash[activeTab].toFixed(2)}`}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="text-xs text-gray-500">Diferencia</span>
-                      <span className={cn(
-                        'text-sm font-mono font-bold',
-                        differences[activeTab] === 0 ? 'text-gray-400' :
-                        differences[activeTab] > 0 ? 'text-green-400' : 'text-red-400'
-                      )}>
-                        {differences[activeTab] >= 0 ? '+' : ''}
-                        {activeTab === 'cup' ? differences[activeTab].toFixed(0) : differences[activeTab].toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
+                        {/* Counter Controls */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => updateCount(activeTab, d.value, -1)}
+                            disabled={count === 0}
+                            className={cn(
+                              'flex-1 h-10 rounded-md flex items-center justify-center transition-colors touch-manipulation',
+                              count === 0
+                                ? 'opacity-30 cursor-not-allowed'
+                                : theme === 'dark'
+                                  ? 'bg-gray-700 hover:bg-gray-600 active:bg-gray-500'
+                                  : 'bg-gray-200 hover:bg-gray-300 active:bg-gray-400'
+                            )}
+                          >
+                            <Minus className="w-4 h-4" />
+                          </button>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min="0"
+                            value={count}
+                            onChange={e => setCount(activeTab, d.value, parseInt(e.target.value) || 0)}
+                            className={cn(
+                              'w-12 h-10 text-center font-mono font-bold text-lg rounded-md',
+                              theme === 'dark' ? 'bg-gray-900 border-gray-600' : 'bg-gray-50 border-gray-300',
+                              'border focus:outline-none focus:ring-2 focus:ring-blue-500'
+                            )}
+                          />
+                          <button
+                            onClick={() => updateCount(activeTab, d.value, 1)}
+                            className={cn(
+                              'flex-1 h-10 rounded-md flex items-center justify-center transition-colors touch-manipulation',
+                              theme === 'dark'
+                                ? 'bg-blue-600 hover:bg-blue-500 active:bg-blue-400 text-white'
+                                : 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white'
+                            )}
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
 
-              {/* Right Column - Summary */}
-              <div className="space-y-4">
-                {/* Session Summary */}
-                <div className={cn(
-                  'rounded-2xl border shadow-lg p-4 md:p-6',
-                  theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                )}>
-                  <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-                    <Receipt className="w-5 h-5" />
-                    Resumen de Sesión
-                  </h2>
-
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className={cn(
-                      'p-3 rounded-xl',
-                      theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+              {/* Currency Total Bar - Fixed at bottom */}
+              <div className={cn(
+                'flex-shrink-0 p-3 border-t',
+                theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+              )}>
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Total {activeTab.toUpperCase()}</p>
+                    <p className="text-xl font-bold font-mono">
+                      {activeTab === 'cup' ? `$${closingCash[activeTab].toFixed(0)}` : `$${closingCash[activeTab].toFixed(2)}`}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Esperado</p>
+                    <p className="text-xl font-mono text-blue-400">
+                      {activeTab === 'cup' ? `$${adjustedExpectedCash[activeTab].toFixed(0)}` : `$${adjustedExpectedCash[activeTab].toFixed(2)}`}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Diferencia</p>
+                    <p className={cn(
+                      'text-xl font-mono font-bold',
+                      differences[activeTab] === 0 ? 'text-gray-400' :
+                      differences[activeTab] > 0 ? 'text-green-400' : 'text-red-400'
                     )}>
-                      <p className="text-xs text-gray-500 mb-1">Ventas</p>
-                      <p className="text-xl font-bold text-green-500">${session.summary.totalSales.toFixed(2)}</p>
+                      {differences[activeTab] >= 0 ? '+' : ''}
+                      {activeTab === 'cup' ? differences[activeTab].toFixed(0) : differences[activeTab].toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Panel - Summary (compact) */}
+            <div className={cn(
+              'lg:col-span-5 xl:col-span-4 flex flex-col overflow-hidden',
+              theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+            )}>
+              {/* Scrollable Summary Area */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                {/* Session Summary - Compact */}
+                <div className={cn(
+                  'rounded-lg border p-3',
+                  theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'
+                )}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Receipt className="w-4 h-4 text-gray-400" />
+                    <h2 className="text-sm font-bold">Resumen de Sesión</h2>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className={cn(
+                      'p-2 rounded-md text-center',
+                      theme === 'dark' ? 'bg-gray-700/50' : 'bg-white'
+                    )}>
+                      <p className="text-xs text-gray-500">Ventas</p>
+                      <p className="text-lg font-bold text-green-500 font-mono">${session.summary.totalSales.toFixed(2)}</p>
                       <p className="text-xs text-gray-500">{session.summary.paidOrders} órdenes</p>
                     </div>
                     <div className={cn(
-                      'p-3 rounded-xl',
-                      theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                      'p-2 rounded-md text-center',
+                      theme === 'dark' ? 'bg-gray-700/50' : 'bg-white'
                     )}>
-                      <p className="text-xs text-gray-500 mb-1">Descuentos</p>
-                      <p className="text-xl font-bold text-amber-500">${session.summary.totalDiscounts.toFixed(2)}</p>
+                      <p className="text-xs text-gray-500">Descuentos</p>
+                      <p className="text-lg font-bold text-amber-500 font-mono">${session.summary.totalDiscounts.toFixed(2)}</p>
                     </div>
                   </div>
 
                   {session.paymentsByMethod.length > 0 && (
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-medium text-gray-500">Pagos por Método</h3>
+                    <div className="mt-2 pt-2 border-t border-gray-700/50 space-y-1">
                       {session.paymentsByMethod.map((payment, i) => (
-                        <div key={i} className={cn(
-                          'flex items-center justify-between p-2 rounded-lg text-sm',
-                          theme === 'dark' ? 'bg-gray-700/30' : 'bg-gray-50'
-                        )}>
-                          <span className="capitalize">{payment.method} ({payment.currency})</span>
-                          <span className="font-bold">${payment.amount.toFixed(2)}</span>
+                        <div key={i} className="flex items-center justify-between text-xs">
+                          <span className="text-gray-400 capitalize">{payment.method} ({payment.currency})</span>
+                          <span className="font-mono font-medium">${payment.amount.toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
 
-                {/* Inventory Shortage Section */}
+                {/* Inventory Shortage - Compact */}
                 {inventoryShortage > 0 && (
-                  <div className={cn(
-                    'rounded-2xl border shadow-lg p-4 md:p-6',
-                    'bg-red-900/20 border-red-700/50'
-                  )}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Package className="w-5 h-5 text-red-400" />
-                      <h2 className="text-lg font-bold text-red-300">Faltante de Inventario</h2>
+                  <div className="rounded-lg border p-3 bg-red-900/20 border-red-700/50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Package className="w-4 h-4 text-red-400" />
+                      <h2 className="text-sm font-bold text-red-300">Faltante de Inventario</h2>
                     </div>
-
-                    <div className="text-center py-3">
-                      <p className="text-sm text-gray-400 mb-2">Valor del faltante detectado en conteo</p>
-                      <p className="text-3xl font-bold text-red-400 font-mono">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-red-400 font-mono">
                         ${inventoryShortage.toFixed(2)}
                       </p>
                     </div>
-
-                    <div className="pt-3 border-t border-red-700/50">
-                      <div className="text-xs text-gray-400 space-y-1">
-                        <div className="flex justify-between">
-                          <span>Efectivo ventas esperado:</span>
-                          <span className="font-mono">${session?.expectedCash.usd.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-red-400">
-                          <span>+ Faltante inventario:</span>
-                          <span className="font-mono">${inventoryShortage.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between font-medium pt-1 border-t border-red-700/30">
-                          <span>= Total a reportar:</span>
-                          <span className="font-mono">${adjustedExpectedCash.usd.toFixed(2)}</span>
-                        </div>
+                    <div className="mt-2 pt-2 border-t border-red-700/30 text-xs text-gray-400 space-y-0.5">
+                      <div className="flex justify-between">
+                        <span>Efectivo ventas:</span>
+                        <span className="font-mono">${session?.expectedCash.usd.toFixed(2)}</span>
                       </div>
-                      <p className="text-xs text-red-300/70 mt-3">
-                        Este monto se suma al efectivo esperado. El cajero debe aportar dinero extra para cubrir el faltante.
-                      </p>
+                      <div className="flex justify-between text-red-400">
+                        <span>+ Faltante:</span>
+                        <span className="font-mono">${inventoryShortage.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between font-medium pt-1 border-t border-red-700/30">
+                        <span>= Total:</span>
+                        <span className="font-mono">${adjustedExpectedCash.usd.toFixed(2)}</span>
+                      </div>
                     </div>
                   </div>
                 )}
 
-                {/* Total Difference */}
+                {/* All Currency Differences */}
                 <div className={cn(
-                  'rounded-2xl border shadow-lg p-4 md:p-6',
-                  Math.abs(totalDifferenceUsd) < 0.01
-                    ? 'bg-green-900/20 border-green-700/50'
-                    : totalDifferenceUsd > 0
+                  'rounded-lg border p-3',
+                  Math.abs(totalDifferenceUsd) < 0.01 || totalDifferenceUsd > 0
                     ? 'bg-green-900/20 border-green-700/50'
                     : 'bg-red-900/20 border-red-700/50'
                 )}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Calculator className="w-5 h-5" />
-                    <h2 className="text-lg font-bold">Diferencia Total</h2>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Calculator className="w-4 h-4" />
+                    <h2 className="text-sm font-bold">Diferencias por Moneda</h2>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 mb-4">
+                  <div className="grid grid-cols-3 gap-2 text-center">
                     {(['usd', 'cup', 'mlc'] as const).map(currency => (
-                      <div key={currency} className="text-center">
-                        <p className="text-xs text-gray-400 uppercase">{currency}</p>
+                      <div key={currency} className={cn(
+                        'p-2 rounded-md',
+                        theme === 'dark' ? 'bg-gray-800/50' : 'bg-white/50'
+                      )}>
+                        <p className="text-xs text-gray-400 uppercase font-bold">{currency}</p>
                         <p className={cn(
-                          'font-mono font-bold',
+                          'font-mono font-bold text-lg',
                           differences[currency] === 0 ? 'text-gray-400' :
                           differences[currency] > 0 ? 'text-green-400' : 'text-red-400'
                         )}>
@@ -810,18 +837,17 @@ export default function CloseSessionPage() {
                     ))}
                   </div>
 
-                  <div className="text-center py-3 border-t border-gray-600/50">
-                    <p className="text-sm text-gray-400 mb-1">Equivalente USD</p>
-                    <div className="flex items-center justify-center gap-2">
+                  <div className="mt-2 pt-2 border-t border-gray-600/30 text-center">
+                    <p className="text-xs text-gray-400">Equivalente USD Total</p>
+                    <div className="flex items-center justify-center gap-1">
                       {totalDifferenceUsd > 0 ? (
-                        <TrendingUp className="w-6 h-6 text-green-400" />
+                        <TrendingUp className="w-5 h-5 text-green-400" />
                       ) : totalDifferenceUsd < 0 ? (
-                        <TrendingDown className="w-6 h-6 text-red-400" />
+                        <TrendingDown className="w-5 h-5 text-red-400" />
                       ) : null}
                       <p className={cn(
-                        'text-3xl font-bold font-mono',
-                        Math.abs(totalDifferenceUsd) < 0.01 ? 'text-green-400' :
-                        totalDifferenceUsd > 0 ? 'text-green-400' : 'text-red-400'
+                        'text-2xl font-bold font-mono',
+                        Math.abs(totalDifferenceUsd) < 0.01 || totalDifferenceUsd > 0 ? 'text-green-400' : 'text-red-400'
                       )}>
                         {totalDifferenceUsd >= 0 ? '+' : ''}${totalDifferenceUsd.toFixed(2)}
                       </p>
@@ -829,72 +855,72 @@ export default function CloseSessionPage() {
                   </div>
                 </div>
 
-                {/* Notes */}
+                {/* Notes - Compact */}
                 <div className={cn(
-                  'rounded-2xl border shadow-lg p-4 md:p-6',
-                  theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                  'rounded-lg border p-3',
+                  theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'
                 )}>
-                  <label className="block text-sm font-medium mb-2">Notas de Cierre</label>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">Notas de Cierre</label>
                   <textarea
                     value={closingNotes}
                     onChange={(e) => setClosingNotes(e.target.value)}
                     rows={2}
                     placeholder="Observaciones..."
                     className={cn(
-                      'w-full px-3 py-2 rounded-xl border resize-none focus:outline-none focus:ring-2',
+                      'w-full px-2 py-1.5 text-sm rounded-md border resize-none focus:outline-none focus:ring-2',
                       theme === 'dark'
-                        ? 'bg-gray-700 border-gray-600 focus:ring-blue-500/50'
-                        : 'bg-gray-50 border-gray-200 focus:ring-blue-500/50'
+                        ? 'bg-gray-900 border-gray-600 focus:ring-blue-500/50'
+                        : 'bg-white border-gray-200 focus:ring-blue-500/50'
                     )}
                   />
                 </div>
-              </div>
-            </div>
 
-            {/* Error */}
-            {error && (
+                {/* Error */}
+                {error && (
+                  <div className="p-3 rounded-lg flex items-center gap-2 bg-red-900/30 text-red-300 border border-red-800">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span className="text-sm">{error}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons - Fixed at bottom */}
               <div className={cn(
-                'p-4 rounded-xl flex items-center gap-2',
-                'bg-red-900/30 text-red-300 border border-red-800'
+                'flex-shrink-0 p-3 border-t grid grid-cols-2 gap-2',
+                theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-gray-100 border-gray-200'
               )}>
-                <AlertCircle className="w-5 h-5" />
-                {error}
+                <button
+                  onClick={() => router.back()}
+                  disabled={closing}
+                  className={cn(
+                    'h-14 rounded-lg font-medium text-base touch-manipulation',
+                    theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 active:bg-gray-500' : 'bg-white hover:bg-gray-50 active:bg-gray-100 border border-gray-300'
+                  )}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCloseSession}
+                  disabled={closing}
+                  className={cn(
+                    'h-14 rounded-lg font-bold text-base flex items-center justify-center gap-2 touch-manipulation',
+                    'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 active:from-blue-700 active:to-blue-800',
+                    closing && 'opacity-70 cursor-not-allowed'
+                  )}
+                >
+                  {closing ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Cerrando...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-5 h-5" />
+                      Confirmar
+                    </>
+                  )}
+                </button>
               </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex gap-3 sticky bottom-4">
-              <button
-                onClick={() => router.back()}
-                disabled={closing}
-                className={cn(
-                  'flex-1 py-3 rounded-xl font-medium',
-                  theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'
-                )}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleCloseSession}
-                disabled={closing}
-                className={cn(
-                  'flex-[2] py-3 rounded-xl font-bold flex items-center justify-center gap-2',
-                  'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25',
-                  closing && 'opacity-70 cursor-not-allowed'
-                )}
-              >
-                {closing ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Cerrando...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-5 h-5" />
-                    Confirmar Cierre
-                  </>
-                )}
-              </button>
             </div>
           </div>
         </div>
