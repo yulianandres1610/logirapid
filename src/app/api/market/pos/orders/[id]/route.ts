@@ -263,18 +263,22 @@ export async function PUT(
       const totalPaid = parseFloat(paidResult.rows[0].total) || 0
       const totalAmount = parseFloat(order.total_amount) || 0
 
-      if (totalPaid >= totalAmount) {
+      console.log('[POS Order] Payment verification:', { orderId, totalPaid, totalAmount })
+
+      // Use small tolerance for floating point comparison
+      const isPaid = totalPaid >= (totalAmount - 0.01)
+
+      if (isPaid) {
         await db.query(`
           UPDATE market_pos_orders SET status = 'paid', updated_at = NOW()
           WHERE id = $1
         `, [orderId])
+        console.log('[POS Order] Order marked as PAID:', orderId)
       }
-
-      console.log('[POS Order] Payment added:', orderId, 'Total paid:', totalPaid)
 
       return NextResponse.json({
         success: true,
-        data: { totalPaid, totalAmount, status: totalPaid >= totalAmount ? 'paid' : 'draft' },
+        data: { totalPaid, totalAmount, status: isPaid ? 'paid' : 'draft' },
         message: 'Pago registrado exitosamente'
       })
     }

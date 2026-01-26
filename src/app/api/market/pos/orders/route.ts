@@ -764,15 +764,30 @@ export async function POST(request: NextRequest) {
         ])
       }
 
-      // Calculate total paid
-      const totalPaid = payments.reduce((sum: number, p: { amount?: number }) => sum + (p.amount || 0), 0)
+      // Calculate total paid from database (more reliable than request data)
+      const dbPaidResult = await db.query(`
+        SELECT COALESCE(SUM(amount), 0) as total_paid FROM market_pos_payments WHERE order_id = $1
+      `, [orderId])
+      const totalPaid = parseFloat(dbPaidResult.rows[0]?.total_paid) || 0
 
-      // If fully paid, mark as paid
-      if (totalPaid >= totalAmount) {
+      console.log('[POS Orders] Payment verification:', {
+        orderId,
+        orderNumber,
+        totalAmount,
+        totalPaid,
+        paymentsReceived: payments.length,
+        willMarkAsPaid: totalPaid >= (totalAmount - 0.01)
+      })
+
+      // If fully paid (with small tolerance for floating point), mark as paid
+      if (totalPaid >= (totalAmount - 0.01)) {
         await db.query(`
           UPDATE market_pos_orders SET status = 'paid', updated_at = NOW()
           WHERE id = $1
         `, [orderId])
+        console.log('[POS Orders] Order marked as PAID:', orderNumber)
+      } else {
+        console.log('[POS Orders] Order remains DRAFT:', orderNumber, 'Need:', totalAmount, 'Got:', totalPaid)
       }
     }
 
