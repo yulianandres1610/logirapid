@@ -55,7 +55,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 })
     }
 
-    if (payload.companyType !== 'market' || payload.role !== 'MARKET_MANAGER') {
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'MARKET_MANAGER']
+    if (payload.companyType !== 'market' || !allowedRoles.includes(payload.role)) {
       return NextResponse.json({ success: false, error: 'Acceso denegado' }, { status: 403 })
     }
 
@@ -248,7 +249,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 })
     }
 
-    if (payload.companyType !== 'market' || payload.role !== 'MARKET_MANAGER') {
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'MARKET_MANAGER']
+    if (payload.companyType !== 'market' || !allowedRoles.includes(payload.role)) {
       return NextResponse.json({ success: false, error: 'Acceso denegado' }, { status: 403 })
     }
 
@@ -480,7 +482,8 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 })
     }
 
-    if (payload.companyType !== 'market' || payload.role !== 'MARKET_MANAGER') {
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'MARKET_MANAGER']
+    if (payload.companyType !== 'market' || !allowedRoles.includes(payload.role)) {
       return NextResponse.json({ success: false, error: 'Solo administradores pueden eliminar conteos' }, { status: 403 })
     }
 

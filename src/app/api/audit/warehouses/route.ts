@@ -33,11 +33,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 })
     }
 
-    // Verify user is MARKET_MANAGER from market company
-    if (payload.companyType !== 'market' || payload.role !== 'MARKET_MANAGER') {
+    // Verify user is admin from market company
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'MARKET_MANAGER']
+    if (payload.companyType !== 'market' || !allowedRoles.includes(payload.role)) {
       return NextResponse.json({
         success: false,
-        error: 'Acceso denegado. Solo MARKET_MANAGER puede acceder.'
+        error: 'Acceso denegado'
       }, { status: 403 })
     }
 
