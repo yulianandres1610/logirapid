@@ -486,27 +486,37 @@ export default function CreateConsignmentOrderPage() {
 
           // Set order lines
           if (order.lines && order.lines.length > 0) {
-            const lines: OrderLine[] = order.lines.map((line: {
-              product: { id: number; name: string; sku: string; barcode: string | null; imageUrl: string | null }
-              variantId: number | null
-              variantName: string | null
-              variantSku: string | null
-              quantityOrdered: number
-              unitCost: number
-              unitPrice: number
-            }) => ({
-              productId: line.product.id,
-              productName: line.product.name,
-              productSku: line.product.sku || '',
-              productBarcode: line.product.barcode || '',
-              productImage: line.product.imageUrl || null,
-              variantId: line.variantId || undefined,
-              variantName: line.variantName || undefined,
-              variantSku: line.variantSku || undefined,
-              quantity: line.quantityOrdered,
-              unitCost: line.unitCost,
-              unitPrice: line.unitPrice
-            }))
+            const lines: OrderLine[] = order.lines
+              .filter((line: { product?: { id: number; name: string } }) => line.product && line.product.id)
+              .map((line: {
+                product: { id: number; name: string; sku?: string; barcode?: string | null; imageUrl?: string | null }
+                variantId?: number | null
+                variantName?: string | null
+                variantSku?: string | null
+                quantityOrdered: number
+                unitCost: number
+                unitPrice: number
+              }) => ({
+                productId: line.product.id,
+                variantId: line.variantId || null,
+                variantName: line.variantName || null,
+                variantSku: line.variantSku || null,
+                product: {
+                  id: line.product.id,
+                  name: line.product.name || 'Producto sin nombre',
+                  sku: line.product.sku || '',
+                  barcode: line.product.barcode || null,
+                  imageUrl: line.product.imageUrl || null,
+                  costPrice: line.unitCost || 0,
+                  sellingPrice: line.unitPrice || 0,
+                  currency: 'USD',
+                  quantityOnHand: 0
+                },
+                quantity: line.quantityOrdered || 0,
+                unitCost: line.unitCost || 0,
+                unitPrice: line.unitPrice || 0,
+                totalCost: (line.quantityOrdered || 0) * (line.unitCost || 0)
+              }))
             setOrderLines(lines)
           }
 
