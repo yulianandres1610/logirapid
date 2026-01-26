@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'approve') {
-      // Get count lines with differences
+      // Get count lines with differences - including variant_id for proper matching
       const linesResult = await db.query(`
         SELECT
           cl.*,
@@ -212,42 +212,56 @@ export async function POST(request: NextRequest) {
           COALESCE(ws.quantity_on_hand, p.quantity_on_hand, 0) as current_stock
         FROM market_inventory_count_lines cl
         LEFT JOIN market_products p ON cl.product_id = p.id
-        LEFT JOIN market_warehouse_stock ws ON cl.product_id = ws.product_id AND ws.warehouse_id = $2
+        LEFT JOIN market_warehouse_stock ws ON cl.product_id = ws.product_id
+          AND ws.warehouse_id = $2
+          AND cl.variant_id IS NOT DISTINCT FROM ws.variant_id
         WHERE cl.count_id = $1
       `, [countId, count.warehouse_id])
 
-      // Update inventory based on count
+      // Update inventory based on count - properly handling variants
       for (const line of linesResult.rows) {
         const difference = parseInt(line.counted_quantity) - parseInt(line.current_stock || 0)
 
         if (difference !== 0) {
-          // Check if warehouse stock record exists
+          // Check if warehouse stock record exists for this product+variant combination
           const stockCheck = await db.query(`
             SELECT id FROM market_warehouse_stock
             WHERE product_id = $1 AND warehouse_id = $2
-          `, [line.product_id, count.warehouse_id])
+              AND variant_id IS NOT DISTINCT FROM $3
+          `, [line.product_id, count.warehouse_id, line.variant_id || null])
 
           if (stockCheck.rows.length > 0) {
-            // Update existing stock
+            // Update existing stock for the specific variant
             await db.query(`
               UPDATE market_warehouse_stock
               SET quantity_on_hand = $1, updated_at = NOW()
               WHERE product_id = $2 AND warehouse_id = $3
-            `, [line.counted_quantity, line.product_id, count.warehouse_id])
+                AND variant_id IS NOT DISTINCT FROM $4
+            `, [line.counted_quantity, line.product_id, count.warehouse_id, line.variant_id || null])
           } else {
-            // Insert new stock record
+            // Insert new stock record with variant_id
             await db.query(`
-              INSERT INTO market_warehouse_stock (product_id, warehouse_id, quantity_on_hand, created_at, updated_at)
-              VALUES ($1, $2, $3, NOW(), NOW())
-            `, [line.product_id, count.warehouse_id, line.counted_quantity])
+              INSERT INTO market_warehouse_stock (product_id, warehouse_id, variant_id, quantity_on_hand, created_at, updated_at)
+              VALUES ($1, $2, $3, $4, NOW(), NOW())
+            `, [line.product_id, count.warehouse_id, line.variant_id || null, line.counted_quantity])
           }
 
-          // Also update main product stock
-          await db.query(`
-            UPDATE market_products
-            SET quantity_on_hand = $1, updated_at = NOW()
-            WHERE id = $2
-          `, [line.counted_quantity, line.product_id])
+          // Update product or variant stock based on whether it's a variant count
+          if (line.variant_id) {
+            // Update variant stock
+            await db.query(`
+              UPDATE market_product_variants
+              SET quantity_on_hand = $1, updated_at = NOW()
+              WHERE id = $2
+            `, [line.counted_quantity, line.variant_id])
+          } else {
+            // Update main product stock (only if no variant)
+            await db.query(`
+              UPDATE market_products
+              SET quantity_on_hand = $1, updated_at = NOW()
+              WHERE id = $2
+            `, [line.counted_quantity, line.product_id])
+          }
         }
       }
 

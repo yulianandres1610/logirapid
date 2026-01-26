@@ -25,6 +25,8 @@ import {
 interface CountLine {
   id: number
   productId: number
+  variantId?: number | null
+  variantName?: string | null
   productName: string
   productSku: string
   productBarcode: string
@@ -155,6 +157,8 @@ export default function InventoryCountReportPage() {
           warehouseId: countData.warehouseId,
           lines: countData.lines.map(l => ({
             productId: l.productId,
+            variantId: l.variantId || null,
+            variantName: l.variantName || null,
             productName: l.productName,
             productSku: l.productSku,
             productBarcode: l.productBarcode,
@@ -193,6 +197,8 @@ export default function InventoryCountReportPage() {
           warehouseId: countData.warehouseId,
           lines: countData.lines.map(l => ({
             productId: l.productId,
+            variantId: l.variantId || null,
+            variantName: l.variantName || null,
             productName: l.productName,
             productSku: l.productSku,
             productBarcode: l.productBarcode,
