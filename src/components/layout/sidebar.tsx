@@ -582,16 +582,19 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Store, label: "Marketplace", href: "/dashboard/market/marketplace" },
     { icon: Package, label: "Inventario", href: "/dashboard/market/inventory" },
     { icon: ClipboardList, label: "Consignaciones", href: "/dashboard/market/consignments" },
+    { icon: MessageCircle, label: "Conversaciones", href: "/dashboard/market/chat" },
   ]
 
   // Menu items para MARKET_ALMACENERO (solo Almacenes - acceso a su almacén asignado)
   const marketAlmaceneroMenuItems = [
     { icon: Warehouse, label: "Almacenes", href: "/dashboard/market/warehouses" },
+    { icon: MessageCircle, label: "Conversaciones", href: "/dashboard/market/chat" },
   ]
 
   // Menu items para MARKET_VENDEDOR (solo POS - acceso a terminales asignados)
   const marketVendedorMenuItems = [
     { icon: Monitor, label: "Punto de Venta", href: "/dashboard/market/pos" },
+    { icon: MessageCircle, label: "Conversaciones", href: "/dashboard/market/chat" },
   ]
 
   // Menu items para MARKET_MANAGER_TIENDA (Almacén asignado + Terminales asignados)
@@ -607,6 +610,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: ClipboardList, label: "Conteos Inventario", href: "/dashboard/market/pos/inventory-counts" },
       ]
     },
+    { icon: MessageCircle, label: "Conversaciones", href: "/dashboard/market/chat" },
   ]
 
   // Hook para verificar servicios habilitados

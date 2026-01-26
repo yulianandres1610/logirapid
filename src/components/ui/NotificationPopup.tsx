@@ -14,7 +14,7 @@ interface PopupNotification {
 }
 
 export default function NotificationPopup() {
-  const { notifications, markAsRead } = useNotifications()
+  const { notifications } = useNotifications()
   const [popups, setPopups] = useState<PopupNotification[]>([])
   const processedIdsRef = useRef<Set<string>>(new Set())
 
@@ -34,15 +34,15 @@ export default function NotificationPopup() {
         autoHideTime: n.type === 'error' ? 7000 : 5000
       }))
 
-      // Marcar como procesadas Y como leídas inmediatamente
+      // Solo marcar como procesadas para el popup, NO como leídas
+      // Las notificaciones se marcarán como leídas cuando el usuario haga clic en ellas
       newNotifications.forEach(n => {
         processedIdsRef.current.add(n.id)
-        markAsRead(n.id) // Marcar como leída para que no vuelva a aparecer al navegar
       })
 
       setPopups(prev => [...newPopups, ...prev].slice(0, 3))
     }
-  }, [notifications, markAsRead])
+  }, [notifications])
 
   // Remover popup del estado local (ya está marcada como leída)
   const removePopup = (id: string) => {
