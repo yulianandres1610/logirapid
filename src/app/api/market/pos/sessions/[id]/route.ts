@@ -72,7 +72,58 @@ export async function GET(
 
     const session = result.rows[0]
 
-    // Get payment totals by method and currency
+    // ==============================================================
+    // STEP 1: Auto-fix draft orders FIRST (before calculating totals)
+    // ==============================================================
+    // Find ALL draft orders to check if they should be marked as paid
+    const allDraftOrders = await db.query(`
+      SELECT o.id, o.order_number, o.total_amount,
+             COALESCE(SUM(p.amount), 0) as total_paid,
+             COUNT(p.id) as payment_count
+      FROM market_pos_orders o
+      LEFT JOIN market_pos_payments p ON p.order_id = o.id
+      WHERE o.pos_session_id = $1 AND o.status = 'draft'
+      GROUP BY o.id, o.order_number, o.total_amount
+    `, [sessionId])
+
+    if (allDraftOrders.rows.length > 0) {
+      console.log('[POS Session API] Found', allDraftOrders.rows.length, 'draft orders to check')
+
+      let fixedCount = 0
+      for (const order of allDraftOrders.rows) {
+        const totalAmount = parseFloat(order.total_amount) || 0
+        const totalPaid = parseFloat(order.total_paid) || 0
+        const paymentCount = parseInt(order.payment_count) || 0
+
+        // Fix if has sufficient payment (with small tolerance for floating point)
+        if (totalPaid >= totalAmount - 0.01) {
+          await db.query(`
+            UPDATE market_pos_orders SET status = 'paid', updated_at = NOW()
+            WHERE id = $1
+          `, [order.id])
+          console.log('[POS Session API] Auto-fixed draft order (paid):', order.order_number,
+            'Amount:', totalAmount, 'Paid:', totalPaid)
+          fixedCount++
+        }
+        // Also fix zero-amount orders with payments (promotional orders, etc)
+        else if (totalAmount === 0 && paymentCount > 0) {
+          await db.query(`
+            UPDATE market_pos_orders SET status = 'paid', updated_at = NOW()
+            WHERE id = $1
+          `, [order.id])
+          console.log('[POS Session API] Auto-fixed zero-amount order:', order.order_number)
+          fixedCount++
+        }
+      }
+
+      if (fixedCount > 0) {
+        console.log('[POS Session API] Fixed', fixedCount, 'draft orders')
+      }
+    }
+
+    // ==============================================================
+    // STEP 2: Now get payment totals (AFTER auto-fix)
+    // ==============================================================
     const paymentsResult = await db.query(`
       SELECT
         p.payment_method,
@@ -85,7 +136,9 @@ export async function GET(
       GROUP BY p.payment_method, p.currency
     `, [sessionId])
 
-    // Get orders summary - include draft orders for debugging
+    // ==============================================================
+    // STEP 3: Get orders summary (AFTER auto-fix)
+    // ==============================================================
     const ordersResult = await db.query(`
       SELECT
         COUNT(*) FILTER (WHERE status = 'paid') as paid_orders,
@@ -100,57 +153,16 @@ export async function GET(
       WHERE pos_session_id = $1
     `, [sessionId])
 
-    // Auto-fix: If there are draft orders, check if they should be paid
-    const draftOrders = parseInt(ordersResult.rows[0].draft_orders) || 0
-    const draftTotal = parseFloat(ordersResult.rows[0].draft_total) || 0
-    if (draftOrders > 0) {
-      console.log('[POS Session API] Checking draft orders for auto-fix:', {
-        sessionId,
-        draftOrders,
-        draftTotal
-      })
-
-      // Find and fix draft orders with sufficient payments
-      const draftOrdersToFix = await db.query(`
-        SELECT o.id, o.order_number, o.total_amount,
-               COALESCE(SUM(p.amount), 0) as total_paid
-        FROM market_pos_orders o
-        LEFT JOIN market_pos_payments p ON p.order_id = o.id
-        WHERE o.pos_session_id = $1 AND o.status = 'draft'
-        GROUP BY o.id, o.order_number, o.total_amount
-        HAVING COALESCE(SUM(p.amount), 0) >= o.total_amount - 0.01
-      `, [sessionId])
-
-      if (draftOrdersToFix.rows.length > 0) {
-        for (const order of draftOrdersToFix.rows) {
-          await db.query(`
-            UPDATE market_pos_orders SET status = 'paid', updated_at = NOW()
-            WHERE id = $1
-          `, [order.id])
-          console.log('[POS Session API] Auto-fixed draft order:', order.order_number)
-        }
-
-        // Re-query orders summary after fixing
-        const updatedOrdersResult = await db.query(`
-          SELECT
-            COUNT(*) FILTER (WHERE status = 'paid') as paid_orders,
-            COUNT(*) FILTER (WHERE status = 'voided') as voided_orders,
-            COUNT(*) FILTER (WHERE status = 'refunded') as refunded_orders,
-            COUNT(*) FILTER (WHERE status = 'draft') as draft_orders,
-            SUM(total_amount) FILTER (WHERE status = 'paid') as total_sales,
-            SUM(total_amount) FILTER (WHERE status = 'refunded') as total_refunds,
-            SUM(discount_amount) FILTER (WHERE status = 'paid') as total_discounts,
-            SUM(total_amount) FILTER (WHERE status = 'draft') as draft_total
-          FROM market_pos_orders
-          WHERE pos_session_id = $1
-        `, [sessionId])
-
-        // Update the ordersSummary reference
-        Object.assign(ordersResult.rows[0], updatedOrdersResult.rows[0])
-      }
-    }
-
     const ordersSummary = ordersResult.rows[0]
+
+    // Log the summary for debugging
+    console.log('[POS Session API] Session summary:', {
+      sessionId,
+      paidOrders: ordersSummary.paid_orders,
+      draftOrders: ordersSummary.draft_orders,
+      totalSales: ordersSummary.total_sales,
+      paymentsCount: paymentsResult.rows.length
+    })
 
     // Calculate expected cash by currency
     const cashPayments: Record<string, number> = {}

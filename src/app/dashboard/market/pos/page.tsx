@@ -79,6 +79,8 @@ export default function MarketPOSPage() {
   const [openSessionModal, setOpenSessionModal] = useState<Terminal | null>(null)
   const [openingSession, setOpeningSession] = useState(false)
   const [printTerminal, setPrintTerminal] = useState<Terminal | null>(null)
+  const [printReportData, setPrintReportData] = useState<Record<string, unknown> | null>(null)
+  const [loadingPrintData, setLoadingPrintData] = useState(false)
   const [openingCash, setOpeningCash] = useState({ usd: 0, cup: 0, mlc: 0 })
   const [openingNotes, setOpeningNotes] = useState('')
   const [useDenominations, setUseDenominations] = useState(true)
@@ -247,6 +249,96 @@ export default function MarketPOSPage() {
       setOpenSessionModal(terminal)
       setOpeningCash({ usd: 0, cup: 0, mlc: 0 })
       setOpeningNotes('')
+    }
+  }
+
+  // Function to load sales report data before printing
+  const handlePrintSalesReport = async (terminal: Terminal) => {
+    setLoadingPrintData(true)
+    setPrintTerminal(terminal)
+
+    try {
+      // First get active session for this terminal
+      const sessionsResponse = await fetch(`/api/market/pos/sessions?terminalId=${terminal.id}&status=open&limit=1`)
+      const sessionsData = await sessionsResponse.json()
+
+      let sessionData = null
+      let sessionId: number | null = null
+
+      if (sessionsData.success && sessionsData.data?.sessions?.length > 0) {
+        sessionId = sessionsData.data.sessions[0].id
+
+        // Get detailed session data (which auto-fixes draft orders)
+        const sessionResponse = await fetch(`/api/market/pos/sessions/${sessionId}`)
+        const sessionDetail = await sessionResponse.json()
+
+        if (sessionDetail.success) {
+          sessionData = sessionDetail.data
+        }
+      }
+
+      // Get daily sales data for products
+      let salesData = null
+      if (sessionId) {
+        const dailySalesResponse = await fetch(`/api/market/pos/daily-sales?sessionId=${sessionId}`)
+        const dailySalesData = await dailySalesResponse.json()
+        if (dailySalesData.success) {
+          salesData = dailySalesData.data
+        }
+      }
+
+      // Build report data
+      const today = new Date()
+      const reportData: Record<string, unknown> = {
+        terminalId: terminal.id,
+        terminalCode: terminal.code,
+        terminalName: terminal.name,
+        warehouseId: terminal.warehouseId,
+        warehouseName: terminal.warehouseName,
+        reportDate: today.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        generatedAt: today.toLocaleString('es-ES'),
+        reportType: 'daily_sales',
+        // Session data
+        totalTransactions: sessionData?.summary?.paidOrders || 0,
+        grossSales: sessionData?.summary?.totalSales || 0,
+        discounts: sessionData?.summary?.totalDiscounts || 0,
+        netSales: (sessionData?.summary?.totalSales || 0) - (sessionData?.summary?.totalDiscounts || 0),
+        // Payment breakdown
+        salesByPayment: sessionData?.payments?.map((p: { paymentMethod: string; currency: string; totalAmount: number; count: number }) => ({
+          paymentMethod: `${p.paymentMethod} (${p.currency})`,
+          transactionCount: p.count,
+          total: p.totalAmount
+        })) || [],
+        // Top products
+        topProducts: salesData?.sales?.slice(0, 10).map((s: { productName: string; totalSold: number; totalAmount: number }) => ({
+          name: s.productName,
+          quantity: s.totalSold,
+          total: s.totalAmount
+        })) || [],
+        totalProducts: salesData?.totals?.totalProducts || 0
+      }
+
+      console.log('[POS Page] Sales report data:', reportData)
+      setPrintReportData(reportData)
+    } catch (error) {
+      console.error('Error loading sales report data:', error)
+      // Fallback to basic data
+      setPrintReportData({
+        terminalId: terminal.id,
+        terminalCode: terminal.code,
+        terminalName: terminal.name,
+        warehouseId: terminal.warehouseId,
+        warehouseName: terminal.warehouseName,
+        reportDate: new Date().toISOString(),
+        reportType: 'daily_sales',
+        totalTransactions: 0,
+        grossSales: 0,
+        netSales: 0,
+        salesByPayment: [],
+        topProducts: []
+      })
+    } finally {
+      setLoadingPrintData(false)
     }
   }
 
@@ -705,11 +797,16 @@ export default function MarketPOSPage() {
                             <motion.button
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
-                              onClick={() => setPrintTerminal(terminal)}
-                              className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                              onClick={() => handlePrintSalesReport(terminal)}
+                              disabled={loadingPrintData}
+                              className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50"
                               title="Imprimir reporte de ventas"
                             >
-                              <Printer className="w-4 h-4 text-blue-500" />
+                              {loadingPrintData && printTerminal?.id === terminal.id ? (
+                                <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+                              ) : (
+                                <Printer className="w-4 h-4 text-blue-500" />
+                              )}
                             </motion.button>
                             <Link href={`/dashboard/market/pos/${terminal.id}/settings`}>
                               <motion.button
@@ -1227,24 +1324,22 @@ export default function MarketPOSPage() {
             </AnimatePresence>
 
             {/* Print Sales Report Modal */}
-            {printTerminal && (
+            {printTerminal && printReportData && !loadingPrintData && (
               <PrintDocumentModal
                 isOpen={!!printTerminal}
-                onClose={() => setPrintTerminal(null)}
+                onClose={() => {
+                  setPrintTerminal(null)
+                  setPrintReportData(null)
+                }}
                 documentType="sales_report"
                 documentTitle={`Reporte de Ventas - ${printTerminal.name}`}
-                documentData={{
-                  terminalId: printTerminal.id,
-                  terminalCode: printTerminal.code,
-                  terminalName: printTerminal.name,
-                  warehouseId: printTerminal.warehouseId,
-                  warehouseName: printTerminal.warehouseName,
-                  reportDate: new Date().toISOString(),
-                  reportType: 'daily_sales'
-                }}
+                documentData={printReportData}
                 sourceType="pos_terminal"
                 sourceId={printTerminal.id}
-                onPrintSuccess={() => setPrintTerminal(null)}
+                onPrintSuccess={() => {
+                  setPrintTerminal(null)
+                  setPrintReportData(null)
+                }}
               />
             )}
           </motion.div>
