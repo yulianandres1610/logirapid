@@ -28,7 +28,9 @@ export function ChatThread({ onBack }: ChatThreadProps) {
     participants,
     isLoadingMessages,
     hasMoreMessages,
-    fetchMessages
+    fetchMessages,
+    currentUserId,
+    typingUsers
   } = useChatContext()
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -264,10 +266,33 @@ export function ChatThread({ onBack }: ChatThreadProps) {
               message={message}
               showSender={showSender}
               onReply={() => handleReply(message)}
-              isOwnMessage={false}
+              isOwnMessage={message.sender.id === currentUserId}
             />
           )
         })}
+
+        {/* Typing indicator */}
+        {typingUsers.length > 0 && (
+          <div className="flex items-center gap-2 py-2 ml-9">
+            <div className={cn(
+              'flex gap-1 px-3 py-2 rounded-lg',
+              theme === 'dark' ? 'bg-gray-800' : 'bg-white border border-gray-200'
+            )}>
+              <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+            <span className={cn(
+              'text-xs',
+              theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+            )}>
+              {typingUsers.length === 1
+                ? `${typingUsers[0].name} está escribiendo...`
+                : `${typingUsers.map(u => u.name).join(', ')} están escribiendo...`
+              }
+            </span>
+          </div>
+        )}
 
         <div ref={messagesEndRef} />
       </div>

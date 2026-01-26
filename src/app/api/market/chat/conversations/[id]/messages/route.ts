@@ -122,30 +122,51 @@ export async function GET(
 
     const result = await db.query(query, queryParams)
 
+    // Get all participants with their last_read_at for read status
+    const participantsResult = await db.query(`
+      SELECT p.user_id, p.last_read_at,
+        COALESCE(NULLIF(TRIM(COALESCE(u.firstname, '') || ' ' || COALESCE(u.lastname, '')), ''), u.email) as name
+      FROM chat_participants p
+      JOIN users u ON u.id = p.user_id
+      WHERE p.conversation_id = $1
+    `, [conversationId])
+
+    const otherParticipants = participantsResult.rows.filter(p => p.user_id !== payload.userId)
+
     // Reverse to get chronological order
-    const messages = result.rows.reverse().map(msg => ({
-      id: msg.id,
-      content: msg.is_deleted ? null : msg.content,
-      messageType: msg.message_type,
-      fileUrl: msg.is_deleted ? null : msg.file_url,
-      fileName: msg.is_deleted ? null : msg.file_name,
-      fileSize: msg.file_size,
-      fileType: msg.file_type,
-      replyToId: msg.reply_to_id,
-      replyToMessage: msg.reply_to_message,
-      isPinned: msg.is_pinned,
-      pinnedBy: msg.pinned_by,
-      pinnedAt: msg.pinned_at,
-      isDeleted: msg.is_deleted,
-      createdAt: msg.created_at,
-      editedAt: msg.edited_at,
-      sender: {
-        id: msg.sender_id,
-        name: msg.sender_name,
-        email: msg.sender_email
-      },
-      reactions: msg.reactions || []
-    }))
+    const messages = result.rows.reverse().map(msg => {
+      // Calculate read status for this message
+      // readBy contains the user ids who have read this message (their last_read_at >= message created_at)
+      const readBy = otherParticipants
+        .filter(p => p.last_read_at && new Date(p.last_read_at) >= new Date(msg.created_at))
+        .map(p => ({ id: p.user_id, name: p.name }))
+
+      return {
+        id: msg.id,
+        content: msg.is_deleted ? null : msg.content,
+        messageType: msg.message_type,
+        fileUrl: msg.is_deleted ? null : msg.file_url,
+        fileName: msg.is_deleted ? null : msg.file_name,
+        fileSize: msg.file_size,
+        fileType: msg.file_type,
+        replyToId: msg.reply_to_id,
+        replyToMessage: msg.reply_to_message,
+        isPinned: msg.is_pinned,
+        pinnedBy: msg.pinned_by,
+        pinnedAt: msg.pinned_at,
+        isDeleted: msg.is_deleted,
+        createdAt: msg.created_at,
+        editedAt: msg.edited_at,
+        sender: {
+          id: msg.sender_id,
+          name: msg.sender_name,
+          email: msg.sender_email
+        },
+        reactions: msg.reactions || [],
+        readBy,
+        isReadByAll: readBy.length === otherParticipants.length
+      }
+    })
 
     // Update last_read_at for current user
     await db.query(`

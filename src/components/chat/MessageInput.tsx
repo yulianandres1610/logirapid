@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { useTheme } from '@/contexts/theme-context'
 import { useChatContext } from '@/contexts/ChatContext'
 import { cn } from '@/lib/utils'
@@ -31,7 +31,7 @@ export function MessageInput({
   userRole
 }: MessageInputProps) {
   const { theme } = useTheme()
-  const { sendMessage, activeConversation, pendingChat } = useChatContext()
+  const { sendMessage, activeConversation, pendingChat, setTyping } = useChatContext()
 
   const [content, setContent] = useState('')
   const [isSending, setIsSending] = useState(false)
@@ -44,6 +44,38 @@ export function MessageInput({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Handle typing indicator
+  const handleContentChange = useCallback((value: string) => {
+    setContent(value)
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+    }
+
+    // Set typing status
+    if (value.trim()) {
+      setTyping(true)
+      // Stop typing after 3 seconds of inactivity
+      typingTimeoutRef.current = setTimeout(() => {
+        setTyping(false)
+      }, 3000)
+    } else {
+      setTyping(false)
+    }
+  }, [setTyping])
+
+  // Cleanup typing timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+      setTyping(false)
+    }
+  }, [setTyping])
 
   // Check if user can post
   const canPost = conversationType !== 'channel' || userRole === 'admin'
@@ -52,6 +84,12 @@ export function MessageInput({
     if (!content.trim() || isSending || (!activeConversation && !pendingChat)) return
 
     setIsSending(true)
+    // Stop typing indicator
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+    }
+    setTyping(false)
+
     try {
       await sendMessage(content.trim(), 'text', undefined, replyingTo?.id)
       setContent('')
@@ -376,7 +414,7 @@ export function MessageInput({
           )}>
             <textarea
               value={content}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={(e) => handleContentChange(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Escribe un mensaje..."
               rows={1}

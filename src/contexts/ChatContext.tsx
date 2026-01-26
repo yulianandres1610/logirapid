@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
-import { createClient, RealtimeChannel } from '@supabase/supabase-js'
+import { playSound, notifyNewMessage } from '@/lib/chat-sounds'
 
 interface User {
   id: number
@@ -30,6 +30,11 @@ interface Reaction {
   userName: string
 }
 
+interface ReadByUser {
+  id: number
+  name: string
+}
+
 interface Message {
   id: number
   content: string | null
@@ -52,6 +57,13 @@ interface Message {
   editedAt?: string | null
   sender: User
   reactions: Reaction[]
+  readBy?: ReadByUser[]
+  isReadByAll?: boolean
+}
+
+interface TypingUser {
+  id: number
+  name: string
 }
 
 interface Conversation {
@@ -101,6 +113,8 @@ interface ChatContextType {
   isLoadingConversations: boolean
   isLoadingMessages: boolean
   hasMoreMessages: boolean
+  currentUserId: number | null
+  typingUsers: TypingUser[]
 
   // Actions
   fetchConversations: (search?: string) => Promise<void>
@@ -122,11 +136,7 @@ interface ChatContextType {
   pinMessage: (messageId: number) => Promise<void>
   unpinMessage: (messageId: number) => Promise<void>
   editMessage: (messageId: number, content: string) => Promise<void>
-  deleteMessage: (messageId: number) => Promise<void>
-
-  // Real-time
-  subscribeToConversation: (conversationId: number) => void
-  unsubscribeFromConversation: () => void
+  setTyping: (isTyping: boolean) => Promise<void>
 }
 
 const ChatContext = createContext<ChatContextType | null>(null)
@@ -154,34 +164,127 @@ export function ChatProvider({ children }: ChatProviderProps) {
   const [isLoadingConversations, setIsLoadingConversations] = useState(false)
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const [hasMoreMessages, setHasMoreMessages] = useState(true)
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null)
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([])
 
-  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null)
-  const channelRef = useRef<RealtimeChannel | null>(null)
-  const presenceIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const typingPollingRef = useRef<NodeJS.Timeout | null>(null)
+  const lastMessageIdRef = useRef<number | null>(null)
+  const activeConversationRef = useRef<Conversation | null>(null)
 
-  // Initialize Supabase client
+  // Keep ref in sync with state
   useEffect(() => {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    activeConversationRef.current = activeConversation
+  }, [activeConversation])
 
-    if (supabaseUrl && supabaseAnonKey) {
-      supabaseRef.current = createClient(supabaseUrl, supabaseAnonKey)
-    }
-
-    return () => {
-      if (channelRef.current) {
-        channelRef.current.unsubscribe()
+  // Get current user ID from cookie
+  useEffect(() => {
+    const getUserId = async () => {
+      try {
+        const res = await fetch('/api/auth/me')
+        const data = await res.json()
+        if (data.success && data.user) {
+          setCurrentUserId(data.user.id)
+        }
+      } catch (error) {
+        console.error('Error getting current user:', error)
       }
-      if (presenceIntervalRef.current) {
-        clearInterval(presenceIntervalRef.current)
-      }
     }
+    getUserId()
   }, [])
+
+  // Poll for new messages when conversation is active
+  useEffect(() => {
+    if (activeConversation) {
+      // Set initial last message ID
+      if (messages.length > 0) {
+        lastMessageIdRef.current = messages[messages.length - 1].id
+      }
+
+      // Start polling
+      pollingIntervalRef.current = setInterval(async () => {
+        if (!activeConversationRef.current) return
+
+        try {
+          const lastId = lastMessageIdRef.current || 0
+          const res = await fetch(
+            `/api/market/chat/conversations/${activeConversationRef.current.id}/messages?after=${lastId}&limit=50`
+          )
+          const data = await res.json()
+
+          if (data.success && data.data.messages.length > 0) {
+            const newMessages = data.data.messages as Message[]
+
+            setMessages(prev => {
+              // Filter out duplicates
+              const existingIds = new Set(prev.map(m => m.id))
+              const uniqueNewMessages = newMessages.filter(m => !existingIds.has(m.id))
+
+              if (uniqueNewMessages.length > 0) {
+                // Update last message ID
+                lastMessageIdRef.current = Math.max(...uniqueNewMessages.map(m => m.id))
+
+                // Play sound for messages from others
+                uniqueNewMessages.forEach(msg => {
+                  if (msg.sender.id !== currentUserId) {
+                    playSound('newMessage')
+                    // Show notification if page is not visible
+                    if (document.hidden) {
+                      notifyNewMessage(
+                        msg.sender.name,
+                        msg.content || 'Nuevo mensaje',
+                        activeConversationRef.current!.id
+                      )
+                    }
+                  }
+                })
+
+                return [...prev, ...uniqueNewMessages]
+              }
+              return prev
+            })
+          }
+        } catch (error) {
+          console.error('Error polling messages:', error)
+        }
+      }, 2000) // Poll every 2 seconds
+
+      // Also poll for typing status
+      typingPollingRef.current = setInterval(async () => {
+        if (!activeConversationRef.current) return
+
+        try {
+          const res = await fetch(
+            `/api/market/chat/conversations/${activeConversationRef.current.id}/typing`
+          )
+          const data = await res.json()
+
+          if (data.success) {
+            setTypingUsers(data.data)
+          }
+        } catch (error) {
+          console.error('Error polling typing status:', error)
+        }
+      }, 1500) // Poll typing every 1.5 seconds
+
+      return () => {
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+        }
+        if (typingPollingRef.current) {
+          clearInterval(typingPollingRef.current)
+          typingPollingRef.current = null
+        }
+        setTypingUsers([])
+      }
+    }
+  }, [activeConversation, currentUserId])
 
   // Start presence heartbeat
   useEffect(() => {
     updatePresence()
-    presenceIntervalRef.current = setInterval(updatePresence, 30000)
+    const presenceInterval = setInterval(updatePresence, 30000)
 
     // Mark offline on page unload
     const handleBeforeUnload = () => {
@@ -190,9 +293,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
     window.addEventListener('beforeunload', handleBeforeUnload)
 
     return () => {
-      if (presenceIntervalRef.current) {
-        clearInterval(presenceIntervalRef.current)
-      }
+      clearInterval(presenceInterval)
       window.removeEventListener('beforeunload', handleBeforeUnload)
     }
   }, [])
@@ -224,70 +325,19 @@ export function ChatProvider({ children }: ChatProviderProps) {
 
     if (existingConv) {
       // If conversation exists, select it instead
-      selectConversationById(existingConv.id)
+      selectConversation(existingConv.id)
     } else {
       // Start a pending chat (no conversation created yet)
       setActiveConversation(null)
       setPendingChat({ user })
       setMessages([])
+      lastMessageIdRef.current = null
     }
   }, [conversations])
 
   const cancelPendingChat = useCallback(() => {
     setPendingChat(null)
   }, [])
-
-  const selectConversationById = useCallback(async (conversationId: number) => {
-    const conv = conversations.find(c => c.id === conversationId)
-    if (conv) {
-      setActiveConversation(conv)
-      setPendingChat(null)
-      setMessages([])
-      setHasMoreMessages(true)
-
-      // Fetch conversation details and messages
-      try {
-        const [convRes, msgRes, partRes] = await Promise.all([
-          fetch(`/api/market/chat/conversations/${conversationId}`),
-          fetch(`/api/market/chat/conversations/${conversationId}/messages?limit=50`),
-          fetch(`/api/market/chat/conversations/${conversationId}/participants`)
-        ])
-
-        const [convData, msgData, partData] = await Promise.all([
-          convRes.json(),
-          msgRes.json(),
-          partRes.json()
-        ])
-
-        if (convData.success) {
-          setActiveConversation(prev => ({
-            ...prev!,
-            ...convData.data,
-            unreadCount: 0
-          }))
-        }
-
-        if (msgData.success) {
-          setMessages(msgData.data.messages)
-          setHasMoreMessages(msgData.data.hasMore)
-        }
-
-        if (partData.success) {
-          setParticipants(partData.data)
-        }
-
-        // Update unread count in conversations list
-        setConversations(prev => prev.map(c =>
-          c.id === conversationId ? { ...c, unreadCount: 0 } : c
-        ))
-
-        // Subscribe to real-time updates
-        subscribeToConversation(conversationId)
-      } catch (error) {
-        console.error('Error loading conversation:', error)
-      }
-    }
-  }, [conversations])
 
   const selectConversation = useCallback(async (conversationId: number) => {
     const conv = conversations.find(c => c.id === conversationId)
@@ -296,6 +346,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
       setPendingChat(null)
       setMessages([])
       setHasMoreMessages(true)
+      lastMessageIdRef.current = null
 
       // Fetch conversation details and messages
       try {
@@ -320,8 +371,12 @@ export function ChatProvider({ children }: ChatProviderProps) {
         }
 
         if (msgData.success) {
-          setMessages(msgData.data.messages)
+          const msgs = msgData.data.messages as Message[]
+          setMessages(msgs)
           setHasMoreMessages(msgData.data.hasMore)
+          if (msgs.length > 0) {
+            lastMessageIdRef.current = msgs[msgs.length - 1].id
+          }
         }
 
         if (partData.success) {
@@ -332,9 +387,6 @@ export function ChatProvider({ children }: ChatProviderProps) {
         setConversations(prev => prev.map(c =>
           c.id === conversationId ? { ...c, unreadCount: 0 } : c
         ))
-
-        // Subscribe to real-time updates
-        subscribeToConversation(conversationId)
       } catch (error) {
         console.error('Error loading conversation:', error)
       }
@@ -394,12 +446,12 @@ export function ChatProvider({ children }: ChatProviderProps) {
           // Clear pending chat and refresh conversations
           setPendingChat(null)
           await fetchConversations()
-          // Select the newly created conversation
-          const conv = conversations.find(c => c.id === conversationId) || {
+          // Set the active conversation
+          const conv: Conversation = {
             id: conversationId,
-            type: 'private' as const,
+            type: 'private',
             name: pendingChat.user.name,
-            userRole: 'admin' as const,
+            userRole: 'admin',
             isMuted: false,
             unreadCount: 0,
             otherParticipant: {
@@ -447,8 +499,9 @@ export function ChatProvider({ children }: ChatProviderProps) {
       const data = await res.json()
 
       if (data.success) {
-        const newMessage = data.data
+        const newMessage = data.data as Message
         setMessages(prev => [...prev, newMessage])
+        lastMessageIdRef.current = newMessage.id
         // Refresh conversations to show the new one with the message
         fetchConversations()
         return newMessage
@@ -458,7 +511,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
       console.error('Error sending message:', error)
       return null
     }
-  }, [activeConversation, pendingChat, conversations, fetchConversations])
+  }, [activeConversation, pendingChat, fetchConversations])
 
   const createConversation = useCallback(async (
     type: string,
@@ -601,7 +654,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
       const data = await res.json()
       if (data.success) {
         setMessages(prev => prev.map(m =>
-          m.id === messageId ? { ...m, content, editedAt: data.data.edited_at } : m
+          m.id === messageId ? { ...m, content, editedAt: new Date().toISOString() } : m
         ))
       }
     } catch (error) {
@@ -609,62 +662,17 @@ export function ChatProvider({ children }: ChatProviderProps) {
     }
   }, [])
 
-  const deleteMessage = useCallback(async (messageId: number) => {
+  const setTyping = useCallback(async (isTyping: boolean) => {
+    if (!activeConversationRef.current) return
+
     try {
-      const res = await fetch(`/api/market/chat/messages/${messageId}`, {
-        method: 'DELETE'
+      await fetch(`/api/market/chat/conversations/${activeConversationRef.current.id}/typing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isTyping })
       })
-
-      if (res.ok) {
-        setMessages(prev => prev.map(m =>
-          m.id === messageId ? { ...m, isDeleted: true, content: null } : m
-        ))
-      }
     } catch (error) {
-      console.error('Error deleting message:', error)
-    }
-  }, [])
-
-  const subscribeToConversation = useCallback((conversationId: number) => {
-    if (!supabaseRef.current) return
-
-    // Unsubscribe from previous channel
-    if (channelRef.current) {
-      channelRef.current.unsubscribe()
-    }
-
-    // Subscribe to new messages
-    channelRef.current = supabaseRef.current
-      .channel(`conversation:${conversationId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'chat_messages',
-          filter: `conversation_id=eq.${conversationId}`
-        },
-        async (payload) => {
-          // Fetch the full message with sender info
-          const res = await fetch(`/api/market/chat/conversations/${conversationId}/messages?after=${payload.new.id - 1}&limit=1`)
-          const data = await res.json()
-          if (data.success && data.data.messages.length > 0) {
-            const newMsg = data.data.messages[0]
-            setMessages(prev => {
-              // Avoid duplicates
-              if (prev.some(m => m.id === newMsg.id)) return prev
-              return [...prev, newMsg]
-            })
-          }
-        }
-      )
-      .subscribe()
-  }, [])
-
-  const unsubscribeFromConversation = useCallback(() => {
-    if (channelRef.current) {
-      channelRef.current.unsubscribe()
-      channelRef.current = null
+      console.error('Error setting typing status:', error)
     }
   }, [])
 
@@ -679,6 +687,8 @@ export function ChatProvider({ children }: ChatProviderProps) {
     isLoadingConversations,
     isLoadingMessages,
     hasMoreMessages,
+    currentUserId,
+    typingUsers,
     fetchConversations,
     selectConversation,
     startPendingChat,
@@ -693,9 +703,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
     pinMessage,
     unpinMessage,
     editMessage,
-    deleteMessage,
-    subscribeToConversation,
-    unsubscribeFromConversation
+    setTyping
   }
 
   return (

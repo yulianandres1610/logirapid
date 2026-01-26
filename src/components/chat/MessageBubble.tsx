@@ -5,7 +5,7 @@ import { useTheme } from '@/contexts/theme-context'
 import { useChatContext } from '@/contexts/ChatContext'
 import { cn } from '@/lib/utils'
 import {
-  Reply, Smile, Pin, Trash2, Edit, Check, X,
+  Reply, Smile, Pin, Edit, Check, CheckCheck, X,
   FileText, Play, Pause, Download
 } from 'lucide-react'
 import { format } from 'date-fns'
@@ -40,6 +40,8 @@ interface MessageBubbleProps {
       userId: number
       userName: string
     }>
+    readBy?: Array<{ id: number; name: string }>
+    isReadByAll?: boolean
   }
   showSender: boolean
   onReply: () => void
@@ -48,9 +50,9 @@ interface MessageBubbleProps {
 
 const EMOJI_OPTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 
-export function MessageBubble({ message, showSender, onReply }: MessageBubbleProps) {
+export function MessageBubble({ message, showSender, onReply, isOwnMessage }: MessageBubbleProps) {
   const { theme } = useTheme()
-  const { addReaction, removeReaction, pinMessage, unpinMessage, editMessage, deleteMessage } = useChatContext()
+  const { addReaction, removeReaction, pinMessage, unpinMessage, editMessage } = useChatContext()
 
   const [showActions, setShowActions] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
@@ -100,12 +102,6 @@ export function MessageBubble({ message, showSender, onReply }: MessageBubblePro
       editMessage(message.id, editContent)
     }
     setIsEditing(false)
-  }
-
-  const handleDelete = () => {
-    if (confirm('¿Eliminar este mensaje?')) {
-      deleteMessage(message.id)
-    }
   }
 
   const togglePin = () => {
@@ -187,10 +183,17 @@ export function MessageBubble({ message, showSender, onReply }: MessageBubblePro
             {message.sender.name}
           </span>
           <span className={cn(
-            'text-xs',
+            'text-xs flex items-center gap-1',
             theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
           )}>
             {format(new Date(message.createdAt), 'HH:mm', { locale: es })}
+            {isOwnMessage && (
+              message.isReadByAll ? (
+                <CheckCheck className="w-3.5 h-3.5 text-blue-500" />
+              ) : (
+                <CheckCheck className="w-3.5 h-3.5" />
+              )
+            )}
           </span>
           {message.isPinned && (
             <Pin className="w-3 h-3 text-amber-500" />
@@ -381,15 +384,6 @@ export function MessageBubble({ message, showSender, onReply }: MessageBubblePro
                 <Edit className="w-3.5 h-3.5" />
               </button>
             )}
-            <button
-              onClick={handleDelete}
-              className={cn(
-                'p-1.5 rounded transition-colors hover:text-red-500',
-                theme === 'dark' ? 'hover:bg-red-500/10 text-gray-400' : 'hover:bg-red-50 text-gray-500'
-              )}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
           </div>
         )}
 
