@@ -258,30 +258,78 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
 
     setUploadingInvoices(true)
     try {
-      const formData = new FormData()
-      formData.append('orderType', 'purchase')
-      formData.append('orderId', resolvedParams.id)
+      // Separate local files from phone-uploaded files
+      const localFiles = pendingInvoices.filter(inv => inv.file instanceof File && !inv.storagePath)
+      const phoneUploads = pendingInvoices.filter(inv => inv.storagePath && inv.uploaded)
 
-      for (const invoice of pendingInvoices) {
-        if (invoice.file) {
-          formData.append('files', invoice.file)
+      let successCount = 0
+      let hasError = false
+
+      // Upload local files via FormData
+      if (localFiles.length > 0) {
+        const formData = new FormData()
+        formData.append('orderType', 'purchase')
+        formData.append('orderId', resolvedParams.id)
+
+        for (const invoice of localFiles) {
+          if (invoice.file) {
+            formData.append('files', invoice.file)
+          }
+        }
+
+        const response = await fetch('/api/upload/order-invoices', {
+          method: 'POST',
+          body: formData
+        })
+
+        const data = await response.json()
+        if (data.success) {
+          successCount += data.data?.uploadedCount || localFiles.length
+        } else {
+          hasError = true
+          console.error('Error uploading local files:', data.error)
         }
       }
 
-      const response = await fetch('/api/upload/order-invoices', {
-        method: 'POST',
-        body: formData
-      })
+      // Register phone-uploaded files via JSON
+      if (phoneUploads.length > 0) {
+        const existingFiles = phoneUploads
+          .filter(inv => inv.storagePath)
+          .map(inv => ({
+            storagePath: inv.storagePath,
+            fileName: inv.name,
+            fileType: inv.type || 'image/jpeg',
+            fileSize: inv.size || 0
+          }))
 
-      const data = await response.json()
+        if (existingFiles.length > 0) {
+          const response = await fetch('/api/upload/order-invoices', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderType: 'purchase',
+              orderId: resolvedParams.id,
+              existingFiles
+            })
+          })
 
-      if (data.success) {
+          const data = await response.json()
+          if (data.success) {
+            successCount += data.data?.registeredCount || phoneUploads.length
+          } else {
+            hasError = true
+            console.error('Error registering phone uploads:', data.error)
+          }
+        }
+      }
+
+      if (successCount > 0) {
         await fetchInvoices()
         setPendingInvoices([])
         setShowUploader(false)
-        showNotification('success', 'Facturas subidas', `Se subieron ${pendingInvoices.length} ${pendingInvoices.length === 1 ? 'factura' : 'facturas'} correctamente`)
-      } else {
-        showNotification('error', 'Error', data.error || 'Error al subir facturas')
+        showNotification('success', 'Facturas subidas', `Se subieron ${successCount} ${successCount === 1 ? 'factura' : 'facturas'} correctamente`)
+      } else if (hasError) {
+        showNotification('error', 'Error', 'Error al subir las facturas')
       }
     } catch (err) {
       console.error('Error uploading invoices:', err)
