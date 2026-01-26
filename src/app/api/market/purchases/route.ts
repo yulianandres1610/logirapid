@@ -656,14 +656,38 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate purchase number
+    // Generate purchase number - use MAX to avoid duplicates when purchases are deleted
     const year = new Date().getFullYear()
-    const countResult = await db.query(`
-      SELECT COUNT(*) as count FROM market_purchases
-      WHERE company_id = $1 AND EXTRACT(YEAR FROM created_at) = $2
-    `, [companyId, year])
-    const count = parseInt(countResult.rows[0]?.count || '0') + 1
-    const purchaseNumber = `PUR-${year}-${count.toString().padStart(4, '0')}`
+    const maxResult = await db.query(`
+      SELECT MAX(CAST(SUBSTRING(purchase_number FROM 10) AS INTEGER)) as max_num
+      FROM market_purchases
+      WHERE company_id = $1
+        AND purchase_number LIKE $2
+    `, [companyId, `PUR-${year}-%`])
+    const nextNum = (parseInt(maxResult.rows[0]?.max_num || '0') || 0) + 1
+    let purchaseNumber = `PUR-${year}-${nextNum.toString().padStart(4, '0')}`
+
+    // Verify uniqueness and retry if needed (handles race conditions)
+    let attempts = 0
+    while (attempts < 10) {
+      const existsCheck = await db.query(
+        'SELECT id FROM market_purchases WHERE purchase_number = $1',
+        [purchaseNumber]
+      )
+      if (existsCheck.rows.length === 0) break
+
+      // Number exists, increment and try again
+      const newNum = nextNum + attempts + 1
+      purchaseNumber = `PUR-${year}-${newNum.toString().padStart(4, '0')}`
+      attempts++
+    }
+
+    if (attempts >= 10) {
+      return NextResponse.json({
+        success: false,
+        error: 'No se pudo generar un número de compra único. Intente nuevamente.'
+      }, { status: 500 })
+    }
 
     // Calculate totals
     let subtotal = 0
