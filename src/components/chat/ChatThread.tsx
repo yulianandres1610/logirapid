@@ -222,8 +222,8 @@ export function ChatThread() {
         ref={messagesContainerRef}
         onScroll={handleScroll}
         className={cn(
-          'flex-1 overflow-y-auto px-4 py-3',
-          theme === 'dark' ? 'bg-gray-950' : 'bg-gray-50'
+          'flex-1 overflow-y-auto px-4 py-2',
+          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
         )}
       >
         {/* Loading more */}

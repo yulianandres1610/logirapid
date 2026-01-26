@@ -85,10 +85,15 @@ interface CompanyUser {
   presence: Presence
 }
 
+interface PendingChat {
+  user: CompanyUser
+}
+
 interface ChatContextType {
   // State
   conversations: Conversation[]
   activeConversation: Conversation | null
+  pendingChat: PendingChat | null
   messages: Message[]
   participants: Participant[]
   companyUsers: CompanyUser[]
@@ -100,6 +105,8 @@ interface ChatContextType {
   // Actions
   fetchConversations: (search?: string) => Promise<void>
   selectConversation: (conversationId: number) => Promise<void>
+  startPendingChat: (user: CompanyUser) => void
+  cancelPendingChat: () => void
   fetchMessages: (beforeId?: number) => Promise<void>
   sendMessage: (content: string, messageType?: string, fileData?: {
     fileUrl: string
@@ -139,6 +146,7 @@ interface ChatProviderProps {
 export function ChatProvider({ children }: ChatProviderProps) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null)
+  const [pendingChat, setPendingChat] = useState<PendingChat | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [participants, setParticipants] = useState<Participant[]>([])
   const [companyUsers, setCompanyUsers] = useState<CompanyUser[]>([])
@@ -208,10 +216,84 @@ export function ChatProvider({ children }: ChatProviderProps) {
     }
   }, [])
 
+  const startPendingChat = useCallback((user: CompanyUser) => {
+    // Check if there's already an existing conversation with this user
+    const existingConv = conversations.find(c =>
+      c.type === 'private' && c.otherParticipant?.id === user.id
+    )
+
+    if (existingConv) {
+      // If conversation exists, select it instead
+      selectConversationById(existingConv.id)
+    } else {
+      // Start a pending chat (no conversation created yet)
+      setActiveConversation(null)
+      setPendingChat({ user })
+      setMessages([])
+    }
+  }, [conversations])
+
+  const cancelPendingChat = useCallback(() => {
+    setPendingChat(null)
+  }, [])
+
+  const selectConversationById = useCallback(async (conversationId: number) => {
+    const conv = conversations.find(c => c.id === conversationId)
+    if (conv) {
+      setActiveConversation(conv)
+      setPendingChat(null)
+      setMessages([])
+      setHasMoreMessages(true)
+
+      // Fetch conversation details and messages
+      try {
+        const [convRes, msgRes, partRes] = await Promise.all([
+          fetch(`/api/market/chat/conversations/${conversationId}`),
+          fetch(`/api/market/chat/conversations/${conversationId}/messages?limit=50`),
+          fetch(`/api/market/chat/conversations/${conversationId}/participants`)
+        ])
+
+        const [convData, msgData, partData] = await Promise.all([
+          convRes.json(),
+          msgRes.json(),
+          partRes.json()
+        ])
+
+        if (convData.success) {
+          setActiveConversation(prev => ({
+            ...prev!,
+            ...convData.data,
+            unreadCount: 0
+          }))
+        }
+
+        if (msgData.success) {
+          setMessages(msgData.data.messages)
+          setHasMoreMessages(msgData.data.hasMore)
+        }
+
+        if (partData.success) {
+          setParticipants(partData.data)
+        }
+
+        // Update unread count in conversations list
+        setConversations(prev => prev.map(c =>
+          c.id === conversationId ? { ...c, unreadCount: 0 } : c
+        ))
+
+        // Subscribe to real-time updates
+        subscribeToConversation(conversationId)
+      } catch (error) {
+        console.error('Error loading conversation:', error)
+      }
+    }
+  }, [conversations])
+
   const selectConversation = useCallback(async (conversationId: number) => {
     const conv = conversations.find(c => c.id === conversationId)
     if (conv) {
       setActiveConversation(conv)
+      setPendingChat(null)
       setMessages([])
       setHasMoreMessages(true)
 
@@ -291,7 +373,58 @@ export function ChatProvider({ children }: ChatProviderProps) {
     fileData?: { fileUrl: string; fileName: string; fileSize: number; fileType: string },
     replyToId?: number
   ): Promise<Message | null> => {
-    if (!activeConversation) return null
+    let conversationId: number | null = null
+
+    // If there's a pending chat, create the conversation first
+    if (pendingChat && !activeConversation) {
+      try {
+        const convRes = await fetch('/api/market/chat/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'private',
+            participantIds: [pendingChat.user.id]
+          })
+        })
+
+        const convData = await convRes.json()
+
+        if (convData.success) {
+          conversationId = convData.data.id
+          // Clear pending chat and refresh conversations
+          setPendingChat(null)
+          await fetchConversations()
+          // Select the newly created conversation
+          const conv = conversations.find(c => c.id === conversationId) || {
+            id: conversationId,
+            type: 'private' as const,
+            name: pendingChat.user.name,
+            userRole: 'admin' as const,
+            isMuted: false,
+            unreadCount: 0,
+            otherParticipant: {
+              id: pendingChat.user.id,
+              name: pendingChat.user.name,
+              email: pendingChat.user.email
+            },
+            participantCount: 2,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }
+          setActiveConversation(conv)
+        } else {
+          console.error('Error creating conversation:', convData.error)
+          return null
+        }
+      } catch (error) {
+        console.error('Error creating conversation:', error)
+        return null
+      }
+    } else if (activeConversation) {
+      conversationId = activeConversation.id
+    }
+
+    if (!conversationId) return null
 
     try {
       const body: Record<string, unknown> = { content, messageType }
@@ -305,7 +438,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
         body.replyToId = replyToId
       }
 
-      const res = await fetch(`/api/market/chat/conversations/${activeConversation.id}/messages`, {
+      const res = await fetch(`/api/market/chat/conversations/${conversationId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -316,6 +449,8 @@ export function ChatProvider({ children }: ChatProviderProps) {
       if (data.success) {
         const newMessage = data.data
         setMessages(prev => [...prev, newMessage])
+        // Refresh conversations to show the new one with the message
+        fetchConversations()
         return newMessage
       }
       return null
@@ -323,7 +458,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
       console.error('Error sending message:', error)
       return null
     }
-  }, [activeConversation])
+  }, [activeConversation, pendingChat, conversations, fetchConversations])
 
   const createConversation = useCallback(async (
     type: string,
@@ -536,6 +671,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
   const value: ChatContextType = {
     conversations,
     activeConversation,
+    pendingChat,
     messages,
     participants,
     companyUsers,
@@ -545,6 +681,8 @@ export function ChatProvider({ children }: ChatProviderProps) {
     hasMoreMessages,
     fetchConversations,
     selectConversation,
+    startPendingChat,
+    cancelPendingChat,
     fetchMessages,
     sendMessage,
     createConversation,

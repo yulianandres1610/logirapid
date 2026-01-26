@@ -6,13 +6,14 @@ import { useChatContext } from '@/contexts/ChatContext'
 import { cn } from '@/lib/utils'
 import { ConversationList } from './ConversationList'
 import { ChatThread } from './ChatThread'
+import { PendingChatThread } from './PendingChatThread'
 import { PresenceList } from './PresenceList'
 import { NewConversationModal } from './NewConversationModal'
 import { MessageSquare, Users } from 'lucide-react'
 
 export function ChatLayout() {
   const { theme } = useTheme()
-  const { activeConversation, fetchCompanyUsers, updatePresence } = useChatContext()
+  const { activeConversation, pendingChat, fetchCompanyUsers, updatePresence } = useChatContext()
   const [showNewConversation, setShowNewConversation] = useState(false)
   const [newConversationType, setNewConversationType] = useState<'private' | 'group' | 'channel'>('private')
 
@@ -104,10 +105,12 @@ export function ChatLayout() {
       {/* Right - Chat thread */}
       <div className={cn(
         'flex-1 flex flex-col min-w-0',
-        theme === 'dark' ? 'bg-gray-950' : 'bg-white'
+        theme === 'dark' ? 'bg-gray-900' : 'bg-white'
       )}>
         {activeConversation ? (
           <ChatThread />
+        ) : pendingChat ? (
+          <PendingChatThread />
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center max-w-md px-8">

@@ -4,7 +4,7 @@ import React, { useState } from 'react'
 import { useTheme } from '@/contexts/theme-context'
 import { useChatContext } from '@/contexts/ChatContext'
 import { cn } from '@/lib/utils'
-import { Search, Users, Megaphone, Loader2 } from 'lucide-react'
+import { Search, Users, Megaphone } from 'lucide-react'
 
 interface PresenceListProps {
   onStartChat: (type: 'private' | 'group' | 'channel') => void
@@ -12,9 +12,8 @@ interface PresenceListProps {
 
 export function PresenceList({ onStartChat }: PresenceListProps) {
   const { theme } = useTheme()
-  const { companyUsers, selectConversation, createConversation, conversations } = useChatContext()
+  const { companyUsers, selectConversation, startPendingChat, conversations } = useChatContext()
   const [search, setSearch] = useState('')
-  const [loadingUserId, setLoadingUserId] = useState<number | null>(null)
 
   const filteredUsers = companyUsers.filter(user =>
     user.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -25,25 +24,17 @@ export function PresenceList({ onStartChat }: PresenceListProps) {
   const awayUsers = filteredUsers.filter(u => u.presence.status === 'away')
   const offlineUsers = filteredUsers.filter(u => u.presence.status === 'offline')
 
-  const handleUserClick = async (userId: number) => {
-    setLoadingUserId(userId)
-    try {
-      // Check if private conversation already exists
-      const existingConv = conversations.find(c =>
-        c.type === 'private' && c.otherParticipant?.id === userId
-      )
+  const handleUserClick = (user: typeof companyUsers[0]) => {
+    // Check if private conversation already exists
+    const existingConv = conversations.find(c =>
+      c.type === 'private' && c.otherParticipant?.id === user.id
+    )
 
-      if (existingConv) {
-        selectConversation(existingConv.id)
-      } else {
-        // Create new private conversation
-        const convId = await createConversation('private', [userId])
-        if (convId) {
-          selectConversation(convId)
-        }
-      }
-    } finally {
-      setLoadingUserId(null)
+    if (existingConv) {
+      selectConversation(existingConv.id)
+    } else {
+      // Start pending chat - conversation will be created when first message is sent
+      startPendingChat(user)
     }
   }
 
@@ -93,14 +84,12 @@ export function PresenceList({ onStartChat }: PresenceListProps) {
         {users.map((user) => (
           <button
             key={user.id}
-            onClick={() => handleUserClick(user.id)}
-            disabled={loadingUserId === user.id}
+            onClick={() => handleUserClick(user)}
             className={cn(
               'w-full px-3 py-2 flex items-center gap-3 transition-colors text-left',
               theme === 'dark'
                 ? 'hover:bg-gray-800'
-                : 'hover:bg-gray-100',
-              loadingUserId === user.id && 'opacity-50'
+                : 'hover:bg-gray-100'
             )}
           >
             <div className="relative">
@@ -108,11 +97,7 @@ export function PresenceList({ onStartChat }: PresenceListProps) {
                 'w-9 h-9 rounded-full flex items-center justify-center text-white font-medium text-sm',
                 getAvatarBg(user.name)
               )}>
-                {loadingUserId === user.id ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  user.name.charAt(0).toUpperCase()
-                )}
+                {user.name.charAt(0).toUpperCase()}
               </div>
               <div className={cn(
                 'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2',
