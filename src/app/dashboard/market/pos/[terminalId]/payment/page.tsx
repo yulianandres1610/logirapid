@@ -673,7 +673,7 @@ function PaymentContent() {
         }
         return {
           method: p.method,
-          amount: p.amountInUSD,
+          amount: p.amount,  // Monto original en la moneda original
           currency: p.currency,
           amountTendered: p.method === 'cash' ? p.amount : null,
           changeAmount: paymentChange
@@ -772,7 +772,7 @@ function PaymentContent() {
               }
               return {
                 method: p.method,
-                amount: p.amountInUSD,
+                amount: p.amount,  // Monto original en la moneda original
                 currency: p.currency,
                 amountTendered: p.method === 'cash' ? p.amount : null,
                 changeAmount: paymentChange
