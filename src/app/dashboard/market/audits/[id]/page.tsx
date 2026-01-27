@@ -15,7 +15,9 @@ import {
   Clock,
   Package,
   ArrowLeft,
-  Minus
+  Minus,
+  Search,
+  X
 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -65,6 +67,18 @@ export default function AuditDetailPage({ params }: { params: Promise<{ id: stri
   const [auditCount, setAuditCount] = useState<AuditCount | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+
+  // Filter lines based on search term
+  const filteredLines = auditCount?.lines?.filter(line => {
+    if (!searchTerm.trim()) return true
+    const term = searchTerm.toLowerCase()
+    return (
+      line.productName.toLowerCase().includes(term) ||
+      line.productSku.toLowerCase().includes(term) ||
+      (line.productBarcode && line.productBarcode.toLowerCase().includes(term))
+    )
+  }) || []
 
   useEffect(() => {
     fetchAuditDetail()
@@ -488,22 +502,51 @@ export default function AuditDetailPage({ params }: { params: Promise<{ id: stri
               )}
             >
               <div className={cn(
-                'px-6 py-4 border-b flex items-center justify-between',
+                'px-6 py-4 border-b',
                 theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
               )}>
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    'p-2 rounded-xl',
-                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                  )}>
-                    <Package className="w-5 h-5 text-gray-500" />
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-2 rounded-xl',
+                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                    )}>
+                      <Package className="w-5 h-5 text-gray-500" />
+                    </div>
+                    <div>
+                      <h3 className={cn(
+                        'font-semibold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>Productos Contados</h3>
+                      <p className="text-sm text-gray-500">
+                        {searchTerm ? `${filteredLines.length} de ${auditCount.lines?.length || 0}` : `${auditCount.lines?.length || 0}`} productos en este conteo
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className={cn(
-                      'font-semibold',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>Productos Contados</h3>
-                    <p className="text-sm text-gray-500">{auditCount.lines?.length || 0} productos en este conteo</p>
+
+                  {/* Search Bar */}
+                  <div className="relative w-full md:w-80">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por nombre, SKU o codigo..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className={cn(
+                        'w-full pl-10 pr-10 py-2.5 rounded-xl border text-sm transition-colors',
+                        theme === 'dark'
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-purple-500'
+                          : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-500'
+                      )}
+                    />
+                    {searchTerm && (
+                      <button
+                        onClick={() => setSearchTerm('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        <X className="w-4 h-4 text-gray-400" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -527,104 +570,131 @@ export default function AuditDetailPage({ params }: { params: Promise<{ id: stri
                     'divide-y',
                     theme === 'dark' ? 'divide-gray-700' : 'divide-gray-100'
                   )}>
-                    {auditCount.lines?.map((line, idx) => (
-                      <motion.tr
-                        key={idx}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.05 * idx }}
-                        className={cn(
-                          'group transition-colors',
-                          theme === 'dark' ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50',
-                          line.difference !== 0 && (
-                            line.difference > 0
-                              ? theme === 'dark' ? 'bg-red-950/10' : 'bg-red-50/50'
-                              : theme === 'dark' ? 'bg-emerald-950/10' : 'bg-emerald-50/50'
-                          )
-                        )}
-                      >
-                        <td className="py-4 px-6">
-                          <div className="flex items-center gap-4">
-                            <div className={cn(
-                              'w-12 h-12 rounded-xl overflow-hidden shrink-0',
-                              theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                            )}>
-                              {line.productImage ? (
-                                <Image
-                                  src={line.productImage}
-                                  alt={line.productName}
-                                  width={48}
-                                  height={48}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <Package className="w-5 h-5 text-gray-400" />
+                    {filteredLines.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center">
+                          <Package className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                          <p className="text-gray-500 dark:text-gray-400">
+                            {searchTerm ? 'No se encontraron productos con ese criterio' : 'No hay productos en este conteo'}
+                          </p>
+                          {searchTerm && (
+                            <button
+                              onClick={() => setSearchTerm('')}
+                              className="mt-2 text-sm text-purple-600 hover:text-purple-700 font-medium"
+                            >
+                              Limpiar busqueda
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredLines.map((line, idx) => (
+                        <motion.tr
+                          key={`${line.productId}-${line.variantId || 'base'}-${idx}`}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: Math.min(0.02 * idx, 0.5) }}
+                          className={cn(
+                            'group transition-colors',
+                            theme === 'dark' ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50',
+                            line.difference !== 0 && (
+                              line.difference > 0
+                                ? theme === 'dark' ? 'bg-red-950/10' : 'bg-red-50/50'
+                                : theme === 'dark' ? 'bg-emerald-950/10' : 'bg-emerald-50/50'
+                            )
+                          )}
+                        >
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-4">
+                              <div className={cn(
+                                'w-12 h-12 rounded-xl overflow-hidden shrink-0',
+                                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                              )}>
+                                {line.productImage ? (
+                                  <Image
+                                    src={line.productImage}
+                                    alt={line.productName}
+                                    width={48}
+                                    height={48}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <Package className="w-5 h-5 text-gray-400" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className={cn(
+                                  'font-medium',
+                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                )} title={line.productName}>
+                                  {line.productName}
+                                </p>
+                                <div className="flex items-center gap-2 text-xs text-gray-500 font-mono">
+                                  <span>SKU: {line.productSku}</span>
+                                  {line.productBarcode && (
+                                    <>
+                                      <span className="text-gray-300 dark:text-gray-600">|</span>
+                                      <span>{line.productBarcode}</span>
+                                    </>
+                                  )}
                                 </div>
-                              )}
+                              </div>
                             </div>
-                            <div className="min-w-0">
-                              <p className={cn(
-                                'font-medium truncate max-w-[200px]',
-                                theme === 'dark' ? 'text-white' : 'text-gray-900'
-                              )}>{line.productName}</p>
-                              <p className="text-xs text-gray-500 font-mono">
-                                SKU: {line.productSku}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-4 px-4 text-right">
-                          <span className="text-gray-500">{formatCurrency(line.costPrice)}</span>
-                        </td>
-                        <td className="py-4 px-4 text-right">
-                          <span className="text-gray-500">{formatCurrency(line.sellingPrice)}</span>
-                        </td>
-                        <td className="py-4 px-4 text-center">
-                          <span className={cn(
-                            'text-lg font-semibold',
-                            theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-                          )}>{line.systemQuantity}</span>
-                        </td>
-                        <td className="py-4 px-4 text-center">
-                          <span className={cn(
-                            'inline-flex items-center justify-center w-10 h-10 rounded-xl font-semibold',
-                            theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-900'
-                          )}>
-                            {line.countedQuantity}
-                          </span>
-                        </td>
-                        <td className="py-4 px-4 text-center">
-                          <span className={cn(
-                            'inline-flex items-center gap-1 px-3 py-1.5 rounded-lg font-bold',
-                            line.difference > 0
-                              ? theme === 'dark' ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700'
-                              : line.difference < 0
-                                ? theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
-                                : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
-                          )}>
-                            {line.difference > 0 && <TrendingDown className="w-3.5 h-3.5" />}
-                            {line.difference < 0 && <TrendingUp className="w-3.5 h-3.5" />}
-                            {line.difference === 0 && <Minus className="w-3.5 h-3.5" />}
-                            {line.difference > 0 ? `-${line.difference}` :
-                             line.difference < 0 ? `+${Math.abs(line.difference)}` :
-                             '0'}
-                          </span>
-                        </td>
-                        <td className="py-4 px-4 text-right">
-                          <span className={cn(
-                            'font-semibold',
-                            line.differenceValueCost > 0 ? 'text-red-500' :
-                            line.differenceValueCost < 0 ? 'text-emerald-500' :
-                            'text-gray-400'
-                          )}>
-                            {line.differenceValueCost !== 0
-                              ? formatCurrency(Math.abs(line.differenceValueCost))
-                              : '-'}
-                          </span>
-                        </td>
-                      </motion.tr>
-                    ))}
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <span className="text-gray-500">{formatCurrency(line.costPrice)}</span>
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <span className="text-gray-500">{formatCurrency(line.sellingPrice)}</span>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <span className={cn(
+                              'text-lg font-semibold',
+                              theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                            )}>{line.systemQuantity}</span>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <span className={cn(
+                              'inline-flex items-center justify-center w-10 h-10 rounded-xl font-semibold',
+                              theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-900'
+                            )}>
+                              {line.countedQuantity}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <span className={cn(
+                              'inline-flex items-center gap-1 px-3 py-1.5 rounded-lg font-bold',
+                              line.difference > 0
+                                ? theme === 'dark' ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700'
+                                : line.difference < 0
+                                  ? theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                                  : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+                            )}>
+                              {line.difference > 0 && <TrendingDown className="w-3.5 h-3.5" />}
+                              {line.difference < 0 && <TrendingUp className="w-3.5 h-3.5" />}
+                              {line.difference === 0 && <Minus className="w-3.5 h-3.5" />}
+                              {line.difference > 0 ? `-${line.difference}` :
+                               line.difference < 0 ? `+${Math.abs(line.difference)}` :
+                               '0'}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <span className={cn(
+                              'font-semibold',
+                              line.differenceValueCost > 0 ? 'text-red-500' :
+                              line.differenceValueCost < 0 ? 'text-emerald-500' :
+                              'text-gray-400'
+                            )}>
+                              {line.differenceValueCost !== 0
+                                ? formatCurrency(Math.abs(line.differenceValueCost))
+                                : '-'}
+                            </span>
+                          </td>
+                        </motion.tr>
+                      ))
+                    )}
                   </tbody>
                   {/* Table Footer */}
                   <tfoot className={cn(
