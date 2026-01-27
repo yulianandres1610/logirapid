@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package,
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   Warehouse,
   TrendingUp,
   Clock,
@@ -32,7 +34,7 @@ import {
   Edit3
 } from 'lucide-react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
@@ -204,12 +206,16 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 
 export default function ProductDetailPage() {
   const params = useParams()
+  const router = useRouter()
   const productId = params.id as string
   const { theme } = useTheme()
   const { USD_CUP, USD_CUP_BCC, USD_MLC } = useMarketExchangeRates()
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
+  const [prevProductId, setPrevProductId] = useState<number | null>(null)
+  const [nextProductId, setNextProductId] = useState<number | null>(null)
+  const [navLoading, setNavLoading] = useState(false)
   const [salesPeriod, setSalesPeriod] = useState<'week' | 'month' | 'year'>('month')
   const [salesData, setSalesData] = useState<SalesData[]>([])
   const [salesSummary, setSalesSummary] = useState<{
@@ -235,7 +241,31 @@ export default function ProductDetailPage() {
 
   useEffect(() => {
     fetchProduct()
+    fetchAdjacentProducts()
   }, [productId])
+
+  // Fetch adjacent product IDs for navigation
+  const fetchAdjacentProducts = async () => {
+    try {
+      const response = await fetch(`/api/market/products/${productId}/adjacent`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setPrevProductId(data.data.prevId)
+          setNextProductId(data.data.nextId)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching adjacent products:', error)
+    }
+  }
+
+  const navigateToProduct = (id: number | null) => {
+    if (id) {
+      setNavLoading(true)
+      router.push(`/dashboard/market/inventory/${id}`)
+    }
+  }
 
   // Always fetch sales data when product loads or period changes (needed for preview chart)
   useEffect(() => {
@@ -476,21 +506,61 @@ export default function ProductDetailPage() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6 max-w-7xl mx-auto"
           >
-            {/* Header with back button and actions */}
+            {/* Header with back button, navigation and actions */}
             <div className="flex items-center justify-between">
-              <Link href="/dashboard/market/inventory">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
-                    theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-gray-300' : 'bg-white hover:bg-gray-100 text-gray-600 shadow-sm border border-gray-200'
-                  )}
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span className="hidden sm:inline">Volver</span>
-                </motion.button>
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link href="/dashboard/market/inventory">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
+                      theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-gray-300' : 'bg-white hover:bg-gray-100 text-gray-600 shadow-sm border border-gray-200'
+                    )}
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span className="hidden sm:inline">Volver</span>
+                  </motion.button>
+                </Link>
+
+                {/* Navigation buttons */}
+                <div className="flex items-center gap-1">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => navigateToProduct(prevProductId)}
+                    disabled={!prevProductId || navLoading}
+                    className={cn(
+                      'flex items-center gap-1 px-3 py-2 rounded-xl transition-colors',
+                      theme === 'dark' ? 'bg-gray-800 text-gray-300' : 'bg-white text-gray-600 shadow-sm border border-gray-200',
+                      prevProductId && !navLoading
+                        ? (theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100')
+                        : 'opacity-50 cursor-not-allowed'
+                    )}
+                    title="Producto anterior"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    <span className="hidden md:inline text-sm">Anterior</span>
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => navigateToProduct(nextProductId)}
+                    disabled={!nextProductId || navLoading}
+                    className={cn(
+                      'flex items-center gap-1 px-3 py-2 rounded-xl transition-colors',
+                      theme === 'dark' ? 'bg-gray-800 text-gray-300' : 'bg-white text-gray-600 shadow-sm border border-gray-200',
+                      nextProductId && !navLoading
+                        ? (theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100')
+                        : 'opacity-50 cursor-not-allowed'
+                    )}
+                    title="Producto siguiente"
+                  >
+                    <span className="hidden md:inline text-sm">Siguiente</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </motion.button>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <motion.button
                   whileHover={{ scale: 1.05 }}
