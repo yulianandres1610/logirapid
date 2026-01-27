@@ -142,14 +142,16 @@ export async function GET(
           sw.name as source_warehouse,
           dw.id as dest_id,
           dw.name as dest_warehouse,
-          COALESCE(u.firstname || ' ' || u.lastname, u.email) as user_name,
+          COALESCE(u_sender.firstname || ' ' || u_sender.lastname, u_sender.email) as sender_name,
+          COALESCE(u_receiver.firstname || ' ' || u_receiver.lastname, u_receiver.email) as receiver_name,
           mwo.notes
         FROM market_warehouse_operation_lines mwol
         JOIN market_warehouse_operations mwo ON mwo.id = mwol.operation_id
         LEFT JOIN market_product_variants mpv ON mpv.id = mwol.variant_id
         LEFT JOIN market_warehouses sw ON sw.id = mwo.source_warehouse_id
         LEFT JOIN market_warehouses dw ON dw.id = mwo.destination_warehouse_id
-        LEFT JOIN users u ON u.id = mwo.created_by
+        LEFT JOIN users u_sender ON u_sender.id = mwo.created_by
+        LEFT JOIN users u_receiver ON u_receiver.id = mwo.validated_by
         WHERE mwol.product_id = $1 AND mwo.company_id = $2
           AND mwo.operation_type = 'internal'
           AND mwo.status IN ('done', 'completed', 'validated', 'confirmed')
@@ -163,7 +165,7 @@ export async function GET(
           const variantLabel = row.variant_name ? ` (${row.variant_name})` : ''
           const variantNote = row.variant_name ? `Variante: ${row.variant_name}` : null
 
-          // Add as exit from source
+          // Add as exit from source - show sender (who created the transfer)
           if (row.source_warehouse) {
             movements.push({
               id: `transfer-out-${row.line_id}`,
@@ -177,14 +179,14 @@ export async function GET(
               warehouseName: row.source_warehouse,
               sourceWarehouse: row.source_warehouse,
               destWarehouse: row.dest_warehouse,
-              userName: row.user_name,
+              userName: row.sender_name,
               status: row.status,
               notes: variantNote || row.notes,
               stockAfter: null
             })
           }
 
-          // Add as entry to destination
+          // Add as entry to destination - show receiver (who validated the transfer)
           if (row.dest_warehouse) {
             movements.push({
               id: `transfer-in-${row.line_id}`,
@@ -198,7 +200,7 @@ export async function GET(
               warehouseName: row.dest_warehouse,
               sourceWarehouse: row.source_warehouse,
               destWarehouse: row.dest_warehouse,
-              userName: row.user_name,
+              userName: row.receiver_name || row.sender_name,
               status: row.status,
               notes: variantNote || row.notes,
               stockAfter: null
