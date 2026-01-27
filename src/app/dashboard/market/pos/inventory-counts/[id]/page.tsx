@@ -23,7 +23,10 @@ import {
   History,
   Zap,
   Check,
-  X
+  X,
+  Trash2,
+  ShieldAlert,
+  Lock
 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -120,6 +123,9 @@ const LIFECYCLE_STEPS = [
   { key: 'approved', label: 'Aprobado', icon: CheckCircle }
 ]
 
+// Roles con permisos de administrador
+const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN', 'MARKET_MANAGER']
+
 export default function InventoryCountDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)
   const router = useRouter()
@@ -129,7 +135,10 @@ export default function InventoryCountDetailPage({ params }: { params: Promise<{
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [processing, setProcessing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [accessDenied, setAccessDenied] = useState(false)
 
   // Get user role from cookies
   useEffect(() => {
@@ -139,15 +148,22 @@ export default function InventoryCountDetailPage({ params }: { params: Promise<{
       if (roleCookie) {
         const role = decodeURIComponent(roleCookie.split('=')[1])
         setUserRole(role)
+      } else {
+        // Si no hay rol, establecer como USER para verificar permisos
+        setUserRole('USER')
       }
     } catch (e) {
       console.error('Error reading role cookie:', e)
+      setUserRole('USER')
     }
   }, [])
 
   useEffect(() => {
-    fetchCount()
-  }, [resolvedParams.id])
+    // Solo fetch cuando el rol esté cargado
+    if (userRole !== null) {
+      fetchCount()
+    }
+  }, [resolvedParams.id, userRole])
 
   const fetchCount = async () => {
     setLoading(true)
@@ -163,12 +179,26 @@ export default function InventoryCountDetailPage({ params }: { params: Promise<{
           approvalInfo = countInfoData.data.counts.find((c: { id: number }) => c.id === parseInt(resolvedParams.id))
         }
 
-        setCount({
+        const countData = {
           ...data.data,
           autoApproved: approvalInfo?.autoApproved || false,
           approvedByName: approvalInfo?.approvedByName || null,
           approvedAt: approvalInfo?.approvedAt || null
-        })
+        }
+
+        // Verificar permisos de acceso:
+        // Solo admins pueden ver conteos NO terminados (in_progress, completed)
+        // Los demás usuarios solo pueden ver conteos terminados (approved, rejected)
+        const isFinished = ['approved', 'rejected'].includes(countData.status)
+        const isAdmin = userRole && ADMIN_ROLES.includes(userRole)
+
+        if (!isFinished && !isAdmin) {
+          setAccessDenied(true)
+          setLoading(false)
+          return
+        }
+
+        setCount(countData)
       } else {
         setError(data.error || 'Error al cargar conteo')
       }
@@ -204,6 +234,32 @@ export default function InventoryCountDetailPage({ params }: { params: Promise<{
       showNotification('error', 'Error de conexión', 'No se pudo procesar el conteo')
     } finally {
       setProcessing(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!count) return
+
+    setDeleting(true)
+    try {
+      const response = await fetch(`/api/market/pos/inventory-counts?countId=${count.id}`, {
+        method: 'DELETE'
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        showNotification('success', 'Conteo eliminado', data.message)
+        router.push('/dashboard/market/pos/inventory-counts')
+      } else {
+        showNotification('error', 'Error', data.error || 'Error al eliminar conteo')
+      }
+    } catch (err) {
+      console.error('Error deleting count:', err)
+      showNotification('error', 'Error de conexión', 'No se pudo eliminar el conteo')
+    } finally {
+      setDeleting(false)
+      setShowDeleteConfirm(false)
     }
   }
 
@@ -267,6 +323,51 @@ export default function InventoryCountDetailPage({ params }: { params: Promise<{
     )
   }
 
+  // Verificar si se denegó el acceso
+  if (accessDenied) {
+    return (
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="min-h-screen p-6">
+            <div className={cn(
+              'max-w-xl mx-auto text-center p-8 rounded-2xl',
+              theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-lg'
+            )}>
+              <div className={cn(
+                'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4',
+                theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100'
+              )}>
+                <Lock className="w-8 h-8 text-amber-500" />
+              </div>
+              <h2 className={cn(
+                'text-xl font-bold mb-2',
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>
+                Acceso Restringido
+              </h2>
+              <p className="text-gray-500 mb-2">
+                Este conteo aún no ha sido finalizado.
+              </p>
+              <p className="text-sm text-gray-400 mb-6">
+                Solo los administradores pueden ver conteos en progreso o pendientes de aprobación.
+              </p>
+              <Link href="/dashboard/market/pos/inventory-counts">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Volver a conteos
+                </motion.button>
+              </Link>
+            </div>
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
+    )
+  }
+
   if (error || !count) {
     return (
       <ProtectedRoute>
@@ -309,7 +410,9 @@ export default function InventoryCountDetailPage({ params }: { params: Promise<{
   const statusConfig = STATUS_CONFIG[count.status] || STATUS_CONFIG.in_progress
   const StatusIcon = statusConfig.icon
   const metrics = calculateMetrics()
-  const canApprove = count.status === 'completed' && userRole && ['MARKET_MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(userRole)
+  const isAdmin = userRole && ADMIN_ROLES.includes(userRole)
+  const canApprove = count.status === 'completed' && isAdmin
+  const canDelete = isAdmin
 
   return (
     <ProtectedRoute>
@@ -335,20 +438,38 @@ export default function InventoryCountDetailPage({ params }: { params: Promise<{
                 </motion.button>
               </Link>
 
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => window.print()}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
-                  theme === 'dark'
-                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              <div className="flex items-center gap-2">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => window.print()}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
+                    theme === 'dark'
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  )}
+                >
+                  <Printer className="w-4 h-4" />
+                  <span className="font-medium">Imprimir</span>
+                </motion.button>
+
+                {/* Delete button - only for admins */}
+                {canDelete && (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
+                      'bg-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-500/30'
+                    )}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span className="font-medium">Eliminar</span>
+                  </motion.button>
                 )}
-              >
-                <Printer className="w-4 h-4" />
-                <span className="font-medium">Imprimir</span>
-              </motion.button>
+              </div>
             </div>
 
             {/* Count Header Card */}
@@ -1066,6 +1187,90 @@ export default function InventoryCountDetailPage({ params }: { params: Promise<{
 
           </div>
         </div>
+
+        {/* Delete Confirmation Modal */}
+        <AnimatePresence>
+          {showDeleteConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+              onClick={() => !deleting && setShowDeleteConfirm(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={e => e.stopPropagation()}
+                className={cn(
+                  'max-w-md w-full p-6 rounded-2xl',
+                  theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                )}
+              >
+                <div className={cn(
+                  'w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4',
+                  theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
+                )}>
+                  <ShieldAlert className="w-7 h-7 text-red-500" />
+                </div>
+                <h3 className={cn(
+                  'text-xl font-bold text-center mb-2',
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                )}>
+                  Eliminar Conteo
+                </h3>
+                <p className="text-center text-gray-500 mb-2">
+                  ¿Está seguro que desea eliminar el conteo <strong>{count.countNumber}</strong>?
+                </p>
+                <p className="text-center text-sm text-gray-400 mb-6">
+                  Esta acción no se puede deshacer. Se eliminarán todos los productos contados.
+                </p>
+                <div className="flex items-center gap-3">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={deleting}
+                    className={cn(
+                      'flex-1 px-4 py-3 rounded-xl font-medium transition-colors',
+                      theme === 'dark'
+                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                      deleting && 'opacity-50 cursor-not-allowed'
+                    )}
+                  >
+                    Cancelar
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className={cn(
+                      'flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium transition-colors text-white',
+                      deleting
+                        ? 'bg-red-400 cursor-not-allowed'
+                        : 'bg-red-600 hover:bg-red-700'
+                    )}
+                  >
+                    {deleting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Eliminando...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        Eliminar
+                      </>
+                    )}
+                  </motion.button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </DashboardLayout>
     </ProtectedRoute>
   )

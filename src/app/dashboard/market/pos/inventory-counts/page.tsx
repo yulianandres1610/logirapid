@@ -22,8 +22,15 @@ import {
   ChevronRight,
   RefreshCw,
   History,
-  Zap
+  Zap,
+  Trash2,
+  ShieldAlert,
+  Lock
 } from 'lucide-react'
+import { useNotifications } from '@/contexts/NotificationContext'
+
+// Roles con permisos de administrador
+const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN', 'MARKET_MANAGER']
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { cn } from '@/lib/utils'
@@ -71,6 +78,7 @@ interface Pagination {
 export default function InventoryCountsPage() {
   const router = useRouter()
   const { theme } = useTheme()
+  const { showNotification } = useNotifications()
 
   const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending')
   const [loading, setLoading] = useState(true)
@@ -87,10 +95,35 @@ export default function InventoryCountsPage() {
   const [countLines, setCountLines] = useState<CountLine[]>([])
   const [loadingLines, setLoadingLines] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [countToDelete, setCountToDelete] = useState<InventoryCount | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const [processing, setProcessing] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  // User role state
+  const [userRole, setUserRole] = useState<string | null>(null)
+
+  // Get user role from cookies
+  useEffect(() => {
+    try {
+      const cookies = document.cookie.split(';')
+      const roleCookie = cookies.find(c => c.trim().startsWith('user-role='))
+      if (roleCookie) {
+        const role = decodeURIComponent(roleCookie.split('=')[1])
+        setUserRole(role)
+      } else {
+        setUserRole('USER')
+      }
+    } catch (e) {
+      console.error('Error reading role cookie:', e)
+      setUserRole('USER')
+    }
+  }, [])
+
+  const isAdmin = userRole && ADMIN_ROLES.includes(userRole)
 
   const fetchCounts = useCallback(async () => {
     try {
@@ -142,6 +175,12 @@ export default function InventoryCountsPage() {
   }
 
   const openDetailModal = (count: InventoryCount) => {
+    // Verificar permisos: solo admins pueden ver conteos no terminados
+    const isFinished = ['approved', 'rejected'].includes(count.status)
+    if (!isFinished && !isAdmin) {
+      showNotification('warning', 'Acceso restringido', 'Solo los administradores pueden ver conteos en progreso')
+      return
+    }
     // Navigate to detail page instead of opening modal
     router.push(`/dashboard/market/pos/inventory-counts/${count.id}`)
   }
@@ -150,6 +189,39 @@ export default function InventoryCountsPage() {
     setSelectedCount(count)
     setShowDetailModal(true)
     fetchCountLines(count.id)
+  }
+
+  const handleDeleteClick = (count: InventoryCount, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent row click navigation
+    setCountToDelete(count)
+    setShowDeleteModal(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!countToDelete) return
+
+    setDeleting(true)
+    try {
+      const response = await fetch(`/api/market/pos/inventory-counts?countId=${countToDelete.id}`, {
+        method: 'DELETE'
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        showNotification('success', 'Conteo eliminado', data.message)
+        fetchCounts()
+      } else {
+        showNotification('error', 'Error', data.error || 'Error al eliminar conteo')
+      }
+    } catch (err) {
+      console.error('Error deleting count:', err)
+      showNotification('error', 'Error de conexión', 'No se pudo eliminar el conteo')
+    } finally {
+      setDeleting(false)
+      setShowDeleteModal(false)
+      setCountToDelete(null)
+    }
   }
 
   const handleAction = async (countId: number, action: 'approve' | 'reject') => {
@@ -453,6 +525,9 @@ export default function InventoryCountsPage() {
                           <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Dif.</th>
                           <th className="text-right py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
                           <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                          {isAdmin && (
+                            <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Acción</th>
+                          )}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -516,6 +591,22 @@ export default function InventoryCountsPage() {
                             <td className="py-4 px-4 text-center">
                               {getStatusBadge(count.status, count.autoApproved, true)}
                             </td>
+                            {isAdmin && (
+                              <td className="py-4 px-4 text-center">
+                                <motion.button
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={(e) => handleDeleteClick(count, e)}
+                                  className={cn(
+                                    'p-2 rounded-lg transition-colors',
+                                    'text-red-500 hover:bg-red-500/20'
+                                  )}
+                                  title="Eliminar conteo"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </motion.button>
+                              </td>
+                            )}
                           </motion.tr>
                         ))}
                       </tbody>
@@ -754,6 +845,90 @@ export default function InventoryCountsPage() {
                     )}
                   </div>
                 )}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Delete Confirmation Modal */}
+        <AnimatePresence>
+          {showDeleteModal && countToDelete && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+              onClick={() => !deleting && setShowDeleteModal(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={e => e.stopPropagation()}
+                className={cn(
+                  'max-w-md w-full p-6 rounded-2xl',
+                  theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                )}
+              >
+                <div className={cn(
+                  'w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4',
+                  theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
+                )}>
+                  <ShieldAlert className="w-7 h-7 text-red-500" />
+                </div>
+                <h3 className={cn(
+                  'text-xl font-bold text-center mb-2',
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                )}>
+                  Eliminar Conteo
+                </h3>
+                <p className="text-center text-gray-500 mb-2">
+                  ¿Está seguro que desea eliminar el conteo <strong>{countToDelete.countNumber}</strong>?
+                </p>
+                <p className="text-center text-sm text-gray-400 mb-6">
+                  Esta acción no se puede deshacer. Se eliminarán todos los productos contados.
+                </p>
+                <div className="flex items-center gap-3">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowDeleteModal(false)}
+                    disabled={deleting}
+                    className={cn(
+                      'flex-1 px-4 py-3 rounded-xl font-medium transition-colors',
+                      theme === 'dark'
+                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                      deleting && 'opacity-50 cursor-not-allowed'
+                    )}
+                  >
+                    Cancelar
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleDeleteConfirm}
+                    disabled={deleting}
+                    className={cn(
+                      'flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium transition-colors text-white',
+                      deleting
+                        ? 'bg-red-400 cursor-not-allowed'
+                        : 'bg-red-600 hover:bg-red-700'
+                    )}
+                  >
+                    {deleting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Eliminando...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        Eliminar
+                      </>
+                    )}
+                  </motion.button>
+                </div>
               </motion.div>
             </motion.div>
           )}

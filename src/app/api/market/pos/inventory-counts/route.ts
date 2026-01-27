@@ -330,3 +330,97 @@ export async function POST(request: NextRequest) {
     }, { status: 500 })
   }
 }
+
+// Roles que tienen permisos de administrador
+const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN', 'MARKET_MANAGER']
+
+/**
+ * DELETE /api/market/pos/inventory-counts
+ * Eliminar un conteo de inventario
+ * SOLO ADMINISTRADORES pueden eliminar conteos
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const cookieStore = await cookies()
+    const authToken = cookieStore.get('auth-token')?.value
+
+    if (!authToken) {
+      return NextResponse.json({
+        success: false,
+        error: 'No autorizado'
+      }, { status: 401 })
+    }
+
+    let payload: JWTPayload
+    try {
+      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+      payload = jwt.verify(authToken, secret) as JWTPayload
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: 'Token inválido'
+      }, { status: 401 })
+    }
+
+    // Verificar que el usuario sea administrador
+    if (!ADMIN_ROLES.includes(payload.role)) {
+      return NextResponse.json({
+        success: false,
+        error: 'Solo los administradores pueden eliminar conteos de inventario'
+      }, { status: 403 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const countId = searchParams.get('countId')
+
+    if (!countId) {
+      return NextResponse.json({
+        success: false,
+        error: 'countId es requerido'
+      }, { status: 400 })
+    }
+
+    // Verificar que el conteo existe y pertenece a la empresa
+    const countResult = await db.query(`
+      SELECT id, count_number, status FROM market_inventory_counts
+      WHERE id = $1 AND company_id = $2
+    `, [countId, payload.companyId])
+
+    if (countResult.rows.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Conteo no encontrado'
+      }, { status: 404 })
+    }
+
+    const count = countResult.rows[0]
+
+    // Eliminar líneas del conteo primero (foreign key)
+    await db.query(`
+      DELETE FROM market_inventory_count_lines WHERE count_id = $1
+    `, [countId])
+
+    // Eliminar el conteo
+    await db.query(`
+      DELETE FROM market_inventory_counts WHERE id = $1
+    `, [countId])
+
+    console.log(`[Inventory Counts] Conteo ${count.count_number} eliminado por usuario ${payload.userId} (${payload.role})`)
+
+    return NextResponse.json({
+      success: true,
+      message: `Conteo ${count.count_number} eliminado exitosamente`,
+      data: {
+        countId: parseInt(countId),
+        countNumber: count.count_number
+      }
+    })
+
+  } catch (error) {
+    console.error('[Inventory Counts DELETE] Error:', error)
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al eliminar conteo'
+    }, { status: 500 })
+  }
+}
