@@ -107,28 +107,32 @@ export async function GET(
 
     const result = await db.query(`
       SELECT
-        id,
-        name,
-        description,
-        image_url as "imageUrl",
-        category,
-        cost_price as "costPrice",
-        selling_price as "sellingPrice",
-        currency,
-        sku,
-        barcode,
-        supplier_name as "supplierName",
-        supplier_contact as "supplierContact",
-        supplier_reference as "supplierReference",
-        quantity_on_hand as "quantityOnHand",
-        quantity_expected as "quantityExpected",
-        minimum_stock::integer as "minimumStock",
-        is_active as "isActive",
-        unit_of_measure as "unitOfMeasure",
-        created_at as "createdAt",
-        updated_at as "updatedAt"
-      FROM market_products
-      WHERE id = $1 AND company_id = $2
+        mp.id,
+        mp.name,
+        mp.description,
+        mp.image_url as "imageUrl",
+        mp.category,
+        mp.cost_price as "costPrice",
+        mp.selling_price as "sellingPrice",
+        mp.currency,
+        mp.sku,
+        mp.barcode,
+        mp.supplier_name as "supplierName",
+        mp.supplier_contact as "supplierContact",
+        mp.supplier_reference as "supplierReference",
+        COALESCE((
+          SELECT SUM(mws.quantity_on_hand)
+          FROM market_warehouse_stock mws
+          WHERE mws.product_id = mp.id AND mws.variant_id IS NULL
+        ), 0) as "quantityOnHand",
+        mp.quantity_expected as "quantityExpected",
+        mp.minimum_stock::integer as "minimumStock",
+        mp.is_active as "isActive",
+        mp.unit_of_measure as "unitOfMeasure",
+        mp.created_at as "createdAt",
+        mp.updated_at as "updatedAt"
+      FROM market_products mp
+      WHERE mp.id = $1 AND mp.company_id = $2
     `, [productId, parseInt(companyId)])
 
     if (result.rows.length === 0) {
