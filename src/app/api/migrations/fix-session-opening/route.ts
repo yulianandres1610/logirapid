@@ -2,11 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 
 /**
- * POST /api/migrations/fix-session-opening
+ * GET /api/migrations/fix-session-opening
  * One-time fix for session SESS-2026-00006
  * Changes opening from 1840 USD to 1840 CUP
  */
+export async function GET(request: NextRequest) {
+  return fixSessionOpening(request)
+}
+
+/**
+ * POST /api/migrations/fix-session-opening
+ */
 export async function POST(request: NextRequest) {
+  return fixSessionOpening(request)
+}
+
+async function fixSessionOpening(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const sessionCode = searchParams.get('code') || 'SESS-2026-00006'
