@@ -32,7 +32,13 @@ import {
   User,
   Box,
   Percent,
-  Activity
+  Activity,
+  ArrowDownRight,
+  ArrowUpRight,
+  Receipt,
+  Repeat,
+  ClipboardCheck,
+  ExternalLink
 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -189,6 +195,33 @@ interface ProductLot {
   createdAt: string
 }
 
+interface InventoryMovementHistory {
+  id: string
+  type: string
+  typeLabel: string
+  date: string
+  quantity: number
+  direction: 'in' | 'out'
+  reference: string
+  referenceId: number
+  warehouseName: string | null
+  sourceWarehouse: string | null
+  destWarehouse: string | null
+  userName: string | null
+  status: string
+  notes: string | null
+  stockAfter: Record<string, number> | null
+}
+
+interface MovementSummary {
+  totalIn: number
+  totalOut: number
+  purchaseCount: number
+  saleCount: number
+  transferCount: number
+  auditCount: number
+}
+
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$',
   CUP: '$',
@@ -257,6 +290,10 @@ export default function ProductDetailPage() {
   const [lotsLoading, setLotsLoading] = useState(false)
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [printVariant, setPrintVariant] = useState<Variant | null>(null)
+  const [inventoryMovements, setInventoryMovements] = useState<InventoryMovementHistory[]>([])
+  const [movementSummary, setMovementSummary] = useState<MovementSummary | null>(null)
+  const [currentWarehouseStock, setCurrentWarehouseStock] = useState<Record<string, { onHand: number; reserved: number }>>({})
+  const [movementsLoading, setMovementsLoading] = useState(false)
 
   // Collapsible sections
   const [showVariants, setShowVariants] = useState(true)
@@ -264,6 +301,7 @@ export default function ProductDetailPage() {
   const [showLots, setShowLots] = useState(true)
   const [showSuppliers, setShowSuppliers] = useState(true)
   const [showHistory, setShowHistory] = useState(false)
+  const [showMovements, setShowMovements] = useState(true)
 
   useEffect(() => {
     fetchProduct()
@@ -279,6 +317,7 @@ export default function ProductDetailPage() {
       fetchLots()
       fetchSuppliers()
       fetchHistory()
+      fetchInventoryMovements()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product, salesPeriod])
@@ -409,6 +448,25 @@ export default function ProductDetailPage() {
       console.error('Error fetching lots:', error)
     } finally {
       setLotsLoading(false)
+    }
+  }
+
+  const fetchInventoryMovements = async () => {
+    setMovementsLoading(true)
+    try {
+      const response = await fetch(`/api/market/products/${productId}/movements`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setInventoryMovements(data.data.movements || [])
+          setMovementSummary(data.data.summary || null)
+          setCurrentWarehouseStock(data.data.currentStock || {})
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching inventory movements:', error)
+    } finally {
+      setMovementsLoading(false)
     }
   }
 
@@ -1637,11 +1695,283 @@ export default function ProductDetailPage() {
               </AnimatePresence>
             </motion.div>
 
-            {/* History Section */}
+            {/* Inventory Movements Section */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.9 }}
+              className={cn(
+                'rounded-2xl border overflow-hidden',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <button
+                onClick={() => setShowMovements(!showMovements)}
+                className={cn(
+                  'w-full px-6 py-4 flex items-center justify-between border-b',
+                  theme === 'dark' ? 'border-gray-700 bg-gray-800 hover:bg-gray-700' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-cyan-900/30' : 'bg-cyan-100'
+                  )}>
+                    <Repeat className="w-5 h-5 text-cyan-500" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className={cn(
+                      'font-semibold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>Movimientos de Inventario</h3>
+                    <p className="text-sm text-gray-500">{inventoryMovements.length} movimientos</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  {movementSummary && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="flex items-center gap-1 text-green-600">
+                        <ArrowDownRight className="w-3.5 h-3.5" />
+                        {movementSummary.totalIn}
+                      </span>
+                      <span className="flex items-center gap-1 text-red-600">
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                        {movementSummary.totalOut}
+                      </span>
+                    </div>
+                  )}
+                  {showMovements ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                </div>
+              </button>
+
+              <AnimatePresence>
+                {showMovements && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-6">
+                      {movementsLoading ? (
+                        <div className="flex items-center justify-center py-8">
+                          <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+                        </div>
+                      ) : inventoryMovements.length === 0 ? (
+                        <div className="text-center py-8">
+                          <Repeat className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                          <p className="text-gray-500 font-medium">No hay movimientos registrados</p>
+                          <p className="text-sm text-gray-400 mt-1">Los movimientos se registran con compras, ventas y transferencias</p>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Summary Stats */}
+                          {movementSummary && (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                              <div className={cn(
+                                'p-3 rounded-xl text-center',
+                                theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'
+                              )}>
+                                <p className="text-2xl font-bold text-blue-600">{movementSummary.purchaseCount}</p>
+                                <p className="text-xs text-gray-500">Compras</p>
+                              </div>
+                              <div className={cn(
+                                'p-3 rounded-xl text-center',
+                                theme === 'dark' ? 'bg-red-900/20' : 'bg-red-50'
+                              )}>
+                                <p className="text-2xl font-bold text-red-600">{movementSummary.saleCount}</p>
+                                <p className="text-xs text-gray-500">Ventas</p>
+                              </div>
+                              <div className={cn(
+                                'p-3 rounded-xl text-center',
+                                theme === 'dark' ? 'bg-purple-900/20' : 'bg-purple-50'
+                              )}>
+                                <p className="text-2xl font-bold text-purple-600">{movementSummary.transferCount}</p>
+                                <p className="text-xs text-gray-500">Transferencias</p>
+                              </div>
+                              <div className={cn(
+                                'p-3 rounded-xl text-center',
+                                theme === 'dark' ? 'bg-amber-900/20' : 'bg-amber-50'
+                              )}>
+                                <p className="text-2xl font-bold text-amber-600">{movementSummary.auditCount}</p>
+                                <p className="text-xs text-gray-500">Ajustes</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Current Stock by Warehouse */}
+                          {Object.keys(currentWarehouseStock).length > 0 && (
+                            <div className={cn(
+                              'mb-6 p-4 rounded-xl border',
+                              theme === 'dark' ? 'bg-gray-700/30 border-gray-600' : 'bg-gray-50 border-gray-200'
+                            )}>
+                              <p className={cn(
+                                'text-sm font-semibold mb-3',
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>Stock Actual por Almacén</p>
+                              <div className="flex flex-wrap gap-3">
+                                {Object.entries(currentWarehouseStock).map(([wh, data]) => (
+                                  <div key={wh} className={cn(
+                                    'px-3 py-2 rounded-lg',
+                                    theme === 'dark' ? 'bg-gray-800' : 'bg-white border border-gray-200'
+                                  )}>
+                                    <p className="text-xs text-gray-500">{wh}</p>
+                                    <p className={cn(
+                                      'text-lg font-bold',
+                                      data.onHand === 0 ? 'text-red-500' : 'text-emerald-600'
+                                    )}>
+                                      {formatNumber(data.onHand)}
+                                    </p>
+                                    {data.reserved > 0 && (
+                                      <p className="text-xs text-amber-500">Reservado: {formatNumber(data.reserved)}</p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Movements Timeline */}
+                          <div className="space-y-3">
+                            {inventoryMovements.slice(0, 20).map((movement) => {
+                              const isEntry = movement.direction === 'in'
+                              const getMovementIcon = () => {
+                                switch (movement.type) {
+                                  case 'purchase': return <ShoppingCart className="w-4 h-4" />
+                                  case 'sale': return <Receipt className="w-4 h-4" />
+                                  case 'transfer_in':
+                                  case 'transfer_out': return <Repeat className="w-4 h-4" />
+                                  case 'audit': return <ClipboardCheck className="w-4 h-4" />
+                                  default: return <Package className="w-4 h-4" />
+                                }
+                              }
+
+                              return (
+                                <div
+                                  key={movement.id}
+                                  className={cn(
+                                    'p-4 rounded-xl border transition-all',
+                                    theme === 'dark'
+                                      ? 'bg-gray-900/50 border-gray-700 hover:border-gray-600'
+                                      : 'bg-white border-gray-200 hover:border-gray-300 shadow-sm'
+                                  )}
+                                >
+                                  <div className="flex items-start gap-4">
+                                    {/* Icon */}
+                                    <div className={cn(
+                                      'p-2.5 rounded-xl shrink-0',
+                                      isEntry
+                                        ? theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-600'
+                                        : theme === 'dark' ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-600'
+                                    )}>
+                                      {getMovementIcon()}
+                                    </div>
+
+                                    {/* Info */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className={cn(
+                                          'font-medium',
+                                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                        )}>
+                                          {movement.typeLabel}
+                                        </span>
+                                        <span className={cn(
+                                          'px-2 py-0.5 rounded text-xs font-mono',
+                                          theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                                        )}>
+                                          {movement.reference}
+                                        </span>
+                                        {movement.userName && (
+                                          <span className="flex items-center gap-1 text-xs text-gray-500">
+                                            <User className="w-3 h-3" />
+                                            {movement.userName}
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* Warehouse Flow */}
+                                      <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
+                                        {movement.sourceWarehouse && (
+                                          <span className={cn(
+                                            'px-2 py-1 rounded-lg text-xs',
+                                            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                                          )}>
+                                            {movement.sourceWarehouse}
+                                          </span>
+                                        )}
+                                        {movement.sourceWarehouse && movement.destWarehouse && (
+                                          <ArrowDownRight className={cn(
+                                            'w-4 h-4 rotate-[-45deg]',
+                                            isEntry ? 'text-green-500' : 'text-red-500'
+                                          )} />
+                                        )}
+                                        {movement.destWarehouse && (
+                                          <span className={cn(
+                                            'px-2 py-1 rounded-lg text-xs',
+                                            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                                          )}>
+                                            {movement.destWarehouse}
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* Notes */}
+                                      {movement.notes && (
+                                        <p className="text-xs text-gray-500 mt-2 italic">{movement.notes}</p>
+                                      )}
+
+                                      {/* Stock snapshot */}
+                                      {movement.stockAfter && Object.keys(movement.stockAfter).length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                          {Object.entries(movement.stockAfter).map(([wh, qty]) => (
+                                            <span key={wh} className="text-xs text-gray-400">
+                                              {wh}: <span className="font-medium">{formatNumber(qty as number)}</span>
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Quantity */}
+                                    <div className="text-right shrink-0">
+                                      <p className={cn(
+                                        'text-xl font-bold',
+                                        isEntry ? 'text-green-600' : 'text-red-600'
+                                      )}>
+                                        {isEntry ? '+' : '-'}{formatNumber(movement.quantity)}
+                                      </p>
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        {formatDateTime(movement.date)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+
+                            {inventoryMovements.length > 20 && (
+                              <p className={cn(
+                                'text-center text-sm py-3',
+                                theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                              )}>
+                                +{inventoryMovements.length - 20} movimientos más
+                              </p>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+
+            {/* History Section */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.0 }}
               className={cn(
                 'rounded-2xl border overflow-hidden',
                 theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
