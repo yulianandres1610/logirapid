@@ -306,34 +306,51 @@ export async function PUT(
         }
       }
 
-      // Restore inventory
+      // Restore inventory (including variant_id for correct stock restoration)
       const lines = await db.query(`
-        SELECT product_id, quantity FROM market_pos_order_lines WHERE order_id = $1
+        SELECT product_id, variant_id, quantity FROM market_pos_order_lines WHERE order_id = $1
       `, [orderId])
 
       for (const line of lines.rows) {
-        if (line.product_id && order.warehouse_id) {
+        if (!line.product_id) continue
+
+        const variantId = line.variant_id || null
+
+        // 1. Restore market_warehouse_stock WITH variant_id
+        if (order.warehouse_id) {
           const stockResult = await db.query(`
             UPDATE market_warehouse_stock
             SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
             WHERE product_id = $2 AND warehouse_id = $3
+              AND (variant_id = $4 OR ($4 IS NULL AND variant_id IS NULL))
             RETURNING id
-          `, [line.quantity, line.product_id, order.warehouse_id])
+          `, [line.quantity, line.product_id, order.warehouse_id, variantId])
 
+          // If stock record doesn't exist, create it
           if (stockResult.rows.length === 0) {
             await db.query(`
-              UPDATE market_products
-              SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
-              WHERE id = $2
-            `, [line.quantity, line.product_id])
+              INSERT INTO market_warehouse_stock (
+                warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved, created_at
+              ) VALUES ($1, $2, $3, $4, 0, NOW())
+            `, [order.warehouse_id, line.product_id, variantId, line.quantity])
           }
-        } else if (line.product_id) {
+        }
+
+        // 2. Restore market_product_variants if it has a variant
+        if (variantId) {
           await db.query(`
-            UPDATE market_products
+            UPDATE market_product_variants
             SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
             WHERE id = $2
-          `, [line.quantity, line.product_id])
+          `, [line.quantity, variantId])
         }
+
+        // 3. Restore market_products (general stock)
+        await db.query(`
+          UPDATE market_products
+          SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
+          WHERE id = $2
+        `, [line.quantity, line.product_id])
       }
 
       await db.query(`
@@ -373,34 +390,51 @@ export async function PUT(
         }
       }
 
-      // Restore inventory
+      // Restore inventory (including variant_id for correct stock restoration)
       const refundLines = await db.query(`
-        SELECT product_id, quantity FROM market_pos_order_lines WHERE order_id = $1
+        SELECT product_id, variant_id, quantity FROM market_pos_order_lines WHERE order_id = $1
       `, [orderId])
 
       for (const line of refundLines.rows) {
-        if (line.product_id && order.warehouse_id) {
+        if (!line.product_id) continue
+
+        const variantId = line.variant_id || null
+
+        // 1. Restore market_warehouse_stock WITH variant_id
+        if (order.warehouse_id) {
           const stockResult = await db.query(`
             UPDATE market_warehouse_stock
             SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
             WHERE product_id = $2 AND warehouse_id = $3
+              AND (variant_id = $4 OR ($4 IS NULL AND variant_id IS NULL))
             RETURNING id
-          `, [line.quantity, line.product_id, order.warehouse_id])
+          `, [line.quantity, line.product_id, order.warehouse_id, variantId])
 
+          // If stock record doesn't exist, create it
           if (stockResult.rows.length === 0) {
             await db.query(`
-              UPDATE market_products
-              SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
-              WHERE id = $2
-            `, [line.quantity, line.product_id])
+              INSERT INTO market_warehouse_stock (
+                warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved, created_at
+              ) VALUES ($1, $2, $3, $4, 0, NOW())
+            `, [order.warehouse_id, line.product_id, variantId, line.quantity])
           }
-        } else if (line.product_id) {
+        }
+
+        // 2. Restore market_product_variants if it has a variant
+        if (variantId) {
           await db.query(`
-            UPDATE market_products
+            UPDATE market_product_variants
             SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
             WHERE id = $2
-          `, [line.quantity, line.product_id])
+          `, [line.quantity, variantId])
         }
+
+        // 3. Restore market_products (general stock)
+        await db.query(`
+          UPDATE market_products
+          SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
+          WHERE id = $2
+        `, [line.quantity, line.product_id])
       }
 
       await db.query(`
@@ -487,34 +521,51 @@ export async function DELETE(
       }, { status: 400 })
     }
 
-    // Restore inventory before deleting
+    // Restore inventory before deleting (including variant_id for correct stock restoration)
     const deleteLines = await db.query(`
-      SELECT product_id, quantity FROM market_pos_order_lines WHERE order_id = $1
+      SELECT product_id, variant_id, quantity FROM market_pos_order_lines WHERE order_id = $1
     `, [orderId])
 
     for (const line of deleteLines.rows) {
-      if (line.product_id && order.warehouse_id) {
+      if (!line.product_id) continue
+
+      const variantId = line.variant_id || null
+
+      // 1. Restore market_warehouse_stock WITH variant_id
+      if (order.warehouse_id) {
         const stockResult = await db.query(`
           UPDATE market_warehouse_stock
           SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
           WHERE product_id = $2 AND warehouse_id = $3
+            AND (variant_id = $4 OR ($4 IS NULL AND variant_id IS NULL))
           RETURNING id
-        `, [line.quantity, line.product_id, order.warehouse_id])
+        `, [line.quantity, line.product_id, order.warehouse_id, variantId])
 
+        // If stock record doesn't exist, create it
         if (stockResult.rows.length === 0) {
           await db.query(`
-            UPDATE market_products
-            SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
-            WHERE id = $2
-          `, [line.quantity, line.product_id])
+            INSERT INTO market_warehouse_stock (
+              warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved, created_at
+            ) VALUES ($1, $2, $3, $4, 0, NOW())
+          `, [order.warehouse_id, line.product_id, variantId, line.quantity])
         }
-      } else if (line.product_id) {
+      }
+
+      // 2. Restore market_product_variants if it has a variant
+      if (variantId) {
         await db.query(`
-          UPDATE market_products
+          UPDATE market_product_variants
           SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
           WHERE id = $2
-        `, [line.quantity, line.product_id])
+        `, [line.quantity, variantId])
       }
+
+      // 3. Restore market_products (general stock)
+      await db.query(`
+        UPDATE market_products
+        SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
+        WHERE id = $2
+      `, [line.quantity, line.product_id])
     }
 
     // Delete order (cascade will delete lines and payments)

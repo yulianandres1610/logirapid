@@ -254,6 +254,25 @@ export async function POST(
         ])
 
         // ============================================================
+        // SYNC VARIANT TOTAL: Actualizar market_product_variants.quantity_on_hand
+        // ============================================================
+        if (variantId) {
+          const totalVariantStock = await db.query(`
+            SELECT COALESCE(SUM(quantity_on_hand), 0) as total
+            FROM market_warehouse_stock
+            WHERE product_id = $1 AND variant_id = $2
+          `, [productId, variantId])
+
+          await db.query(`
+            UPDATE market_product_variants
+            SET quantity_on_hand = $1, updated_at = NOW()
+            WHERE id = $2
+          `, [parseFloat(totalVariantStock.rows[0].total) || 0, variantId])
+
+          console.log(`[Transfer] Variant ${variantId} total stock synced: ${totalVariantStock.rows[0].total}`)
+        }
+
+        // ============================================================
         // MOVER LOTES FIFO: Transferir lotes del almacén origen al destino
         // ============================================================
         let remainingToTransfer = validatedQuantity

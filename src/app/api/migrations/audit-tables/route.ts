@@ -78,6 +78,31 @@ export async function GET() {
 
     console.log('[Migration] audit_counts indexes created')
 
+    // Add apply columns to audit_counts (for applying audit adjustments)
+    try {
+      await db.query(`ALTER TABLE audit_counts ADD COLUMN applied_at TIMESTAMP`)
+      console.log('[Migration] Added applied_at column to audit_counts')
+    } catch (e: unknown) {
+      const error = e as { code?: string }
+      if (error.code !== '42701') throw e // Ignore if column exists
+    }
+
+    try {
+      await db.query(`ALTER TABLE audit_counts ADD COLUMN applied_by INTEGER`)
+      console.log('[Migration] Added applied_by column to audit_counts')
+    } catch (e: unknown) {
+      const error = e as { code?: string }
+      if (error.code !== '42701') throw e
+    }
+
+    try {
+      await db.query(`ALTER TABLE audit_counts ADD COLUMN apply_notes TEXT`)
+      console.log('[Migration] Added apply_notes column to audit_counts')
+    } catch (e: unknown) {
+      const error = e as { code?: string }
+      if (error.code !== '42701') throw e
+    }
+
     // Create audit_count_lines table
     await db.query(`
       CREATE TABLE IF NOT EXISTS audit_count_lines (
