@@ -187,6 +187,7 @@ interface ProductLot {
   quantity: number
   quantityAvailable: number
   notes: string | null
+  purchaseId: number | null
   purchaseNumber: string | null
   purchaseDate: string | null
   supplierName: string | null
@@ -1512,6 +1513,7 @@ export default function ProductDetailPage() {
                                 <th className="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Cantidad</th>
                                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Almacén</th>
                                 <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Estado</th>
+                                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Compra</th>
                               </tr>
                             </thead>
                             <tbody className={cn(
@@ -1578,6 +1580,27 @@ export default function ProductDetailPage() {
                                       )}>
                                         {expStatus.label}
                                       </span>
+                                    </td>
+                                    <td className="py-3 px-4 text-center">
+                                      {lot.purchaseId ? (
+                                        <Link
+                                          href={lot.source === 'consignment'
+                                            ? `/dashboard/market/consignments/${lot.purchaseId}`
+                                            : `/dashboard/market/purchases/${lot.purchaseId}`
+                                          }
+                                          className={cn(
+                                            'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                                            theme === 'dark'
+                                              ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50'
+                                              : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                          )}
+                                        >
+                                          <Receipt className="w-3.5 h-3.5" />
+                                          {lot.purchaseNumber || 'Ver'}
+                                        </Link>
+                                      ) : (
+                                        <span className="text-xs text-gray-400">—</span>
+                                      )}
                                     </td>
                                   </tr>
                                 )

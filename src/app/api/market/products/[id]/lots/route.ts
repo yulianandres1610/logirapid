@@ -12,6 +12,7 @@ interface LotData {
   notes: string | null
   isActive: boolean
   createdAt: string
+  purchaseId: number | null
   purchaseNumber: string | null
   purchaseDate: string | null
   supplierName: string | null
@@ -67,6 +68,7 @@ export async function GET(
           NULL as notes,
           (cli.quantity_available > 0) as is_active,
           cli.received_at as created_at,
+          co.id as purchase_id,
           co.order_number as purchase_number,
           co.consignment_date as purchase_date,
           cs.name as supplier_name,
@@ -92,6 +94,7 @@ export async function GET(
           notes: lot.notes,
           isActive: lot.is_active,
           createdAt: lot.created_at,
+          purchaseId: lot.purchase_id ? parseInt(lot.purchase_id) : null,
           purchaseNumber: lot.purchase_number,
           purchaseDate: lot.purchase_date,
           supplierName: lot.supplier_name,
@@ -117,6 +120,7 @@ export async function GET(
           NULL as notes,
           (pli.quantity_available > 0) as is_active,
           pli.created_at,
+          mp.id as purchase_id,
           mp.purchase_number,
           mp.purchase_date,
           mp.supplier_name,
@@ -142,6 +146,7 @@ export async function GET(
           notes: lot.notes,
           isActive: lot.is_active,
           createdAt: lot.created_at,
+          purchaseId: lot.purchase_id ? parseInt(lot.purchase_id) : null,
           purchaseNumber: lot.purchase_number,
           purchaseDate: lot.purchase_date,
           supplierName: lot.supplier_name,
@@ -167,6 +172,7 @@ export async function GET(
           mpl.notes,
           mpl.is_active,
           mpl.created_at,
+          mp.id as purchase_id,
           mp.purchase_number,
           mp.purchase_date,
           mp.supplier_name,
@@ -189,6 +195,7 @@ export async function GET(
           notes: lot.notes,
           isActive: lot.is_active,
           createdAt: lot.created_at,
+          purchaseId: lot.purchase_id ? parseInt(lot.purchase_id) : null,
           purchaseNumber: lot.purchase_number,
           purchaseDate: lot.purchase_date,
           supplierName: lot.supplier_name,
