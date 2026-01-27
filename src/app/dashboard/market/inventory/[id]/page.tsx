@@ -2085,61 +2085,7 @@ export default function ProductDetailPage() {
                             </div>
                           )}
 
-                          {/* Inventory Movements */}
-                          {movements.length > 0 && (
-                            <div>
-                              <h4 className={cn(
-                                'font-semibold mb-4',
-                                theme === 'dark' ? 'text-white' : 'text-gray-900'
-                              )}>Movimientos de Inventario</h4>
-                              <div className="space-y-2">
-                                {movements.slice(0, 5).map((movement) => (
-                                  <div
-                                    key={movement.id}
-                                    className={cn(
-                                      'p-3 rounded-xl flex items-center justify-between',
-                                      theme === 'dark' ? 'bg-gray-700/30' : 'bg-gray-50'
-                                    )}
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <div className={cn(
-                                        'p-1.5 rounded-lg',
-                                        movement.quantity > 0
-                                          ? theme === 'dark' ? 'bg-green-900/30' : 'bg-green-100'
-                                          : theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
-                                      )}>
-                                        {movement.quantity > 0 ? (
-                                          <ChevronUp className="w-4 h-4 text-green-600" />
-                                        ) : (
-                                          <ChevronDown className="w-4 h-4 text-red-600" />
-                                        )}
-                                      </div>
-                                      <div>
-                                        <p className={cn(
-                                          'text-sm font-medium',
-                                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                        )}>{movement.typeLabel}</p>
-                                        <p className="text-xs text-gray-500">{formatDateTime(movement.createdAt)}</p>
-                                      </div>
-                                    </div>
-                                    <div className="text-right">
-                                      <p className={cn(
-                                        'font-bold',
-                                        movement.quantity > 0 ? 'text-green-600' : 'text-red-600'
-                                      )}>
-                                        {movement.quantity > 0 ? '+' : ''}{movement.quantity}
-                                      </p>
-                                      <p className="text-xs text-gray-500">
-                                        {movement.quantityBefore} → {movement.quantityAfter}
-                                      </p>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {changeLogs.length === 0 && movements.length === 0 && (
+                          {changeLogs.length === 0 && (
                             <div className="text-center py-8">
                               <History className="w-12 h-12 mx-auto mb-3 text-gray-400" />
                               <p className="text-gray-500">No hay historial registrado</p>
