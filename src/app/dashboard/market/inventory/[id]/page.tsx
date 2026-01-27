@@ -26,14 +26,16 @@ import {
   History,
   Calendar,
   Archive,
-  Globe,
-  ExternalLink,
   Tag,
   Scale,
-  Trash2,
-  Edit3
+  Edit3,
+  User,
+  Box,
+  Percent,
+  Activity
 } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useParams, useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -187,21 +189,37 @@ interface ProductLot {
   createdAt: string
 }
 
-type TabType = 'overview' | 'stock' | 'lots' | 'suppliers' | 'history'
-
-const TABS: { id: TabType; label: string; icon: React.ElementType }[] = [
-  { id: 'overview', label: 'Resumen', icon: TrendingUp },
-  { id: 'stock', label: 'Stock por Almacén', icon: Warehouse },
-  { id: 'lots', label: 'Lotes', icon: Archive },
-  { id: 'suppliers', label: 'Proveedores', icon: Truck },
-  { id: 'history', label: 'Historial', icon: History }
-]
-
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$',
   CUP: '$',
   EUR: '€',
   MLC: '$'
+}
+
+const STATUS_CONFIG: Record<string, {
+  label: string
+  color: string
+  bgGradient: string
+  icon: React.ElementType
+}> = {
+  in_stock: {
+    label: 'En Stock',
+    color: 'emerald',
+    bgGradient: 'from-emerald-500 to-teal-500',
+    icon: CheckCircle
+  },
+  low_stock: {
+    label: 'Stock Bajo',
+    color: 'amber',
+    bgGradient: 'from-amber-500 to-orange-500',
+    icon: AlertTriangle
+  },
+  out_of_stock: {
+    label: 'Sin Stock',
+    color: 'red',
+    bgGradient: 'from-red-500 to-rose-500',
+    icon: AlertCircle
+  }
 }
 
 export default function ProductDetailPage() {
@@ -210,11 +228,12 @@ export default function ProductDetailPage() {
   const productId = params.id as string
   const { theme } = useTheme()
   const { USD_CUP, USD_CUP_BCC, USD_MLC } = useMarketExchangeRates()
-  const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
   const [prevProductId, setPrevProductId] = useState<number | null>(null)
   const [nextProductId, setNextProductId] = useState<number | null>(null)
+  const [currentIndex, setCurrentIndex] = useState<number>(0)
+  const [totalProducts, setTotalProducts] = useState<number>(0)
   const [navLoading, setNavLoading] = useState(false)
   const [salesPeriod, setSalesPeriod] = useState<'week' | 'month' | 'year'>('month')
   const [salesData, setSalesData] = useState<SalesData[]>([])
@@ -239,12 +258,31 @@ export default function ProductDetailPage() {
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [printVariant, setPrintVariant] = useState<Variant | null>(null)
 
+  // Collapsible sections
+  const [showVariants, setShowVariants] = useState(true)
+  const [showStock, setShowStock] = useState(true)
+  const [showLots, setShowLots] = useState(true)
+  const [showSuppliers, setShowSuppliers] = useState(true)
+  const [showHistory, setShowHistory] = useState(false)
+
   useEffect(() => {
     fetchProduct()
     fetchAdjacentProducts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId])
 
-  // Fetch adjacent product IDs for navigation
+  // Fetch all data when product loads
+  useEffect(() => {
+    if (product) {
+      fetchSalesData()
+      fetchWarehouseStock()
+      fetchLots()
+      fetchSuppliers()
+      fetchHistory()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product, salesPeriod])
+
   const fetchAdjacentProducts = async () => {
     try {
       const response = await fetch(`/api/market/products/${productId}/adjacent`)
@@ -253,6 +291,8 @@ export default function ProductDetailPage() {
         if (data.success) {
           setPrevProductId(data.data.prevId)
           setNextProductId(data.data.nextId)
+          setCurrentIndex(data.data.currentIndex || 0)
+          setTotalProducts(data.data.total || 0)
         }
       }
     } catch (error) {
@@ -266,28 +306,6 @@ export default function ProductDetailPage() {
       router.push(`/dashboard/market/inventory/${id}`)
     }
   }
-
-  // Always fetch sales data when product loads or period changes (needed for preview chart)
-  useEffect(() => {
-    if (product) {
-      fetchSalesData()
-    }
-  }, [product, salesPeriod])
-
-  // Fetch tab-specific data
-  useEffect(() => {
-    if (product) {
-      if (activeTab === 'stock') {
-        fetchWarehouseStock()
-      } else if (activeTab === 'lots') {
-        fetchLots()
-      } else if (activeTab === 'suppliers') {
-        fetchSuppliers()
-      } else if (activeTab === 'history') {
-        fetchHistory()
-      }
-    }
-  }, [activeTab, product])
 
   const fetchProduct = async () => {
     setLoading(true)
@@ -424,12 +442,12 @@ export default function ProductDetailPage() {
 
   const getStockStatus = (p: Product) => {
     if (p.quantityOnHand === 0) {
-      return { color: 'red', label: 'Sin Stock', icon: AlertCircle }
+      return 'out_of_stock'
     }
     if (p.quantityOnHand <= p.minimumStock) {
-      return { color: 'amber', label: 'Stock Bajo', icon: AlertTriangle }
+      return 'low_stock'
     }
-    return { color: 'green', label: 'En Stock', icon: CheckCircle }
+    return 'in_stock'
   }
 
   const getMargin = (p: Product) => {
@@ -441,26 +459,27 @@ export default function ProductDetailPage() {
     return new Date(dateString).toLocaleDateString('es-ES', {
       year: 'numeric',
       month: 'short',
+      day: 'numeric'
+    })
+  }
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
     })
   }
 
-  const getTotalSales = () => {
-    return salesData.reduce((acc, d) => acc + d.quantity, 0)
-  }
+  const getTotalSales = () => salesData.reduce((acc, d) => acc + d.quantity, 0)
+  const getTotalRevenue = () => salesData.reduce((acc, d) => acc + d.revenue, 0)
+  const getTotalOrders = () => salesData.reduce((acc, d) => acc + d.orders, 0)
+  const getTotalWarehouseStock = () => warehouseStock.reduce((acc, w) => acc + w.quantityOnHand, 0)
 
-  const getTotalRevenue = () => {
-    return salesData.reduce((acc, d) => acc + d.revenue, 0)
-  }
-
-  const getTotalOrders = () => {
-    return salesData.reduce((acc, d) => acc + d.orders, 0)
-  }
-
-  const getTotalWarehouseStock = () => {
-    return warehouseStock.reduce((acc, w) => acc + w.quantityOnHand, 0)
+  const formatNumber = (num: number) => {
+    return Number(num) % 1 === 0 ? num : Number(num).toFixed(2)
   }
 
   if (loading) {
@@ -468,7 +487,15 @@ export default function ProductDetailPage() {
       <ProtectedRoute>
         <DashboardLayout>
           <div className="min-h-screen p-6 flex items-center justify-center">
-            <RefreshCw className="w-8 h-8 animate-spin text-gray-400" />
+            <div className="text-center">
+              <div className={cn(
+                'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4',
+                theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+              )}>
+                <RefreshCw className="w-8 h-8 animate-spin text-emerald-500" />
+              </div>
+              <p className="text-gray-500">Cargando detalles del producto...</p>
+            </div>
           </div>
         </DashboardLayout>
       </ProtectedRoute>
@@ -479,47 +506,69 @@ export default function ProductDetailPage() {
     return (
       <ProtectedRoute>
         <DashboardLayout>
-          <div className="min-h-screen p-6 flex flex-col items-center justify-center">
-            <Package className="w-16 h-16 text-gray-400 mb-4" />
-            <h2 className="text-xl font-bold text-gray-600 dark:text-gray-300">Producto no encontrado</h2>
-            <Link href="/dashboard/market/inventory">
-              <button className="mt-4 text-emerald-500 hover:text-emerald-600">
-                Volver al inventario
-              </button>
-            </Link>
+          <div className="min-h-screen p-6">
+            <div className={cn(
+              'max-w-xl mx-auto text-center p-8 rounded-2xl',
+              theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-lg'
+            )}>
+              <div className={cn(
+                'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4',
+                theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
+              )}>
+                <Package className="w-8 h-8 text-red-500" />
+              </div>
+              <h2 className={cn(
+                'text-xl font-bold mb-2',
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>
+                Producto no encontrado
+              </h2>
+              <p className="text-gray-500 mb-6">No pudimos cargar los detalles de este producto.</p>
+              <Link href="/dashboard/market/inventory">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Volver al inventario
+                </motion.button>
+              </Link>
+            </div>
           </div>
         </DashboardLayout>
       </ProtectedRoute>
     )
   }
 
-  const status = getStockStatus(product)
+  const stockStatus = getStockStatus(product)
+  const statusConfig = STATUS_CONFIG[stockStatus]
+  const StatusIcon = statusConfig.icon
   const margin = getMargin(product)
   const symbol = CURRENCY_SYMBOLS[product.currency] || '$'
 
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="min-h-screen p-4 md:p-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6 max-w-7xl mx-auto"
-          >
-            {/* Header with back button, navigation and actions */}
-            <div className="flex items-center justify-between">
+        <div className="min-h-screen p-6">
+          {/* Header Section */}
+          <div className="max-w-6xl mx-auto mb-8">
+            {/* Navigation */}
+            <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2">
                 <Link href="/dashboard/market/inventory">
                   <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                    whileHover={{ scale: 1.02, x: -2 }}
+                    whileTap={{ scale: 0.98 }}
                     className={cn(
                       'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
-                      theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-gray-300' : 'bg-white hover:bg-gray-100 text-gray-600 shadow-sm border border-gray-200'
+                      theme === 'dark'
+                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     )}
                   >
                     <ArrowLeft className="w-4 h-4" />
-                    <span className="hidden sm:inline">Volver</span>
+                    <span className="font-medium">Volver</span>
                   </motion.button>
                 </Link>
 
@@ -532,16 +581,25 @@ export default function ProductDetailPage() {
                     disabled={!prevProductId || navLoading}
                     className={cn(
                       'flex items-center gap-1 px-3 py-2 rounded-xl transition-colors',
-                      theme === 'dark' ? 'bg-gray-800 text-gray-300' : 'bg-white text-gray-600 shadow-sm border border-gray-200',
+                      theme === 'dark' ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-600',
                       prevProductId && !navLoading
-                        ? (theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100')
+                        ? (theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-200')
                         : 'opacity-50 cursor-not-allowed'
                     )}
                     title="Producto anterior"
                   >
                     <ChevronLeft className="w-4 h-4" />
-                    <span className="hidden md:inline text-sm">Anterior</span>
                   </motion.button>
+
+                  {totalProducts > 0 && (
+                    <span className={cn(
+                      'px-3 py-1.5 rounded-lg text-xs font-medium',
+                      theme === 'dark' ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-500'
+                    )}>
+                      {currentIndex} / {totalProducts}
+                    </span>
+                  )}
+
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -549,36 +607,38 @@ export default function ProductDetailPage() {
                     disabled={!nextProductId || navLoading}
                     className={cn(
                       'flex items-center gap-1 px-3 py-2 rounded-xl transition-colors',
-                      theme === 'dark' ? 'bg-gray-800 text-gray-300' : 'bg-white text-gray-600 shadow-sm border border-gray-200',
+                      theme === 'dark' ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-600',
                       nextProductId && !navLoading
-                        ? (theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100')
+                        ? (theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-200')
                         : 'opacity-50 cursor-not-allowed'
                     )}
                     title="Producto siguiente"
                   >
-                    <span className="hidden md:inline text-sm">Siguiente</span>
                     <ChevronRight className="w-4 h-4" />
                   </motion.button>
                 </div>
               </div>
+
               <div className="flex items-center gap-2">
                 <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => setShowPrintModal(true)}
                   className={cn(
-                    'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-colors',
-                    theme === 'dark' ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-600 hover:bg-gray-100 shadow-sm border border-gray-200'
+                    'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
+                    theme === 'dark'
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   )}
                 >
                   <Printer className="w-4 h-4" />
-                  <span className="hidden sm:inline">Imprimir</span>
+                  <span className="font-medium hidden sm:inline">Imprimir</span>
                 </motion.button>
                 <Link href={`/dashboard/market/inventory/${product.id}/edit`}>
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25"
+                    className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25 font-medium"
                   >
                     <Edit className="w-4 h-4" />
                     <span className="hidden sm:inline">Editar</span>
@@ -587,678 +647,678 @@ export default function ProductDetailPage() {
               </div>
             </div>
 
-            {/* Main Content - Two Column Layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left Column - Product Image and Basic Info */}
-              <div className="lg:col-span-1 space-y-4">
-                {/* Product Image Card */}
+            {/* Product Header Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                'p-6 rounded-2xl border',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <div className="flex flex-col md:flex-row md:items-start gap-6">
+                {/* Product Image */}
+                <div className={cn(
+                  'w-24 h-24 md:w-32 md:h-32 rounded-2xl overflow-hidden flex-shrink-0',
+                  `bg-gradient-to-br ${statusConfig.bgGradient}`
+                )}>
+                  {product.imageUrl ? (
+                    <Image
+                      src={product.imageUrl}
+                      alt={product.name}
+                      width={128}
+                      height={128}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Package className="w-12 h-12 text-white/80" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Product Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                      <div className="flex items-center gap-3 mb-2 flex-wrap">
+                        <h1 className={cn(
+                          'text-2xl md:text-3xl font-bold',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>
+                          {product.name}
+                        </h1>
+                        <span className={cn(
+                          'inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium',
+                          statusConfig.color === 'emerald' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                          statusConfig.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                          statusConfig.color === 'red' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                        )}>
+                          <StatusIcon className="w-3.5 h-3.5" />
+                          {statusConfig.label}
+                        </span>
+                      </div>
+
+                      {product.description && (
+                        <p className="text-gray-500 mb-3 line-clamp-2">{product.description}</p>
+                      )}
+
+                      <div className="flex items-center gap-4 text-sm text-gray-500 flex-wrap">
+                        {product.category && (
+                          <span className="flex items-center gap-1.5">
+                            <Tag className="w-4 h-4" />
+                            {product.category}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1.5 font-mono">
+                          <Barcode className="w-4 h-4" />
+                          SKU: {product.sku}
+                        </span>
+                        {product.barcode && (
+                          <span className="flex items-center gap-1.5 font-mono">
+                            {product.barcode}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1.5">
+                          <Scale className="w-4 h-4" />
+                          {product.unitOfMeasure}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Price Display */}
+                    <div className={cn(
+                      'p-4 rounded-xl text-right',
+                      theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                    )}>
+                      <p className="text-sm text-gray-500 mb-1">Precio Venta</p>
+                      <p className="text-3xl font-bold text-emerald-600">
+                        {symbol}{Number(product.sellingPrice).toFixed(2)}
+                      </p>
+                      <div className="mt-1 space-y-0.5">
+                        <p className="text-xs text-blue-600">${Math.round(product.sellingPrice * USD_CUP_BCC).toLocaleString()} CUP</p>
+                        <p className="text-xs text-purple-600">${(product.sellingPrice * USD_MLC).toFixed(2)} MLC</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Content */}
+          <div className="max-w-6xl mx-auto space-y-6">
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                {
+                  label: 'Stock Total',
+                  value: formatNumber(product.quantityOnHand),
+                  icon: Box,
+                  color: stockStatus === 'in_stock' ? 'emerald' : stockStatus === 'low_stock' ? 'amber' : 'red',
+                  suffix: product.unitOfMeasure,
+                  subtext: `Mín: ${formatNumber(product.minimumStock)}`
+                },
+                {
+                  label: 'Precio Costo',
+                  value: `${symbol}${Number(product.costPrice).toFixed(2)}`,
+                  icon: DollarSign,
+                  color: 'blue',
+                  subtext: `$${Math.round(product.costPrice * USD_CUP).toLocaleString()} CUP`
+                },
+                {
+                  label: 'Margen',
+                  value: `${margin}%`,
+                  icon: Percent,
+                  color: margin >= 30 ? 'emerald' : margin >= 15 ? 'amber' : 'red',
+                  subtext: `${symbol}${(product.sellingPrice - product.costPrice).toFixed(2)} ganancia`
+                },
+                {
+                  label: 'Velocidad',
+                  value: salesSummary?.salesVelocity ? `${salesSummary.salesVelocity}` : '0',
+                  icon: Activity,
+                  color: 'purple',
+                  suffix: 'uds/día',
+                  subtext: salesLoading ? 'Cargando...' : `${getTotalSales()} vendidas`
+                }
+              ].map((stat, idx) => (
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
+                  key={stat.label}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.1 }}
                   className={cn(
-                    'rounded-2xl overflow-hidden shadow-xl border',
-                    theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    'p-5 rounded-2xl border relative overflow-hidden group',
+                    theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
                   )}
                 >
-                  <div className="aspect-square relative bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800">
-                    {product.imageUrl ? (
-                      <img
-                        src={product.imageUrl}
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <ImageIcon className="w-24 h-24 text-gray-300 dark:text-gray-600" />
-                      </div>
-                    )}
-                    {/* Status Badge */}
-                    <span className={cn(
-                      'absolute top-4 right-4 px-3 py-1.5 rounded-full text-xs font-semibold shadow-lg',
-                      status.color === 'green' && 'bg-green-500 text-white',
-                      status.color === 'amber' && 'bg-amber-500 text-white',
-                      status.color === 'red' && 'bg-red-500 text-white'
+                  <div className={cn(
+                    'absolute -right-4 -top-4 w-20 h-20 rounded-full opacity-10 group-hover:opacity-20 transition-opacity',
+                    stat.color === 'emerald' && 'bg-emerald-500',
+                    stat.color === 'blue' && 'bg-blue-500',
+                    stat.color === 'amber' && 'bg-amber-500',
+                    stat.color === 'red' && 'bg-red-500',
+                    stat.color === 'purple' && 'bg-purple-500'
+                  )} />
+
+                  <div className="relative">
+                    <div className={cn(
+                      'w-10 h-10 rounded-xl flex items-center justify-center mb-3',
+                      stat.color === 'emerald' && (theme === 'dark' ? 'bg-emerald-900/50 text-emerald-400' : 'bg-emerald-100 text-emerald-600'),
+                      stat.color === 'blue' && (theme === 'dark' ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'),
+                      stat.color === 'amber' && (theme === 'dark' ? 'bg-amber-900/50 text-amber-400' : 'bg-amber-100 text-amber-600'),
+                      stat.color === 'red' && (theme === 'dark' ? 'bg-red-900/50 text-red-400' : 'bg-red-100 text-red-600'),
+                      stat.color === 'purple' && (theme === 'dark' ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600')
                     )}>
-                      {status.label}
-                    </span>
-                    {/* Category Badge */}
-                    {product.category && (
-                      <span className={cn(
-                        'absolute top-4 left-4 px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-sm',
-                        theme === 'dark' ? 'bg-black/50 text-white' : 'bg-white/80 text-gray-700'
-                      )}>
-                        {product.category}
-                      </span>
+                      <stat.icon className="w-5 h-5" />
+                    </div>
+                    <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
+                    <p className={cn(
+                      'text-2xl font-bold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      {stat.value}
+                      {stat.suffix && <span className="text-sm font-normal text-gray-500 ml-1">{stat.suffix}</span>}
+                    </p>
+                    {stat.subtext && (
+                      <p className="text-xs text-gray-500 mt-1">{stat.subtext}</p>
                     )}
                   </div>
-                  {/* Quick Actions */}
-                  <div className="p-4 flex gap-2">
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Info Cards Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Supplier Card */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={cn(
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
+                  )}>
+                    <Truck className="w-5 h-5 text-blue-500" />
+                  </div>
+                  <h3 className={cn(
+                    'font-semibold',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>Proveedor Principal</h3>
+                </div>
+
+                {product.supplierName ? (
+                  <div className="space-y-3">
+                    <p className={cn(
+                      'font-semibold text-lg',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>{product.supplierName}</p>
+
+                    {product.supplierContact && (
+                      <div className="flex items-center gap-3">
+                        <User className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-500">{product.supplierContact}</span>
+                      </div>
+                    )}
+
+                    {suppliers.length > 0 && (
+                      <div className={cn(
+                        'pt-3 border-t',
+                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                      )}>
+                        <p className="text-xs text-gray-500 mb-1">Último precio</p>
+                        <p className="text-xl font-bold text-emerald-600">
+                          {symbol}{Number(suppliers[0].lastPrice).toFixed(2)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">Sin proveedor asignado</p>
+                )}
+              </motion.div>
+
+              {/* Stock Summary Card */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-2 rounded-xl',
+                      theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'
+                    )}>
+                      <Warehouse className="w-5 h-5 text-purple-500" />
+                    </div>
+                    <h3 className={cn(
+                      'font-semibold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>Distribución Stock</h3>
+                  </div>
+                  <span className={cn(
+                    'px-2.5 py-1 rounded-lg text-xs font-medium',
+                    theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                  )}>
+                    {warehouseStock.length} almacenes
+                  </span>
+                </div>
+
+                {stockLoading ? (
+                  <div className="flex items-center justify-center py-6">
+                    <RefreshCw className="w-5 h-5 animate-spin text-gray-400" />
+                  </div>
+                ) : warehouseStock.length > 0 ? (
+                  <div className="space-y-2">
+                    {warehouseStock.slice(0, 3).map((wh) => (
+                      <div key={wh.warehouseId} className="flex items-center justify-between">
+                        <span className="text-sm text-gray-500 truncate">{wh.warehouseName}</span>
+                        <span className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>
+                          {formatNumber(wh.quantityOnHand)}
+                        </span>
+                      </div>
+                    ))}
+                    {warehouseStock.length > 3 && (
+                      <p className="text-xs text-gray-500 pt-2">
+                        +{warehouseStock.length - 3} más
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">Sin distribución por almacén</p>
+                )}
+              </motion.div>
+
+              {/* Sales Card */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-2 rounded-xl',
+                      theme === 'dark' ? 'bg-emerald-900/30' : 'bg-emerald-100'
+                    )}>
+                      <TrendingUp className="w-5 h-5 text-emerald-500" />
+                    </div>
+                    <h3 className={cn(
+                      'font-semibold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>Ventas</h3>
+                  </div>
+                  <div className="flex gap-1">
+                    {(['week', 'month', 'year'] as const).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => setSalesPeriod(p)}
+                        className={cn(
+                          'px-2 py-1 rounded text-xs font-medium transition-all',
+                          salesPeriod === p
+                            ? 'bg-emerald-500 text-white'
+                            : theme === 'dark'
+                              ? 'text-gray-400 hover:text-white'
+                              : 'text-gray-500 hover:text-gray-900'
+                        )}
+                      >
+                        {p === 'week' ? '7D' : p === 'month' ? '30D' : '1A'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {salesLoading ? (
+                  <div className="flex items-center justify-center py-6">
+                    <RefreshCw className="w-5 h-5 animate-spin text-gray-400" />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-500">Unidades</span>
+                      <span className={cn(
+                        'text-lg font-bold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>{getTotalSales()}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-500">Ingresos</span>
+                      <span className="text-lg font-bold text-emerald-600">
+                        {symbol}{Number(getTotalRevenue()).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-500">Órdenes</span>
+                      <span className={cn(
+                        'text-lg font-bold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>{getTotalOrders()}</span>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </div>
+
+            {/* Variants Section */}
+            {product.variants && product.variants.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className={cn(
+                  'rounded-2xl border overflow-hidden',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <button
+                  onClick={() => setShowVariants(!showVariants)}
+                  className={cn(
+                    'w-full px-6 py-4 flex items-center justify-between border-b',
+                    theme === 'dark' ? 'border-gray-700 bg-gray-800 hover:bg-gray-700' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-2 rounded-xl',
+                      theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'
+                    )}>
+                      <Package className="w-5 h-5 text-purple-500" />
+                    </div>
+                    <div className="text-left">
+                      <h3 className={cn(
+                        'font-semibold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>Variantes</h3>
+                      <p className="text-sm text-gray-500">{product.variants.length} variantes disponibles</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => setShowPrintModal(true)}
+                      onClick={(e) => { e.stopPropagation(); setShowPrintModal(true); }}
                       className={cn(
-                        'flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-all',
+                        'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
                         theme === 'dark'
-                          ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? 'bg-purple-900/30 text-purple-400 hover:bg-purple-900/50'
+                          : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
                       )}
                     >
-                      <Printer className="w-4 h-4" />
-                      Imprimir Etiqueta
+                      <Printer className="w-3.5 h-3.5" />
+                      Imprimir Todas
                     </motion.button>
+                    {showVariants ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
                   </div>
-                </motion.div>
+                </button>
 
-                {/* Barcode Card */}
-                {product.barcode && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                    className={cn(
-                      'p-4 rounded-2xl border shadow-lg',
-                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                    )}
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <Barcode className="w-5 h-5 text-gray-400" />
-                      <p className="text-xs text-gray-500 uppercase tracking-wide">Código de Barras</p>
-                    </div>
-                    <p className="font-mono text-xl font-bold text-gray-900 dark:text-white tracking-widest text-center py-2">
-                      {product.barcode}
-                    </p>
-                  </motion.div>
-                )}
-
-                {/* Supplier Card */}
-                {product.supplierName && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.15 }}
-                    className={cn(
-                      'p-4 rounded-2xl border shadow-lg',
-                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                    )}
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <Truck className="w-5 h-5 text-gray-400" />
-                      <p className="text-xs text-gray-500 uppercase tracking-wide">Proveedor</p>
-                    </div>
-                    <p className="font-medium text-gray-900 dark:text-white">{product.supplierName}</p>
-                    {product.supplierContact && (
-                      <p className="text-sm text-gray-500 mt-1">{product.supplierContact}</p>
-                    )}
-                  </motion.div>
-                )}
-              </div>
-
-              {/* Right Column - Product Details */}
-              <div className="lg:col-span-2 space-y-4">
-                {/* Product Title and Info Card */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={cn(
-                    'p-6 rounded-2xl border shadow-xl',
-                    theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                  )}
-                >
-                  <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                    {product.name}
-                  </h1>
-                  {product.description && (
-                    <p className="text-gray-600 dark:text-gray-400 mb-4">{product.description}</p>
-                  )}
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="text-sm text-gray-500 font-mono bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-lg">
-                      SKU: {product.sku}
-                    </span>
-                    <span className="text-sm text-gray-500 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-lg">
-                      {product.unitOfMeasure}
-                    </span>
-                  </div>
-                </motion.div>
-
-                {/* Price & Stock Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {/* Selling Price - Highlighted */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                    className={cn(
-                      'p-5 rounded-2xl border-2 col-span-2 md:col-span-1',
-                      'bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 border-emerald-500/30'
-                    )}
-                  >
-                    <p className="text-xs text-emerald-600 dark:text-emerald-400 uppercase tracking-wide mb-1">Precio Venta</p>
-                    <p className="text-3xl font-bold text-emerald-600">{symbol}{Number(product.sellingPrice).toFixed(2)}</p>
-                    <div className="mt-2 pt-2 border-t border-emerald-200/30 dark:border-emerald-800/30 space-y-1">
-                      <p className="text-sm text-blue-600 font-medium">
-                        ${Math.round(product.sellingPrice * USD_CUP_BCC).toLocaleString()} CUP
-                      </p>
-                      <p className="text-sm text-purple-600 font-medium">
-                        ${(product.sellingPrice * USD_MLC).toFixed(2)} MLC
-                      </p>
-                    </div>
-                  </motion.div>
-
-                  {/* Cost Price */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.15 }}
-                    className={cn(
-                      'p-5 rounded-2xl border shadow-lg',
-                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                    )}
-                  >
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Precio Costo</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{symbol}{Number(product.costPrice).toFixed(2)}</p>
-                    <div className="text-xs mt-1.5 space-y-0.5">
-                      <p className="text-blue-600">${Math.round(product.costPrice * USD_CUP).toLocaleString()} CUP</p>
-                      <p className="text-purple-600">${(product.costPrice * USD_MLC).toFixed(2)} MLC</p>
-                    </div>
-                  </motion.div>
-
-                  {/* Margin */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                    className={cn(
-                      'p-5 rounded-2xl border shadow-lg',
-                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                    )}
-                  >
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Margen</p>
-                    <p className={cn(
-                      'text-2xl font-bold flex items-center gap-1',
-                      margin >= 30 ? 'text-green-600' : margin >= 15 ? 'text-amber-600' : 'text-red-600'
-                    )}>
-                      <TrendingUp className="w-5 h-5" />
-                      {margin}%
-                    </p>
-                  </motion.div>
-
-                  {/* Stock */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.25 }}
-                    className={cn(
-                      'p-5 rounded-2xl border shadow-lg',
-                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                    )}
-                  >
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Stock</p>
-                    <p className={cn(
-                      'text-2xl font-bold',
-                      status.color === 'green' ? 'text-green-600' : status.color === 'amber' ? 'text-amber-600' : 'text-red-600'
-                    )}>
-                      {Number(product.quantityOnHand) % 1 === 0
-                        ? product.quantityOnHand
-                        : Number(product.quantityOnHand).toFixed(2)}
-                      <span className="text-sm font-normal text-gray-500 ml-1">{product.unitOfMeasure}</span>
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">Mínimo: {Number(product.minimumStock) % 1 === 0
-                      ? product.minimumStock
-                      : Number(product.minimumStock).toFixed(2)}</p>
-                  </motion.div>
-                </div>
-
-                {/* Variants Section - Inside Right Column */}
-            {product.variants && product.variants.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.35 }}
-                className={cn(
-                  'rounded-2xl border shadow-xl overflow-hidden',
-                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-                )}
-              >
-                <div className={cn(
-                  'px-6 py-4 flex items-center justify-between border-b',
-                  theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
-                )}>
-                  <div className="flex items-center gap-3">
-                    <Package className="w-5 h-5 text-purple-500" />
-                    <h3 className="font-semibold text-gray-900 dark:text-white">
-                      Variantes ({product.variants.length})
-                    </h3>
-                  </div>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowPrintModal(true)}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all',
-                      theme === 'dark'
-                        ? 'bg-purple-900/30 text-purple-400 hover:bg-purple-900/50'
-                        : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                    )}
-                  >
-                    <Printer className="w-4 h-4" />
-                    Imprimir Todas
-                  </motion.button>
-                </div>
-                <div className="p-4 space-y-3">
-                  {product.variants.map((variant, idx) => (
+                <AnimatePresence>
+                  {showVariants && (
                     <motion.div
-                      key={variant.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.35 + idx * 0.05 }}
-                      className={cn(
-                        'flex items-center gap-4 p-4 rounded-xl border transition-all hover:shadow-md',
-                        theme === 'dark'
-                          ? 'bg-gray-900/50 border-gray-700 hover:border-gray-600'
-                          : 'bg-gray-50 border-gray-200 hover:border-gray-300'
-                      )}
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
                     >
-                      {/* Variant Image */}
-                      <div className={cn(
-                        'w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center shadow-sm border',
-                        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                      )}>
-                        {variant.imageUrl ? (
-                          <img
-                            src={variant.imageUrl}
-                            alt={variant.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : product.imageUrl ? (
-                          <img
-                            src={product.imageUrl}
-                            alt={variant.name}
-                            className="w-full h-full object-cover opacity-50"
-                          />
-                        ) : (
-                          <Package className="w-6 h-6 text-gray-400" />
-                        )}
-                      </div>
-
-                      {/* Variant Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="font-medium text-gray-900 dark:text-white truncate">{variant.name}</h4>
-                          {/* Option badges (color, size, etc.) */}
-                          {variant.options && variant.options.length > 0 && variant.options.map((opt, optIdx) => (
-                            <span
-                              key={optIdx}
-                              className={cn(
-                                'px-2 py-0.5 rounded-full text-[10px] font-medium uppercase',
-                                opt.type === 'color'
-                                  ? 'bg-gradient-to-r from-pink-100 to-purple-100 text-purple-700 dark:from-pink-900/30 dark:to-purple-900/30 dark:text-purple-300'
-                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+                      <div className="p-4 space-y-3">
+                        {product.variants.map((variant, idx) => (
+                          <motion.div
+                            key={variant.id}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: idx * 0.05 }}
+                            className={cn(
+                              'flex items-center gap-4 p-4 rounded-xl border transition-all hover:shadow-md',
+                              theme === 'dark'
+                                ? 'bg-gray-900/50 border-gray-700 hover:border-gray-600'
+                                : 'bg-gray-50 border-gray-200 hover:border-gray-300'
+                            )}
+                          >
+                            {/* Variant Image */}
+                            <div className={cn(
+                              'w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center',
+                              theme === 'dark' ? 'bg-gray-800' : 'bg-white border border-gray-200'
+                            )}>
+                              {variant.imageUrl ? (
+                                <Image
+                                  src={variant.imageUrl}
+                                  alt={variant.name}
+                                  width={56}
+                                  height={56}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : product.imageUrl ? (
+                                <Image
+                                  src={product.imageUrl}
+                                  alt={variant.name}
+                                  width={56}
+                                  height={56}
+                                  className="w-full h-full object-cover opacity-50"
+                                />
+                              ) : (
+                                <Package className="w-5 h-5 text-gray-400" />
                               )}
+                            </div>
+
+                            {/* Variant Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className={cn(
+                                  'font-medium truncate',
+                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                )}>{variant.name}</h4>
+                                {variant.options?.map((opt, optIdx) => (
+                                  <span
+                                    key={optIdx}
+                                    className={cn(
+                                      'px-2 py-0.5 rounded-full text-[10px] font-medium uppercase',
+                                      opt.type === 'color'
+                                        ? 'bg-gradient-to-r from-pink-100 to-purple-100 text-purple-700 dark:from-pink-900/30 dark:to-purple-900/30 dark:text-purple-300'
+                                        : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+                                    )}
+                                  >
+                                    {opt.value}
+                                  </span>
+                                ))}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
+                                <span className="text-xs text-gray-500 font-mono">SKU: {variant.sku}</span>
+                                {variant.barcode && (
+                                  <span className="text-xs text-gray-500 font-mono flex items-center gap-1">
+                                    <Barcode className="w-3 h-3" />
+                                    {variant.barcode}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Price & Stock */}
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-lg font-bold text-emerald-600">
+                                {symbol}{Number(variant.sellingPrice).toFixed(2)}
+                              </p>
+                              <p className={cn(
+                                'text-sm',
+                                variant.quantityOnHand === 0 ? 'text-red-500' :
+                                variant.quantityOnHand <= product.minimumStock ? 'text-amber-500' :
+                                'text-gray-500'
+                              )}>
+                                Stock: {formatNumber(variant.quantityOnHand)}
+                              </p>
+                            </div>
+
+                            {/* Print Button */}
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => { setPrintVariant(variant); setShowPrintModal(true); }}
+                              className={cn(
+                                'p-2.5 rounded-xl transition-all flex-shrink-0',
+                                theme === 'dark'
+                                  ? 'bg-gray-800 hover:bg-gray-700 text-gray-300'
+                                  : 'bg-white hover:bg-gray-100 text-gray-600 shadow-sm border border-gray-200'
+                              )}
+                              title={`Imprimir etiqueta: ${variant.name}`}
                             >
-                              {opt.value}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
-                          <span className="text-xs text-gray-500 font-mono">SKU: {variant.sku}</span>
-                          {variant.barcode && (
-                            <span className="text-xs text-gray-500 font-mono flex items-center gap-1">
-                              <Barcode className="w-3 h-3" />
-                              {variant.barcode}
-                            </span>
-                          )}
-                        </div>
+                              <Printer className="w-4 h-4" />
+                            </motion.button>
+                          </motion.div>
+                        ))}
                       </div>
-
-                      {/* Price & Stock */}
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-lg font-bold text-emerald-600">
-                          {symbol}{Number(variant.sellingPrice).toFixed(2)}
-                        </p>
-                        <div className="text-[10px] space-y-0">
-                          <p className="text-blue-600">${Math.round(variant.sellingPrice * USD_CUP_BCC).toLocaleString()} CUP</p>
-                          <p className="text-purple-600">${(variant.sellingPrice * USD_MLC).toFixed(2)} MLC</p>
-                        </div>
-                        <p className={cn(
-                          'text-sm mt-1',
-                          variant.quantityOnHand === 0 ? 'text-red-500' :
-                          variant.quantityOnHand <= product.minimumStock ? 'text-amber-500' :
-                          'text-gray-500'
-                        )}>
-                          Stock: {Number(variant.quantityOnHand) % 1 === 0
-                            ? variant.quantityOnHand
-                            : Number(variant.quantityOnHand).toFixed(2)}
-                        </p>
-                      </div>
-
-                      {/* Print Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => { setPrintVariant(variant); setShowPrintModal(true); }}
-                        className={cn(
-                          'p-2.5 rounded-xl transition-all flex-shrink-0',
-                          theme === 'dark'
-                            ? 'bg-gray-800 hover:bg-gray-700 text-gray-300'
-                            : 'bg-white hover:bg-gray-100 text-gray-600 shadow-sm border border-gray-200'
-                        )}
-                        title={`Imprimir etiqueta: ${variant.name}`}
-                      >
-                        <Printer className="w-5 h-5" />
-                      </motion.button>
                     </motion.div>
-                  ))}
-                </div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             )}
-              </div>
-            </div>
 
-            {/* Tabs */}
-            <div className={cn(
-              'rounded-2xl border shadow-xl overflow-hidden',
-              theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-            )}>
-              {/* Tab Header */}
-              <div className={cn(
-                'flex border-b overflow-x-auto',
-                theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
-              )}>
-                {TABS.map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={cn(
-                      'flex items-center gap-2 px-6 py-4 text-sm font-medium transition-all relative whitespace-nowrap',
-                      activeTab === tab.id
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                    )}
+            {/* Stock by Warehouse Section */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className={cn(
+                'rounded-2xl border overflow-hidden',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <button
+                onClick={() => setShowStock(!showStock)}
+                className={cn(
+                  'w-full px-6 py-4 flex items-center justify-between border-b',
+                  theme === 'dark' ? 'border-gray-700 bg-gray-800 hover:bg-gray-700' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
+                  )}>
+                    <Warehouse className="w-5 h-5 text-blue-500" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className={cn(
+                      'font-semibold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>Stock por Almacén</h3>
+                    <p className="text-sm text-gray-500">
+                      Total: {formatNumber(getTotalWarehouseStock())} {product.unitOfMeasure}
+                    </p>
+                  </div>
+                </div>
+                {showStock ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+              </button>
+
+              <AnimatePresence>
+                {showStock && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
                   >
-                    <tab.icon className="w-4 h-4" />
-                    {tab.label}
-                    {activeTab === tab.id && (
-                      <motion.div
-                        layoutId="activeTab"
-                        className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500"
-                      />
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              {/* Tab Content */}
-              <div className="p-6">
-                <AnimatePresence mode="wait">
-                  {/* Overview Tab - Sales Analytics */}
-                  {activeTab === 'overview' && (
-                    <motion.div
-                      key="overview"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="space-y-6"
-                    >
-                      <div className="flex items-center justify-between flex-wrap gap-4">
-                        <div className="flex items-center gap-4">
-                          <h3 className="text-lg font-bold text-gray-900 dark:text-white">Ritmo de Ventas</h3>
-                          {salesSummary && salesSummary.salesVelocity > 0 && (
-                            <div className={cn(
-                              'px-3 py-1.5 rounded-full flex items-center gap-2',
-                              theme === 'dark' ? 'bg-emerald-900/30' : 'bg-emerald-100'
-                            )}>
-                              <TrendingUp className="w-4 h-4 text-emerald-600" />
-                              <span className="text-sm font-semibold text-emerald-600">
-                                {salesSummary.salesVelocity} uds/día
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {(['week', 'month', 'year'] as const).map((period) => (
-                            <button
-                              key={period}
-                              onClick={() => setSalesPeriod(period)}
-                              className={cn(
-                                'px-4 py-2 rounded-lg text-sm font-medium transition-all',
-                                salesPeriod === period
-                                  ? 'bg-emerald-500 text-white'
-                                  : theme === 'dark'
-                                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                              )}
-                            >
-                              {period === 'week' ? 'Semanal' : period === 'month' ? 'Mensual' : 'Anual'}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {salesLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                          <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
-                        </div>
-                      ) : salesData.length === 0 ? (
-                        <div className="text-center py-12">
-                          <ShoppingCart className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                          <p className="text-gray-500">No hay datos de ventas para este período</p>
-                        </div>
-                      ) : (
-                        <>
-                          {/* Sales Summary */}
-                          <div className="grid grid-cols-3 gap-4">
-                            <div className={cn(
-                              'p-4 rounded-xl',
-                              theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                            )}>
-                              <p className="text-xs text-gray-500 mb-1">Unidades Vendidas</p>
-                              <p className="text-2xl font-bold text-gray-900 dark:text-white">{getTotalSales()}</p>
-                            </div>
-                            <div className={cn(
-                              'p-4 rounded-xl',
-                              theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                            )}>
-                              <p className="text-xs text-gray-500 mb-1">Ingresos Totales</p>
-                              <p className="text-2xl font-bold text-emerald-600">{symbol}{Number(getTotalRevenue()).toFixed(2)}</p>
-                            </div>
-                            <div className={cn(
-                              'p-4 rounded-xl',
-                              theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                            )}>
-                              <p className="text-xs text-gray-500 mb-1">Órdenes</p>
-                              <p className="text-2xl font-bold text-gray-900 dark:text-white">{getTotalOrders()}</p>
-                            </div>
-                          </div>
-
-                          {/* Sales Table */}
-                          <div className={cn(
-                            'rounded-xl overflow-hidden',
-                            theme === 'dark' ? 'bg-gray-700/30' : 'bg-gray-50'
-                          )}>
-                            <table className="w-full">
-                              <thead>
-                                <tr className={cn(
-                                  'border-b',
-                                  theme === 'dark' ? 'border-gray-600' : 'border-gray-200'
-                                )}>
-                                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Período</th>
-                                  <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase">Cantidad</th>
-                                  <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase">Ingresos</th>
-                                  <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase">Órdenes</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
-                                {salesData.map((sale, idx) => (
-                                  <tr key={idx} className={cn(
-                                    'transition-colors',
-                                    theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-100'
-                                  )}>
-                                    <td className="py-3 px-4 text-sm font-medium text-gray-900 dark:text-white">{sale.period}</td>
-                                    <td className="py-3 px-4 text-sm text-right text-gray-600 dark:text-gray-300">{sale.quantity}</td>
-                                    <td className="py-3 px-4 text-sm text-right font-medium text-emerald-600">{symbol}{Number(sale.revenue).toFixed(2)}</td>
-                                    <td className="py-3 px-4 text-sm text-right text-gray-600 dark:text-gray-300">{sale.orders}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </>
-                      )}
-                    </motion.div>
-                  )}
-
-                  {/* Stock by Warehouse Tab */}
-                  {activeTab === 'stock' && (
-                    <motion.div
-                      key="stock"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="space-y-6"
-                    >
-                      <div className="flex items-center justify-between flex-wrap gap-4">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Stock por Almacén</h3>
-                        <div className={cn(
-                          'px-4 py-2 rounded-lg',
-                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                        )}>
-                          <span className="text-sm text-gray-500">Total: </span>
-                          <span className="text-lg font-bold text-gray-900 dark:text-white">
-                            {getTotalWarehouseStock() % 1 === 0
-                              ? getTotalWarehouseStock()
-                              : getTotalWarehouseStock().toFixed(2)}
-                          </span>
-                          <span className="text-sm text-gray-500 ml-1">{product.unitOfMeasure}</span>
-                        </div>
-                      </div>
-
+                    <div className="p-6">
                       {stockLoading ? (
-                        <div className="flex items-center justify-center py-12">
+                        <div className="flex items-center justify-center py-8">
                           <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
                         </div>
                       ) : warehouseStock.length === 0 ? (
-                        <div className="text-center py-12">
+                        <div className="text-center py-8">
                           <Warehouse className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                          <p className="text-gray-500">No hay stock en almacenes</p>
-                          <p className="text-sm text-gray-400 mt-1">El stock mostrado es general sin distribución por almacén</p>
+                          <p className="text-gray-500">Sin distribución por almacén</p>
                         </div>
                       ) : (
-                        <div className="grid gap-4">
+                        <div className="grid gap-4 md:grid-cols-2">
                           {warehouseStock.map((warehouse) => (
                             <div
                               key={warehouse.warehouseId}
                               className={cn(
-                                'p-4 rounded-xl border transition-colors',
-                                theme === 'dark'
-                                  ? 'bg-gray-700/50 border-gray-600 hover:bg-gray-700'
-                                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                                'p-4 rounded-xl border',
+                                theme === 'dark' ? 'bg-gray-700/30 border-gray-600' : 'bg-gray-50 border-gray-200'
                               )}
                             >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <div className={cn(
-                                    'p-2 rounded-lg',
-                                    theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
-                                  )}>
-                                    <Warehouse className="w-5 h-5 text-blue-600" />
-                                  </div>
-                                  <div>
-                                    <p className="font-medium text-gray-900 dark:text-white">{warehouse.warehouseName}</p>
-                                    <p className="text-xs text-gray-500">Código: {warehouse.warehouseCode}</p>
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-xl font-bold text-gray-900 dark:text-white">
-                                    {Number(warehouse.quantityOnHand) % 1 === 0
-                                      ? warehouse.quantityOnHand
-                                      : Number(warehouse.quantityOnHand).toFixed(2)}
-                                  </p>
-                                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                                    <span>Reservado: {Number(warehouse.quantityReserved) % 1 === 0
-                                      ? warehouse.quantityReserved
-                                      : Number(warehouse.quantityReserved).toFixed(2)}</span>
-                                    <span>|</span>
-                                    <span className="text-emerald-600">Disponible: {Number(warehouse.quantityAvailable) % 1 === 0
-                                      ? warehouse.quantityAvailable
-                                      : Number(warehouse.quantityAvailable).toFixed(2)}</span>
-                                  </div>
-                                </div>
+                              <div className="flex items-center justify-between mb-2">
+                                <p className={cn(
+                                  'font-medium',
+                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                )}>{warehouse.warehouseName}</p>
+                                <span className="text-xs text-gray-500 font-mono">{warehouse.warehouseCode}</span>
                               </div>
-                              {warehouse.location && (
-                                <p className="mt-2 text-xs text-gray-500">Ubicación: {warehouse.location}</p>
-                              )}
+                              <div className="flex items-baseline gap-2">
+                                <p className={cn(
+                                  'text-2xl font-bold',
+                                  warehouse.quantityOnHand === 0 ? 'text-red-500' : 'text-emerald-600'
+                                )}>
+                                  {formatNumber(warehouse.quantityOnHand)}
+                                </p>
+                                <span className="text-sm text-gray-500">{product.unitOfMeasure}</span>
+                              </div>
+                              <div className="flex gap-4 mt-2 text-xs text-gray-500">
+                                <span>Reservado: {formatNumber(warehouse.quantityReserved)}</span>
+                                <span className="text-emerald-600">Disponible: {formatNumber(warehouse.quantityAvailable)}</span>
+                              </div>
                             </div>
                           ))}
                         </div>
                       )}
 
-                      {/* Variant Stock Section */}
+                      {/* Variant Stock */}
                       {variantStock.length > 0 && (
-                        <div className="mt-8">
-                          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                            <Package className="w-5 h-5 text-purple-500" />
+                        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                          <h4 className={cn(
+                            'font-semibold mb-4 flex items-center gap-2',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            <Package className="w-4 h-4 text-purple-500" />
                             Stock por Variante
-                          </h3>
+                          </h4>
                           <div className="grid gap-4">
                             {variantStock.map((variant) => (
                               <div
                                 key={variant.variantId}
                                 className={cn(
-                                  'p-4 rounded-xl border transition-colors',
-                                  theme === 'dark'
-                                    ? 'bg-purple-900/20 border-purple-800/50 hover:bg-purple-900/30'
-                                    : 'bg-purple-50 border-purple-200 hover:bg-purple-100'
+                                  'p-4 rounded-xl border',
+                                  theme === 'dark' ? 'bg-purple-900/20 border-purple-800/50' : 'bg-purple-50 border-purple-200'
                                 )}
                               >
-                                <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center justify-between mb-2">
                                   <div>
-                                    <p className="font-semibold text-gray-900 dark:text-white">{variant.variantName}</p>
-                                    <div className="flex items-center gap-3 mt-1">
-                                      <span className="text-xs text-gray-500 font-mono">SKU: {variant.variantSku}</span>
-                                      {variant.variantBarcode && (
-                                        <span className="text-xs text-gray-500 font-mono flex items-center gap-1">
-                                          <Barcode className="w-3 h-3" />
-                                          {variant.variantBarcode}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="text-right">
                                     <p className={cn(
-                                      'text-2xl font-bold',
-                                      variant.totalOnHand === 0 ? 'text-red-500' :
-                                      variant.totalOnHand <= (product?.minimumStock || 0) ? 'text-amber-500' :
-                                      'text-purple-600'
-                                    )}>
-                                      {Number(variant.totalOnHand) % 1 === 0
-                                        ? variant.totalOnHand
-                                        : Number(variant.totalOnHand).toFixed(2)}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                      Disponible: <span className="text-emerald-600 font-medium">
-                                        {Number(variant.totalAvailable) % 1 === 0
-                                          ? variant.totalAvailable
-                                          : Number(variant.totalAvailable).toFixed(2)}
-                                      </span>
-                                    </p>
+                                      'font-medium',
+                                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                    )}>{variant.variantName}</p>
+                                    <p className="text-xs text-gray-500 font-mono">SKU: {variant.variantSku}</p>
                                   </div>
+                                  <p className={cn(
+                                    'text-xl font-bold',
+                                    variant.totalOnHand === 0 ? 'text-red-500' : 'text-purple-600'
+                                  )}>
+                                    {formatNumber(variant.totalOnHand)}
+                                  </p>
                                 </div>
                                 {variant.byWarehouse.length > 0 && (
-                                  <div className={cn(
-                                    'mt-3 pt-3 border-t grid gap-2',
-                                    theme === 'dark' ? 'border-purple-700/50' : 'border-purple-200'
-                                  )}>
+                                  <div className="flex flex-wrap gap-3 mt-2">
                                     {variant.byWarehouse.map((wh) => (
-                                      <div key={wh.warehouseId} className="flex items-center justify-between text-sm">
-                                        <span className="text-gray-600 dark:text-gray-400 flex items-center gap-2">
-                                          <Warehouse className="w-3 h-3" />
-                                          {wh.warehouseName}
-                                        </span>
-                                        <span className="font-medium text-gray-900 dark:text-white">
-                                          {Number(wh.quantityOnHand) % 1 === 0 ? wh.quantityOnHand : Number(wh.quantityOnHand).toFixed(2)} <span className="text-gray-400 font-normal">({Number(wh.quantityAvailable) % 1 === 0 ? wh.quantityAvailable : Number(wh.quantityAvailable).toFixed(2)} disp.)</span>
-                                        </span>
-                                      </div>
+                                      <span key={wh.warehouseId} className="text-xs text-gray-500">
+                                        {wh.warehouseName}: <span className="font-medium">{formatNumber(wh.quantityOnHand)}</span>
+                                      </span>
                                     ))}
                                   </div>
                                 )}
@@ -1267,182 +1327,148 @@ export default function ProductDetailPage() {
                           </div>
                         </div>
                       )}
-                    </motion.div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+
+            {/* Lots Section */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 }}
+              className={cn(
+                'rounded-2xl border overflow-hidden',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <button
+                onClick={() => setShowLots(!showLots)}
+                className={cn(
+                  'w-full px-6 py-4 flex items-center justify-between border-b',
+                  theme === 'dark' ? 'border-gray-700 bg-gray-800 hover:bg-gray-700' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100'
+                  )}>
+                    <Archive className="w-5 h-5 text-amber-500" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className={cn(
+                      'font-semibold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>Lotes y Vencimientos</h3>
+                    <p className="text-sm text-gray-500">{lots.length} lotes registrados</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  {getExpiredLots().length > 0 && (
+                    <span className="px-2 py-1 rounded-lg text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                      {getExpiredLots().length} vencidos
+                    </span>
                   )}
+                  {getCriticalLots().length > 0 && (
+                    <span className="px-2 py-1 rounded-lg text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                      {getCriticalLots().length} por vencer
+                    </span>
+                  )}
+                  {showLots ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                </div>
+              </button>
 
-                  {/* Lots Tab */}
-                  {activeTab === 'lots' && (
-                    <motion.div
-                      key="lots"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="space-y-6"
-                    >
-                      <div className="flex items-center justify-between flex-wrap gap-4">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Lotes y Fechas de Vencimiento</h3>
-                        {lots.length > 0 && (
-                          <div className="flex items-center gap-3">
-                            {getActiveLots().length > 0 && (
-                              <div className={cn(
-                                'px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm',
-                                theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
-                              )}>
-                                <CheckCircle className="w-4 h-4" />
-                                {getActiveLots().length} activos
-                              </div>
-                            )}
-                            {getCriticalLots().length > 0 && (
-                              <div className={cn(
-                                'px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm',
-                                theme === 'dark' ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-100 text-orange-700'
-                              )}>
-                                <AlertTriangle className="w-4 h-4" />
-                                {getCriticalLots().length} por vencer
-                              </div>
-                            )}
-                            {getExpiredLots().length > 0 && (
-                              <div className={cn(
-                                'px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm',
-                                theme === 'dark' ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700'
-                              )}>
-                                <AlertCircle className="w-4 h-4" />
-                                {getExpiredLots().length} vencidos
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
+              <AnimatePresence>
+                {showLots && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-6">
                       {lotsLoading ? (
-                        <div className="flex items-center justify-center py-12">
+                        <div className="flex items-center justify-center py-8">
                           <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
                         </div>
                       ) : lots.length === 0 ? (
-                        <div className="text-center py-12">
+                        <div className="text-center py-8">
                           <Archive className="w-12 h-12 mx-auto mb-3 text-gray-400" />
                           <p className="text-gray-500 font-medium">No hay lotes registrados</p>
-                          <p className="text-sm text-gray-400 mt-1">Los lotes se crean al recibir compras de proveedores</p>
+                          <p className="text-sm text-gray-400 mt-1">Los lotes se crean al recibir compras</p>
                         </div>
                       ) : (
-                        <div className="space-y-4">
-                          {lots.map((lot, idx) => {
-                            const expStatus = getLotExpirationStatus(lot.expirationDate)
-                            const daysLeft = getDaysUntilExpiration(lot.expirationDate)
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead className={cn(
+                              theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                            )}>
+                              <tr>
+                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Lote</th>
+                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Vencimiento</th>
+                                <th className="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Cantidad</th>
+                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Almacén</th>
+                                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Estado</th>
+                              </tr>
+                            </thead>
+                            <tbody className={cn(
+                              'divide-y',
+                              theme === 'dark' ? 'divide-gray-700' : 'divide-gray-100'
+                            )}>
+                              {lots.map((lot) => {
+                                const expStatus = getLotExpirationStatus(lot.expirationDate)
+                                const daysLeft = getDaysUntilExpiration(lot.expirationDate)
 
-                            return (
-                              <motion.div
-                                key={lot.id}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: idx * 0.05 }}
-                                className={cn(
-                                  'p-4 rounded-xl border relative overflow-hidden',
-                                  theme === 'dark'
-                                    ? 'bg-gray-700/50 border-gray-600'
-                                    : 'bg-white border-gray-200 shadow-sm'
-                                )}
-                              >
-                                {/* Status bar */}
-                                <div className={cn(
-                                  'absolute left-0 top-0 bottom-0 w-1',
-                                  expStatus.color === 'green' && 'bg-green-500',
-                                  expStatus.color === 'amber' && 'bg-amber-500',
-                                  expStatus.color === 'orange' && 'bg-orange-500',
-                                  expStatus.color === 'red' && 'bg-red-500',
-                                  expStatus.color === 'gray' && (theme === 'dark' ? 'bg-gray-600' : 'bg-gray-300')
-                                )} />
-
-                                <div className="pl-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 flex-1">
-                                    {/* Número de lote */}
-                                    <div>
-                                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Lote</p>
-                                      <p className="font-mono font-bold text-gray-900 dark:text-white">{lot.lotNumber}</p>
-                                    </div>
-
-                                    {/* Fecha de vencimiento */}
-                                    <div>
-                                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Vencimiento</p>
-                                      <div className="flex items-center gap-2">
-                                        <p className={cn(
-                                          'font-medium',
-                                          expStatus.color === 'green' && 'text-green-600',
-                                          expStatus.color === 'amber' && 'text-amber-600',
-                                          expStatus.color === 'orange' && 'text-orange-600',
-                                          expStatus.color === 'red' && 'text-red-600',
-                                          expStatus.color === 'gray' && 'text-gray-500'
-                                        )}>
-                                          {lot.expirationDate
-                                            ? new Date(lot.expirationDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
-                                            : 'Sin fecha'
-                                          }
-                                        </p>
-                                        {expStatus.status === 'expired' && <AlertCircle className="w-4 h-4 text-red-500" />}
-                                        {expStatus.status === 'critical' && <Clock className="w-4 h-4 text-orange-500 animate-pulse" />}
-                                      </div>
-                                      {daysLeft !== null && (
-                                        <p className={cn(
-                                          'text-xs mt-0.5',
-                                          daysLeft < 0 ? 'text-red-500' :
-                                          daysLeft <= 7 ? 'text-orange-500' :
-                                          daysLeft <= 30 ? 'text-amber-500' :
-                                          'text-gray-400'
-                                        )}>
-                                          {daysLeft < 0
-                                            ? `Vencido hace ${Math.abs(daysLeft)} días`
-                                            : daysLeft === 0
-                                              ? 'Vence hoy'
-                                              : `${daysLeft} días restantes`
-                                          }
-                                        </p>
+                                return (
+                                  <tr key={lot.id} className={cn(
+                                    'transition-colors',
+                                    theme === 'dark' ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50'
+                                  )}>
+                                    <td className="py-3 px-4">
+                                      <p className={cn(
+                                        'font-mono font-medium',
+                                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                      )}>{lot.lotNumber}</p>
+                                      {lot.supplierName && (
+                                        <p className="text-xs text-gray-500">{lot.supplierName}</p>
                                       )}
-                                    </div>
-
-                                    {/* Cantidad */}
-                                    <div>
-                                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Cantidad</p>
-                                      <p className="font-bold text-gray-900 dark:text-white">
-                                        {Number(lot.quantityAvailable) % 1 === 0 ? lot.quantityAvailable : Number(lot.quantityAvailable).toFixed(2)} <span className="font-normal text-gray-500">/ {Number(lot.quantity) % 1 === 0 ? lot.quantity : Number(lot.quantity).toFixed(2)}</span>
-                                      </p>
-                                      <p className="text-xs text-gray-400">{product?.unitOfMeasure || 'unidad'}</p>
-                                    </div>
-
-                                    {/* Proveedor y Almacén */}
-                                    <div>
-                                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Proveedor / Almacén</p>
-                                      {lot.supplierName ? (
-                                        <p className="font-medium text-gray-900 dark:text-white">{lot.supplierName}</p>
-                                      ) : (
-                                        <p className="text-gray-400 italic">—</p>
-                                      )}
-                                      {lot.warehouseName && (
-                                        <p className="text-xs text-gray-400 flex items-center gap-1">
-                                          <Warehouse className="w-3 h-3" />
-                                          {lot.warehouseName}
-                                        </p>
-                                      )}
-                                      {lot.purchaseNumber && (
-                                        <p className="text-xs text-gray-400">#{lot.purchaseNumber}</p>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* Estado y Origen */}
-                                  <div className="flex flex-col items-end gap-2">
-                                    <div className="flex items-center gap-2">
-                                      {/* Source badge */}
-                                      <span className={cn(
-                                        'px-2 py-1 rounded text-[10px] font-medium uppercase',
-                                        lot.source === 'consignment' && 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-                                        lot.source === 'purchase' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-                                        lot.source === 'manual' && 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                    </td>
+                                    <td className="py-3 px-4">
+                                      <p className={cn(
+                                        'font-medium',
+                                        expStatus.color === 'green' && 'text-green-600',
+                                        expStatus.color === 'amber' && 'text-amber-600',
+                                        expStatus.color === 'orange' && 'text-orange-600',
+                                        expStatus.color === 'red' && 'text-red-600',
+                                        expStatus.color === 'gray' && 'text-gray-500'
                                       )}>
-                                        {lot.source === 'consignment' ? 'Consig.' : lot.source === 'purchase' ? 'Compra' : 'Manual'}
-                                      </span>
-                                      {/* Expiration status */}
+                                        {lot.expirationDate
+                                          ? new Date(lot.expirationDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+                                          : 'Sin fecha'}
+                                      </p>
+                                      {daysLeft !== null && (
+                                        <p className="text-xs text-gray-500">
+                                          {daysLeft < 0 ? `Hace ${Math.abs(daysLeft)} días` : daysLeft === 0 ? 'Hoy' : `${daysLeft} días`}
+                                        </p>
+                                      )}
+                                    </td>
+                                    <td className="py-3 px-4 text-right">
+                                      <p className={cn(
+                                        'font-bold',
+                                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                      )}>
+                                        {formatNumber(lot.quantityAvailable)}
+                                      </p>
+                                      <p className="text-xs text-gray-500">de {formatNumber(lot.quantity)}</p>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                      <p className="text-sm text-gray-500">{lot.warehouseName || '—'}</p>
+                                    </td>
+                                    <td className="py-3 px-4 text-center">
                                       <span className={cn(
-                                        'px-3 py-1.5 rounded-full text-xs font-medium',
+                                        'px-2.5 py-1 rounded-full text-xs font-medium',
                                         expStatus.color === 'green' && 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
                                         expStatus.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
                                         expStatus.color === 'orange' && 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
@@ -1451,103 +1477,114 @@ export default function ProductDetailPage() {
                                       )}>
                                         {expStatus.label}
                                       </span>
-                                    </div>
-                                    {/* Unit cost */}
-                                    {lot.unitCost > 0 && (
-                                      <p className="text-xs text-gray-500">
-                                        Costo: <span className="font-medium text-gray-700 dark:text-gray-300">${lot.unitCost.toFixed(2)}</span>
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Notas y fechas adicionales */}
-                                {(lot.notes || lot.manufacturingDate) && (
-                                  <div className="pl-4 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-                                    <div className="flex items-center gap-4 text-xs text-gray-500">
-                                      {lot.manufacturingDate && (
-                                        <span>Fabricación: {new Date(lot.manufacturingDate).toLocaleDateString('es-ES')}</span>
-                                      )}
-                                      {lot.purchaseDate && (
-                                        <span>Compra: {new Date(lot.purchaseDate).toLocaleDateString('es-ES')}</span>
-                                      )}
-                                    </div>
-                                    {lot.notes && (
-                                      <p className="text-sm text-gray-500 italic mt-1">{lot.notes}</p>
-                                    )}
-                                  </div>
-                                )}
-                              </motion.div>
-                            )
-                          })}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
                         </div>
                       )}
-                    </motion.div>
-                  )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
 
-                  {/* Suppliers Tab */}
-                  {activeTab === 'suppliers' && (
-                    <motion.div
-                      key="suppliers"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="space-y-6"
-                    >
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Proveedores y Precios</h3>
+            {/* Suppliers History Section */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.8 }}
+              className={cn(
+                'rounded-2xl border overflow-hidden',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <button
+                onClick={() => setShowSuppliers(!showSuppliers)}
+                className={cn(
+                  'w-full px-6 py-4 flex items-center justify-between border-b',
+                  theme === 'dark' ? 'border-gray-700 bg-gray-800 hover:bg-gray-700' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-indigo-900/30' : 'bg-indigo-100'
+                  )}>
+                    <Truck className="w-5 h-5 text-indigo-500" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className={cn(
+                      'font-semibold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>Historial de Proveedores</h3>
+                    <p className="text-sm text-gray-500">{suppliers.length} proveedores</p>
+                  </div>
+                </div>
+                {showSuppliers ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+              </button>
 
+              <AnimatePresence>
+                {showSuppliers && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-6">
                       {suppliersLoading ? (
-                        <div className="flex items-center justify-center py-12">
+                        <div className="flex items-center justify-center py-8">
                           <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
                         </div>
                       ) : suppliers.length === 0 ? (
-                        <div className="text-center py-12">
+                        <div className="text-center py-8">
                           <Truck className="w-12 h-12 mx-auto mb-3 text-gray-400" />
                           <p className="text-gray-500">No hay historial de proveedores</p>
-                          <p className="text-sm text-gray-400 mt-1">El historial se generará con las compras</p>
                         </div>
                       ) : (
-                        <div className="space-y-4">
+                        <div className="grid gap-4 md:grid-cols-2">
                           {suppliers.map((supplier, idx) => (
                             <div
                               key={idx}
                               className={cn(
                                 'p-4 rounded-xl border',
-                                theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
+                                theme === 'dark' ? 'bg-gray-700/30 border-gray-600' : 'bg-gray-50 border-gray-200'
                               )}
                             >
-                              <div className="flex items-start justify-between mb-4">
+                              <div className="flex items-start justify-between mb-3">
                                 <div>
-                                  <p className="font-bold text-gray-900 dark:text-white">{supplier.supplierName}</p>
+                                  <p className={cn(
+                                    'font-bold',
+                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                  )}>{supplier.supplierName}</p>
                                   {supplier.supplierContact && (
                                     <p className="text-sm text-gray-500">{supplier.supplierContact}</p>
                                   )}
                                 </div>
                                 <div className="text-right">
-                                  <p className="text-xs text-gray-500">Último precio</p>
+                                  <p className="text-xs text-gray-500">Último</p>
                                   <p className="text-xl font-bold text-emerald-600">{symbol}{Number(supplier.lastPrice).toFixed(2)}</p>
                                 </div>
                               </div>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                              <div className="grid grid-cols-2 gap-3 text-sm">
                                 <div>
-                                  <p className="text-xs text-gray-500">Precio Promedio</p>
-                                  <p className="font-medium text-gray-900 dark:text-white">{symbol}{Number(supplier.avgPrice).toFixed(2)}</p>
+                                  <p className="text-xs text-gray-500">Promedio</p>
+                                  <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                    {symbol}{Number(supplier.avgPrice).toFixed(2)}
+                                  </p>
                                 </div>
                                 <div>
-                                  <p className="text-xs text-gray-500">Precio Mínimo</p>
-                                  <p className="font-medium text-green-600">{symbol}{Number(supplier.minPrice).toFixed(2)}</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-gray-500">Precio Máximo</p>
-                                  <p className="font-medium text-red-600">{symbol}{Number(supplier.maxPrice).toFixed(2)}</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-gray-500">Total Comprado</p>
-                                  <p className="font-medium text-gray-900 dark:text-white">{supplier.totalPurchased} unidades</p>
+                                  <p className="text-xs text-gray-500">Comprado</p>
+                                  <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                    {supplier.totalPurchased} uds
+                                  </p>
                                 </div>
                               </div>
                               {supplier.lastPurchaseDate && (
-                                <p className="mt-3 text-xs text-gray-500">
+                                <p className="text-xs text-gray-500 mt-2">
                                   Última compra: {formatDate(supplier.lastPurchaseDate)}
                                 </p>
                               )}
@@ -1555,233 +1592,150 @@ export default function ProductDetailPage() {
                           ))}
                         </div>
                       )}
-                    </motion.div>
-                  )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
 
-                  {/* History Tab */}
-                  {activeTab === 'history' && (
-                    <motion.div
-                      key="history"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="space-y-6"
-                    >
+            {/* History Section */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.9 }}
+              className={cn(
+                'rounded-2xl border overflow-hidden',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <button
+                onClick={() => setShowHistory(!showHistory)}
+                className={cn(
+                  'w-full px-6 py-4 flex items-center justify-between border-b',
+                  theme === 'dark' ? 'border-gray-700 bg-gray-800 hover:bg-gray-700' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                  )}>
+                    <History className="w-5 h-5 text-gray-500" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className={cn(
+                      'font-semibold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>Historial de Actividad</h3>
+                    <p className="text-sm text-gray-500">{changeLogs.length + movements.length} registros</p>
+                  </div>
+                </div>
+                {showHistory ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+              </button>
+
+              <AnimatePresence>
+                {showHistory && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-6">
                       {historyLoading ? (
-                        <div className="flex items-center justify-center py-12">
+                        <div className="flex items-center justify-center py-8">
                           <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
                         </div>
                       ) : (
-                        <>
-                          {/* Change Logs */}
-                          <div>
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Historial de Cambios</h3>
-                            {changeLogs.length === 0 ? (
-                              <div className="text-center py-8">
-                                <Clock className="w-10 h-10 mx-auto mb-2 text-gray-400" />
-                                <p className="text-gray-500">No hay cambios registrados</p>
-                              </div>
-                            ) : (
-                              <div className="space-y-4">
-                                {changeLogs.map((log) => (
-                                  <div
-                                    key={log.id}
-                                    className={cn(
-                                      'rounded-2xl border overflow-hidden',
-                                      log.action === 'created'
-                                        ? (theme === 'dark' ? 'bg-emerald-900/20 border-emerald-800' : 'bg-emerald-50 border-emerald-200')
-                                        : (theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200')
-                                    )}
-                                  >
-                                    {/* Header with user and date - PROMINENT */}
-                                    <div className={cn(
-                                      'px-4 py-3 border-b flex items-center justify-between',
-                                      log.action === 'created'
-                                        ? (theme === 'dark' ? 'bg-emerald-900/30 border-emerald-700' : 'bg-emerald-100/50 border-emerald-200')
-                                        : (theme === 'dark' ? 'bg-gray-800/50 border-gray-600' : 'bg-gray-100/50 border-gray-200')
-                                    )}>
-                                      <div className="flex items-center gap-3">
-                                        {/* User Avatar */}
-                                        <div className={cn(
-                                          'w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm',
-                                          log.action === 'created'
-                                            ? 'bg-gradient-to-br from-emerald-500 to-emerald-600'
-                                            : 'bg-gradient-to-br from-blue-500 to-blue-600'
-                                        )}>
-                                          {log.userName ? log.userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'US'}
-                                        </div>
-                                        <div>
-                                          <p className="font-semibold text-gray-900 dark:text-white">
-                                            {log.userName || 'Usuario desconocido'}
-                                          </p>
-                                          <p className="text-xs text-gray-500">{log.userEmail || ''}</p>
-                                        </div>
+                        <div className="space-y-6">
+                          {/* Change Logs Timeline */}
+                          {changeLogs.length > 0 && (
+                            <div>
+                              <h4 className={cn(
+                                'font-semibold mb-4',
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>Cambios del Producto</h4>
+                              <div className="relative">
+                                <div className={cn(
+                                  'absolute left-[17px] top-2 bottom-2 w-0.5',
+                                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                                )} />
+                                <div className="space-y-4">
+                                  {changeLogs.slice(0, 5).map((log) => (
+                                    <div key={log.id} className="flex items-start gap-4 relative">
+                                      <div className={cn(
+                                        'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                                        log.action === 'created'
+                                          ? theme === 'dark' ? 'bg-emerald-900/50 ring-4 ring-gray-800' : 'bg-emerald-100 ring-4 ring-white'
+                                          : theme === 'dark' ? 'bg-blue-900/50 ring-4 ring-gray-800' : 'bg-blue-100 ring-4 ring-white'
+                                      )}>
+                                        {log.action === 'created' ? (
+                                          <Package className="w-4 h-4 text-emerald-500" />
+                                        ) : (
+                                          <Edit3 className="w-4 h-4 text-blue-500" />
+                                        )}
                                       </div>
-                                      <div className="text-right">
-                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                          {formatDate(log.createdAt)}
+                                      <div className="pt-1 flex-1">
+                                        <p className={cn(
+                                          'text-sm font-medium',
+                                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                        )}>{log.actionLabel}</p>
+                                        {log.fieldLabel && log.action !== 'created' && (
+                                          <p className="text-xs text-gray-500">
+                                            {log.fieldLabel}: <span className="line-through text-red-500">{log.oldValue}</span> → <span className="text-emerald-500">{log.newValue}</span>
+                                          </p>
+                                        )}
+                                        <p className="text-xs text-gray-500">
+                                          por {log.userName || 'Usuario'} • {formatDateTime(log.createdAt)}
                                         </p>
                                       </div>
                                     </div>
-
-                                    {/* Action Content */}
-                                    <div className="p-4">
-                                      <div className="flex items-center gap-2 mb-3">
-                                        {log.action === 'created' && (
-                                          <div className={cn(
-                                            'p-2 rounded-lg',
-                                            theme === 'dark' ? 'bg-emerald-900/50' : 'bg-emerald-100'
-                                          )}>
-                                            <Package className="w-5 h-5 text-emerald-600" />
-                                          </div>
-                                        )}
-                                        {log.action === 'updated' && (
-                                          <div className={cn(
-                                            'p-2 rounded-lg',
-                                            theme === 'dark' ? 'bg-blue-900/50' : 'bg-blue-100'
-                                          )}>
-                                            <Edit3 className="w-5 h-5 text-blue-600" />
-                                          </div>
-                                        )}
-                                        {log.action === 'deleted' && (
-                                          <div className={cn(
-                                            'p-2 rounded-lg',
-                                            theme === 'dark' ? 'bg-red-900/50' : 'bg-red-100'
-                                          )}>
-                                            <Trash2 className="w-5 h-5 text-red-600" />
-                                          </div>
-                                        )}
-                                        <div>
-                                          <p className={cn(
-                                            'font-bold text-lg',
-                                            log.action === 'created'
-                                              ? 'text-emerald-700 dark:text-emerald-400'
-                                              : log.action === 'deleted'
-                                              ? 'text-red-700 dark:text-red-400'
-                                              : 'text-gray-900 dark:text-white'
-                                          )}>
-                                            {log.actionLabel}
-                                          </p>
-                                        </div>
-                                      </div>
-
-                                      {/* Show creation details */}
-                                      {log.action === 'created' && log.productDetails && (
-                                        <div className={cn(
-                                          'p-4 rounded-xl grid grid-cols-2 md:grid-cols-4 gap-4 text-sm',
-                                          theme === 'dark' ? 'bg-gray-800/50' : 'bg-white/80 border border-gray-100'
-                                        )}>
-                                          <div>
-                                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">SKU</p>
-                                            <p className="font-mono font-semibold text-gray-900 dark:text-white">{log.productDetails.sku}</p>
-                                          </div>
-                                          <div>
-                                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Categoría</p>
-                                            <p className="font-semibold text-gray-900 dark:text-white">{log.productDetails.category || '—'}</p>
-                                          </div>
-                                          <div>
-                                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Precio Costo</p>
-                                            <p className="font-semibold text-gray-900 dark:text-white">
-                                              {CURRENCY_SYMBOLS[log.productDetails.currency] || '$'}{Number(log.productDetails.costPrice).toFixed(2)}
-                                            </p>
-                                          </div>
-                                          <div>
-                                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Precio Venta</p>
-                                            <p className="font-bold text-emerald-600 text-lg">
-                                              {CURRENCY_SYMBOLS[log.productDetails.currency] || '$'}{Number(log.productDetails.sellingPrice).toFixed(2)}
-                                            </p>
-                                          </div>
-                                          {log.productDetails.supplierName && (
-                                            <div className="col-span-2">
-                                              <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Proveedor</p>
-                                              <p className="font-semibold text-gray-900 dark:text-white">{log.productDetails.supplierName}</p>
-                                            </div>
-                                          )}
-                                          <div>
-                                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Unidad</p>
-                                            <p className="font-semibold text-gray-900 dark:text-white">{log.productDetails.unitOfMeasure}</p>
-                                          </div>
-                                          <div>
-                                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Stock Mín.</p>
-                                            <p className="font-semibold text-gray-900 dark:text-white">{log.productDetails.minimumStock}</p>
-                                          </div>
-                                        </div>
-                                      )}
-
-                                      {/* Show notes for creation */}
-                                      {log.notes && (
-                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-3 p-3 rounded-lg bg-gray-100 dark:bg-gray-800/50 italic">
-                                          {log.notes}
-                                        </p>
-                                      )}
-
-                                      {/* Show field changes for updates */}
-                                      {log.action !== 'created' && log.fieldLabel && (
-                                        <div className="mt-2">
-                                          <p className="text-sm text-gray-500">
-                                            Campo modificado: <span className="font-semibold text-gray-900 dark:text-white">{log.fieldLabel}</span>
-                                          </p>
-                                        </div>
-                                      )}
-                                      {log.action !== 'created' && log.oldValue && log.newValue && (
-                                        <div className="mt-2 flex items-center gap-2">
-                                          <span className="px-2 py-1 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-sm line-through">
-                                            {log.oldValue}
-                                          </span>
-                                          <span className="text-gray-400">→</span>
-                                          <span className="px-2 py-1 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-sm font-medium">
-                                            {log.newValue}
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
+                                  ))}
+                                </div>
                               </div>
-                            )}
-                          </div>
+                            </div>
+                          )}
 
                           {/* Inventory Movements */}
-                          <div>
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Movimientos de Inventario</h3>
-                            {movements.length === 0 ? (
-                              <div className="text-center py-8">
-                                <Package className="w-10 h-10 mx-auto mb-2 text-gray-400" />
-                                <p className="text-gray-500">No hay movimientos registrados</p>
-                              </div>
-                            ) : (
-                              <div className="space-y-3">
-                                {movements.map((movement) => (
+                          {movements.length > 0 && (
+                            <div>
+                              <h4 className={cn(
+                                'font-semibold mb-4',
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>Movimientos de Inventario</h4>
+                              <div className="space-y-2">
+                                {movements.slice(0, 5).map((movement) => (
                                   <div
                                     key={movement.id}
                                     className={cn(
-                                      'p-4 rounded-xl border flex items-center justify-between',
-                                      theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
+                                      'p-3 rounded-xl flex items-center justify-between',
+                                      theme === 'dark' ? 'bg-gray-700/30' : 'bg-gray-50'
                                     )}
                                   >
                                     <div className="flex items-center gap-3">
                                       <div className={cn(
-                                        'p-2 rounded-lg',
+                                        'p-1.5 rounded-lg',
                                         movement.quantity > 0
-                                          ? (theme === 'dark' ? 'bg-green-900/30' : 'bg-green-100')
-                                          : (theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100')
+                                          ? theme === 'dark' ? 'bg-green-900/30' : 'bg-green-100'
+                                          : theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
                                       )}>
                                         {movement.quantity > 0 ? (
-                                          <ChevronUp className="w-5 h-5 text-green-600" />
+                                          <ChevronUp className="w-4 h-4 text-green-600" />
                                         ) : (
-                                          <ChevronDown className="w-5 h-5 text-red-600" />
+                                          <ChevronDown className="w-4 h-4 text-red-600" />
                                         )}
                                       </div>
                                       <div>
-                                        <p className="font-medium text-gray-900 dark:text-white">{movement.typeLabel}</p>
-                                        {movement.notes && (
-                                          <p className="text-sm text-gray-500">{movement.notes}</p>
-                                        )}
+                                        <p className={cn(
+                                          'text-sm font-medium',
+                                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                        )}>{movement.typeLabel}</p>
+                                        <p className="text-xs text-gray-500">{formatDateTime(movement.createdAt)}</p>
                                       </div>
                                     </div>
                                     <div className="text-right">
                                       <p className={cn(
-                                        'text-lg font-bold',
+                                        'font-bold',
                                         movement.quantity > 0 ? 'text-green-600' : 'text-red-600'
                                       )}>
                                         {movement.quantity > 0 ? '+' : ''}{movement.quantity}
@@ -1789,21 +1743,28 @@ export default function ProductDetailPage() {
                                       <p className="text-xs text-gray-500">
                                         {movement.quantityBefore} → {movement.quantityAfter}
                                       </p>
-                                      <p className="text-xs text-gray-400 mt-1">{formatDate(movement.createdAt)}</p>
                                     </div>
                                   </div>
                                 ))}
                               </div>
-                            )}
-                          </div>
-                        </>
+                            </div>
+                          )}
+
+                          {changeLogs.length === 0 && movements.length === 0 && (
+                            <div className="text-center py-8">
+                              <History className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                              <p className="text-gray-500">No hay historial registrado</p>
+                            </div>
+                          )}
+                        </div>
                       )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
-          </motion.div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+
+          </div>
         </div>
 
         {/* Print Label Modal */}
