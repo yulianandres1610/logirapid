@@ -299,6 +299,30 @@ export async function POST() {
       results.push('consignment_wallet_transactions: table not found')
     }
 
+    // Fix market_inventory_movements - THIS IS THE KEY TABLE FOR THE ERROR
+    const invMovTableCheck = await db.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables WHERE table_name = 'market_inventory_movements'
+      ) as exists
+    `)
+
+    if (invMovTableCheck.rows[0]?.exists) {
+      try {
+        await db.query(`
+          ALTER TABLE market_inventory_movements
+          ALTER COLUMN quantity TYPE DECIMAL(12,3) USING quantity::DECIMAL(12,3),
+          ALTER COLUMN quantity_before TYPE DECIMAL(12,3) USING quantity_before::DECIMAL(12,3),
+          ALTER COLUMN quantity_after TYPE DECIMAL(12,3) USING quantity_after::DECIMAL(12,3)
+        `)
+        results.push('market_inventory_movements: OK')
+        console.log('[Migration] Fixed market_inventory_movements columns to DECIMAL')
+      } catch (e) {
+        results.push(`market_inventory_movements: ${e instanceof Error ? e.message : 'error'}`)
+      }
+    } else {
+      results.push('market_inventory_movements: table not found')
+    }
+
     console.log('[Migration] Decimal quantities fix completed:', results)
 
     return NextResponse.json({
