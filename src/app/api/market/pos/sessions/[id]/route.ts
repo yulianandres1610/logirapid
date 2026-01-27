@@ -474,6 +474,66 @@ export async function PUT(
       })
     }
 
+    // Fix opening balance (Admin only)
+    if (action === 'fix-opening') {
+      // Check admin permission
+      const isAdmin = ['ADMIN', 'SUPER_ADMIN', 'MARKET_MANAGER'].includes(payload.role)
+      if (!isAdmin) {
+        return NextResponse.json({
+          success: false,
+          error: 'Solo administradores pueden corregir la apertura'
+        }, { status: 403 })
+      }
+
+      if (session.status !== 'open') {
+        return NextResponse.json({
+          success: false,
+          error: 'Solo se puede corregir la apertura de sesiones abiertas'
+        }, { status: 400 })
+      }
+
+      const {
+        openingCashUsd,
+        openingCashCup,
+        openingCashMlc,
+        openingNotes
+      } = body
+
+      // Update opening balance
+      await db.query(`
+        UPDATE market_pos_sessions SET
+          opening_cash_usd = $1,
+          opening_cash_cup = $2,
+          opening_cash_mlc = $3,
+          opening_notes = COALESCE($4, opening_notes)
+        WHERE id = $5
+      `, [
+        openingCashUsd ?? session.opening_cash_usd,
+        openingCashCup ?? session.opening_cash_cup,
+        openingCashMlc ?? session.opening_cash_mlc,
+        openingNotes,
+        sessionId
+      ])
+
+      console.log('[POS Sessions] Fixed opening balance for session:', session.session_code, {
+        usd: openingCashUsd,
+        cup: openingCashCup,
+        mlc: openingCashMlc
+      })
+
+      return NextResponse.json({
+        success: true,
+        message: 'Apertura de caja corregida exitosamente',
+        data: {
+          openingCash: {
+            usd: openingCashUsd ?? parseFloat(session.opening_cash_usd) || 0,
+            cup: openingCashCup ?? parseFloat(session.opening_cash_cup) || 0,
+            mlc: openingCashMlc ?? parseFloat(session.opening_cash_mlc) || 0
+          }
+        }
+      })
+    }
+
     // Fix draft orders that should be paid
     if (action === 'fix-drafts') {
       // Find all draft orders for this session that have sufficient payments
