@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowRightLeft, Trash2, Scale, PackageOpen, Package, RotateCcw, Printer, BarChart3, History } from 'lucide-react'
 
-export type OperationType = 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer' | 'order_reception' | 'return' | 'print_labels' | 'stock_report' | 'transfer_history'
+export type OperationType = 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer' | 'order_reception' | 'return' | 'print_labels' | 'stock_report' | 'transfer_history' | 'adjustments_history'
 
 interface OperationTypeSelectorProps {
   onSelect: (type: OperationType) => void
@@ -61,6 +61,16 @@ const operationTypes = [
     hoverGradient: 'from-slate-600 to-gray-700',
     bgLight: 'bg-slate-50',
     textColor: 'text-slate-600'
+  },
+  {
+    id: 'adjustments_history' as OperationType,
+    name: 'Hist. Ajustes',
+    description: 'Ver historial de ajustes y scrap',
+    icon: Scale,
+    gradient: 'from-amber-500 to-orange-600',
+    hoverGradient: 'from-amber-600 to-orange-700',
+    bgLight: 'bg-amber-50',
+    textColor: 'text-amber-600'
   },
   {
     id: 'order_reception' as OperationType,
@@ -136,7 +146,7 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
     return () => clearInterval(interval)
   }, [currentWarehouse.id])
 
-  // Separar en filas para el layout: 5 arriba, 4 abajo
+  // Separar en filas para el layout: 5 arriba, 5 abajo
   const topRow = operationTypes.slice(0, 5)
   const bottomRow = operationTypes.slice(5)
 

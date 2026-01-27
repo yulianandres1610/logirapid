@@ -33,6 +33,7 @@ import POSReturnReceiveView from '@/components/warehouse/POSReturnReceiveView'
 import PrintLabelsView from '@/components/warehouse/PrintLabelsView'
 import StockReportView from '@/components/warehouse/StockReportView'
 import TransferHistoryView from '@/components/warehouse/TransferHistoryView'
+import AdjustmentsHistoryView from '@/components/warehouse/AdjustmentsHistoryView'
 import { PasswordConfirmModal } from '@/components/auth/PasswordConfirmModal'
 
 interface WarehouseData {
@@ -546,6 +547,9 @@ export default function WarehouseOperationsPage() {
     } else if (type === 'transfer_history') {
       setOperation({ ...initialOperationState, operationType: type })
       setHistoryOperationId(null)
+    } else if (type === 'adjustments_history') {
+      setOperation({ ...initialOperationState, operationType: type })
+      setHistoryOperationId(null)
     } else {
       setOperation({ ...initialOperationState, operationType: type })
     }
@@ -1051,7 +1055,8 @@ export default function WarehouseOperationsPage() {
                         operation.operationType === 'return' ? (returnType === 'supplier' ? 'Devolucion a Proveedor' : returnType === 'pos' ? 'Devolucion desde POS' : 'Devoluciones') :
                         operation.operationType === 'print_labels' ? 'Imprimir Etiquetas' :
                         operation.operationType === 'stock_report' ? 'Reporte de Stock' :
-                        operation.operationType === 'transfer_history' ? 'Historial de Transferencias' : 'Operacion'}`
+                        operation.operationType === 'transfer_history' ? 'Historial de Transferencias' :
+                        operation.operationType === 'adjustments_history' ? 'Historial de Ajustes y Scrap' : 'Operacion'}`
                     : 'Operaciones'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">{warehouse.name}</p>
@@ -1209,6 +1214,18 @@ export default function WarehouseOperationsPage() {
             onSelectOperation={(opId) => {
               setHistoryOperationId(opId || null)
               updateURL('transfer_history', opId || null)
+            }}
+          />
+        ) : operation.operationType === 'adjustments_history' ? (
+          /* Adjustments History View */
+          <AdjustmentsHistoryView
+            warehouseId={warehouseId}
+            warehouseName={warehouse.name}
+            onBack={handleBack}
+            initialOperationId={historyOperationId}
+            onSelectOperation={(opId) => {
+              setHistoryOperationId(opId || null)
+              updateURL('adjustments_history', opId || null)
             }}
           />
         ) : (
