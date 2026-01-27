@@ -46,7 +46,8 @@ import {
   FileCheck,
   TrendingUp,
   ClipboardCheck,
-  MessageCircle
+  MessageCircle,
+  History
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -514,7 +515,16 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const marketMenuItems = [
     { icon: Home, label: "Dashboard", href: "/dashboard/market" },
     { icon: Package, label: "Inventario", href: "/dashboard/market/inventory" },
-    { icon: Warehouse, label: "Almacenes", href: "/dashboard/market/warehouses" },
+    {
+      icon: Warehouse,
+      label: "Almacenes",
+      href: "/dashboard/market/warehouses",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: Warehouse, label: "Lista de Almacenes", href: "/dashboard/market/warehouses" },
+        { icon: History, label: "Ajustes y Scrap", href: "/dashboard/market/warehouses/adjustments-history" },
+      ]
+    },
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
     { icon: Store, label: "Marketplace", href: "/dashboard/market/marketplace" },
     {
