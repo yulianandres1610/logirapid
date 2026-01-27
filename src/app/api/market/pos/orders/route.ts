@@ -16,7 +16,76 @@ async function ensureMigrations() {
       ALTER TABLE market_pos_order_lines
       ADD COLUMN IF NOT EXISTS original_price DECIMAL(12,2)
     `)
-    console.log('[POS Orders] Migrations ensured (employee_id, original_price)')
+
+    // Fix consignment tables to support decimal quantities (for products sold by weight/volume)
+    // Check if consignment_lot_inventory exists before altering
+    const lotTableCheck = await db.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables WHERE table_name = 'consignment_lot_inventory'
+      ) as exists
+    `)
+
+    if (lotTableCheck.rows[0]?.exists) {
+      await db.query(`
+        ALTER TABLE consignment_lot_inventory
+        ALTER COLUMN quantity_initial TYPE DECIMAL(12,3) USING quantity_initial::DECIMAL(12,3),
+        ALTER COLUMN quantity_available TYPE DECIMAL(12,3) USING quantity_available::DECIMAL(12,3),
+        ALTER COLUMN quantity_sold TYPE DECIMAL(12,3) USING quantity_sold::DECIMAL(12,3),
+        ALTER COLUMN quantity_returned TYPE DECIMAL(12,3) USING quantity_returned::DECIMAL(12,3)
+      `)
+      console.log('[POS Orders] Fixed consignment_lot_inventory columns to DECIMAL')
+    }
+
+    const orderLinesTableCheck = await db.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables WHERE table_name = 'consignment_order_lines'
+      ) as exists
+    `)
+
+    if (orderLinesTableCheck.rows[0]?.exists) {
+      await db.query(`
+        ALTER TABLE consignment_order_lines
+        ALTER COLUMN quantity_ordered TYPE DECIMAL(12,3) USING quantity_ordered::DECIMAL(12,3),
+        ALTER COLUMN quantity_received TYPE DECIMAL(12,3) USING quantity_received::DECIMAL(12,3),
+        ALTER COLUMN quantity_sold TYPE DECIMAL(12,3) USING quantity_sold::DECIMAL(12,3),
+        ALTER COLUMN quantity_returned TYPE DECIMAL(12,3) USING quantity_returned::DECIMAL(12,3)
+      `)
+      console.log('[POS Orders] Fixed consignment_order_lines columns to DECIMAL')
+    }
+
+    // Also fix purchase_lot_inventory if exists
+    const purchaseLotTableCheck = await db.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables WHERE table_name = 'purchase_lot_inventory'
+      ) as exists
+    `)
+
+    if (purchaseLotTableCheck.rows[0]?.exists) {
+      await db.query(`
+        ALTER TABLE purchase_lot_inventory
+        ALTER COLUMN quantity_initial TYPE DECIMAL(12,3) USING quantity_initial::DECIMAL(12,3),
+        ALTER COLUMN quantity_available TYPE DECIMAL(12,3) USING quantity_available::DECIMAL(12,3),
+        ALTER COLUMN quantity_sold TYPE DECIMAL(12,3) USING quantity_sold::DECIMAL(12,3)
+      `)
+      console.log('[POS Orders] Fixed purchase_lot_inventory columns to DECIMAL')
+    }
+
+    // Fix consignment_wallet_transactions quantity column
+    const walletTxTableCheck = await db.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables WHERE table_name = 'consignment_wallet_transactions'
+      ) as exists
+    `)
+
+    if (walletTxTableCheck.rows[0]?.exists) {
+      await db.query(`
+        ALTER TABLE consignment_wallet_transactions
+        ALTER COLUMN quantity TYPE DECIMAL(12,3) USING quantity::DECIMAL(12,3)
+      `)
+      console.log('[POS Orders] Fixed consignment_wallet_transactions.quantity to DECIMAL')
+    }
+
+    console.log('[POS Orders] Migrations ensured (employee_id, original_price, decimal quantities)')
     migrationRun = true
   } catch (error) {
     console.error('[POS Orders] Migration error (may be safe to ignore):', error)
