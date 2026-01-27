@@ -135,7 +135,8 @@ export async function GET(
       LEFT JOIN market_warehouses dw ON dw.id = mwo.destination_warehouse_id
       LEFT JOIN users u ON u.id = mwo.created_by
       WHERE mwol.product_id = $1 AND mwo.company_id = $2
-        AND mwo.status IN ('done', 'completed', 'validated')
+        AND mwo.operation_type = 'transfer'
+        AND mwo.status IN ('done', 'completed', 'validated', 'confirmed')
       ORDER BY COALESCE(mwo.completed_at, mwo.created_at) DESC
       LIMIT $3
     `, [productId, payload.companyId, limit])
@@ -303,7 +304,7 @@ export async function GET(
       LEFT JOIN users u ON u.id = mwo.created_by
       WHERE mwol.product_id = $1 AND mwo.company_id = $2
         AND mwo.operation_type = 'adjustment'
-        AND mwo.status IN ('done', 'completed')
+        AND mwo.status IN ('done', 'completed', 'confirmed', 'validated')
       ORDER BY COALESCE(mwo.completed_at, mwo.created_at) DESC
       LIMIT $3
     `, [productId, payload.companyId, limit])
@@ -358,7 +359,7 @@ export async function GET(
       LEFT JOIN users u ON u.id = mwo.created_by
       WHERE mwol.product_id = $1 AND mwo.company_id = $2
         AND mwo.operation_type = 'scrap'
-        AND mwo.status IN ('done', 'completed')
+        AND mwo.status IN ('done', 'completed', 'confirmed', 'validated')
       ORDER BY COALESCE(mwo.completed_at, mwo.created_at) DESC
       LIMIT $3
     `, [productId, payload.companyId, limit])
