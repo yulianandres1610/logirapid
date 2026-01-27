@@ -66,7 +66,7 @@ export async function GET(
     // Get all movements from different sources
     const movements: Movement[] = []
 
-    // 1. Get purchases (entries) - filter for base product only (no variant)
+    // 1. Get purchases (entries) - include variant info
     try {
       const purchasesResult = await db.query(`
         SELECT
@@ -78,18 +78,20 @@ export async function GET(
           mp.received_at,
           mpl.quantity,
           mpl.quantity_received,
+          mpl.variant_id,
+          mpv.variant_name,
           mw.id as warehouse_id,
           mw.name as warehouse_name,
           COALESCE(u.firstname || ' ' || u.lastname, u.email) as user_name,
           s.name as supplier_name
         FROM market_purchase_lines mpl
         JOIN market_purchases mp ON mp.id = mpl.purchase_id
+        LEFT JOIN market_product_variants mpv ON mpv.id = mpl.variant_id
         LEFT JOIN market_warehouses mw ON mw.id = mp.warehouse_id
         LEFT JOIN users u ON u.id = mp.created_by
         LEFT JOIN market_suppliers s ON s.id = mp.supplier_id
         WHERE mpl.product_id = $1 AND mp.company_id = $2
           AND mp.status IN ('recibido', 'received', 'completed', 'parcial')
-          AND mpl.variant_id IS NULL
         ORDER BY COALESCE(mp.received_at, mp.created_at) DESC
         LIMIT $3
       `, [productId, payload.companyId, limit])
@@ -97,10 +99,11 @@ export async function GET(
       for (const row of purchasesResult.rows) {
         const qty = parseFloat(row.quantity_received) || parseFloat(row.quantity) || 0
         if (qty > 0) {
+          const variantLabel = row.variant_name ? ` (${row.variant_name})` : ''
           movements.push({
             id: `purchase-${row.line_id}`,
             type: 'purchase',
-            typeLabel: 'Compra',
+            typeLabel: `Compra${variantLabel}`,
             date: row.received_at || row.created_at,
             quantity: qty,
             direction: 'in',
@@ -111,7 +114,7 @@ export async function GET(
             destWarehouse: row.warehouse_name,
             userName: row.user_name,
             status: row.status,
-            notes: null,
+            notes: row.variant_name ? `Variante: ${row.variant_name}` : null,
             stockAfter: null
           })
         }
@@ -120,7 +123,7 @@ export async function GET(
       console.error('[Product Movements] Error fetching purchases:', error)
     }
 
-    // 2. Get warehouse transfers (both directions) - filter for base product only
+    // 2. Get warehouse transfers (both directions) - include variant info
     try {
       const transfersResult = await db.query(`
         SELECT
@@ -133,6 +136,8 @@ export async function GET(
           mwo.completed_at,
           mwol.quantity_planned,
           mwol.quantity_done,
+          mwol.variant_id,
+          mpv.variant_name,
           sw.id as source_id,
           sw.name as source_warehouse,
           dw.id as dest_id,
@@ -141,13 +146,13 @@ export async function GET(
           mwo.notes
         FROM market_warehouse_operation_lines mwol
         JOIN market_warehouse_operations mwo ON mwo.id = mwol.operation_id
+        LEFT JOIN market_product_variants mpv ON mpv.id = mwol.variant_id
         LEFT JOIN market_warehouses sw ON sw.id = mwo.source_warehouse_id
         LEFT JOIN market_warehouses dw ON dw.id = mwo.destination_warehouse_id
         LEFT JOIN users u ON u.id = mwo.created_by
         WHERE mwol.product_id = $1 AND mwo.company_id = $2
           AND mwo.operation_type = 'transfer'
           AND mwo.status IN ('done', 'completed', 'validated', 'confirmed')
-          AND mwol.variant_id IS NULL
         ORDER BY COALESCE(mwo.completed_at, mwo.created_at) DESC
         LIMIT $3
       `, [productId, payload.companyId, limit])
@@ -155,12 +160,15 @@ export async function GET(
       for (const row of transfersResult.rows) {
         const qty = parseFloat(row.quantity_done) || parseFloat(row.quantity_planned) || 0
         if (qty > 0) {
+          const variantLabel = row.variant_name ? ` (${row.variant_name})` : ''
+          const variantNote = row.variant_name ? `Variante: ${row.variant_name}` : null
+
           // Add as exit from source
           if (row.source_warehouse) {
             movements.push({
               id: `transfer-out-${row.line_id}`,
               type: 'transfer_out',
-              typeLabel: 'Transferencia (Salida)',
+              typeLabel: `Transferencia (Salida)${variantLabel}`,
               date: row.completed_at || row.created_at,
               quantity: qty,
               direction: 'out',
@@ -171,7 +179,7 @@ export async function GET(
               destWarehouse: row.dest_warehouse,
               userName: row.user_name,
               status: row.status,
-              notes: row.notes,
+              notes: variantNote || row.notes,
               stockAfter: null
             })
           }
@@ -181,7 +189,7 @@ export async function GET(
             movements.push({
               id: `transfer-in-${row.line_id}`,
               type: 'transfer_in',
-              typeLabel: 'Transferencia (Entrada)',
+              typeLabel: `Transferencia (Entrada)${variantLabel}`,
               date: row.completed_at || row.created_at,
               quantity: qty,
               direction: 'in',
@@ -192,7 +200,7 @@ export async function GET(
               destWarehouse: row.dest_warehouse,
               userName: row.user_name,
               status: row.status,
-              notes: row.notes,
+              notes: variantNote || row.notes,
               stockAfter: null
             })
           }
@@ -202,7 +210,7 @@ export async function GET(
       console.error('[Product Movements] Error fetching transfers:', error)
     }
 
-    // 3. Get POS sales (exits) - use line ID for unique identification
+    // 3. Get POS sales (exits) - include variant info
     try {
       const salesResult = await db.query(`
         SELECT
@@ -213,18 +221,19 @@ export async function GET(
           mpo.created_at,
           mpol.quantity,
           mpol.variant_id,
+          mpv.variant_name,
           mw.id as warehouse_id,
           mw.name as warehouse_name,
           COALESCE(u.firstname || ' ' || u.lastname, u.email) as user_name,
           t.name as terminal_name
         FROM market_pos_order_lines mpol
         JOIN market_pos_orders mpo ON mpo.id = mpol.order_id
+        LEFT JOIN market_product_variants mpv ON mpv.id = mpol.variant_id
         LEFT JOIN market_warehouses mw ON mw.id = mpo.warehouse_id
         LEFT JOIN users u ON u.id = mpo.created_by
         LEFT JOIN market_pos_terminals t ON t.id = mpo.pos_terminal_id
         WHERE mpol.product_id = $1 AND mpo.company_id = $2
           AND mpo.status IN ('paid', 'completed')
-          AND mpol.variant_id IS NULL
         ORDER BY mpo.created_at DESC
         LIMIT $3
       `, [productId, payload.companyId, limit])
@@ -232,10 +241,11 @@ export async function GET(
       for (const row of salesResult.rows) {
         const qty = parseFloat(row.quantity) || 0
         if (qty > 0) {
+          const variantLabel = row.variant_name ? ` (${row.variant_name})` : ''
           movements.push({
             id: `sale-${row.line_id}`,
             type: 'sale',
-            typeLabel: 'Venta POS',
+            typeLabel: `Venta POS${variantLabel}`,
             date: row.created_at,
             quantity: qty,
             direction: 'out',
@@ -246,7 +256,7 @@ export async function GET(
             destWarehouse: row.terminal_name || 'Cliente',
             userName: row.user_name,
             status: row.status,
-            notes: null,
+            notes: row.variant_name ? `Variante: ${row.variant_name}` : null,
             stockAfter: null
           })
         }
