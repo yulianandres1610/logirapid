@@ -252,6 +252,138 @@ export async function POST(
           hasDiscrepancies ? `Recepción con discrepancia: esperado ${expectedQuantity}, recibido ${validatedQuantity}` : null,
           payload.userId
         ])
+
+        // ============================================================
+        // MOVER LOTES FIFO: Transferir lotes del almacén origen al destino
+        // ============================================================
+        let remainingToTransfer = validatedQuantity
+
+        // 1. Mover lotes de COMPRA (purchase_lot_inventory)
+        if (remainingToTransfer > 0) {
+          const purchaseLots = await db.query(`
+            SELECT id, lot_number, quantity_available, unit_cost, supplier_id,
+                   purchase_line_id, expiration_date, manufacturing_date
+            FROM purchase_lot_inventory
+            WHERE warehouse_id = $1 AND product_id = $2
+              AND (variant_id = $3 OR ($3 IS NULL AND variant_id IS NULL))
+              AND quantity_available > 0
+            ORDER BY received_at ASC
+            FOR UPDATE
+          `, [sourceWarehouseId, productId, variantId])
+
+          for (const lot of purchaseLots.rows) {
+            if (remainingToTransfer <= 0) break
+
+            const availableInLot = parseFloat(lot.quantity_available) || 0
+            const toTransfer = Math.min(remainingToTransfer, availableInLot)
+
+            // Reducir del lote origen
+            await db.query(`
+              UPDATE purchase_lot_inventory
+              SET quantity_available = quantity_available - $1
+              WHERE id = $2
+            `, [toTransfer, lot.id])
+
+            // Buscar o crear lote en destino con el mismo lot_number
+            const destLot = await db.query(`
+              SELECT id, quantity_available FROM purchase_lot_inventory
+              WHERE warehouse_id = $1 AND product_id = $2 AND lot_number = $3
+                AND (variant_id = $4 OR ($4 IS NULL AND variant_id IS NULL))
+            `, [destinationWarehouseId, productId, lot.lot_number, variantId])
+
+            if (destLot.rows.length > 0) {
+              // Sumar al lote existente en destino
+              await db.query(`
+                UPDATE purchase_lot_inventory
+                SET quantity_available = quantity_available + $1,
+                    quantity_initial = quantity_initial + $1
+                WHERE id = $2
+              `, [toTransfer, destLot.rows[0].id])
+            } else {
+              // Crear nuevo lote en destino
+              await db.query(`
+                INSERT INTO purchase_lot_inventory (
+                  company_id, warehouse_id, product_id, variant_id, purchase_line_id,
+                  supplier_id, lot_number, expiration_date, manufacturing_date,
+                  quantity_initial, quantity_available, quantity_sold, unit_cost, received_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0, $12, NOW())
+              `, [
+                payload.companyId, destinationWarehouseId, productId, variantId,
+                lot.purchase_line_id, lot.supplier_id, lot.lot_number,
+                lot.expiration_date, lot.manufacturing_date,
+                toTransfer, toTransfer, lot.unit_cost
+              ])
+            }
+
+            remainingToTransfer -= toTransfer
+            console.log(`[Transfer] Movido lote compra ${lot.lot_number}: ${toTransfer} unidades`)
+          }
+        }
+
+        // 2. Mover lotes de CONSIGNACIÓN (consignment_lot_inventory)
+        if (remainingToTransfer > 0) {
+          const consignmentLots = await db.query(`
+            SELECT id, lot_number, quantity_available, unit_cost, supplier_id,
+                   order_line_id, expiration_date
+            FROM consignment_lot_inventory
+            WHERE warehouse_id = $1 AND product_id = $2
+              AND (variant_id = $3 OR ($3 IS NULL AND variant_id IS NULL))
+              AND quantity_available > 0
+            ORDER BY received_at ASC
+            FOR UPDATE
+          `, [sourceWarehouseId, productId, variantId])
+
+          for (const lot of consignmentLots.rows) {
+            if (remainingToTransfer <= 0) break
+
+            const availableInLot = parseFloat(lot.quantity_available) || 0
+            const toTransfer = Math.min(remainingToTransfer, availableInLot)
+
+            // Reducir del lote origen
+            await db.query(`
+              UPDATE consignment_lot_inventory
+              SET quantity_available = quantity_available - $1
+              WHERE id = $2
+            `, [toTransfer, lot.id])
+
+            // Buscar o crear lote en destino con el mismo lot_number
+            const destLot = await db.query(`
+              SELECT id, quantity_available FROM consignment_lot_inventory
+              WHERE warehouse_id = $1 AND product_id = $2 AND lot_number = $3
+                AND (variant_id = $4 OR ($4 IS NULL AND variant_id IS NULL))
+            `, [destinationWarehouseId, productId, lot.lot_number, variantId])
+
+            if (destLot.rows.length > 0) {
+              // Sumar al lote existente en destino
+              await db.query(`
+                UPDATE consignment_lot_inventory
+                SET quantity_available = quantity_available + $1,
+                    quantity_initial = quantity_initial + $1
+                WHERE id = $2
+              `, [toTransfer, destLot.rows[0].id])
+            } else {
+              // Crear nuevo lote en destino
+              await db.query(`
+                INSERT INTO consignment_lot_inventory (
+                  company_id, warehouse_id, product_id, variant_id, order_line_id,
+                  supplier_id, lot_number, expiration_date,
+                  quantity_initial, quantity_available, quantity_sold, unit_cost, received_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, $11, NOW())
+              `, [
+                payload.companyId, destinationWarehouseId, productId, variantId,
+                lot.order_line_id, lot.supplier_id, lot.lot_number, lot.expiration_date,
+                toTransfer, toTransfer, lot.unit_cost
+              ])
+            }
+
+            remainingToTransfer -= toTransfer
+            console.log(`[Transfer] Movido lote consignación ${lot.lot_number}: ${toTransfer} unidades`)
+          }
+        }
+
+        if (remainingToTransfer > 0) {
+          console.warn(`[Transfer] ADVERTENCIA: Quedan ${remainingToTransfer} unidades sin lote FIFO para producto ${productId}`)
+        }
       }
 
       // Update operation status
