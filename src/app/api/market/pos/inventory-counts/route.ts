@@ -331,8 +331,8 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Roles que tienen permisos de administrador
-const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN', 'MARKET_MANAGER']
+// Roles que tienen permisos de administrador para eliminar conteos
+const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN']
 
 /**
  * DELETE /api/market/pos/inventory-counts

@@ -462,7 +462,7 @@ export async function POST(request: NextRequest) {
 
 /**
  * DELETE /api/audit/counts
- * Delete a count (MARKET_MANAGER only)
+ * Delete a count (ADMIN/SUPER_ADMIN only)
  * Query param: countId
  */
 export async function DELETE(request: NextRequest) {
@@ -482,9 +482,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 })
     }
 
-    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'MARKET_MANAGER']
-    if (payload.companyType !== 'market' || !allowedRoles.includes(payload.role)) {
-      return NextResponse.json({ success: false, error: 'Solo administradores pueden eliminar conteos' }, { status: 403 })
+    // Solo ADMIN y SUPER_ADMIN pueden eliminar conteos de auditoría
+    const deleteAllowedRoles = ['SUPER_ADMIN', 'ADMIN']
+    if (payload.companyType !== 'market' || !deleteAllowedRoles.includes(payload.role)) {
+      return NextResponse.json({ success: false, error: 'Solo administradores pueden eliminar conteos de auditoría' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)

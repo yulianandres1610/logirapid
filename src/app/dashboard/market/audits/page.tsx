@@ -25,6 +25,10 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
+import { useNotifications } from '@/contexts/NotificationContext'
+
+// Roles con permisos de administrador para eliminar conteos
+const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN']
 
 interface AuditCountLine {
   productId: number
@@ -63,12 +67,35 @@ interface AuditCount {
 
 export default function AuditsPage() {
   const { theme } = useTheme()
+  const { showNotification } = useNotifications()
 
   const [loading, setLoading] = useState(true)
   const [counts, setCounts] = useState<AuditCount[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+
+  // User role state for permissions
+  const [userRole, setUserRole] = useState<string | null>(null)
+
+  // Get user role from cookies
+  useEffect(() => {
+    try {
+      const cookies = document.cookie.split(';')
+      const roleCookie = cookies.find(c => c.trim().startsWith('user-role='))
+      if (roleCookie) {
+        const role = decodeURIComponent(roleCookie.split('=')[1])
+        setUserRole(role)
+      } else {
+        setUserRole('USER')
+      }
+    } catch (e) {
+      console.error('Error reading role cookie:', e)
+      setUserRole('USER')
+    }
+  }, [])
+
+  const isAdmin = userRole && ADMIN_ROLES.includes(userRole)
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('')
@@ -156,18 +183,26 @@ export default function AuditsPage() {
 
   const deleteCount = async (countId: number, e: React.MouseEvent) => {
     e.stopPropagation()
+
+    // Verificar permisos de administrador
+    if (!isAdmin) {
+      showNotification('error', 'Acceso denegado', 'Solo los administradores pueden eliminar conteos de auditoría')
+      return
+    }
+
     if (!confirm('¿Eliminar este conteo de auditoría? Esta acción no se puede deshacer.')) return
 
     try {
       const res = await fetch(`/api/audit/counts?countId=${countId}`, { method: 'DELETE' })
       const data = await res.json()
       if (data.success) {
+        showNotification('success', 'Conteo eliminado', 'El conteo de auditoría ha sido eliminado')
         fetchCounts(true)
       } else {
-        alert(data.error || 'Error al eliminar')
+        showNotification('error', 'Error', data.error || 'Error al eliminar conteo')
       }
     } catch {
-      alert('Error de conexión')
+      showNotification('error', 'Error de conexión', 'No se pudo eliminar el conteo')
     }
   }
 
@@ -672,15 +707,18 @@ export default function AuditsPage() {
                                   <Eye className="w-4 h-4 text-purple-500" />
                                 )}
                               </motion.button>
-                              <motion.button
-                                whileHover={{ scale: 1.1 }}
-                                whileTap={{ scale: 0.9 }}
-                                onClick={(e) => deleteCount(count.id, e)}
-                                className="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-                                title="Eliminar"
-                              >
-                                <Trash2 className="w-4 h-4 text-red-500" />
-                              </motion.button>
+                              {/* Solo admins pueden eliminar */}
+                              {isAdmin && (
+                                <motion.button
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={(e) => deleteCount(count.id, e)}
+                                  className="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                                  title="Eliminar"
+                                >
+                                  <Trash2 className="w-4 h-4 text-red-500" />
+                                </motion.button>
+                              )}
                             </div>
                           </td>
                         </motion.tr>

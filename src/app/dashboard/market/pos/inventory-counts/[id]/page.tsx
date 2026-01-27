@@ -123,8 +123,8 @@ const LIFECYCLE_STEPS = [
   { key: 'approved', label: 'Aprobado', icon: CheckCircle }
 ]
 
-// Roles con permisos de administrador
-const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN', 'MARKET_MANAGER']
+// Roles con permisos de administrador para eliminar y ver conteos no finalizados
+const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN']
 
 export default function InventoryCountDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)

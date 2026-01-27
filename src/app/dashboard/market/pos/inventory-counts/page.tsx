@@ -29,8 +29,8 @@ import {
 } from 'lucide-react'
 import { useNotifications } from '@/contexts/NotificationContext'
 
-// Roles con permisos de administrador
-const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN', 'MARKET_MANAGER']
+// Roles con permisos de administrador para eliminar conteos
+const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN']
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { cn } from '@/lib/utils'
