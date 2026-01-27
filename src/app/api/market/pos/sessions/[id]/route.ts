@@ -526,9 +526,9 @@ export async function PUT(
         message: 'Apertura de caja corregida exitosamente',
         data: {
           openingCash: {
-            usd: openingCashUsd ?? parseFloat(session.opening_cash_usd) || 0,
-            cup: openingCashCup ?? parseFloat(session.opening_cash_cup) || 0,
-            mlc: openingCashMlc ?? parseFloat(session.opening_cash_mlc) || 0
+            usd: openingCashUsd ?? (parseFloat(session.opening_cash_usd) || 0),
+            cup: openingCashCup ?? (parseFloat(session.opening_cash_cup) || 0),
+            mlc: openingCashMlc ?? (parseFloat(session.opening_cash_mlc) || 0)
           }
         }
       })
