@@ -818,7 +818,7 @@ export default function ProductDetailPage() {
                   value: salesSummary?.salesVelocity ? `${salesSummary.salesVelocity}` : '0',
                   icon: Activity,
                   color: 'purple',
-                  suffix: 'uds/día',
+                  suffix: `${product.unitOfMeasure}/día`,
                   subtext: salesLoading ? 'Cargando...' : `${getTotalSales()} vendidas`
                 }
               ].map((stat, idx) => (
