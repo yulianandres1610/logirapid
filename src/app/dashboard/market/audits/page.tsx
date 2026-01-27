@@ -19,8 +19,10 @@ import {
   ChevronRight,
   Package,
   Eye,
-  Trash2
+  Trash2,
+  Minus
 } from 'lucide-react'
+import Image from 'next/image'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { cn } from '@/lib/utils'
@@ -850,7 +852,7 @@ export default function AuditsPage() {
                           <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase">P. Venta</th>
                           <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase">Sistema</th>
                           <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase">Contado</th>
-                          <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase">Diferencia</th>
+                          <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase">Diferencia</th>
                           <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase">Valor Dif.</th>
                         </tr>
                       </thead>
@@ -859,19 +861,46 @@ export default function AuditsPage() {
                           <tr
                             key={idx}
                             className={cn(
+                              'transition-colors',
+                              theme === 'dark' ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50',
                               line.difference !== 0 && (
-                                theme === 'dark' ? 'bg-amber-900/10' : 'bg-amber-50/50'
+                                line.difference > 0
+                                  ? 'bg-red-500/5'
+                                  : 'bg-green-500/5'
                               )
                             )}
                           >
                             <td className="py-3 px-4">
-                              <p className={cn(
-                                'text-sm font-medium',
-                                theme === 'dark' ? 'text-white' : 'text-gray-900'
-                              )}>{line.productName}</p>
-                              {line.productSku && (
-                                <p className="text-xs text-gray-500">{line.productSku}</p>
-                              )}
+                              <div className="flex items-center gap-3">
+                                {/* Product Image */}
+                                <div className={cn(
+                                  'w-10 h-10 rounded-lg overflow-hidden shrink-0',
+                                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                                )}>
+                                  {line.productImage ? (
+                                    <Image
+                                      src={line.productImage}
+                                      alt={line.productName}
+                                      width={40}
+                                      height={40}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                      <Package className="w-4 h-4 text-gray-400" />
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className={cn(
+                                    'text-sm font-medium truncate max-w-[180px]',
+                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                  )}>{line.productName}</p>
+                                  {line.productSku && (
+                                    <p className="text-xs text-gray-500 font-mono">SKU: {line.productSku}</p>
+                                  )}
+                                </div>
+                              </div>
                             </td>
                             <td className="py-3 px-4 text-right text-sm text-gray-600 dark:text-gray-300">
                               {formatCurrency(line.costPrice)}
@@ -891,15 +920,22 @@ export default function AuditsPage() {
                             )}>
                               {line.countedQuantity}
                             </td>
-                            <td className={cn(
-                              'py-3 px-4 text-right text-sm font-bold',
-                              line.difference > 0 ? 'text-red-500' :
-                              line.difference < 0 ? 'text-green-500' :
-                              'text-gray-400'
-                            )}>
-                              {line.difference > 0 ? `-${line.difference}` :
-                               line.difference < 0 ? `+${Math.abs(line.difference)}` :
-                               '0'}
+                            <td className="py-3 px-4 text-center">
+                              <span className={cn(
+                                'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold',
+                                line.difference > 0
+                                  ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                  : line.difference < 0
+                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                    : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+                              )}>
+                                {line.difference > 0 && <TrendingDown className="w-3 h-3" />}
+                                {line.difference < 0 && <TrendingUp className="w-3 h-3" />}
+                                {line.difference === 0 && <Minus className="w-3 h-3" />}
+                                {line.difference > 0 ? `-${line.difference}` :
+                                 line.difference < 0 ? `+${Math.abs(line.difference)}` :
+                                 '0'}
+                              </span>
                             </td>
                             <td className={cn(
                               'py-3 px-4 text-right text-sm font-medium',
