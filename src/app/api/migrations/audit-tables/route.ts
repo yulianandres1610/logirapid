@@ -44,7 +44,8 @@ export async function GET() {
       console.log('[Migration] Added unique constraint on audit_counts')
     } catch (e: unknown) {
       const error = e as { code?: string }
-      if (error.code !== '42710') throw e // Ignore if already exists
+      // 42710 = constraint already exists, 42P07 = relation already exists
+      if (error.code !== '42710' && error.code !== '42P07') throw e
     }
 
     // Create indexes on audit_counts
