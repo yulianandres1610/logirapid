@@ -1,28 +1,24 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
   ClipboardCheck,
   Loader2,
   TrendingDown,
   TrendingUp,
-  Calendar,
-  User,
   Warehouse,
   RefreshCw,
   X,
   AlertTriangle,
   CheckCircle2,
   Clock,
-  ChevronLeft,
-  ChevronRight,
   Package,
   Eye,
   Trash2,
-  Minus
+  User
 } from 'lucide-react'
-import Image from 'next/image'
+import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { cn } from '@/lib/utils'
@@ -31,22 +27,6 @@ import { useNotifications } from '@/contexts/NotificationContext'
 
 // Roles con permisos de administrador para eliminar conteos
 const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN']
-
-interface AuditCountLine {
-  productId: number
-  variantId: number | null
-  productName: string
-  productSku: string
-  productBarcode: string
-  productImage: string | null
-  costPrice: number
-  sellingPrice: number
-  systemQuantity: number
-  countedQuantity: number
-  difference: number
-  differenceValueCost: number
-  differenceValueSale: number
-}
 
 interface AuditCount {
   id: number
@@ -64,7 +44,6 @@ interface AuditCount {
   countedByName: string
   startedAt: string
   completedAt: string | null
-  lines?: AuditCountLine[]
 }
 
 export default function AuditsPage() {
@@ -103,11 +82,6 @@ export default function AuditsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [warehouseFilter, setWarehouseFilter] = useState<string>('')
   const [warehouses, setWarehouses] = useState<{ id: number; name: string }[]>([])
-
-  // Detail modal
-  const [selectedCount, setSelectedCount] = useState<AuditCount | null>(null)
-  const [loadingDetail, setLoadingDetail] = useState(false)
-  const [showDetail, setShowDetail] = useState(false)
 
   // Stats
   const [stats, setStats] = useState({
@@ -166,22 +140,6 @@ export default function AuditsPage() {
   useEffect(() => {
     fetchCounts()
   }, [fetchCounts])
-
-  const fetchDetail = useCallback(async (countId: number) => {
-    setLoadingDetail(true)
-    try {
-      const res = await fetch(`/api/audit/counts?countId=${countId}`)
-      const data = await res.json()
-      if (data.success) {
-        setSelectedCount(data.data)
-        setShowDetail(true)
-      }
-    } catch {
-      // silent
-    } finally {
-      setLoadingDetail(false)
-    }
-  }, [])
 
   const deleteCount = async (countId: number, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -695,20 +653,16 @@ export default function AuditsPage() {
                           </td>
                           <td className="py-4 px-4 text-center">
                             <div className="flex items-center justify-center gap-1">
-                              <motion.button
-                                whileHover={{ scale: 1.1 }}
-                                whileTap={{ scale: 0.9 }}
-                                onClick={() => fetchDetail(count.id)}
-                                disabled={loadingDetail}
-                                className="p-2 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
-                                title="Ver detalle"
-                              >
-                                {loadingDetail ? (
-                                  <Loader2 className="w-4 h-4 text-purple-500 animate-spin" />
-                                ) : (
+                              <Link href={`/dashboard/market/audits/${count.id}`}>
+                                <motion.button
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  className="p-2 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                                  title="Ver detalle"
+                                >
                                   <Eye className="w-4 h-4 text-purple-500" />
-                                )}
-                              </motion.button>
+                                </motion.button>
+                              </Link>
                               {/* Solo admins pueden eliminar */}
                               {isAdmin && (
                                 <motion.button
@@ -731,516 +685,6 @@ export default function AuditsPage() {
               </div>
             </motion.div>
           </motion.div>
-
-          {/* Detail Modal - Purchases Style */}
-          <AnimatePresence>
-            {showDetail && selectedCount && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm"
-                onClick={() => setShowDetail(false)}
-              >
-                <div className="min-h-screen px-4 py-8">
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 20 }}
-                    className="max-w-6xl mx-auto"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {/* Close Button */}
-                    <div className="flex justify-end mb-4">
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setShowDetail(false)}
-                        className={cn(
-                          'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
-                          theme === 'dark'
-                            ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                            : 'bg-white text-gray-600 hover:bg-gray-100 shadow-sm'
-                        )}
-                      >
-                        <X className="w-4 h-4" />
-                        <span className="font-medium">Cerrar</span>
-                      </motion.button>
-                    </div>
-
-                    {/* Header Card */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={cn(
-                        'p-6 rounded-2xl border mb-6',
-                        theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
-                      )}
-                    >
-                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-                        {/* Left: Audit Info */}
-                        <div className="flex items-start gap-4">
-                          <div className={cn(
-                            'w-14 h-14 rounded-2xl flex items-center justify-center shrink-0',
-                            selectedCount.status === 'completed'
-                              ? 'bg-gradient-to-br from-emerald-500 to-teal-500'
-                              : 'bg-gradient-to-br from-amber-500 to-orange-500'
-                          )}>
-                            <ClipboardCheck className="w-7 h-7 text-white" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-3 mb-1 flex-wrap">
-                              <h1 className={cn(
-                                'text-2xl md:text-3xl font-bold font-mono',
-                                theme === 'dark' ? 'text-white' : 'text-gray-900'
-                              )}>
-                                {selectedCount.countNumber}
-                              </h1>
-                              {selectedCount.status === 'completed' ? (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  Completado
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                                  <Clock className="w-3.5 h-3.5" />
-                                  En progreso
-                                </span>
-                              )}
-                              {selectedCount.productsWithDifferences > 0 && (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                                  <AlertTriangle className="w-3.5 h-3.5" />
-                                  {selectedCount.productsWithDifferences} diferencias
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-sm text-gray-500 mb-2">Conteo de Inventario</p>
-                            <div className="flex items-center gap-4 text-sm text-gray-500 flex-wrap">
-                              <span className="flex items-center gap-1.5">
-                                <Warehouse className="w-4 h-4" />
-                                {selectedCount.warehouseName}
-                              </span>
-                              <span className="flex items-center gap-1.5">
-                                <User className="w-4 h-4" />
-                                {selectedCount.countedByName}
-                              </span>
-                              <span className="flex items-center gap-1.5">
-                                <Calendar className="w-4 h-4" />
-                                {formatDate(selectedCount.startedAt)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Right: Totals */}
-                        <div className="flex items-center gap-3">
-                          {selectedCount.totalShortageValue > 0 && (
-                            <div className={cn(
-                              'p-4 rounded-xl',
-                              theme === 'dark' ? 'bg-red-900/20' : 'bg-red-50'
-                            )}>
-                              <p className="text-xs text-red-500 mb-1">Faltantes</p>
-                              <p className="text-xl font-bold text-red-500">
-                                {formatCurrency(selectedCount.totalShortageValue)}
-                              </p>
-                            </div>
-                          )}
-                          {selectedCount.totalExcessValue > 0 && (
-                            <div className={cn(
-                              'p-4 rounded-xl',
-                              theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50'
-                            )}>
-                              <p className="text-xs text-emerald-500 mb-1">Sobrantes</p>
-                              <p className="text-xl font-bold text-emerald-500">
-                                {formatCurrency(selectedCount.totalExcessValue)}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                      {[
-                        {
-                          label: 'Productos',
-                          value: selectedCount.totalProducts,
-                          icon: Package,
-                          color: 'blue',
-                          suffix: 'items'
-                        },
-                        {
-                          label: 'Stock Costo',
-                          value: formatCurrency(selectedCount.totalStockAtCost),
-                          icon: TrendingDown,
-                          color: 'purple'
-                        },
-                        {
-                          label: 'Stock Venta',
-                          value: formatCurrency(selectedCount.totalStockAtSale),
-                          icon: TrendingUp,
-                          color: 'emerald'
-                        },
-                        {
-                          label: 'Con Diferencias',
-                          value: selectedCount.productsWithDifferences,
-                          icon: AlertTriangle,
-                          color: 'amber',
-                          highlight: selectedCount.productsWithDifferences > 0
-                        }
-                      ].map((stat, idx) => (
-                        <motion.div
-                          key={stat.label}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: idx * 0.1 }}
-                          className={cn(
-                            'p-5 rounded-2xl border relative overflow-hidden group',
-                            theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm',
-                            stat.highlight && 'ring-2 ring-amber-500/30'
-                          )}
-                        >
-                          <div className={cn(
-                            'absolute -right-4 -top-4 w-20 h-20 rounded-full opacity-10 group-hover:opacity-20 transition-opacity',
-                            stat.color === 'blue' && 'bg-blue-500',
-                            stat.color === 'purple' && 'bg-purple-500',
-                            stat.color === 'emerald' && 'bg-emerald-500',
-                            stat.color === 'amber' && 'bg-amber-500'
-                          )} />
-
-                          <div className="relative">
-                            <div className={cn(
-                              'w-10 h-10 rounded-xl flex items-center justify-center mb-3',
-                              stat.color === 'blue' && (theme === 'dark' ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'),
-                              stat.color === 'purple' && (theme === 'dark' ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600'),
-                              stat.color === 'emerald' && (theme === 'dark' ? 'bg-emerald-900/50 text-emerald-400' : 'bg-emerald-100 text-emerald-600'),
-                              stat.color === 'amber' && (theme === 'dark' ? 'bg-amber-900/50 text-amber-400' : 'bg-amber-100 text-amber-600')
-                            )}>
-                              <stat.icon className="w-5 h-5" />
-                            </div>
-                            <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
-                            <p className={cn(
-                              'text-2xl font-bold',
-                              theme === 'dark' ? 'text-white' : 'text-gray-900'
-                            )}>
-                              {stat.value}
-                              {stat.suffix && <span className="text-sm font-normal text-gray-500 ml-1">{stat.suffix}</span>}
-                            </p>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-
-                    {/* Info Cards Grid */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                      {/* Audit Info Card */}
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
-                        className={cn(
-                          'p-6 rounded-2xl border',
-                          theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
-                        )}
-                      >
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className={cn(
-                            'p-2 rounded-xl',
-                            theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'
-                          )}>
-                            <ClipboardCheck className="w-5 h-5 text-purple-500" />
-                          </div>
-                          <h3 className={cn(
-                            'font-semibold',
-                            theme === 'dark' ? 'text-white' : 'text-gray-900'
-                          )}>Información del Conteo</h3>
-                        </div>
-
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-500">Almacén:</span>
-                            <span className={cn(
-                              'font-medium',
-                              theme === 'dark' ? 'text-white' : 'text-gray-900'
-                            )}>{selectedCount.warehouseName}</span>
-                          </div>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-500">Contado por:</span>
-                            <span className={cn(
-                              'font-medium',
-                              theme === 'dark' ? 'text-white' : 'text-gray-900'
-                            )}>{selectedCount.countedByName}</span>
-                          </div>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-500">Inicio:</span>
-                            <span className={cn(
-                              'font-medium',
-                              theme === 'dark' ? 'text-white' : 'text-gray-900'
-                            )}>{formatDate(selectedCount.startedAt)}</span>
-                          </div>
-                          {selectedCount.completedAt && (
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-gray-500">Completado:</span>
-                              <span className="text-emerald-500 font-medium">{formatDate(selectedCount.completedAt)}</span>
-                            </div>
-                          )}
-                        </div>
-                      </motion.div>
-
-                      {/* Summary Card */}
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.3 }}
-                        className={cn(
-                          'p-6 rounded-2xl border',
-                          theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
-                        )}
-                      >
-                        <div className="flex items-center justify-between mb-6">
-                          <h3 className={cn(
-                            'font-semibold',
-                            theme === 'dark' ? 'text-white' : 'text-gray-900'
-                          )}>Resumen de Diferencias</h3>
-                          <span className={cn(
-                            'px-3 py-1 rounded-lg text-sm font-medium',
-                            selectedCount.productsWithDifferences === 0
-                              ? theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
-                              : theme === 'dark' ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-600'
-                          )}>
-                            {selectedCount.productsWithDifferences === 0 ? 'Sin diferencias' : `${selectedCount.productsWithDifferences} productos`}
-                          </span>
-                        </div>
-
-                        {/* Progress Bar */}
-                        <div className={cn(
-                          'h-4 rounded-full overflow-hidden mb-6',
-                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                        )}>
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${selectedCount.totalProducts > 0 ? ((selectedCount.totalProducts - selectedCount.productsWithDifferences) / selectedCount.totalProducts) * 100 : 100}%` }}
-                            transition={{ duration: 1, ease: 'easeOut' }}
-                            className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full"
-                          />
-                        </div>
-
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-500">Productos correctos</span>
-                            <span className="text-sm font-medium text-emerald-500">
-                              {selectedCount.totalProducts - selectedCount.productsWithDifferences}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-500">Faltantes (valor)</span>
-                            <span className={cn(
-                              'text-sm font-medium',
-                              selectedCount.totalShortageValue > 0 ? 'text-red-500' : 'text-gray-400'
-                            )}>
-                              {selectedCount.totalShortageValue > 0 ? formatCurrency(selectedCount.totalShortageValue) : '-'}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-500">Sobrantes (valor)</span>
-                            <span className={cn(
-                              'text-sm font-medium',
-                              selectedCount.totalExcessValue > 0 ? 'text-emerald-500' : 'text-gray-400'
-                            )}>
-                              {selectedCount.totalExcessValue > 0 ? formatCurrency(selectedCount.totalExcessValue) : '-'}
-                            </span>
-                          </div>
-                        </div>
-                      </motion.div>
-                    </div>
-
-                    {/* Products Table */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.4 }}
-                      className={cn(
-                        'rounded-2xl border overflow-hidden',
-                        theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
-                      )}
-                    >
-                      <div className={cn(
-                        'px-6 py-4 border-b flex items-center justify-between',
-                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                      )}>
-                        <div className="flex items-center gap-3">
-                          <div className={cn(
-                            'p-2 rounded-xl',
-                            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                          )}>
-                            <Package className="w-5 h-5 text-gray-500" />
-                          </div>
-                          <div>
-                            <h3 className={cn(
-                              'font-semibold',
-                              theme === 'dark' ? 'text-white' : 'text-gray-900'
-                            )}>Productos Contados</h3>
-                            <p className="text-sm text-gray-500">{selectedCount.lines?.length || 0} productos en este conteo</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead className={cn(
-                            theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
-                          )}>
-                            <tr>
-                              <th className="text-left py-4 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Producto</th>
-                              <th className="text-right py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">P.Costo</th>
-                              <th className="text-right py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">P.Venta</th>
-                              <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sistema</th>
-                              <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Contado</th>
-                              <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Diferencia</th>
-                              <th className="text-right py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Valor Dif.</th>
-                            </tr>
-                          </thead>
-                          <tbody className={cn(
-                            'divide-y',
-                            theme === 'dark' ? 'divide-gray-700' : 'divide-gray-100'
-                          )}>
-                            {selectedCount.lines?.map((line, idx) => (
-                              <motion.tr
-                                key={idx}
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: 0.05 * idx }}
-                                className={cn(
-                                  'group transition-colors',
-                                  theme === 'dark' ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50',
-                                  line.difference !== 0 && (
-                                    line.difference > 0
-                                      ? theme === 'dark' ? 'bg-red-950/10' : 'bg-red-50/50'
-                                      : theme === 'dark' ? 'bg-emerald-950/10' : 'bg-emerald-50/50'
-                                  )
-                                )}
-                              >
-                                <td className="py-4 px-6">
-                                  <div className="flex items-center gap-4">
-                                    <div className={cn(
-                                      'w-12 h-12 rounded-xl overflow-hidden shrink-0',
-                                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                                    )}>
-                                      {line.productImage ? (
-                                        <Image
-                                          src={line.productImage}
-                                          alt={line.productName}
-                                          width={48}
-                                          height={48}
-                                          className="w-full h-full object-cover"
-                                        />
-                                      ) : (
-                                        <div className="w-full h-full flex items-center justify-center">
-                                          <Package className="w-5 h-5 text-gray-400" />
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div className="min-w-0">
-                                      <p className={cn(
-                                        'font-medium truncate max-w-[200px]',
-                                        theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                      )}>{line.productName}</p>
-                                      <p className="text-xs text-gray-500 font-mono">
-                                        SKU: {line.productSku}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="py-4 px-4 text-right">
-                                  <span className="text-gray-500">{formatCurrency(line.costPrice)}</span>
-                                </td>
-                                <td className="py-4 px-4 text-right">
-                                  <span className="text-gray-500">{formatCurrency(line.sellingPrice)}</span>
-                                </td>
-                                <td className="py-4 px-4 text-center">
-                                  <span className={cn(
-                                    'text-lg font-semibold',
-                                    theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-                                  )}>{line.systemQuantity}</span>
-                                </td>
-                                <td className="py-4 px-4 text-center">
-                                  <span className={cn(
-                                    'inline-flex items-center justify-center w-10 h-10 rounded-xl font-semibold',
-                                    theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-900'
-                                  )}>
-                                    {line.countedQuantity}
-                                  </span>
-                                </td>
-                                <td className="py-4 px-4 text-center">
-                                  <span className={cn(
-                                    'inline-flex items-center gap-1 px-3 py-1.5 rounded-lg font-bold',
-                                    line.difference > 0
-                                      ? theme === 'dark' ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700'
-                                      : line.difference < 0
-                                        ? theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
-                                        : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
-                                  )}>
-                                    {line.difference > 0 && <TrendingDown className="w-3.5 h-3.5" />}
-                                    {line.difference < 0 && <TrendingUp className="w-3.5 h-3.5" />}
-                                    {line.difference === 0 && <Minus className="w-3.5 h-3.5" />}
-                                    {line.difference > 0 ? `-${line.difference}` :
-                                     line.difference < 0 ? `+${Math.abs(line.difference)}` :
-                                     '0'}
-                                  </span>
-                                </td>
-                                <td className="py-4 px-4 text-right">
-                                  <span className={cn(
-                                    'font-semibold',
-                                    line.differenceValueCost > 0 ? 'text-red-500' :
-                                    line.differenceValueCost < 0 ? 'text-emerald-500' :
-                                    'text-gray-400'
-                                  )}>
-                                    {line.differenceValueCost !== 0
-                                      ? formatCurrency(Math.abs(line.differenceValueCost))
-                                      : '-'}
-                                  </span>
-                                </td>
-                              </motion.tr>
-                            ))}
-                          </tbody>
-                          {/* Table Footer */}
-                          <tfoot className={cn(
-                            'border-t-2',
-                            theme === 'dark' ? 'border-gray-600 bg-gray-900/50' : 'border-gray-200 bg-gray-50'
-                          )}>
-                            <tr>
-                              <td colSpan={5} className="py-4 px-6 text-right font-semibold text-gray-500">
-                                Diferencia Total:
-                              </td>
-                              <td colSpan={2} className="py-4 px-4 text-right">
-                                <div className="flex items-center justify-end gap-4">
-                                  {selectedCount.totalShortageValue > 0 && (
-                                    <span className="text-lg font-bold text-red-500">
-                                      -{formatCurrency(selectedCount.totalShortageValue)}
-                                    </span>
-                                  )}
-                                  {selectedCount.totalExcessValue > 0 && (
-                                    <span className="text-lg font-bold text-emerald-500">
-                                      +{formatCurrency(selectedCount.totalExcessValue)}
-                                    </span>
-                                  )}
-                                  {selectedCount.totalShortageValue === 0 && selectedCount.totalExcessValue === 0 && (
-                                    <span className="text-lg font-bold text-gray-400">$0.00</span>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          </tfoot>
-                        </table>
-                      </div>
-                    </motion.div>
-
-                  </motion.div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
       </DashboardLayout>
     </ProtectedRoute>
