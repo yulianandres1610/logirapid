@@ -142,6 +142,11 @@ export default function InventoryCountsPage() {
   }
 
   const openDetailModal = (count: InventoryCount) => {
+    // Navigate to detail page instead of opening modal
+    router.push(`/dashboard/market/pos/inventory-counts/${count.id}`)
+  }
+
+  const openDetailModalLegacy = (count: InventoryCount) => {
     setSelectedCount(count)
     setShowDetailModal(true)
     fetchCountLines(count.id)
