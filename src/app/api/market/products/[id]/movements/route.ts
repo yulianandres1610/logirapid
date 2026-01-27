@@ -66,11 +66,12 @@ export async function GET(
     // Get all movements from different sources
     const movements: Movement[] = []
 
-    // 1. Get purchases (entries)
+    // 1. Get purchases (entries) - filter for base product only (no variant)
     try {
       const purchasesResult = await db.query(`
         SELECT
-          mp.id,
+          mpl.id as line_id,
+          mp.id as purchase_id,
           mp.purchase_number,
           mp.status,
           mp.created_at,
@@ -88,6 +89,7 @@ export async function GET(
         LEFT JOIN market_suppliers s ON s.id = mp.supplier_id
         WHERE mpl.product_id = $1 AND mp.company_id = $2
           AND mp.status IN ('recibido', 'received', 'completed', 'parcial')
+          AND mpl.variant_id IS NULL
         ORDER BY COALESCE(mp.received_at, mp.created_at) DESC
         LIMIT $3
       `, [productId, payload.companyId, limit])
@@ -96,14 +98,14 @@ export async function GET(
         const qty = parseFloat(row.quantity_received) || parseFloat(row.quantity) || 0
         if (qty > 0) {
           movements.push({
-            id: `purchase-${row.id}`,
+            id: `purchase-${row.line_id}`,
             type: 'purchase',
             typeLabel: 'Compra',
             date: row.received_at || row.created_at,
             quantity: qty,
             direction: 'in',
-            reference: row.purchase_number || `PO-${row.id}`,
-            referenceId: row.id,
+            reference: row.purchase_number || `PO-${row.purchase_id}`,
+            referenceId: row.purchase_id,
             warehouseName: row.warehouse_name,
             sourceWarehouse: row.supplier_name || 'Proveedor',
             destWarehouse: row.warehouse_name,
@@ -118,11 +120,12 @@ export async function GET(
       console.error('[Product Movements] Error fetching purchases:', error)
     }
 
-    // 2. Get warehouse transfers (both directions)
+    // 2. Get warehouse transfers (both directions) - filter for base product only
     try {
       const transfersResult = await db.query(`
         SELECT
-          mwo.id,
+          mwol.id as line_id,
+          mwo.id as operation_id,
           mwo.operation_number,
           mwo.operation_type,
           mwo.status,
@@ -144,6 +147,7 @@ export async function GET(
         WHERE mwol.product_id = $1 AND mwo.company_id = $2
           AND mwo.operation_type = 'transfer'
           AND mwo.status IN ('done', 'completed', 'validated', 'confirmed')
+          AND mwol.variant_id IS NULL
         ORDER BY COALESCE(mwo.completed_at, mwo.created_at) DESC
         LIMIT $3
       `, [productId, payload.companyId, limit])
@@ -154,14 +158,14 @@ export async function GET(
           // Add as exit from source
           if (row.source_warehouse) {
             movements.push({
-              id: `transfer-out-${row.id}`,
+              id: `transfer-out-${row.line_id}`,
               type: 'transfer_out',
               typeLabel: 'Transferencia (Salida)',
               date: row.completed_at || row.created_at,
               quantity: qty,
               direction: 'out',
-              reference: row.operation_number || `TRF-${row.id}`,
-              referenceId: row.id,
+              reference: row.operation_number || `TRF-${row.operation_id}`,
+              referenceId: row.operation_id,
               warehouseName: row.source_warehouse,
               sourceWarehouse: row.source_warehouse,
               destWarehouse: row.dest_warehouse,
@@ -175,14 +179,14 @@ export async function GET(
           // Add as entry to destination
           if (row.dest_warehouse) {
             movements.push({
-              id: `transfer-in-${row.id}`,
+              id: `transfer-in-${row.line_id}`,
               type: 'transfer_in',
               typeLabel: 'Transferencia (Entrada)',
               date: row.completed_at || row.created_at,
               quantity: qty,
               direction: 'in',
-              reference: row.operation_number || `TRF-${row.id}`,
-              referenceId: row.id,
+              reference: row.operation_number || `TRF-${row.operation_id}`,
+              referenceId: row.operation_id,
               warehouseName: row.dest_warehouse,
               sourceWarehouse: row.source_warehouse,
               destWarehouse: row.dest_warehouse,
@@ -198,15 +202,17 @@ export async function GET(
       console.error('[Product Movements] Error fetching transfers:', error)
     }
 
-    // 3. Get POS sales (exits)
+    // 3. Get POS sales (exits) - use line ID for unique identification
     try {
       const salesResult = await db.query(`
         SELECT
-          mpo.id,
+          mpol.id as line_id,
+          mpo.id as order_id,
           mpo.order_number,
           mpo.status,
           mpo.created_at,
           mpol.quantity,
+          mpol.variant_id,
           mw.id as warehouse_id,
           mw.name as warehouse_name,
           COALESCE(u.firstname || ' ' || u.lastname, u.email) as user_name,
@@ -218,6 +224,7 @@ export async function GET(
         LEFT JOIN market_pos_terminals t ON t.id = mpo.pos_terminal_id
         WHERE mpol.product_id = $1 AND mpo.company_id = $2
           AND mpo.status IN ('paid', 'completed')
+          AND mpol.variant_id IS NULL
         ORDER BY mpo.created_at DESC
         LIMIT $3
       `, [productId, payload.companyId, limit])
@@ -226,14 +233,14 @@ export async function GET(
         const qty = parseFloat(row.quantity) || 0
         if (qty > 0) {
           movements.push({
-            id: `sale-${row.id}`,
+            id: `sale-${row.line_id}`,
             type: 'sale',
             typeLabel: 'Venta POS',
             date: row.created_at,
             quantity: qty,
             direction: 'out',
-            reference: row.order_number || `ORD-${row.id}`,
-            referenceId: row.id,
+            reference: row.order_number || `ORD-${row.order_id}`,
+            referenceId: row.order_id,
             warehouseName: row.warehouse_name,
             sourceWarehouse: row.warehouse_name,
             destWarehouse: row.terminal_name || 'Cliente',
