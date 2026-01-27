@@ -558,17 +558,33 @@ function PaymentContent() {
   // Tolerancia de 1 centavo para diferencias de conversión CUP/MLC
   const isFullyPaid = remainingUSD <= 0.01
 
-  // Calculate change - valor exacto sin redondear
+  // Calculate total paid in CUP (suma directa de pagos CUP, sin conversiones)
+  const totalPaidCUP = useMemo(() => {
+    return payments.reduce((sum, p) => {
+      if (p.currency === 'CUP') {
+        return sum + p.amount  // Usar monto original en CUP
+      } else if (p.currency === 'USD') {
+        return sum + roundCUP(p.amount * rates.CUP_BCC)
+      } else if (p.currency === 'MLC') {
+        return sum + roundCUP((p.amount / rates.MLC) * rates.CUP_BCC)
+      }
+      return sum
+    }, 0)
+  }, [payments, rates])
+
+  // Calculate change - usar CUP directamente cuando aplique para evitar errores de redondeo
   const changeAmount = useMemo(() => {
     if (remainingUSD < -0.01) {
-      const changeUSD = Math.abs(remainingUSD)
       if (changeCurrency === 'CUP') {
-        return roundCUP(changeUSD * rates.CUP_BCC)  // Redondear al múltiplo de 5
+        // Calcular cambio directamente en CUP: pagado - total
+        const changeCUP = totalPaidCUP - totals.totalCUP
+        return Math.max(0, roundCUP(changeCUP))
       }
-      return changeUSD
+      // Para USD, usar el cálculo normal
+      return Math.abs(remainingUSD)
     }
     return 0
-  }, [remainingUSD, changeCurrency, rates])
+  }, [remainingUSD, changeCurrency, totalPaidCUP, totals.totalCUP])
 
   // Convert amount to USD (usando tasa BCC para venta)
   const convertToUSD = (amount: number, currency: 'USD' | 'CUP' | 'MLC'): number => {
@@ -1158,7 +1174,7 @@ function PaymentContent() {
                       changeCurrency === 'CUP' ? 'bg-blue-500 text-white' : tc.button
                     }`}
                   >
-                    CUP ({formatCurrency(roundCUP(Math.abs(remainingUSD) * rates.CUP_BCC), 'CUP')})
+                    CUP ({formatCurrency(Math.max(0, roundCUP(totalPaidCUP - totals.totalCUP)), 'CUP')})
                   </button>
                 </div>
               </div>
