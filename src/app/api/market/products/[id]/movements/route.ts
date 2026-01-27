@@ -281,6 +281,120 @@ export async function GET(
       }
     }
 
+    // 5. Get manual adjustments (from warehouse operations)
+    const adjustmentsResult = await db.query(`
+      SELECT
+        mwo.id,
+        mwo.operation_number,
+        mwo.operation_type,
+        mwo.status,
+        mwo.created_at,
+        mwo.completed_at,
+        mwol.quantity_planned,
+        mwol.quantity_done,
+        mwol.scrap_reason,
+        sw.id as warehouse_id,
+        sw.name as warehouse_name,
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as user_name,
+        mwo.notes
+      FROM market_warehouse_operation_lines mwol
+      JOIN market_warehouse_operations mwo ON mwo.id = mwol.operation_id
+      LEFT JOIN market_warehouses sw ON sw.id = mwo.source_warehouse_id
+      LEFT JOIN users u ON u.id = mwo.created_by
+      WHERE mwol.product_id = $1 AND mwo.company_id = $2
+        AND mwo.operation_type = 'adjustment'
+        AND mwo.status IN ('done', 'completed')
+      ORDER BY COALESCE(mwo.completed_at, mwo.created_at) DESC
+      LIMIT $3
+    `, [productId, payload.companyId, limit])
+
+    for (const row of adjustmentsResult.rows) {
+      const qty = parseFloat(row.quantity_done) || parseFloat(row.quantity_planned) || 0
+      if (qty !== 0) {
+        // Adjustments can be positive or negative based on notes or context
+        // By default, we treat them as reductions (out) unless notes indicate otherwise
+        const isPositive = row.notes?.toLowerCase().includes('entrada') ||
+                          row.notes?.toLowerCase().includes('agregar') ||
+                          row.notes?.toLowerCase().includes('añadir')
+        movements.push({
+          id: `adjustment-${row.id}`,
+          type: 'adjustment',
+          typeLabel: isPositive ? 'Ajuste Manual (+)' : 'Ajuste Manual (-)',
+          date: row.completed_at || row.created_at,
+          quantity: Math.abs(qty),
+          direction: isPositive ? 'in' : 'out',
+          reference: row.operation_number,
+          referenceId: row.id,
+          warehouseName: row.warehouse_name,
+          sourceWarehouse: isPositive ? 'Ajuste' : row.warehouse_name,
+          destWarehouse: isPositive ? row.warehouse_name : 'Ajuste',
+          userName: row.user_name,
+          status: row.status,
+          notes: row.notes,
+          stockAfter: null
+        })
+      }
+    }
+
+    // 6. Get scrap/waste (from warehouse operations)
+    const scrapResult = await db.query(`
+      SELECT
+        mwo.id,
+        mwo.operation_number,
+        mwo.operation_type,
+        mwo.status,
+        mwo.created_at,
+        mwo.completed_at,
+        mwol.quantity_planned,
+        mwol.quantity_done,
+        mwol.scrap_reason,
+        sw.id as warehouse_id,
+        sw.name as warehouse_name,
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as user_name,
+        mwo.notes
+      FROM market_warehouse_operation_lines mwol
+      JOIN market_warehouse_operations mwo ON mwo.id = mwol.operation_id
+      LEFT JOIN market_warehouses sw ON sw.id = mwo.source_warehouse_id
+      LEFT JOIN users u ON u.id = mwo.created_by
+      WHERE mwol.product_id = $1 AND mwo.company_id = $2
+        AND mwo.operation_type = 'scrap'
+        AND mwo.status IN ('done', 'completed')
+      ORDER BY COALESCE(mwo.completed_at, mwo.created_at) DESC
+      LIMIT $3
+    `, [productId, payload.companyId, limit])
+
+    const SCRAP_REASON_LABELS: Record<string, string> = {
+      damaged: 'Dañado',
+      expired: 'Vencido',
+      defective: 'Defectuoso',
+      theft_loss: 'Robo/Pérdida',
+      other: 'Otro'
+    }
+
+    for (const row of scrapResult.rows) {
+      const qty = parseFloat(row.quantity_done) || parseFloat(row.quantity_planned) || 0
+      if (qty > 0) {
+        const reasonLabel = SCRAP_REASON_LABELS[row.scrap_reason] || row.scrap_reason || 'Scrap'
+        movements.push({
+          id: `scrap-${row.id}`,
+          type: 'scrap',
+          typeLabel: `Scrap (${reasonLabel})`,
+          date: row.completed_at || row.created_at,
+          quantity: qty,
+          direction: 'out',
+          reference: row.operation_number,
+          referenceId: row.id,
+          warehouseName: row.warehouse_name,
+          sourceWarehouse: row.warehouse_name,
+          destWarehouse: 'Merma',
+          userName: row.user_name,
+          status: row.status,
+          notes: row.notes || `Motivo: ${reasonLabel}`,
+          stockAfter: null
+        })
+      }
+    }
+
     // Sort all movements by date descending
     movements.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
@@ -333,7 +447,9 @@ export async function GET(
           purchaseCount: movements.filter(m => m.type === 'purchase').length,
           saleCount: movements.filter(m => m.type === 'sale').length,
           transferCount: movements.filter(m => m.type.startsWith('transfer')).length / 2,
-          auditCount: movements.filter(m => m.type === 'audit').length
+          auditCount: movements.filter(m => m.type === 'audit').length,
+          adjustmentCount: movements.filter(m => m.type === 'adjustment').length,
+          scrapCount: movements.filter(m => m.type === 'scrap').length
         }
       }
     })

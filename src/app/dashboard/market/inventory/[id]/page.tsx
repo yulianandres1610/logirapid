@@ -38,7 +38,9 @@ import {
   Receipt,
   Repeat,
   ClipboardCheck,
-  ExternalLink
+  ExternalLink,
+  Settings,
+  Trash2
 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -220,6 +222,8 @@ interface MovementSummary {
   saleCount: number
   transferCount: number
   auditCount: number
+  adjustmentCount: number
+  scrapCount: number
 }
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -1767,7 +1771,7 @@ export default function ProductDetailPage() {
                         <>
                           {/* Summary Stats */}
                           {movementSummary && (
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
                               <div className={cn(
                                 'p-3 rounded-xl text-center',
                                 theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'
@@ -1777,9 +1781,9 @@ export default function ProductDetailPage() {
                               </div>
                               <div className={cn(
                                 'p-3 rounded-xl text-center',
-                                theme === 'dark' ? 'bg-red-900/20' : 'bg-red-50'
+                                theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50'
                               )}>
-                                <p className="text-2xl font-bold text-red-600">{movementSummary.saleCount}</p>
+                                <p className="text-2xl font-bold text-emerald-600">{movementSummary.saleCount}</p>
                                 <p className="text-xs text-gray-500">Ventas</p>
                               </div>
                               <div className={cn(
@@ -1794,7 +1798,21 @@ export default function ProductDetailPage() {
                                 theme === 'dark' ? 'bg-amber-900/20' : 'bg-amber-50'
                               )}>
                                 <p className="text-2xl font-bold text-amber-600">{movementSummary.auditCount}</p>
+                                <p className="text-xs text-gray-500">Auditorías</p>
+                              </div>
+                              <div className={cn(
+                                'p-3 rounded-xl text-center',
+                                theme === 'dark' ? 'bg-cyan-900/20' : 'bg-cyan-50'
+                              )}>
+                                <p className="text-2xl font-bold text-cyan-600">{movementSummary.adjustmentCount || 0}</p>
                                 <p className="text-xs text-gray-500">Ajustes</p>
+                              </div>
+                              <div className={cn(
+                                'p-3 rounded-xl text-center',
+                                theme === 'dark' ? 'bg-red-900/20' : 'bg-red-50'
+                              )}>
+                                <p className="text-2xl font-bold text-red-600">{movementSummary.scrapCount || 0}</p>
+                                <p className="text-xs text-gray-500">Scrap</p>
                               </div>
                             </div>
                           )}
@@ -1842,6 +1860,8 @@ export default function ProductDetailPage() {
                                   case 'transfer_in':
                                   case 'transfer_out': return <Repeat className="w-4 h-4" />
                                   case 'audit': return <ClipboardCheck className="w-4 h-4" />
+                                  case 'adjustment': return <Settings className="w-4 h-4" />
+                                  case 'scrap': return <Trash2 className="w-4 h-4" />
                                   default: return <Package className="w-4 h-4" />
                                 }
                               }
