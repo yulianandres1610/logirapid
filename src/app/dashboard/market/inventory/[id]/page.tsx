@@ -1769,214 +1769,275 @@ export default function ProductDetailPage() {
                         </div>
                       ) : (
                         <>
-                          {/* Summary Stats */}
+                          {/* Summary Stats - Compact Horizontal */}
                           {movementSummary && (
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-                              <div className={cn(
-                                'p-3 rounded-xl text-center',
-                                theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'
-                              )}>
-                                <p className="text-2xl font-bold text-blue-600">{movementSummary.purchaseCount}</p>
-                                <p className="text-xs text-gray-500">Compras</p>
-                              </div>
-                              <div className={cn(
-                                'p-3 rounded-xl text-center',
-                                theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50'
-                              )}>
-                                <p className="text-2xl font-bold text-emerald-600">{movementSummary.saleCount}</p>
-                                <p className="text-xs text-gray-500">Ventas</p>
-                              </div>
-                              <div className={cn(
-                                'p-3 rounded-xl text-center',
-                                theme === 'dark' ? 'bg-purple-900/20' : 'bg-purple-50'
-                              )}>
-                                <p className="text-2xl font-bold text-purple-600">{movementSummary.transferCount}</p>
-                                <p className="text-xs text-gray-500">Transferencias</p>
-                              </div>
-                              <div className={cn(
-                                'p-3 rounded-xl text-center',
-                                theme === 'dark' ? 'bg-amber-900/20' : 'bg-amber-50'
-                              )}>
-                                <p className="text-2xl font-bold text-amber-600">{movementSummary.auditCount}</p>
-                                <p className="text-xs text-gray-500">Auditorías</p>
-                              </div>
-                              <div className={cn(
-                                'p-3 rounded-xl text-center',
-                                theme === 'dark' ? 'bg-cyan-900/20' : 'bg-cyan-50'
-                              )}>
-                                <p className="text-2xl font-bold text-cyan-600">{movementSummary.adjustmentCount || 0}</p>
-                                <p className="text-xs text-gray-500">Ajustes</p>
-                              </div>
-                              <div className={cn(
-                                'p-3 rounded-xl text-center',
-                                theme === 'dark' ? 'bg-red-900/20' : 'bg-red-50'
-                              )}>
-                                <p className="text-2xl font-bold text-red-600">{movementSummary.scrapCount || 0}</p>
-                                <p className="text-xs text-gray-500">Scrap</p>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Current Stock by Warehouse */}
-                          {Object.keys(currentWarehouseStock).length > 0 && (
                             <div className={cn(
-                              'mb-6 p-4 rounded-xl border',
-                              theme === 'dark' ? 'bg-gray-700/30 border-gray-600' : 'bg-gray-50 border-gray-200'
+                              'flex items-center gap-6 mb-6 pb-4 border-b overflow-x-auto',
+                              theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                             )}>
-                              <p className={cn(
-                                'text-sm font-semibold mb-3',
-                                theme === 'dark' ? 'text-white' : 'text-gray-900'
-                              )}>Stock Actual por Almacén</p>
-                              <div className="flex flex-wrap gap-3">
-                                {Object.entries(currentWarehouseStock).map(([wh, data]) => (
-                                  <div key={wh} className={cn(
-                                    'px-3 py-2 rounded-lg',
-                                    theme === 'dark' ? 'bg-gray-800' : 'bg-white border border-gray-200'
-                                  )}>
-                                    <p className="text-xs text-gray-500">{wh}</p>
-                                    <p className={cn(
-                                      'text-lg font-bold',
-                                      data.onHand === 0 ? 'text-red-500' : 'text-emerald-600'
-                                    )}>
-                                      {formatNumber(data.onHand)}
-                                    </p>
-                                    {data.reserved > 0 && (
-                                      <p className="text-xs text-amber-500">Reservado: {formatNumber(data.reserved)}</p>
-                                    )}
-                                  </div>
-                                ))}
+                              <div className="flex items-center gap-2 shrink-0">
+                                <div className={cn('p-1.5 rounded-lg', theme === 'dark' ? 'bg-green-900/30' : 'bg-green-100')}>
+                                  <ArrowDownRight className="w-4 h-4 text-green-500" />
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500">Entradas</p>
+                                  <p className="text-lg font-bold text-green-600">+{formatNumber(movementSummary.totalIn)}</p>
+                                </div>
                               </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <div className={cn('p-1.5 rounded-lg', theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100')}>
+                                  <ArrowUpRight className="w-4 h-4 text-red-500" />
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500">Salidas</p>
+                                  <p className="text-lg font-bold text-red-600">-{formatNumber(movementSummary.totalOut)}</p>
+                                </div>
+                              </div>
+                              <div className="h-8 w-px bg-gray-600 shrink-0" />
+                              {movementSummary.purchaseCount > 0 && (
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <ShoppingCart className="w-4 h-4 text-blue-500" />
+                                  <span className="text-sm"><span className="font-semibold text-blue-500">{movementSummary.purchaseCount}</span> <span className="text-gray-500">compras</span></span>
+                                </div>
+                              )}
+                              {movementSummary.saleCount > 0 && (
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <Receipt className="w-4 h-4 text-emerald-500" />
+                                  <span className="text-sm"><span className="font-semibold text-emerald-500">{movementSummary.saleCount}</span> <span className="text-gray-500">ventas</span></span>
+                                </div>
+                              )}
+                              {movementSummary.transferCount > 0 && (
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <Repeat className="w-4 h-4 text-purple-500" />
+                                  <span className="text-sm"><span className="font-semibold text-purple-500">{movementSummary.transferCount}</span> <span className="text-gray-500">transferencias</span></span>
+                                </div>
+                              )}
+                              {(movementSummary.adjustmentCount || 0) > 0 && (
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <Settings className="w-4 h-4 text-cyan-500" />
+                                  <span className="text-sm"><span className="font-semibold text-cyan-500">{movementSummary.adjustmentCount}</span> <span className="text-gray-500">ajustes</span></span>
+                                </div>
+                              )}
+                              {(movementSummary.scrapCount || 0) > 0 && (
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <Trash2 className="w-4 h-4 text-red-400" />
+                                  <span className="text-sm"><span className="font-semibold text-red-400">{movementSummary.scrapCount}</span> <span className="text-gray-500">scrap</span></span>
+                                </div>
+                              )}
                             </div>
                           )}
 
-                          {/* Movements Timeline */}
-                          <div className="space-y-3">
-                            {inventoryMovements.slice(0, 20).map((movement) => {
-                              const isEntry = movement.direction === 'in'
-                              const getMovementIcon = () => {
-                                switch (movement.type) {
-                                  case 'purchase': return <ShoppingCart className="w-4 h-4" />
-                                  case 'sale': return <Receipt className="w-4 h-4" />
+                          {/* Current Stock by Warehouse - Compact Pills */}
+                          {Object.keys(currentWarehouseStock).length > 0 && (
+                            <div className="flex items-center gap-2 mb-6 flex-wrap">
+                              <span className="text-xs text-gray-500 font-medium">Stock actual:</span>
+                              {Object.entries(currentWarehouseStock).map(([wh, data]) => (
+                                <span key={wh} className={cn(
+                                  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium',
+                                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                                )}>
+                                  <Warehouse className="w-3 h-3 text-gray-400" />
+                                  <span className="text-gray-500">{wh}:</span>
+                                  <span className={data.onHand === 0 ? 'text-red-500' : 'text-emerald-600'}>
+                                    {formatNumber(data.onHand)}
+                                  </span>
+                                  {data.reserved > 0 && (
+                                    <span className="text-amber-500">({formatNumber(data.reserved)} res.)</span>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Movements Timeline - Grouped by Date */}
+                          <div className="relative">
+                            {/* Timeline line */}
+                            <div className={cn(
+                              'absolute left-[19px] top-0 bottom-0 w-0.5',
+                              theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                            )} />
+
+                            {/* Group movements by date */}
+                            {(() => {
+                              const today = new Date()
+                              today.setHours(0, 0, 0, 0)
+                              const yesterday = new Date(today)
+                              yesterday.setDate(yesterday.getDate() - 1)
+                              const weekAgo = new Date(today)
+                              weekAgo.setDate(weekAgo.getDate() - 7)
+
+                              const sortedMovements = [...inventoryMovements].sort((a, b) => {
+                                const dateA = new Date(a.date).getTime()
+                                const dateB = new Date(b.date).getTime()
+                                return dateB - dateA
+                              })
+
+                              const grouped: { label: string; movements: typeof inventoryMovements }[] = []
+                              const todayMvts: typeof inventoryMovements = []
+                              const yesterdayMvts: typeof inventoryMovements = []
+                              const thisWeekMvts: typeof inventoryMovements = []
+                              const olderMvts: typeof inventoryMovements = []
+
+                              sortedMovements.slice(0, 30).forEach(m => {
+                                const mDate = new Date(m.date)
+                                mDate.setHours(0, 0, 0, 0)
+                                if (mDate.getTime() === today.getTime()) {
+                                  todayMvts.push(m)
+                                } else if (mDate.getTime() === yesterday.getTime()) {
+                                  yesterdayMvts.push(m)
+                                } else if (mDate >= weekAgo) {
+                                  thisWeekMvts.push(m)
+                                } else {
+                                  olderMvts.push(m)
+                                }
+                              })
+
+                              if (todayMvts.length > 0) grouped.push({ label: 'Hoy', movements: todayMvts })
+                              if (yesterdayMvts.length > 0) grouped.push({ label: 'Ayer', movements: yesterdayMvts })
+                              if (thisWeekMvts.length > 0) grouped.push({ label: 'Esta semana', movements: thisWeekMvts })
+                              if (olderMvts.length > 0) grouped.push({ label: 'Anteriores', movements: olderMvts })
+
+                              const getMovementIcon = (type: string) => {
+                                switch (type) {
+                                  case 'purchase': return <ShoppingCart className="w-3.5 h-3.5" />
+                                  case 'sale': return <Receipt className="w-3.5 h-3.5" />
                                   case 'transfer_in':
-                                  case 'transfer_out': return <Repeat className="w-4 h-4" />
-                                  case 'audit': return <ClipboardCheck className="w-4 h-4" />
-                                  case 'adjustment': return <Settings className="w-4 h-4" />
-                                  case 'scrap': return <Trash2 className="w-4 h-4" />
-                                  default: return <Package className="w-4 h-4" />
+                                  case 'transfer_out': return <Repeat className="w-3.5 h-3.5" />
+                                  case 'audit': return <ClipboardCheck className="w-3.5 h-3.5" />
+                                  case 'adjustment': return <Settings className="w-3.5 h-3.5" />
+                                  case 'scrap': return <Trash2 className="w-3.5 h-3.5" />
+                                  default: return <Package className="w-3.5 h-3.5" />
                                 }
                               }
 
-                              return (
-                                <div
-                                  key={movement.id}
-                                  className={cn(
-                                    'p-4 rounded-xl border transition-all',
-                                    theme === 'dark'
-                                      ? 'bg-gray-900/50 border-gray-700 hover:border-gray-600'
-                                      : 'bg-white border-gray-200 hover:border-gray-300 shadow-sm'
-                                  )}
-                                >
-                                  <div className="flex items-start gap-4">
-                                    {/* Icon */}
+                              const getTimeOnly = (dateStr: string) => {
+                                try {
+                                  return new Date(dateStr).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+                                } catch {
+                                  return ''
+                                }
+                              }
+
+                              const getShortDate = (dateStr: string) => {
+                                try {
+                                  return new Date(dateStr).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+                                } catch {
+                                  return ''
+                                }
+                              }
+
+                              return grouped.map((group, groupIdx) => (
+                                <div key={group.label} className={groupIdx > 0 ? 'mt-6' : ''}>
+                                  {/* Group Header */}
+                                  <div className="flex items-center gap-3 mb-3 relative">
                                     <div className={cn(
-                                      'p-2.5 rounded-xl shrink-0',
-                                      isEntry
-                                        ? theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-600'
-                                        : theme === 'dark' ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-600'
+                                      'w-10 h-10 rounded-full flex items-center justify-center z-10 shrink-0',
+                                      theme === 'dark' ? 'bg-gray-800 border-2 border-gray-600' : 'bg-white border-2 border-gray-300'
                                     )}>
-                                      {getMovementIcon()}
+                                      <Calendar className={cn('w-4 h-4', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')} />
                                     </div>
+                                    <h4 className={cn(
+                                      'text-sm font-semibold uppercase tracking-wide',
+                                      theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                                    )}>{group.label}</h4>
+                                    <div className={cn(
+                                      'flex-1 h-px',
+                                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                                    )} />
+                                  </div>
 
-                                    {/* Info */}
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className={cn(
-                                          'font-medium',
-                                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                        )}>
-                                          {movement.typeLabel}
-                                        </span>
-                                        <span className={cn(
-                                          'px-2 py-0.5 rounded text-xs font-mono',
-                                          theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
-                                        )}>
-                                          {movement.reference}
-                                        </span>
-                                        {movement.userName && (
-                                          <span className="flex items-center gap-1 text-xs text-gray-500">
-                                            <User className="w-3 h-3" />
-                                            {movement.userName}
-                                          </span>
-                                        )}
-                                      </div>
-
-                                      {/* Warehouse Flow */}
-                                      <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
-                                        {movement.sourceWarehouse && (
-                                          <span className={cn(
-                                            'px-2 py-1 rounded-lg text-xs',
-                                            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                                  {/* Movements in Group */}
+                                  <div className="space-y-2 ml-1">
+                                    {group.movements.map((movement) => {
+                                      const isEntry = movement.direction === 'in'
+                                      return (
+                                        <div
+                                          key={movement.id}
+                                          className={cn(
+                                            'flex items-center gap-3 pl-3 py-2 rounded-lg transition-all group cursor-default',
+                                            theme === 'dark' ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'
+                                          )}
+                                        >
+                                          {/* Timeline Dot */}
+                                          <div className={cn(
+                                            'w-8 h-8 rounded-full flex items-center justify-center z-10 shrink-0 transition-transform group-hover:scale-110',
+                                            isEntry
+                                              ? theme === 'dark' ? 'bg-green-900/50 text-green-400' : 'bg-green-100 text-green-600'
+                                              : theme === 'dark' ? 'bg-red-900/50 text-red-400' : 'bg-red-100 text-red-600'
                                           )}>
-                                            {movement.sourceWarehouse}
-                                          </span>
-                                        )}
-                                        {movement.sourceWarehouse && movement.destWarehouse && (
-                                          <ArrowDownRight className={cn(
-                                            'w-4 h-4 rotate-[-45deg]',
-                                            isEntry ? 'text-green-500' : 'text-red-500'
-                                          )} />
-                                        )}
-                                        {movement.destWarehouse && (
-                                          <span className={cn(
-                                            'px-2 py-1 rounded-lg text-xs',
-                                            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                                          )}>
-                                            {movement.destWarehouse}
-                                          </span>
-                                        )}
-                                      </div>
+                                            {getMovementIcon(movement.type)}
+                                          </div>
 
-                                      {/* Notes */}
-                                      {movement.notes && (
-                                        <p className="text-xs text-gray-500 mt-2 italic">{movement.notes}</p>
-                                      )}
+                                          {/* Content */}
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                              <span className={cn(
+                                                'font-medium text-sm',
+                                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                              )}>
+                                                {movement.typeLabel}
+                                              </span>
+                                              <span className={cn(
+                                                'text-xs font-mono',
+                                                theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                                              )}>
+                                                {movement.reference}
+                                              </span>
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                              {(movement.type === 'transfer_in' || movement.type === 'transfer_out') && movement.sourceWarehouse && movement.destWarehouse ? (
+                                                <span className="text-xs text-gray-500">
+                                                  {movement.sourceWarehouse} → {movement.destWarehouse}
+                                                </span>
+                                              ) : movement.warehouseName && (
+                                                <span className="text-xs text-gray-500">
+                                                  {movement.warehouseName}
+                                                </span>
+                                              )}
+                                              {movement.userName && (
+                                                <>
+                                                  <span className="text-gray-600">·</span>
+                                                  <span className="text-xs text-gray-500">{movement.userName}</span>
+                                                </>
+                                              )}
+                                            </div>
+                                          </div>
 
-                                      {/* Stock snapshot */}
-                                      {movement.stockAfter && Object.keys(movement.stockAfter).length > 0 && (
-                                        <div className="flex flex-wrap gap-2 mt-2">
-                                          {Object.entries(movement.stockAfter).map(([wh, qty]) => (
-                                            <span key={wh} className="text-xs text-gray-400">
-                                              {wh}: <span className="font-medium">{formatNumber(qty as number)}</span>
-                                            </span>
-                                          ))}
+                                          {/* Quantity & Time */}
+                                          <div className="text-right shrink-0">
+                                            <p className={cn(
+                                              'text-base font-bold tabular-nums',
+                                              isEntry ? 'text-green-500' : 'text-red-500'
+                                            )}>
+                                              {isEntry ? '+' : '-'}{formatNumber(movement.quantity)}
+                                            </p>
+                                            <p className="text-xs text-gray-500">
+                                              {group.label === 'Hoy' || group.label === 'Ayer'
+                                                ? getTimeOnly(movement.date)
+                                                : getShortDate(movement.date)
+                                              }
+                                            </p>
+                                          </div>
                                         </div>
-                                      )}
-                                    </div>
-
-                                    {/* Quantity */}
-                                    <div className="text-right shrink-0">
-                                      <p className={cn(
-                                        'text-xl font-bold',
-                                        isEntry ? 'text-green-600' : 'text-red-600'
-                                      )}>
-                                        {isEntry ? '+' : '-'}{formatNumber(movement.quantity)}
-                                      </p>
-                                      <p className="text-xs text-gray-500 mt-1">
-                                        {formatDateTime(movement.date)}
-                                      </p>
-                                    </div>
+                                      )
+                                    })}
                                   </div>
                                 </div>
-                              )
-                            })}
+                              ))
+                            })()}
 
-                            {inventoryMovements.length > 20 && (
-                              <p className={cn(
-                                'text-center text-sm py-3',
-                                theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
-                              )}>
-                                +{inventoryMovements.length - 20} movimientos más
-                              </p>
+                            {inventoryMovements.length > 30 && (
+                              <div className="flex items-center gap-3 mt-4 ml-1 pl-3">
+                                <div className={cn(
+                                  'w-8 h-8 rounded-full flex items-center justify-center z-10',
+                                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                                )}>
+                                  <span className="text-xs text-gray-500">...</span>
+                                </div>
+                                <p className="text-sm text-gray-500">
+                                  +{inventoryMovements.length - 30} movimientos anteriores
+                                </p>
+                              </div>
                             )}
                           </div>
                         </>
