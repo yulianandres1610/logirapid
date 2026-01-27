@@ -250,50 +250,61 @@ export async function GET(
 
     // 4. Get audit adjustments
     try {
-      const auditsResult = await db.query(`
-        SELECT
-          ac.id,
-          ac.count_number,
-          ac.status,
-          ac.applied_at,
-          acl.system_quantity,
-          acl.counted_quantity,
-          acl.difference,
-          mw.id as warehouse_id,
-          mw.name as warehouse_name,
-          COALESCE(u.firstname || ' ' || u.lastname, u.email) as user_name,
-          ac.notes
-        FROM audit_count_lines acl
-        JOIN audit_counts ac ON ac.id = acl.count_id
-        LEFT JOIN market_warehouses mw ON mw.id = ac.warehouse_id
-        LEFT JOIN users u ON u.id = ac.created_by
-        WHERE acl.product_id = $1 AND ac.company_id = $2
-          AND ac.status = 'applied'
-          AND acl.difference != 0
-        ORDER BY ac.applied_at DESC
-        LIMIT $3
-      `, [productId, payload.companyId, limit])
+      // First check if audit_counts table exists
+      const tableCheck = await db.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables
+          WHERE table_name = 'audit_counts'
+        ) as exists
+      `)
 
-      for (const row of auditsResult.rows) {
-        const diff = parseFloat(row.difference) || 0
-        if (diff !== 0) {
-          movements.push({
-            id: `audit-${row.id}`,
-            type: 'audit',
-            typeLabel: diff > 0 ? 'Ajuste Auditoría (+)' : 'Ajuste Auditoría (-)',
-            date: row.applied_at || row.created_at,
-            quantity: Math.abs(diff),
-            direction: diff > 0 ? 'in' : 'out',
-            reference: row.count_number || `AUD-${row.id}`,
-            referenceId: row.id,
-            warehouseName: row.warehouse_name,
-            sourceWarehouse: diff > 0 ? 'Ajuste' : row.warehouse_name,
-            destWarehouse: diff > 0 ? row.warehouse_name : 'Ajuste',
-            userName: row.user_name,
-            status: row.status,
-            notes: `Sistema: ${row.system_quantity}, Contado: ${row.counted_quantity}`,
-            stockAfter: null
-          })
+      if (tableCheck.rows[0]?.exists) {
+        const auditsResult = await db.query(`
+          SELECT
+            ac.id,
+            ac.count_number,
+            ac.status,
+            ac.applied_at,
+            ac.created_at,
+            acl.system_quantity,
+            acl.counted_quantity,
+            acl.difference,
+            mw.id as warehouse_id,
+            mw.name as warehouse_name,
+            COALESCE(u.firstname || ' ' || u.lastname, u.email) as user_name,
+            ac.notes
+          FROM audit_count_lines acl
+          JOIN audit_counts ac ON ac.id = acl.count_id
+          LEFT JOIN market_warehouses mw ON mw.id = ac.warehouse_id
+          LEFT JOIN users u ON u.id = ac.created_by
+          WHERE acl.product_id = $1 AND ac.company_id = $2
+            AND ac.status = 'applied'
+            AND acl.difference != 0
+          ORDER BY COALESCE(ac.applied_at, ac.created_at) DESC
+          LIMIT $3
+        `, [productId, payload.companyId, limit])
+
+        for (const row of auditsResult.rows) {
+          const diff = parseFloat(row.difference) || 0
+          if (diff !== 0) {
+            movements.push({
+              id: `audit-${row.id}`,
+              type: 'audit',
+              typeLabel: diff > 0 ? 'Ajuste Auditoría (+)' : 'Ajuste Auditoría (-)',
+              date: row.applied_at || row.created_at || new Date().toISOString(),
+              quantity: Math.abs(diff),
+              direction: diff > 0 ? 'in' : 'out',
+              reference: row.count_number || `AUD-${row.id}`,
+              referenceId: row.id,
+              warehouseName: row.warehouse_name,
+              sourceWarehouse: diff > 0 ? 'Ajuste' : row.warehouse_name,
+              destWarehouse: diff > 0 ? row.warehouse_name : 'Ajuste',
+              userName: row.user_name,
+              status: row.status,
+              notes: `Sistema: ${row.system_quantity}, Contado: ${row.counted_quantity}`,
+              stockAfter: null
+            })
+          }
         }
       }
     } catch (error) {
@@ -302,57 +313,68 @@ export async function GET(
 
     // 5. Get manual adjustments (from warehouse operations)
     try {
-      const adjustmentsResult = await db.query(`
-        SELECT
-          mwo.id,
-          mwo.operation_number,
-          mwo.operation_type,
-          mwo.status,
-          mwo.created_at,
-          mwo.completed_at,
-          mwol.quantity_planned,
-          mwol.quantity_done,
-          mwol.scrap_reason,
-          sw.id as warehouse_id,
-          sw.name as warehouse_name,
-          COALESCE(u.firstname || ' ' || u.lastname, u.email) as user_name,
-          mwo.notes
-        FROM market_warehouse_operation_lines mwol
-        JOIN market_warehouse_operations mwo ON mwo.id = mwol.operation_id
-        LEFT JOIN market_warehouses sw ON sw.id = mwo.source_warehouse_id
-        LEFT JOIN users u ON u.id = mwo.created_by
-        WHERE mwol.product_id = $1 AND mwo.company_id = $2
-          AND mwo.operation_type = 'adjustment'
-          AND mwo.status IN ('done', 'completed', 'confirmed', 'validated', 'draft')
-        ORDER BY COALESCE(mwo.completed_at, mwo.created_at) DESC
-        LIMIT $3
-      `, [productId, payload.companyId, limit])
+      // Check if table exists first
+      const opTableCheck = await db.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables
+          WHERE table_name = 'market_warehouse_operations'
+        ) as exists
+      `)
 
-      for (const row of adjustmentsResult.rows) {
-        const qty = parseFloat(row.quantity_done) || parseFloat(row.quantity_planned) || 0
-        if (qty !== 0) {
-          // Adjustments can be positive or negative based on notes or context
-          // By default, we treat them as reductions (out) unless notes indicate otherwise
-          const isPositive = row.notes?.toLowerCase().includes('entrada') ||
-                            row.notes?.toLowerCase().includes('agregar') ||
-                            row.notes?.toLowerCase().includes('añadir')
-          movements.push({
-            id: `adjustment-${row.id}`,
-            type: 'adjustment',
-            typeLabel: isPositive ? 'Ajuste Manual (+)' : 'Ajuste Manual (-)',
-            date: row.completed_at || row.created_at,
-            quantity: Math.abs(qty),
-            direction: isPositive ? 'in' : 'out',
-            reference: row.operation_number || `ADJ-${row.id}`,
-            referenceId: row.id,
-            warehouseName: row.warehouse_name,
-            sourceWarehouse: isPositive ? 'Ajuste' : row.warehouse_name,
-            destWarehouse: isPositive ? row.warehouse_name : 'Ajuste',
-            userName: row.user_name,
-            status: row.status,
-            notes: row.notes,
-            stockAfter: null
-          })
+      if (opTableCheck.rows[0]?.exists) {
+        const adjustmentsResult = await db.query(`
+          SELECT
+            mwo.id,
+            mwo.operation_number,
+            mwo.operation_type,
+            mwo.status,
+            mwo.created_at,
+            mwo.completed_at,
+            mwol.quantity_planned,
+            mwol.quantity_done,
+            mwol.scrap_reason,
+            sw.id as warehouse_id,
+            sw.name as warehouse_name,
+            COALESCE(u.firstname || ' ' || u.lastname, u.email) as user_name,
+            mwo.notes
+          FROM market_warehouse_operation_lines mwol
+          JOIN market_warehouse_operations mwo ON mwo.id = mwol.operation_id
+          LEFT JOIN market_warehouses sw ON sw.id = mwo.source_warehouse_id
+          LEFT JOIN users u ON u.id = mwo.created_by
+          WHERE mwol.product_id = $1 AND mwo.company_id = $2
+            AND mwo.operation_type = 'adjustment'
+            AND mwo.status IN ('done', 'completed', 'confirmed', 'validated', 'draft')
+          ORDER BY COALESCE(mwo.completed_at, mwo.created_at) DESC
+          LIMIT $3
+        `, [productId, payload.companyId, limit])
+
+        for (const row of adjustmentsResult.rows) {
+          const qty = parseFloat(row.quantity_done) || parseFloat(row.quantity_planned) || 0
+          if (qty !== 0) {
+            // Adjustments can be positive or negative based on notes or context
+            // By default, we treat them as reductions (out) unless notes indicate otherwise
+            const notesLower = (row.notes || '').toLowerCase()
+            const isPositive = notesLower.includes('entrada') ||
+                              notesLower.includes('agregar') ||
+                              notesLower.includes('añadir')
+            movements.push({
+              id: `adjustment-${row.id}`,
+              type: 'adjustment',
+              typeLabel: isPositive ? 'Ajuste Manual (+)' : 'Ajuste Manual (-)',
+              date: row.completed_at || row.created_at || new Date().toISOString(),
+              quantity: Math.abs(qty),
+              direction: isPositive ? 'in' : 'out',
+              reference: row.operation_number || `ADJ-${row.id}`,
+              referenceId: row.id,
+              warehouseName: row.warehouse_name || 'N/A',
+              sourceWarehouse: isPositive ? 'Ajuste' : (row.warehouse_name || 'N/A'),
+              destWarehouse: isPositive ? (row.warehouse_name || 'N/A') : 'Ajuste',
+              userName: row.user_name,
+              status: row.status,
+              notes: row.notes,
+              stockAfter: null
+            })
+          }
         }
       }
     } catch (error) {
@@ -361,6 +383,7 @@ export async function GET(
 
     // 6. Get scrap/waste (from warehouse operations)
     try {
+      // Use the same table check from adjustments (already verified above)
       const scrapResult = await db.query(`
         SELECT
           mwo.id,
@@ -403,13 +426,13 @@ export async function GET(
             id: `scrap-${row.id}`,
             type: 'scrap',
             typeLabel: `Scrap (${reasonLabel})`,
-            date: row.completed_at || row.created_at,
+            date: row.completed_at || row.created_at || new Date().toISOString(),
             quantity: qty,
             direction: 'out',
             reference: row.operation_number || `SCR-${row.id}`,
             referenceId: row.id,
-            warehouseName: row.warehouse_name,
-            sourceWarehouse: row.warehouse_name,
+            warehouseName: row.warehouse_name || 'N/A',
+            sourceWarehouse: row.warehouse_name || 'N/A',
             destWarehouse: 'Merma',
             userName: row.user_name,
             status: row.status,
@@ -422,10 +445,22 @@ export async function GET(
       console.error('[Product Movements] Error fetching scrap:', error)
     }
 
-    // Sort all movements by date descending (handle null dates)
+    // Sort all movements by date descending (handle null/invalid dates)
     movements.sort((a, b) => {
-      const dateA = a.date ? new Date(a.date).getTime() : 0
-      const dateB = b.date ? new Date(b.date).getTime() : 0
+      let dateA = 0
+      let dateB = 0
+      try {
+        if (a.date) {
+          const parsed = new Date(a.date).getTime()
+          if (!isNaN(parsed)) dateA = parsed
+        }
+      } catch { /* ignore */ }
+      try {
+        if (b.date) {
+          const parsed = new Date(b.date).getTime()
+          if (!isNaN(parsed)) dateB = parsed
+        }
+      } catch { /* ignore */ }
       return dateB - dateA
     })
 
