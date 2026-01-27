@@ -26,23 +26,33 @@ export async function GET(
     const currentWarehouseId = url.searchParams.get('currentWarehouseId')
     const currentWarehouseIdNum = currentWarehouseId ? parseInt(currentWarehouseId) : null
 
+    // Check if product has variants
+    const variantsCheck = await db.query(`
+      SELECT COUNT(*) as count FROM market_product_variants
+      WHERE product_id = $1 AND is_active = true
+    `, [productId])
+    const hasVariants = parseInt(variantsCheck.rows[0]?.count || '0') > 0
+
     // Get stock by warehouse
+    // If product has variants, aggregate variant stock per warehouse
+    // If no variants, get base product stock (variant_id IS NULL)
     const stockResult = await db.query(`
       SELECT
-        mws.id,
         mws.warehouse_id,
         mw.name as warehouse_name,
         mw.code as warehouse_code,
         mw.is_central,
         mw.city,
-        mws.quantity_on_hand,
-        mws.quantity_reserved,
-        (mws.quantity_on_hand - mws.quantity_reserved) as quantity_available,
-        mws.location_code,
-        mws.last_movement_at
+        SUM(mws.quantity_on_hand) as quantity_on_hand,
+        SUM(mws.quantity_reserved) as quantity_reserved,
+        SUM(mws.quantity_on_hand - mws.quantity_reserved) as quantity_available,
+        MAX(mws.location_code) as location_code,
+        MAX(mws.last_movement_at) as last_movement_at
       FROM market_warehouse_stock mws
       JOIN market_warehouses mw ON mws.warehouse_id = mw.id
       WHERE mws.product_id = $1 AND mw.company_id = $2 AND mw.is_active = true
+        ${hasVariants ? 'AND mws.variant_id IS NOT NULL' : 'AND mws.variant_id IS NULL'}
+      GROUP BY mws.warehouse_id, mw.name, mw.code, mw.is_central, mw.city
       ORDER BY mw.is_central DESC, mw.name ASC
     `, [productId, parseInt(companyId)])
 
@@ -61,7 +71,7 @@ export async function GET(
       ORDER BY is_central DESC, name ASC
     `, [parseInt(companyId)])
 
-    // Merge warehouses with stock data
+    // Merge warehouses with stock data (now aggregated for variants)
     const stockByWarehouse = warehousesResult.rows.map(warehouse => {
       const stockData = stockResult.rows.find(s => s.warehouse_id === warehouse.id)
       return {
@@ -70,9 +80,9 @@ export async function GET(
         warehouseCode: warehouse.code,
         isCentral: warehouse.is_central,
         city: warehouse.city,
-        quantityOnHand: stockData ? parseFloat(stockData.quantity_on_hand) : 0,
-        quantityReserved: stockData ? parseFloat(stockData.quantity_reserved) : 0,
-        quantityAvailable: stockData ? parseFloat(stockData.quantity_available) : 0,
+        quantityOnHand: stockData ? parseFloat(stockData.quantity_on_hand) || 0 : 0,
+        quantityReserved: stockData ? parseFloat(stockData.quantity_reserved) || 0 : 0,
+        quantityAvailable: stockData ? parseFloat(stockData.quantity_available) || 0 : 0,
         locationCode: stockData?.location_code || null,
         lastMovementAt: stockData?.last_movement_at || null,
         isCurrentWarehouse: currentWarehouseIdNum ? warehouse.id === currentWarehouseIdNum : false
