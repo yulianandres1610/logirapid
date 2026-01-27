@@ -652,93 +652,132 @@ export default function ProductDetailPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className={cn(
-                'p-6 rounded-2xl border',
+                'rounded-2xl border overflow-hidden',
                 theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
               )}
             >
-              <div className="flex flex-col md:flex-row md:items-start gap-6">
-                {/* Product Image */}
+              <div className="grid grid-cols-1 lg:grid-cols-3">
+                {/* Product Image - Large Square */}
                 <div className={cn(
-                  'w-24 h-24 md:w-32 md:h-32 rounded-2xl overflow-hidden flex-shrink-0',
+                  'aspect-square lg:aspect-auto lg:h-full relative overflow-hidden',
                   `bg-gradient-to-br ${statusConfig.bgGradient}`
                 )}>
                   {product.imageUrl ? (
                     <Image
                       src={product.imageUrl}
                       alt={product.name}
-                      width={128}
-                      height={128}
-                      className="w-full h-full object-cover"
+                      fill
+                      className="object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Package className="w-12 h-12 text-white/80" />
+                    <div className="w-full h-full flex items-center justify-center min-h-[280px]">
+                      <Package className="w-24 h-24 text-white/80" />
                     </div>
+                  )}
+                  {/* Status Badge on Image */}
+                  <span className={cn(
+                    'absolute top-4 left-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium shadow-lg',
+                    statusConfig.color === 'emerald' && 'bg-emerald-500 text-white',
+                    statusConfig.color === 'amber' && 'bg-amber-500 text-white',
+                    statusConfig.color === 'red' && 'bg-red-500 text-white'
+                  )}>
+                    <StatusIcon className="w-4 h-4" />
+                    {statusConfig.label}
+                  </span>
+                  {/* Category Badge */}
+                  {product.category && (
+                    <span className={cn(
+                      'absolute top-4 right-4 px-3 py-1.5 rounded-lg text-sm font-medium backdrop-blur-sm shadow-lg',
+                      theme === 'dark' ? 'bg-black/50 text-white' : 'bg-white/90 text-gray-700'
+                    )}>
+                      {product.category}
+                    </span>
                   )}
                 </div>
 
                 {/* Product Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-4 flex-wrap">
-                    <div>
-                      <div className="flex items-center gap-3 mb-2 flex-wrap">
-                        <h1 className={cn(
-                          'text-2xl md:text-3xl font-bold',
-                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                        )}>
-                          {product.name}
-                        </h1>
-                        <span className={cn(
-                          'inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium',
-                          statusConfig.color === 'emerald' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-                          statusConfig.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-                          statusConfig.color === 'red' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                        )}>
-                          <StatusIcon className="w-3.5 h-3.5" />
-                          {statusConfig.label}
-                        </span>
-                      </div>
+                <div className="lg:col-span-2 p-6 flex flex-col">
+                  {/* Title and Description */}
+                  <div className="mb-4">
+                    <h1 className={cn(
+                      'text-2xl md:text-3xl font-bold mb-2',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      {product.name}
+                    </h1>
+                    {product.description && (
+                      <p className="text-gray-500 line-clamp-2">{product.description}</p>
+                    )}
+                  </div>
 
-                      {product.description && (
-                        <p className="text-gray-500 mb-3 line-clamp-2">{product.description}</p>
-                      )}
+                  {/* SKU and Barcode */}
+                  <div className="flex items-center gap-4 text-sm text-gray-500 flex-wrap mb-6">
+                    <span className={cn(
+                      'flex items-center gap-1.5 font-mono px-3 py-1.5 rounded-lg',
+                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                    )}>
+                      <Barcode className="w-4 h-4" />
+                      SKU: {product.sku}
+                    </span>
+                    {product.barcode && (
+                      <span className={cn(
+                        'flex items-center gap-1.5 font-mono px-3 py-1.5 rounded-lg',
+                        theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                      )}>
+                        {product.barcode}
+                      </span>
+                    )}
+                    <span className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg',
+                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                    )}>
+                      <Scale className="w-4 h-4" />
+                      {product.unitOfMeasure}
+                    </span>
+                  </div>
 
-                      <div className="flex items-center gap-4 text-sm text-gray-500 flex-wrap">
-                        {product.category && (
-                          <span className="flex items-center gap-1.5">
-                            <Tag className="w-4 h-4" />
-                            {product.category}
-                          </span>
-                        )}
-                        <span className="flex items-center gap-1.5 font-mono">
-                          <Barcode className="w-4 h-4" />
-                          SKU: {product.sku}
-                        </span>
-                        {product.barcode && (
-                          <span className="flex items-center gap-1.5 font-mono">
-                            {product.barcode}
-                          </span>
-                        )}
-                        <span className="flex items-center gap-1.5">
-                          <Scale className="w-4 h-4" />
-                          {product.unitOfMeasure}
-                        </span>
+                  {/* Price Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-auto">
+                    {/* Selling Price - Highlighted */}
+                    <div className={cn(
+                      'p-4 rounded-xl col-span-2 md:col-span-1',
+                      'bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 border-2 border-emerald-500/30'
+                    )}>
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400 uppercase tracking-wide mb-1">Precio Venta</p>
+                      <p className="text-3xl font-bold text-emerald-600">{symbol}{Number(product.sellingPrice).toFixed(2)}</p>
+                      <div className="mt-2 pt-2 border-t border-emerald-200/30 dark:border-emerald-800/30 space-y-0.5">
+                        <p className="text-xs text-blue-600 font-medium">${Math.round(product.sellingPrice * USD_CUP_BCC).toLocaleString()} CUP</p>
+                        <p className="text-xs text-purple-600 font-medium">${(product.sellingPrice * USD_MLC).toFixed(2)} MLC</p>
                       </div>
                     </div>
 
-                    {/* Price Display */}
+                    {/* Cost Price */}
                     <div className={cn(
-                      'p-4 rounded-xl text-right',
-                      theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                      'p-4 rounded-xl',
+                      theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
                     )}>
-                      <p className="text-sm text-gray-500 mb-1">Precio Venta</p>
-                      <p className="text-3xl font-bold text-emerald-600">
-                        {symbol}{Number(product.sellingPrice).toFixed(2)}
+                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Precio Costo</p>
+                      <p className={cn(
+                        'text-2xl font-bold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>{symbol}{Number(product.costPrice).toFixed(2)}</p>
+                      <p className="text-xs text-blue-600 mt-1">${Math.round(product.costPrice * USD_CUP).toLocaleString()} CUP</p>
+                    </div>
+
+                    {/* Margin */}
+                    <div className={cn(
+                      'p-4 rounded-xl',
+                      theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                    )}>
+                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Margen</p>
+                      <p className={cn(
+                        'text-2xl font-bold flex items-center gap-1',
+                        margin >= 30 ? 'text-emerald-600' : margin >= 15 ? 'text-amber-600' : 'text-red-600'
+                      )}>
+                        <TrendingUp className="w-5 h-5" />
+                        {margin}%
                       </p>
-                      <div className="mt-1 space-y-0.5">
-                        <p className="text-xs text-blue-600">${Math.round(product.sellingPrice * USD_CUP_BCC).toLocaleString()} CUP</p>
-                        <p className="text-xs text-purple-600">${(product.sellingPrice * USD_MLC).toFixed(2)} MLC</p>
-                      </div>
+                      <p className="text-xs text-gray-500 mt-1">{symbol}{(product.sellingPrice - product.costPrice).toFixed(2)} ganancia</p>
                     </div>
                   </div>
                 </div>
