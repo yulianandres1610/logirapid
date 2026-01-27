@@ -420,12 +420,22 @@ export default function CloseSessionPage() {
                         <CreditCard className="w-4 h-4" /> Pagos Recibidos
                       </h3>
                       <div className="space-y-2">
-                        {session.paymentsByMethod.map((p, i) => (
-                          <div key={i} className="flex justify-between text-sm">
-                            <span className="text-gray-500 capitalize">{p.method} <span className="text-xs">({p.currency})</span></span>
-                            <span className="font-mono">${p.amount.toFixed(2)} <span className="text-xs text-gray-500">×{p.count}</span></span>
-                          </div>
-                        ))}
+                        {session.paymentsByMethod.map((p, i) => {
+                          const formatAmount = (amount: number, currency: string) => {
+                            if (currency === 'CUP') {
+                              return `${amount.toLocaleString('es', { maximumFractionDigits: 0 })} CUP`
+                            } else if (currency === 'MLC') {
+                              return `$${amount.toFixed(2)} MLC`
+                            }
+                            return `$${amount.toFixed(2)}`
+                          }
+                          return (
+                            <div key={i} className="flex justify-between text-sm">
+                              <span className="text-gray-500 capitalize">{p.method} <span className="text-xs">({p.currency})</span></span>
+                              <span className="font-mono">{formatAmount(p.amount, p.currency)} <span className="text-xs text-gray-500">×{p.count}</span></span>
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   )}
