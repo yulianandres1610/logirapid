@@ -28,9 +28,11 @@ import {
   X
 } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
+import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 
 interface OperationLine {
@@ -100,6 +102,8 @@ const REASON_LABELS: Record<string, { label: string; color: string }> = {
 
 export default function AdjustmentsHistoryPage() {
   const { theme } = useTheme()
+  const { user, isLoading: authLoading } = useAuth()
+  const router = useRouter()
   const [operations, setOperations] = useState<Operation[]>([])
   const [stats, setStats] = useState<Stats>({
     adjustment: { draft: 0, done: 0, cancelled: 0, totalQty: 0, totalValue: 0 },
@@ -116,6 +120,16 @@ export default function AdjustmentsHistoryPage() {
   const [dateTo, setDateTo] = useState<string>('')
   const [expandedOperations, setExpandedOperations] = useState<Set<number>>(new Set())
   const [detailModal, setDetailModal] = useState<Operation | null>(null)
+
+  // Check if user has admin access
+  const allowedRoles = ['SUPER_ADMIN', 'ADMIN']
+  const hasAccess = user && allowedRoles.includes(user.role)
+
+  useEffect(() => {
+    if (!authLoading && user && !allowedRoles.includes(user.role)) {
+      router.push('/dashboard/market/warehouses')
+    }
+  }, [user, authLoading, router])
 
   const fetchHistory = async () => {
     setLoading(true)
@@ -198,6 +212,24 @@ export default function AdjustmentsHistoryPage() {
       textColor: theme === 'dark' ? 'text-amber-400' : 'text-amber-600'
     }
   ]
+
+  // Show loading while checking access
+  if (authLoading) {
+    return (
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="min-h-screen flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
+    )
+  }
+
+  // If no access, the useEffect will redirect, but just in case show nothing
+  if (!hasAccess) {
+    return null
+  }
 
   return (
     <ProtectedRoute>

@@ -522,7 +522,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       hasSubmenu: true,
       submenuItems: [
         { icon: Warehouse, label: "Lista de Almacenes", href: "/dashboard/market/warehouses" },
-        { icon: History, label: "Ajustes y Scrap", href: "/dashboard/market/warehouses/adjustments-history" },
+        { icon: History, label: "Ajustes y Scrap", href: "/dashboard/market/warehouses/adjustments-history", requiredRoles: ['ADMIN', 'SUPER_ADMIN'] },
       ]
     },
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
@@ -637,9 +637,13 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         return hasService(item.requiredService)
       })
       .map(item => {
-        // Si tiene submenu, filtrar los subítems según permisos de submódulo
+        // Si tiene submenu, filtrar los subítems según permisos de submódulo y roles
         if (item.hasSubmenu && item.submenuItems) {
           const filteredSubmenuItems = item.submenuItems.filter((subItem: any) => {
+            // Si requiere roles específicos, verificar que el usuario tenga uno de ellos
+            if (subItem.requiredRoles && Array.isArray(subItem.requiredRoles)) {
+              if (!subItem.requiredRoles.includes(user?.role)) return false
+            }
             // Si no requiere submódulo, siempre se muestra
             if (!subItem.requiredSubmodule) return true
             // Verificar si tiene permiso para este submódulo
