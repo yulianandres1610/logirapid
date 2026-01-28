@@ -105,7 +105,7 @@ export default function HREmployeesPage() {
         status: statusFilter,
         search: search
       })
-      const response = await fetch(`/api/market/accounting/employees?${params}`)
+      const response = await fetch(`/api/market/hr/employees?${params}`)
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
@@ -142,7 +142,7 @@ export default function HREmployeesPage() {
     if (!confirm('¿Estás seguro de dar de baja a este empleado?')) return
 
     try {
-      const response = await fetch(`/api/market/accounting/employees/${id}`, {
+      const response = await fetch(`/api/market/hr/employees/${id}`, {
         method: 'DELETE'
       })
       if (response.ok) {

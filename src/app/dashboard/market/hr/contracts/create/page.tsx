@@ -115,7 +115,7 @@ export default function CreateContractPage() {
   const fetchData = async () => {
     try {
       // Fetch employees
-      const empRes = await fetch('/api/market/accounting/employees?status=active')
+      const empRes = await fetch('/api/market/hr/employees?status=active')
       if (empRes.ok) {
         const data = await empRes.json()
         if (data.success) {

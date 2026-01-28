@@ -71,7 +71,7 @@ export default function HRDashboardPage() {
   const fetchStats = async () => {
     try {
       // Fetch employees count
-      const employeesRes = await fetch('/api/market/accounting/employees?status=all')
+      const employeesRes = await fetch('/api/market/hr/employees?status=all')
       if (employeesRes.ok) {
         const data = await employeesRes.json()
         if (data.success) {

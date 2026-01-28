@@ -121,7 +121,7 @@ export default function DepartmentsPage() {
 
   const fetchEmployees = async () => {
     try {
-      const response = await fetch('/api/market/accounting/employees?status=active')
+      const response = await fetch('/api/market/hr/employees?status=active')
       if (response.ok) {
         const result = await response.json()
         if (result.success) {

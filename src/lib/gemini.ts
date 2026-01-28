@@ -660,24 +660,19 @@ export async function processEmployeePhoto(
     const cleanBase64 = await compressImageForGemini(imageBase64)
 
     const suitDescription = gender === 'male'
-      ? 'dark navy suit jacket, white dress shirt, and professional tie'
-      : 'professional blazer in navy or black with elegant blouse'
+      ? 'dark navy formal business suit with white shirt and tie'
+      : 'elegant navy blazer with professional blouse'
 
-    const prompt = `Edit this person's photo for a professional employee contract:
+    // Prompt simplificado para mejor compatibilidad
+    const prompt = `Transform this photo into a professional corporate headshot:
+- Remove background, replace with pure white
+- Add ${suitDescription} to the person
+- Keep face exactly the same, don't alter facial features
+- Center the person, head and shoulders visible
+- Professional studio lighting
+- Output 1024x1024 square image`
 
-CRITICAL REQUIREMENTS:
-1. Output MUST be exactly 1024x1024 pixels (square format)
-2. Remove the background completely and replace with pure white (#FFFFFF)
-3. KEEP THE PERSON'S FACE EXACTLY AS IT IS - do not modify facial features, skin tone, or any personal characteristics
-4. ADD PROFESSIONAL ATTIRE: ${suitDescription}
-5. Frame as professional headshot (head and shoulders visible)
-6. Center the person horizontally and vertically
-7. Apply professional studio lighting effect
-8. Maintain natural skin tones exactly as in the original
-9. Clean, sharp edges where person meets white background
-10. The person should be wearing the suit naturally, as if photographed in a studio
-
-The final image should look like an official corporate headshot photo suitable for contracts and official documents.`
+    console.log('[Gemini Employee Photo] Using model:', IMAGE_GENERATION_MODEL)
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_GENERATION_MODEL}:generateContent?key=${GOOGLE_AI_API_KEY}`,
@@ -701,16 +696,40 @@ The final image should look like an official corporate headshot photo suitable f
     if (!response.ok) {
       const errorText = await response.text()
       console.error('[Gemini Employee Photo] API Error:', response.status, errorText)
-      return { success: false, error: 'No se pudo procesar la imagen' }
+
+      // Try fallback: just normalize the original image
+      console.log('[Gemini Employee Photo] API failed, normalizing original as fallback...')
+      const normalizedOriginal = await normalizeImageSize(cleanBase64)
+      return {
+        success: true,
+        imageBase64: normalizedOriginal,
+        error: 'IA no disponible, se uso imagen original normalizada'
+      }
     }
 
     const data = await response.json()
+
+    // Log response for debugging
+    console.log('[Gemini Employee Photo] Response received, checking for image...')
+
+    // Check for blocked content
+    if (data.candidates?.[0]?.finishReason === 'SAFETY' ||
+        data.candidates?.[0]?.finishReason === 'RECITATION' ||
+        data.promptFeedback?.blockReason) {
+      console.log('[Gemini Employee Photo] Content blocked, normalizing original...')
+      const normalizedOriginal = await normalizeImageSize(cleanBase64)
+      return {
+        success: true,
+        imageBase64: normalizedOriginal,
+        error: 'Filtro de seguridad activado, se uso imagen original'
+      }
+    }
 
     // Buscar imagen en respuesta (mismo patrón que cleanProductImage)
     if (data.candidates?.[0]?.content?.parts) {
       for (const part of data.candidates[0].content.parts) {
         if (part.inlineData?.data) {
-          console.log('[Gemini Employee Photo] Success, normalizing...')
+          console.log('[Gemini Employee Photo] Success! AI processed image received.')
           const normalizedImage = await normalizeImageSize(part.inlineData.data)
           return { success: true, imageBase64: normalizedImage }
         }
@@ -718,15 +737,27 @@ The final image should look like an official corporate headshot photo suitable f
     }
 
     // Fallback: normalizar original
-    console.log('[Gemini Employee Photo] No edited image returned, normalizing original...')
+    console.log('[Gemini Employee Photo] No AI image returned, normalizing original...')
     const normalizedOriginal = await normalizeImageSize(cleanBase64)
     return { success: true, imageBase64: normalizedOriginal }
 
   } catch (error) {
     console.error('[Gemini Employee Photo] Error:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Error al procesar imagen'
+
+    // Last resort fallback
+    try {
+      const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '')
+      const normalizedOriginal = await normalizeImageSize(cleanBase64)
+      return {
+        success: true,
+        imageBase64: normalizedOriginal,
+        error: 'Error de IA, se uso imagen original'
+      }
+    } catch (fallbackError) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error al procesar imagen'
+      }
     }
   }
 }

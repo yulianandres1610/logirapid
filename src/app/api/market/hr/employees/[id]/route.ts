@@ -145,3 +145,44 @@ export async function PUT(
     )
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const companyId = await getCompanyId()
+    if (!companyId) {
+      return NextResponse.json({ success: false, error: 'No company ID' }, { status: 401 })
+    }
+
+    const { id } = await params
+
+    // Soft delete - set status to inactive
+    const result = await db.query(`
+      UPDATE market_employees
+      SET status = 'inactive', updated_at = NOW()
+      WHERE id = $1 AND company_id = $2
+      RETURNING id
+    `, [id, companyId])
+
+    if (result.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Employee not found' },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Employee deactivated successfully'
+    })
+
+  } catch (error: any) {
+    console.error('Error deactivating employee:', error)
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    )
+  }
+}
