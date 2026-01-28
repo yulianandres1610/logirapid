@@ -5,18 +5,20 @@ import { motion } from 'framer-motion'
 import {
   Calendar,
   Search,
-  Filter,
   Clock,
   CheckCircle,
   XCircle,
   AlertTriangle,
-  Users,
-  Download,
+  RefreshCw,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Users,
+  Timer
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
+import { useTheme } from '@/contexts/theme-context'
+import { cn } from '@/lib/utils'
 
 interface AttendanceRecord {
   id: number
@@ -42,18 +44,31 @@ interface Employee {
   fullName: string
 }
 
-const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
-  present: { label: 'Presente', color: 'green', icon: CheckCircle },
-  late: { label: 'Tardanza', color: 'amber', icon: AlertTriangle },
-  absent: { label: 'Ausente', color: 'red', icon: XCircle },
-  half_day: { label: 'Medio día', color: 'blue', icon: Clock },
-  holiday: { label: 'Feriado', color: 'purple', icon: Calendar }
+const statusConfig: Record<string, { label: string; color: string; bgLight: string; bgDark: string; textLight: string; textDark: string }> = {
+  present: { label: 'Presente', color: 'green', bgLight: 'bg-green-100', bgDark: 'bg-green-900/30', textLight: 'text-green-700', textDark: 'text-green-400' },
+  late: { label: 'Tardanza', color: 'amber', bgLight: 'bg-amber-100', bgDark: 'bg-amber-900/30', textLight: 'text-amber-700', textDark: 'text-amber-400' },
+  absent: { label: 'Ausente', color: 'red', bgLight: 'bg-red-100', bgDark: 'bg-red-900/30', textLight: 'text-red-700', textDark: 'text-red-400' },
+  half_day: { label: 'Medio día', color: 'blue', bgLight: 'bg-blue-100', bgDark: 'bg-blue-900/30', textLight: 'text-blue-700', textDark: 'text-blue-400' },
+  holiday: { label: 'Feriado', color: 'purple', bgLight: 'bg-purple-100', bgDark: 'bg-purple-900/30', textLight: 'text-purple-700', textDark: 'text-purple-400' }
+}
+
+const getStatusIcon = (status: string) => {
+  switch (status) {
+    case 'present': return CheckCircle
+    case 'late': return AlertTriangle
+    case 'absent': return XCircle
+    case 'half_day': return Clock
+    case 'holiday': return Calendar
+    default: return CheckCircle
+  }
 }
 
 export default function AttendancePage() {
+  const { theme } = useTheme()
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState('')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('week')
@@ -110,9 +125,11 @@ export default function AttendancePage() {
     }
   }
 
-  const fetchAttendance = async () => {
+  const fetchAttendance = async (silent = false) => {
+    if (!silent) setLoading(true)
+    else setIsRefreshing(true)
+
     try {
-      setLoading(true)
       const { start, end } = getDateRange()
       const params = new URLSearchParams({
         startDate: start,
@@ -133,7 +150,8 @@ export default function AttendancePage() {
     } catch (error) {
       console.error('Error fetching attendance:', error)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
+      else setIsRefreshing(false)
     }
   }
 
@@ -183,249 +201,475 @@ export default function AttendancePage() {
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
-          {/* Header */}
+        <div className="min-h-screen p-6">
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+            className="space-y-6"
           >
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                <Calendar className="w-8 h-8 text-emerald-600" />
-                Control de Asistencia
-              </h1>
-              <p className="text-gray-500 dark:text-gray-400 mt-1">
-                Registro de entradas y salidas del personal
-              </p>
-            </div>
-          </motion.div>
-
-          {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            {/* Date Navigation */}
-            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-xl p-2 shadow">
-              <button
-                onClick={() => navigateDate('prev')}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+              {/* Presentes */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className={cn(
+                  'relative overflow-hidden',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl'
+                )}
               >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <span className="px-4 font-medium text-gray-900 dark:text-white min-w-[200px] text-center">
-                {getDateLabel()}
-              </span>
-              <button
-                onClick={() => navigateDate('next')}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-green-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-green-900/30 border border-green-800/50'
+                          : 'bg-gradient-to-br from-green-50 to-green-100 border border-green-200'
+                      )}>
+                        <CheckCircle className="w-6 h-6 text-green-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>Presentes</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{summary.present}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                    )}>Asistencias registradas</span>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Tardanzas */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className={cn(
+                  'relative overflow-hidden',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl'
+                )}
               >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-amber-900/30 border border-amber-800/50'
+                          : 'bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200'
+                      )}>
+                        <AlertTriangle className="w-6 h-6 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>Tardanzas</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{summary.late}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                    )}>Llegadas tarde</span>
+                  </div>
+                </div>
+              </motion.div>
 
-            {/* View Mode */}
-            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 shadow">
-              {(['day', 'week', 'month'] as const).map(mode => (
-                <button
-                  key={mode}
-                  onClick={() => setViewMode(mode)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    viewMode === mode
-                      ? 'bg-emerald-500 text-white'
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'
-                  }`}
-                >
-                  {mode === 'day' ? 'Día' : mode === 'week' ? 'Semana' : 'Mes'}
-                </button>
-              ))}
-            </div>
-
-            {/* Employee Filter */}
-            <div className="flex-1">
-              <select
-                value={selectedEmployee}
-                onChange={(e) => setSelectedEmployee(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500"
+              {/* Ausentes */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className={cn(
+                  'relative overflow-hidden',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl'
+                )}
               >
-                <option value="">Todos los empleados</option>
-                {employees.map(emp => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.fullName}
-                  </option>
-                ))}
-              </select>
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-400 to-red-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-red-900/30 border border-red-800/50'
+                          : 'bg-gradient-to-br from-red-50 to-red-100 border border-red-200'
+                      )}>
+                        <XCircle className="w-6 h-6 text-red-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>Ausentes</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{summary.absent}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                    )}>Sin asistencia</span>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Total Horas */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className={cn(
+                  'relative overflow-hidden',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl'
+                )}
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-blue-900/30 border border-blue-800/50'
+                          : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
+                      )}>
+                        <Timer className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>Total Horas</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{formatHours(summary.totalHours)}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                    )}>Horas trabajadas</span>
+                  </div>
+                </div>
+              </motion.div>
             </div>
 
-            <button
-              onClick={() => setCurrentDate(new Date())}
-              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium transition-colors"
+            {/* Filters */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className={cn(
+                'p-4 rounded-2xl border shadow-xl',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+              )}
             >
-              Hoy
-            </button>
-          </div>
+              <div className="flex flex-col lg:flex-row gap-4">
+                {/* Date Navigation */}
+                <div className={cn(
+                  'flex items-center gap-2 rounded-xl p-2',
+                  theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow'
+                )}>
+                  <button
+                    onClick={() => navigateDate('prev')}
+                    className={cn(
+                      'p-2 rounded-lg transition-colors',
+                      theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                    )}
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <span className={cn(
+                    'px-4 font-medium min-w-[200px] text-center',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>
+                    {getDateLabel()}
+                  </span>
+                  <button
+                    onClick={() => navigateDate('next')}
+                    className={cn(
+                      'p-2 rounded-lg transition-colors',
+                      theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                    )}
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
 
-          {/* Summary Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
+                {/* View Mode */}
+                <div className={cn(
+                  'flex items-center gap-1 rounded-xl p-1',
+                  theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow'
+                )}>
+                  {(['day', 'week', 'month'] as const).map(mode => (
+                    <button
+                      key={mode}
+                      onClick={() => setViewMode(mode)}
+                      className={cn(
+                        'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                        viewMode === mode
+                          ? 'bg-emerald-500 text-white'
+                          : theme === 'dark'
+                            ? 'hover:bg-gray-700 text-gray-400'
+                            : 'hover:bg-gray-100 text-gray-600'
+                      )}
+                    >
+                      {mode === 'day' ? 'Día' : mode === 'week' ? 'Semana' : 'Mes'}
+                    </button>
+                  ))}
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{summary.present}</p>
-                  <p className="text-sm text-gray-500">Presentes</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                  <AlertTriangle className="w-5 h-5 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{summary.late}</p>
-                  <p className="text-sm text-gray-500">Tardanzas</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                  <XCircle className="w-5 h-5 text-red-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{summary.absent}</p>
-                  <p className="text-sm text-gray-500">Ausentes</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatHours(summary.totalHours)}</p>
-                  <p className="text-sm text-gray-500">Total horas</p>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Attendance Table */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
-            {loading ? (
-              <div className="p-8 text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto"></div>
+                {/* Employee Filter */}
+                <div className="flex-1">
+                  <select
+                    value={selectedEmployee}
+                    onChange={(e) => setSelectedEmployee(e.target.value)}
+                    className={cn(
+                      'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                      theme === 'dark'
+                        ? 'bg-gray-800/50 border-gray-700 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
+                        : 'bg-white border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
+                    )}
+                  >
+                    <option value="">Todos los empleados</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.fullName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Refresh */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => fetchAttendance(true)}
+                  disabled={loading || isRefreshing}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all',
+                    theme === 'dark'
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                    isRefreshing && 'opacity-75'
+                  )}
+                >
+                  <RefreshCw className={cn('w-4 h-4', (loading || isRefreshing) && 'animate-spin')} />
+                </motion.button>
+
+                {/* Hoy */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setCurrentDate(new Date())}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25"
+                >
+                  <Calendar className="w-4 h-4" />
+                  Hoy
+                </motion.button>
               </div>
-            ) : records.length === 0 ? (
-              <div className="p-8 text-center">
-                <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                  Sin registros
-                </h3>
-                <p className="text-gray-500">
-                  No hay registros de asistencia para este período
-                </p>
-              </div>
-            ) : (
+            </motion.div>
+
+            {/* Attendance Table */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className={cn(
+                'rounded-2xl border shadow-xl overflow-hidden',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+              )}
+            >
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50 dark:bg-gray-900/50">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Empleado
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Fecha
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Entrada
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Salida
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Horas
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Estado
-                      </th>
+                  <thead>
+                    <tr className={cn(
+                      'border-b',
+                      theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                    )}>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Empleado</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Entrada</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Salida</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Horas</th>
+                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {records.map((record, idx) => {
-                      const status = statusConfig[record.status] || statusConfig.present
-                      const StatusIcon = status.icon
+                    {loading ? (
+                      [...Array(5)].map((_, i) => (
+                        <tr key={i}>
+                          <td colSpan={6} className="py-4 px-4">
+                            <div className="animate-pulse flex items-center gap-3">
+                              <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full" />
+                              <div className="flex-1">
+                                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : records.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center">
+                          <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                          <p className={cn(
+                            'font-medium mb-1',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>Sin registros</p>
+                          <p className="text-gray-500 dark:text-gray-400">
+                            No hay registros de asistencia para este período
+                          </p>
+                        </td>
+                      </tr>
+                    ) : (
+                      records.map((record, index) => {
+                        const status = statusConfig[record.status] || statusConfig.present
+                        const StatusIcon = getStatusIcon(record.status)
 
-                      return (
-                        <motion.tr
-                          key={record.id}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ delay: idx * 0.02 }}
-                          className="hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                        >
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 font-medium text-sm">
-                                {record.employeeName.charAt(0)}
-                              </div>
-                              <div>
-                                <p className="font-medium text-gray-900 dark:text-white">
-                                  {record.employeeName}
-                                </p>
-                                <p className="text-xs text-gray-500">{record.employeeCode}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                            {new Date(record.date).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div>
-                              <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                {formatTime(record.checkIn)}
-                              </p>
-                              {record.checkInMethod && (
-                                <p className="text-xs text-gray-500">{record.checkInMethod}</p>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div>
-                              <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                {formatTime(record.checkOut)}
-                              </p>
-                              {record.checkOutMethod && (
-                                <p className="text-xs text-gray-500">{record.checkOutMethod}</p>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <p className="text-sm font-medium text-gray-900 dark:text-white">
-                              {formatHours(record.workedHours)}
-                            </p>
-                            {record.overtimeHours > 0 && (
-                              <p className="text-xs text-green-600">+{formatHours(record.overtimeHours)} extra</p>
+                        return (
+                          <motion.tr
+                            key={record.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.02 }}
+                            className={cn(
+                              'group transition-colors',
+                              theme === 'dark' ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'
                             )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-${status.color}-100 dark:bg-${status.color}-900/30 text-${status.color}-700 dark:text-${status.color}-400`}>
-                              <StatusIcon className="w-3.5 h-3.5" />
-                              {status.label}
-                              {record.lateMinutes > 0 && (
-                                <span className="ml-1">({record.lateMinutes}min)</span>
+                          >
+                            <td className="py-4 px-4">
+                              <div className="flex items-center gap-3">
+                                <div className={cn(
+                                  'w-8 h-8 rounded-full flex items-center justify-center font-medium text-sm',
+                                  theme === 'dark'
+                                    ? 'bg-emerald-900/30 text-emerald-400'
+                                    : 'bg-emerald-100 text-emerald-600'
+                                )}>
+                                  {record.employeeName.charAt(0)}
+                                </div>
+                                <div>
+                                  <p className={cn(
+                                    'font-medium',
+                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                  )}>
+                                    {record.employeeName}
+                                  </p>
+                                  <p className="text-xs text-gray-500">{record.employeeCode}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4">
+                              <span className={cn(
+                                'text-sm',
+                                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                              )}>
+                                {new Date(record.date).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4">
+                              <div>
+                                <p className={cn(
+                                  'text-sm font-medium',
+                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                )}>
+                                  {formatTime(record.checkIn)}
+                                </p>
+                                {record.checkInMethod && (
+                                  <p className="text-xs text-gray-500">{record.checkInMethod}</p>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-4 px-4">
+                              <div>
+                                <p className={cn(
+                                  'text-sm font-medium',
+                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                )}>
+                                  {formatTime(record.checkOut)}
+                                </p>
+                                {record.checkOutMethod && (
+                                  <p className="text-xs text-gray-500">{record.checkOutMethod}</p>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-4 px-4">
+                              <p className={cn(
+                                'text-sm font-medium',
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>
+                                {formatHours(record.workedHours)}
+                              </p>
+                              {record.overtimeHours > 0 && (
+                                <p className="text-xs text-green-600">+{formatHours(record.overtimeHours)} extra</p>
                               )}
-                            </div>
-                          </td>
-                        </motion.tr>
-                      )
-                    })}
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <span className={cn(
+                                'inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium',
+                                theme === 'dark' ? status.bgDark : status.bgLight,
+                                theme === 'dark' ? status.textDark : status.textLight
+                              )}>
+                                <StatusIcon className="w-3.5 h-3.5" />
+                                {status.label}
+                                {record.lateMinutes > 0 && (
+                                  <span className="ml-1">({record.lateMinutes}min)</span>
+                                )}
+                              </span>
+                            </td>
+                          </motion.tr>
+                        )
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
-            )}
-          </div>
+            </motion.div>
+          </motion.div>
         </div>
       </DashboardLayout>
     </ProtectedRoute>

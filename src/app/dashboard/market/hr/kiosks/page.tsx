@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Fingerprint,
   Plus,
@@ -14,11 +14,16 @@ import {
   ExternalLink,
   X,
   Copy,
-  Check
+  Check,
+  RefreshCw,
+  Search,
+  MapPin
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
+import { useTheme } from '@/contexts/theme-context'
+import { cn } from '@/lib/utils'
 
 interface Kiosk {
   id: number
@@ -41,12 +46,16 @@ interface WarehouseOption {
 }
 
 export default function KiosksPage() {
+  const { theme } = useTheme()
   const [kiosks, setKiosks] = useState<Kiosk[]>([])
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([])
   const [loading, setLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [editingKiosk, setEditingKiosk] = useState<Kiosk | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
 
   const [formData, setFormData] = useState({
     name: '',
@@ -57,12 +66,14 @@ export default function KiosksPage() {
   useEffect(() => {
     fetchKiosks()
     fetchWarehouses()
-  }, [])
+  }, [statusFilter])
 
-  const fetchKiosks = async () => {
+  const fetchKiosks = async (silent = false) => {
+    if (!silent) setLoading(true)
+    else setIsRefreshing(true)
+
     try {
-      setLoading(true)
-      const response = await fetch('/api/market/hr/kiosks?status=all')
+      const response = await fetch(`/api/market/hr/kiosks?status=${statusFilter}`)
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
@@ -72,7 +83,8 @@ export default function KiosksPage() {
     } catch (error) {
       console.error('Error fetching kiosks:', error)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
+      else setIsRefreshing(false)
     }
   }
 
@@ -164,277 +176,691 @@ export default function KiosksPage() {
     return (now - pingTime) < 5 * 60 * 1000 // 5 minutes
   }
 
+  // Filter kiosks by search
+  const filteredKiosks = kiosks.filter(k =>
+    k.name.toLowerCase().includes(search.toLowerCase()) ||
+    k.location?.toLowerCase().includes(search.toLowerCase())
+  )
+
+  // Stats
+  const stats = {
+    total: kiosks.length,
+    active: kiosks.filter(k => k.isActive).length,
+    online: kiosks.filter(k => k.isActive && isOnline(k.lastPing)).length,
+    withWarehouse: kiosks.filter(k => k.warehouseId).length
+  }
+
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
-          {/* Header */}
+        <div className="min-h-screen p-6">
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+            className="space-y-6"
           >
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                <Fingerprint className="w-8 h-8 text-indigo-600" />
-                Kioscos de Asistencia
-              </h1>
-              <p className="text-gray-500 dark:text-gray-400 mt-1">
-                {kiosks.filter(k => k.isActive).length} kioscos activos
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                setEditingKiosk(null)
-                setFormData({ name: '', location: '', warehouseId: '' })
-                setShowModal(true)
-              }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors shadow-lg"
-            >
-              <Plus className="w-5 h-5" />
-              Nuevo Kiosco
-            </button>
-          </motion.div>
-
-          {/* Info Banner */}
-          <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl p-4">
-            <div className="flex items-start gap-3">
-              <Monitor className="w-5 h-5 text-indigo-600 mt-0.5" />
-              <div>
-                <h3 className="font-medium text-indigo-800 dark:text-indigo-300">
-                  ¿Cómo funciona?
-                </h3>
-                <p className="text-sm text-indigo-700 dark:text-indigo-400 mt-1">
-                  Los kioscos permiten a los empleados registrar su entrada y salida usando PIN, badge o reconocimiento facial.
-                  Configura un dispositivo (tablet/computadora) y accede a la URL del kiosco para comenzar.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Kiosks Grid */}
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="h-48 bg-gray-200 dark:bg-gray-700 rounded-2xl animate-pulse" />
-              ))}
-            </div>
-          ) : kiosks.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl shadow-lg"
-            >
-              <Fingerprint className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                No hay kioscos
-              </h3>
-              <p className="text-gray-500 dark:text-gray-400 mb-4">
-                Crea un kiosco para permitir el registro de asistencia
-              </p>
-            </motion.div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {kiosks.map((kiosk, idx) => (
-                <motion.div
-                  key={kiosk.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.05 }}
-                  className={`bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-lg ${!kiosk.isActive ? 'opacity-60' : ''}`}
-                >
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+              {/* Total Kioscos */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className={cn(
+                  'relative overflow-hidden',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl'
+                )}
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-400 to-indigo-600"></div>
+                <div className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                        kiosk.isActive && isOnline(kiosk.lastPing)
-                          ? 'bg-green-100 dark:bg-green-900/30'
-                          : 'bg-gray-100 dark:bg-gray-700'
-                      }`}>
-                        <Fingerprint className={`w-6 h-6 ${
-                          kiosk.isActive && isOnline(kiosk.lastPing)
-                            ? 'text-green-600 dark:text-green-400'
-                            : 'text-gray-400'
-                        }`} />
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-indigo-900/30 border border-indigo-800/50'
+                          : 'bg-gradient-to-br from-indigo-50 to-indigo-100 border border-indigo-200'
+                      )}>
+                        <Fingerprint className="w-6 h-6 text-indigo-600" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-gray-900 dark:text-white">
-                          {kiosk.name}
-                        </h3>
-                        <div className="flex items-center gap-2 mt-1">
-                          {kiosk.isActive && isOnline(kiosk.lastPing) ? (
-                            <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                              <Wifi className="w-3 h-3" />
-                              En línea
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1 text-xs text-gray-500">
-                              <WifiOff className="w-3 h-3" />
-                              Sin conexión
-                            </span>
-                          )}
-                        </div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>Total Kioscos</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{stats.total}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleEdit(kiosk)}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                      >
-                        <Edit className="w-4 h-4 text-gray-500" />
-                      </button>
-                      {kiosk.isActive && (
-                        <button
-                          onClick={() => handleDelete(kiosk.id)}
-                          className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4 text-red-500" />
-                        </button>
-                      )}
-                    </div>
                   </div>
-
-                  {kiosk.location && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                      📍 {kiosk.location}
-                    </p>
-                  )}
-
-                  {kiosk.warehouseName && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
-                      <Warehouse className="w-4 h-4" />
-                      {kiosk.warehouseName}
-                    </div>
-                  )}
-
-                  {/* Device ID */}
-                  <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg mb-3">
-                    <p className="text-xs text-gray-500 mb-1">ID del Dispositivo</p>
-                    <div className="flex items-center gap-2">
-                      <code className="text-xs font-mono text-gray-700 dark:text-gray-300 truncate flex-1">
-                        {kiosk.deviceId}
-                      </code>
-                      <button
-                        onClick={() => copyDeviceId(kiosk.deviceId)}
-                        className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-                      >
-                        {copied === kiosk.deviceId ? (
-                          <Check className="w-4 h-4 text-green-500" />
-                        ) : (
-                          <Copy className="w-4 h-4 text-gray-400" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Open Kiosk Button */}
-                  {kiosk.isActive && (
-                    <Link
-                      href={`/dashboard/market/hr/kiosks/${kiosk.id}`}
-                      target="_blank"
-                      className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      Abrir Kiosco
-                    </Link>
-                  )}
-
-                  {!kiosk.isActive && (
-                    <div className="text-center py-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm text-gray-500">
-                      Kiosco desactivado
-                    </div>
-                  )}
-                </motion.div>
-              ))}
-            </div>
-          )}
-
-          {/* Modal */}
-          {showModal && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full"
-              >
-                <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                      {editingKiosk ? 'Editar Kiosco' : 'Nuevo Kiosco'}
-                    </h2>
-                    <button
-                      onClick={() => setShowModal(false)}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                    )}>Registrados</span>
                   </div>
                 </div>
+              </motion.div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Nombre *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-indigo-500"
-                      placeholder="Ej: Kiosco Entrada Principal"
-                    />
+              {/* Activos */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className={cn(
+                  'relative overflow-hidden',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl'
+                )}
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-blue-900/30 border border-blue-800/50'
+                          : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
+                      )}>
+                        <Monitor className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>Activos</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{stats.active}</p>
+                      </div>
+                    </div>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                    )}>Disponibles</span>
+                  </div>
+                </div>
+              </motion.div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Ubicación
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.location}
-                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-indigo-500"
-                      placeholder="Ej: Recepción, Piso 1"
-                    />
+              {/* En Línea */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className={cn(
+                  'relative overflow-hidden',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl'
+                )}
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-green-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-green-900/30 border border-green-800/50'
+                          : 'bg-gradient-to-br from-green-50 to-green-100 border border-green-200'
+                      )}>
+                        <Wifi className="w-6 h-6 text-green-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>En Línea</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{stats.online}</p>
+                      </div>
+                    </div>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                    )}>Conectados ahora</span>
+                  </div>
+                </div>
+              </motion.div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Almacén (opcional)
-                    </label>
-                    <select
-                      value={formData.warehouseId}
-                      onChange={(e) => setFormData({ ...formData, warehouseId: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value="">Sin almacén asociado</option>
-                      {warehouses.map(w => (
-                        <option key={w.id} value={w.id}>
-                          {w.name}
-                        </option>
-                      ))}
-                    </select>
+              {/* Con Almacén */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className={cn(
+                  'relative overflow-hidden',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl'
+                )}
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-amber-900/30 border border-amber-800/50'
+                          : 'bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200'
+                      )}>
+                        <Warehouse className="w-6 h-6 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>Con Almacén</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{stats.withWarehouse}</p>
+                      </div>
+                    </div>
                   </div>
-
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowModal(false)}
-                      className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors"
-                    >
-                      {editingKiosk ? 'Guardar' : 'Crear'}
-                    </button>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                    )}>Vinculados</span>
                   </div>
-                </form>
+                </div>
               </motion.div>
             </div>
-          )}
+
+            {/* Info Banner */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.45 }}
+              className={cn(
+                'p-4 rounded-xl border',
+                theme === 'dark'
+                  ? 'bg-indigo-900/20 border-indigo-800'
+                  : 'bg-indigo-50 border-indigo-200'
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <Monitor className="w-5 h-5 text-indigo-600 mt-0.5" />
+                <div>
+                  <h3 className={cn(
+                    'font-medium',
+                    theme === 'dark' ? 'text-indigo-300' : 'text-indigo-800'
+                  )}>
+                    ¿Cómo funciona?
+                  </h3>
+                  <p className={cn(
+                    'text-sm mt-1',
+                    theme === 'dark' ? 'text-indigo-400' : 'text-indigo-700'
+                  )}>
+                    Los kioscos permiten a los empleados registrar su entrada y salida usando PIN, badge o reconocimiento facial.
+                    Configura un dispositivo (tablet/computadora) y accede a la URL del kiosco para comenzar.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Filters */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className={cn(
+                'p-4 rounded-2xl border shadow-xl',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+              )}
+            >
+              <div className="flex flex-col sm:flex-row gap-4">
+                {/* Search */}
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre o ubicación..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className={cn(
+                      'w-full pl-10 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                      theme === 'dark'
+                        ? 'bg-gray-800/50 border-gray-700 text-white focus:border-indigo-500 focus:ring-indigo-500/20'
+                        : 'bg-white border-gray-200 text-gray-900 focus:border-indigo-500 focus:ring-indigo-500/20'
+                    )}
+                  />
+                </div>
+
+                {/* Status Filter */}
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as any)}
+                  className={cn(
+                    'px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all min-w-[180px]',
+                    theme === 'dark'
+                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-indigo-500 focus:ring-indigo-500/20'
+                      : 'bg-white border-gray-200 text-gray-900 focus:border-indigo-500 focus:ring-indigo-500/20'
+                  )}
+                >
+                  <option value="all">Todos</option>
+                  <option value="active">Activos</option>
+                  <option value="inactive">Inactivos</option>
+                </select>
+
+                {/* Refresh */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => fetchKiosks(true)}
+                  disabled={loading || isRefreshing}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all',
+                    theme === 'dark'
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                    isRefreshing && 'opacity-75'
+                  )}
+                >
+                  <RefreshCw className={cn('w-4 h-4', (loading || isRefreshing) && 'animate-spin')} />
+                </motion.button>
+
+                {/* Nuevo Kiosco */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    setEditingKiosk(null)
+                    setFormData({ name: '', location: '', warehouseId: '' })
+                    setShowModal(true)
+                  }}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl hover:from-indigo-600 hover:to-indigo-700 transition-all shadow-lg shadow-indigo-500/25"
+                >
+                  <Plus className="w-5 h-5" />
+                  Nuevo Kiosco
+                </motion.button>
+              </div>
+            </motion.div>
+
+            {/* Kiosks Table */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className={cn(
+                'rounded-2xl border shadow-xl overflow-hidden',
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+              )}
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className={cn(
+                      'border-b',
+                      theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                    )}>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Kiosco</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Ubicación</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Almacén</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Device ID</th>
+                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {loading ? (
+                      [...Array(5)].map((_, i) => (
+                        <tr key={i}>
+                          <td colSpan={6} className="py-4 px-4">
+                            <div className="animate-pulse flex items-center gap-3">
+                              <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+                              <div className="flex-1">
+                                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : filteredKiosks.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center">
+                          <Fingerprint className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                          <p className={cn(
+                            'font-medium mb-1',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>No hay kioscos</p>
+                          <p className="text-gray-500 dark:text-gray-400">
+                            Crea un kiosco para permitir el registro de asistencia
+                          </p>
+                          <button
+                            onClick={() => {
+                              setEditingKiosk(null)
+                              setFormData({ name: '', location: '', warehouseId: '' })
+                              setShowModal(true)
+                            }}
+                            className="mt-3 text-sm text-indigo-500 hover:text-indigo-600"
+                          >
+                            Crear primer kiosco
+                          </button>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredKiosks.map((kiosk, index) => (
+                        <motion.tr
+                          key={kiosk.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.02 }}
+                          className={cn(
+                            'group transition-colors',
+                            !kiosk.isActive && 'opacity-60',
+                            theme === 'dark' ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'
+                          )}
+                        >
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                'w-10 h-10 rounded-lg flex items-center justify-center',
+                                kiosk.isActive && isOnline(kiosk.lastPing)
+                                  ? theme === 'dark' ? 'bg-green-900/30' : 'bg-green-100'
+                                  : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                              )}>
+                                <Fingerprint className={cn(
+                                  'w-5 h-5',
+                                  kiosk.isActive && isOnline(kiosk.lastPing)
+                                    ? 'text-green-600'
+                                    : 'text-gray-400'
+                                )} />
+                              </div>
+                              <div>
+                                <p className={cn(
+                                  'font-medium',
+                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                )}>
+                                  {kiosk.name}
+                                </p>
+                                <div className="flex items-center gap-1 mt-0.5">
+                                  {kiosk.isActive && isOnline(kiosk.lastPing) ? (
+                                    <span className="flex items-center gap-1 text-xs text-green-600">
+                                      <Wifi className="w-3 h-3" />
+                                      En línea
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1 text-xs text-gray-500">
+                                      <WifiOff className="w-3 h-3" />
+                                      Sin conexión
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4">
+                            {kiosk.location ? (
+                              <span className={cn(
+                                'inline-flex items-center gap-1 text-sm',
+                                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                              )}>
+                                <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                                {kiosk.location}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4">
+                            {kiosk.warehouseName ? (
+                              <span className={cn(
+                                'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium',
+                                theme === 'dark' ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-700'
+                              )}>
+                                <Warehouse className="w-3 h-3" />
+                                {kiosk.warehouseName}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-2">
+                              <code className={cn(
+                                'text-xs font-mono truncate max-w-[150px]',
+                                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                              )}>
+                                {kiosk.deviceId}
+                              </code>
+                              <button
+                                onClick={() => copyDeviceId(kiosk.deviceId)}
+                                className={cn(
+                                  'p-1 rounded transition-colors',
+                                  theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-200'
+                                )}
+                              >
+                                {copied === kiosk.deviceId ? (
+                                  <Check className="w-3.5 h-3.5 text-green-500" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5 text-gray-400" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            {kiosk.isActive ? (
+                              <span className={cn(
+                                'inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium',
+                                theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
+                              )}>
+                                Activo
+                              </span>
+                            ) : (
+                              <span className={cn(
+                                'inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium',
+                                theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-700'
+                              )}>
+                                Inactivo
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              {kiosk.isActive && (
+                                <Link
+                                  href={`/dashboard/market/hr/kiosks/${kiosk.id}`}
+                                  target="_blank"
+                                >
+                                  <motion.button
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    className="p-2 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
+                                    title="Abrir Kiosco"
+                                  >
+                                    <ExternalLink className="w-4 h-4 text-indigo-500" />
+                                  </motion.button>
+                                </Link>
+                              )}
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => handleEdit(kiosk)}
+                                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                title="Editar"
+                              >
+                                <Edit className="w-4 h-4 text-gray-500" />
+                              </motion.button>
+                              {kiosk.isActive && (
+                                <motion.button
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => handleDelete(kiosk.id)}
+                                  className="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                                  title="Desactivar"
+                                >
+                                  <Trash2 className="w-4 h-4 text-red-500" />
+                                </motion.button>
+                              )}
+                            </div>
+                          </td>
+                        </motion.tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </motion.div>
+
+            {/* Modal */}
+            <AnimatePresence>
+              {showModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className={cn(
+                      'rounded-2xl shadow-2xl max-w-md w-full',
+                      theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                    )}
+                  >
+                    <div className={cn(
+                      'p-6 border-b',
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <div className="flex items-center justify-between">
+                        <h2 className={cn(
+                          'text-xl font-bold',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>
+                          {editingKiosk ? 'Editar Kiosco' : 'Nuevo Kiosco'}
+                        </h2>
+                        <button
+                          onClick={() => setShowModal(false)}
+                          className={cn(
+                            'p-2 rounded-lg transition-colors',
+                            theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                          )}
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                      <div>
+                        <label className={cn(
+                          'block text-sm font-medium mb-1',
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Nombre *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          className={cn(
+                            'w-full px-4 py-2.5 border rounded-xl focus:ring-2',
+                            theme === 'dark'
+                              ? 'bg-gray-900 border-gray-700 text-white focus:ring-indigo-500'
+                              : 'bg-white border-gray-200 text-gray-900 focus:ring-indigo-500'
+                          )}
+                          placeholder="Ej: Kiosco Entrada Principal"
+                        />
+                      </div>
+
+                      <div>
+                        <label className={cn(
+                          'block text-sm font-medium mb-1',
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Ubicación
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.location}
+                          onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                          className={cn(
+                            'w-full px-4 py-2.5 border rounded-xl focus:ring-2',
+                            theme === 'dark'
+                              ? 'bg-gray-900 border-gray-700 text-white focus:ring-indigo-500'
+                              : 'bg-white border-gray-200 text-gray-900 focus:ring-indigo-500'
+                          )}
+                          placeholder="Ej: Recepción, Piso 1"
+                        />
+                      </div>
+
+                      <div>
+                        <label className={cn(
+                          'block text-sm font-medium mb-1',
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Almacén (opcional)
+                        </label>
+                        <select
+                          value={formData.warehouseId}
+                          onChange={(e) => setFormData({ ...formData, warehouseId: e.target.value })}
+                          className={cn(
+                            'w-full px-4 py-2.5 border rounded-xl focus:ring-2',
+                            theme === 'dark'
+                              ? 'bg-gray-900 border-gray-700 text-white focus:ring-indigo-500'
+                              : 'bg-white border-gray-200 text-gray-900 focus:ring-indigo-500'
+                          )}
+                        >
+                          <option value="">Sin almacén asociado</option>
+                          {warehouses.map(w => (
+                            <option key={w.id} value={w.id}>
+                              {w.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className={cn(
+                        'flex gap-3 pt-4 border-t',
+                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                      )}>
+                        <button
+                          type="button"
+                          onClick={() => setShowModal(false)}
+                          className={cn(
+                            'flex-1 px-4 py-2.5 border rounded-xl font-medium transition-colors',
+                            theme === 'dark'
+                              ? 'border-gray-700 hover:bg-gray-700'
+                              : 'border-gray-200 hover:bg-gray-50'
+                          )}
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          className="flex-1 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl font-medium hover:from-indigo-600 hover:to-indigo-700 transition-colors"
+                        >
+                          {editingKiosk ? 'Guardar' : 'Crear'}
+                        </button>
+                      </div>
+                    </form>
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
+          </motion.div>
         </div>
       </DashboardLayout>
     </ProtectedRoute>
