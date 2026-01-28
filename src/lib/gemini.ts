@@ -15,10 +15,9 @@ const STANDARD_IMAGE_SIZE = 1024 // Tamaño estándar para todas las imágenes d
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
 // Modelo para generación de imágenes de productos
-// gemini-2.0-flash-exp soporta generación nativa de imágenes con responseModalities: ['IMAGE', 'TEXT']
 const IMAGE_GENERATION_MODEL = 'gemini-2.0-flash-exp'
-// Modelo para edición de imágenes (Imagen 3)
-const IMAGE_EDIT_MODEL = 'imagen-3.0-capability-001'
+// Modelo para edición de imágenes con mejor calidad
+const IMAGE_EDIT_MODEL = 'gemini-2.5-flash-preview-04-17'
 
 /**
  * Obtiene el cliente de Gemini AI
@@ -686,30 +685,26 @@ export async function processEmployeePhoto(
     const cleanBase64 = await compressImageForGemini(imageBase64)
 
     const suitDescription = gender === 'male'
-      ? 'a formal dark navy business suit with white dress shirt and dark tie'
-      : 'a formal dark navy blazer with elegant white blouse'
+      ? 'wearing a dark navy formal suit with white shirt and tie'
+      : 'wearing a dark navy professional blazer with white blouse'
 
-    // Prompt optimizado para foto estilo pasaporte/carnet - similar al de productos que funciona
-    const prompt = `Edit this photo to create an official passport-style portrait photo:
+    // Prompt directo y simple para edición de imagen
+    const prompt = `Edit this photograph:
 
-CRITICAL REQUIREMENTS:
-1. Output MUST be exactly 1024x1024 pixels (square format)
-2. Remove the background completely and replace with pure white (#FFFFFF)
-3. KEEP THE PERSON'S FACE EXACTLY AS IT IS - same facial features, same skin tone, same expression
-4. CHANGE THE CLOTHING to ${suitDescription} - make it look natural and professional
-5. Frame as passport photo: head and shoulders visible, face centered, looking straight ahead
-6. Apply professional studio lighting - soft, even illumination on face
-7. Ensure sharp, clean edges where person meets the white background
-8. The person should occupy approximately 70-80% of the frame height
-9. Equal white margins on all sides
+1. Replace the background with solid pure white color (#FFFFFF)
+2. Change the person's clothing to: ${suitDescription}
+3. Keep the person's face, hair, and skin exactly the same - do not modify facial features
+4. Crop to show head and shoulders only, centered
+5. Output a square 1024x1024 pixel image
 
-The final image must look like an official ID photo or passport photo - clean, professional, white background, formal attire. Do NOT change the person's face, hair color, or any identifying features.`
+This is for an official ID photo. The person must be ${suitDescription}, on a pure white background.`
 
-    console.log('[Gemini Employee Photo] Using model:', IMAGE_GENERATION_MODEL)
-    console.log('[Gemini Employee Photo] Sending request to Gemini API...')
+    console.log('[Gemini Employee Photo] Using model:', IMAGE_EDIT_MODEL)
+    console.log('[Gemini Employee Photo] Prompt:', prompt)
+    console.log('[Gemini Employee Photo] Image size:', cleanBase64.length, 'chars')
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_GENERATION_MODEL}:generateContent?key=${GOOGLE_AI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_EDIT_MODEL}:generateContent?key=${GOOGLE_AI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -721,7 +716,8 @@ The final image must look like an official ID photo or passport photo - clean, p
             ]
           }],
           generationConfig: {
-            responseModalities: ['IMAGE', 'TEXT']
+            responseModalities: ['IMAGE', 'TEXT'],
+            temperature: 1.0
           }
         })
       }
