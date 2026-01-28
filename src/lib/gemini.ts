@@ -17,6 +17,8 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
 // Modelo para generación de imágenes de productos
 // gemini-2.0-flash-exp soporta generación nativa de imágenes con responseModalities: ['IMAGE', 'TEXT']
 const IMAGE_GENERATION_MODEL = 'gemini-2.0-flash-exp'
+// Modelo para edición de imágenes (Imagen 3)
+const IMAGE_EDIT_MODEL = 'imagen-3.0-capability-001'
 
 /**
  * Obtiene el cliente de Gemini AI
@@ -36,19 +38,25 @@ function getGeminiClient() {
 async function compressImageForGemini(base64Data: string): Promise<string> {
   const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '')
 
-  // Si ya está dentro del límite, devolver sin cambios
-  if (cleanBase64.length <= GEMINI_MAX_IMAGE_SIZE) {
-    console.log('[Gemini] Image size OK:', Math.round(cleanBase64.length / 1024), 'KB')
-    return cleanBase64
-  }
-
-  console.log('[Gemini] Image too large:', Math.round(cleanBase64.length / 1024), 'KB, compressing...')
-
   try {
     const inputBuffer = Buffer.from(cleanBase64, 'base64')
 
+    // Auto-rotate based on EXIF orientation first
+    const rotatedBuffer = await sharp(inputBuffer)
+      .rotate() // Auto-rotate based on EXIF
+      .toBuffer()
+
+    // Check size after rotation
+    const rotatedBase64 = rotatedBuffer.toString('base64')
+    if (rotatedBase64.length <= GEMINI_MAX_IMAGE_SIZE) {
+      console.log('[Gemini] Image size OK after rotation:', Math.round(rotatedBase64.length / 1024), 'KB')
+      return rotatedBase64
+    }
+
+    console.log('[Gemini] Image too large:', Math.round(rotatedBase64.length / 1024), 'KB, compressing...')
+
     // Obtener metadata para saber dimensiones actuales
-    const metadata = await sharp(inputBuffer).metadata()
+    const metadata = await sharp(rotatedBuffer).metadata()
     const maxDimension = Math.max(metadata.width || 0, metadata.height || 0)
 
     // Calcular ratio de redimensionamiento si es necesario
@@ -68,7 +76,7 @@ async function compressImageForGemini(base64Data: string): Promise<string> {
     let outputBase64: string
 
     do {
-      outputBuffer = await sharp(inputBuffer)
+      outputBuffer = await sharp(rotatedBuffer)
         .resize(resizeOptions)
         .jpeg({ quality, mozjpeg: true })
         .toBuffer()
@@ -96,12 +104,16 @@ async function normalizeImageSize(base64Data: string): Promise<string> {
     const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '')
     const inputBuffer = Buffer.from(cleanBase64, 'base64')
 
-    // Obtener metadata de la imagen
-    const metadata = await sharp(inputBuffer).metadata()
+    // Auto-rotate based on EXIF orientation and get metadata
+    const rotatedBuffer = await sharp(inputBuffer)
+      .rotate() // Auto-rotate based on EXIF orientation
+      .toBuffer()
+
+    const metadata = await sharp(rotatedBuffer).metadata()
     const width = metadata.width || STANDARD_IMAGE_SIZE
     const height = metadata.height || STANDARD_IMAGE_SIZE
 
-    console.log(`[Gemini Normalize] Input size: ${width}x${height}`)
+    console.log(`[Gemini Normalize] Input size after rotation: ${width}x${height}`)
 
     // Calcular el tamaño para que el producto ocupe ~80% del frame
     const maxDimension = Math.max(width, height)
@@ -112,7 +124,7 @@ async function normalizeImageSize(base64Data: string): Promise<string> {
     const scaledHeight = Math.floor(height * scale)
 
     // Redimensionar la imagen manteniendo proporción
-    const resizedBuffer = await sharp(inputBuffer)
+    const resizedBuffer = await sharp(rotatedBuffer)
       .resize(scaledWidth, scaledHeight, {
         fit: 'inside',
         withoutEnlargement: false
@@ -132,7 +144,7 @@ async function normalizeImageSize(base64Data: string): Promise<string> {
         input: resizedBuffer,
         gravity: 'center'
       }])
-      .png({ quality: 95 })
+      .jpeg({ quality: 95 }) // Use JPEG for better compatibility
       .toBuffer()
 
     const outputBase64 = outputBuffer.toString('base64')
@@ -649,8 +661,22 @@ export async function processEmployeePhoto(
   imageBase64?: string
   error?: string
 }> {
+  // Helper function to normalize image without AI
+  const normalizeOriginalImage = async (base64: string): Promise<string> => {
+    const cleanBase64 = base64.replace(/^data:image\/\w+;base64,/, '')
+    return await normalizeImageSize(cleanBase64)
+  }
+
+  // If no API key, just normalize the original image
   if (!GOOGLE_AI_API_KEY) {
-    return { success: false, error: 'GOOGLE_AI_API_KEY no configurada' }
+    console.log('[Gemini Employee Photo] No API key, normalizing original image...')
+    try {
+      const normalized = await normalizeOriginalImage(imageBase64)
+      return { success: true, imageBase64: normalized, error: 'IA no configurada, imagen normalizada' }
+    } catch (e) {
+      console.error('[Gemini Employee Photo] Failed to normalize:', e)
+      return { success: false, error: 'Error al normalizar imagen' }
+    }
   }
 
   try {
@@ -660,17 +686,27 @@ export async function processEmployeePhoto(
     const cleanBase64 = await compressImageForGemini(imageBase64)
 
     const suitDescription = gender === 'male'
-      ? 'dark navy formal business suit with white shirt and tie'
-      : 'elegant navy blazer with professional blouse'
+      ? 'wearing a dark navy formal business suit with white shirt and tie'
+      : 'wearing an elegant navy blazer with professional blouse'
 
-    // Prompt simplificado para mejor compatibilidad
-    const prompt = `Transform this photo into a professional corporate headshot:
-- Remove background, replace with pure white
-- Add ${suitDescription} to the person
-- Keep face exactly the same, don't alter facial features
-- Center the person, head and shoulders visible
-- Professional studio lighting
-- Output 1024x1024 square image`
+    // Prompt optimizado para edición de imagen con Gemini
+    const prompt = `Edit this photograph to create a professional corporate ID photo:
+
+IMPORTANT - This is an IMAGE EDITING task, not generation. You must edit the provided photo.
+
+Required changes:
+1. BACKGROUND: Remove the current background completely and replace it with a clean, pure white background (#FFFFFF)
+2. CLOTHING: Edit the person's clothing to show them ${suitDescription}
+3. FRAMING: Crop and center as a professional headshot showing head and shoulders
+4. LIGHTING: Apply professional studio lighting effect
+5. FACE: Keep the person's face, hair, and features EXACTLY as they appear - do not modify
+
+Technical requirements:
+- Output exactly 1024x1024 pixels square format
+- High quality, sharp image
+- No watermarks or text
+
+This should look like an official corporate employee ID photo.`
 
     console.log('[Gemini Employee Photo] Using model:', IMAGE_GENERATION_MODEL)
 
@@ -687,7 +723,8 @@ export async function processEmployeePhoto(
             ]
           }],
           generationConfig: {
-            responseModalities: ['IMAGE', 'TEXT']
+            responseModalities: ['IMAGE', 'TEXT'],
+            temperature: 0.4
           }
         })
       }
@@ -709,14 +746,21 @@ export async function processEmployeePhoto(
 
     const data = await response.json()
 
-    // Log response for debugging
-    console.log('[Gemini Employee Photo] Response received, checking for image...')
+    // Log full response for debugging
+    console.log('[Gemini Employee Photo] Response structure:', JSON.stringify({
+      hasCandidates: !!data.candidates,
+      candidateCount: data.candidates?.length || 0,
+      finishReason: data.candidates?.[0]?.finishReason,
+      hasContent: !!data.candidates?.[0]?.content,
+      partsCount: data.candidates?.[0]?.content?.parts?.length || 0,
+      blockReason: data.promptFeedback?.blockReason
+    }))
 
     // Check for blocked content
     if (data.candidates?.[0]?.finishReason === 'SAFETY' ||
         data.candidates?.[0]?.finishReason === 'RECITATION' ||
         data.promptFeedback?.blockReason) {
-      console.log('[Gemini Employee Photo] Content blocked, normalizing original...')
+      console.log('[Gemini Employee Photo] Content blocked:', data.promptFeedback?.blockReason || data.candidates?.[0]?.finishReason)
       const normalizedOriginal = await normalizeImageSize(cleanBase64)
       return {
         success: true,
@@ -729,22 +773,25 @@ export async function processEmployeePhoto(
     if (data.candidates?.[0]?.content?.parts) {
       for (const part of data.candidates[0].content.parts) {
         if (part.inlineData?.data) {
-          console.log('[Gemini Employee Photo] Success! AI processed image received.')
+          console.log('[Gemini Employee Photo] Success! AI processed image received, size:', part.inlineData.data.length)
           const normalizedImage = await normalizeImageSize(part.inlineData.data)
           return { success: true, imageBase64: normalizedImage }
+        }
+        if (part.text) {
+          console.log('[Gemini Employee Photo] AI text response:', part.text.substring(0, 200))
         }
       }
     }
 
     // Fallback: normalizar original
-    console.log('[Gemini Employee Photo] No AI image returned, normalizing original...')
+    console.log('[Gemini Employee Photo] No AI image in response, normalizing original...')
     const normalizedOriginal = await normalizeImageSize(cleanBase64)
     return { success: true, imageBase64: normalizedOriginal }
 
   } catch (error) {
     console.error('[Gemini Employee Photo] Error:', error)
 
-    // Last resort fallback
+    // Last resort fallback - try multiple approaches
     try {
       const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '')
       const normalizedOriginal = await normalizeImageSize(cleanBase64)
@@ -754,9 +801,21 @@ export async function processEmployeePhoto(
         error: 'Error de IA, se uso imagen original'
       }
     } catch (fallbackError) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Error al procesar imagen'
+      console.error('[Gemini Employee Photo] Fallback also failed:', fallbackError)
+
+      // Ultimate fallback: return the clean base64 without normalization
+      try {
+        const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '')
+        return {
+          success: true,
+          imageBase64: cleanBase64,
+          error: 'Error de procesamiento, imagen sin normalizar'
+        }
+      } catch (e) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Error al procesar imagen'
+        }
       }
     }
   }
