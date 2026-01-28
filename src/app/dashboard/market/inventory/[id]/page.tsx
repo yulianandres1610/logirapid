@@ -1252,18 +1252,13 @@ export default function ProductDetailPage() {
                               </div>
                             </div>
 
-                            {/* Price & Stock */}
+                            {/* Prices */}
                             <div className="text-right flex-shrink-0">
                               <p className="text-lg font-bold text-emerald-600">
                                 {symbol}{Number(variant.sellingPrice).toFixed(2)}
                               </p>
-                              <p className={cn(
-                                'text-sm',
-                                variant.quantityOnHand === 0 ? 'text-red-500' :
-                                variant.quantityOnHand <= product.minimumStock ? 'text-amber-500' :
-                                'text-gray-500'
-                              )}>
-                                Stock: {formatNumber(variant.quantityOnHand)}
+                              <p className="text-xs text-gray-500">
+                                Costo: {symbol}{Number(variant.costPrice || 0).toFixed(2)}
                               </p>
                             </div>
 
