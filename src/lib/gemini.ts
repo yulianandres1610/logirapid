@@ -686,29 +686,27 @@ export async function processEmployeePhoto(
     const cleanBase64 = await compressImageForGemini(imageBase64)
 
     const suitDescription = gender === 'male'
-      ? 'wearing a dark navy formal business suit with white shirt and tie'
-      : 'wearing an elegant navy blazer with professional blouse'
+      ? 'a formal dark navy business suit with white dress shirt and dark tie'
+      : 'a formal dark navy blazer with elegant white blouse'
 
-    // Prompt optimizado para edición de imagen con Gemini
-    const prompt = `Edit this photograph to create a professional corporate ID photo:
+    // Prompt optimizado para foto estilo pasaporte/carnet - similar al de productos que funciona
+    const prompt = `Edit this photo to create an official passport-style portrait photo:
 
-IMPORTANT - This is an IMAGE EDITING task, not generation. You must edit the provided photo.
+CRITICAL REQUIREMENTS:
+1. Output MUST be exactly 1024x1024 pixels (square format)
+2. Remove the background completely and replace with pure white (#FFFFFF)
+3. KEEP THE PERSON'S FACE EXACTLY AS IT IS - same facial features, same skin tone, same expression
+4. CHANGE THE CLOTHING to ${suitDescription} - make it look natural and professional
+5. Frame as passport photo: head and shoulders visible, face centered, looking straight ahead
+6. Apply professional studio lighting - soft, even illumination on face
+7. Ensure sharp, clean edges where person meets the white background
+8. The person should occupy approximately 70-80% of the frame height
+9. Equal white margins on all sides
 
-Required changes:
-1. BACKGROUND: Remove the current background completely and replace it with a clean, pure white background (#FFFFFF)
-2. CLOTHING: Edit the person's clothing to show them ${suitDescription}
-3. FRAMING: Crop and center as a professional headshot showing head and shoulders
-4. LIGHTING: Apply professional studio lighting effect
-5. FACE: Keep the person's face, hair, and features EXACTLY as they appear - do not modify
-
-Technical requirements:
-- Output exactly 1024x1024 pixels square format
-- High quality, sharp image
-- No watermarks or text
-
-This should look like an official corporate employee ID photo.`
+The final image must look like an official ID photo or passport photo - clean, professional, white background, formal attire. Do NOT change the person's face, hair color, or any identifying features.`
 
     console.log('[Gemini Employee Photo] Using model:', IMAGE_GENERATION_MODEL)
+    console.log('[Gemini Employee Photo] Sending request to Gemini API...')
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_GENERATION_MODEL}:generateContent?key=${GOOGLE_AI_API_KEY}`,
@@ -723,12 +721,13 @@ This should look like an official corporate employee ID photo.`
             ]
           }],
           generationConfig: {
-            responseModalities: ['IMAGE', 'TEXT'],
-            temperature: 0.4
+            responseModalities: ['IMAGE', 'TEXT']
           }
         })
       }
     )
+
+    console.log('[Gemini Employee Photo] Response status:', response.status)
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -753,7 +752,8 @@ This should look like an official corporate employee ID photo.`
       finishReason: data.candidates?.[0]?.finishReason,
       hasContent: !!data.candidates?.[0]?.content,
       partsCount: data.candidates?.[0]?.content?.parts?.length || 0,
-      blockReason: data.promptFeedback?.blockReason
+      blockReason: data.promptFeedback?.blockReason,
+      hasInlineData: data.candidates?.[0]?.content?.parts?.some((p: any) => p.inlineData?.data)
     }))
 
     // Check for blocked content
@@ -773,20 +773,23 @@ This should look like an official corporate employee ID photo.`
     if (data.candidates?.[0]?.content?.parts) {
       for (const part of data.candidates[0].content.parts) {
         if (part.inlineData?.data) {
-          console.log('[Gemini Employee Photo] Success! AI processed image received, size:', part.inlineData.data.length)
+          console.log('[Gemini Employee Photo] SUCCESS! AI edited image received, base64 length:', part.inlineData.data.length)
           const normalizedImage = await normalizeImageSize(part.inlineData.data)
           return { success: true, imageBase64: normalizedImage }
         }
         if (part.text) {
-          console.log('[Gemini Employee Photo] AI text response:', part.text.substring(0, 200))
+          console.log('[Gemini Employee Photo] AI text response:', part.text.substring(0, 500))
         }
       }
     }
 
+    // Si no hay imagen, loguear toda la respuesta para debug
+    console.log('[Gemini Employee Photo] No image found in response. Full response:', JSON.stringify(data).substring(0, 1000))
+
     // Fallback: normalizar original
     console.log('[Gemini Employee Photo] No AI image in response, normalizing original...')
     const normalizedOriginal = await normalizeImageSize(cleanBase64)
-    return { success: true, imageBase64: normalizedOriginal }
+    return { success: true, imageBase64: normalizedOriginal, error: 'IA no devolvio imagen editada' }
 
   } catch (error) {
     console.error('[Gemini Employee Photo] Error:', error)
