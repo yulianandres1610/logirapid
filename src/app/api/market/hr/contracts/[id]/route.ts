@@ -96,6 +96,9 @@ export async function GET(
         terminationDate: row.terminationdate,
         terminationReason: row.terminationreason,
         notes: row.notes,
+        photoUrl: row.photourl,
+        photoOriginalUrl: row.photooriginalurl,
+        photoProcessedAt: row.photoprocessedat,
         createdAt: row.createdat,
         updatedAt: row.updatedat
       }
@@ -135,7 +138,9 @@ export async function PUT(
       status,
       terminationDate,
       terminationReason,
-      notes
+      notes,
+      photoUrl,
+      photoOriginalUrl
     } = body
 
     const result = await db.query(`
@@ -154,6 +159,9 @@ export async function PUT(
         terminationdate = $11,
         terminationreason = $12,
         notes = $13,
+        photourl = COALESCE($16, photourl),
+        photooriginalurl = COALESCE($17, photooriginalurl),
+        photoprocessedat = CASE WHEN $16 IS NOT NULL THEN NOW() ELSE photoprocessedat END,
         updatedat = NOW()
       WHERE id = $14 AND companyid = $15
       RETURNING *
@@ -161,7 +169,7 @@ export async function PUT(
       contractType, endDate, payType, payRate, currency,
       commissionRate, departmentId || null, scheduleId || null,
       position, status, terminationDate, terminationReason,
-      notes, id, companyId
+      notes, id, companyId, photoUrl, photoOriginalUrl
     ])
 
     if (result.rows.length === 0) {
@@ -202,6 +210,9 @@ export async function PUT(
         terminationDate: row.terminationdate,
         terminationReason: row.terminationreason,
         notes: row.notes,
+        photoUrl: row.photourl,
+        photoOriginalUrl: row.photooriginalurl,
+        photoProcessedAt: row.photoprocessedat,
         createdAt: row.createdat,
         updatedAt: row.updatedat
       }

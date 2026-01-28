@@ -85,6 +85,9 @@ export async function GET(request: NextRequest) {
         terminationDate: row.terminationdate,
         terminationReason: row.terminationreason,
         notes: row.notes,
+        photoUrl: row.photourl,
+        photoOriginalUrl: row.photooriginalurl,
+        photoProcessedAt: row.photoprocessedat,
         createdAt: row.createdat,
         updatedAt: row.updatedat
       }))
@@ -120,7 +123,9 @@ export async function POST(request: NextRequest) {
       departmentId,
       scheduleId,
       position,
-      notes
+      notes,
+      photoUrl,
+      photoOriginalUrl
     } = body
 
     if (!employeeId || !contractType || !startDate || !payType || !payRate) {
@@ -165,15 +170,17 @@ export async function POST(request: NextRequest) {
       INSERT INTO market_contracts (
         companyid, employeeid, contractnumber, contracttype,
         startdate, enddate, paytype, payrate, currency,
-        commissionrate, departmentid, scheduleid, position, notes
+        commissionrate, departmentid, scheduleid, position, notes,
+        photourl, photooriginalurl, photoprocessedat
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING *
     `, [
       companyId, employeeId, finalContractNumber, contractType,
       startDate, endDate || null, payType, payRate, currency || 'USD',
       commissionRate || 0, departmentId || null, scheduleId || null,
-      position || null, notes || null
+      position || null, notes || null,
+      photoUrl || null, photoOriginalUrl || null, photoUrl ? new Date() : null
     ])
 
     // Update employee's department if specified
@@ -205,6 +212,9 @@ export async function POST(request: NextRequest) {
         position: row.position,
         status: row.status,
         notes: row.notes,
+        photoUrl: row.photourl,
+        photoOriginalUrl: row.photooriginalurl,
+        photoProcessedAt: row.photoprocessedat,
         createdAt: row.createdat,
         updatedAt: row.updatedat
       }

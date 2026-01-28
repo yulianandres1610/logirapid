@@ -636,6 +636,102 @@ Responde en JSON:
 }
 
 /**
+ * Procesa foto de empleado para contrato
+ * - Remueve fondo y pone blanco puro
+ * - Agrega traje formal según género
+ * - Normaliza a 1024x1024
+ */
+export async function processEmployeePhoto(
+  imageBase64: string,
+  gender: 'male' | 'female'
+): Promise<{
+  success: boolean
+  imageBase64?: string
+  error?: string
+}> {
+  if (!GOOGLE_AI_API_KEY) {
+    return { success: false, error: 'GOOGLE_AI_API_KEY no configurada' }
+  }
+
+  try {
+    console.log('[Gemini Employee Photo] Processing with gender:', gender)
+
+    // Comprimir si es muy grande (misma función que productos)
+    const cleanBase64 = await compressImageForGemini(imageBase64)
+
+    const suitDescription = gender === 'male'
+      ? 'dark navy suit jacket, white dress shirt, and professional tie'
+      : 'professional blazer in navy or black with elegant blouse'
+
+    const prompt = `Edit this person's photo for a professional employee contract:
+
+CRITICAL REQUIREMENTS:
+1. Output MUST be exactly 1024x1024 pixels (square format)
+2. Remove the background completely and replace with pure white (#FFFFFF)
+3. KEEP THE PERSON'S FACE EXACTLY AS IT IS - do not modify facial features, skin tone, or any personal characteristics
+4. ADD PROFESSIONAL ATTIRE: ${suitDescription}
+5. Frame as professional headshot (head and shoulders visible)
+6. Center the person horizontally and vertically
+7. Apply professional studio lighting effect
+8. Maintain natural skin tones exactly as in the original
+9. Clean, sharp edges where person meets white background
+10. The person should be wearing the suit naturally, as if photographed in a studio
+
+The final image should look like an official corporate headshot photo suitable for contracts and official documents.`
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_GENERATION_MODEL}:generateContent?key=${GOOGLE_AI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } }
+            ]
+          }],
+          generationConfig: {
+            responseModalities: ['IMAGE', 'TEXT']
+          }
+        })
+      }
+    )
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[Gemini Employee Photo] API Error:', response.status, errorText)
+      return { success: false, error: 'No se pudo procesar la imagen' }
+    }
+
+    const data = await response.json()
+
+    // Buscar imagen en respuesta (mismo patrón que cleanProductImage)
+    if (data.candidates?.[0]?.content?.parts) {
+      for (const part of data.candidates[0].content.parts) {
+        if (part.inlineData?.data) {
+          console.log('[Gemini Employee Photo] Success, normalizing...')
+          const normalizedImage = await normalizeImageSize(part.inlineData.data)
+          return { success: true, imageBase64: normalizedImage }
+        }
+      }
+    }
+
+    // Fallback: normalizar original
+    console.log('[Gemini Employee Photo] No edited image returned, normalizing original...')
+    const normalizedOriginal = await normalizeImageSize(cleanBase64)
+    return { success: true, imageBase64: normalizedOriginal }
+
+  } catch (error) {
+    console.error('[Gemini Employee Photo] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al procesar imagen'
+    }
+  }
+}
+
+/**
  * Verifica si la API key de Gemini esta configurada
  */
 export function isGeminiConfigured(): boolean {

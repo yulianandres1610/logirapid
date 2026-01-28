@@ -141,6 +141,25 @@ export async function POST(request: NextRequest) {
       console.log('Column hasfaceregistered may already exist')
     }
 
+    // Add photo columns to market_contracts if not exists
+    try {
+      await db.query(`ALTER TABLE market_contracts ADD COLUMN IF NOT EXISTS photourl TEXT`)
+    } catch (e) {
+      console.log('Column photourl may already exist')
+    }
+
+    try {
+      await db.query(`ALTER TABLE market_contracts ADD COLUMN IF NOT EXISTS photooriginalurl TEXT`)
+    } catch (e) {
+      console.log('Column photooriginalurl may already exist')
+    }
+
+    try {
+      await db.query(`ALTER TABLE market_contracts ADD COLUMN IF NOT EXISTS photoprocessedat TIMESTAMP`)
+    } catch (e) {
+      console.log('Column photoprocessedat may already exist')
+    }
+
     // Create indexes for better performance
     try {
       await db.query(`CREATE INDEX IF NOT EXISTS idx_attendance_employee_date ON market_attendance(employeeid, date)`)
