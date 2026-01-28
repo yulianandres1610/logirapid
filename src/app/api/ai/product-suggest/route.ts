@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 // Gemini Configuration - Optimizado para descripciones de productos
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
-const GEMINI_MODEL = 'gemini-3-pro-preview' // Modelo para generación de texto
+const GEMINI_MODEL = 'gemini-2.5-flash' // Modelo rápido para generación de texto
 
 // Available categories (must match the ones in the create form)
 const CATEGORIES = [
@@ -162,7 +162,7 @@ Responde SOLO con JSON válido:
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.3,
-          maxOutputTokens: 300,
+          maxOutputTokens: 500, // Aumentado para modelos con thinking tokens
         }
       })
 
