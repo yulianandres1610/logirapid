@@ -12,7 +12,10 @@ import {
   RefreshCw,
   Clock,
   CheckCircle,
-  XCircle
+  XCircle,
+  DollarSign,
+  FileClock,
+  FileCheck
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -166,68 +169,198 @@ export default function WholesaleQuotesPage() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className={cn(
-                  'text-2xl font-bold',
-                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                )}>
-                  Cotizaciones
-                </h1>
-                <p className={cn(
-                  'text-sm mt-1',
-                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                )}>
-                  Gestión de presupuestos y cotizaciones B2B
-                </p>
-              </div>
-              <Link href="/dashboard/market/wholesale/quotes/create">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/25"
-                >
-                  <Plus className="w-5 h-5" />
-                  Nueva Cotización
-                </motion.button>
-              </Link>
-            </div>
-
             {/* Stats Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              {Object.entries({
-                total: { label: 'Total', value: stats.total, color: 'blue' },
-                draft: { label: 'Borradores', value: stats.draft, color: 'gray' },
-                sent: { label: 'Enviadas', value: stats.sent, color: 'blue' },
-                accepted: { label: 'Aceptadas', value: stats.accepted, color: 'green' },
-                converted: { label: 'Convertidas', value: stats.converted, color: 'purple' },
-                pendingValue: { label: 'Valor Pendiente', value: formatCurrency(stats.pendingValue), color: 'amber' }
-              }).map(([key, stat]) => (
-                <motion.div
-                  key={key}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={cn(
-                    'p-4 rounded-xl border',
-                    theme === 'dark'
-                      ? 'bg-gray-800/50 border-gray-700'
-                      : 'bg-white border-gray-200'
-                  )}
-                >
-                  <p className="text-sm text-gray-500">{stat.label}</p>
-                  <p className={cn(
-                    'text-xl font-bold mt-1',
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>{stat.value}</p>
-                </motion.div>
-              ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+              {/* Total Cotizaciones */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className={cn(
+                  'relative overflow-hidden',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl'
+                )}
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-blue-900/30 border border-blue-800/50'
+                          : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
+                      )}>
+                        <FileText className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>Total Cotizaciones</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{stats.total}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                    )}>Presupuestos en el sistema</span>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Enviadas */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className={cn(
+                  'relative overflow-hidden',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl'
+                )}
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-400 to-cyan-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-cyan-900/30 border border-cyan-800/50'
+                          : 'bg-gradient-to-br from-cyan-50 to-cyan-100 border border-cyan-200'
+                      )}>
+                        <FileClock className="w-6 h-6 text-cyan-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>Enviadas</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{stats.sent}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                    )}>Pendientes de respuesta</span>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Aceptadas */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className={cn(
+                  'relative overflow-hidden',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl'
+                )}
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-green-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-green-900/30 border border-green-800/50'
+                          : 'bg-gradient-to-br from-green-50 to-green-100 border border-green-200'
+                      )}>
+                        <FileCheck className="w-6 h-6 text-green-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>Aceptadas</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{stats.accepted}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                    )}>Listas para facturar</span>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Valor Pendiente */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className={cn(
+                  'relative overflow-hidden',
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
+                  'rounded-2xl border shadow-xl'
+                )}
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-amber-600"></div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-3 rounded-xl shadow-sm',
+                        theme === 'dark'
+                          ? 'bg-amber-900/30 border border-amber-800/50'
+                          : 'bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200'
+                      )}>
+                        <DollarSign className="w-6 h-6 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>Valor Pendiente</p>
+                        <p className={cn(
+                          'text-3xl font-bold mt-1',
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}>{formatCurrency(stats.pendingValue)}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+                    )}>Total cotizaciones activas</span>
+                  </div>
+                </div>
+              </motion.div>
             </div>
 
             {/* Filters */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
               className={cn(
                 'p-4 rounded-2xl border shadow-xl',
                 theme === 'dark'
@@ -236,6 +369,7 @@ export default function WholesaleQuotesPage() {
               )}
             >
               <div className="flex flex-col sm:flex-row gap-4">
+                {/* Search */}
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
@@ -252,6 +386,7 @@ export default function WholesaleQuotesPage() {
                   />
                 </div>
 
+                {/* Status Filter */}
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
@@ -271,6 +406,7 @@ export default function WholesaleQuotesPage() {
                   <option value="expired">Expiradas</option>
                 </select>
 
+                {/* Refresh */}
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
@@ -280,11 +416,24 @@ export default function WholesaleQuotesPage() {
                     'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all',
                     theme === 'dark'
                       ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                    isRefreshing && 'opacity-75'
                   )}
                 >
                   <RefreshCw className={cn('w-4 h-4', (loading || isRefreshing) && 'animate-spin')} />
                 </motion.button>
+
+                {/* Nueva Cotización */}
+                <Link href="/dashboard/market/wholesale/quotes/create">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/25"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Nueva Cotización
+                  </motion.button>
+                </Link>
               </div>
             </motion.div>
 
@@ -292,6 +441,7 @@ export default function WholesaleQuotesPage() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
               className={cn(
                 'rounded-2xl border shadow-xl overflow-hidden',
                 theme === 'dark'
@@ -320,7 +470,10 @@ export default function WholesaleQuotesPage() {
                         <tr key={i}>
                           <td colSpan={6} className="py-4 px-4">
                             <div className="animate-pulse flex items-center gap-3">
-                              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-full" />
+                              <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full" />
+                              <div className="flex-1">
+                                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+                              </div>
                             </div>
                           </td>
                         </tr>
@@ -333,7 +486,7 @@ export default function WholesaleQuotesPage() {
                             'font-medium mb-1',
                             theme === 'dark' ? 'text-white' : 'text-gray-900'
                           )}>No hay cotizaciones</p>
-                          <p className="text-gray-500">
+                          <p className="text-gray-500 dark:text-gray-400">
                             Crea tu primera cotización
                           </p>
                           <Link href="/dashboard/market/wholesale/quotes/create">
@@ -361,14 +514,19 @@ export default function WholesaleQuotesPage() {
                             )}
                           >
                             <td className="py-4 px-4">
-                              <div>
-                                <p className={cn(
-                                  'font-medium',
-                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                )}>
-                                  {quote.quoteNumber}
-                                </p>
-                                <p className="text-xs text-gray-500">{quote.linesCount} productos</p>
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold">
+                                  <FileText className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <p className={cn(
+                                    'font-medium',
+                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                  )}>
+                                    {quote.quoteNumber}
+                                  </p>
+                                  <p className="text-xs text-gray-500">{quote.linesCount} productos</p>
+                                </div>
                               </div>
                             </td>
                             <td className="py-4 px-4">
