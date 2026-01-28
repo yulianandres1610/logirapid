@@ -29,6 +29,60 @@ interface EmployeePhotoUploadProps {
 
 type PhotoUploadStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error'
 
+// Maximum size for API request (Vercel limit is 4.5MB, we target 3MB for safety)
+const MAX_IMAGE_SIZE_KB = 3000
+
+/**
+ * Compress image on client side before sending to API
+ */
+async function compressImage(base64Data: string, maxSizeKB: number = MAX_IMAGE_SIZE_KB): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      let width = img.width
+      let height = img.height
+
+      // Limit max dimension to 1500px
+      const maxDim = 1500
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = (height / width) * maxDim
+          width = maxDim
+        } else {
+          width = (width / height) * maxDim
+          height = maxDim
+        }
+      }
+
+      canvas.width = width
+      canvas.height = height
+
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        resolve(base64Data)
+        return
+      }
+
+      ctx.drawImage(img, 0, 0, width, height)
+
+      // Try different quality levels until size is acceptable
+      let quality = 0.9
+      let result = canvas.toDataURL('image/jpeg', quality)
+
+      while (result.length / 1024 > maxSizeKB && quality > 0.3) {
+        quality -= 0.1
+        result = canvas.toDataURL('image/jpeg', quality)
+      }
+
+      console.log(`[Compress Client] Original: ${Math.round(base64Data.length / 1024)}KB, Compressed: ${Math.round(result.length / 1024)}KB, Quality: ${quality.toFixed(1)}`)
+      resolve(result)
+    }
+    img.onerror = () => resolve(base64Data)
+    img.src = base64Data
+  })
+}
+
 export function EmployeePhotoUpload({
   employeeId,
   employeeName,
@@ -128,11 +182,16 @@ export function EmployeePhotoUpload({
     setError(null)
 
     try {
+      // Compress image before sending to API to avoid payload size limits
+      console.log('[Upload] Compressing image before API call...')
+      const compressedImage = await compressImage(originalImage)
+      console.log(`[Upload] Sending compressed image: ${Math.round(compressedImage.length / 1024)}KB`)
+
       const response = await fetch('/api/ai/process-employee-photo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          imageBase64: originalImage,
+          imageBase64: compressedImage,
           gender: employeeGender === 'M' ? 'male' : 'female',
           employeeId
         })

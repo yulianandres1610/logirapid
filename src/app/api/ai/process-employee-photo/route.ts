@@ -2,10 +2,56 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
 import { randomBytes } from 'crypto'
+import sharp from 'sharp'
 import { processEmployeePhoto } from '@/lib/gemini'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60 // 60 seconds timeout
+
+// Maximum image size to accept (in base64 characters, ~3MB image = ~4MB base64)
+const MAX_BASE64_SIZE = 4 * 1024 * 1024 // 4MB in base64
+
+/**
+ * Compress image if too large for processing
+ */
+async function compressImageIfNeeded(base64Data: string): Promise<string> {
+  const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '')
+
+  // If already small enough, return as is
+  if (cleanBase64.length <= MAX_BASE64_SIZE) {
+    console.log('[Compress] Image size OK:', Math.round(cleanBase64.length / 1024), 'KB')
+    return cleanBase64
+  }
+
+  console.log('[Compress] Image too large:', Math.round(cleanBase64.length / 1024), 'KB, compressing...')
+
+  try {
+    const inputBuffer = Buffer.from(cleanBase64, 'base64')
+
+    // Auto-rotate and resize
+    let quality = 80
+    let outputBase64: string
+
+    do {
+      const outputBuffer = await sharp(inputBuffer)
+        .rotate() // Auto-rotate based on EXIF
+        .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality, mozjpeg: true })
+        .toBuffer()
+
+      outputBase64 = outputBuffer.toString('base64')
+      quality -= 10
+      console.log('[Compress] Trying quality', quality + 10, '- size:', Math.round(outputBase64.length / 1024), 'KB')
+    } while (outputBase64.length > MAX_BASE64_SIZE && quality > 30)
+
+    console.log('[Compress] Final size:', Math.round(outputBase64.length / 1024), 'KB')
+    return outputBase64
+  } catch (error) {
+    console.error('[Compress] Error:', error)
+    return cleanBase64
+  }
+}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -66,9 +112,14 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`[Process Employee Photo] Processing photo for employee ${employeeId}, gender: ${gender}`)
+    console.log(`[Process Employee Photo] Input image size: ${Math.round(imageBase64.length / 1024)} KB`)
 
-    // 1. Procesar con Gemini
-    const result = await processEmployeePhoto(imageBase64, gender)
+    // 1. Comprimir imagen si es muy grande
+    const compressedBase64 = await compressImageIfNeeded(imageBase64)
+    console.log(`[Process Employee Photo] Compressed image size: ${Math.round(compressedBase64.length / 1024)} KB`)
+
+    // 2. Procesar con Gemini
+    const result = await processEmployeePhoto(compressedBase64, gender)
 
     if (!result.success) {
       console.error('[Process Employee Photo] Gemini processing failed:', result.error)
