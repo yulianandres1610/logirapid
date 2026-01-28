@@ -47,7 +47,11 @@ import {
   TrendingUp,
   ClipboardCheck,
   MessageCircle,
-  History
+  History,
+  Clock,
+  Calendar,
+  Fingerprint,
+  Briefcase
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -303,6 +307,13 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         'Brokers': true
       }))
     }
+    // Auto-expand HR submenu
+    if (pathname.includes('/market/hr')) {
+      setOpenSubmenus(prev => ({
+        ...prev,
+        'Recursos Humanos': true
+      }))
+    }
   }, [pathname])
 
   // Fetch branding data for company logo
@@ -550,7 +561,20 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: ClipboardList, label: "Conteos Inventario", href: "/dashboard/market/pos/inventory-counts" },
       ]
     },
-    { icon: Users, label: "Empleados", href: "/dashboard/market/accounting/employees" },
+    {
+      icon: Briefcase,
+      label: "Recursos Humanos",
+      href: "/dashboard/market/hr",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: Users, label: "Empleados", href: "/dashboard/market/hr/employees" },
+        { icon: FileText, label: "Contratos", href: "/dashboard/market/hr/contracts" },
+        { icon: Building2, label: "Departamentos", href: "/dashboard/market/hr/departments" },
+        { icon: Clock, label: "Horarios", href: "/dashboard/market/hr/schedules" },
+        { icon: Calendar, label: "Asistencia", href: "/dashboard/market/hr/attendance" },
+        { icon: Fingerprint, label: "Kioscos", href: "/dashboard/market/hr/kiosks" },
+      ]
+    },
     { icon: MessageCircle, label: "Conversaciones", href: "/dashboard/market/chat" },
     {
       icon: Calculator,

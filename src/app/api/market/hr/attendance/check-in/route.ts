@@ -1,0 +1,142 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { db } from '@/lib/database'
+
+async function getCompanyId() {
+  const cookieStore = await cookies()
+  const companyId = cookieStore.get('user-company-id')?.value
+  return companyId ? parseInt(companyId) : null
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const companyId = await getCompanyId()
+    if (!companyId) {
+      return NextResponse.json({ success: false, error: 'No company ID' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { employeeId, method, photoUrl, kioskId } = body
+
+    if (!employeeId) {
+      return NextResponse.json(
+        { success: false, error: 'Employee ID is required' },
+        { status: 400 }
+      )
+    }
+
+    // Verify employee exists and belongs to company
+    const employeeCheck = await db.query(`
+      SELECT
+        e.id, e.employeecode,
+        COALESCE(e.firstname || ' ' || e.lastname, u.email) as fullname,
+        c.scheduleid
+      FROM market_employees e
+      LEFT JOIN users u ON e.userid = u.id
+      LEFT JOIN market_contracts c ON c.employeeid = e.id AND c.status = 'active'
+      WHERE e.id = $1 AND e.companyid = $2 AND e.status = 'active'
+    `, [employeeId, companyId])
+
+    if (employeeCheck.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Employee not found or inactive' },
+        { status: 404 }
+      )
+    }
+
+    const employee = employeeCheck.rows[0]
+    const now = new Date()
+    const today = now.toISOString().split('T')[0]
+
+    // Check if already checked in today
+    const existingCheck = await db.query(`
+      SELECT * FROM market_attendance
+      WHERE employeeid = $1 AND date = $2
+    `, [employeeId, today])
+
+    if (existingCheck.rows.length > 0 && existingCheck.rows[0].checkin) {
+      return NextResponse.json(
+        { success: false, error: 'Already checked in today', existingCheckIn: existingCheck.rows[0].checkin },
+        { status: 400 }
+      )
+    }
+
+    // Calculate late minutes if schedule exists
+    let lateMinutes = 0
+    let status = 'present'
+
+    if (employee.scheduleid) {
+      const dayOfWeek = now.getDay()
+      const scheduleDay = await db.query(`
+        SELECT * FROM market_schedule_days
+        WHERE scheduleid = $1 AND dayofweek = $2
+      `, [employee.scheduleid, dayOfWeek])
+
+      if (scheduleDay.rows.length > 0 && scheduleDay.rows[0].isworkday && scheduleDay.rows[0].starttime) {
+        const scheduledStart = scheduleDay.rows[0].starttime
+        const [scheduledHour, scheduledMinute] = scheduledStart.split(':').map(Number)
+        const scheduledTime = new Date(now)
+        scheduledTime.setHours(scheduledHour, scheduledMinute, 0, 0)
+
+        if (now > scheduledTime) {
+          lateMinutes = Math.round((now.getTime() - scheduledTime.getTime()) / (1000 * 60))
+          if (lateMinutes > 15) {
+            status = 'late'
+          }
+        }
+      }
+    }
+
+    // Create or update attendance record
+    const result = await db.query(`
+      INSERT INTO market_attendance (
+        companyid, employeeid, date, checkin, checkinmethod,
+        checkinphotourl, status, lateminutes
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ON CONFLICT (employeeid, date) DO UPDATE SET
+        checkin = $4,
+        checkinmethod = $5,
+        checkinphotourl = $6,
+        status = $7,
+        lateminutes = $8,
+        updatedat = NOW()
+      RETURNING *
+    `, [
+      companyId, employeeId, today, now.toISOString(),
+      method || 'manual', photoUrl || null, status, lateMinutes
+    ])
+
+    const row = result.rows[0]
+
+    // Update kiosk last ping if provided
+    if (kioskId) {
+      await db.query(`
+        UPDATE market_attendance_kiosks SET lastping = NOW() WHERE id = $1
+      `, [kioskId])
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `¡Bienvenido, ${employee.fullname}!`,
+      data: {
+        id: row.id,
+        employeeId: row.employeeid,
+        employeeName: employee.fullname,
+        employeeCode: employee.employeecode,
+        date: row.date,
+        checkIn: row.checkin,
+        checkInMethod: row.checkinmethod,
+        status: row.status,
+        lateMinutes: row.lateminutes
+      }
+    })
+
+  } catch (error: any) {
+    console.error('Error checking in:', error)
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    )
+  }
+}

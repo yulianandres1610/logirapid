@@ -1,0 +1,483 @@
+'use client'
+
+import { useEffect, useState, useRef } from 'react'
+import { useParams } from 'next/navigation'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Fingerprint,
+  Clock,
+  LogIn,
+  LogOut,
+  User,
+  CheckCircle,
+  XCircle,
+  Keyboard,
+  Camera,
+  RefreshCw
+} from 'lucide-react'
+
+interface KioskInfo {
+  id: number
+  name: string
+  location: string | null
+  deviceId: string
+  companyId: number
+}
+
+interface EmployeeResult {
+  id: number
+  employeeCode: string
+  fullName: string
+  hasFaceRegistered: boolean
+  canCheckIn: boolean
+  canCheckOut: boolean
+  todayAttendance: {
+    checkIn: string | null
+    checkOut: string | null
+    status: string
+  } | null
+}
+
+type KioskStep = 'idle' | 'identify' | 'confirm' | 'success' | 'error'
+
+export default function KioskPage() {
+  const params = useParams()
+  const kioskId = params.kioskId as string
+
+  const [kiosk, setKiosk] = useState<KioskInfo | null>(null)
+  const [step, setStep] = useState<KioskStep>('idle')
+  const [pin, setPin] = useState('')
+  const [employee, setEmployee] = useState<EmployeeResult | null>(null)
+  const [message, setMessage] = useState('')
+  const [currentTime, setCurrentTime] = useState(new Date())
+  const [loading, setLoading] = useState(false)
+
+  const pinInputRef = useRef<HTMLInputElement>(null)
+
+  // Update time every second
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // Fetch kiosk info
+  useEffect(() => {
+    fetchKiosk()
+  }, [kioskId])
+
+  // Focus PIN input when in identify step
+  useEffect(() => {
+    if (step === 'identify' && pinInputRef.current) {
+      pinInputRef.current.focus()
+    }
+  }, [step])
+
+  // Auto-reset after success/error
+  useEffect(() => {
+    if (step === 'success' || step === 'error') {
+      const timer = setTimeout(() => {
+        resetKiosk()
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [step])
+
+  const fetchKiosk = async () => {
+    try {
+      const response = await fetch(`/api/market/hr/kiosks/${kioskId}`)
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          setKiosk(result.data)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching kiosk:', error)
+    }
+  }
+
+  const resetKiosk = () => {
+    setStep('idle')
+    setPin('')
+    setEmployee(null)
+    setMessage('')
+  }
+
+  const handlePinChange = (digit: string) => {
+    if (pin.length < 6) {
+      const newPin = pin + digit
+      setPin(newPin)
+
+      // Auto-verify when PIN is 4-6 digits
+      if (newPin.length >= 4) {
+        verifyEmployee(newPin)
+      }
+    }
+  }
+
+  const handlePinDelete = () => {
+    setPin(pin.slice(0, -1))
+  }
+
+  const verifyEmployee = async (pinCode: string) => {
+    try {
+      setLoading(true)
+      const response = await fetch(`/api/market/hr/kiosks/${kioskId}/verify-employee`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: 'pin', pin: pinCode })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setEmployee(result.data)
+        setStep('confirm')
+      } else {
+        setMessage(result.error || 'PIN inválido')
+        setStep('error')
+      }
+    } catch (error) {
+      setMessage('Error de conexión')
+      setStep('error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCheckIn = async () => {
+    if (!employee) return
+
+    try {
+      setLoading(true)
+      const response = await fetch('/api/market/hr/attendance/check-in', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: employee.id,
+          method: 'kiosk',
+          kioskId: parseInt(kioskId)
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setMessage(result.message)
+        setStep('success')
+      } else {
+        setMessage(result.error || 'Error al registrar entrada')
+        setStep('error')
+      }
+    } catch (error) {
+      setMessage('Error de conexión')
+      setStep('error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCheckOut = async () => {
+    if (!employee) return
+
+    try {
+      setLoading(true)
+      const response = await fetch('/api/market/hr/attendance/check-out', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: employee.id,
+          method: 'kiosk',
+          kioskId: parseInt(kioskId)
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setMessage(result.message)
+        setStep('success')
+      } else {
+        setMessage(result.error || 'Error al registrar salida')
+        setStep('error')
+      }
+    } catch (error) {
+      setMessage('Error de conexión')
+      setStep('error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  }
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-indigo-900 flex flex-col items-center justify-center p-4">
+      {/* Header */}
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-white mb-2">
+          {kiosk?.name || 'Kiosco de Asistencia'}
+        </h1>
+        {kiosk?.location && (
+          <p className="text-indigo-200">{kiosk.location}</p>
+        )}
+      </div>
+
+      {/* Time Display */}
+      <div className="text-center mb-8">
+        <p className="text-6xl font-bold text-white tracking-wider">
+          {formatTime(currentTime)}
+        </p>
+        <p className="text-indigo-200 mt-2 capitalize">
+          {formatDate(currentTime)}
+        </p>
+      </div>
+
+      {/* Main Card */}
+      <motion.div
+        layout
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+      >
+        <AnimatePresence mode="wait">
+          {/* Idle State */}
+          {step === 'idle' && (
+            <motion.div
+              key="idle"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="p-8 text-center"
+            >
+              <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Fingerprint className="w-12 h-12 text-indigo-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Marcar Asistencia
+              </h2>
+              <p className="text-gray-500 mb-8">
+                Toca el botón para comenzar
+              </p>
+              <button
+                onClick={() => setStep('identify')}
+                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-lg transition-colors"
+              >
+                Comenzar
+              </button>
+            </motion.div>
+          )}
+
+          {/* Identify State */}
+          {step === 'identify' && (
+            <motion.div
+              key="identify"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="p-8"
+            >
+              <div className="text-center mb-6">
+                <Keyboard className="w-10 h-10 text-indigo-600 mx-auto mb-2" />
+                <h2 className="text-xl font-bold text-gray-900">
+                  Ingresa tu PIN
+                </h2>
+              </div>
+
+              {/* PIN Display */}
+              <div className="flex justify-center gap-3 mb-6">
+                {[0, 1, 2, 3, 4, 5].map(i => (
+                  <div
+                    key={i}
+                    className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-colors ${
+                      i < pin.length
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-600'
+                        : 'border-gray-200'
+                    }`}
+                  >
+                    {i < pin.length ? '•' : ''}
+                  </div>
+                ))}
+              </div>
+
+              {/* Number Pad */}
+              <div className="grid grid-cols-3 gap-3 mb-6">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((digit, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      if (digit === null) return
+                      if (digit === 'del') handlePinDelete()
+                      else handlePinChange(digit.toString())
+                    }}
+                    disabled={loading || digit === null}
+                    className={`h-16 rounded-xl text-2xl font-bold transition-colors ${
+                      digit === null
+                        ? 'invisible'
+                        : digit === 'del'
+                          ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          : 'bg-gray-100 text-gray-900 hover:bg-indigo-100'
+                    }`}
+                  >
+                    {digit === 'del' ? '⌫' : digit}
+                  </button>
+                ))}
+              </div>
+
+              {loading && (
+                <div className="flex items-center justify-center gap-2 text-indigo-600">
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                  <span>Verificando...</span>
+                </div>
+              )}
+
+              <button
+                onClick={resetKiosk}
+                className="w-full py-3 text-gray-500 hover:text-gray-700"
+              >
+                Cancelar
+              </button>
+            </motion.div>
+          )}
+
+          {/* Confirm State */}
+          {step === 'confirm' && employee && (
+            <motion.div
+              key="confirm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="p-8"
+            >
+              <div className="text-center mb-6">
+                <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <User className="w-10 h-10 text-indigo-600" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900">
+                  {employee.fullName}
+                </h2>
+                <p className="text-gray-500">{employee.employeeCode}</p>
+              </div>
+
+              {employee.todayAttendance && (
+                <div className="bg-gray-50 rounded-xl p-4 mb-6">
+                  <p className="text-sm text-gray-500 mb-2">Hoy:</p>
+                  <div className="flex justify-between text-sm">
+                    <span>Entrada: {employee.todayAttendance.checkIn
+                      ? new Date(employee.todayAttendance.checkIn).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+                      : '-'
+                    }</span>
+                    <span>Salida: {employee.todayAttendance.checkOut
+                      ? new Date(employee.todayAttendance.checkOut).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+                      : '-'
+                    }</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {employee.canCheckIn && (
+                  <button
+                    onClick={handleCheckIn}
+                    disabled={loading}
+                    className="w-full flex items-center justify-center gap-3 py-4 bg-green-500 hover:bg-green-600 text-white rounded-2xl font-bold text-lg transition-colors disabled:opacity-50"
+                  >
+                    <LogIn className="w-6 h-6" />
+                    Registrar Entrada
+                  </button>
+                )}
+
+                {employee.canCheckOut && (
+                  <button
+                    onClick={handleCheckOut}
+                    disabled={loading}
+                    className="w-full flex items-center justify-center gap-3 py-4 bg-red-500 hover:bg-red-600 text-white rounded-2xl font-bold text-lg transition-colors disabled:opacity-50"
+                  >
+                    <LogOut className="w-6 h-6" />
+                    Registrar Salida
+                  </button>
+                )}
+
+                {!employee.canCheckIn && !employee.canCheckOut && (
+                  <div className="text-center py-4 text-gray-500">
+                    Ya has registrado entrada y salida hoy
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={resetKiosk}
+                className="w-full py-3 mt-4 text-gray-500 hover:text-gray-700"
+              >
+                Cancelar
+              </button>
+            </motion.div>
+          )}
+
+          {/* Success State */}
+          {step === 'success' && (
+            <motion.div
+              key="success"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              className="p-8 text-center"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', bounce: 0.5 }}
+                className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"
+              >
+                <CheckCircle className="w-14 h-14 text-green-500" />
+              </motion.div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                ¡Registrado!
+              </h2>
+              <p className="text-gray-600">{message}</p>
+            </motion.div>
+          )}
+
+          {/* Error State */}
+          {step === 'error' && (
+            <motion.div
+              key="error"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              className="p-8 text-center"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', bounce: 0.5 }}
+                className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6"
+              >
+                <XCircle className="w-14 h-14 text-red-500" />
+              </motion.div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Error
+              </h2>
+              <p className="text-gray-600 mb-6">{message}</p>
+              <button
+                onClick={resetKiosk}
+                className="px-6 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium"
+              >
+                Intentar de nuevo
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+
+      {/* Footer */}
+      <p className="text-indigo-200 text-sm mt-8">
+        Sistema de Control de Asistencia
+      </p>
+    </div>
+  )
+}
