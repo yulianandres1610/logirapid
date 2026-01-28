@@ -31,7 +31,7 @@ export async function POST(
 
     // Verify employee exists and belongs to company
     const employeeCheck = await db.query(`
-      SELECT id FROM market_employees WHERE id = $1 AND companyid = $2
+      SELECT id FROM market_employees WHERE id = $1 AND company_id = $2
     `, [id, companyId])
 
     if (employeeCheck.rows.length === 0) {
@@ -91,7 +91,7 @@ export async function GET(
       SELECT ef.*, e.hasfaceregistered
       FROM market_employee_faces ef
       JOIN market_employees e ON ef.employeeid = e.id
-      WHERE ef.employeeid = $1 AND e.companyid = $2
+      WHERE ef.employeeid = $1 AND e.company_id = $2
     `, [id, companyId])
 
     if (result.rows.length === 0) {
@@ -148,7 +148,7 @@ export async function DELETE(
       // Update employee flag
       await client.query(`
         UPDATE market_employees SET hasfaceregistered = false, updatedat = NOW()
-        WHERE id = $1 AND companyid = $2
+        WHERE id = $1 AND company_id = $2
       `, [id, companyId])
     })
 

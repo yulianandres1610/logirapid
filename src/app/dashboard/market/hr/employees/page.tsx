@@ -17,7 +17,8 @@ import {
   KeyRound,
   Building2,
   FileText,
-  Fingerprint
+  Fingerprint,
+  Camera
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -350,6 +351,21 @@ export default function HREmployeesPage() {
                       >
                         <FileText className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                       </Link>
+                      <Link
+                        href={`/dashboard/market/hr/employees/${employee.id}/register-face`}
+                        className={`p-2 rounded-lg transition-colors ${
+                          employee.hasFaceRegistered
+                            ? 'bg-indigo-100 dark:bg-indigo-900/30 hover:bg-indigo-200'
+                            : 'hover:bg-indigo-100 dark:hover:bg-indigo-900/30'
+                        }`}
+                        title={employee.hasFaceRegistered ? 'Actualizar Reconocimiento Facial' : 'Registrar Rostro'}
+                      >
+                        <Camera className={`w-5 h-5 ${
+                          employee.hasFaceRegistered
+                            ? 'text-indigo-600 dark:text-indigo-400'
+                            : 'text-gray-600 dark:text-gray-400'
+                        }`} />
+                      </Link>
                       {employee.status === 'active' && (
                         <button
                           onClick={() => terminateEmployee(employee.id)}
@@ -506,6 +522,36 @@ export default function HREmployeesPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* Face Registration */}
+                  <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <h3 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                      <Fingerprint className="w-4 h-4" />
+                      Reconocimiento Facial
+                    </h3>
+                    <div className={`p-4 rounded-lg ${
+                      selectedEmployee.hasFaceRegistered
+                        ? 'bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800'
+                        : 'bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700'
+                    }`}>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                        {selectedEmployee.hasFaceRegistered
+                          ? 'Este empleado tiene reconocimiento facial configurado.'
+                          : 'El reconocimiento facial no está configurado.'}
+                      </p>
+                      <Link
+                        href={`/dashboard/market/hr/employees/${selectedEmployee.id}/register-face`}
+                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium ${
+                          selectedEmployee.hasFaceRegistered
+                            ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                            : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                        }`}
+                      >
+                        <Camera className="w-4 h-4" />
+                        {selectedEmployee.hasFaceRegistered ? 'Actualizar Registro' : 'Registrar Rostro'}
+                      </Link>
+                    </div>
+                  </div>
                 </div>
               </motion.div>
             </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -13,8 +13,10 @@ import {
   XCircle,
   Keyboard,
   Camera,
-  RefreshCw
+  RefreshCw,
+  Scan
 } from 'lucide-react'
+import { useFaceRecognition } from '@/hooks/useFaceRecognition'
 
 interface KioskInfo {
   id: number
@@ -38,7 +40,15 @@ interface EmployeeResult {
   } | null
 }
 
-type KioskStep = 'idle' | 'identify' | 'confirm' | 'success' | 'error'
+interface EmployeeFace {
+  employeeId: number
+  employeeCode: string
+  fullName: string
+  faceEncoding: string
+}
+
+type KioskStep = 'idle' | 'identify' | 'face-scan' | 'confirm' | 'success' | 'error'
+type IdentifyMethod = 'pin' | 'face'
 
 export default function KioskPage() {
   const params = useParams()
@@ -46,13 +56,31 @@ export default function KioskPage() {
 
   const [kiosk, setKiosk] = useState<KioskInfo | null>(null)
   const [step, setStep] = useState<KioskStep>('idle')
+  const [identifyMethod, setIdentifyMethod] = useState<IdentifyMethod>('pin')
   const [pin, setPin] = useState('')
   const [employee, setEmployee] = useState<EmployeeResult | null>(null)
   const [message, setMessage] = useState('')
   const [currentTime, setCurrentTime] = useState(new Date())
   const [loading, setLoading] = useState(false)
 
+  // Face recognition states
+  const [employeeFaces, setEmployeeFaces] = useState<EmployeeFace[]>([])
+  const [cameraActive, setCameraActive] = useState(false)
+  const [faceDetected, setFaceDetected] = useState(false)
+  const [scanStatus, setScanStatus] = useState<string>('idle')
+
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   const pinInputRef = useRef<HTMLInputElement>(null)
+
+  const {
+    isModelLoaded,
+    isLoading: modelsLoading,
+    error: modelError,
+    detectFace,
+    findMatch
+  } = useFaceRecognition()
 
   // Update time every second
   useEffect(() => {
@@ -63,14 +91,15 @@ export default function KioskPage() {
   // Fetch kiosk info
   useEffect(() => {
     fetchKiosk()
+    fetchEmployeeFaces()
   }, [kioskId])
 
   // Focus PIN input when in identify step
   useEffect(() => {
-    if (step === 'identify' && pinInputRef.current) {
+    if (step === 'identify' && identifyMethod === 'pin' && pinInputRef.current) {
       pinInputRef.current.focus()
     }
-  }, [step])
+  }, [step, identifyMethod])
 
   // Auto-reset after success/error
   useEffect(() => {
@@ -81,6 +110,72 @@ export default function KioskPage() {
       return () => clearTimeout(timer)
     }
   }, [step])
+
+  // Start/stop camera when entering/leaving face-scan step
+  useEffect(() => {
+    if (step === 'face-scan') {
+      startCamera()
+    } else {
+      stopCamera()
+    }
+    return () => stopCamera()
+  }, [step])
+
+  // Face detection loop
+  useEffect(() => {
+    if (!cameraActive || !isModelLoaded || step !== 'face-scan') return
+
+    let animationFrameId: number
+    let isProcessing = false
+
+    const detectFaceLoop = async () => {
+      if (!videoRef.current || isProcessing || scanStatus === 'processing') {
+        animationFrameId = requestAnimationFrame(detectFaceLoop)
+        return
+      }
+
+      isProcessing = true
+      setScanStatus('scanning')
+
+      try {
+        const descriptor = await detectFace(videoRef.current)
+
+        if (descriptor) {
+          setFaceDetected(true)
+          setScanStatus('processing')
+
+          // Try to match face
+          const match = findMatch(descriptor, employeeFaces, 0.6)
+
+          if (match) {
+            // Found a match - verify employee
+            await verifyEmployeeByFace(match.employeeId)
+          } else {
+            setFaceDetected(false)
+          }
+        } else {
+          setFaceDetected(false)
+        }
+      } catch (err) {
+        console.error('Face detection error:', err)
+      }
+
+      isProcessing = false
+      if (step === 'face-scan' && scanStatus !== 'processing') {
+        animationFrameId = requestAnimationFrame(detectFaceLoop)
+      }
+    }
+
+    // Start detection loop after a short delay
+    const timeoutId = setTimeout(() => {
+      animationFrameId = requestAnimationFrame(detectFaceLoop)
+    }, 500)
+
+    return () => {
+      cancelAnimationFrame(animationFrameId)
+      clearTimeout(timeoutId)
+    }
+  }, [cameraActive, isModelLoaded, step, employeeFaces, detectFace, findMatch, scanStatus])
 
   const fetchKiosk = async () => {
     try {
@@ -96,11 +191,59 @@ export default function KioskPage() {
     }
   }
 
+  const fetchEmployeeFaces = async () => {
+    try {
+      const response = await fetch(`/api/market/hr/kiosks/${kioskId}/faces`)
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          setEmployeeFaces(result.data)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching employee faces:', error)
+    }
+  }
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: 'user'
+        }
+      })
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        streamRef.current = stream
+        setCameraActive(true)
+      }
+    } catch (err) {
+      console.error('Error accessing camera:', err)
+      setMessage('No se pudo acceder a la cámara')
+      setStep('error')
+    }
+  }
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+      streamRef.current = null
+    }
+    setCameraActive(false)
+    setFaceDetected(false)
+    setScanStatus('idle')
+  }
+
   const resetKiosk = () => {
     setStep('idle')
     setPin('')
     setEmployee(null)
     setMessage('')
+    setFaceDetected(false)
+    setScanStatus('idle')
   }
 
   const handlePinChange = (digit: string) => {
@@ -145,6 +288,32 @@ export default function KioskPage() {
     }
   }
 
+  const verifyEmployeeByFace = async (employeeId: number) => {
+    try {
+      setLoading(true)
+      const response = await fetch(`/api/market/hr/kiosks/${kioskId}/verify-employee`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: 'face', employeeId })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setEmployee(result.data)
+        setStep('confirm')
+      } else {
+        setMessage(result.error || 'No se pudo verificar el empleado')
+        setScanStatus('idle')
+      }
+    } catch (error) {
+      setMessage('Error de conexión')
+      setScanStatus('idle')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleCheckIn = async () => {
     if (!employee) return
 
@@ -155,7 +324,7 @@ export default function KioskPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           employeeId: employee.id,
-          method: 'kiosk',
+          method: identifyMethod === 'face' ? 'face' : 'kiosk',
           kioskId: parseInt(kioskId)
         })
       })
@@ -187,7 +356,7 @@ export default function KioskPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           employeeId: employee.id,
-          method: 'kiosk',
+          method: identifyMethod === 'face' ? 'face' : 'kiosk',
           kioskId: parseInt(kioskId)
         })
       })
@@ -216,6 +385,8 @@ export default function KioskPage() {
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   }
+
+  const hasFaceRecognition = employeeFaces.length > 0 && isModelLoaded
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-indigo-900 flex flex-col items-center justify-center p-4">
@@ -261,18 +432,137 @@ export default function KioskPage() {
                 Marcar Asistencia
               </h2>
               <p className="text-gray-500 mb-8">
-                Toca el botón para comenzar
+                {hasFaceRecognition
+                  ? 'Selecciona el método de identificación'
+                  : 'Toca el botón para comenzar'
+                }
               </p>
+
+              {hasFaceRecognition ? (
+                <div className="space-y-3">
+                  <button
+                    onClick={() => {
+                      setIdentifyMethod('face')
+                      setStep('face-scan')
+                    }}
+                    className="w-full flex items-center justify-center gap-3 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-lg transition-colors"
+                  >
+                    <Camera className="w-6 h-6" />
+                    Reconocimiento Facial
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIdentifyMethod('pin')
+                      setStep('identify')
+                    }}
+                    className="w-full flex items-center justify-center gap-3 py-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl font-bold text-lg transition-colors"
+                  >
+                    <Keyboard className="w-6 h-6" />
+                    Usar PIN
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setStep('identify')}
+                  className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-lg transition-colors"
+                >
+                  Comenzar
+                </button>
+              )}
+
+              {modelsLoading && (
+                <p className="text-sm text-gray-400 mt-4 flex items-center justify-center gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Cargando reconocimiento facial...
+                </p>
+              )}
+            </motion.div>
+          )}
+
+          {/* Face Scan State */}
+          {step === 'face-scan' && (
+            <motion.div
+              key="face-scan"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="p-8"
+            >
+              <div className="text-center mb-4">
+                <Camera className="w-10 h-10 text-indigo-600 mx-auto mb-2" />
+                <h2 className="text-xl font-bold text-gray-900">
+                  Reconocimiento Facial
+                </h2>
+                <p className="text-gray-500 text-sm">
+                  Mira directamente a la cámara
+                </p>
+              </div>
+
+              {/* Camera View */}
+              <div className="relative rounded-2xl overflow-hidden mb-6 bg-black aspect-[4/3]">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover transform -scale-x-100"
+                />
+                <canvas
+                  ref={canvasRef}
+                  className="absolute inset-0 w-full h-full"
+                />
+
+                {/* Face detection overlay */}
+                <div className={`absolute inset-0 border-4 rounded-2xl transition-colors ${
+                  faceDetected ? 'border-green-500' : 'border-transparent'
+                }`} />
+
+                {/* Scanning indicator */}
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+                  <div className={`px-4 py-2 rounded-full flex items-center gap-2 ${
+                    scanStatus === 'processing'
+                      ? 'bg-green-500 text-white'
+                      : faceDetected
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-white/80 text-gray-700'
+                  }`}>
+                    {scanStatus === 'processing' ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span className="text-sm font-medium">Verificando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Scan className="w-4 h-4" />
+                        <span className="text-sm font-medium">
+                          {faceDetected ? 'Rostro detectado' : 'Buscando rostro...'}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <button
-                onClick={() => setStep('identify')}
-                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-lg transition-colors"
+                onClick={resetKiosk}
+                className="w-full py-3 text-gray-500 hover:text-gray-700"
               >
-                Comenzar
+                Cancelar
+              </button>
+
+              <button
+                onClick={() => {
+                  setIdentifyMethod('pin')
+                  setStep('identify')
+                }}
+                className="w-full py-3 text-indigo-600 hover:text-indigo-700 text-sm"
+              >
+                Usar PIN en su lugar
               </button>
             </motion.div>
           )}
 
-          {/* Identify State */}
+          {/* Identify State (PIN) */}
           {step === 'identify' && (
             <motion.div
               key="identify"
@@ -341,6 +631,19 @@ export default function KioskPage() {
               >
                 Cancelar
               </button>
+
+              {hasFaceRecognition && (
+                <button
+                  onClick={() => {
+                    setIdentifyMethod('face')
+                    setPin('')
+                    setStep('face-scan')
+                  }}
+                  className="w-full py-3 text-indigo-600 hover:text-indigo-700 text-sm"
+                >
+                  Usar reconocimiento facial
+                </button>
+              )}
             </motion.div>
           )}
 
@@ -361,6 +664,12 @@ export default function KioskPage() {
                   {employee.fullName}
                 </h2>
                 <p className="text-gray-500">{employee.employeeCode}</p>
+                {identifyMethod === 'face' && (
+                  <span className="inline-flex items-center gap-1 mt-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
+                    <Camera className="w-4 h-4" />
+                    Verificado por rostro
+                  </span>
+                )}
               </div>
 
               {employee.todayAttendance && (
@@ -477,6 +786,7 @@ export default function KioskPage() {
       {/* Footer */}
       <p className="text-indigo-200 text-sm mt-8">
         Sistema de Control de Asistencia
+        {isModelLoaded && <span className="ml-2">• IA Facial Activa</span>}
       </p>
     </div>
   )
