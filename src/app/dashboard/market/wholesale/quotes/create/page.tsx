@@ -13,7 +13,13 @@ import {
   Plus,
   Minus,
   Trash2,
-  Save
+  Save,
+  Building2,
+  Tag,
+  Percent,
+  Calendar,
+  FileText,
+  ShoppingCart
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -60,11 +66,18 @@ interface Warehouse {
   name: string
 }
 
-const steps = [
-  { id: 1, title: 'Cliente', icon: Users },
-  { id: 2, title: 'Productos', icon: Package },
-  { id: 3, title: 'Condiciones', icon: Settings },
-  { id: 4, title: 'Confirmación', icon: CheckCircle }
+interface WizardStep {
+  id: number
+  title: string
+  description: string
+  icon: React.ComponentType<{ className?: string }>
+}
+
+const steps: WizardStep[] = [
+  { id: 1, title: 'Cliente', description: 'Seleccionar', icon: Users },
+  { id: 2, title: 'Productos', description: 'Agregar líneas', icon: Package },
+  { id: 3, title: 'Condiciones', description: 'Configurar', icon: Settings },
+  { id: 4, title: 'Confirmar', description: 'Revisar y crear', icon: CheckCircle }
 ]
 
 export default function CreateQuotePage() {
@@ -279,74 +292,116 @@ export default function CreateQuotePage() {
             className="space-y-6"
           >
             {/* Header */}
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard/market/wholesale/quotes">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className={cn(
-                    'p-2 rounded-lg transition-colors',
-                    theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
-                  )}
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </motion.button>
-              </Link>
-              <div>
-                <h1 className={cn(
-                  'text-2xl font-bold',
-                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                )}>
-                  Nueva Cotización
-                </h1>
-                <p className={cn(
-                  'text-sm mt-1',
-                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                )}>
-                  Crea una nueva cotización para cliente mayorista
-                </p>
+            <div className={cn(
+              'relative overflow-hidden rounded-2xl border shadow-xl p-6',
+              theme === 'dark'
+                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+            )}>
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
+              <div className="flex items-center gap-4">
+                <Link href="/dashboard/market/wholesale/quotes">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className={cn(
+                      'p-3 rounded-xl transition-colors',
+                      theme === 'dark'
+                        ? 'bg-gray-700/50 hover:bg-gray-700 text-gray-300'
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                    )}
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </motion.button>
+                </Link>
+                <div className="flex items-center gap-4">
+                  <div className={cn(
+                    'p-3 rounded-xl',
+                    theme === 'dark'
+                      ? 'bg-blue-900/30 border border-blue-800/50'
+                      : 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
+                  )}>
+                    <FileText className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h1 className={cn(
+                      'text-2xl font-bold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      Nueva Cotización
+                    </h1>
+                    <p className={cn(
+                      'text-sm mt-0.5',
+                      theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                    )}>
+                      Crea una nueva cotización para cliente mayorista
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Progress Steps */}
-            <div className="flex items-center justify-center gap-2">
-              {steps.map((step, index) => {
-                const StepIcon = step.icon
-                const isActive = currentStep === step.id
-                const isCompleted = currentStep > step.id
+            <div className={cn(
+              'rounded-2xl border shadow-xl p-4',
+              theme === 'dark'
+                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+            )}>
+              <div className="flex items-center justify-between">
+                {steps.map((step, index) => {
+                  const StepIcon = step.icon
+                  const isActive = currentStep === step.id
+                  const isCompleted = currentStep > step.id
 
-                return (
-                  <div key={step.id} className="flex items-center">
-                    <motion.div
-                      initial={{ scale: 0.8 }}
-                      animate={{ scale: isActive ? 1.1 : 1 }}
-                      className={cn(
-                        'flex items-center gap-2 px-4 py-2 rounded-xl transition-all',
-                        isActive
-                          ? 'bg-blue-500 text-white'
-                          : isCompleted
-                            ? 'bg-green-500 text-white'
+                  return (
+                    <div key={step.id} className="flex items-center flex-1">
+                      <motion.div
+                        initial={{ scale: 0.8 }}
+                        animate={{ scale: isActive ? 1 : 0.95 }}
+                        className={cn(
+                          'flex items-center gap-3 px-4 py-3 rounded-xl transition-all flex-1',
+                          isActive
+                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25'
+                            : isCompleted
+                              ? 'bg-gradient-to-r from-green-500 to-green-600 text-white'
+                              : theme === 'dark'
+                                ? 'bg-gray-800 text-gray-400'
+                                : 'bg-gray-100 text-gray-500'
+                        )}
+                      >
+                        <div className={cn(
+                          'p-2 rounded-lg',
+                          isActive || isCompleted
+                            ? 'bg-white/20'
                             : theme === 'dark'
-                              ? 'bg-gray-800 text-gray-400'
-                              : 'bg-gray-100 text-gray-500'
+                              ? 'bg-gray-700'
+                              : 'bg-white'
+                        )}>
+                          <StepIcon className="w-5 h-5" />
+                        </div>
+                        <div className="hidden md:block">
+                          <p className="font-semibold text-sm">{step.title}</p>
+                          <p className={cn(
+                            'text-xs',
+                            isActive || isCompleted ? 'text-white/70' : 'text-gray-500'
+                          )}>{step.description}</p>
+                        </div>
+                      </motion.div>
+                      {index < steps.length - 1 && (
+                        <div className={cn(
+                          'w-8 h-1 mx-2 rounded-full',
+                          currentStep > step.id
+                            ? 'bg-green-500'
+                            : theme === 'dark'
+                              ? 'bg-gray-700'
+                              : 'bg-gray-200'
+                        )} />
                       )}
-                    >
-                      <StepIcon className="w-5 h-5" />
-                      <span className="font-medium hidden sm:inline">{step.title}</span>
-                    </motion.div>
-                    {index < steps.length - 1 && (
-                      <div className={cn(
-                        'w-8 h-0.5 mx-2',
-                        currentStep > step.id
-                          ? 'bg-green-500'
-                          : theme === 'dark'
-                            ? 'bg-gray-700'
-                            : 'bg-gray-200'
-                      )} />
-                    )}
-                  </div>
-                )
-              })}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
 
             {/* Step Content */}
@@ -356,7 +411,7 @@ export default function CreateQuotePage() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               className={cn(
-                'rounded-2xl border shadow-xl p-6',
+                'rounded-2xl border shadow-xl',
                 theme === 'dark'
                   ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
                   : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
@@ -364,24 +419,35 @@ export default function CreateQuotePage() {
             >
               {/* Step 1: Select Customer */}
               {currentStep === 1 && (
-                <div className="space-y-6">
-                  <h2 className={cn(
-                    'text-lg font-semibold',
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>Seleccionar Cliente</h2>
+                <div className="p-6 space-y-6">
+                  <div className="flex items-center gap-3 pb-4 border-b border-gray-200 dark:border-gray-700">
+                    <div className={cn(
+                      'p-2 rounded-lg',
+                      theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
+                    )}>
+                      <Users className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <h2 className={cn(
+                        'text-lg font-semibold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>Seleccionar Cliente</h2>
+                      <p className="text-sm text-gray-500">Elige el cliente mayorista para la cotización</p>
+                    </div>
+                  </div>
 
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                     <input
                       type="text"
                       placeholder="Buscar cliente por nombre o código..."
                       value={customerSearch}
                       onChange={(e) => setCustomerSearch(e.target.value)}
                       className={cn(
-                        'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
+                        'w-full pl-12 pr-4 py-3.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
                         theme === 'dark'
-                          ? 'bg-gray-800/50 border-gray-700 text-white'
-                          : 'bg-white border-gray-200 text-gray-900'
+                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                          : 'bg-white border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
                       )}
                     />
                   </div>
@@ -394,28 +460,39 @@ export default function CreateQuotePage() {
                         whileTap={{ scale: 0.98 }}
                         onClick={() => setSelectedCustomer(customer)}
                         className={cn(
-                          'p-4 rounded-xl border cursor-pointer transition-all',
+                          'p-4 rounded-xl border-2 cursor-pointer transition-all',
                           selectedCustomer?.id === customer.id
-                            ? 'border-blue-500 bg-blue-500/10'
+                            ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-500/10'
                             : theme === 'dark'
-                              ? 'border-gray-700 hover:border-gray-600'
-                              : 'border-gray-200 hover:border-gray-300'
+                              ? 'border-gray-700 hover:border-gray-600 hover:bg-gray-800/50'
+                              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                         )}
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
+                          <div className={cn(
+                            'w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg',
+                            selectedCustomer?.id === customer.id
+                              ? 'bg-gradient-to-br from-blue-500 to-blue-600'
+                              : 'bg-gradient-to-br from-gray-400 to-gray-500'
+                          )}>
                             {customer.businessName.charAt(0)}
                           </div>
-                          <div>
+                          <div className="flex-1 min-w-0">
                             <p className={cn(
-                              'font-medium',
+                              'font-semibold truncate',
                               theme === 'dark' ? 'text-white' : 'text-gray-900'
                             )}>{customer.businessName}</p>
                             <p className="text-sm text-gray-500">{customer.code}</p>
                           </div>
+                          {selectedCustomer?.id === customer.id && (
+                            <CheckCircle className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                          )}
                         </div>
                         {customer.pricelistName && (
-                          <p className="text-xs text-blue-500 mt-2">Lista: {customer.pricelistName}</p>
+                          <div className="mt-3 flex items-center gap-2">
+                            <Tag className="w-3.5 h-3.5 text-blue-500" />
+                            <span className="text-xs text-blue-500 font-medium">{customer.pricelistName}</span>
+                          </div>
                         )}
                       </motion.div>
                     ))}
@@ -426,15 +503,18 @@ export default function CreateQuotePage() {
                       'p-4 rounded-xl border',
                       theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
                     )}>
-                      <h3 className="font-medium mb-3">Almacén de Origen (opcional)</h3>
+                      <div className="flex items-center gap-3 mb-3">
+                        <Building2 className="w-5 h-5 text-gray-400" />
+                        <h3 className="font-medium">Almacén de Origen (opcional)</h3>
+                      </div>
                       <select
                         value={selectedWarehouse || ''}
                         onChange={(e) => setSelectedWarehouse(e.target.value ? parseInt(e.target.value) : null)}
                         className={cn(
-                          'w-full px-4 py-2 rounded-lg border',
+                          'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
                           theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700 text-white'
-                            : 'bg-white border-gray-300 text-gray-900'
+                            ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                            : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
                         )}
                       >
                         <option value="">Sin especificar</option>
@@ -449,48 +529,62 @@ export default function CreateQuotePage() {
 
               {/* Step 2: Add Products */}
               {currentStep === 2 && (
-                <div className="space-y-6">
-                  <h2 className={cn(
-                    'text-lg font-semibold',
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>Agregar Productos</h2>
+                <div className="p-6 space-y-6">
+                  <div className="flex items-center gap-3 pb-4 border-b border-gray-200 dark:border-gray-700">
+                    <div className={cn(
+                      'p-2 rounded-lg',
+                      theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'
+                    )}>
+                      <Package className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <h2 className={cn(
+                        'text-lg font-semibold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>Agregar Productos</h2>
+                      <p className="text-sm text-gray-500">Busca y agrega productos a la cotización</p>
+                    </div>
+                  </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Product Search */}
                     <div className="space-y-4">
                       <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <input
                           type="text"
                           placeholder="Buscar producto por nombre, SKU o código..."
                           value={productSearch}
                           onChange={(e) => setProductSearch(e.target.value)}
                           className={cn(
-                            'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
+                            'w-full pl-12 pr-4 py-3.5 rounded-xl border focus:outline-none focus:ring-2',
                             theme === 'dark'
-                              ? 'bg-gray-800/50 border-gray-700 text-white'
-                              : 'bg-white border-gray-200 text-gray-900'
+                              ? 'bg-gray-800/50 border-gray-700 text-white focus:border-purple-500 focus:ring-purple-500/20'
+                              : 'bg-white border-gray-200 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20'
                           )}
                         />
                       </div>
 
-                      <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                      <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
                         {filteredProducts.slice(0, 20).map(product => (
                           <motion.div
                             key={product.id}
                             whileHover={{ scale: 1.01 }}
                             className={cn(
-                              'flex items-center justify-between p-3 rounded-lg border cursor-pointer',
+                              'flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all',
                               theme === 'dark'
-                                ? 'border-gray-700 hover:bg-gray-800'
-                                : 'border-gray-200 hover:bg-gray-50'
+                                ? 'border-gray-700 hover:bg-gray-800 hover:border-gray-600'
+                                : 'border-gray-200 hover:bg-gray-50 hover:border-gray-300'
                             )}
                             onClick={() => addProduct(product)}
                           >
                             <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                              <div className={cn(
+                                'w-12 h-12 rounded-xl flex items-center justify-center',
+                                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                              )}>
                                 {product.imageUrl ? (
-                                  <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover rounded-lg" />
+                                  <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover rounded-xl" />
                                 ) : (
                                   <Package className="w-6 h-6 text-gray-400" />
                                 )}
@@ -504,9 +598,9 @@ export default function CreateQuotePage() {
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="font-medium text-green-600">{formatCurrency(product.sellingPrice)}</p>
-                              <button className="text-xs text-blue-500 hover:text-blue-600">
-                                <Plus className="w-4 h-4 inline" /> Agregar
+                              <p className="font-bold text-green-600">{formatCurrency(product.sellingPrice)}</p>
+                              <button className="text-xs text-purple-500 hover:text-purple-600 font-medium flex items-center gap-1">
+                                <Plus className="w-3.5 h-3.5" /> Agregar
                               </button>
                             </div>
                           </motion.div>
@@ -517,73 +611,93 @@ export default function CreateQuotePage() {
                     {/* Quote Lines */}
                     <div className={cn(
                       'p-4 rounded-xl border',
-                      theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                      theme === 'dark' ? 'border-gray-700 bg-gray-800/30' : 'border-gray-200 bg-gray-50'
                     )}>
-                      <h3 className="font-medium mb-4">Productos en la cotización ({lines.length})</h3>
-                      <div className="space-y-3 max-h-[350px] overflow-y-auto">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <ShoppingCart className="w-5 h-5 text-gray-400" />
+                          <h3 className="font-semibold">Productos ({lines.length})</h3>
+                        </div>
+                      </div>
+                      <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2">
                         {lines.length === 0 ? (
-                          <p className="text-center text-gray-500 py-8">
-                            No hay productos agregados
-                          </p>
+                          <div className="text-center py-12">
+                            <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                            <p className="text-gray-500">No hay productos agregados</p>
+                            <p className="text-sm text-gray-400">Busca y agrega productos</p>
+                          </div>
                         ) : (
                           lines.map((line, index) => (
-                            <div
+                            <motion.div
                               key={index}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
                               className={cn(
-                                'p-3 rounded-lg border',
-                                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                                'p-3 rounded-xl border',
+                                theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white'
                               )}
                             >
-                              <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center justify-between mb-3">
                                 <p className={cn(
                                   'font-medium text-sm',
                                   theme === 'dark' ? 'text-white' : 'text-gray-900'
                                 )}>{line.productName}</p>
                                 <button
                                   onClick={() => removeLine(index)}
-                                  className="text-red-500 hover:text-red-600"
+                                  className="p-1.5 rounded-lg text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </button>
                               </div>
-                              <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-3 flex-wrap">
+                                <div className="flex items-center gap-1.5">
                                   <button
                                     onClick={() => updateLineQuantity(index, line.quantity - 1)}
-                                    className="p-1 rounded bg-gray-200 dark:bg-gray-700"
+                                    className={cn(
+                                      'p-1.5 rounded-lg transition-colors',
+                                      theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
+                                    )}
                                   >
-                                    <Minus className="w-4 h-4" />
+                                    <Minus className="w-3.5 h-3.5" />
                                   </button>
                                   <input
                                     type="number"
                                     value={line.quantity}
                                     onChange={(e) => updateLineQuantity(index, parseInt(e.target.value) || 1)}
-                                    className="w-16 text-center px-2 py-1 rounded border dark:bg-gray-800 dark:border-gray-700"
+                                    className={cn(
+                                      'w-14 text-center px-2 py-1.5 rounded-lg border text-sm',
+                                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'
+                                    )}
                                   />
                                   <button
                                     onClick={() => updateLineQuantity(index, line.quantity + 1)}
-                                    className="p-1 rounded bg-gray-200 dark:bg-gray-700"
+                                    className={cn(
+                                      'p-1.5 rounded-lg transition-colors',
+                                      theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
+                                    )}
                                   >
-                                    <Plus className="w-4 h-4" />
+                                    <Plus className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-gray-500">Desc:</span>
+                                <div className="flex items-center gap-1.5">
+                                  <Percent className="w-3.5 h-3.5 text-gray-400" />
                                   <input
                                     type="number"
                                     value={line.discountPercent}
                                     onChange={(e) => updateLineDiscount(index, parseFloat(e.target.value) || 0)}
-                                    className="w-16 text-center px-2 py-1 rounded border dark:bg-gray-800 dark:border-gray-700"
+                                    className={cn(
+                                      'w-14 text-center px-2 py-1.5 rounded-lg border text-sm',
+                                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'
+                                    )}
                                     min="0"
                                     max="100"
                                   />
-                                  <span className="text-xs">%</span>
                                 </div>
-                                <p className="font-medium text-green-600 ml-auto">
+                                <p className="font-bold text-green-600 ml-auto">
                                   {formatCurrency(line.subtotal)}
                                 </p>
                               </div>
-                            </div>
+                            </motion.div>
                           ))
                         )}
                       </div>
@@ -593,9 +707,9 @@ export default function CreateQuotePage() {
                           'mt-4 pt-4 border-t',
                           theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                         )}>
-                          <div className="flex justify-between text-lg font-bold">
+                          <div className="flex justify-between items-center text-lg font-bold">
                             <span>Subtotal:</span>
-                            <span>{formatCurrency(subtotal)}</span>
+                            <span className="text-green-600">{formatCurrency(subtotal)}</span>
                           </div>
                         </div>
                       )}
@@ -606,70 +720,109 @@ export default function CreateQuotePage() {
 
               {/* Step 3: Conditions */}
               {currentStep === 3 && (
-                <div className="space-y-6">
-                  <h2 className={cn(
-                    'text-lg font-semibold',
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>Condiciones de la Cotización</h2>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Descuento Global (%)</label>
-                      <input
-                        type="number"
-                        value={discountPercent}
-                        onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)}
-                        min="0"
-                        max="100"
-                        className={cn(
-                          'w-full px-4 py-2 rounded-lg border',
-                          theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700 text-white'
-                            : 'bg-white border-gray-300 text-gray-900'
-                        )}
-                      />
+                <div className="p-6 space-y-6">
+                  <div className="flex items-center gap-3 pb-4 border-b border-gray-200 dark:border-gray-700">
+                    <div className={cn(
+                      'p-2 rounded-lg',
+                      theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100'
+                    )}>
+                      <Settings className="w-5 h-5 text-amber-600" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-2">Válida Hasta</label>
+                      <h2 className={cn(
+                        'text-lg font-semibold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>Condiciones de la Cotización</h2>
+                      <p className="text-sm text-gray-500">Configura descuentos, validez y notas</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className={cn(
+                      'p-4 rounded-xl border',
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Percent className="w-4 h-4 text-green-600" />
+                        <label className="font-medium">Descuento Global</label>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={discountPercent}
+                          onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)}
+                          min="0"
+                          max="100"
+                          className={cn(
+                            'w-full px-4 py-3 rounded-xl border pr-12 focus:outline-none focus:ring-2',
+                            theme === 'dark'
+                              ? 'bg-gray-800 border-gray-700 text-white focus:border-green-500 focus:ring-green-500/20'
+                              : 'bg-white border-gray-300 text-gray-900 focus:border-green-500 focus:ring-green-500/20'
+                          )}
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+                      </div>
+                    </div>
+                    <div className={cn(
+                      'p-4 rounded-xl border',
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Calendar className="w-4 h-4 text-blue-600" />
+                        <label className="font-medium">Válida Hasta</label>
+                      </div>
                       <input
                         type="date"
                         value={validUntil}
                         onChange={(e) => setValidUntil(e.target.value)}
                         className={cn(
-                          'w-full px-4 py-2 rounded-lg border',
+                          'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
                           theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700 text-white'
-                            : 'bg-white border-gray-300 text-gray-900'
+                            ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                            : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
                         )}
                       />
                     </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium mb-2">Notas para el Cliente</label>
+                    <div className={cn(
+                      'md:col-span-2 p-4 rounded-xl border',
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <FileText className="w-4 h-4 text-purple-600" />
+                        <label className="font-medium">Notas para el Cliente</label>
+                      </div>
                       <textarea
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
                         rows={3}
                         placeholder="Condiciones, observaciones..."
                         className={cn(
-                          'w-full px-4 py-2 rounded-lg border',
+                          'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 resize-none',
                           theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700 text-white'
-                            : 'bg-white border-gray-300 text-gray-900'
+                            ? 'bg-gray-800 border-gray-700 text-white focus:border-purple-500 focus:ring-purple-500/20'
+                            : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20'
                         )}
                       />
                     </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium mb-2">Notas Internas</label>
+                    <div className={cn(
+                      'md:col-span-2 p-4 rounded-xl border',
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <FileText className="w-4 h-4 text-gray-400" />
+                        <label className="font-medium">Notas Internas</label>
+                        <span className="text-xs text-gray-400">(no visibles para el cliente)</span>
+                      </div>
                       <textarea
                         value={internalNotes}
                         onChange={(e) => setInternalNotes(e.target.value)}
                         rows={2}
-                        placeholder="Notas internas (no visibles para el cliente)..."
+                        placeholder="Notas internas..."
                         className={cn(
-                          'w-full px-4 py-2 rounded-lg border',
+                          'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 resize-none',
                           theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700 text-white'
-                            : 'bg-white border-gray-300 text-gray-900'
+                            ? 'bg-gray-800 border-gray-700 text-white focus:border-gray-500 focus:ring-gray-500/20'
+                            : 'bg-white border-gray-300 text-gray-900 focus:border-gray-500 focus:ring-gray-500/20'
                         )}
                       />
                     </div>
@@ -679,34 +832,56 @@ export default function CreateQuotePage() {
 
               {/* Step 4: Confirmation */}
               {currentStep === 4 && (
-                <div className="space-y-6">
-                  <h2 className={cn(
-                    'text-lg font-semibold',
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>Confirmar Cotización</h2>
+                <div className="p-6 space-y-6">
+                  <div className="flex items-center gap-3 pb-4 border-b border-gray-200 dark:border-gray-700">
+                    <div className={cn(
+                      'p-2 rounded-lg',
+                      theme === 'dark' ? 'bg-green-900/30' : 'bg-green-100'
+                    )}>
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div>
+                      <h2 className={cn(
+                        'text-lg font-semibold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>Confirmar Cotización</h2>
+                      <p className="text-sm text-gray-500">Revisa los detalles antes de crear</p>
+                    </div>
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className={cn(
-                      'p-4 rounded-xl border',
-                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                      'p-5 rounded-xl border',
+                      theme === 'dark' ? 'border-gray-700 bg-gray-800/30' : 'border-gray-200 bg-gray-50'
                     )}>
-                      <h3 className="font-medium mb-3">Cliente</h3>
-                      <p className={cn(
-                        'text-lg font-semibold',
-                        theme === 'dark' ? 'text-white' : 'text-gray-900'
-                      )}>{selectedCustomer?.businessName}</p>
-                      <p className="text-sm text-gray-500">{selectedCustomer?.code}</p>
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className={cn(
+                          'w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg bg-gradient-to-br from-blue-500 to-blue-600'
+                        )}>
+                          {selectedCustomer?.businessName.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Cliente</p>
+                          <p className={cn(
+                            'text-lg font-semibold',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>{selectedCustomer?.businessName}</p>
+                          <p className="text-sm text-gray-500">{selectedCustomer?.code}</p>
+                        </div>
+                      </div>
                     </div>
 
                     <div className={cn(
-                      'p-4 rounded-xl border',
-                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                      'p-5 rounded-xl border',
+                      theme === 'dark' ? 'border-gray-700 bg-gray-800/30' : 'border-gray-200 bg-gray-50'
                     )}>
-                      <h3 className="font-medium mb-3">Resumen</h3>
+                      <p className="text-sm text-gray-500 mb-3">Resumen</p>
                       <div className="space-y-2">
                         <div className="flex justify-between">
                           <span className="text-gray-500">Subtotal:</span>
-                          <span>{formatCurrency(subtotal)}</span>
+                          <span className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                            {formatCurrency(subtotal)}
+                          </span>
                         </div>
                         {discountPercent > 0 && (
                           <div className="flex justify-between text-green-600">
@@ -715,7 +890,7 @@ export default function CreateQuotePage() {
                           </div>
                         )}
                         <div className={cn(
-                          'flex justify-between text-lg font-bold pt-2 border-t',
+                          'flex justify-between text-xl font-bold pt-3 border-t',
                           theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                         )}>
                           <span>Total:</span>
@@ -726,15 +901,29 @@ export default function CreateQuotePage() {
                   </div>
 
                   <div className={cn(
-                    'p-4 rounded-xl border',
-                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    'p-5 rounded-xl border',
+                    theme === 'dark' ? 'border-gray-700 bg-gray-800/30' : 'border-gray-200 bg-gray-50'
                   )}>
-                    <h3 className="font-medium mb-3">Productos ({lines.length})</h3>
+                    <div className="flex items-center gap-2 mb-4">
+                      <Package className="w-5 h-5 text-gray-400" />
+                      <h3 className="font-semibold">Productos ({lines.length})</h3>
+                    </div>
                     <div className="space-y-2">
                       {lines.map((line, index) => (
-                        <div key={index} className="flex justify-between text-sm">
-                          <span>{line.quantity}x {line.productName}</span>
-                          <span>{formatCurrency(line.subtotal)}</span>
+                        <div key={index} className={cn(
+                          'flex justify-between items-center p-3 rounded-lg',
+                          theme === 'dark' ? 'bg-gray-800/50' : 'bg-white'
+                        )}>
+                          <div className="flex items-center gap-2">
+                            <span className={cn(
+                              'w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium',
+                              theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                            )}>{line.quantity}</span>
+                            <span className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                              {line.productName}
+                            </span>
+                          </div>
+                          <span className="font-semibold text-green-600">{formatCurrency(line.subtotal)}</span>
                         </div>
                       ))}
                     </div>
@@ -744,18 +933,23 @@ export default function CreateQuotePage() {
             </motion.div>
 
             {/* Navigation Buttons */}
-            <div className="flex justify-between">
+            <div className={cn(
+              'flex justify-between p-4 rounded-2xl border shadow-xl',
+              theme === 'dark'
+                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+            )}>
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => currentStep > 1 && setCurrentStep(currentStep - 1)}
                 disabled={currentStep === 1}
                 className={cn(
-                  'flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium transition-all',
+                  'flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all',
                   currentStep === 1
                     ? 'opacity-50 cursor-not-allowed'
                     : theme === 'dark'
-                      ? 'bg-gray-800 hover:bg-gray-700 text-white'
+                      ? 'bg-gray-700 hover:bg-gray-600 text-white'
                       : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
                 )}
               >
@@ -770,10 +964,10 @@ export default function CreateQuotePage() {
                   onClick={() => canProceed() && setCurrentStep(currentStep + 1)}
                   disabled={!canProceed()}
                   className={cn(
-                    'flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium transition-all',
+                    'flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all',
                     !canProceed()
-                      ? 'opacity-50 cursor-not-allowed bg-gray-300'
-                      : 'bg-blue-500 hover:bg-blue-600 text-white'
+                      ? 'opacity-50 cursor-not-allowed bg-gray-300 text-gray-500'
+                      : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg shadow-blue-500/25'
                   )}
                 >
                   Siguiente
@@ -785,7 +979,7 @@ export default function CreateQuotePage() {
                   whileTap={{ scale: 0.98 }}
                   onClick={handleSubmit}
                   disabled={saving}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-xl font-medium disabled:opacity-50"
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl font-medium disabled:opacity-50 shadow-lg shadow-green-500/25"
                 >
                   <Save className="w-5 h-5" />
                   {saving ? 'Guardando...' : 'Crear Cotización'}
