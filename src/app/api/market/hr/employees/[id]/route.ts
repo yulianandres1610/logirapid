@@ -25,7 +25,6 @@ export async function GET(
         e.id,
         e.employee_code,
         e.status,
-        e.position,
         e.departmentid,
         e.hasfaceregistered,
         e.user_id,
@@ -34,7 +33,8 @@ export async function GET(
         u.lastname,
         u.email,
         u.phone,
-        d.name as department_name
+        d.name as department_name,
+        (SELECT c.position FROM market_contracts c WHERE c.employeeid = e.id AND c.status = 'active' LIMIT 1) as position
       FROM market_employees e
       LEFT JOIN users u ON e.user_id = u.id
       LEFT JOIN market_departments d ON e.departmentid = d.id
@@ -90,9 +90,10 @@ export async function PUT(
 
     const { id } = await params
     const body = await request.json()
-    const { status, position, departmentId } = body
+    const { status, departmentId } = body
 
     // Build update query dynamically
+    // Note: position is stored in contracts table, not employees
     const updates: string[] = []
     const values: any[] = []
     let paramIndex = 1
@@ -100,11 +101,6 @@ export async function PUT(
     if (status !== undefined) {
       updates.push(`status = $${paramIndex++}`)
       values.push(status)
-    }
-
-    if (position !== undefined) {
-      updates.push(`position = $${paramIndex++}`)
-      values.push(position)
     }
 
     if (departmentId !== undefined) {

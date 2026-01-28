@@ -24,10 +24,10 @@ export async function GET(
       SELECT
         d.*,
         e.id as manager_employee_id,
-        COALESCE(e.firstname || ' ' || e.lastname, u.email) as managername
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as managername
       FROM market_departments d
       LEFT JOIN market_employees e ON d.managerid = e.id
-      LEFT JOIN users u ON e.userid = u.id
+      LEFT JOIN users u ON e.user_id = u.id
       WHERE d.id = $1 AND d.companyid = $2
     `, [id, companyId])
 
@@ -43,12 +43,12 @@ export async function GET(
     // Get employees in this department
     const employeesResult = await db.query(`
       SELECT
-        e.id, e.employeecode, e.userid,
-        COALESCE(e.firstname || ' ' || e.lastname, u.email) as fullname,
+        e.id, e.employee_code, e.user_id,
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as fullname,
         e.status
       FROM market_employees e
-      LEFT JOIN users u ON e.userid = u.id
-      WHERE e.departmentid = $1 AND e.companyid = $2
+      LEFT JOIN users u ON e.user_id = u.id
+      WHERE e.departmentid = $1 AND e.company_id = $2
       ORDER BY fullname ASC
     `, [id, companyId])
 
@@ -67,7 +67,7 @@ export async function GET(
         updatedAt: row.updatedat,
         employees: employeesResult.rows.map(emp => ({
           id: emp.id,
-          employeeCode: emp.employeecode,
+          employeeCode: emp.employee_code,
           fullName: emp.fullname,
           status: emp.status
         }))
@@ -158,7 +158,7 @@ export async function DELETE(
     // Check if department has employees
     const employeesCheck = await db.query(`
       SELECT COUNT(*) as count FROM market_employees
-      WHERE departmentid = $1 AND companyid = $2
+      WHERE departmentid = $1 AND company_id = $2
     `, [id, companyId])
 
     if (parseInt(employeesCheck.rows[0].count) > 0) {

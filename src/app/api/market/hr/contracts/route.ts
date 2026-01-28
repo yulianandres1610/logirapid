@@ -23,13 +23,13 @@ export async function GET(request: NextRequest) {
     let query = `
       SELECT
         c.*,
-        COALESCE(e.firstname || ' ' || e.lastname, u.email) as employeename,
-        e.employeecode,
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as employeename,
+        e.employee_code as employeecode,
         d.name as departmentname,
         s.name as schedulename
       FROM market_contracts c
       JOIN market_employees e ON c.employeeid = e.id
-      LEFT JOIN users u ON e.userid = u.id
+      LEFT JOIN users u ON e.user_id = u.id
       LEFT JOIN market_departments d ON c.departmentid = d.id
       LEFT JOIN market_schedules s ON c.scheduleid = s.id
       WHERE c.companyid = $1

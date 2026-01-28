@@ -23,11 +23,11 @@ export async function GET(request: NextRequest) {
       SELECT
         d.*,
         e.id as manager_employee_id,
-        COALESCE(e.firstname || ' ' || e.lastname, u.email) as managername,
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as managername,
         (SELECT COUNT(*) FROM market_employees emp WHERE emp.departmentid = d.id) as employeecount
       FROM market_departments d
       LEFT JOIN market_employees e ON d.managerid = e.id
-      LEFT JOIN users u ON e.userid = u.id
+      LEFT JOIN users u ON e.user_id = u.id
       WHERE d.companyid = $1
     `
 
