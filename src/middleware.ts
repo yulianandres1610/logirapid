@@ -469,6 +469,43 @@ export async function middleware(request: NextRequest) {
   }
 
   // ============================================================
+  // ATTENDANCE KIOSK SUBDOMAIN HANDLING - asistencia.logirapid.com
+  // ============================================================
+  const isAttendanceSubdomain = host.startsWith('asistencia.') || host.includes('asistencia.logirapid')
+
+  if (isAttendanceSubdomain) {
+    // Allow static resources
+    if (pathname.startsWith('/_next') || pathname.startsWith('/images') || pathname === '/favicon.ico') {
+      return NextResponse.next()
+    }
+
+    // Allow kiosk API routes (for attendance operations)
+    if (pathname.startsWith('/api/market/hr/kiosks') ||
+        pathname.startsWith('/api/market/hr/attendance')) {
+      return NextResponse.next()
+    }
+
+    // Allow kiosk pages - /kiosk/[kioskId] or /[kioskId]
+    if (pathname.startsWith('/kiosk/') || pathname.match(/^\/\d+$/)) {
+      return NextResponse.next()
+    }
+
+    // Redirect root to kiosk selector page
+    if (pathname === '/') {
+      return NextResponse.rewrite(new URL('/kiosk', request.url))
+    }
+
+    // Allow /kiosk routes
+    if (pathname === '/kiosk' || pathname.startsWith('/kiosk')) {
+      return NextResponse.next()
+    }
+
+    // Block other routes on attendance subdomain
+    console.log('[MIDDLEWARE] Attendance subdomain - blocking route:', pathname)
+    return NextResponse.rewrite(new URL('/kiosk', request.url))
+  }
+
+  // ============================================================
   // REGULAR DOMAIN HANDLING
   // ============================================================
 
