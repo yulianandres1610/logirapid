@@ -42,7 +42,9 @@ import {
   Info,
   Warehouse,
   MapPin,
-  RefreshCw
+  RefreshCw,
+  Barcode,
+  Scan
 } from 'lucide-react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
@@ -949,48 +951,12 @@ export default function POSTerminalPage() {
     enabled: !showPaymentModal && !showCloseSessionModal && !showVariantModal && !loading
   })
 
-  // Handle product click - show variant modal if product has variants
-  // If product is out of stock, show details modal with warehouse stock info
+  // Handle product click - show product info modal (description + barcode)
+  // Employees must scan the product barcode to add it to cart
   const handleProductClick = useCallback((product: Product) => {
-    // Si el producto está sin stock, mostrar modal de detalles con stock en otros almacenes
-    if (product.trackInventory && product.stock <= 0) {
-      setSelectedProductForDetails(product)
-      setShowProductDetailsModal(true)
-      // Cargar stock de otros almacenes
-      setLoadingStocks(true)
-      setWarehouseStocks([])
-      fetch(`/api/market/products/${product.id}/stock?currentWarehouseId=${terminal?.warehouseId || ''}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.success && data.data.warehouses) {
-            const stocks = data.data.warehouses.map((w: {
-              warehouseId: number
-              warehouseName: string
-              warehouseCode: string
-              quantityOnHand: number
-              isCurrentWarehouse: boolean
-            }) => ({
-              warehouseId: w.warehouseId,
-              warehouseName: w.warehouseName,
-              warehouseCode: w.warehouseCode,
-              stock: w.quantityOnHand,
-              isCurrentWarehouse: w.isCurrentWarehouse
-            }))
-            setWarehouseStocks(stocks)
-          }
-        })
-        .catch(error => console.error('[POS] Error fetching warehouse stocks:', error))
-        .finally(() => setLoadingStocks(false))
-      return
-    }
-
-    if (product.hasVariants && product.variants && product.variants.length > 0) {
-      setSelectedProductForVariant(product)
-      setShowVariantModal(true)
-    } else {
-      addToCart(product, null)
-    }
-  }, [addToCart, terminal?.warehouseId])
+    setSelectedProductForDetails(product)
+    setShowProductDetailsModal(true)
+  }, [])
 
   // Handle variant selection from modal
   const handleVariantSelect = useCallback((variant: Variant) => {
@@ -2421,7 +2387,7 @@ export default function POSTerminalPage() {
               {/* Content */}
               <div className="flex-1 overflow-y-auto p-6 space-y-6">
                 {/* Description */}
-                {selectedProductForDetails.description && (
+                {selectedProductForDetails.description ? (
                   <div>
                     <h4 className="font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
                       <Tag className="w-4 h-4" />
@@ -2434,123 +2400,78 @@ export default function POSTerminalPage() {
                       {selectedProductForDetails.description}
                     </p>
                   </div>
-                )}
-
-                {/* Stock by Warehouse */}
-                <div>
-                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                    <Warehouse className="w-4 h-4" />
-                    Stock por Almacen
-                  </h4>
-
-                  {loadingStocks ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                      <span className="ml-2 text-gray-500">Cargando stock...</span>
-                    </div>
-                  ) : warehouseStocks.length === 0 ? (
-                    <p className="text-sm text-gray-500 text-center py-4">
-                      No hay datos de stock disponibles
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {warehouseStocks.map((warehouse) => (
-                        <div
-                          key={warehouse.warehouseId}
-                          className={cn(
-                            'flex items-center justify-between p-3 rounded-xl border-2 transition-all',
-                            warehouse.isCurrentWarehouse
-                              ? theme === 'dark'
-                                ? 'border-blue-500 bg-blue-900/20'
-                                : 'border-blue-500 bg-blue-50'
-                              : theme === 'dark'
-                                ? 'border-gray-700 bg-gray-700/50'
-                                : 'border-gray-200 bg-gray-50'
-                          )}
-                        >
-                          <div className="flex items-center gap-3">
-                            {warehouse.isCurrentWarehouse && (
-                              <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
-                                <MapPin className="w-4 h-4 text-white" />
-                              </div>
-                            )}
-                            <div>
-                              <p className={cn(
-                                'font-medium',
-                                warehouse.isCurrentWarehouse
-                                  ? 'text-blue-600 dark:text-blue-400'
-                                  : 'text-gray-900 dark:text-white'
-                              )}>
-                                {warehouse.warehouseName}
-                                {warehouse.isCurrentWarehouse && (
-                                  <span className="ml-2 text-xs font-normal text-blue-500">
-                                    (Actual)
-                                  </span>
-                                )}
-                              </p>
-                              <p className="text-xs text-gray-500 font-mono">
-                                {warehouse.warehouseCode}
-                              </p>
-                            </div>
-                          </div>
-                          <div className={cn(
-                            'text-right',
-                            warehouse.stock <= 0
-                              ? 'text-red-500'
-                              : warehouse.stock <= 5
-                                ? 'text-amber-500'
-                                : 'text-green-500'
-                          )}>
-                            <p className="text-xl font-bold">{warehouse.stock}</p>
-                            <p className="text-xs">unidades</p>
-                          </div>
-                        </div>
-                      ))}
-
-                      {/* Total */}
-                      <div className={cn(
-                        'flex items-center justify-between p-3 rounded-xl mt-3',
-                        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
-                      )}>
-                        <p className="font-semibold text-gray-900 dark:text-white">
-                          Stock Total
-                        </p>
-                        <p className="text-xl font-bold text-blue-500">
-                          {warehouseStocks.reduce((sum, w) => sum + w.stock, 0)}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Barcode */}
-                {selectedProductForDetails.barcode && (
-                  <div className={cn(
-                    'p-4 rounded-xl text-center',
-                    theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
-                  )}>
-                    <p className="text-xs text-gray-500 mb-1">Codigo de Barras</p>
-                    <p className="font-mono text-lg font-bold text-gray-900 dark:text-white">
-                      {selectedProductForDetails.barcode}
+                ) : (
+                  <div className="text-center py-4">
+                    <p className={cn(
+                      'text-sm',
+                      theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                    )}>
+                      Sin descripcion disponible
                     </p>
                   </div>
                 )}
+
+                {/* Barcode - Prominent display */}
+                <div className={cn(
+                  'p-6 rounded-xl text-center border-2 border-dashed',
+                  theme === 'dark' ? 'bg-gray-900 border-gray-600' : 'bg-gray-50 border-gray-300'
+                )}>
+                  <Barcode className="w-10 h-10 mx-auto mb-3 text-blue-500" />
+                  <p className="text-xs text-gray-500 mb-2">Codigo de Barras</p>
+                  {selectedProductForDetails.barcode ? (
+                    <p className="font-mono text-2xl font-bold text-gray-900 dark:text-white tracking-wider">
+                      {selectedProductForDetails.barcode}
+                    </p>
+                  ) : (
+                    <p className={cn(
+                      'text-sm',
+                      theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                    )}>
+                      Sin codigo de barras
+                    </p>
+                  )}
+                </div>
+
+                {/* Scan instruction */}
+                <div className={cn(
+                  'p-4 rounded-xl flex items-center gap-3',
+                  theme === 'dark' ? 'bg-amber-900/30 border border-amber-700' : 'bg-amber-50 border border-amber-200'
+                )}>
+                  <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center flex-shrink-0">
+                    <Scan className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <p className={cn(
+                      'font-medium text-sm',
+                      theme === 'dark' ? 'text-amber-400' : 'text-amber-700'
+                    )}>
+                      Escanea el codigo de barras
+                    </p>
+                    <p className={cn(
+                      'text-xs',
+                      theme === 'dark' ? 'text-amber-500/80' : 'text-amber-600'
+                    )}>
+                      Para agregar este producto al carrito, escanea el codigo con el lector
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              {/* Footer */}
+              {/* Footer - Close button only */}
               <div className={cn(
                 'px-6 py-4 border-t flex-shrink-0',
                 theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
               )}>
                 <button
-                  onClick={() => {
-                    setShowProductDetailsModal(false)
-                    handleProductClick(selectedProductForDetails)
-                  }}
-                  className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+                  onClick={() => setShowProductDetailsModal(false)}
+                  className={cn(
+                    'w-full py-3 font-semibold rounded-xl transition-colors',
+                    theme === 'dark'
+                      ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                      : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                  )}
                 >
-                  <ShoppingCart className="w-5 h-5" />
-                  Agregar al Carrito
+                  Cerrar
                 </button>
               </div>
             </motion.div>
