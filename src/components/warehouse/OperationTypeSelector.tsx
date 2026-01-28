@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRightLeft, Trash2, Scale, PackageOpen, Package, RotateCcw, Printer, BarChart3, History } from 'lucide-react'
+import { ArrowRightLeft, Trash2, Scale, PackageOpen, Package, RotateCcw, Printer, BarChart3, History, Truck } from 'lucide-react'
 
-export type OperationType = 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer' | 'order_reception' | 'return' | 'print_labels' | 'stock_report' | 'transfer_history' | 'adjustments_history'
+export type OperationType = 'transfer' | 'scrap' | 'adjustment' | 'receive_transfer' | 'order_reception' | 'return' | 'print_labels' | 'stock_report' | 'transfer_history' | 'adjustments_history' | 'wholesale_delivery'
 
 interface OperationTypeSelectorProps {
   onSelect: (type: OperationType) => void
@@ -51,6 +51,16 @@ const operationTypes = [
     hoverGradient: 'from-purple-600 to-indigo-700',
     bgLight: 'bg-purple-50',
     textColor: 'text-purple-600'
+  },
+  {
+    id: 'wholesale_delivery' as OperationType,
+    name: 'Mayoreo',
+    description: 'Entregas ventas mayoristas',
+    icon: Truck,
+    gradient: 'from-green-500 to-emerald-600',
+    hoverGradient: 'from-green-600 to-emerald-700',
+    bgLight: 'bg-green-50',
+    textColor: 'text-green-600'
   },
   {
     id: 'transfer_history' as OperationType,
@@ -117,6 +127,7 @@ const operationTypes = [
 export default function OperationTypeSelector({ onSelect, currentWarehouse }: OperationTypeSelectorProps) {
   const [pendingCount, setPendingCount] = useState(0)
   const [pendingConsignments, setPendingConsignments] = useState(0)
+  const [pendingWholesale, setPendingWholesale] = useState(0)
 
   // Fetch pending transfers count
   useEffect(() => {
@@ -135,6 +146,13 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
         if (consignmentsData.success) {
           setPendingConsignments(consignmentsData.data.count)
         }
+
+        // Fetch pending wholesale deliveries
+        const wholesaleResponse = await fetch(`/api/market/warehouses/${currentWarehouse.id}/pending-wholesale-deliveries`)
+        const wholesaleData = await wholesaleResponse.json()
+        if (wholesaleData.success) {
+          setPendingWholesale(wholesaleData.data.pendingCount)
+        }
       } catch (error) {
         console.error('Error fetching pending counts:', error)
       }
@@ -152,8 +170,11 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
 
   const renderCard = (op: typeof operationTypes[0], index: number) => {
     const Icon = op.icon
-    const showBadge = (op.id === 'receive_transfer' && pendingCount > 0) || (op.id === 'order_reception' && pendingConsignments > 0)
-    const badgeCount = op.id === 'receive_transfer' ? pendingCount : pendingConsignments
+    const showBadge = (op.id === 'receive_transfer' && pendingCount > 0) ||
+                      (op.id === 'order_reception' && pendingConsignments > 0) ||
+                      (op.id === 'wholesale_delivery' && pendingWholesale > 0)
+    const badgeCount = op.id === 'receive_transfer' ? pendingCount :
+                       op.id === 'wholesale_delivery' ? pendingWholesale : pendingConsignments
 
     return (
       <motion.button
@@ -181,7 +202,7 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
             animate={{ scale: 1 }}
             className="absolute top-2 right-2 z-20 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-lg"
           >
-            <span className={`text-xs font-bold ${op.id === 'order_reception' ? 'text-teal-600' : 'text-purple-600'}`}>
+            <span className={`text-xs font-bold ${op.id === 'order_reception' ? 'text-teal-600' : op.id === 'wholesale_delivery' ? 'text-green-600' : 'text-purple-600'}`}>
               {badgeCount}
             </span>
           </motion.div>

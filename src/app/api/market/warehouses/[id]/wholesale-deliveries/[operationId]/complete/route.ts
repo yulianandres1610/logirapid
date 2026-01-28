@@ -1,0 +1,275 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import jwt from 'jsonwebtoken'
+import { db } from '@/lib/database'
+
+interface JWTPayload {
+  userId: number
+  email: string
+  role: string
+  companyId: number
+}
+
+async function getPayload(): Promise<JWTPayload | null> {
+  const cookieStore = await cookies()
+  const token = cookieStore.get('auth-token')?.value
+  if (!token) return null
+
+  try {
+    const secret = process.env.JWT_SECRET || 'fallback-secret'
+    return jwt.verify(token, secret) as JWTPayload
+  } catch {
+    return null
+  }
+}
+
+/**
+ * POST /api/market/warehouses/[id]/wholesale-deliveries/[operationId]/complete
+ * Complete wholesale delivery - deduct stock and update statuses
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string; operationId: string }> }
+) {
+  try {
+    const payload = await getPayload()
+    if (!payload) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
+    }
+
+    const { id, operationId } = await params
+    const warehouseId = parseInt(id)
+    const opId = parseInt(operationId)
+
+    const body = await request.json()
+    const { discrepancyNotes } = body
+
+    // Get operation details
+    const operationResult = await db.query(`
+      SELECT
+        o.id, o.operation_number, o.status, o.validation_status,
+        o.source_warehouse_id, sw.name as warehouse_name,
+        o.reference_id as invoice_id, o.reference_number as invoice_number,
+        i.customer_id,
+        c.business_name as customer_name
+      FROM market_warehouse_operations o
+      LEFT JOIN market_warehouses sw ON sw.id = o.source_warehouse_id
+      LEFT JOIN market_invoices i ON i.id = o.reference_id
+      LEFT JOIN market_wholesale_customers c ON c.id = i.customer_id
+      WHERE o.id = $1 AND o.company_id = $2 AND o.operation_type = 'wholesale_delivery'
+    `, [opId, payload.companyId])
+
+    if (operationResult.rows.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Operación no encontrada'
+      }, { status: 404 })
+    }
+
+    const operation = operationResult.rows[0]
+
+    if (operation.status !== 'pending') {
+      return NextResponse.json({
+        success: false,
+        error: 'Esta operación ya fue completada'
+      }, { status: 400 })
+    }
+
+    // Get operation lines with validation data
+    const linesResult = await db.query(`
+      SELECT
+        l.id, l.product_id, l.variant_id,
+        p.name as product_name,
+        COALESCE(pv.sku, p.sku) as sku,
+        l.quantity_planned as quantity_expected,
+        COALESCE(l.quantity_validated, 0) as quantity_validated
+      FROM market_warehouse_operation_lines l
+      JOIN market_products p ON p.id = l.product_id
+      LEFT JOIN market_product_variants pv ON pv.id = l.variant_id
+      WHERE l.operation_id = $1
+    `, [opId])
+
+    // Check if any validation was done
+    const totalValidated = linesResult.rows.reduce((sum, l) =>
+      sum + (parseFloat(l.quantity_validated) || 0), 0)
+
+    if (totalValidated === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Escanee los productos antes de completar la entrega'
+      }, { status: 400 })
+    }
+
+    // Check for discrepancies
+    const hasDiscrepancies = linesResult.rows.some(l =>
+      Math.abs(parseFloat(l.quantity_validated) - parseFloat(l.quantity_expected)) > 0.001
+    )
+
+    if (hasDiscrepancies && !discrepancyNotes) {
+      return NextResponse.json({
+        success: false,
+        error: 'Hay discrepancias. Por favor agregue una nota explicativa.',
+        requiresNote: true,
+        discrepancies: linesResult.rows
+          .filter(l => Math.abs(parseFloat(l.quantity_validated) - parseFloat(l.quantity_expected)) > 0.001)
+          .map(l => ({
+            product: l.product_name,
+            expected: parseFloat(l.quantity_expected),
+            validated: parseFloat(l.quantity_validated),
+            difference: parseFloat(l.quantity_validated) - parseFloat(l.quantity_expected)
+          }))
+      }, { status: 400 })
+    }
+
+    // Start transaction
+    await db.query('BEGIN')
+
+    try {
+      // 1. Update stock for each line - release reservation and deduct
+      for (const line of linesResult.rows) {
+        const quantityExpected = parseFloat(line.quantity_expected)
+        const quantityValidated = parseFloat(line.quantity_validated)
+
+        // Get current stock
+        const stockResult = await db.query(`
+          SELECT id, quantity_on_hand, quantity_reserved
+          FROM market_warehouse_stock
+          WHERE warehouse_id = $1 AND product_id = $2
+          ${line.variant_id ? 'AND variant_id = $3' : 'AND variant_id IS NULL'}
+        `, line.variant_id
+          ? [warehouseId, line.product_id, line.variant_id]
+          : [warehouseId, line.product_id]
+        )
+
+        if (stockResult.rows.length > 0) {
+          const stock = stockResult.rows[0]
+          const previousOnHand = parseFloat(stock.quantity_on_hand) || 0
+          const previousReserved = parseFloat(stock.quantity_reserved) || 0
+
+          // Release reserved quantity (what was expected) and deduct validated quantity
+          const newReserved = Math.max(0, previousReserved - quantityExpected)
+          const newOnHand = previousOnHand - quantityValidated
+
+          await db.query(`
+            UPDATE market_warehouse_stock SET
+              quantity_on_hand = $1,
+              quantity_reserved = $2,
+              updated_at = NOW()
+            WHERE id = $3
+          `, [newOnHand, newReserved, stock.id])
+
+          // Create stock movement record
+          await db.query(`
+            INSERT INTO market_stock_movements (
+              company_id, warehouse_id, product_id, variant_id,
+              movement_type, quantity, quantity_before, quantity_after,
+              reference_type, reference_id, reference_number,
+              notes, created_by, created_at
+            ) VALUES (
+              $1, $2, $3, $4,
+              'wholesale_out', $5, $6, $7,
+              'wholesale_delivery', $8, $9,
+              $10, $11, NOW()
+            )
+          `, [
+            payload.companyId,
+            warehouseId,
+            line.product_id,
+            line.variant_id,
+            quantityValidated,
+            previousOnHand,
+            newOnHand,
+            opId,
+            operation.operation_number,
+            `Entrega mayorista a ${operation.customer_name}`,
+            payload.userId
+          ])
+
+          // Update variant quantity if applicable
+          if (line.variant_id) {
+            // Sum total across all warehouses
+            const totalResult = await db.query(`
+              SELECT COALESCE(SUM(quantity_on_hand), 0) as total
+              FROM market_warehouse_stock
+              WHERE product_id = $1 AND variant_id = $2
+            `, [line.product_id, line.variant_id])
+
+            await db.query(`
+              UPDATE market_product_variants
+              SET quantity_on_hand = $1, updated_at = NOW()
+              WHERE id = $2
+            `, [totalResult.rows[0].total, line.variant_id])
+          }
+        }
+      }
+
+      // 2. Update operation status
+      await db.query(`
+        UPDATE market_warehouse_operations SET
+          status = 'done',
+          validation_status = 'validated',
+          discrepancy_notes = $1,
+          completed_at = NOW(),
+          completed_by = $2,
+          updated_at = NOW()
+        WHERE id = $3
+      `, [discrepancyNotes || null, payload.userId, opId])
+
+      // 3. Update invoice status
+      const totalExpected = linesResult.rows.reduce((sum, l) =>
+        sum + (parseFloat(l.quantity_expected) || 0), 0)
+
+      // Check if this fully delivers the invoice
+      await db.query(`
+        UPDATE market_invoices SET
+          status = 'delivered',
+          delivered_at = NOW(),
+          updated_at = NOW()
+        WHERE id = $1
+      `, [operation.invoice_id])
+
+      // Update invoice lines with delivered quantities
+      for (const line of linesResult.rows) {
+        await db.query(`
+          UPDATE market_invoice_lines SET
+            quantity_delivered = COALESCE(quantity_delivered, 0) + $1
+          WHERE invoice_id = $2 AND product_id = $3
+          ${line.variant_id ? 'AND variant_id = $4' : 'AND variant_id IS NULL'}
+        `, line.variant_id
+          ? [line.quantity_validated, operation.invoice_id, line.product_id, line.variant_id]
+          : [line.quantity_validated, operation.invoice_id, line.product_id]
+        )
+      }
+
+      await db.query('COMMIT')
+
+      return NextResponse.json({
+        success: true,
+        message: 'Entrega completada exitosamente',
+        data: {
+          operationId: opId,
+          operationNumber: operation.operation_number,
+          invoiceNumber: operation.invoice_number,
+          warehouseName: operation.warehouse_name,
+          customerName: operation.customer_name,
+          totalProducts: linesResult.rows.length,
+          totalExpected: totalExpected,
+          totalDelivered: totalValidated,
+          hasDiscrepancies,
+          discrepancyNotes: discrepancyNotes || null
+        }
+      })
+
+    } catch (txError) {
+      await db.query('ROLLBACK')
+      throw txError
+    }
+
+  } catch (error) {
+    console.error('[Wholesale Delivery Complete] Error:', error)
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al completar entrega'
+    }, { status: 500 })
+  }
+}

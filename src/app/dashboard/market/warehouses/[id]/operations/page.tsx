@@ -26,6 +26,8 @@ import AdjustmentReasonSelector, { type AdjustmentReason } from '@/components/wa
 import ReferenceOrderSelector, { type ReferenceType } from '@/components/warehouse/ReferenceOrderSelector'
 import PendingTransfersList, { type PendingTransfer } from '@/components/warehouse/PendingTransfersList'
 import TransferValidationView from '@/components/warehouse/TransferValidationView'
+import PendingWholesaleDeliveriesList, { type PendingWholesaleDelivery } from '@/components/warehouse/PendingWholesaleDeliveriesList'
+import WholesaleDeliveryValidationView from '@/components/warehouse/WholesaleDeliveryValidationView'
 import UnifiedReceptionView from '@/components/warehouse/UnifiedReceptionView'
 import ReturnTypeSelector, { type ReturnType } from '@/components/warehouse/ReturnTypeSelector'
 import SupplierReturnView from '@/components/warehouse/SupplierReturnView'
@@ -426,6 +428,12 @@ export default function WarehouseOperationsPage() {
   const [selectedTransfer, setSelectedTransfer] = useState<PendingTransfer | null>(null)
   const [showValidationView, setShowValidationView] = useState(false)
 
+  // Wholesale delivery validation state
+  const [pendingWholesaleDeliveries, setPendingWholesaleDeliveries] = useState<PendingWholesaleDelivery[]>([])
+  const [loadingWholesaleDeliveries, setLoadingWholesaleDeliveries] = useState(false)
+  const [selectedWholesaleDelivery, setSelectedWholesaleDelivery] = useState<PendingWholesaleDelivery | null>(null)
+  const [showWholesaleValidationView, setShowWholesaleValidationView] = useState(false)
+
   // Return operation state
   const [returnType, setReturnType] = useState<ReturnType | null>(initialReturnType)
 
@@ -524,6 +532,25 @@ export default function WarehouseOperationsPage() {
     }
   }, [warehouseId])
 
+  // Fetch pending wholesale deliveries when wholesale_delivery is selected
+  const fetchPendingWholesaleDeliveries = useCallback(async () => {
+    setLoadingWholesaleDeliveries(true)
+    try {
+      const response = await fetch(`/api/market/warehouses/${warehouseId}/pending-wholesale-deliveries`)
+      const data = await response.json()
+      if (data.success) {
+        setPendingWholesaleDeliveries(data.data.deliveries)
+      } else {
+        setError(data.error)
+      }
+    } catch (err) {
+      console.error('Error fetching pending wholesale deliveries:', err)
+      setError('Error al cargar entregas mayoristas pendientes')
+    } finally {
+      setLoadingWholesaleDeliveries(false)
+    }
+  }, [warehouseId])
+
   const handleOperationTypeSelect = (type: OperationType) => {
     // Require password for scrap and adjustment operations
     if (type === 'scrap' || type === 'adjustment') {
@@ -539,6 +566,9 @@ export default function WarehouseOperationsPage() {
     if (type === 'receive_transfer') {
       setOperation({ ...initialOperationState, operationType: type })
       fetchPendingTransfers()
+    } else if (type === 'wholesale_delivery') {
+      setOperation({ ...initialOperationState, operationType: type })
+      fetchPendingWholesaleDeliveries()
     } else if (type === 'order_reception') {
       setOperation({ ...initialOperationState, operationType: type })
     } else if (type === 'return') {
@@ -559,6 +589,8 @@ export default function WarehouseOperationsPage() {
     setSuccess(null)
     setSelectedTransfer(null)
     setShowValidationView(false)
+    setSelectedWholesaleDelivery(null)
+    setShowWholesaleValidationView(false)
     if (type !== 'return') {
       setReturnType(null)
     }
@@ -611,6 +643,26 @@ export default function WarehouseOperationsPage() {
   const handleValidationClose = () => {
     setShowValidationView(false)
     setSelectedTransfer(null)
+  }
+
+  // Wholesale delivery handlers
+  const handleSelectWholesaleDelivery = (delivery: PendingWholesaleDelivery) => {
+    setSelectedWholesaleDelivery(delivery)
+    setShowWholesaleValidationView(true)
+  }
+
+  const handleWholesaleDeliveryComplete = () => {
+    setShowWholesaleValidationView(false)
+    setSelectedWholesaleDelivery(null)
+    setSuccess('Entrega mayorista completada exitosamente')
+    // Refresh the pending deliveries list
+    fetchPendingWholesaleDeliveries()
+    setTimeout(() => setSuccess(null), 3000)
+  }
+
+  const handleWholesaleDeliveryClose = () => {
+    setShowWholesaleValidationView(false)
+    setSelectedWholesaleDelivery(null)
   }
 
   const handleProductScanned = useCallback((data: ScannedProductData) => {
@@ -1051,6 +1103,7 @@ export default function WarehouseOperationsPage() {
                         operation.operationType === 'scrap' ? 'Scrap' :
                         operation.operationType === 'adjustment' ? 'Ajuste' :
                         operation.operationType === 'receive_transfer' ? 'Recibir Transferencia' :
+                        operation.operationType === 'wholesale_delivery' ? 'Entrega Mayorista' :
                         operation.operationType === 'order_reception' ? 'Recibir Orden' :
                         operation.operationType === 'return' ? (returnType === 'supplier' ? 'Devolucion a Proveedor' : returnType === 'pos' ? 'Devolucion desde POS' : 'Devoluciones') :
                         operation.operationType === 'print_labels' ? 'Imprimir Etiquetas' :
@@ -1115,6 +1168,16 @@ export default function WarehouseOperationsPage() {
         />
       )}
 
+      {/* Wholesale Delivery Validation Modal */}
+      {showWholesaleValidationView && selectedWholesaleDelivery && (
+        <WholesaleDeliveryValidationView
+          warehouseId={warehouseId}
+          operationId={selectedWholesaleDelivery.id}
+          onClose={handleWholesaleDeliveryClose}
+          onComplete={handleWholesaleDeliveryComplete}
+        />
+      )}
+
       {/* Main Content */}
       <main className="max-w-7xl mx-auto p-4">
         {!operation.operationType ? (
@@ -1133,6 +1196,26 @@ export default function WarehouseOperationsPage() {
                 onViewHistory={() => {
                   proceedWithOperation('transfer_history')
                 }}
+              />
+
+              <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={handleBack}
+                  className="px-6 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors"
+                >
+                  Volver a operaciones
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : operation.operationType === 'wholesale_delivery' ? (
+          /* Wholesale Delivery View */
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+              <PendingWholesaleDeliveriesList
+                deliveries={pendingWholesaleDeliveries}
+                onSelectDelivery={handleSelectWholesaleDelivery}
+                loading={loadingWholesaleDeliveries}
               />
 
               <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
