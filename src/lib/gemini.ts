@@ -16,8 +16,8 @@ const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
 // Modelo para generación de imágenes de productos
 const IMAGE_GENERATION_MODEL = 'gemini-2.0-flash-exp'
-// Modelo para edición de imágenes con mejor calidad
-const IMAGE_EDIT_MODEL = 'gemini-2.5-flash-preview-04-17'
+// Modelo para edición de imágenes con mejor calidad (Gemini 2.5 Flash Image)
+const IMAGE_EDIT_MODEL = 'gemini-2.5-flash-image'
 
 /**
  * Obtiene el cliente de Gemini AI

@@ -141,9 +141,18 @@ export async function GET(request: NextRequest) {
       `, [warehouseId, payload.companyId])
 
       if (existingCount.rows.length > 0) {
-        // Return the existing in-progress count
-        const redirectUrl = `/api/audit/counts?countId=${existingCount.rows[0].id}`
-        return NextResponse.redirect(new URL(redirectUrl, request.url))
+        // Return the existing in-progress count info (not redirect)
+        return NextResponse.json({
+          success: true,
+          data: {
+            count: {
+              id: existingCount.rows[0].id,
+              countNumber: existingCount.rows[0].count_number,
+              status: existingCount.rows[0].status,
+              startedAt: existingCount.rows[0].started_at
+            }
+          }
+        })
       }
 
       return NextResponse.json({

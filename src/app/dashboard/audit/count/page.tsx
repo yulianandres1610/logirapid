@@ -143,6 +143,87 @@ export default function AuditCountPage() {
   // Auto-save timer ref
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastSavedRef = useRef<string>('')
+  const isSavingRef = useRef(false)
+
+  // LocalStorage key for backup
+  const getLocalStorageKey = () => `audit-count-${warehouseId}`
+
+  // Save to localStorage immediately (no debounce)
+  const saveToLocalStorage = useCallback((products: CountedProduct[]) => {
+    if (!warehouseId) return
+    try {
+      const key = `audit-count-${warehouseId}`
+      const data = {
+        countId,
+        products,
+        savedAt: new Date().toISOString()
+      }
+      localStorage.setItem(key, JSON.stringify(data))
+      console.log('[LocalStorage] Saved', products.length, 'products')
+    } catch (e) {
+      console.error('[LocalStorage] Save error:', e)
+    }
+  }, [warehouseId, countId])
+
+  // Load from localStorage
+  const loadFromLocalStorage = useCallback((): { countId: number | null, products: CountedProduct[] } | null => {
+    if (!warehouseId) return null
+    try {
+      const key = `audit-count-${warehouseId}`
+      const stored = localStorage.getItem(key)
+      if (stored) {
+        const data = JSON.parse(stored)
+        console.log('[LocalStorage] Loaded', data.products?.length || 0, 'products')
+        return { countId: data.countId, products: data.products || [] }
+      }
+    } catch (e) {
+      console.error('[LocalStorage] Load error:', e)
+    }
+    return null
+  }, [warehouseId])
+
+  // Clear localStorage for this count
+  const clearLocalStorage = useCallback(() => {
+    if (!warehouseId) return
+    try {
+      const key = `audit-count-${warehouseId}`
+      localStorage.removeItem(key)
+      console.log('[LocalStorage] Cleared')
+    } catch (e) {
+      console.error('[LocalStorage] Clear error:', e)
+    }
+  }, [warehouseId])
+
+  // Save to server (without debounce - immediate)
+  const saveToServer = useCallback(async (products: CountedProduct[], currentCountId: number | null): Promise<number | null> => {
+    if (!warehouseId || isSavingRef.current) return currentCountId
+
+    try {
+      isSavingRef.current = true
+      const response = await fetch('/api/audit/counts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          warehouseId: parseInt(warehouseId),
+          countId: currentCountId,
+          lines: products,
+          action: 'save'
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        lastSavedRef.current = JSON.stringify(products)
+        console.log('[Server] Saved successfully, countId:', data.data.countId)
+        return data.data.countId
+      }
+    } catch (err) {
+      console.error('[Server] Save error:', err)
+    } finally {
+      isSavingRef.current = false
+    }
+    return currentCountId
+  }, [warehouseId])
 
   // Online status and theme
   useEffect(() => {
@@ -159,15 +240,56 @@ export default function AuditCountPage() {
       }
     }
 
+    // Save before page unload/refresh
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Save to localStorage immediately (synchronous)
+      if (warehouseId && countedProducts.length > 0) {
+        try {
+          const key = `audit-count-${warehouseId}`
+          const data = {
+            countId,
+            products: countedProducts,
+            savedAt: new Date().toISOString()
+          }
+          localStorage.setItem(key, JSON.stringify(data))
+          console.log('[BeforeUnload] Saved to localStorage')
+        } catch (err) {
+          console.error('[BeforeUnload] Save error:', err)
+        }
+      }
+    }
+
+    // Save when tab loses focus or visibility changes
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && warehouseId && countedProducts.length > 0) {
+        try {
+          const key = `audit-count-${warehouseId}`
+          const data = {
+            countId,
+            products: countedProducts,
+            savedAt: new Date().toISOString()
+          }
+          localStorage.setItem(key, JSON.stringify(data))
+          console.log('[VisibilityChange] Saved to localStorage')
+        } catch (err) {
+          console.error('[VisibilityChange] Save error:', err)
+        }
+      }
+    }
+
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
     window.addEventListener('storage', handleStorageChange)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
       window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [])
+  }, [warehouseId, countId, countedProducts])
 
   // Load warehouse and products
   useEffect(() => {
@@ -232,19 +354,24 @@ export default function AuditCountPage() {
           }))
         })))
 
-        // Check for existing in-progress count
+        // First check localStorage for any unsaved progress
+        const localData = loadFromLocalStorage()
+        let serverProducts: CountedProduct[] = []
+        let serverCountId: number | null = null
+
+        // Check for existing in-progress count on server
         const countRes = await fetch(`/api/audit/counts?warehouseId=${warehouseId}&status=in_progress`)
         const countData = await countRes.json()
 
         if (countData.success && countData.data?.count) {
-          // Load existing count
+          // Load existing count from server
           const existingCountId = countData.data.count.id
           const detailRes = await fetch(`/api/audit/counts?countId=${existingCountId}`)
           const detailData = await detailRes.json()
 
           if (detailData.success && detailData.data) {
-            setCountId(detailData.data.id)
-            const loadedProducts = detailData.data.lines.map((l: {
+            serverCountId = detailData.data.id
+            serverProducts = detailData.data.lines.map((l: {
               productId: number
               variantId?: number
               productName: string
@@ -268,21 +395,69 @@ export default function AuditCountPage() {
               systemQuantity: l.systemQuantity || 0,
               countedQuantity: l.countedQuantity || 0
             }))
-            setCountedProducts(loadedProducts)
-            lastSavedRef.current = JSON.stringify(loadedProducts)
           }
+        }
+
+        // Determine which data to use: localStorage takes priority if it has more products
+        // (indicating it has unsaved changes from before refresh)
+        if (localData && localData.products.length > 0) {
+          const localProductCount = localData.products.length
+          const serverProductCount = serverProducts.length
+
+          console.log('[Load] LocalStorage products:', localProductCount, 'Server products:', serverProductCount)
+
+          // Use localStorage data if it has more products OR same count but localStorage is newer
+          if (localProductCount >= serverProductCount) {
+            console.log('[Load] Using localStorage data (more recent)')
+            setCountId(localData.countId || serverCountId)
+            setCountedProducts(localData.products)
+            lastSavedRef.current = ''  // Mark as not saved to trigger auto-save
+
+            // Immediately sync localStorage data to server
+            if (localData.products.length > 0) {
+              setTimeout(async () => {
+                const newCountId = await saveToServer(localData.products, localData.countId || serverCountId)
+                if (newCountId) {
+                  setCountId(newCountId)
+                  console.log('[Load] Synced localStorage to server, countId:', newCountId)
+                }
+              }, 500)
+            }
+          } else {
+            console.log('[Load] Using server data (more products)')
+            setCountId(serverCountId)
+            setCountedProducts(serverProducts)
+            lastSavedRef.current = JSON.stringify(serverProducts)
+            // Update localStorage with server data
+            saveToLocalStorage(serverProducts)
+          }
+        } else if (serverProducts.length > 0) {
+          console.log('[Load] Using server data (no localStorage)')
+          setCountId(serverCountId)
+          setCountedProducts(serverProducts)
+          lastSavedRef.current = JSON.stringify(serverProducts)
+          // Save to localStorage for backup
+          saveToLocalStorage(serverProducts)
         }
 
       } catch (err) {
         console.error('Error loading data:', err)
         setError(err instanceof Error ? err.message : 'Error al cargar datos')
+
+        // Try to load from localStorage as fallback
+        const localData = loadFromLocalStorage()
+        if (localData && localData.products.length > 0) {
+          console.log('[Load] Using localStorage as fallback after error')
+          setCountId(localData.countId)
+          setCountedProducts(localData.products)
+        }
       } finally {
         setLoading(false)
       }
     }
 
     loadData()
-  }, [warehouseId])
+  }, [warehouseId, loadFromLocalStorage, saveToLocalStorage, saveToServer])
 
   // Auto-focus search input (desktop only - don't open keyboard on mobile)
   useEffect(() => {
@@ -330,7 +505,7 @@ export default function AuditCountPage() {
     return products.filter(p => !countedProductIds.has(p.id))
   }, [products, countedProducts])
 
-  // Auto-save effect - debounced save when countedProducts changes
+  // Auto-save effect - immediate localStorage save + debounced server save
   useEffect(() => {
     if (!warehouseId) return
 
@@ -342,14 +517,20 @@ export default function AuditCountPage() {
     // Don't save empty array if we never had anything (initial state)
     if (countedProducts.length === 0 && lastSavedRef.current === '') return
 
-    // Clear any pending save
+    // IMMEDIATELY save to localStorage (no debounce) - this is the key fix
+    saveToLocalStorage(countedProducts)
+
+    // Clear any pending server save
     if (autoSaveTimeoutRef.current) {
       clearTimeout(autoSaveTimeoutRef.current)
     }
 
-    // Schedule auto-save after 2 seconds of inactivity
+    // Schedule server save after 1.5 seconds of inactivity (reduced from 2s)
     autoSaveTimeoutRef.current = setTimeout(async () => {
+      if (isSavingRef.current) return
+
       try {
+        isSavingRef.current = true
         const response = await fetch('/api/audit/counts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -367,19 +548,22 @@ export default function AuditCountPage() {
             setCountId(data.data.countId)
           }
           lastSavedRef.current = currentState
-          console.log('[AutoSave] Conteo guardado automáticamente')
+          console.log('[AutoSave] Server save complete')
         }
       } catch (err) {
-        console.error('[AutoSave] Error:', err)
+        console.error('[AutoSave] Server error:', err)
+        // Keep localStorage backup - will sync on next load
+      } finally {
+        isSavingRef.current = false
       }
-    }, 2000)
+    }, 1500)
 
     return () => {
       if (autoSaveTimeoutRef.current) {
         clearTimeout(autoSaveTimeoutRef.current)
       }
     }
-  }, [warehouseId, countId, countedProducts])
+  }, [warehouseId, countId, countedProducts, saveToLocalStorage])
 
   // Handle product selection from search
   const selectProduct = useCallback((product: Product) => {
@@ -539,7 +723,10 @@ export default function AuditCountPage() {
     const newProducts = countedProducts.filter((_, i) => i !== index)
     setCountedProducts(newProducts)
 
-    // Save immediately after deletion
+    // Immediately save to localStorage
+    saveToLocalStorage(newProducts)
+
+    // Save to server immediately after deletion
     if (warehouseId) {
       try {
         const response = await fetch('/api/audit/counts', {
@@ -561,7 +748,7 @@ export default function AuditCountPage() {
         console.error('[Delete] Error al guardar:', err)
       }
     }
-  }, [countedProducts, selectedProduct, warehouseId, countId])
+  }, [countedProducts, selectedProduct, warehouseId, countId, saveToLocalStorage])
 
   // Edit counted product
   const editCountedProduct = useCallback((index: number) => {
@@ -580,6 +767,10 @@ export default function AuditCountPage() {
 
     try {
       setSaving(true)
+
+      // Save to localStorage first
+      saveToLocalStorage(countedProducts)
+
       const response = await fetch('/api/audit/counts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -598,12 +789,15 @@ export default function AuditCountPage() {
         setCountId(data.data.countId)
       }
 
+      lastSavedRef.current = JSON.stringify(countedProducts)
+      console.log('[ManualSave] Guardado exitoso')
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar')
     } finally {
       setSaving(false)
     }
-  }, [warehouseId, countId, countedProducts])
+  }, [warehouseId, countId, countedProducts, saveToLocalStorage])
 
   // Go to report
   const goToReport = useCallback(async () => {
@@ -611,7 +805,11 @@ export default function AuditCountPage() {
 
     try {
       setSaving(true)
-      // Save first
+
+      // Save to localStorage first as backup
+      saveToLocalStorage(countedProducts)
+
+      // Save to server
       const response = await fetch('/api/audit/counts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -627,6 +825,11 @@ export default function AuditCountPage() {
       if (!data.success) throw new Error(data.error)
 
       const savedCountId = data.data.countId || countId
+      lastSavedRef.current = JSON.stringify(countedProducts)
+
+      // Clear localStorage since data is now saved to server
+      clearLocalStorage()
+
       router.push(`/dashboard/audit/report?countId=${savedCountId}`)
 
     } catch (err) {
@@ -634,12 +837,29 @@ export default function AuditCountPage() {
     } finally {
       setSaving(false)
     }
-  }, [warehouseId, countId, countedProducts, router])
+  }, [warehouseId, countId, countedProducts, router, saveToLocalStorage, clearLocalStorage])
 
   // Go back to dashboard
-  const goBack = useCallback(() => {
+  const goBack = useCallback(async () => {
+    // Save to localStorage and server before leaving
+    if (warehouseId && countedProducts.length > 0) {
+      saveToLocalStorage(countedProducts)
+
+      // Try to save to server (don't wait for it to complete)
+      fetch('/api/audit/counts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          warehouseId: parseInt(warehouseId),
+          countId: countId,
+          lines: countedProducts,
+          action: 'save'
+        })
+      }).catch(err => console.error('[GoBack] Save error:', err))
+    }
+
     router.push('/dashboard/audit')
-  }, [router])
+  }, [router, warehouseId, countId, countedProducts, saveToLocalStorage])
 
   // Theme classes
   const tc = getThemeClasses(theme)
