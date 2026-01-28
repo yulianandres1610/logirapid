@@ -314,6 +314,13 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         'Recursos Humanos': true
       }))
     }
+    // Auto-expand Wholesale submenu
+    if (pathname.includes('/market/wholesale')) {
+      setOpenSubmenus(prev => ({
+        ...prev,
+        'Mayoreo': true
+      }))
+    }
   }, [pathname])
 
   // Fetch branding data for company logo
@@ -537,6 +544,17 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       ]
     },
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
+    {
+      icon: Briefcase,
+      label: "Mayoreo",
+      href: "/dashboard/market/wholesale",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: Users, label: "Clientes", href: "/dashboard/market/wholesale/customers" },
+        { icon: FileText, label: "Cotizaciones", href: "/dashboard/market/wholesale/quotes" },
+        { icon: Receipt, label: "Facturas", href: "/dashboard/market/wholesale/invoices" },
+      ]
+    },
     { icon: Store, label: "Marketplace", href: "/dashboard/market/marketplace" },
     {
       icon: Package,
