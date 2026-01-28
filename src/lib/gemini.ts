@@ -14,10 +14,10 @@ const STANDARD_IMAGE_SIZE = 1024 // Tamaño estándar para todas las imágenes d
 
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
-// Modelo para generación de imágenes de productos
-const IMAGE_GENERATION_MODEL = 'gemini-2.0-flash-exp'
-// Modelo para edición de imágenes con mejor calidad
-const IMAGE_EDIT_MODEL = 'gemini-2.0-flash-exp'
+// Modelo para generación y edición de imágenes de productos
+const IMAGE_GENERATION_MODEL = 'gemini-3-pro-image-preview'
+// Modelo para edición de imágenes (fotos de empleados, etc.)
+const IMAGE_EDIT_MODEL = 'gemini-3-pro-image-preview'
 
 /**
  * Obtiene el cliente de Gemini AI

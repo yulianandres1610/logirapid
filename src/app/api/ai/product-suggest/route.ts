@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-// Gemini Configuration - Fast and efficient
+// Gemini Configuration - Optimizado para descripciones de productos
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
-const GEMINI_MODEL = 'gemini-2.0-flash-exp' // Fast model for text generation
+const GEMINI_MODEL = 'gemini-3-pro-preview' // Modelo para generación de texto
 
 // Available categories (must match the ones in the create form)
 const CATEGORIES = [
