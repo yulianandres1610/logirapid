@@ -28,13 +28,11 @@ export async function POST(request: NextRequest) {
     // Verify employee exists
     const employeeCheck = await db.query(`
       SELECT
-        e.id, e.employeecode,
-        COALESCE(e.firstname || ' ' || e.lastname, u.email) as fullname,
-        c.scheduleid
+        e.id, e.employee_code,
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as fullname
       FROM market_employees e
-      LEFT JOIN users u ON e.userid = u.id
-      LEFT JOIN market_contracts c ON c.employeeid = e.id AND c.status = 'active'
-      WHERE e.id = $1 AND e.companyid = $2
+      LEFT JOIN users u ON e.user_id = u.id
+      WHERE e.id = $1 AND e.company_id = $2
     `, [employeeId, companyId])
 
     if (employeeCheck.rows.length === 0) {
@@ -74,16 +72,24 @@ export async function POST(request: NextRequest) {
     const checkInTime = new Date(attendance.checkin)
     const workedHours = (now.getTime() - checkInTime.getTime()) / (1000 * 60 * 60)
 
-    // Calculate early departure if schedule exists
+    // Calculate early departure and overtime if schedule exists
     let earlyDepartureMinutes = 0
     let overtimeHours = 0
 
-    if (employee.scheduleid) {
+    // Try to get schedule from contract
+    const contractCheck = await db.query(`
+      SELECT c.scheduleid FROM market_contracts c
+      WHERE c.employeeid = $1 AND c.status = 'active'
+      LIMIT 1
+    `, [employeeId])
+
+    if (contractCheck.rows.length > 0 && contractCheck.rows[0].scheduleid) {
+      const scheduleId = contractCheck.rows[0].scheduleid
       const dayOfWeek = now.getDay()
       const scheduleDay = await db.query(`
         SELECT * FROM market_schedule_days
         WHERE scheduleid = $1 AND dayofweek = $2
-      `, [employee.scheduleid, dayOfWeek])
+      `, [scheduleId, dayOfWeek])
 
       if (scheduleDay.rows.length > 0 && scheduleDay.rows[0].isworkday && scheduleDay.rows[0].endtime) {
         const scheduledEnd = scheduleDay.rows[0].endtime
@@ -140,7 +146,7 @@ export async function POST(request: NextRequest) {
         id: row.id,
         employeeId: row.employeeid,
         employeeName: employee.fullname,
-        employeeCode: employee.employeecode,
+        employeeCode: employee.employee_code,
         date: row.date,
         checkIn: row.checkin,
         checkOut: row.checkout,

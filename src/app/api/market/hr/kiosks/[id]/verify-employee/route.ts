@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { db } from '@/lib/database'
+import bcrypt from 'bcryptjs'
 
 async function getCompanyId() {
   const cookieStore = await cookies()
@@ -43,30 +44,38 @@ export async function POST(
     let employee = null
 
     if (method === 'pin' && pin) {
-      // Verify by PIN
+      // Verify by PIN - PIN is hashed, need to compare with bcrypt
+      // First get all active employees with PIN
       const result = await db.query(`
         SELECT
-          e.id, e.employeecode, e.status,
-          COALESCE(e.firstname || ' ' || e.lastname, u.email) as fullname,
-          e.hasfaceregistered
+          e.id, e.employee_code, e.status, e.pos_pin,
+          COALESCE(u.firstname || ' ' || u.lastname, u.email) as fullname,
+          COALESCE(e.hasfaceregistered, false) as hasfaceregistered
         FROM market_employees e
-        LEFT JOIN users u ON e.userid = u.id
-        WHERE e.companyid = $1 AND e.pin = $2 AND e.status = 'active'
-      `, [companyId, pin])
+        LEFT JOIN users u ON e.user_id = u.id
+        WHERE e.company_id = $1 AND e.status = 'active' AND e.pos_pin IS NOT NULL
+      `, [companyId])
 
-      if (result.rows.length > 0) {
-        employee = result.rows[0]
+      // Check PIN against each employee (bcrypt compare)
+      for (const emp of result.rows) {
+        if (emp.pos_pin) {
+          const pinMatch = await bcrypt.compare(pin, emp.pos_pin)
+          if (pinMatch) {
+            employee = emp
+            break
+          }
+        }
       }
     } else if (method === 'badge' && badgeCode) {
       // Verify by badge code
       const result = await db.query(`
         SELECT
-          e.id, e.employeecode, e.status,
-          COALESCE(e.firstname || ' ' || e.lastname, u.email) as fullname,
-          e.hasfaceregistered
+          e.id, e.employee_code, e.status,
+          COALESCE(u.firstname || ' ' || u.lastname, u.email) as fullname,
+          COALESCE(e.hasfaceregistered, false) as hasfaceregistered
         FROM market_employees e
-        LEFT JOIN users u ON e.userid = u.id
-        WHERE e.companyid = $1 AND e.badgecode = $2 AND e.status = 'active'
+        LEFT JOIN users u ON e.user_id = u.id
+        WHERE e.company_id = $1 AND e.pos_badge_code = $2 AND e.status = 'active'
       `, [companyId, badgeCode])
 
       if (result.rows.length > 0) {
@@ -76,12 +85,12 @@ export async function POST(
       // For face recognition, we need the employee ID from the client-side face match
       const result = await db.query(`
         SELECT
-          e.id, e.employeecode, e.status,
-          COALESCE(e.firstname || ' ' || e.lastname, u.email) as fullname,
-          e.hasfaceregistered
+          e.id, e.employee_code, e.status,
+          COALESCE(u.firstname || ' ' || u.lastname, u.email) as fullname,
+          COALESCE(e.hasfaceregistered, false) as hasfaceregistered
         FROM market_employees e
-        LEFT JOIN users u ON e.userid = u.id
-        WHERE e.id = $1 AND e.companyid = $2 AND e.status = 'active'
+        LEFT JOIN users u ON e.user_id = u.id
+        WHERE e.id = $1 AND e.company_id = $2 AND e.status = 'active'
       `, [employeeId, companyId])
 
       if (result.rows.length > 0) {
@@ -111,7 +120,7 @@ export async function POST(
       success: true,
       data: {
         id: employee.id,
-        employeeCode: employee.employeecode,
+        employeeCode: employee.employee_code,
         fullName: employee.fullname,
         hasFaceRegistered: employee.hasfaceregistered,
         canCheckIn,
