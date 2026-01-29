@@ -316,7 +316,9 @@ export default function CreateInvoicePage() {
   const updateLineDiscount = (index: number, discount: number) => {
     const newLines = [...lines]
     const line = newLines[index]
-    line.discountPercent = Math.max(0, Math.min(100, discount))
+    // Discount cannot exceed the profit margin
+    const maxDiscount = Math.max(0, line.profitMargin)
+    line.discountPercent = Math.max(0, Math.min(maxDiscount, discount))
     line.discountAmount = line.quantity * line.unitPrice * line.discountPercent / 100
     line.subtotal = line.quantity * line.unitPrice - line.discountAmount
     setLines(newLines)
@@ -953,7 +955,8 @@ export default function CreateInvoicePage() {
                                   theme === 'dark' ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'
                                 )}
                                 min="0"
-                                max="100"
+                                max={Math.max(0, line.profitMargin)}
+                                title={`Máximo: ${line.profitMargin.toFixed(0)}% (margen)`}
                               />
                             </div>
                             <div className="col-span-1 text-right">

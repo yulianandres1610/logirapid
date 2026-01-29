@@ -48,6 +48,7 @@ interface Product {
   costPrice: number
   imageUrl: string | null
   stock: number
+  profitMargin?: number
 }
 
 interface QuoteLine {
@@ -61,6 +62,7 @@ interface QuoteLine {
   discountPercent: number
   discountAmount: number
   subtotal: number
+  profitMargin: number
 }
 
 interface Warehouse {
@@ -159,7 +161,7 @@ export default function CreateQuotePage() {
 
   const fetchProducts = async () => {
     try {
-      const response = await fetch('/api/market/products?limit=100')
+      const response = await fetch('/api/market/products?limit=500&includeWarehouseStock=true')
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
@@ -179,6 +181,11 @@ export default function CreateQuotePage() {
       newLines[existingIndex].subtotal = newLines[existingIndex].quantity * newLines[existingIndex].unitPrice
       setLines(newLines)
     } else {
+      // Calculate profit margin if not provided
+      const profitMargin = product.profitMargin ?? (product.costPrice > 0
+        ? ((product.sellingPrice - product.costPrice) / product.costPrice) * 100
+        : 0)
+
       setLines([...lines, {
         productId: product.id,
         variantId: null,
@@ -189,7 +196,8 @@ export default function CreateQuotePage() {
         originalPrice: product.sellingPrice,
         discountPercent: 0,
         discountAmount: 0,
-        subtotal: product.sellingPrice
+        subtotal: product.sellingPrice,
+        profitMargin
       }])
     }
   }
@@ -204,9 +212,12 @@ export default function CreateQuotePage() {
 
   const updateLineDiscount = (index: number, discount: number) => {
     const newLines = [...lines]
-    newLines[index].discountPercent = discount
-    newLines[index].discountAmount = newLines[index].quantity * newLines[index].unitPrice * discount / 100
-    newLines[index].subtotal = newLines[index].quantity * newLines[index].unitPrice - newLines[index].discountAmount
+    const line = newLines[index]
+    // Discount cannot exceed the profit margin
+    const maxDiscount = Math.max(0, line.profitMargin)
+    line.discountPercent = Math.max(0, Math.min(maxDiscount, discount))
+    line.discountAmount = line.quantity * line.unitPrice * line.discountPercent / 100
+    line.subtotal = line.quantity * line.unitPrice - line.discountAmount
     setLines(newLines)
   }
 
@@ -754,7 +765,8 @@ export default function CreateQuotePage() {
                                         theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'
                                       )}
                                       min="0"
-                                      max="100"
+                                      max={Math.max(0, line.profitMargin)}
+                                      title={`Máx: ${line.profitMargin.toFixed(0)}% (margen)`}
                                     />
                                   </div>
                                   <p className="font-bold text-green-600 ml-auto">
