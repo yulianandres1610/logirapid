@@ -63,6 +63,19 @@ interface QuoteLine {
   discountAmount: number
   subtotal: number
   profitMargin: number
+  hasPricelistPrice: boolean
+  pricelistDiscountInfo: string | null
+}
+
+interface PricelistItem {
+  id: number
+  productId: number
+  categoryId: number | null
+  priceType: 'fixed' | 'discount_percent' | 'discount_amount'
+  fixedPrice: number | null
+  discountPercent: number | null
+  discountAmount: number | null
+  minQuantity: number
 }
 
 interface Warehouse {
@@ -114,6 +127,10 @@ export default function CreateQuotePage() {
   const [notes, setNotes] = useState('')
   const [internalNotes, setInternalNotes] = useState('')
 
+  // Pricelist state
+  const [pricelistItems, setPricelistItems] = useState<PricelistItem[]>([])
+  const [loadingPricelist, setLoadingPricelist] = useState(false)
+
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
 
   useEffect(() => {
@@ -126,7 +143,7 @@ export default function CreateQuotePage() {
     if (preselectedCustomerId && customers.length > 0) {
       const customer = customers.find(c => c.id === parseInt(preselectedCustomerId))
       if (customer) {
-        setSelectedCustomer(customer)
+        handleSelectCustomer(customer)
       }
     }
   }, [preselectedCustomerId, customers])
@@ -173,18 +190,110 @@ export default function CreateQuotePage() {
     }
   }
 
+  const fetchPricelistItems = async (pricelistId: number) => {
+    setLoadingPricelist(true)
+    try {
+      const response = await fetch(`/api/market/pricelists/${pricelistId}`)
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && result.data.items) {
+          setPricelistItems(result.data.items.map((item: {
+            id: number
+            productId: number
+            categoryId: number | null
+            priceType: string
+            fixedPrice: number | null
+            discountPercent: number | null
+            discountAmount: number | null
+            minQuantity: number
+          }) => ({
+            id: item.id,
+            productId: item.productId,
+            categoryId: item.categoryId,
+            priceType: item.priceType as 'fixed' | 'discount_percent' | 'discount_amount',
+            fixedPrice: item.fixedPrice,
+            discountPercent: item.discountPercent,
+            discountAmount: item.discountAmount,
+            minQuantity: item.minQuantity || 1
+          })))
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching pricelist items:', error)
+    } finally {
+      setLoadingPricelist(false)
+    }
+  }
+
+  // Calculate price from pricelist for a product
+  const getPricelistPrice = (productId: number, basePrice: number, quantity: number = 1): { price: number; hasDiscount: boolean; discountInfo: string | null } => {
+    const applicableItems = pricelistItems
+      .filter(item => item.productId === productId && item.minQuantity <= quantity)
+      .sort((a, b) => b.minQuantity - a.minQuantity)
+
+    if (applicableItems.length === 0) {
+      return { price: basePrice, hasDiscount: false, discountInfo: null }
+    }
+
+    const item = applicableItems[0]
+
+    if (item.priceType === 'fixed' && item.fixedPrice !== null) {
+      const discount = ((basePrice - item.fixedPrice) / basePrice) * 100
+      return {
+        price: item.fixedPrice,
+        hasDiscount: true,
+        discountInfo: `Precio fijo de lista (-${discount.toFixed(0)}%)`
+      }
+    } else if (item.priceType === 'discount_percent' && item.discountPercent !== null) {
+      const discountedPrice = basePrice * (1 - item.discountPercent / 100)
+      return {
+        price: discountedPrice,
+        hasDiscount: true,
+        discountInfo: `${item.discountPercent}% descuento de lista`
+      }
+    } else if (item.priceType === 'discount_amount' && item.discountAmount !== null) {
+      const discountedPrice = Math.max(0, basePrice - item.discountAmount)
+      return {
+        price: discountedPrice,
+        hasDiscount: true,
+        discountInfo: `$${item.discountAmount} descuento de lista`
+      }
+    }
+
+    return { price: basePrice, hasDiscount: false, discountInfo: null }
+  }
+
+  // Handle customer selection - also fetch pricelist items
+  const handleSelectCustomer = (customer: Customer) => {
+    setSelectedCustomer(customer)
+    setPricelistItems([])
+    setLines([])
+    if (customer.pricelistId) {
+      fetchPricelistItems(customer.pricelistId)
+    }
+  }
+
   const addProduct = (product: Product) => {
     const existingIndex = lines.findIndex(l => l.productId === product.id)
     if (existingIndex >= 0) {
       const newLines = [...lines]
       newLines[existingIndex].quantity += 1
-      newLines[existingIndex].subtotal = newLines[existingIndex].quantity * newLines[existingIndex].unitPrice
+      newLines[existingIndex].subtotal = newLines[existingIndex].quantity * newLines[existingIndex].unitPrice * (1 - newLines[existingIndex].discountPercent / 100)
       setLines(newLines)
     } else {
-      // Calculate profit margin if not provided
-      const profitMargin = product.profitMargin ?? (product.costPrice > 0
-        ? ((product.sellingPrice - product.costPrice) / product.costPrice) * 100
-        : 0)
+      // Check if there's a pricelist price for this product
+      const { price: pricelistPrice, hasDiscount, discountInfo } = getPricelistPrice(
+        product.id,
+        product.sellingPrice,
+        1
+      )
+
+      const unitPrice = hasDiscount ? pricelistPrice : product.sellingPrice
+
+      // Calculate profit margin based on actual unit price
+      const profitMargin = product.costPrice > 0
+        ? ((unitPrice - product.costPrice) / product.costPrice) * 100
+        : 0
 
       setLines([...lines, {
         productId: product.id,
@@ -192,12 +301,14 @@ export default function CreateQuotePage() {
         productName: product.name,
         productSku: product.sku || '',
         quantity: 1,
-        unitPrice: product.sellingPrice,
+        unitPrice,
         originalPrice: product.sellingPrice,
         discountPercent: 0,
         discountAmount: 0,
-        subtotal: product.sellingPrice,
-        profitMargin
+        subtotal: unitPrice,
+        profitMargin,
+        hasPricelistPrice: hasDiscount,
+        pricelistDiscountInfo: discountInfo
       }])
     }
   }
@@ -533,7 +644,7 @@ export default function CreateQuotePage() {
                           key={customer.id}
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
-                          onClick={() => setSelectedCustomer(customer)}
+                          onClick={() => handleSelectCustomer(customer)}
                           className={cn(
                             'p-4 rounded-xl border-2 cursor-pointer transition-all',
                             selectedCustomer?.id === customer.id

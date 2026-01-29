@@ -89,7 +89,7 @@ interface InvoiceLine {
   quantity: number
   unitPrice: number
   costPrice: number
-  originalPrice: number
+  originalPrice: number // Base selling price before any pricelist discounts
   discountPercent: number
   discountAmount: number
   subtotal: number
@@ -97,6 +97,8 @@ interface InvoiceLine {
   warehouseStock: WarehouseStock[]
   profitMargin: number
   costPriceCup: number
+  hasPricelistPrice: boolean // Whether price comes from pricelist
+  pricelistDiscountInfo: string | null // Info about pricelist discount applied
 }
 
 interface WarehouseInfo {
@@ -107,6 +109,17 @@ interface WarehouseInfo {
 interface Pricelist {
   id: number
   name: string
+}
+
+interface PricelistItem {
+  id: number
+  productId: number
+  categoryId: number | null
+  priceType: 'fixed' | 'discount_percent' | 'discount_amount'
+  fixedPrice: number | null
+  discountPercent: number | null
+  discountAmount: number | null
+  minQuantity: number
 }
 
 const STEPS = [
@@ -138,6 +151,8 @@ export default function CreateInvoicePage() {
   const [loadingCustomers, setLoadingCustomers] = useState(true)
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [exchangeRate, setExchangeRate] = useState(340)
+  const [pricelistItems, setPricelistItems] = useState<PricelistItem[]>([])
+  const [loadingPricelist, setLoadingPricelist] = useState(false)
 
   // Step 1: Customer
   const [customerSearch, setCustomerSearch] = useState('')
@@ -180,10 +195,22 @@ export default function CreateInvoicePage() {
     if (preselectedCustomerId && customers.length > 0) {
       const customer = customers.find(c => c.id === parseInt(preselectedCustomerId))
       if (customer) {
-        setSelectedCustomer(customer)
+        handleSelectCustomer(customer)
       }
     }
   }, [preselectedCustomerId, customers])
+
+  // Handle customer selection - also fetch pricelist items
+  const handleSelectCustomer = (customer: Customer) => {
+    setSelectedCustomer(customer)
+    // Clear previous pricelist items and lines when changing customer
+    setPricelistItems([])
+    setLines([])
+    // Fetch pricelist items if customer has a pricelist
+    if (customer.pricelistId) {
+      fetchPricelistItems(customer.pricelistId)
+    }
+  }
 
   const fetchCustomers = async () => {
     setLoadingCustomers(true)
@@ -250,6 +277,80 @@ export default function CreateInvoicePage() {
     }
   }
 
+  const fetchPricelistItems = async (pricelistId: number) => {
+    setLoadingPricelist(true)
+    try {
+      const response = await fetch(`/api/market/pricelists/${pricelistId}`)
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && result.data.items) {
+          setPricelistItems(result.data.items.map((item: {
+            id: number
+            productId: number
+            categoryId: number | null
+            priceType: string
+            fixedPrice: number | null
+            discountPercent: number | null
+            discountAmount: number | null
+            minQuantity: number
+          }) => ({
+            id: item.id,
+            productId: item.productId,
+            categoryId: item.categoryId,
+            priceType: item.priceType as 'fixed' | 'discount_percent' | 'discount_amount',
+            fixedPrice: item.fixedPrice,
+            discountPercent: item.discountPercent,
+            discountAmount: item.discountAmount,
+            minQuantity: item.minQuantity || 1
+          })))
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching pricelist items:', error)
+    } finally {
+      setLoadingPricelist(false)
+    }
+  }
+
+  // Calculate price from pricelist for a product
+  const getPricelistPrice = (productId: number, basePrice: number, quantity: number = 1): { price: number; hasDiscount: boolean; discountInfo: string | null } => {
+    // Find applicable pricelist items for this product (sorted by min_quantity desc to get best tier)
+    const applicableItems = pricelistItems
+      .filter(item => item.productId === productId && item.minQuantity <= quantity)
+      .sort((a, b) => b.minQuantity - a.minQuantity)
+
+    if (applicableItems.length === 0) {
+      return { price: basePrice, hasDiscount: false, discountInfo: null }
+    }
+
+    const item = applicableItems[0] // Best applicable tier
+
+    if (item.priceType === 'fixed' && item.fixedPrice !== null) {
+      const discount = ((basePrice - item.fixedPrice) / basePrice) * 100
+      return {
+        price: item.fixedPrice,
+        hasDiscount: true,
+        discountInfo: `Precio fijo de lista (-${discount.toFixed(0)}%)`
+      }
+    } else if (item.priceType === 'discount_percent' && item.discountPercent !== null) {
+      const discountedPrice = basePrice * (1 - item.discountPercent / 100)
+      return {
+        price: discountedPrice,
+        hasDiscount: true,
+        discountInfo: `${item.discountPercent}% descuento de lista`
+      }
+    } else if (item.priceType === 'discount_amount' && item.discountAmount !== null) {
+      const discountedPrice = Math.max(0, basePrice - item.discountAmount)
+      return {
+        price: discountedPrice,
+        hasDiscount: true,
+        discountInfo: `$${item.discountAmount} descuento de lista`
+      }
+    }
+
+    return { price: basePrice, hasDiscount: false, discountInfo: null }
+  }
+
   const addProduct = (product: Product) => {
     const existingIndex = lines.findIndex(l => l.productId === product.id)
     if (existingIndex >= 0) {
@@ -266,9 +367,19 @@ export default function CreateInvoicePage() {
     }
 
     const costPriceCup = product.costPriceCup || product.costPrice * exchangeRate
-    const profitMargin = product.profitMargin || (product.costPrice > 0
-      ? ((product.sellingPrice - product.costPrice) / product.costPrice) * 100
-      : 0)
+
+    // Check if there's a pricelist price for this product
+    const { price: pricelistPrice, hasDiscount, discountInfo } = getPricelistPrice(
+      product.id,
+      product.sellingPrice,
+      1 // Initial quantity for price tier
+    )
+
+    // Calculate profit margin based on the actual unit price (after pricelist)
+    const unitPrice = hasDiscount ? pricelistPrice : product.sellingPrice
+    const profitMargin = product.costPrice > 0
+      ? ((unitPrice - product.costPrice) / product.costPrice) * 100
+      : 0
 
     setLines([...lines, {
       productId: product.id,
@@ -276,16 +387,18 @@ export default function CreateInvoicePage() {
       productName: product.name,
       productSku: product.sku || '',
       quantity: 0, // Will be calculated from warehouse quantities
-      unitPrice: product.sellingPrice,
+      unitPrice,
       costPrice: product.costPrice,
-      originalPrice: product.sellingPrice,
-      discountPercent: 0,
+      originalPrice: product.sellingPrice, // Keep base price for reference
+      discountPercent: 0, // Additional discount on top of pricelist price
       discountAmount: 0,
       subtotal: 0,
       warehouseQuantities,
       warehouseStock,
       profitMargin,
-      costPriceCup
+      costPriceCup,
+      hasPricelistPrice: hasDiscount,
+      pricelistDiscountInfo: discountInfo
     }])
 
     // Expand the newly added line
@@ -738,7 +851,7 @@ export default function CreateInvoicePage() {
                     {filteredCustomers.map(customer => (
                       <div
                         key={customer.id}
-                        onClick={() => setSelectedCustomer(customer)}
+                        onClick={() => handleSelectCustomer(customer)}
                         className={cn(
                           "p-4 border-2 rounded-xl cursor-pointer transition-all",
                           selectedCustomer?.id === customer.id
@@ -793,10 +906,20 @@ export default function CreateInvoicePage() {
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                    Agregar Productos
-                  </h2>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                      Agregar Productos
+                    </h2>
+                    {selectedCustomer?.pricelistName && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Tag className="w-3.5 h-3.5 text-green-500" />
+                        <span className="text-xs text-green-600 dark:text-green-400">
+                          {loadingPricelist ? 'Cargando lista...' : `Lista de precios: ${selectedCustomer.pricelistName}`}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                   <div className={cn(
                     'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm',
                     theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
@@ -930,8 +1053,21 @@ export default function CreateInvoicePage() {
                             <div className="col-span-1 text-right text-sm text-gray-600 dark:text-gray-400">
                               {formatCurrency(line.costPrice)}
                             </div>
-                            <div className="col-span-1 text-right text-sm font-medium text-green-600">
-                              {formatCurrency(line.unitPrice)}
+                            <div className="col-span-1 text-right">
+                              {line.hasPricelistPrice ? (
+                                <div title={line.pricelistDiscountInfo || ''}>
+                                  <span className="text-xs text-gray-400 line-through block">
+                                    {formatCurrency(line.originalPrice)}
+                                  </span>
+                                  <span className="text-sm font-medium text-green-600">
+                                    {formatCurrency(line.unitPrice)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-sm font-medium text-green-600">
+                                  {formatCurrency(line.unitPrice)}
+                                </span>
+                              )}
                             </div>
                             <div className="col-span-1 text-right">
                               <span className={cn(
