@@ -46,9 +46,26 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || ''
     const category = searchParams.get('category')
     const stockFilter = searchParams.get('filter') // 'low-stock', 'out-of-stock', 'in-stock'
+    const includeWarehouseStock = searchParams.get('includeWarehouseStock') === 'true'
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = (page - 1) * limit
+
+    // Fetch exchange rate if needed for CUP prices
+    let exchangeRate = 340 // Default fallback
+    if (includeWarehouseStock) {
+      try {
+        const ratesResponse = await fetch(`${request.nextUrl.origin}/api/market/pos/exchange-rates`)
+        if (ratesResponse.ok) {
+          const ratesData = await ratesResponse.json()
+          if (ratesData.success && ratesData.rates?.CUP) {
+            exchangeRate = ratesData.rates.CUP
+          }
+        }
+      } catch (e) {
+        console.warn('[Market Products] Could not fetch exchange rate, using default:', e)
+      }
+    }
 
     let query = `
       SELECT
@@ -237,6 +254,48 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Get warehouse stock for products if requested
+    let warehouseStockByProduct: Record<number, Array<{
+      warehouseId: number
+      warehouseName: string
+      warehouseCode: string
+      quantityOnHand: number
+      quantityReserved: number
+      quantityAvailable: number
+    }>> = {}
+
+    if (includeWarehouseStock && productIds.length > 0) {
+      const warehouseStockResult = await db.query(`
+        SELECT
+          mws.product_id,
+          mws.warehouse_id,
+          mw.name as warehouse_name,
+          mw.code as warehouse_code,
+          COALESCE(SUM(mws.quantity_on_hand), 0) as quantity_on_hand,
+          COALESCE(SUM(mws.quantity_reserved), 0) as quantity_reserved,
+          COALESCE(SUM(mws.quantity_on_hand - mws.quantity_reserved), 0) as quantity_available
+        FROM market_warehouse_stock mws
+        JOIN market_warehouses mw ON mws.warehouse_id = mw.id
+        WHERE mws.product_id = ANY($1) AND mw.company_id = $2 AND mw.is_active = true
+        GROUP BY mws.product_id, mws.warehouse_id, mw.name, mw.code
+        ORDER BY mw.name
+      `, [productIds, companyId])
+
+      for (const row of warehouseStockResult.rows) {
+        if (!warehouseStockByProduct[row.product_id]) {
+          warehouseStockByProduct[row.product_id] = []
+        }
+        warehouseStockByProduct[row.product_id].push({
+          warehouseId: row.warehouse_id,
+          warehouseName: row.warehouse_name,
+          warehouseCode: row.warehouse_code,
+          quantityOnHand: parseFloat(row.quantity_on_hand) || 0,
+          quantityReserved: parseFloat(row.quantity_reserved) || 0,
+          quantityAvailable: parseFloat(row.quantity_available) || 0
+        })
+      }
+    }
+
     // Calculate stock stats using warehouse stock
     const statsResult = await db.query(`
       SELECT
@@ -272,14 +331,33 @@ export async function GET(request: NextRequest) {
             )
           }
 
+          const costPrice = parseFloat(row.cost_price) || 0
+          const sellingPrice = parseFloat(row.selling_price) || 0
+
+          // Calculate CUP price and profit margin when warehouse stock is included
+          const costPriceCup = includeWarehouseStock ? costPrice * exchangeRate : undefined
+          const profitMargin = includeWarehouseStock && costPrice > 0
+            ? ((sellingPrice - costPrice) / costPrice) * 100
+            : undefined
+
+          // Get warehouse stock for this product
+          const warehouseStock = includeWarehouseStock
+            ? warehouseStockByProduct[row.id] || []
+            : undefined
+
+          // Calculate total stock from warehouses
+          const totalWarehouseStock = warehouseStock
+            ? warehouseStock.reduce((sum, ws) => sum + ws.quantityAvailable, 0)
+            : 0
+
           return {
             id: row.id,
             name: row.name,
             description: row.description,
             imageUrl: row.image_url,
             category: row.category,
-            costPrice: parseFloat(row.cost_price) || 0,
-            sellingPrice: parseFloat(row.selling_price) || 0,
+            costPrice,
+            sellingPrice,
             currency: row.currency || 'USD',
             sku: row.sku,
             barcode: row.barcode,
@@ -304,7 +382,14 @@ export async function GET(request: NextRequest) {
               name: matchedVariant.name,
               barcode: matchedVariant.barcode,
               sku: matchedVariant.sku
-            } : undefined
+            } : undefined,
+            // Multi-warehouse stock data (only included when includeWarehouseStock=true)
+            ...(includeWarehouseStock ? {
+              costPriceCup,
+              profitMargin: profitMargin !== undefined ? Math.round(profitMargin * 100) / 100 : undefined,
+              warehouseStock,
+              totalStock: totalWarehouseStock
+            } : {})
           }
         }),
         categories: categoriesResult.rows.map(r => r.category),
@@ -319,7 +404,12 @@ export async function GET(request: NextRequest) {
           limit,
           total,
           totalPages: Math.ceil(total / limit)
-        }
+        },
+        // Exchange rate info (only when warehouse stock is included)
+        ...(includeWarehouseStock ? {
+          exchangeRate,
+          currency: 'CUP'
+        } : {})
       }
     })
 

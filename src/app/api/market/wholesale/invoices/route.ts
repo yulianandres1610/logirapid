@@ -318,12 +318,17 @@ export async function POST(request: NextRequest) {
           : (line.discountAmount || 0)
         const lineSubtotal = (line.quantity * line.unitPrice) - lineDiscountAmount
 
+        // Serialize warehouse quantities as JSONB (multi-warehouse support)
+        const warehouseQuantities = line.warehouseQuantities
+          ? JSON.stringify(line.warehouseQuantities)
+          : '{}'
+
         await client.query(`
           INSERT INTO market_invoice_lines (
             invoice_id, product_id, variant_id, product_name, product_sku,
             quantity, unit_price, cost_price, original_price, discount_percent,
-            discount_amount, subtotal, notes
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            discount_amount, subtotal, warehouse_quantities, notes
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         `, [
           invoiceId,
           line.productId,
@@ -337,6 +342,7 @@ export async function POST(request: NextRequest) {
           line.discountPercent || 0,
           lineDiscountAmount,
           lineSubtotal,
+          warehouseQuantities,
           line.notes || null
         ])
       }

@@ -137,11 +137,19 @@ export async function initializeWholesaleTables() {
       discount_percent DECIMAL(5,2) DEFAULT 0,
       discount_amount DECIMAL(12,2) DEFAULT 0,
       subtotal DECIMAL(12,2) NOT NULL,
+      warehouse_quantities JSONB DEFAULT '{}',
       notes TEXT,
       created_at TIMESTAMP DEFAULT NOW()
     )
   `)
   console.log('[Wholesale] Created market_invoice_lines table')
+
+  // Add warehouse_quantities column if table already exists
+  try {
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS warehouse_quantities JSONB DEFAULT '{}'`)
+  } catch {
+    // Column may already exist
+  }
 
   // 6. Invoice Deliveries
   await db.query(`

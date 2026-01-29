@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -28,7 +28,11 @@ import {
   MapPin,
   CreditCard,
   Hash,
-  User
+  User,
+  Warehouse,
+  TrendingUp,
+  DollarSign,
+  Truck
 } from 'lucide-react'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
@@ -48,6 +52,15 @@ interface Customer {
   creditDays: number
 }
 
+interface WarehouseStock {
+  warehouseId: number
+  warehouseName: string
+  warehouseCode: string
+  quantityOnHand: number
+  quantityReserved: number
+  quantityAvailable: number
+}
+
 interface Product {
   id: number
   name: string
@@ -56,7 +69,16 @@ interface Product {
   sellingPrice: number
   costPrice: number
   imageUrl: string | null
-  stock: number
+  quantityOnHand: number
+  // Multi-warehouse data (when includeWarehouseStock=true)
+  costPriceCup?: number
+  profitMargin?: number
+  warehouseStock?: WarehouseStock[]
+  totalStock?: number
+}
+
+interface WarehouseQuantities {
+  [warehouseId: string]: number
 }
 
 interface InvoiceLine {
@@ -66,13 +88,18 @@ interface InvoiceLine {
   productSku: string
   quantity: number
   unitPrice: number
+  costPrice: number
   originalPrice: number
   discountPercent: number
   discountAmount: number
   subtotal: number
+  warehouseQuantities: WarehouseQuantities
+  warehouseStock: WarehouseStock[]
+  profitMargin: number
+  costPriceCup: number
 }
 
-interface Warehouse {
+interface WarehouseInfo {
   id: number
   name: string
 }
@@ -106,19 +133,20 @@ export default function CreateInvoicePage() {
   // Data
   const [customers, setCustomers] = useState<Customer[]>([])
   const [products, setProducts] = useState<Product[]>([])
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([])
+  const [warehouses, setWarehouses] = useState<WarehouseInfo[]>([])
   const [pricelists, setPricelists] = useState<Pricelist[]>([])
   const [loadingCustomers, setLoadingCustomers] = useState(true)
   const [loadingProducts, setLoadingProducts] = useState(true)
+  const [exchangeRate, setExchangeRate] = useState(340)
 
   // Step 1: Customer
   const [customerSearch, setCustomerSearch] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [selectedWarehouse, setSelectedWarehouse] = useState<number | null>(null)
 
   // Step 2: Products
   const [productSearch, setProductSearch] = useState('')
   const [lines, setLines] = useState<InvoiceLine[]>([])
+  const [expandedLineIndex, setExpandedLineIndex] = useState<number | null>(null)
 
   // Step 3: Conditions
   const [dueDate, setDueDate] = useState('')
@@ -144,7 +172,7 @@ export default function CreateInvoicePage() {
   useEffect(() => {
     fetchCustomers()
     fetchWarehouses()
-    fetchProducts()
+    fetchProductsWithStock()
     fetchPricelists()
   }, [])
 
@@ -188,14 +216,17 @@ export default function CreateInvoicePage() {
     }
   }
 
-  const fetchProducts = async () => {
+  const fetchProductsWithStock = async () => {
     setLoadingProducts(true)
     try {
-      const response = await fetch('/api/market/products?limit=500')
+      const response = await fetch('/api/market/products?limit=500&includeWarehouseStock=true')
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
           setProducts(result.data.products || result.data)
+          if (result.data.exchangeRate) {
+            setExchangeRate(result.data.exchangeRate)
+          }
         }
       }
     } catch (error) {
@@ -222,49 +253,119 @@ export default function CreateInvoicePage() {
   const addProduct = (product: Product) => {
     const existingIndex = lines.findIndex(l => l.productId === product.id)
     if (existingIndex >= 0) {
-      const newLines = [...lines]
-      newLines[existingIndex].quantity += 1
-      newLines[existingIndex].subtotal = newLines[existingIndex].quantity * newLines[existingIndex].unitPrice
-      setLines(newLines)
-    } else {
-      setLines([...lines, {
-        productId: product.id,
-        variantId: null,
-        productName: product.name,
-        productSku: product.sku || '',
-        quantity: 1,
-        unitPrice: product.sellingPrice,
-        originalPrice: product.sellingPrice,
-        discountPercent: 0,
-        discountAmount: 0,
-        subtotal: product.sellingPrice
-      }])
+      // Product already added, expand it
+      setExpandedLineIndex(existingIndex)
+      return
     }
+
+    // Initialize warehouse quantities - set 0 for all warehouses with stock
+    const warehouseQuantities: WarehouseQuantities = {}
+    const warehouseStock = product.warehouseStock || []
+    for (const ws of warehouseStock) {
+      warehouseQuantities[ws.warehouseId.toString()] = 0
+    }
+
+    const costPriceCup = product.costPriceCup || product.costPrice * exchangeRate
+    const profitMargin = product.profitMargin || (product.costPrice > 0
+      ? ((product.sellingPrice - product.costPrice) / product.costPrice) * 100
+      : 0)
+
+    setLines([...lines, {
+      productId: product.id,
+      variantId: null,
+      productName: product.name,
+      productSku: product.sku || '',
+      quantity: 0, // Will be calculated from warehouse quantities
+      unitPrice: product.sellingPrice,
+      costPrice: product.costPrice,
+      originalPrice: product.sellingPrice,
+      discountPercent: 0,
+      discountAmount: 0,
+      subtotal: 0,
+      warehouseQuantities,
+      warehouseStock,
+      profitMargin,
+      costPriceCup
+    }])
+
+    // Expand the newly added line
+    setExpandedLineIndex(lines.length)
   }
 
-  const updateLineQuantity = (index: number, quantity: number) => {
-    if (quantity < 1) return
+  const updateWarehouseQuantity = (lineIndex: number, warehouseId: number, quantity: number) => {
     const newLines = [...lines]
-    newLines[index].quantity = quantity
-    newLines[index].subtotal = quantity * newLines[index].unitPrice * (1 - newLines[index].discountPercent / 100)
+    const line = newLines[lineIndex]
+    const warehouseStock = line.warehouseStock.find(ws => ws.warehouseId === warehouseId)
+    const maxQuantity = warehouseStock?.quantityAvailable || 0
+
+    // Clamp quantity to available stock
+    const clampedQuantity = Math.max(0, Math.min(quantity, maxQuantity))
+    line.warehouseQuantities[warehouseId.toString()] = clampedQuantity
+
+    // Calculate total quantity from all warehouses
+    line.quantity = Object.values(line.warehouseQuantities).reduce((sum, q) => sum + q, 0)
+
+    // Recalculate subtotal
+    const discountMultiplier = 1 - line.discountPercent / 100
+    line.subtotal = line.quantity * line.unitPrice * discountMultiplier
+    line.discountAmount = line.quantity * line.unitPrice * (line.discountPercent / 100)
+
     setLines(newLines)
   }
 
   const updateLineDiscount = (index: number, discount: number) => {
     const newLines = [...lines]
-    newLines[index].discountPercent = discount
-    newLines[index].discountAmount = newLines[index].quantity * newLines[index].unitPrice * discount / 100
-    newLines[index].subtotal = newLines[index].quantity * newLines[index].unitPrice - newLines[index].discountAmount
+    const line = newLines[index]
+    line.discountPercent = Math.max(0, Math.min(100, discount))
+    line.discountAmount = line.quantity * line.unitPrice * line.discountPercent / 100
+    line.subtotal = line.quantity * line.unitPrice - line.discountAmount
     setLines(newLines)
   }
 
   const removeLine = (index: number) => {
     setLines(lines.filter((_, i) => i !== index))
+    if (expandedLineIndex === index) {
+      setExpandedLineIndex(null)
+    } else if (expandedLineIndex !== null && expandedLineIndex > index) {
+      setExpandedLineIndex(expandedLineIndex - 1)
+    }
   }
 
   const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
   const globalDiscount = subtotal * discountPercent / 100
   const total = subtotal - globalDiscount
+
+  // Calculate deliveries that will be generated
+  const deliveriesPreview = useMemo(() => {
+    const deliveryMap = new Map<number, {
+      warehouseId: number
+      warehouseName: string
+      products: Array<{ name: string; quantity: number }>
+    }>()
+
+    for (const line of lines) {
+      for (const [warehouseIdStr, qty] of Object.entries(line.warehouseQuantities)) {
+        if (qty <= 0) continue
+        const warehouseId = parseInt(warehouseIdStr)
+        const warehouse = line.warehouseStock.find(ws => ws.warehouseId === warehouseId)
+
+        if (!deliveryMap.has(warehouseId)) {
+          deliveryMap.set(warehouseId, {
+            warehouseId,
+            warehouseName: warehouse?.warehouseName || `Almacén ${warehouseId}`,
+            products: []
+          })
+        }
+
+        deliveryMap.get(warehouseId)!.products.push({
+          name: line.productName,
+          quantity: qty
+        })
+      }
+    }
+
+    return Array.from(deliveryMap.values())
+  }, [lines])
 
   const validateStep = (step: string): boolean => {
     setError('')
@@ -280,6 +381,12 @@ export default function CreateInvoicePage() {
       case 'products':
         if (lines.length === 0) {
           setError('Debe agregar al menos un producto')
+          return false
+        }
+        // Check that at least one product has quantity
+        const totalQuantity = lines.reduce((sum, line) => sum + line.quantity, 0)
+        if (totalQuantity === 0) {
+          setError('Debe especificar cantidades para al menos un producto')
           return false
         }
         return true
@@ -336,7 +443,6 @@ export default function CreateInvoicePage() {
 
       const result = await response.json()
       if (result.success) {
-        // Add new customer to list and select it
         const created = result.data
         setCustomers(prev => [...prev, created])
         setSelectedCustomer(created)
@@ -358,7 +464,7 @@ export default function CreateInvoicePage() {
       }
     } catch (error) {
       console.error('Error creating customer:', error)
-      setError('Error de conexión')
+      setError('Error de conexion')
     } finally {
       setSavingCustomer(false)
     }
@@ -374,13 +480,13 @@ export default function CreateInvoicePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerId: selectedCustomer.id,
-          warehouseId: selectedWarehouse,
+          warehouseId: null, // Multi-warehouse mode, no single warehouse
           pricelistId: selectedCustomer.pricelistId,
           dueDate: dueDate || null,
           discountPercent,
           notes,
           internalNotes,
-          lines: lines.map(l => ({
+          lines: lines.filter(l => l.quantity > 0).map(l => ({
             productId: l.productId,
             variantId: l.variantId,
             productName: l.productName,
@@ -389,7 +495,8 @@ export default function CreateInvoicePage() {
             unitPrice: l.unitPrice,
             originalPrice: l.originalPrice,
             discountPercent: l.discountPercent,
-            discountAmount: l.discountAmount
+            discountAmount: l.discountAmount,
+            warehouseQuantities: l.warehouseQuantities
           }))
         })
       })
@@ -408,12 +515,20 @@ export default function CreateInvoicePage() {
     }
   }
 
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value: number, currency: string = 'USD') => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: currency,
       minimumFractionDigits: 2
     }).format(value)
+  }
+
+  const formatCUP = (value: number) => {
+    return new Intl.NumberFormat('es-CU', {
+      style: 'decimal',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(value) + ' CUP'
   }
 
   const filteredCustomers = customers.filter(c =>
@@ -433,7 +548,7 @@ export default function CreateInvoicePage() {
       "min-h-screen pt-12 sm:pt-16 lg:pt-20 pb-20 px-4 sm:px-6 lg:px-8",
       theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
     )}>
-      <div className="max-w-5xl xl:max-w-6xl mx-auto space-y-6 sm:space-y-8 relative">
+      <div className="max-w-6xl xl:max-w-7xl mx-auto space-y-6 sm:space-y-8 relative">
         {/* Close Button */}
         <motion.button
           onClick={() => setShowCancelModal(true)}
@@ -476,7 +591,6 @@ export default function CreateInvoicePage() {
               <React.Fragment key={step.id}>
                 <div className="flex flex-col items-center">
                   <div className="relative w-14 h-14">
-                    {/* Pulsing ring for active step */}
                     {isActive && (
                       <motion.div
                         className="absolute inset-0 rounded-full bg-green-500"
@@ -597,12 +711,11 @@ export default function CreateInvoicePage() {
                   </motion.button>
                 </div>
 
-                {/* Search */}
                 <div className="relative">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Buscar por nombre, código o RUC/NIT..."
+                    placeholder="Buscar por nombre, codigo o RUC/NIT..."
                     value={customerSearch}
                     onChange={(e) => setCustomerSearch(e.target.value)}
                     className={cn(
@@ -614,7 +727,6 @@ export default function CreateInvoicePage() {
                   />
                 </div>
 
-                {/* Customer List */}
                 {loadingCustomers ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="w-8 h-8 animate-spin text-green-600" />
@@ -667,38 +779,10 @@ export default function CreateInvoicePage() {
                     ))}
                   </div>
                 )}
-
-                {/* Warehouse selection */}
-                {selectedCustomer && warehouses.length > 0 && (
-                  <div className={cn(
-                    'p-4 rounded-xl border',
-                    theme === 'dark' ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gray-50'
-                  )}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Building2 className="w-4 h-4 text-gray-400" />
-                      <label className="font-medium text-sm">Almacén de Origen (opcional)</label>
-                    </div>
-                    <select
-                      value={selectedWarehouse || ''}
-                      onChange={(e) => setSelectedWarehouse(e.target.value ? parseInt(e.target.value) : null)}
-                      className={cn(
-                        'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
-                        theme === 'dark'
-                          ? 'bg-gray-800 border-gray-700 text-white focus:border-green-500 focus:ring-green-500/20'
-                          : 'bg-white border-gray-300 text-gray-900 focus:border-green-500 focus:ring-green-500/20'
-                      )}
-                    >
-                      <option value="">Sin especificar</option>
-                      {warehouses.map(w => (
-                        <option key={w.id} value={w.id}>{w.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
               </motion.div>
             )}
 
-            {/* Step 2: Products */}
+            {/* Step 2: Products - Invoice Style with Multi-Warehouse */}
             {currentStep === 'products' && (
               <motion.div
                 key="step2"
@@ -707,107 +791,183 @@ export default function CreateInvoicePage() {
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                  Agregar Productos
-                </h2>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Product Search */}
-                  <div className="space-y-4">
-                    <div className="relative">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="Buscar producto por nombre, SKU o código..."
-                        value={productSearch}
-                        onChange={(e) => setProductSearch(e.target.value)}
-                        className={cn(
-                          'w-full pl-12 pr-4 py-3.5 rounded-xl border focus:outline-none focus:ring-2',
-                          theme === 'dark'
-                            ? 'bg-gray-900 border-gray-700 text-white focus:border-green-500 focus:ring-green-500/20'
-                            : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-green-500 focus:ring-green-500/20'
-                        )}
-                      />
-                    </div>
-
-                    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
-                      {loadingProducts ? (
-                        <div className="flex items-center justify-center py-12">
-                          <Loader2 className="w-6 h-6 animate-spin text-green-600" />
-                        </div>
-                      ) : (
-                        filteredProducts.slice(0, 30).map(product => (
-                          <div
-                            key={product.id}
-                            onClick={() => addProduct(product)}
-                            className={cn(
-                              'flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all',
-                              theme === 'dark'
-                                ? 'border-gray-700 hover:bg-gray-700 hover:border-gray-600'
-                                : 'border-gray-200 hover:bg-gray-50 hover:border-gray-300'
-                            )}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className={cn(
-                                'w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden',
-                                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                              )}>
-                                {product.imageUrl ? (
-                                  <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
-                                ) : (
-                                  <Package className="w-6 h-6 text-gray-400" />
-                                )}
-                              </div>
-                              <div>
-                                <p className={cn(
-                                  'font-medium text-sm',
-                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                )}>{product.name}</p>
-                                <p className="text-xs text-gray-500">{product.sku}</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-bold text-green-600">{formatCurrency(product.sellingPrice)}</p>
-                              <button className="text-xs text-green-500 hover:text-green-600 font-medium flex items-center gap-1">
-                                <Plus className="w-3.5 h-3.5" /> Agregar
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Invoice Lines */}
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                    Agregar Productos
+                  </h2>
                   <div className={cn(
-                    'p-4 rounded-xl border',
+                    'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm',
+                    theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                  )}>
+                    <DollarSign className="w-4 h-4" />
+                    Tasa: $1 = {exchangeRate.toLocaleString()} CUP
+                  </div>
+                </div>
+
+                {/* Product Search */}
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar producto por nombre, SKU o codigo de barras..."
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    className={cn(
+                      'w-full pl-12 pr-4 py-3.5 rounded-xl border focus:outline-none focus:ring-2',
+                      theme === 'dark'
+                        ? 'bg-gray-900 border-gray-700 text-white focus:border-green-500 focus:ring-green-500/20'
+                        : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-green-500 focus:ring-green-500/20'
+                    )}
+                  />
+                </div>
+
+                {/* Product List for Selection */}
+                {productSearch && (
+                  <div className={cn(
+                    'max-h-[200px] overflow-y-auto rounded-xl border',
                     theme === 'dark' ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gray-50'
                   )}>
-                    <div className="flex items-center gap-2 mb-4">
-                      <ShoppingCart className="w-5 h-5 text-gray-400" />
-                      <h3 className="font-semibold">Productos ({lines.length})</h3>
-                    </div>
-                    <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2">
-                      {lines.length === 0 ? (
-                        <div className="text-center py-12">
-                          <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                          <p className="text-gray-500">No hay productos agregados</p>
-                          <p className="text-sm text-gray-400">Busca y agrega productos</p>
-                        </div>
-                      ) : (
-                        lines.map((line, index) => (
-                          <div
-                            key={index}
-                            className={cn(
-                              'p-3 rounded-xl border',
-                              theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
-                            )}
-                          >
-                            <div className="flex items-center justify-between mb-3">
+                    {loadingProducts ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin text-green-600" />
+                      </div>
+                    ) : (
+                      filteredProducts.slice(0, 20).map(product => (
+                        <div
+                          key={product.id}
+                          onClick={() => addProduct(product)}
+                          className={cn(
+                            'flex items-center justify-between p-3 cursor-pointer transition-colors border-b last:border-b-0',
+                            theme === 'dark'
+                              ? 'border-gray-700 hover:bg-gray-800'
+                              : 'border-gray-200 hover:bg-gray-100'
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              'w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden',
+                              theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                            )}>
+                              {product.imageUrl ? (
+                                <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <Package className="w-5 h-5 text-gray-400" />
+                              )}
+                            </div>
+                            <div>
                               <p className={cn(
                                 'font-medium text-sm',
                                 theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>{product.name}</p>
+                              <p className="text-xs text-gray-500">{product.sku} | Stock: {product.totalStock || 0}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-green-600">{formatCurrency(product.sellingPrice)}</p>
+                            <button className="text-xs text-green-500 hover:text-green-600 font-medium flex items-center gap-1">
+                              <Plus className="w-3.5 h-3.5" /> Agregar
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* Invoice-Style Product Table */}
+                <div className={cn(
+                  'rounded-xl border overflow-hidden',
+                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                )}>
+                  {/* Table Header */}
+                  <div className={cn(
+                    'grid grid-cols-12 gap-2 p-3 text-xs font-semibold uppercase tracking-wider',
+                    theme === 'dark' ? 'bg-gray-900 text-gray-400' : 'bg-gray-100 text-gray-600'
+                  )}>
+                    <div className="col-span-1">#</div>
+                    <div className="col-span-3">Producto</div>
+                    <div className="col-span-1 text-right">P.Costo</div>
+                    <div className="col-span-1 text-right">P.Venta</div>
+                    <div className="col-span-1 text-right">Margen</div>
+                    <div className="col-span-1 text-center">Desc%</div>
+                    <div className="col-span-1 text-right">Cant.</div>
+                    <div className="col-span-2 text-right">Total</div>
+                    <div className="col-span-1"></div>
+                  </div>
+
+                  {/* Table Body */}
+                  {lines.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                      <p className="text-gray-500">No hay productos agregados</p>
+                      <p className="text-sm text-gray-400">Busca y agrega productos</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {lines.map((line, index) => (
+                        <div key={index}>
+                          {/* Main Row */}
+                          <div
+                            className={cn(
+                              'grid grid-cols-12 gap-2 p-3 items-center cursor-pointer transition-colors',
+                              expandedLineIndex === index
+                                ? theme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'
+                                : theme === 'dark' ? 'hover:bg-gray-900/50' : 'hover:bg-gray-50'
+                            )}
+                            onClick={() => setExpandedLineIndex(expandedLineIndex === index ? null : index)}
+                          >
+                            <div className="col-span-1 text-sm text-gray-500">{index + 1}</div>
+                            <div className="col-span-3">
+                              <p className={cn(
+                                'font-medium text-sm truncate',
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
                               )}>{line.productName}</p>
+                              <p className="text-xs text-gray-500">{line.productSku}</p>
+                              <p className="text-xs text-gray-400">{formatCUP(line.costPriceCup)}</p>
+                            </div>
+                            <div className="col-span-1 text-right text-sm text-gray-600 dark:text-gray-400">
+                              {formatCurrency(line.costPrice)}
+                            </div>
+                            <div className="col-span-1 text-right text-sm font-medium text-green-600">
+                              {formatCurrency(line.unitPrice)}
+                            </div>
+                            <div className="col-span-1 text-right">
+                              <span className={cn(
+                                'text-xs px-1.5 py-0.5 rounded',
+                                line.profitMargin >= 20
+                                  ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400'
+                                  : line.profitMargin >= 10
+                                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400'
+                                    : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400'
+                              )}>
+                                {line.profitMargin.toFixed(0)}%
+                              </span>
+                            </div>
+                            <div className="col-span-1 text-center" onClick={e => e.stopPropagation()}>
+                              <input
+                                type="number"
+                                value={line.discountPercent}
+                                onChange={(e) => updateLineDiscount(index, parseFloat(e.target.value) || 0)}
+                                className={cn(
+                                  'w-14 text-center px-1 py-1 rounded border text-sm',
+                                  theme === 'dark' ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'
+                                )}
+                                min="0"
+                                max="100"
+                              />
+                            </div>
+                            <div className="col-span-1 text-right">
+                              <span className={cn(
+                                'font-semibold text-sm',
+                                line.quantity > 0 ? 'text-green-600' : 'text-gray-400'
+                              )}>
+                                {line.quantity}
+                              </span>
+                            </div>
+                            <div className="col-span-2 text-right font-bold text-green-600">
+                              {formatCurrency(line.subtotal)}
+                            </div>
+                            <div className="col-span-1 text-right" onClick={e => e.stopPropagation()}>
                               <button
                                 onClick={() => removeLine(index)}
                                 className="p-1.5 rounded-lg text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
@@ -815,71 +975,127 @@ export default function CreateInvoicePage() {
                                 <Trash2 className="w-4 h-4" />
                               </button>
                             </div>
-                            <div className="flex items-center gap-3 flex-wrap">
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  onClick={() => updateLineQuantity(index, line.quantity - 1)}
-                                  className={cn(
-                                    'p-1.5 rounded-lg transition-colors',
-                                    theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
-                                  )}
-                                >
-                                  <Minus className="w-3.5 h-3.5" />
-                                </button>
-                                <input
-                                  type="number"
-                                  value={line.quantity}
-                                  onChange={(e) => updateLineQuantity(index, parseInt(e.target.value) || 1)}
-                                  className={cn(
-                                    'w-14 text-center px-2 py-1.5 rounded-lg border text-sm',
-                                    theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-300'
-                                  )}
-                                />
-                                <button
-                                  onClick={() => updateLineQuantity(index, line.quantity + 1)}
-                                  className={cn(
-                                    'p-1.5 rounded-lg transition-colors',
-                                    theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
-                                  )}
-                                >
-                                  <Plus className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <Percent className="w-3.5 h-3.5 text-gray-400" />
-                                <input
-                                  type="number"
-                                  value={line.discountPercent}
-                                  onChange={(e) => updateLineDiscount(index, parseFloat(e.target.value) || 0)}
-                                  className={cn(
-                                    'w-14 text-center px-2 py-1.5 rounded-lg border text-sm',
-                                    theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-300'
-                                  )}
-                                  min="0"
-                                  max="100"
-                                />
-                              </div>
-                              <p className="font-bold text-green-600 ml-auto">
-                                {formatCurrency(line.subtotal)}
-                              </p>
-                            </div>
                           </div>
-                        ))
-                      )}
-                    </div>
 
-                    {lines.length > 0 && (
-                      <div className={cn(
-                        'mt-4 pt-4 border-t',
-                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                      )}>
-                        <div className="flex justify-between items-center text-lg font-bold">
-                          <span>Subtotal:</span>
-                          <span className="text-green-600">{formatCurrency(subtotal)}</span>
+                          {/* Expanded: Warehouse Stock Section */}
+                          <AnimatePresence>
+                            {expandedLineIndex === index && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className={cn(
+                                  'overflow-hidden',
+                                  theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                                )}
+                              >
+                                <div className="p-4 space-y-3">
+                                  <div className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400">
+                                    <Warehouse className="w-4 h-4" />
+                                    Stock por Almacen - Total: {line.quantity}
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {line.warehouseStock.map(ws => {
+                                      const qty = line.warehouseQuantities[ws.warehouseId.toString()] || 0
+                                      const hasStock = ws.quantityAvailable > 0
+
+                                      return (
+                                        <div
+                                          key={ws.warehouseId}
+                                          className={cn(
+                                            'flex items-center justify-between p-3 rounded-lg border',
+                                            hasStock
+                                              ? theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
+                                              : theme === 'dark' ? 'border-gray-700 bg-gray-800/50 opacity-50' : 'border-gray-200 bg-gray-100 opacity-50'
+                                          )}
+                                        >
+                                          <div>
+                                            <p className={cn(
+                                              'font-medium text-sm',
+                                              theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                            )}>
+                                              {ws.warehouseName}
+                                            </p>
+                                            <p className={cn(
+                                              'text-xs',
+                                              hasStock ? 'text-green-600' : 'text-gray-400'
+                                            )}>
+                                              {ws.quantityAvailable} disponibles
+                                            </p>
+                                          </div>
+                                          <div className="flex items-center gap-1.5">
+                                            <button
+                                              onClick={() => updateWarehouseQuantity(index, ws.warehouseId, qty - 1)}
+                                              disabled={qty <= 0}
+                                              className={cn(
+                                                'p-1.5 rounded-lg transition-colors disabled:opacity-30',
+                                                theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
+                                              )}
+                                            >
+                                              <Minus className="w-3.5 h-3.5" />
+                                            </button>
+                                            <input
+                                              type="number"
+                                              value={qty}
+                                              onChange={(e) => updateWarehouseQuantity(index, ws.warehouseId, parseInt(e.target.value) || 0)}
+                                              disabled={!hasStock}
+                                              className={cn(
+                                                'w-14 text-center px-2 py-1.5 rounded-lg border text-sm font-medium',
+                                                theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-300',
+                                                !hasStock && 'opacity-50 cursor-not-allowed'
+                                              )}
+                                              min="0"
+                                              max={ws.quantityAvailable}
+                                            />
+                                            <button
+                                              onClick={() => updateWarehouseQuantity(index, ws.warehouseId, qty + 1)}
+                                              disabled={!hasStock || qty >= ws.quantityAvailable}
+                                              className={cn(
+                                                'p-1.5 rounded-lg transition-colors disabled:opacity-30',
+                                                theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
+                                              )}
+                                            >
+                                              <Plus className="w-3.5 h-3.5" />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                  {line.warehouseStock.length === 0 && (
+                                    <p className="text-sm text-gray-500 text-center py-2">
+                                      No hay stock disponible en ningun almacen
+                                    </p>
+                                  )}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Table Footer - Totals */}
+                  {lines.length > 0 && (
+                    <div className={cn(
+                      'p-4 border-t',
+                      theme === 'dark' ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gray-50'
+                    )}>
+                      <div className="flex justify-end">
+                        <div className="w-64 space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Subtotal:</span>
+                            <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(subtotal)}</span>
+                          </div>
+                          <div className="flex justify-between text-xl font-bold pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <span>Total:</span>
+                            <span className="text-green-600">{formatCurrency(subtotal)}</span>
+                          </div>
                         </div>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -994,88 +1210,133 @@ export default function CreateInvoicePage() {
                   Confirmar Factura
                 </h2>
 
-                <div className="space-y-6">
-                  {/* Customer Summary */}
-                  <div className={cn(
-                    'rounded-xl p-4',
-                    theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-                  )}>
-                    <h3 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                      <Users className="w-5 h-5 text-green-600" />
-                      Cliente
-                    </h3>
-                    <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-bold text-xl">
-                        {selectedCustomer?.businessName.charAt(0)}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Left Column */}
+                  <div className="space-y-6">
+                    {/* Customer Summary */}
+                    <div className={cn(
+                      'rounded-xl p-4',
+                      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+                    )}>
+                      <h3 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                        <Users className="w-5 h-5 text-green-600" />
+                        Cliente
+                      </h3>
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-bold text-xl">
+                          {selectedCustomer?.businessName.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-lg text-gray-900 dark:text-white">
+                            {selectedCustomer?.businessName}
+                          </p>
+                          <p className="text-sm text-gray-500">{selectedCustomer?.code}</p>
+                          {selectedCustomer?.taxId && (
+                            <p className="text-xs text-gray-400">RUC/NIT: {selectedCustomer.taxId}</p>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-semibold text-lg text-gray-900 dark:text-white">
-                          {selectedCustomer?.businessName}
-                        </p>
-                        <p className="text-sm text-gray-500">{selectedCustomer?.code}</p>
-                        {selectedCustomer?.taxId && (
-                          <p className="text-xs text-gray-400">RUC/NIT: {selectedCustomer.taxId}</p>
+                    </div>
+
+                    {/* Products Summary */}
+                    <div className={cn(
+                      'rounded-xl p-4',
+                      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+                    )}>
+                      <h3 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                        <Package className="w-5 h-5 text-green-600" />
+                        Productos ({lines.filter(l => l.quantity > 0).length})
+                      </h3>
+                      <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                        {lines.filter(l => l.quantity > 0).map((line, index) => (
+                          <div key={index} className={cn(
+                            'flex justify-between items-center p-3 rounded-lg',
+                            theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                          )}>
+                            <div className="flex items-center gap-2">
+                              <span className={cn(
+                                'w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium',
+                                theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                              )}>{line.quantity}</span>
+                              <span className={cn('font-medium text-sm', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                {line.productName}
+                              </span>
+                            </div>
+                            <span className="font-semibold text-green-600">{formatCurrency(line.subtotal)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column */}
+                  <div className="space-y-6">
+                    {/* Deliveries Preview */}
+                    <div className={cn(
+                      'rounded-xl p-4',
+                      theme === 'dark' ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200'
+                    )}>
+                      <h3 className="font-medium text-blue-900 dark:text-blue-200 mb-3 flex items-center gap-2">
+                        <Truck className="w-5 h-5" />
+                        Entregas a generar ({deliveriesPreview.length})
+                      </h3>
+                      <div className="space-y-3">
+                        {deliveriesPreview.map((delivery, index) => (
+                          <div
+                            key={delivery.warehouseId}
+                            className={cn(
+                              'p-3 rounded-lg',
+                              theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                            )}
+                          >
+                            <div className="flex items-center gap-2 mb-2">
+                              <Warehouse className="w-4 h-4 text-blue-500" />
+                              <span className="font-medium text-sm text-gray-900 dark:text-white">
+                                {delivery.warehouseName}
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-500 space-y-1">
+                              {delivery.products.map((p, i) => (
+                                <div key={i}>{p.quantity}x {p.name}</div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        {deliveriesPreview.length === 0 && (
+                          <p className="text-sm text-gray-500 text-center py-2">
+                            No se generaran entregas (sin productos con cantidades)
+                          </p>
                         )}
                       </div>
                     </div>
-                  </div>
 
-                  {/* Products Summary */}
-                  <div className={cn(
-                    'rounded-xl p-4',
-                    theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-                  )}>
-                    <h3 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                      <Package className="w-5 h-5 text-green-600" />
-                      Productos ({lines.length})
-                    </h3>
-                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                      {lines.map((line, index) => (
-                        <div key={index} className={cn(
-                          'flex justify-between items-center p-3 rounded-lg',
-                          theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-                        )}>
-                          <div className="flex items-center gap-2">
-                            <span className={cn(
-                              'w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium',
-                              theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
-                            )}>{line.quantity}</span>
-                            <span className={cn('font-medium text-sm', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                              {line.productName}
-                            </span>
+                    {/* Totals */}
+                    <div className={cn(
+                      'rounded-xl p-4',
+                      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+                    )}>
+                      <h3 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                        <CreditCard className="w-5 h-5 text-green-600" />
+                        Resumen
+                      </h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500">Subtotal</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(subtotal)}</span>
+                        </div>
+                        {discountPercent > 0 && (
+                          <div className="flex justify-between text-sm text-green-600">
+                            <span>Descuento ({discountPercent}%)</span>
+                            <span>-{formatCurrency(globalDiscount)}</span>
                           </div>
-                          <span className="font-semibold text-green-600">{formatCurrency(line.subtotal)}</span>
+                        )}
+                        <div className={cn(
+                          'flex justify-between text-xl font-bold pt-3 border-t',
+                          theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                        )}>
+                          <span>Total</span>
+                          <span className="text-green-600">{formatCurrency(total)}</span>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Totals */}
-                  <div className={cn(
-                    'rounded-xl p-4',
-                    theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-                  )}>
-                    <h3 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                      <CreditCard className="w-5 h-5 text-green-600" />
-                      Resumen
-                    </h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Subtotal</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(subtotal)}</span>
-                      </div>
-                      {discountPercent > 0 && (
-                        <div className="flex justify-between text-sm text-green-600">
-                          <span>Descuento ({discountPercent}%)</span>
-                          <span>-{formatCurrency(globalDiscount)}</span>
-                        </div>
-                      )}
-                      <div className={cn(
-                        'flex justify-between text-xl font-bold pt-3 border-t',
-                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                      )}>
-                        <span>Total</span>
-                        <span className="text-green-600">{formatCurrency(total)}</span>
                       </div>
                     </div>
                   </div>
@@ -1166,13 +1427,13 @@ export default function CreateInvoicePage() {
                 "text-lg font-bold mb-2",
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               )}>
-                ¿Cancelar factura?
+                Cancelar factura?
               </h3>
               <p className={cn(
                 "mb-6",
                 theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
               )}>
-                Perderás todos los datos ingresados. ¿Estás seguro?
+                Perderas todos los datos ingresados. Estas seguro?
               </p>
               <div className="flex gap-3">
                 <button
@@ -1190,7 +1451,7 @@ export default function CreateInvoicePage() {
                   onClick={() => router.push('/dashboard/market/wholesale/invoices')}
                   className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors"
                 >
-                  Sí, cancelar
+                  Si, cancelar
                 </button>
               </div>
             </motion.div>
@@ -1259,13 +1520,13 @@ export default function CreateInvoicePage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     <FileText className="w-4 h-4 inline mr-2" />
-                    Razón Social
+                    Razon Social
                   </label>
                   <input
                     type="text"
                     value={newCustomer.legalName}
                     onChange={(e) => setNewCustomer({ ...newCustomer, legalName: e.target.value })}
-                    placeholder="Razón social"
+                    placeholder="Razon social"
                     className={cn(
                       'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
                       theme === 'dark'
@@ -1284,7 +1545,7 @@ export default function CreateInvoicePage() {
                     type="text"
                     value={newCustomer.taxId}
                     onChange={(e) => setNewCustomer({ ...newCustomer, taxId: e.target.value })}
-                    placeholder="Identificación fiscal"
+                    placeholder="Identificacion fiscal"
                     className={cn(
                       'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
                       theme === 'dark'
@@ -1316,7 +1577,7 @@ export default function CreateInvoicePage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     <Phone className="w-4 h-4 inline mr-2" />
-                    Teléfono
+                    Telefono
                   </label>
                   <input
                     type="tel"
@@ -1354,13 +1615,13 @@ export default function CreateInvoicePage() {
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     <MapPin className="w-4 h-4 inline mr-2" />
-                    Dirección
+                    Direccion
                   </label>
                   <input
                     type="text"
                     value={newCustomer.address}
                     onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
-                    placeholder="Dirección completa"
+                    placeholder="Direccion completa"
                     className={cn(
                       'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
                       theme === 'dark'
@@ -1395,7 +1656,7 @@ export default function CreateInvoicePage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     <Calendar className="w-4 h-4 inline mr-2" />
-                    Días de Crédito
+                    Dias de Credito
                   </label>
                   <input
                     type="number"
