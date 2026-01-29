@@ -7,6 +7,7 @@ import {
   Search,
   RefreshCw,
   ChevronRight,
+  ChevronLeft,
   User,
   Calendar,
   DollarSign,
@@ -25,7 +26,11 @@ import {
   CreditCard,
   Banknote,
   ArrowRightLeft,
-  Eye
+  Eye,
+  FileText,
+  Hash,
+  Percent,
+  Tag
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -70,26 +75,44 @@ interface OrderLine {
   productId: number
   productName: string
   productSku: string | null
+  barcode?: string
+  imageUrl?: string
   quantity: number
   unitPrice: number
+  originalPrice?: number
+  discountPercent: number
   discountAmount: number
+  subtotal: number
   total: number
+  promotionName?: string
 }
 
 interface OrderPayment {
+  id: number
   method: string
   amount: number
   amountTendered: number | null
   changeAmount: number | null
   currency: string
+  reference?: string
+  createdAt: string
+}
+
+interface OrderCustomer {
+  id: number
+  name: string
+  phone?: string
+  email?: string
 }
 
 interface Order {
   id: number
   orderNumber: string
   customerName: string | null
+  customer?: OrderCustomer | null
   subtotal: number
   discountAmount: number
+  taxAmount: number
   totalAmount: number
   currency: string
   status: string
@@ -122,6 +145,8 @@ export default function POSSessionsHistoryPage() {
   const [selectedSession, setSelectedSession] = useState<Session | null>(null)
   const [sessionOrders, setSessionOrders] = useState<Order[]>([])
   const [loadingOrders, setLoadingOrders] = useState(false)
+
+  // Order detail modal
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [loadingOrderDetails, setLoadingOrderDetails] = useState(false)
 
@@ -214,7 +239,6 @@ export default function POSSessionsHistoryPage() {
   }
 
   const handleReprintReceipt = (order: Order) => {
-    // Get terminalId from selected session
     if (selectedSession) {
       window.open(`/dashboard/market/pos/${selectedSession.terminalId}/receipt?orderId=${order.id}&orderNumber=${order.orderNumber}`, '_blank')
     }
@@ -223,6 +247,10 @@ export default function POSSessionsHistoryPage() {
   const closePanel = () => {
     setSelectedSession(null)
     setSessionOrders([])
+    setSelectedOrder(null)
+  }
+
+  const closeOrderModal = () => {
     setSelectedOrder(null)
   }
 
@@ -279,6 +307,26 @@ export default function POSSessionsHistoryPage() {
       case 'credit': return 'Crédito'
       default: return method
     }
+  }
+
+  const getStatusBadge = (status: string) => {
+    const styles = {
+      paid: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+      voided: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+      refunded: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+      draft: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+    }
+    const labels: Record<string, string> = {
+      paid: 'Pagada',
+      voided: 'Anulada',
+      refunded: 'Reembolsada',
+      draft: 'Borrador'
+    }
+    return (
+      <span className={cn('px-2 py-1 rounded-full text-xs font-medium', styles[status as keyof typeof styles] || styles.draft)}>
+        {labels[status] || status}
+      </span>
+    )
   }
 
   const filteredSessions = sessions.filter(session => {
@@ -369,10 +417,7 @@ export default function POSSessionsHistoryPage() {
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
                 <div className="p-5">
                   <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'p-3 rounded-xl',
-                      theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-50'
-                    )}>
+                    <div className={cn('p-3 rounded-xl', theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-50')}>
                       <Clock className="w-5 h-5 text-blue-600" />
                     </div>
                     <div>
@@ -399,10 +444,7 @@ export default function POSSessionsHistoryPage() {
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-emerald-600"></div>
                 <div className="p-5">
                   <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'p-3 rounded-xl',
-                      theme === 'dark' ? 'bg-green-900/30' : 'bg-green-50'
-                    )}>
+                    <div className={cn('p-3 rounded-xl', theme === 'dark' ? 'bg-green-900/30' : 'bg-green-50')}>
                       <DollarSign className="w-5 h-5 text-green-600" />
                     </div>
                     <div>
@@ -429,10 +471,7 @@ export default function POSSessionsHistoryPage() {
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-purple-600"></div>
                 <div className="p-5">
                   <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'p-3 rounded-xl',
-                      theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-50'
-                    )}>
+                    <div className={cn('p-3 rounded-xl', theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-50')}>
                       <ShoppingCart className="w-5 h-5 text-purple-600" />
                     </div>
                     <div>
@@ -459,10 +498,7 @@ export default function POSSessionsHistoryPage() {
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600"></div>
                 <div className="p-5">
                   <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'p-3 rounded-xl',
-                      theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-50'
-                    )}>
+                    <div className={cn('p-3 rounded-xl', theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-50')}>
                       <Receipt className="w-5 h-5 text-amber-600" />
                     </div>
                     <div>
@@ -489,7 +525,6 @@ export default function POSSessionsHistoryPage() {
               )}
             >
               <div className="flex flex-col sm:flex-row gap-4">
-                {/* Search */}
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
@@ -505,8 +540,6 @@ export default function POSSessionsHistoryPage() {
                     )}
                   />
                 </div>
-
-                {/* Status Filter */}
                 <select
                   value={statusFilter}
                   onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
@@ -521,8 +554,6 @@ export default function POSSessionsHistoryPage() {
                   <option value="open">Abiertas</option>
                   <option value="closed">Cerradas</option>
                 </select>
-
-                {/* Terminal Filter */}
                 <select
                   value={terminalFilter}
                   onChange={(e) => { setTerminalFilter(e.target.value); setPage(1) }}
@@ -559,14 +590,11 @@ export default function POSSessionsHistoryPage() {
                   )}
                 >
                   <Clock className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                    No hay sesiones
-                  </h3>
-                  <p className="text-gray-500 dark:text-gray-400">
+                  <h3 className="text-xl font-bold mb-2">No hay sesiones</h3>
+                  <p className="text-gray-500">
                     {search || statusFilter !== 'all' || terminalFilter !== 'all'
                       ? 'No se encontraron sesiones con los filtros aplicados'
-                      : 'Aún no se han registrado sesiones de caja'
-                    }
+                      : 'Aún no se han registrado sesiones de caja'}
                   </p>
                 </motion.div>
               ) : (
@@ -588,7 +616,6 @@ export default function POSSessionsHistoryPage() {
                     <div className="p-5">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                          {/* Status Icon */}
                           <div className={cn(
                             'w-12 h-12 rounded-xl flex items-center justify-center',
                             session.status === 'open'
@@ -601,13 +628,9 @@ export default function POSSessionsHistoryPage() {
                               <CheckCircle className="w-6 h-6 text-gray-500" />
                             )}
                           </div>
-
                           <div>
                             <div className="flex items-center gap-2">
-                              <h3 className={cn(
-                                'font-bold text-lg',
-                                theme === 'dark' ? 'text-white' : 'text-gray-900'
-                              )}>
+                              <h3 className={cn('font-bold text-lg', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
                                 {session.sessionCode}
                               </h3>
                               <span className={cn(
@@ -635,25 +658,15 @@ export default function POSSessionsHistoryPage() {
                             </div>
                           </div>
                         </div>
-
                         <div className="flex items-center gap-6">
-                          {/* Stats */}
                           <div className="hidden md:flex items-center gap-6">
                             <div className="text-right">
                               <p className="text-xs text-gray-500">Ventas</p>
-                              <p className={cn(
-                                'font-bold text-green-600',
-                                theme === 'dark' ? 'text-green-400' : 'text-green-600'
-                              )}>
-                                ${session.totalSales.toFixed(2)}
-                              </p>
+                              <p className="font-bold text-green-500">${session.totalSales.toFixed(2)}</p>
                             </div>
                             <div className="text-right">
                               <p className="text-xs text-gray-500">Órdenes</p>
-                              <p className={cn(
-                                'font-bold',
-                                theme === 'dark' ? 'text-white' : 'text-gray-900'
-                              )}>
+                              <p className={cn('font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
                                 {session.totalOrders}
                               </p>
                             </div>
@@ -662,26 +675,17 @@ export default function POSSessionsHistoryPage() {
                                 <p className="text-xs text-gray-500">Diferencia</p>
                                 <p className={cn(
                                   'font-bold flex items-center gap-1 justify-end',
-                                  session.cashDifference === 0
-                                    ? 'text-green-600'
-                                    : session.cashDifference > 0
-                                    ? 'text-blue-600'
-                                    : 'text-red-600'
+                                  session.cashDifference === 0 ? 'text-green-600' :
+                                  session.cashDifference > 0 ? 'text-blue-600' : 'text-red-600'
                                 )}>
-                                  {session.cashDifference > 0 ? (
-                                    <TrendingUp className="w-4 h-4" />
-                                  ) : session.cashDifference < 0 ? (
-                                    <TrendingDown className="w-4 h-4" />
-                                  ) : (
-                                    <CheckCircle className="w-4 h-4" />
-                                  )}
+                                  {session.cashDifference > 0 ? <TrendingUp className="w-4 h-4" /> :
+                                   session.cashDifference < 0 ? <TrendingDown className="w-4 h-4" /> :
+                                   <CheckCircle className="w-4 h-4" />}
                                   ${Math.abs(session.cashDifference).toFixed(2)}
                                 </p>
                               </div>
                             )}
                           </div>
-
-                          {/* Arrow */}
                           <ChevronRight className="w-5 h-5 text-gray-400" />
                         </div>
                       </div>
@@ -701,18 +705,13 @@ export default function POSSessionsHistoryPage() {
                   disabled={page === 1}
                   className={cn(
                     'px-4 py-2 rounded-xl transition-colors',
-                    page === 1
-                      ? 'opacity-50 cursor-not-allowed'
-                      : theme === 'dark'
-                      ? 'bg-gray-800 hover:bg-gray-700 text-white'
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
+                    page === 1 ? 'opacity-50 cursor-not-allowed' :
+                    theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
                   )}
                 >
                   Anterior
                 </motion.button>
-                <span className="text-gray-500">
-                  Página {page} de {Math.ceil(total / limit)}
-                </span>
+                <span className="text-gray-500">Página {page} de {Math.ceil(total / limit)}</span>
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -720,11 +719,8 @@ export default function POSSessionsHistoryPage() {
                   disabled={page >= Math.ceil(total / limit)}
                   className={cn(
                     'px-4 py-2 rounded-xl transition-colors',
-                    page >= Math.ceil(total / limit)
-                      ? 'opacity-50 cursor-not-allowed'
-                      : theme === 'dark'
-                      ? 'bg-gray-800 hover:bg-gray-700 text-white'
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
+                    page >= Math.ceil(total / limit) ? 'opacity-50 cursor-not-allowed' :
+                    theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
                   )}
                 >
                   Siguiente
@@ -734,11 +730,10 @@ export default function POSSessionsHistoryPage() {
           </motion.div>
         </div>
 
-        {/* Detail Panel - Slide from Right */}
+        {/* Session Detail Panel */}
         <AnimatePresence>
           {selectedSession && (
             <>
-              {/* Backdrop */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -746,8 +741,6 @@ export default function POSSessionsHistoryPage() {
                 onClick={closePanel}
                 className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
               />
-
-              {/* Panel */}
               <motion.div
                 initial={{ x: '100%' }}
                 animate={{ x: 0 }}
@@ -760,19 +753,16 @@ export default function POSSessionsHistoryPage() {
               >
                 {/* Panel Header */}
                 <div className={cn(
-                  'flex items-center justify-between px-6 py-4 border-b',
+                  'flex items-center justify-between px-6 py-4 border-b flex-shrink-0',
                   theme === 'dark' ? 'border-gray-800' : 'border-gray-200'
                 )}>
                   <div>
-                    <h2 className="text-xl font-bold">Detalles de Sesión</h2>
-                    <p className="text-sm text-gray-500">{selectedSession.sessionCode}</p>
+                    <h2 className="text-xl font-bold">{selectedSession.sessionCode}</h2>
+                    <p className="text-sm text-gray-500">{selectedSession.terminalName}</p>
                   </div>
                   <button
                     onClick={closePanel}
-                    className={cn(
-                      'p-2 rounded-lg transition-colors',
-                      theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
-                    )}
+                    className={cn('p-2 rounded-lg transition-colors', theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100')}
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -781,18 +771,22 @@ export default function POSSessionsHistoryPage() {
                 {/* Panel Content */}
                 <div className="flex-1 overflow-auto p-6 space-y-6">
                   {/* Session Info */}
-                  <div className={cn(
-                    'rounded-xl p-4',
-                    theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'
-                  )}>
+                  <div className={cn('rounded-xl p-4', theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50')}>
                     <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <p className="text-gray-500">Terminal</p>
-                        <p className="font-medium">{selectedSession.terminalName}</p>
-                      </div>
                       <div>
                         <p className="text-gray-500">Duración</p>
                         <p className="font-medium">{getDuration(selectedSession.openedAt, selectedSession.closedAt)}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Estado</p>
+                        <span className={cn(
+                          'inline-block px-2 py-0.5 rounded-full text-xs font-medium mt-1',
+                          selectedSession.status === 'open'
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                            : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                        )}>
+                          {selectedSession.status === 'open' ? 'Abierta' : 'Cerrada'}
+                        </span>
                       </div>
                       <div>
                         <p className="text-gray-500">Abierta por</p>
@@ -804,7 +798,7 @@ export default function POSSessionsHistoryPage() {
                         {selectedSession.closedByName ? (
                           <>
                             <p className="font-medium">{selectedSession.closedByName}</p>
-                            <p className="text-xs text-gray-400">{selectedSession.closedAt ? formatDate(selectedSession.closedAt) : ''}</p>
+                            <p className="text-xs text-gray-400">{selectedSession.closedAt && formatDate(selectedSession.closedAt)}</p>
                           </>
                         ) : (
                           <p className="text-gray-400 italic">Aún abierta</p>
@@ -813,61 +807,34 @@ export default function POSSessionsHistoryPage() {
                     </div>
 
                     {/* Cash Summary */}
-                    <div className={cn(
-                      'mt-4 pt-4 border-t grid grid-cols-3 gap-4 text-center',
-                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                    )}>
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Fondo Inicial</p>
-                        <div className="space-y-0.5">
-                          <p className="text-sm font-mono">${selectedSession.openingCash.usd.toFixed(2)} USD</p>
-                          <p className="text-xs text-gray-400">{selectedSession.openingCash.cup.toLocaleString()} CUP</p>
+                    <div className={cn('mt-4 pt-4 border-t', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="text-center">
+                          <p className="text-xs text-gray-500 mb-1">Total Ventas</p>
+                          <p className="text-2xl font-bold text-green-500">${selectedSession.totalSales.toFixed(2)}</p>
+                          <p className="text-xs text-gray-400">{selectedSession.totalOrders} órdenes</p>
                         </div>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Ventas</p>
-                        <p className="text-lg font-bold text-green-500">${selectedSession.totalSales.toFixed(2)}</p>
-                        <p className="text-xs text-gray-400">{selectedSession.totalOrders} órdenes</p>
-                      </div>
-                      {selectedSession.closingCash && (
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Cierre</p>
-                          <div className="space-y-0.5">
-                            <p className="text-sm font-mono">${selectedSession.closingCash.usd.toFixed(2)} USD</p>
-                            <p className="text-xs text-gray-400">{selectedSession.closingCash.cup.toLocaleString()} CUP</p>
+                        {selectedSession.cashDifference !== null && (
+                          <div className="text-center">
+                            <p className="text-xs text-gray-500 mb-1">Diferencia</p>
+                            <p className={cn(
+                              'text-2xl font-bold',
+                              selectedSession.cashDifference === 0 ? 'text-green-500' :
+                              selectedSession.cashDifference > 0 ? 'text-blue-500' : 'text-red-500'
+                            )}>
+                              {selectedSession.cashDifference >= 0 ? '+' : ''}${selectedSession.cashDifference.toFixed(2)}
+                            </p>
                           </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {selectedSession.cashDifference !== null && (
-                      <div className={cn(
-                        'mt-4 pt-4 border-t text-center',
-                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                      )}>
-                        <p className="text-xs text-gray-500 mb-1">Diferencia de Caja</p>
-                        <p className={cn(
-                          'text-xl font-bold flex items-center justify-center gap-2',
-                          selectedSession.cashDifference === 0
-                            ? 'text-green-500'
-                            : selectedSession.cashDifference > 0
-                            ? 'text-blue-500'
-                            : 'text-red-500'
-                        )}>
-                          {selectedSession.cashDifference > 0 ? <TrendingUp className="w-5 h-5" /> :
-                           selectedSession.cashDifference < 0 ? <TrendingDown className="w-5 h-5" /> :
-                           <CheckCircle className="w-5 h-5" />}
-                          {selectedSession.cashDifference >= 0 ? '+' : ''}${selectedSession.cashDifference.toFixed(2)}
-                        </p>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
 
-                  {/* Orders Section */}
+                  {/* Orders List */}
                   <div>
                     <h3 className="font-semibold mb-3 flex items-center gap-2">
                       <ShoppingCart className="w-5 h-5" />
-                      Órdenes ({sessionOrders.length})
+                      Órdenes de la Sesión ({sessionOrders.length})
                     </h3>
 
                     {loadingOrders ? (
@@ -885,151 +852,321 @@ export default function POSSessionsHistoryPage() {
                     ) : (
                       <div className="space-y-2">
                         {sessionOrders.map(order => (
-                          <div
+                          <motion.div
                             key={order.id}
-                            className={cn(
-                              'rounded-xl border p-4 transition-all cursor-pointer',
-                              theme === 'dark'
-                                ? 'bg-gray-800 border-gray-700 hover:border-blue-500/50'
-                                : 'bg-gray-50 border-gray-200 hover:border-blue-400',
-                              selectedOrder?.id === order.id && 'ring-2 ring-blue-500'
-                            )}
+                            whileHover={{ scale: 1.01 }}
                             onClick={() => handleSelectOrder(order)}
+                            className={cn(
+                              'rounded-xl border p-4 cursor-pointer transition-all',
+                              theme === 'dark'
+                                ? 'bg-gray-800 border-gray-700 hover:border-blue-500'
+                                : 'bg-gray-50 border-gray-200 hover:border-blue-400'
+                            )}
                           >
                             <div className="flex items-center justify-between">
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono font-bold">{order.orderNumber}</span>
-                                  <span className={cn(
-                                    'px-2 py-0.5 rounded-full text-xs font-medium',
-                                    order.status === 'paid'
-                                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                      : order.status === 'voided'
-                                      ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                                      : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                                  )}>
-                                    {order.status === 'paid' ? 'Pagada' :
-                                     order.status === 'voided' ? 'Anulada' :
-                                     order.status === 'refunded' ? 'Reembolsada' : order.status}
-                                  </span>
+                              <div className="flex items-center gap-3">
+                                <div className={cn(
+                                  'w-10 h-10 rounded-lg flex items-center justify-center',
+                                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                                )}>
+                                  <Receipt className="w-5 h-5 text-gray-500" />
                                 </div>
-                                <p className="text-sm text-gray-500 mt-1">
-                                  {formatTime(order.createdAt)} • {order.customerName || 'Cliente general'}
-                                </p>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono font-bold">{order.orderNumber}</span>
+                                    {getStatusBadge(order.status)}
+                                  </div>
+                                  <p className="text-sm text-gray-500">
+                                    {formatTime(order.createdAt)} • {order.customerName || 'Cliente general'}
+                                  </p>
+                                </div>
                               </div>
-                              <div className="text-right">
-                                <p className="font-bold text-lg">
-                                  {formatCurrency(order.totalAmount, order.currency)}
-                                </p>
-                                <div className="flex flex-wrap gap-1 justify-end mt-1">
-                                  {order.payments?.map((p, i) => (
-                                    <span
-                                      key={i}
-                                      className={cn(
-                                        'inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs',
-                                        theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                                      )}
-                                    >
-                                      {getPaymentMethodIcon(p.method)}
-                                      <span>{formatCurrency(p.amount, p.currency)}</span>
-                                    </span>
-                                  ))}
+                              <div className="flex items-center gap-3">
+                                <div className="text-right">
+                                  <p className="font-bold text-lg">{formatCurrency(order.totalAmount, order.currency)}</p>
+                                  <div className="flex flex-wrap gap-1 justify-end">
+                                    {order.payments?.slice(0, 2).map((p, i) => (
+                                      <span
+                                        key={i}
+                                        className={cn(
+                                          'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs',
+                                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                                        )}
+                                      >
+                                        {getPaymentMethodIcon(p.method)}
+                                        <span>{p.currency}</span>
+                                      </span>
+                                    ))}
+                                  </div>
                                 </div>
+                                <Eye className="w-5 h-5 text-blue-500" />
                               </div>
                             </div>
-
-                            {/* Order Details (when selected) */}
-                            <AnimatePresence>
-                              {selectedOrder?.id === order.id && (
-                                <motion.div
-                                  initial={{ height: 0, opacity: 0 }}
-                                  animate={{ height: 'auto', opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }}
-                                  className="overflow-hidden"
-                                >
-                                  {loadingOrderDetails ? (
-                                    <div className="flex items-center justify-center py-4">
-                                      <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-                                    </div>
-                                  ) : (
-                                    <div className={cn(
-                                      'mt-4 pt-4 border-t space-y-4',
-                                      theme === 'dark' ? 'border-gray-700' : 'border-gray-300'
-                                    )}>
-                                      {/* Products */}
-                                      <div>
-                                        <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
-                                          <Package className="w-3 h-3" />
-                                          Productos
-                                        </p>
-                                        <div className="space-y-1">
-                                          {selectedOrder.lines?.map(line => (
-                                            <div key={line.id} className="flex justify-between text-sm">
-                                              <span className="truncate flex-1">
-                                                {line.productName} x{line.quantity}
-                                              </span>
-                                              <span className="font-mono ml-2">
-                                                ${line.total.toFixed(2)}
-                                              </span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-
-                                      {/* Payments Detail */}
-                                      <div>
-                                        <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
-                                          <CreditCard className="w-3 h-3" />
-                                          Pagos
-                                        </p>
-                                        <div className="space-y-2">
-                                          {selectedOrder.payments?.map((p, i) => (
-                                            <div key={i} className={cn(
-                                              'p-2 rounded-lg text-sm',
-                                              theme === 'dark' ? 'bg-gray-900' : 'bg-white'
-                                            )}>
-                                              <div className="flex items-center justify-between">
-                                                <span className="flex items-center gap-2">
-                                                  {getPaymentMethodIcon(p.method)}
-                                                  {getPaymentMethodLabel(p.method)}
-                                                </span>
-                                                <span className="font-mono font-bold">
-                                                  {formatCurrency(p.amount, p.currency)}
-                                                </span>
-                                              </div>
-                                              {p.changeAmount && p.changeAmount > 0 && (
-                                                <div className="flex justify-between text-xs text-amber-500 mt-1 pl-6">
-                                                  <span>Entregó: {formatCurrency(p.amountTendered || 0, p.currency)}</span>
-                                                  <span>Cambio: {formatCurrency(p.changeAmount, p.currency)}</span>
-                                                </div>
-                                              )}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-
-                                      {/* Reprint Button */}
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          handleReprintReceipt(order)
-                                        }}
-                                        className="w-full py-2 rounded-lg bg-blue-500 text-white font-medium flex items-center justify-center gap-2 hover:bg-blue-600 transition-colors"
-                                      >
-                                        <Printer className="w-4 h-4" />
-                                        Reimprimir Recibo
-                                      </button>
-                                    </div>
-                                  )}
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
-                          </div>
+                          </motion.div>
                         ))}
                       </div>
                     )}
                   </div>
                 </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
+        {/* Order Detail Modal */}
+        <AnimatePresence>
+          {selectedOrder && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={closeOrderModal}
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className={cn(
+                  'fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
+                  'md:w-full md:max-w-3xl md:max-h-[90vh] z-[70] rounded-2xl shadow-2xl overflow-hidden flex flex-col',
+                  theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+                )}
+              >
+                {loadingOrderDetails ? (
+                  <div className="flex items-center justify-center p-20">
+                    <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Modal Header */}
+                    <div className={cn(
+                      'flex items-center justify-between px-6 py-4 border-b flex-shrink-0',
+                      theme === 'dark' ? 'border-gray-800 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                    )}>
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          'w-12 h-12 rounded-xl flex items-center justify-center',
+                          theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-50'
+                        )}>
+                          <FileText className="w-6 h-6 text-blue-500" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h2 className="text-xl font-bold">{selectedOrder.orderNumber}</h2>
+                            {getStatusBadge(selectedOrder.status)}
+                          </div>
+                          <p className="text-sm text-gray-500">
+                            {formatDate(selectedOrder.createdAt)} • {selectedOrder.createdByName}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={closeOrderModal}
+                        className={cn('p-2 rounded-lg transition-colors', theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-200')}
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {/* Modal Content */}
+                    <div className="flex-1 overflow-auto p-6 space-y-6">
+                      {/* Customer Info */}
+                      {(selectedOrder.customer || selectedOrder.customerName) && (
+                        <div className={cn('rounded-xl p-4', theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50')}>
+                          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                            <User className="w-4 h-4" />
+                            Cliente
+                          </h3>
+                          <div className="grid grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <p className="text-gray-500">Nombre</p>
+                              <p className="font-medium">{selectedOrder.customer?.name || selectedOrder.customerName || 'Cliente general'}</p>
+                            </div>
+                            {selectedOrder.customer?.phone && (
+                              <div>
+                                <p className="text-gray-500">Teléfono</p>
+                                <p className="font-medium">{selectedOrder.customer.phone}</p>
+                              </div>
+                            )}
+                            {selectedOrder.customer?.email && (
+                              <div>
+                                <p className="text-gray-500">Email</p>
+                                <p className="font-medium">{selectedOrder.customer.email}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Products */}
+                      <div>
+                        <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                          <Package className="w-4 h-4" />
+                          Productos ({selectedOrder.lines?.length || 0})
+                        </h3>
+                        <div className={cn('rounded-xl border overflow-hidden', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                          <table className="w-full">
+                            <thead className={cn(theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50')}>
+                              <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Producto</th>
+                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Cant.</th>
+                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Precio</th>
+                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Desc.</th>
+                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody className={cn('divide-y', theme === 'dark' ? 'divide-gray-700' : 'divide-gray-200')}>
+                              {selectedOrder.lines?.map(line => (
+                                <tr key={line.id}>
+                                  <td className="px-4 py-3">
+                                    <div>
+                                      <p className="font-medium">{line.productName}</p>
+                                      {line.productSku && (
+                                        <p className="text-xs text-gray-500">SKU: {line.productSku}</p>
+                                      )}
+                                      {line.promotionName && (
+                                        <span className="inline-flex items-center gap-1 text-xs text-green-500 mt-1">
+                                          <Tag className="w-3 h-3" />
+                                          {line.promotionName}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-center font-mono">{line.quantity}</td>
+                                  <td className="px-4 py-3 text-right">
+                                    <span className="font-mono">${line.unitPrice.toFixed(2)}</span>
+                                    {line.originalPrice && line.originalPrice !== line.unitPrice && (
+                                      <span className="text-xs text-gray-500 line-through block">
+                                        ${line.originalPrice.toFixed(2)}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 text-right">
+                                    {line.discountAmount > 0 ? (
+                                      <span className="text-amber-500 font-mono">-${line.discountAmount.toFixed(2)}</span>
+                                    ) : (
+                                      <span className="text-gray-400">-</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 text-right font-mono font-bold">${line.total.toFixed(2)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* Order Totals */}
+                      <div className={cn('rounded-xl p-4', theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50')}>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Subtotal</span>
+                            <span className="font-mono">${selectedOrder.subtotal.toFixed(2)}</span>
+                          </div>
+                          {selectedOrder.discountAmount > 0 && (
+                            <div className="flex justify-between text-sm text-amber-500">
+                              <span className="flex items-center gap-1">
+                                <Percent className="w-3 h-3" />
+                                Descuento
+                              </span>
+                              <span className="font-mono">-${selectedOrder.discountAmount.toFixed(2)}</span>
+                            </div>
+                          )}
+                          {selectedOrder.taxAmount > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-500">Impuestos</span>
+                              <span className="font-mono">${selectedOrder.taxAmount.toFixed(2)}</span>
+                            </div>
+                          )}
+                          <div className={cn('pt-2 border-t flex justify-between', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                            <span className="font-bold text-lg">TOTAL</span>
+                            <span className="font-bold text-lg font-mono text-green-500">
+                              {formatCurrency(selectedOrder.totalAmount, selectedOrder.currency)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Payments */}
+                      <div>
+                        <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                          <CreditCard className="w-4 h-4" />
+                          Pagos Recibidos ({selectedOrder.payments?.length || 0})
+                        </h3>
+                        <div className="space-y-2">
+                          {selectedOrder.payments?.map((payment, i) => (
+                            <div
+                              key={i}
+                              className={cn(
+                                'rounded-xl p-4 border',
+                                theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'
+                              )}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className={cn(
+                                    'w-10 h-10 rounded-lg flex items-center justify-center',
+                                    payment.method === 'cash'
+                                      ? 'bg-green-500/20 text-green-500'
+                                      : payment.method === 'card'
+                                      ? 'bg-blue-500/20 text-blue-500'
+                                      : 'bg-purple-500/20 text-purple-500'
+                                  )}>
+                                    {getPaymentMethodIcon(payment.method)}
+                                  </div>
+                                  <div>
+                                    <p className="font-medium">{getPaymentMethodLabel(payment.method)}</p>
+                                    <p className="text-xs text-gray-500">
+                                      {formatTime(payment.createdAt)}
+                                      {payment.reference && ` • Ref: ${payment.reference}`}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-bold text-lg font-mono">
+                                    {formatCurrency(payment.amount, payment.currency)}
+                                  </p>
+                                  {payment.changeAmount && payment.changeAmount > 0 && (
+                                    <div className="text-xs text-amber-500 mt-1">
+                                      <span>Entregó: {formatCurrency(payment.amountTendered || 0, payment.currency)}</span>
+                                      <span className="mx-1">•</span>
+                                      <span>Cambio: {formatCurrency(payment.changeAmount, payment.currency)}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Modal Footer */}
+                    <div className={cn(
+                      'flex items-center justify-between px-6 py-4 border-t flex-shrink-0',
+                      theme === 'dark' ? 'border-gray-800 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                    )}>
+                      <button
+                        onClick={closeOrderModal}
+                        className={cn(
+                          'px-4 py-2.5 rounded-xl font-medium transition-colors',
+                          theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
+                        )}
+                      >
+                        Cerrar
+                      </button>
+                      <button
+                        onClick={() => handleReprintReceipt(selectedOrder)}
+                        className="px-6 py-2.5 rounded-xl font-medium bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                      >
+                        <Printer className="w-4 h-4" />
+                        Reimprimir Recibo
+                      </button>
+                    </div>
+                  </>
+                )}
               </motion.div>
             </>
           )}
