@@ -203,7 +203,8 @@ export async function POST(request: NextRequest) {
       discountPercent,
       notes,
       internalNotes,
-      lines
+      lines,
+      payment // Optional payment data for immediate payment
     } = body
 
     if (!customerId) {
@@ -273,6 +274,13 @@ export async function POST(request: NextRequest) {
     const discountAmount = discountPercent ? (subtotal * discountPercent / 100) : 0
     const totalAmount = subtotal - discountAmount
 
+    // Determine initial status based on payment
+    const hasImmediatePayment = payment && payment.amount > 0
+    const initialStatus = hasImmediatePayment ? 'confirmed' : 'draft'
+    const initialPaymentStatus = hasImmediatePayment ? 'paid' : 'pending'
+    const initialAmountDue = hasImmediatePayment ? 0 : totalAmount
+    const initialAmountPaid = hasImmediatePayment ? totalAmount : 0
+
     // Create invoice using transaction
     const result = await db.transaction(async (client) => {
       // Insert invoice
@@ -280,8 +288,9 @@ export async function POST(request: NextRequest) {
         INSERT INTO market_invoices (
           company_id, invoice_number, customer_id, pricelist_id, warehouse_id,
           status, payment_status, subtotal, discount_percent, discount_amount, total_amount,
-          amount_due, currency, due_date, notes, internal_notes, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          amount_due, amount_paid, currency, due_date, notes, internal_notes, created_by,
+          confirmed_at, paid_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
         RETURNING id
       `, [
         payload.companyId,
@@ -289,18 +298,21 @@ export async function POST(request: NextRequest) {
         customerId,
         effectivePricelistId,
         warehouseId || null,
-        'draft',
-        'pending',
+        initialStatus,
+        initialPaymentStatus,
         subtotal,
         discountPercent || 0,
         discountAmount,
         totalAmount,
-        totalAmount, // amount_due = total at creation
+        initialAmountDue,
+        initialAmountPaid,
         'USD',
         effectiveDueDate || null,
         notes || null,
         internalNotes || null,
-        payload.userId
+        payload.userId,
+        hasImmediatePayment ? new Date().toISOString() : null,
+        hasImmediatePayment ? new Date().toISOString() : null
       ])
 
       const invoiceId = invoiceResult.rows[0].id
@@ -344,6 +356,45 @@ export async function POST(request: NextRequest) {
           lineSubtotal,
           warehouseQuantities,
           line.notes || null
+        ])
+      }
+
+      // If immediate payment, record the payment
+      if (hasImmediatePayment) {
+        // Generate payment number
+        const paymentNumberResult = await client.query(`
+          SELECT payment_number FROM market_invoice_payments
+          WHERE invoice_id IN (SELECT id FROM market_invoices WHERE company_id = $1)
+          ORDER BY id DESC
+          LIMIT 1
+        `, [payload.companyId])
+
+        let nextPaymentNumber = 1
+        if (paymentNumberResult.rows.length > 0) {
+          const lastNum = paymentNumberResult.rows[0].payment_number
+          const match = lastNum.match(/PAY-\d{4}-(\d+)/)
+          if (match) {
+            nextPaymentNumber = parseInt(match[1]) + 1
+          }
+        }
+        const paymentNumber = `PAY-${year}-${String(nextPaymentNumber).padStart(4, '0')}`
+
+        await client.query(`
+          INSERT INTO market_invoice_payments (
+            invoice_id, payment_number, amount, currency, payment_method, reference, payment_date, notes, created_by
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `, [
+          invoiceId,
+          paymentNumber,
+          payment.amount,
+          payment.currency || 'USD',
+          payment.method || 'cash',
+          payment.reference || null,
+          new Date().toISOString().split('T')[0],
+          payment.amountTendered && payment.amountTendered > payment.amount
+            ? `Cambio: $${(payment.amountTendered - payment.amount).toFixed(2)}`
+            : null,
+          payload.userId
         ])
       }
 

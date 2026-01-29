@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Users,
   Package,
-  Settings,
   CheckCircle,
   ArrowLeft,
   ArrowRight,
@@ -17,9 +16,7 @@ import {
   FileText,
   Building2,
   Tag,
-  Percent,
   Calendar,
-  ShoppingCart,
   AlertCircle,
   Loader2,
   X,
@@ -32,7 +29,12 @@ import {
   Warehouse,
   TrendingUp,
   DollarSign,
-  Truck
+  Truck,
+  Printer,
+  Banknote,
+  Smartphone,
+  Clock,
+  Receipt
 } from 'lucide-react'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
@@ -128,8 +130,9 @@ interface PricelistItem {
 const STEPS = [
   { id: 'customer', title: 'Cliente', icon: Users },
   { id: 'products', title: 'Productos', icon: Package },
-  { id: 'conditions', title: 'Condiciones', icon: Settings },
-  { id: 'confirm', title: 'Confirmación', icon: CheckCircle }
+  { id: 'terms', title: 'Términos', icon: Calendar },
+  { id: 'payment', title: 'Pago', icon: CreditCard },
+  { id: 'print', title: 'Imprimir', icon: Printer }
 ]
 
 const STORAGE_KEY = 'wholesale_invoice_draft'
@@ -199,11 +202,28 @@ export default function CreateInvoicePage() {
   const [lines, setLines] = useState<InvoiceLine[]>([])
   const [expandedLineIndex, setExpandedLineIndex] = useState<number | null>(null)
 
-  // Step 3: Conditions
-  const [dueDate, setDueDate] = useState('')
-  const [discountPercent, setDiscountPercent] = useState(0)
+  // Step 3: Payment Terms
+  const [paymentTerms, setPaymentTerms] = useState<'immediate' | '15' | '30' | '40' | 'custom'>('immediate')
+  const [customDueDate, setCustomDueDate] = useState('')
   const [notes, setNotes] = useState('')
   const [internalNotes, setInternalNotes] = useState('')
+
+  // Step 4: Payment
+  const [paymentMethod, setPaymentMethod] = useState<string>('cash')
+  const [paymentCurrency, setPaymentCurrency] = useState<string>('USD')
+  const [amountTendered, setAmountTendered] = useState<string>('')
+  const [paymentReference, setPaymentReference] = useState<string>('')
+
+  // Step 5: Created invoice
+  interface CreatedInvoice {
+    id: number
+    invoiceNumber: string
+    customerName: string
+    total: number
+    paymentStatus: string
+    dueDate: string | null
+  }
+  const [createdInvoice, setCreatedInvoice] = useState<CreatedInvoice | null>(null)
 
   // New customer form
   const [newCustomer, setNewCustomer] = useState({
@@ -237,14 +257,14 @@ export default function CreateInvoicePage() {
     const state = {
       customerId: selectedCustomer?.id || null,
       lines: serializeLines(lines),
-      dueDate,
-      discountPercent,
+      paymentTerms,
+      customDueDate,
       notes,
       internalNotes,
       timestamp: Date.now()
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-  }, [selectedCustomer, lines, dueDate, discountPercent, notes, internalNotes, isRestoring])
+  }, [selectedCustomer, lines, paymentTerms, customDueDate, notes, internalNotes, isRestoring])
 
   // Clear storage after successful save
   const clearStorage = useCallback(() => {
@@ -260,8 +280,8 @@ export default function CreateInvoicePage() {
         // Check if saved state is less than 24 hours old
         if (state.timestamp && Date.now() - state.timestamp < 24 * 60 * 60 * 1000) {
           // Will restore customer after customers are loaded
-          if (state.dueDate) setDueDate(state.dueDate)
-          if (state.discountPercent) setDiscountPercent(state.discountPercent)
+          if (state.paymentTerms) setPaymentTerms(state.paymentTerms)
+          if (state.customDueDate) setCustomDueDate(state.customDueDate)
           if (state.notes) setNotes(state.notes)
           if (state.internalNotes) setInternalNotes(state.internalNotes)
         } else {
@@ -671,8 +691,28 @@ export default function CreateInvoicePage() {
   }
 
   const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
-  const globalDiscount = subtotal * discountPercent / 100
-  const total = subtotal - globalDiscount
+  const total = subtotal // No global discount in new flow
+
+  // Calculate due date based on payment terms
+  const calculateDueDate = useCallback((terms: string, customDate?: string): string => {
+    if (terms === 'immediate') return new Date().toISOString().split('T')[0]
+    if (terms === 'custom' && customDate) return customDate
+
+    const days = parseInt(terms) // 15, 30, or 40
+    const dueDate = new Date()
+    dueDate.setDate(dueDate.getDate() + days)
+    return dueDate.toISOString().split('T')[0]
+  }, [])
+
+  // Format date in Spanish
+  const formatDateSpanish = useCallback((dateStr: string): string => {
+    const date = new Date(dateStr + 'T00:00:00')
+    return date.toLocaleDateString('es-ES', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    })
+  }, [])
 
   // Calculate deliveries that will be generated
   const deliveriesPreview = useMemo(() => {
@@ -730,7 +770,31 @@ export default function CreateInvoicePage() {
         }
         return true
 
-      case 'conditions':
+      case 'terms':
+        // If custom date selected, must have a date
+        if (paymentTerms === 'custom' && !customDueDate) {
+          setError('Debe seleccionar una fecha de vencimiento')
+          return false
+        }
+        // Custom date must be >= today
+        if (paymentTerms === 'custom' && customDueDate) {
+          const today = new Date().toISOString().split('T')[0]
+          if (customDueDate < today) {
+            setError('La fecha de vencimiento debe ser igual o posterior a hoy')
+            return false
+          }
+        }
+        return true
+
+      case 'payment':
+        // For immediate payment with cash, validate amount
+        if (paymentTerms === 'immediate' && paymentMethod === 'cash' && amountTendered) {
+          if (parseFloat(amountTendered) < total) {
+            setError('El monto recibido es menor al total')
+            return false
+          }
+        }
+        // For transfer, reference is optional but recommended
         return true
 
       default:
@@ -814,6 +878,9 @@ export default function CreateInvoicePage() {
     setSaving(true)
 
     try {
+      const effectiveDueDate = calculateDueDate(paymentTerms, customDueDate)
+      const isImmediatePayment = paymentTerms === 'immediate'
+
       const response = await fetch('/api/market/wholesale/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -821,8 +888,8 @@ export default function CreateInvoicePage() {
           customerId: selectedCustomer.id,
           warehouseId: null, // Multi-warehouse mode, no single warehouse
           pricelistId: selectedCustomer.pricelistId,
-          dueDate: dueDate || null,
-          discountPercent,
+          dueDate: effectiveDueDate,
+          discountPercent: 0, // No global discount in new flow
           notes,
           internalNotes,
           lines: lines.filter(l => l.quantity > 0).map(l => ({
@@ -834,7 +901,15 @@ export default function CreateInvoicePage() {
             unitPrice: l.unitPrice,
             originalPrice: l.originalPrice,
             warehouseQuantities: l.warehouseQuantities
-          }))
+          })),
+          // Payment data for immediate payment
+          payment: isImmediatePayment ? {
+            method: paymentMethod,
+            currency: paymentCurrency,
+            amount: total,
+            amountTendered: paymentMethod === 'cash' ? parseFloat(amountTendered || String(total)) : total,
+            reference: paymentReference || null
+          } : null
         })
       })
 
@@ -842,8 +917,22 @@ export default function CreateInvoicePage() {
         const result = await response.json()
         if (result.success) {
           clearStorage() // Clear saved draft on success
-          router.push(`/dashboard/market/wholesale/invoices/${result.data.id}`)
+          // Set created invoice data for print step
+          setCreatedInvoice({
+            id: result.data.id,
+            invoiceNumber: result.data.invoiceNumber,
+            customerName: selectedCustomer.businessName,
+            total: total,
+            paymentStatus: isImmediatePayment ? 'paid' : 'pending',
+            dueDate: isImmediatePayment ? null : effectiveDueDate
+          })
+          // Move to print step
+          setCurrentStep('print')
+        } else {
+          setError(result.error || 'Error al crear factura')
         }
+      } else {
+        setError('Error al crear factura')
       }
     } catch (error) {
       console.error('Error creating invoice:', error)
@@ -1582,8 +1671,8 @@ export default function CreateInvoicePage() {
               </motion.div>
             )}
 
-            {/* Step 3: Conditions */}
-            {currentStep === 'conditions' && (
+            {/* Step 3: Payment Terms */}
+            {currentStep === 'terms' && (
               <motion.div
                 key="step3"
                 initial={{ opacity: 0, x: 20 }}
@@ -1592,52 +1681,112 @@ export default function CreateInvoicePage() {
                 className="space-y-6"
               >
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                  Condiciones de la Factura
+                  Términos de Pago
                 </h2>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-6">
+                  {/* Payment Terms Selection */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      <Percent className="w-4 h-4 inline mr-2" />
-                      Descuento Global
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                      <Clock className="w-4 h-4 inline mr-2" />
+                      Términos de Pago
                     </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={discountPercent}
-                        onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)}
-                        min="0"
-                        max="100"
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {[
+                        { id: 'immediate', label: 'Inmediato' },
+                        { id: '15', label: '15 días' },
+                        { id: '30', label: '30 días' },
+                        { id: '40', label: '40 días' }
+                      ].map(term => (
+                        <button
+                          key={term.id}
+                          onClick={() => setPaymentTerms(term.id as typeof paymentTerms)}
+                          className={cn(
+                            'py-3 px-4 rounded-xl font-medium transition-all border-2',
+                            paymentTerms === term.id
+                              ? 'bg-green-500 text-white border-green-500'
+                              : theme === 'dark'
+                                ? 'bg-gray-800 border-gray-700 text-gray-300 hover:border-green-500/50'
+                                : 'bg-white border-gray-200 text-gray-700 hover:border-green-500/50'
+                          )}
+                        >
+                          {term.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Custom date option */}
+                    <div className="mt-3">
+                      <button
+                        onClick={() => setPaymentTerms('custom')}
                         className={cn(
-                          'w-full px-4 py-3 rounded-xl border pr-12 focus:outline-none focus:ring-2',
-                          theme === 'dark'
-                            ? 'bg-gray-900 border-gray-700 text-white focus:border-green-500 focus:ring-green-500/20'
-                            : 'bg-white border-gray-300 text-gray-900 focus:border-green-500 focus:ring-green-500/20'
+                          'w-full py-3 px-4 rounded-xl font-medium transition-all border-2 flex items-center justify-between',
+                          paymentTerms === 'custom'
+                            ? 'bg-green-500 text-white border-green-500'
+                            : theme === 'dark'
+                              ? 'bg-gray-800 border-gray-700 text-gray-300 hover:border-green-500/50'
+                              : 'bg-white border-gray-200 text-gray-700 hover:border-green-500/50'
                         )}
-                      />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+                      >
+                        <span>Fecha específica</span>
+                        {paymentTerms === 'custom' && (
+                          <input
+                            type="date"
+                            value={customDueDate}
+                            onChange={(e) => setCustomDueDate(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            min={new Date().toISOString().split('T')[0]}
+                            className={cn(
+                              'px-3 py-1 rounded-lg bg-white/20 border-0 focus:outline-none focus:ring-2 focus:ring-white/50',
+                              'text-white'
+                            )}
+                          />
+                        )}
+                      </button>
                     </div>
                   </div>
 
+                  {/* Creation Date (read-only) */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       <Calendar className="w-4 h-4 inline mr-2" />
-                      Fecha de Vencimiento
+                      Fecha de Creación
                     </label>
-                    <input
-                      type="date"
-                      value={dueDate}
-                      onChange={(e) => setDueDate(e.target.value)}
-                      className={cn(
-                        'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
-                        theme === 'dark'
-                          ? 'bg-gray-900 border-gray-700 text-white focus:border-green-500 focus:ring-green-500/20'
-                          : 'bg-white border-gray-300 text-gray-900 focus:border-green-500 focus:ring-green-500/20'
-                      )}
-                    />
+                    <div className={cn(
+                      'px-4 py-3 rounded-xl border flex items-center gap-3',
+                      theme === 'dark'
+                        ? 'bg-gray-900 border-gray-700 text-gray-300'
+                        : 'bg-gray-50 border-gray-200 text-gray-600'
+                    )}>
+                      <Calendar className="w-5 h-5 text-green-500" />
+                      <span className="font-medium">
+                        {formatDateSpanish(new Date().toISOString().split('T')[0])}
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="md:col-span-2">
+                  {/* Due Date Preview (when not immediate) */}
+                  {paymentTerms !== 'immediate' && (
+                    <div className={cn(
+                      'p-4 rounded-xl border',
+                      theme === 'dark'
+                        ? 'bg-blue-900/20 border-blue-800'
+                        : 'bg-blue-50 border-blue-200'
+                    )}>
+                      <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                        <Clock className="w-5 h-5" />
+                        <span className="font-medium">Fecha de Vencimiento:</span>
+                        <span className="font-bold">
+                          {paymentTerms === 'custom' && customDueDate
+                            ? formatDateSpanish(customDueDate)
+                            : formatDateSpanish(calculateDueDate(paymentTerms))}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Notes for client */}
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       <FileText className="w-4 h-4 inline mr-2" />
                       Notas para el Cliente
@@ -1646,7 +1795,7 @@ export default function CreateInvoicePage() {
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       rows={3}
-                      placeholder="Condiciones, observaciones..."
+                      placeholder="Notas visibles para el cliente..."
                       className={cn(
                         'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 resize-none',
                         theme === 'dark'
@@ -1656,7 +1805,8 @@ export default function CreateInvoicePage() {
                     />
                   </div>
 
-                  <div className="md:col-span-2">
+                  {/* Internal notes */}
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       <FileText className="w-4 h-4 inline mr-2 text-gray-400" />
                       Notas Internas
@@ -1679,8 +1829,8 @@ export default function CreateInvoicePage() {
               </motion.div>
             )}
 
-            {/* Step 4: Confirmation */}
-            {currentStep === 'confirm' && (
+            {/* Step 4: Payment */}
+            {currentStep === 'payment' && (
               <motion.div
                 key="step4"
                 initial={{ opacity: 0, x: 20 }}
@@ -1688,23 +1838,172 @@ export default function CreateInvoicePage() {
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                  Confirmar Factura
-                </h2>
+                {paymentTerms === 'immediate' ? (
+                  <>
+                    {/* Immediate Payment Mode */}
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                      Pago de Factura
+                    </h2>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Left Column */}
-                  <div className="space-y-6">
-                    {/* Customer Summary */}
+                    {/* Total Amount */}
                     <div className={cn(
-                      'rounded-xl p-4',
+                      'rounded-xl p-6 text-center',
                       theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
                     )}>
-                      <h3 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                        <Users className="w-5 h-5 text-green-600" />
-                        Cliente
-                      </h3>
-                      <div className="flex items-center gap-4">
+                      <p className="text-sm text-gray-500 mb-1">Total a Pagar</p>
+                      <p className="text-4xl font-bold text-green-600">{formatCurrency(total)}</p>
+                      <p className="text-lg text-gray-500 mt-1">
+                        {formatCUP(total * exchangeRateBCC)} <span className="text-xs">(Tasa BCC: {exchangeRateBCC})</span>
+                      </p>
+                    </div>
+
+                    {/* Payment Method */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        Método de Pago
+                      </label>
+                      <div className="grid grid-cols-4 gap-3">
+                        {[
+                          { id: 'cash', label: 'Efectivo', icon: Banknote },
+                          { id: 'transfer', label: 'Transferencia', icon: Smartphone },
+                          { id: 'card', label: 'Tarjeta', icon: CreditCard },
+                          { id: 'credit', label: 'Crédito', icon: User }
+                        ].map(({ id, label, icon: Icon }) => (
+                          <button
+                            key={id}
+                            onClick={() => setPaymentMethod(id)}
+                            className={cn(
+                              'py-4 rounded-xl flex flex-col items-center gap-2 transition-all border-2',
+                              paymentMethod === id
+                                ? 'bg-green-500 text-white border-green-500'
+                                : theme === 'dark'
+                                  ? 'bg-gray-800 border-gray-700 text-gray-300 hover:border-green-500/50'
+                                  : 'bg-white border-gray-200 text-gray-700 hover:border-green-500/50'
+                            )}
+                          >
+                            <Icon className="w-6 h-6" />
+                            <span className="text-sm font-medium">{label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Payment Currency */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        Moneda de Pago
+                      </label>
+                      <div className="flex gap-3">
+                        {['USD', 'CUP', 'MLC'].map(currency => (
+                          <button
+                            key={currency}
+                            onClick={() => setPaymentCurrency(currency)}
+                            className={cn(
+                              'flex-1 py-3 rounded-xl font-medium transition-all border-2',
+                              paymentCurrency === currency
+                                ? 'bg-green-500 text-white border-green-500'
+                                : theme === 'dark'
+                                  ? 'bg-gray-800 border-gray-700 text-gray-300 hover:border-green-500/50'
+                                  : 'bg-white border-gray-200 text-gray-700 hover:border-green-500/50'
+                            )}
+                          >
+                            {currency}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Amount Tendered (for cash) */}
+                    {paymentMethod === 'cash' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                          Monto Recibido
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={amountTendered}
+                          onChange={(e) => setAmountTendered(e.target.value)}
+                          placeholder={total.toFixed(2)}
+                          className={cn(
+                            'w-full px-4 py-4 rounded-xl border text-xl font-mono focus:outline-none focus:ring-2',
+                            theme === 'dark'
+                              ? 'bg-gray-900 border-gray-700 text-white focus:border-green-500 focus:ring-green-500/20'
+                              : 'bg-white border-gray-300 text-gray-900 focus:border-green-500 focus:ring-green-500/20'
+                          )}
+                        />
+
+                        {/* Quick amounts */}
+                        <div className="flex gap-2 mt-3">
+                          {[total, Math.ceil(total / 10) * 10, Math.ceil(total / 50) * 50, Math.ceil(total / 100) * 100].filter((v, i, a) => a.indexOf(v) === i).slice(0, 4).map(amount => (
+                            <button
+                              key={amount}
+                              onClick={() => setAmountTendered(amount.toString())}
+                              className={cn(
+                                'flex-1 py-2.5 rounded-xl text-sm font-medium transition-all',
+                                amountTendered === amount.toString()
+                                  ? 'bg-green-500 text-white'
+                                  : theme === 'dark'
+                                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              )}
+                            >
+                              ${amount.toFixed(2)}
+                              {amount === total && <span className="block text-xs opacity-70">(exacto)</span>}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Change */}
+                        {amountTendered && parseFloat(amountTendered) > total && (
+                          <div className={cn(
+                            'mt-4 p-4 rounded-xl',
+                            theme === 'dark' ? 'bg-green-900/30' : 'bg-green-50'
+                          )}>
+                            <p className="text-sm text-green-600 dark:text-green-400">Cambio</p>
+                            <p className="text-3xl font-bold text-green-600 dark:text-green-400">
+                              ${(parseFloat(amountTendered) - total).toFixed(2)}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Reference (for transfer) */}
+                    {paymentMethod === 'transfer' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Referencia de Transferencia <span className="text-gray-400">(opcional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={paymentReference}
+                          onChange={(e) => setPaymentReference(e.target.value)}
+                          placeholder="Número de referencia o confirmación"
+                          className={cn(
+                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
+                            theme === 'dark'
+                              ? 'bg-gray-900 border-gray-700 text-white focus:border-green-500 focus:ring-green-500/20'
+                              : 'bg-white border-gray-300 text-gray-900 focus:border-green-500 focus:ring-green-500/20'
+                          )}
+                        />
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {/* Credit Payment Mode - Summary */}
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                      Resumen de Factura
+                    </h2>
+
+                    <div className={cn(
+                      'rounded-xl p-6',
+                      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+                    )}>
+                      {/* Customer Summary */}
+                      <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
                         <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-bold text-xl">
                           {selectedCustomer?.businessName.charAt(0)}
                         </div>
@@ -1713,46 +2012,52 @@ export default function CreateInvoicePage() {
                             {selectedCustomer?.businessName}
                           </p>
                           <p className="text-sm text-gray-500">{selectedCustomer?.code}</p>
-                          {selectedCustomer?.taxId && (
-                            <p className="text-xs text-gray-400">RUC/NIT: {selectedCustomer.taxId}</p>
-                          )}
+                        </div>
+                      </div>
+
+                      {/* Invoice Details */}
+                      <div className="space-y-4">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Productos</span>
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {lines.filter(l => l.quantity > 0).length} items
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xl font-bold">
+                          <span>Total</span>
+                          <span className="text-green-600">{formatCurrency(total)}</span>
+                        </div>
+
+                        <div className={cn(
+                          'mt-4 p-4 rounded-xl flex items-center gap-3',
+                          theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-50'
+                        )}>
+                          <Clock className="w-6 h-6 text-blue-500" />
+                          <div>
+                            <p className="font-medium text-blue-700 dark:text-blue-300">
+                              Términos de Pago: {paymentTerms === 'custom' ? 'Fecha específica' : `${paymentTerms} días`}
+                            </p>
+                            <p className="text-sm text-blue-600 dark:text-blue-400">
+                              Vencimiento: {formatDateSpanish(calculateDueDate(paymentTerms, customDueDate))}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className={cn(
+                          'p-4 rounded-xl flex items-start gap-3',
+                          theme === 'dark' ? 'bg-yellow-900/20' : 'bg-yellow-50'
+                        )}>
+                          <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                              Esta factura quedará en estado <strong>Pendiente de Pago</strong>.
+                              El cliente podrá pagar posteriormente.
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Products Summary */}
-                    <div className={cn(
-                      'rounded-xl p-4',
-                      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-                    )}>
-                      <h3 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                        <Package className="w-5 h-5 text-green-600" />
-                        Productos ({lines.filter(l => l.quantity > 0).length})
-                      </h3>
-                      <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                        {lines.filter(l => l.quantity > 0).map((line, index) => (
-                          <div key={index} className={cn(
-                            'flex justify-between items-center p-3 rounded-lg',
-                            theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-                          )}>
-                            <div className="flex items-center gap-2">
-                              <span className={cn(
-                                'w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium',
-                                theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
-                              )}>{line.quantity}</span>
-                              <span className={cn('font-medium text-sm', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                                {line.productName}
-                              </span>
-                            </div>
-                            <span className="font-semibold text-green-600">{formatCurrency(line.subtotal)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Column */}
-                  <div className="space-y-6">
                     {/* Deliveries Preview */}
                     <div className={cn(
                       'rounded-xl p-4',
@@ -1762,126 +2067,259 @@ export default function CreateInvoicePage() {
                         <Truck className="w-5 h-5" />
                         Entregas a generar ({deliveriesPreview.length})
                       </h3>
-                      <div className="space-y-3">
-                        {deliveriesPreview.map((delivery, index) => (
+                      <div className="space-y-2">
+                        {deliveriesPreview.map((delivery) => (
                           <div
                             key={delivery.warehouseId}
                             className={cn(
-                              'p-3 rounded-lg',
+                              'p-3 rounded-lg flex items-center justify-between',
                               theme === 'dark' ? 'bg-gray-800' : 'bg-white'
                             )}
                           >
-                            <div className="flex items-center gap-2 mb-2">
+                            <div className="flex items-center gap-2">
                               <Warehouse className="w-4 h-4 text-blue-500" />
                               <span className="font-medium text-sm text-gray-900 dark:text-white">
                                 {delivery.warehouseName}
                               </span>
                             </div>
-                            <div className="text-xs text-gray-500 space-y-1">
-                              {delivery.products.map((p, i) => (
-                                <div key={i}>{p.quantity}x {p.name}</div>
-                              ))}
-                            </div>
+                            <span className="text-sm text-gray-500">
+                              {delivery.products.reduce((sum, p) => sum + p.quantity, 0)} productos
+                            </span>
                           </div>
                         ))}
-                        {deliveriesPreview.length === 0 && (
-                          <p className="text-sm text-gray-500 text-center py-2">
-                            No se generaran entregas (sin productos con cantidades)
-                          </p>
-                        )}
                       </div>
                     </div>
+                  </>
+                )}
+              </motion.div>
+            )}
 
-                    {/* Totals */}
-                    <div className={cn(
-                      'rounded-xl p-4',
-                      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-                    )}>
-                      <h3 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                        <CreditCard className="w-5 h-5 text-green-600" />
-                        Resumen
-                      </h3>
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Subtotal</span>
-                          <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(subtotal)}</span>
-                        </div>
-                        {discountPercent > 0 && (
-                          <div className="flex justify-between text-sm text-green-600">
-                            <span>Descuento ({discountPercent}%)</span>
-                            <span>-{formatCurrency(globalDiscount)}</span>
-                          </div>
-                        )}
-                        <div className={cn(
-                          'flex justify-between text-xl font-bold pt-3 border-t',
-                          theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                        )}>
-                          <span>Total</span>
-                          <span className="text-green-600">{formatCurrency(total)}</span>
-                        </div>
-                      </div>
+            {/* Step 5: Print/Confirmation */}
+            {currentStep === 'print' && createdInvoice && (
+              <motion.div
+                key="step5"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="space-y-6 text-center"
+              >
+                {/* Success Icon */}
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', delay: 0.2 }}
+                  className="w-20 h-20 mx-auto rounded-full bg-green-500 flex items-center justify-center"
+                >
+                  <CheckCircle className="w-10 h-10 text-white" />
+                </motion.div>
+
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                    {createdInvoice.paymentStatus === 'paid' ? 'Factura Creada y Pagada' : 'Factura Creada'}
+                  </h2>
+                  <p className="text-gray-500">
+                    La factura ha sido creada exitosamente
+                  </p>
+                </div>
+
+                {/* Invoice Details */}
+                <div className={cn(
+                  'rounded-xl p-6 max-w-md mx-auto',
+                  theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+                )}>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Factura</span>
+                      <span className="font-bold text-gray-900 dark:text-white">{createdInvoice.invoiceNumber}</span>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Cliente</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{createdInvoice.customerName}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Total</span>
+                      <span className="font-bold text-green-600">{formatCurrency(createdInvoice.total)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-500">Estado</span>
+                      <span className={cn(
+                        'px-3 py-1 rounded-full text-sm font-medium',
+                        createdInvoice.paymentStatus === 'paid'
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400'
+                          : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400'
+                      )}>
+                        {createdInvoice.paymentStatus === 'paid' ? 'Pagada' : 'Pendiente de Pago'}
+                      </span>
+                    </div>
+                    {createdInvoice.dueDate && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Vencimiento</span>
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {formatDateSpanish(createdInvoice.dueDate)}
+                        </span>
+                      </div>
+                    )}
                   </div>
+                </div>
+
+                {/* Print Options */}
+                <div className="space-y-3 max-w-md mx-auto">
+                  <p className="text-sm text-gray-500 font-medium">¿Desea imprimir?</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => {
+                        window.open(`/dashboard/market/wholesale/invoices/${createdInvoice.id}/print?format=receipt`, '_blank')
+                      }}
+                      className={cn(
+                        'py-4 px-4 rounded-xl flex flex-col items-center gap-2 transition-all border-2',
+                        theme === 'dark'
+                          ? 'bg-gray-800 border-gray-700 text-gray-300 hover:border-green-500'
+                          : 'bg-white border-gray-200 text-gray-700 hover:border-green-500'
+                      )}
+                    >
+                      <Receipt className="w-6 h-6" />
+                      <span className="font-medium">Imprimir Recibo</span>
+                      <span className="text-xs text-gray-400">(Ticket 80mm)</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        window.open(`/dashboard/market/wholesale/invoices/${createdInvoice.id}/print?format=letter`, '_blank')
+                      }}
+                      className={cn(
+                        'py-4 px-4 rounded-xl flex flex-col items-center gap-2 transition-all border-2',
+                        theme === 'dark'
+                          ? 'bg-gray-800 border-gray-700 text-gray-300 hover:border-green-500'
+                          : 'bg-white border-gray-200 text-gray-700 hover:border-green-500'
+                      )}
+                    >
+                      <FileText className="w-6 h-6" />
+                      <span className="font-medium">Imprimir Factura</span>
+                      <span className="text-xs text-gray-400">(Tamaño Carta)</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="space-y-3 max-w-md mx-auto pt-4">
+                  <button
+                    onClick={() => {
+                      // Reset all state and start fresh
+                      setSelectedCustomer(null)
+                      setLines([])
+                      setPaymentTerms('immediate')
+                      setCustomDueDate('')
+                      setNotes('')
+                      setInternalNotes('')
+                      setPaymentMethod('cash')
+                      setPaymentCurrency('USD')
+                      setAmountTendered('')
+                      setPaymentReference('')
+                      setCreatedInvoice(null)
+                      setCurrentStep('customer')
+                    }}
+                    className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Crear Nueva Factura
+                  </button>
+
+                  {createdInvoice.paymentStatus !== 'paid' && (
+                    <button
+                      onClick={() => {
+                        router.push(`/dashboard/market/wholesale/invoices/${createdInvoice.id}/payment`)
+                      }}
+                      className={cn(
+                        'w-full py-3 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 border-2',
+                        theme === 'dark'
+                          ? 'border-green-500 text-green-500 hover:bg-green-500/10'
+                          : 'border-green-600 text-green-600 hover:bg-green-50'
+                      )}
+                    >
+                      <CreditCard className="w-5 h-5" />
+                      Registrar Pago
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      router.push(`/dashboard/market/wholesale/invoices/${createdInvoice.id}`)
+                    }}
+                    className={cn(
+                      'w-full py-3 rounded-xl font-medium transition-colors',
+                      theme === 'dark'
+                        ? 'text-gray-400 hover:text-white hover:bg-gray-800'
+                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                    )}
+                  >
+                    Ver Detalle de Factura
+                  </button>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* Navigation Buttons */}
-          <div className={cn(
-            "flex items-center justify-between mt-8 pt-6 border-t",
-            theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-          )}>
-            <motion.button
-              onClick={prevStep}
-              disabled={currentStepIndex === 0}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-colors",
-                currentStepIndex === 0
-                  ? 'text-gray-400 cursor-not-allowed'
-                  : theme === 'dark'
-                    ? 'text-gray-300 hover:bg-gray-700'
-                    : 'text-gray-600 hover:bg-gray-100'
-              )}
-              whileHover={currentStepIndex > 0 ? { scale: 1.02 } : {}}
-              whileTap={currentStepIndex > 0 ? { scale: 0.98 } : {}}
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Anterior
-            </motion.button>
-
-            {currentStepIndex < STEPS.length - 1 ? (
+          {/* Navigation Buttons - Hide on print step */}
+          {currentStep !== 'print' && (
+            <div className={cn(
+              "flex items-center justify-between mt-8 pt-6 border-t",
+              theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+            )}>
               <motion.button
-                onClick={nextStep}
-                className="flex items-center gap-2 px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-colors"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                Siguiente
-                <ArrowRight className="w-5 h-5" />
-              </motion.button>
-            ) : (
-              <motion.button
-                onClick={handleSubmit}
-                disabled={saving}
-                className="flex items-center gap-2 px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
-                whileHover={!saving ? { scale: 1.02 } : {}}
-                whileTap={!saving ? { scale: 0.98 } : {}}
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Creando...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-5 h-5" />
-                    Crear Factura
-                  </>
+                onClick={prevStep}
+                disabled={currentStepIndex === 0}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-colors",
+                  currentStepIndex === 0
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : theme === 'dark'
+                      ? 'text-gray-300 hover:bg-gray-700'
+                      : 'text-gray-600 hover:bg-gray-100'
                 )}
+                whileHover={currentStepIndex > 0 ? { scale: 1.02 } : {}}
+                whileTap={currentStepIndex > 0 ? { scale: 0.98 } : {}}
+              >
+                <ArrowLeft className="w-5 h-5" />
+                Anterior
               </motion.button>
-            )}
-          </div>
+
+              {currentStep === 'payment' ? (
+                <motion.button
+                  onClick={handleSubmit}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
+                  whileHover={!saving ? { scale: 1.02 } : {}}
+                  whileTap={!saving ? { scale: 0.98 } : {}}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Procesando...
+                    </>
+                  ) : paymentTerms === 'immediate' ? (
+                    <>
+                      <CheckCircle className="w-5 h-5" />
+                      Confirmar Pago
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-5 h-5" />
+                      Crear Factura
+                    </>
+                  )}
+                </motion.button>
+              ) : (
+                <motion.button
+                  onClick={nextStep}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-colors"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Siguiente
+                  <ArrowRight className="w-5 h-5" />
+                </motion.button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
