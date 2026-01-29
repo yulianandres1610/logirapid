@@ -146,9 +146,6 @@ export default function POSSessionsHistoryPage() {
   const [sessionOrders, setSessionOrders] = useState<Order[]>([])
   const [loadingOrders, setLoadingOrders] = useState(false)
 
-  // Order detail modal
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
-  const [loadingOrderDetails, setLoadingOrderDetails] = useState(false)
 
   const fetchSessions = async () => {
     setLoading(true)
@@ -205,21 +202,6 @@ export default function POSSessionsHistoryPage() {
     }
   }
 
-  const fetchOrderDetails = async (orderId: number) => {
-    setLoadingOrderDetails(true)
-    try {
-      const response = await fetch(`/api/market/pos/orders/${orderId}`)
-      const data = await response.json()
-      if (data.success) {
-        setSelectedOrder(data.data)
-      }
-    } catch (error) {
-      console.error('Error fetching order details:', error)
-    } finally {
-      setLoadingOrderDetails(false)
-    }
-  }
-
   useEffect(() => {
     fetchTerminals()
   }, [])
@@ -230,12 +212,12 @@ export default function POSSessionsHistoryPage() {
 
   const handleSelectSession = (session: Session) => {
     setSelectedSession(session)
-    setSelectedOrder(null)
     fetchSessionOrders(session.id)
   }
 
   const handleSelectOrder = (order: Order) => {
-    fetchOrderDetails(order.id)
+    // Navigate to order detail page
+    router.push(`/dashboard/market/pos/orders/${order.id}`)
   }
 
   const handleReprintReceipt = (order: Order) => {
@@ -247,11 +229,6 @@ export default function POSSessionsHistoryPage() {
   const closePanel = () => {
     setSelectedSession(null)
     setSessionOrders([])
-    setSelectedOrder(null)
-  }
-
-  const closeOrderModal = () => {
-    setSelectedOrder(null)
   }
 
   const formatDate = (dateStr: string) => {
@@ -913,265 +890,6 @@ export default function POSSessionsHistoryPage() {
           )}
         </AnimatePresence>
 
-        {/* Order Detail Modal */}
-        <AnimatePresence>
-          {selectedOrder && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={closeOrderModal}
-                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
-              />
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className={cn(
-                  'fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
-                  'w-[calc(100%-2rem)] max-w-3xl h-[calc(100%-2rem)] max-h-[90vh]',
-                  'z-[70] rounded-2xl shadow-2xl overflow-hidden flex flex-col',
-                  theme === 'dark' ? 'bg-gray-900' : 'bg-white'
-                )}
-              >
-                {loadingOrderDetails ? (
-                  <div className="flex items-center justify-center p-20">
-                    <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                  </div>
-                ) : (
-                  <>
-                    {/* Modal Header */}
-                    <div className={cn(
-                      'flex items-center justify-between px-6 py-4 border-b flex-shrink-0',
-                      theme === 'dark' ? 'border-gray-800 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
-                    )}>
-                      <div className="flex items-center gap-4">
-                        <div className={cn(
-                          'w-12 h-12 rounded-xl flex items-center justify-center',
-                          theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-50'
-                        )}>
-                          <FileText className="w-6 h-6 text-blue-500" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h2 className="text-xl font-bold">{selectedOrder.orderNumber}</h2>
-                            {getStatusBadge(selectedOrder.status)}
-                          </div>
-                          <p className="text-sm text-gray-500">
-                            {formatDate(selectedOrder.createdAt)} • {selectedOrder.createdByName}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={closeOrderModal}
-                        className={cn('p-2 rounded-lg transition-colors', theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-200')}
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    {/* Modal Content */}
-                    <div className="flex-1 overflow-auto p-6 space-y-6">
-                      {/* Customer Info */}
-                      {(selectedOrder.customer || selectedOrder.customerName) && (
-                        <div className={cn('rounded-xl p-4', theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50')}>
-                          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                            <User className="w-4 h-4" />
-                            Cliente
-                          </h3>
-                          <div className="grid grid-cols-3 gap-4 text-sm">
-                            <div>
-                              <p className="text-gray-500">Nombre</p>
-                              <p className="font-medium">{selectedOrder.customer?.name || selectedOrder.customerName || 'Cliente general'}</p>
-                            </div>
-                            {selectedOrder.customer?.phone && (
-                              <div>
-                                <p className="text-gray-500">Teléfono</p>
-                                <p className="font-medium">{selectedOrder.customer.phone}</p>
-                              </div>
-                            )}
-                            {selectedOrder.customer?.email && (
-                              <div>
-                                <p className="text-gray-500">Email</p>
-                                <p className="font-medium">{selectedOrder.customer.email}</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Products */}
-                      <div>
-                        <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                          <Package className="w-4 h-4" />
-                          Productos ({selectedOrder.lines?.length || 0})
-                        </h3>
-                        <div className={cn('rounded-xl border overflow-hidden', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
-                          <table className="w-full">
-                            <thead className={cn(theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50')}>
-                              <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Producto</th>
-                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Cant.</th>
-                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Precio</th>
-                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Desc.</th>
-                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
-                              </tr>
-                            </thead>
-                            <tbody className={cn('divide-y', theme === 'dark' ? 'divide-gray-700' : 'divide-gray-200')}>
-                              {selectedOrder.lines?.map(line => (
-                                <tr key={line.id}>
-                                  <td className="px-4 py-3">
-                                    <div>
-                                      <p className="font-medium">{line.productName}</p>
-                                      {line.productSku && (
-                                        <p className="text-xs text-gray-500">SKU: {line.productSku}</p>
-                                      )}
-                                      {line.promotionName && (
-                                        <span className="inline-flex items-center gap-1 text-xs text-green-500 mt-1">
-                                          <Tag className="w-3 h-3" />
-                                          {line.promotionName}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-3 text-center font-mono">{line.quantity}</td>
-                                  <td className="px-4 py-3 text-right">
-                                    <span className="font-mono">${line.unitPrice.toFixed(2)}</span>
-                                    {line.originalPrice && line.originalPrice !== line.unitPrice && (
-                                      <span className="text-xs text-gray-500 line-through block">
-                                        ${line.originalPrice.toFixed(2)}
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-3 text-right">
-                                    {line.discountAmount > 0 ? (
-                                      <span className="text-amber-500 font-mono">-${line.discountAmount.toFixed(2)}</span>
-                                    ) : (
-                                      <span className="text-gray-400">-</span>
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-3 text-right font-mono font-bold">${line.total.toFixed(2)}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-
-                      {/* Order Totals */}
-                      <div className={cn('rounded-xl p-4', theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50')}>
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-gray-500">Subtotal</span>
-                            <span className="font-mono">${selectedOrder.subtotal.toFixed(2)}</span>
-                          </div>
-                          {selectedOrder.discountAmount > 0 && (
-                            <div className="flex justify-between text-sm text-amber-500">
-                              <span className="flex items-center gap-1">
-                                <Percent className="w-3 h-3" />
-                                Descuento
-                              </span>
-                              <span className="font-mono">-${selectedOrder.discountAmount.toFixed(2)}</span>
-                            </div>
-                          )}
-                          {selectedOrder.taxAmount > 0 && (
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">Impuestos</span>
-                              <span className="font-mono">${selectedOrder.taxAmount.toFixed(2)}</span>
-                            </div>
-                          )}
-                          <div className={cn('pt-2 border-t flex justify-between', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
-                            <span className="font-bold text-lg">TOTAL</span>
-                            <span className="font-bold text-lg font-mono text-green-500">
-                              {formatCurrency(selectedOrder.totalAmount, selectedOrder.currency)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Payments */}
-                      <div>
-                        <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                          <CreditCard className="w-4 h-4" />
-                          Pagos Recibidos ({selectedOrder.payments?.length || 0})
-                        </h3>
-                        <div className="space-y-2">
-                          {selectedOrder.payments?.map((payment, i) => (
-                            <div
-                              key={i}
-                              className={cn(
-                                'rounded-xl p-4 border',
-                                theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'
-                              )}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <div className={cn(
-                                    'w-10 h-10 rounded-lg flex items-center justify-center',
-                                    payment.method === 'cash'
-                                      ? 'bg-green-500/20 text-green-500'
-                                      : payment.method === 'card'
-                                      ? 'bg-blue-500/20 text-blue-500'
-                                      : 'bg-purple-500/20 text-purple-500'
-                                  )}>
-                                    {getPaymentMethodIcon(payment.method)}
-                                  </div>
-                                  <div>
-                                    <p className="font-medium">{getPaymentMethodLabel(payment.method)}</p>
-                                    <p className="text-xs text-gray-500">
-                                      {formatTime(payment.createdAt)}
-                                      {payment.reference && ` • Ref: ${payment.reference}`}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <p className="font-bold text-lg font-mono">
-                                    {formatCurrency(payment.amount, payment.currency)}
-                                  </p>
-                                  {payment.changeAmount && payment.changeAmount > 0 && (
-                                    <div className="text-xs text-amber-500 mt-1">
-                                      <span>Entregó: {formatCurrency(payment.amountTendered || 0, payment.currency)}</span>
-                                      <span className="mx-1">•</span>
-                                      <span>Cambio: {formatCurrency(payment.changeAmount, payment.currency)}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Modal Footer */}
-                    <div className={cn(
-                      'flex items-center justify-between px-6 py-4 border-t flex-shrink-0',
-                      theme === 'dark' ? 'border-gray-800 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
-                    )}>
-                      <button
-                        onClick={closeOrderModal}
-                        className={cn(
-                          'px-4 py-2.5 rounded-xl font-medium transition-colors',
-                          theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
-                        )}
-                      >
-                        Cerrar
-                      </button>
-                      <button
-                        onClick={() => handleReprintReceipt(selectedOrder)}
-                        className="px-6 py-2.5 rounded-xl font-medium bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
-                      >
-                        <Printer className="w-4 h-4" />
-                        Reimprimir Recibo
-                      </button>
-                    </div>
-                  </>
-                )}
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
       </DashboardLayout>
     </ProtectedRoute>
   )
