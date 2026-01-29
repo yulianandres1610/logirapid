@@ -21,7 +21,8 @@ import {
   Calendar,
   FileText,
   ShoppingCart,
-  CheckCircle
+  CheckCircle,
+  DollarSign
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -58,10 +59,11 @@ interface QuoteLine {
   productSku: string
   quantity: number
   unitPrice: number
+  unitPriceCup: number // Selling price in CUP (BCC rate)
   originalPrice: number
-  discountPercent: number
-  discountAmount: number
   subtotal: number
+  subtotalCup: number // Subtotal in CUP
+  costPrice: number
   profitMargin: number
   hasPricelistPrice: boolean
   pricelistDiscountInfo: string | null
@@ -131,13 +133,31 @@ export default function CreateQuotePage() {
   const [pricelistItems, setPricelistItems] = useState<PricelistItem[]>([])
   const [loadingPricelist, setLoadingPricelist] = useState(false)
 
+  // Exchange rates
+  const [exchangeRateBCC, setExchangeRateBCC] = useState(411) // BCC rate for selling
+
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
 
   useEffect(() => {
     fetchCustomers()
     fetchWarehouses()
     fetchProducts()
+    fetchExchangeRates()
   }, [])
+
+  const fetchExchangeRates = async () => {
+    try {
+      const response = await fetch('/api/market/pos/exchange-rates')
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && result.rates) {
+          setExchangeRateBCC(result.rates.CUP_BCC || 411)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching exchange rates:', error)
+    }
+  }
 
   useEffect(() => {
     if (preselectedCustomerId && customers.length > 0) {
@@ -278,7 +298,8 @@ export default function CreateQuotePage() {
     if (existingIndex >= 0) {
       const newLines = [...lines]
       newLines[existingIndex].quantity += 1
-      newLines[existingIndex].subtotal = newLines[existingIndex].quantity * newLines[existingIndex].unitPrice * (1 - newLines[existingIndex].discountPercent / 100)
+      newLines[existingIndex].subtotal = newLines[existingIndex].quantity * newLines[existingIndex].unitPrice
+      newLines[existingIndex].subtotalCup = newLines[existingIndex].subtotal * exchangeRateBCC
       setLines(newLines)
     } else {
       // Check if there's a pricelist price for this product
@@ -302,10 +323,11 @@ export default function CreateQuotePage() {
         productSku: product.sku || '',
         quantity: 1,
         unitPrice,
+        unitPriceCup: unitPrice * exchangeRateBCC,
         originalPrice: product.sellingPrice,
-        discountPercent: 0,
-        discountAmount: 0,
         subtotal: unitPrice,
+        subtotalCup: unitPrice * exchangeRateBCC,
+        costPrice: product.costPrice,
         profitMargin,
         hasPricelistPrice: hasDiscount,
         pricelistDiscountInfo: discountInfo
@@ -317,18 +339,8 @@ export default function CreateQuotePage() {
     if (quantity < 1) return
     const newLines = [...lines]
     newLines[index].quantity = quantity
-    newLines[index].subtotal = quantity * newLines[index].unitPrice * (1 - newLines[index].discountPercent / 100)
-    setLines(newLines)
-  }
-
-  const updateLineDiscount = (index: number, discount: number) => {
-    const newLines = [...lines]
-    const line = newLines[index]
-    // Discount cannot exceed the profit margin
-    const maxDiscount = Math.max(0, line.profitMargin)
-    line.discountPercent = Math.max(0, Math.min(maxDiscount, discount))
-    line.discountAmount = line.quantity * line.unitPrice * line.discountPercent / 100
-    line.subtotal = line.quantity * line.unitPrice - line.discountAmount
+    newLines[index].subtotal = quantity * newLines[index].unitPrice
+    newLines[index].subtotalCup = newLines[index].subtotal * exchangeRateBCC
     setLines(newLines)
   }
 
@@ -384,9 +396,7 @@ export default function CreateQuotePage() {
             productSku: l.productSku,
             quantity: l.quantity,
             unitPrice: l.unitPrice,
-            originalPrice: l.originalPrice,
-            discountPercent: l.discountPercent,
-            discountAmount: l.discountAmount
+            originalPrice: l.originalPrice
           }))
         })
       })
@@ -410,6 +420,14 @@ export default function CreateQuotePage() {
       currency: 'USD',
       minimumFractionDigits: 2
     }).format(value)
+  }
+
+  const formatCUP = (value: number) => {
+    return new Intl.NumberFormat('es-CU', {
+      style: 'decimal',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(value) + ' CUP'
   }
 
   const filteredCustomers = customers.filter(c =>
@@ -723,15 +741,24 @@ export default function CreateQuotePage() {
                     transition={{ duration: 0.3 }}
                     className="space-y-6"
                   >
-                    <h2 className={cn(
-                      "text-xl font-bold flex items-center gap-3",
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
-                        <Package className="w-5 h-5 text-white" />
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                      <h2 className={cn(
+                        "text-xl font-bold flex items-center gap-3",
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                          <Package className="w-5 h-5 text-white" />
+                        </div>
+                        Agregar Productos
+                      </h2>
+                      <div className={cn(
+                        'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm',
+                        theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                      )}>
+                        <DollarSign className="w-4 h-4" />
+                        Tasa BCC: $1 = {exchangeRateBCC.toLocaleString()} CUP
                       </div>
-                      Agregar Productos
-                    </h2>
+                    </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       {/* Product Search */}
@@ -823,11 +850,24 @@ export default function CreateQuotePage() {
                                   theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white'
                                 )}
                               >
-                                <div className="flex items-center justify-between mb-3">
-                                  <p className={cn(
-                                    'font-medium text-sm',
-                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                  )}>{line.productName}</p>
+                                <div className="flex items-center justify-between mb-2">
+                                  <div>
+                                    <p className={cn(
+                                      'font-medium text-sm',
+                                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                    )}>{line.productName}</p>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      {line.hasPricelistPrice ? (
+                                        <>
+                                          <span className="text-xs text-gray-400 line-through">{formatCurrency(line.originalPrice)}</span>
+                                          <span className="text-xs text-green-600 font-medium">{formatCurrency(line.unitPrice)}</span>
+                                        </>
+                                      ) : (
+                                        <span className="text-xs text-green-600 font-medium">{formatCurrency(line.unitPrice)}</span>
+                                      )}
+                                      <span className="text-xs text-gray-500">| {formatCUP(line.unitPriceCup)}</span>
+                                    </div>
+                                  </div>
                                   <button
                                     onClick={() => removeLine(index)}
                                     className="p-1.5 rounded-lg text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
@@ -865,24 +905,14 @@ export default function CreateQuotePage() {
                                       <Plus className="w-3.5 h-3.5" />
                                     </button>
                                   </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <Percent className="w-3.5 h-3.5 text-gray-400" />
-                                    <input
-                                      type="number"
-                                      value={line.discountPercent}
-                                      onChange={(e) => updateLineDiscount(index, parseFloat(e.target.value) || 0)}
-                                      className={cn(
-                                        'w-14 text-center px-2 py-1.5 rounded-lg border text-sm',
-                                        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'
-                                      )}
-                                      min="0"
-                                      max={Math.max(0, line.profitMargin)}
-                                      title={`Máx: ${line.profitMargin.toFixed(0)}% (margen)`}
-                                    />
+                                  <div className="ml-auto text-right">
+                                    <p className="font-bold text-green-600">
+                                      {formatCurrency(line.subtotal)}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                      {formatCUP(line.subtotalCup)}
+                                    </p>
                                   </div>
-                                  <p className="font-bold text-green-600 ml-auto">
-                                    {formatCurrency(line.subtotal)}
-                                  </p>
                                 </div>
                               </motion.div>
                             ))
@@ -895,8 +925,14 @@ export default function CreateQuotePage() {
                             theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                           )}>
                             <div className="flex justify-between items-center text-lg font-bold">
-                              <span>Subtotal:</span>
+                              <span>Subtotal USD:</span>
                               <span className="text-green-600">{formatCurrency(subtotal)}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm mt-1">
+                              <span className="text-gray-500">Subtotal CUP:</span>
+                              <span className={cn(
+                                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                              )}>{formatCUP(subtotal * exchangeRateBCC)}</span>
                             </div>
                           </div>
                         )}
@@ -1082,8 +1118,14 @@ export default function CreateQuotePage() {
                     )}>
                       <div className="space-y-2">
                         <div className="flex justify-between">
-                          <span>Subtotal:</span>
+                          <span>Subtotal USD:</span>
                           <span>{formatCurrency(subtotal)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500">Subtotal CUP:</span>
+                          <span className={cn(
+                            theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                          )}>{formatCUP(subtotal * exchangeRateBCC)}</span>
                         </div>
                         {discountPercent > 0 && (
                           <div className="flex justify-between text-red-500">
@@ -1092,8 +1134,14 @@ export default function CreateQuotePage() {
                           </div>
                         )}
                         <div className="flex justify-between text-xl font-bold pt-2 border-t border-green-300 dark:border-green-800">
-                          <span>Total:</span>
+                          <span>Total USD:</span>
                           <span className="text-green-600">{formatCurrency(total)}</span>
+                        </div>
+                        <div className="flex justify-between text-lg font-semibold">
+                          <span className="text-gray-500">Total CUP:</span>
+                          <span className={cn(
+                            theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                          )}>{formatCUP(total * exchangeRateBCC)}</span>
                         </div>
                       </div>
                     </div>

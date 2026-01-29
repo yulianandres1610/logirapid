@@ -88,16 +88,16 @@ interface InvoiceLine {
   productSku: string
   quantity: number
   unitPrice: number
+  unitPriceCup: number // Selling price in CUP (BCC rate)
   previousUnitPrice: number // For animation - track previous price
   costPrice: number
   originalPrice: number // Base selling price before any pricelist discounts
-  discountPercent: number
-  discountAmount: number
   subtotal: number
+  subtotalCup: number // Subtotal in CUP
   warehouseQuantities: WarehouseQuantities
   warehouseStock: WarehouseStock[]
   profitMargin: number
-  costPriceCup: number
+  costPriceCup: number // Cost in CUP (ElToque rate)
   hasPricelistPrice: boolean // Whether price comes from pricelist
   pricelistDiscountInfo: string | null // Info about pricelist discount applied
   currentTierMinQty: number // Current tier minimum quantity for display
@@ -153,7 +153,8 @@ export default function CreateInvoicePage() {
   const [pricelists, setPricelists] = useState<Pricelist[]>([])
   const [loadingCustomers, setLoadingCustomers] = useState(true)
   const [loadingProducts, setLoadingProducts] = useState(true)
-  const [exchangeRate, setExchangeRate] = useState(340)
+  const [exchangeRate, setExchangeRate] = useState(340) // ElToque rate for cost
+  const [exchangeRateBCC, setExchangeRateBCC] = useState(411) // BCC rate for selling
   const [pricelistItems, setPricelistItems] = useState<PricelistItem[]>([])
   const [loadingPricelist, setLoadingPricelist] = useState(false)
 
@@ -192,7 +193,23 @@ export default function CreateInvoicePage() {
     fetchWarehouses()
     fetchProductsWithStock()
     fetchPricelists()
+    fetchExchangeRates()
   }, [])
+
+  const fetchExchangeRates = async () => {
+    try {
+      const response = await fetch('/api/market/pos/exchange-rates')
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && result.rates) {
+          setExchangeRate(result.rates.CUP || 340)
+          setExchangeRateBCC(result.rates.CUP_BCC || 411)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching exchange rates:', error)
+    }
+  }
 
   useEffect(() => {
     if (preselectedCustomerId && customers.length > 0) {
@@ -427,12 +444,12 @@ export default function CreateInvoicePage() {
       productSku: product.sku || '',
       quantity: 0, // Will be calculated from warehouse quantities
       unitPrice,
+      unitPriceCup: unitPrice * exchangeRateBCC, // BCC rate for selling
       previousUnitPrice: unitPrice,
       costPrice: product.costPrice,
       originalPrice: product.sellingPrice, // Keep base price for reference
-      discountPercent: 0, // Additional discount on top of pricelist price
-      discountAmount: 0,
       subtotal: 0,
+      subtotalCup: 0,
       warehouseQuantities,
       warehouseStock,
       profitMargin,
@@ -485,6 +502,7 @@ export default function CreateInvoicePage() {
     }
 
     line.unitPrice = newPrice
+    line.unitPriceCup = newPrice * exchangeRateBCC // Update CUP price with BCC rate
     line.hasPricelistPrice = hasDiscount
     line.pricelistDiscountInfo = discountInfo
     line.currentTierMinQty = minQuantity
@@ -494,22 +512,10 @@ export default function CreateInvoicePage() {
       ? ((newPrice - line.costPrice) / line.costPrice) * 100
       : 0
 
-    // Recalculate subtotal with new price
-    const discountMultiplier = 1 - line.discountPercent / 100
-    line.subtotal = line.quantity * line.unitPrice * discountMultiplier
-    line.discountAmount = line.quantity * line.unitPrice * (line.discountPercent / 100)
+    // Recalculate subtotal with new price (no manual discounts)
+    line.subtotal = line.quantity * line.unitPrice
+    line.subtotalCup = line.subtotal * exchangeRateBCC
 
-    setLines(newLines)
-  }
-
-  const updateLineDiscount = (index: number, discount: number) => {
-    const newLines = [...lines]
-    const line = newLines[index]
-    // Discount cannot exceed the profit margin
-    const maxDiscount = Math.max(0, line.profitMargin)
-    line.discountPercent = Math.max(0, Math.min(maxDiscount, discount))
-    line.discountAmount = line.quantity * line.unitPrice * line.discountPercent / 100
-    line.subtotal = line.quantity * line.unitPrice - line.discountAmount
     setLines(newLines)
   }
 
@@ -685,8 +691,6 @@ export default function CreateInvoicePage() {
             quantity: l.quantity,
             unitPrice: l.unitPrice,
             originalPrice: l.originalPrice,
-            discountPercent: l.discountPercent,
-            discountAmount: l.discountAmount,
             warehouseQuantities: l.warehouseQuantities
           }))
         })
@@ -1001,7 +1005,7 @@ export default function CreateInvoicePage() {
                     theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
                   )}>
                     <DollarSign className="w-4 h-4" />
-                    Tasa: $1 = {exchangeRate.toLocaleString()} CUP
+                    Tasa BCC: $1 = {exchangeRateBCC.toLocaleString()} CUP
                   </div>
                 </div>
 
@@ -1087,10 +1091,8 @@ export default function CreateInvoicePage() {
                   )}>
                     <div className="col-span-1">#</div>
                     <div className="col-span-3">Producto</div>
-                    <div className="col-span-1 text-right">P.Costo</div>
-                    <div className="col-span-1 text-right">P.Venta</div>
-                    <div className="col-span-1 text-right">Margen</div>
-                    <div className="col-span-1 text-center">Desc%</div>
+                    <div className="col-span-2 text-right">Precio USD</div>
+                    <div className="col-span-2 text-right">Precio CUP</div>
                     <div className="col-span-1 text-right">Cant.</div>
                     <div className="col-span-2 text-right">Total</div>
                     <div className="col-span-1"></div>
@@ -1131,12 +1133,21 @@ export default function CreateInvoicePage() {
                                 theme === 'dark' ? 'text-white' : 'text-gray-900'
                               )}>{line.productName}</p>
                               <p className="text-xs text-gray-500">{line.productSku}</p>
-                              <p className="text-xs text-gray-400">{formatCUP(line.costPriceCup)}</p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-xs text-gray-400">Costo: {formatCurrency(line.costPrice)}</span>
+                                <span className={cn(
+                                  'text-[10px] px-1 py-0.5 rounded',
+                                  line.profitMargin >= 20
+                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400'
+                                    : line.profitMargin >= 10
+                                      ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400'
+                                      : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400'
+                                )}>
+                                  {line.profitMargin.toFixed(0)}%
+                                </span>
+                              </div>
                             </div>
-                            <div className="col-span-1 text-right text-sm text-gray-600 dark:text-gray-400">
-                              {formatCurrency(line.costPrice)}
-                            </div>
-                            <div className="col-span-1 text-right">
+                            <div className="col-span-2 text-right">
                               {line.hasPricelistPrice ? (
                                 <div title={line.pricelistDiscountInfo || ''}>
                                   <span className="text-xs text-gray-400 line-through block">
@@ -1168,31 +1179,19 @@ export default function CreateInvoicePage() {
                                 </span>
                               )}
                             </div>
-                            <div className="col-span-1 text-right">
-                              <span className={cn(
-                                'text-xs px-1.5 py-0.5 rounded',
-                                line.profitMargin >= 20
-                                  ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400'
-                                  : line.profitMargin >= 10
-                                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400'
-                                    : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400'
-                              )}>
-                                {line.profitMargin.toFixed(0)}%
-                              </span>
-                            </div>
-                            <div className="col-span-1 text-center" onClick={e => e.stopPropagation()}>
-                              <input
-                                type="number"
-                                value={line.discountPercent}
-                                onChange={(e) => updateLineDiscount(index, parseFloat(e.target.value) || 0)}
+                            <div className="col-span-2 text-right">
+                              <motion.span
+                                key={`cup-${line.productId}-${line.unitPriceCup}`}
+                                initial={line.priceJustChanged ? { scale: 1.2 } : false}
+                                animate={{ scale: 1 }}
+                                transition={{ duration: 0.3, type: 'spring' }}
                                 className={cn(
-                                  'w-14 text-center px-1 py-1 rounded border text-sm',
-                                  theme === 'dark' ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'
+                                  'text-sm font-medium block',
+                                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                                 )}
-                                min="0"
-                                max={Math.max(0, line.profitMargin)}
-                                title={`Máximo: ${line.profitMargin.toFixed(0)}% (margen)`}
-                              />
+                              >
+                                {formatCUP(line.unitPriceCup)}
+                              </motion.span>
                             </div>
                             <div className="col-span-1 text-right">
                               <span className={cn(
@@ -1208,10 +1207,13 @@ export default function CreateInvoicePage() {
                                 initial={line.priceJustChanged ? { scale: 1.2 } : false}
                                 animate={{ scale: 1 }}
                                 transition={{ duration: 0.3, type: 'spring' }}
-                                className="font-bold text-green-600"
+                                className="font-bold text-green-600 block"
                               >
                                 {formatCurrency(line.subtotal)}
                               </motion.span>
+                              <span className="text-xs text-gray-500">
+                                {formatCUP(line.subtotalCup)}
+                              </span>
                             </div>
                             <div className="col-span-1 text-right" onClick={e => e.stopPropagation()}>
                               <button
@@ -1410,14 +1412,24 @@ export default function CreateInvoicePage() {
                       theme === 'dark' ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gray-50'
                     )}>
                       <div className="flex justify-end">
-                        <div className="w-64 space-y-2">
+                        <div className="w-72 space-y-2">
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-500">Subtotal:</span>
+                            <span className="text-gray-500">Subtotal USD:</span>
                             <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(subtotal)}</span>
                           </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Subtotal CUP:</span>
+                            <span className="font-medium text-gray-600 dark:text-gray-300">{formatCUP(subtotal * exchangeRateBCC)}</span>
+                          </div>
                           <div className="flex justify-between text-xl font-bold pt-2 border-t border-gray-200 dark:border-gray-700">
-                            <span>Total:</span>
+                            <span>Total USD:</span>
                             <span className="text-green-600">{formatCurrency(subtotal)}</span>
+                          </div>
+                          <div className="flex justify-between text-lg font-semibold">
+                            <span className="text-gray-500">Total CUP:</span>
+                            <span className={cn(
+                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                            )}>{formatCUP(subtotal * exchangeRateBCC)}</span>
                           </div>
                         </div>
                       </div>
