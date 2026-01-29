@@ -645,33 +645,16 @@ export async function DELETE(
     const companyId = cookieStore.get('user-company-id')?.value
     const authToken = cookieStore.get('auth-token')?.value
 
-    if (!companyId) {
-      return NextResponse.json({ success: false, error: 'Sin empresa asignada' }, { status: 403 })
-    }
-
     if (!authToken) {
       return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
     }
 
     // Get user info from token and verify admin role
-    let userId = 0
-    let userName = 'Sistema'
-    let userEmail = ''
     let userRole = ''
-
     try {
-      // Use the same fallback as login route for consistency
       const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
       const payload = jwt.verify(authToken, secret) as JWTPayload
-      userId = payload.userId
-      userEmail = payload.email
       userRole = payload.role
-
-      const userResult = await db.query(
-        'SELECT COALESCE(firstname || \' \' || lastname, email) as fullname FROM users WHERE id = $1',
-        [userId]
-      )
-      userName = userResult.rows[0]?.fullname || payload.email
     } catch (err) {
       console.error('[Product Delete] JWT verification error:', err)
       return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 })
@@ -692,10 +675,10 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'ID inválido' }, { status: 400 })
     }
 
-    // Get product info before deleting (including image_url)
+    // Get product info before deleting
     const checkResult = await db.query(
-      'SELECT id, name, image_url FROM market_products WHERE id = $1 AND company_id = $2',
-      [productId, parseInt(companyId)]
+      'SELECT id, name, image_url FROM market_products WHERE id = $1',
+      [productId]
     )
 
     if (checkResult.rows.length === 0) {
@@ -704,6 +687,7 @@ export async function DELETE(
 
     const productName = checkResult.rows[0].name
     const imageUrl = checkResult.rows[0].image_url
+    const deletions: string[] = []
 
     // Delete image from Supabase Storage if exists
     if (imageUrl && imageUrl.includes('supabase')) {
@@ -713,102 +697,89 @@ export async function DELETE(
 
         if (supabaseUrl && supabaseServiceKey) {
           const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-            auth: {
-              autoRefreshToken: false,
-              persistSession: false
-            }
+            auth: { autoRefreshToken: false, persistSession: false }
           })
 
-          // Extract the path from the URL
-          // URL format: https://xxx.supabase.co/storage/v1/object/public/company-documents/images/img-xxx.jpg
           const urlParts = imageUrl.split('/storage/v1/object/public/')
           if (urlParts.length === 2) {
-            const fullPath = urlParts[1] // e.g., "company-documents/images/img-xxx.jpg"
+            const fullPath = urlParts[1]
             const pathParts = fullPath.split('/')
-            const bucket = pathParts[0] // "company-documents"
-            const filePath = pathParts.slice(1).join('/') // "images/img-xxx.jpg"
+            const bucket = pathParts[0]
+            const filePath = pathParts.slice(1).join('/')
 
-            const { error: deleteError } = await supabase.storage
-              .from(bucket)
-              .remove([filePath])
-
-            if (deleteError) {
-              console.warn(`[Product Delete] Could not delete image from Supabase:`, deleteError.message)
-            } else {
-              console.log(`[Product Delete] Successfully deleted image from Supabase: ${filePath}`)
-            }
+            await supabase.storage.from(bucket).remove([filePath])
+            deletions.push('image: deleted')
           }
         }
-      } catch (imageError) {
-        console.warn('[Product Delete] Error deleting image from storage:', imageError)
-        // Continue with product deletion even if image deletion fails
+      } catch {
+        // Continue even if image deletion fails
       }
     }
 
-    // Log deletion before actually deleting
-    await logProductChange(
-      productId,
-      parseInt(companyId),
-      'deleted',
-      null,
-      productName,
-      null,
-      userId,
-      userName,
-      userEmail
+    // Get variant IDs for this product (to delete variant-related data)
+    const variantIds = await db.query(
+      'SELECT id FROM market_product_variants WHERE product_id = $1',
+      [productId]
     )
+    const variantIdList = variantIds.rows.map(r => r.id)
 
-    // Delete related records first (handle foreign key constraints)
-    // Order matters: delete from dependent tables first
+    // Delete all related records - no restrictions, like a migration
     const relatedTables = [
-      // Warehouse-related tables first
-      { table: 'market_stock_movements', column: 'product_id' },
-      { table: 'market_warehouse_operation_lines', column: 'product_id' },
-      { table: 'market_warehouse_stock', column: 'product_id' },
-      // Order and purchase lines
-      { table: 'market_order_lines', column: 'product_id' },
-      { table: 'market_purchase_lines', column: 'product_id' },
-      // Inventory movements
-      { table: 'market_inventory_movements', column: 'product_id' },
-      // Product-specific tables
-      { table: 'market_product_variants', column: 'product_id' },
-      { table: 'market_product_suppliers', column: 'product_id' },
-      { table: 'market_product_lots', column: 'product_id' },
-      // Odoo mapping
-      { table: 'odoo_product_mapping', column: 'local_product_id' },
-      // Change logs (don't delete, but set product_id to NULL or skip)
-      { table: 'market_product_change_logs', column: 'product_id', skipOnError: true }
+      // Variant-related first (using variant_id)
+      { table: 'market_variant_options', column: 'variant_id', ids: variantIdList },
+      { table: 'market_warehouse_stock', column: 'variant_id', ids: variantIdList },
+      // Product-related (using product_id)
+      { table: 'market_warehouse_stock', column: 'product_id', ids: [productId] },
+      { table: 'market_stock_movements', column: 'product_id', ids: [productId] },
+      { table: 'market_warehouse_operation_lines', column: 'product_id', ids: [productId] },
+      { table: 'market_order_lines', column: 'product_id', ids: [productId] },
+      { table: 'market_purchase_lines', column: 'product_id', ids: [productId] },
+      { table: 'market_inventory_movements', column: 'product_id', ids: [productId] },
+      { table: 'market_pricelist_items', column: 'product_id', ids: [productId] },
+      { table: 'market_product_variants', column: 'product_id', ids: [productId] },
+      { table: 'market_product_suppliers', column: 'product_id', ids: [productId] },
+      { table: 'market_product_lots', column: 'product_id', ids: [productId] },
+      { table: 'market_product_logs', column: 'product_id', ids: [productId] },
+      { table: 'market_product_change_logs', column: 'product_id', ids: [productId] },
+      { table: 'market_invoice_lines', column: 'product_id', ids: [productId] },
+      { table: 'market_invoice_delivery_lines', column: 'product_id', ids: [productId] },
+      { table: 'market_quote_lines', column: 'product_id', ids: [productId] },
+      { table: 'odoo_product_mapping', column: 'local_product_id', ids: [productId] },
     ]
 
-    for (const { table, column, skipOnError } of relatedTables) {
+    for (const { table, column, ids } of relatedTables) {
+      if (ids.length === 0) continue
       try {
-        const result = await db.query(`DELETE FROM ${table} WHERE ${column} = $1`, [productId])
+        const result = await db.query(
+          `DELETE FROM ${table} WHERE ${column} = ANY($1)`,
+          [ids]
+        )
         if (result.rowCount && result.rowCount > 0) {
+          deletions.push(`${table}: ${result.rowCount}`)
           console.log(`[Product Delete] Deleted ${result.rowCount} rows from ${table}`)
         }
-      } catch (e: any) {
-        // Table may not exist or other error
-        if (!skipOnError) {
-          console.warn(`[Product Delete] Could not delete from ${table}:`, e.message)
-        }
+      } catch {
+        // Table may not exist - ignore and continue
       }
     }
 
-    // Delete product
-    await db.query(
-      'DELETE FROM market_products WHERE id = $1 AND company_id = $2',
-      [productId, parseInt(companyId)]
-    )
+    // Delete the product itself
+    await db.query('DELETE FROM market_products WHERE id = $1', [productId])
+    deletions.push('product: 1')
+
+    console.log(`[Product Delete] Product "${productName}" (ID: ${productId}) deleted successfully`)
 
     return NextResponse.json({
       success: true,
-      message: 'Producto eliminado correctamente'
+      message: `Producto "${productName}" eliminado correctamente`,
+      productId,
+      deletions
     })
   } catch (error) {
     console.error('Error deleting product:', error)
     return NextResponse.json({
       success: false,
-      error: 'Error al eliminar producto'
+      error: error instanceof Error ? error.message : 'Error al eliminar producto'
     }, { status: 500 })
   }
 }
