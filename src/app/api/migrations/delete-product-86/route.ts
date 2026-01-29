@@ -27,57 +27,39 @@ export async function GET() {
     // Delete related data in order
     const deletions: string[] = []
 
-    // 1. Delete warehouse stock
-    const stockResult = await db.query(
-      'DELETE FROM market_warehouse_stock WHERE product_id = $1',
-      [productId]
-    )
-    deletions.push(`warehouse_stock: ${stockResult.rowCount} rows`)
+    // Delete all related records in order
+    const tablesToDelete = [
+      { name: 'market_pos_order_lines (variant)', query: 'DELETE FROM market_pos_order_lines WHERE variant_id IN (SELECT id FROM market_product_variants WHERE product_id = $1)' },
+      { name: 'market_warehouse_stock (variant)', query: 'DELETE FROM market_warehouse_stock WHERE variant_id IN (SELECT id FROM market_product_variants WHERE product_id = $1)' },
+      { name: 'market_variant_options', query: 'DELETE FROM market_variant_options WHERE variant_id IN (SELECT id FROM market_product_variants WHERE product_id = $1)' },
+      { name: 'market_pos_order_lines', query: 'DELETE FROM market_pos_order_lines WHERE product_id = $1' },
+      { name: 'market_warehouse_stock', query: 'DELETE FROM market_warehouse_stock WHERE product_id = $1' },
+      { name: 'market_stock_movements', query: 'DELETE FROM market_stock_movements WHERE product_id = $1' },
+      { name: 'market_warehouse_operation_lines', query: 'DELETE FROM market_warehouse_operation_lines WHERE product_id = $1' },
+      { name: 'market_order_lines', query: 'DELETE FROM market_order_lines WHERE product_id = $1' },
+      { name: 'market_purchase_lines', query: 'DELETE FROM market_purchase_lines WHERE product_id = $1' },
+      { name: 'market_inventory_movements', query: 'DELETE FROM market_inventory_movements WHERE product_id = $1' },
+      { name: 'market_pricelist_items', query: 'DELETE FROM market_pricelist_items WHERE product_id = $1' },
+      { name: 'market_invoice_lines', query: 'DELETE FROM market_invoice_lines WHERE product_id = $1' },
+      { name: 'market_invoice_delivery_lines', query: 'DELETE FROM market_invoice_delivery_lines WHERE product_id = $1' },
+      { name: 'market_quote_lines', query: 'DELETE FROM market_quote_lines WHERE product_id = $1' },
+      { name: 'market_product_variants', query: 'DELETE FROM market_product_variants WHERE product_id = $1' },
+      { name: 'market_product_logs', query: 'DELETE FROM market_product_logs WHERE product_id = $1' },
+      { name: 'market_product_change_logs', query: 'DELETE FROM market_product_change_logs WHERE product_id = $1' },
+    ]
 
-    // 2. Delete variant stock
-    const variantStockResult = await db.query(
-      'DELETE FROM market_warehouse_stock WHERE variant_id IN (SELECT id FROM market_product_variants WHERE product_id = $1)',
-      [productId]
-    )
-    deletions.push(`variant_stock: ${variantStockResult.rowCount} rows`)
-
-    // 3. Delete variant options
-    const variantOptionsResult = await db.query(
-      'DELETE FROM market_variant_options WHERE variant_id IN (SELECT id FROM market_product_variants WHERE product_id = $1)',
-      [productId]
-    )
-    deletions.push(`variant_options: ${variantOptionsResult.rowCount} rows`)
-
-    // 4. Delete variants
-    const variantsResult = await db.query(
-      'DELETE FROM market_product_variants WHERE product_id = $1',
-      [productId]
-    )
-    deletions.push(`variants: ${variantsResult.rowCount} rows`)
-
-    // 5. Delete product logs
-    try {
-      const logsResult = await db.query(
-        'DELETE FROM market_product_logs WHERE product_id = $1',
-        [productId]
-      )
-      deletions.push(`logs: ${logsResult.rowCount} rows`)
-    } catch {
-      // Table may not exist
+    for (const { name, query } of tablesToDelete) {
+      try {
+        const result = await db.query(query, [productId])
+        if (result.rowCount && result.rowCount > 0) {
+          deletions.push(`${name}: ${result.rowCount} rows`)
+        }
+      } catch {
+        // Table may not exist - continue
+      }
     }
 
-    // 6. Delete product change logs
-    try {
-      const changeLogsResult = await db.query(
-        'DELETE FROM market_product_change_logs WHERE product_id = $1',
-        [productId]
-      )
-      deletions.push(`change_logs: ${changeLogsResult.rowCount} rows`)
-    } catch {
-      // Table may not exist
-    }
-
-    // 7. Delete the product itself
+    // Delete the product itself
     const deleteResult = await db.query(
       'DELETE FROM market_products WHERE id = $1',
       [productId]

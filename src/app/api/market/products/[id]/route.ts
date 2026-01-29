@@ -728,11 +728,13 @@ export async function DELETE(
       // Variant-related first (using variant_id)
       { table: 'market_variant_options', column: 'variant_id', ids: variantIdList },
       { table: 'market_warehouse_stock', column: 'variant_id', ids: variantIdList },
+      { table: 'market_pos_order_lines', column: 'variant_id', ids: variantIdList },
       // Product-related (using product_id)
       { table: 'market_warehouse_stock', column: 'product_id', ids: [productId] },
       { table: 'market_stock_movements', column: 'product_id', ids: [productId] },
       { table: 'market_warehouse_operation_lines', column: 'product_id', ids: [productId] },
       { table: 'market_order_lines', column: 'product_id', ids: [productId] },
+      { table: 'market_pos_order_lines', column: 'product_id', ids: [productId] },
       { table: 'market_purchase_lines', column: 'product_id', ids: [productId] },
       { table: 'market_inventory_movements', column: 'product_id', ids: [productId] },
       { table: 'market_pricelist_items', column: 'product_id', ids: [productId] },
