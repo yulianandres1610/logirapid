@@ -84,13 +84,13 @@ export async function GET(
       productId: item.product_id,
       productName: item.product_name,
       productSku: item.product_sku,
-      productBasePrice: item.product_base_price ? parseFloat(item.product_base_price) : null,
+      basePrice: item.product_base_price ? parseFloat(item.product_base_price) : 0,
       categoryId: item.category_id,
       priceType: item.price_type,
       fixedPrice: item.fixed_price ? parseFloat(item.fixed_price) : null,
       discountPercent: item.discount_percent ? parseFloat(item.discount_percent) : null,
       discountAmount: item.discount_amount ? parseFloat(item.discount_amount) : null,
-      minQuantity: item.min_quantity,
+      minQuantity: item.min_quantity || 1,
       createdAt: item.created_at
     }))
 

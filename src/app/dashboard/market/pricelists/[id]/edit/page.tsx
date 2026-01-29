@@ -13,14 +13,13 @@ import {
   Search,
   DollarSign,
   Percent,
-  Check,
   ChevronDown,
   ChevronUp,
   Layers,
   Save,
   AlertCircle
 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 
@@ -50,9 +49,15 @@ interface SelectedProduct {
   expanded: boolean
 }
 
-export default function CreatePricelistPage() {
+export default function EditPricelistPage() {
   const { theme } = useTheme()
   const router = useRouter()
+  const params = useParams()
+  const pricelistId = params.id as string
+
+  // Loading state
+  const [loading, setLoading] = useState(true)
+  const [loadingProducts, setLoadingProducts] = useState(true)
 
   // Form state
   const [name, setName] = useState('')
@@ -65,7 +70,6 @@ export default function CreatePricelistPage() {
 
   // Products state
   const [products, setProducts] = useState<Product[]>([])
-  const [loadingProducts, setLoadingProducts] = useState(true)
   const [productSearch, setProductSearch] = useState('')
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([])
 
@@ -76,7 +80,8 @@ export default function CreatePricelistPage() {
 
   useEffect(() => {
     fetchProducts()
-  }, [])
+    fetchPricelist()
+  }, [pricelistId])
 
   const fetchProducts = async () => {
     try {
@@ -99,8 +104,62 @@ export default function CreatePricelistPage() {
     }
   }
 
+  const fetchPricelist = async () => {
+    try {
+      const response = await fetch(`/api/market/pricelists/${pricelistId}`)
+      const data = await response.json()
+      if (data.success) {
+        const pricelist = data.data
+        setName(pricelist.name)
+        setCode(pricelist.code || '')
+        setCurrency(pricelist.currency || 'USD')
+        setValidFrom(pricelist.validFrom?.split('T')[0] || '')
+        setValidUntil(pricelist.validUntil?.split('T')[0] || '')
+        setIsActive(pricelist.isActive)
+        setIsDefault(pricelist.isDefault)
+
+        // Convert items to selectedProducts format
+        if (pricelist.items && pricelist.items.length > 0) {
+          const productsMap = new Map<number, SelectedProduct>()
+
+          for (const item of pricelist.items) {
+            const existing = productsMap.get(item.productId)
+            const tier: PriceTier = {
+              id: `${item.productId}-${item.id || Date.now()}-${Math.random()}`,
+              minQuantity: item.minQuantity || 1,
+              priceType: item.priceType || 'fixed',
+              value: item.priceType === 'fixed' ? (item.fixedPrice || 0) :
+                     item.priceType === 'discount_percent' ? (item.discountPercent || 0) :
+                     (item.discountAmount || 0)
+            }
+
+            if (existing) {
+              existing.tiers.push(tier)
+            } else {
+              productsMap.set(item.productId, {
+                productId: item.productId,
+                productName: item.productName || 'Producto',
+                productSku: item.productSku || '',
+                basePrice: item.basePrice || 0,
+                imageUrl: item.imageUrl,
+                tiers: [tier],
+                expanded: false
+              })
+            }
+          }
+
+          setSelectedProducts(Array.from(productsMap.values()))
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching pricelist:', err)
+      setError('Error al cargar la lista de precios')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const addProduct = (product: Product) => {
-    // Check if already added
     if (selectedProducts.some(p => p.productId === product.id)) {
       return
     }
@@ -112,7 +171,7 @@ export default function CreatePricelistPage() {
       basePrice: product.sellingPrice,
       imageUrl: product.imageUrl,
       tiers: [{
-        id: `${product.id}-1`,
+        id: `${product.id}-${Date.now()}`,
         minQuantity: 1,
         priceType: 'fixed',
         value: product.sellingPrice
@@ -148,7 +207,6 @@ export default function CreatePricelistPage() {
   const removeTier = (productId: number, tierId: string) => {
     setSelectedProducts(prev => prev.map(p => {
       if (p.productId !== productId) return p
-      // Don't allow removing the last tier
       if (p.tiers.length <= 1) return p
       return { ...p, tiers: p.tiers.filter(t => t.id !== tierId) }
     }))
@@ -192,7 +250,6 @@ export default function CreatePricelistPage() {
     setError('')
 
     try {
-      // Convert selectedProducts to items format expected by API
       const items = selectedProducts.flatMap(p =>
         p.tiers.map(tier => ({
           productId: p.productId,
@@ -204,8 +261,8 @@ export default function CreatePricelistPage() {
         }))
       )
 
-      const response = await fetch('/api/market/pricelists', {
-        method: 'POST',
+      const response = await fetch(`/api/market/pricelists/${pricelistId}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
@@ -224,7 +281,7 @@ export default function CreatePricelistPage() {
       if (data.success) {
         router.push('/dashboard/market/pricelists')
       } else {
-        setError(data.error || 'Error al crear lista de precios')
+        setError(data.error || 'Error al actualizar lista de precios')
       }
     } catch (err) {
       setError('Error de conexión')
@@ -243,6 +300,17 @@ export default function CreatePricelistPage() {
   }, [products, productSearch, selectedProducts])
 
   const totalItems = selectedProducts.reduce((sum, p) => sum + p.tiers.length, 0)
+
+  if (loading) {
+    return (
+      <div className={cn(
+        "min-h-screen flex items-center justify-center",
+        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+      )}>
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    )
+  }
 
   return (
     <div className={cn(
@@ -270,7 +338,7 @@ export default function CreatePricelistPage() {
                 "text-xl font-bold",
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               )}>
-                Nueva Lista de Precios
+                Editar Lista de Precios
               </h1>
               <p className="text-sm text-gray-500">
                 {selectedProducts.length} productos, {totalItems} precios configurados
@@ -307,7 +375,7 @@ export default function CreatePricelistPage() {
               ) : (
                 <Save className="w-4 h-4" />
               )}
-              Guardar Lista
+              Guardar Cambios
             </motion.button>
           </div>
         </div>
