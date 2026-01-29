@@ -1833,18 +1833,6 @@ export default function POSTerminalPage() {
                       <p className="text-purple-600">${(product.price * USD_MLC).toFixed(2)} MLC</p>
                     </div>
 
-                    {/* Stock indicator - hidden on smallest screens */}
-                    {product.trackInventory && (
-                      <p className={cn(
-                        'text-[9px] lg:text-xs mt-0.5 hidden sm:block',
-                        product.stock <= 5
-                          ? 'text-amber-500'
-                          : 'text-gray-500'
-                      )}>
-                        Stock: {product.stock}
-                      </p>
-                    )}
-
                     {/* Info button - always visible for touch devices */}
                     <div
                       role="button"
