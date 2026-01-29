@@ -539,11 +539,13 @@ export default function EditPricelistPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left: Available Products */}
           <div className={cn(
-            'rounded-2xl border overflow-hidden h-fit lg:sticky lg:top-24',
+            'rounded-2xl border overflow-hidden lg:sticky lg:top-24 flex flex-col',
             theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-          )}>
+          )}
+          style={{ maxHeight: 'calc(100vh - 120px)' }}
+          >
             <div className={cn(
-              'px-4 py-3 border-b',
+              'px-4 py-3 border-b flex-shrink-0',
               theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'
             )}>
               <h2 className={cn(
@@ -555,8 +557,8 @@ export default function EditPricelistPage() {
               </h2>
             </div>
 
-            <div className="p-4">
-              <div className="relative mb-4">
+            <div className="p-4 flex flex-col flex-1 min-h-0">
+              <div className="relative mb-4 flex-shrink-0">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
@@ -577,7 +579,7 @@ export default function EditPricelistPage() {
                   <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
                 </div>
               ) : (
-                <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+                <div className="space-y-2 overflow-y-auto flex-1 min-h-0 pr-1">
                   {filteredProducts.length === 0 ? (
                     <div className="text-center py-8">
                       <Package className="w-10 h-10 mx-auto text-gray-400 mb-2" />
