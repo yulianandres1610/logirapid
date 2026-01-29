@@ -553,6 +553,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: Users, label: "Clientes", href: "/dashboard/market/wholesale/customers" },
         { icon: FileText, label: "Cotizaciones", href: "/dashboard/market/wholesale/quotes" },
         { icon: Receipt, label: "Facturas", href: "/dashboard/market/wholesale/invoices" },
+        { icon: Tag, label: "Listas de Precios", href: "/dashboard/market/pricelists" },
       ]
     },
     { icon: Store, label: "Marketplace", href: "/dashboard/market/marketplace" },
@@ -621,7 +622,6 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       ]
     },
     { icon: ClipboardCheck, label: "Auditoría", href: "/dashboard/market/audits", requiredRole: 'MARKET_MANAGER' },
-    { icon: Tag, label: "Listas de Precios", href: "/dashboard/market/pricelists" },
     { icon: Wallet, label: "Mi Wallet", href: "/dashboard/market/wallet" },
     { icon: Truck, label: "Entregas", href: "/dashboard/market/deliveries" },
     { icon: Settings, label: "Configuración", href: "/dashboard/market/settings" },
