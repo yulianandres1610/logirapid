@@ -562,8 +562,8 @@ export default function CreateQuotePage() {
   const formatCUP = (value: number) => {
     return new Intl.NumberFormat('es-CU', {
       style: 'decimal',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(value) + ' CUP'
   }
 
