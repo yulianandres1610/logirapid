@@ -88,6 +88,7 @@ interface InvoiceLine {
   productSku: string
   quantity: number
   unitPrice: number
+  previousUnitPrice: number // For animation - track previous price
   costPrice: number
   originalPrice: number // Base selling price before any pricelist discounts
   discountPercent: number
@@ -99,6 +100,8 @@ interface InvoiceLine {
   costPriceCup: number
   hasPricelistPrice: boolean // Whether price comes from pricelist
   pricelistDiscountInfo: string | null // Info about pricelist discount applied
+  currentTierMinQty: number // Current tier minimum quantity for display
+  priceJustChanged: boolean // Flag for animation
 }
 
 interface WarehouseInfo {
@@ -313,14 +316,19 @@ export default function CreateInvoicePage() {
   }
 
   // Calculate price from pricelist for a product
-  const getPricelistPrice = (productId: number, basePrice: number, quantity: number = 1): { price: number; hasDiscount: boolean; discountInfo: string | null } => {
+  const getPricelistPrice = (productId: number, basePrice: number, quantity: number = 1): {
+    price: number
+    hasDiscount: boolean
+    discountInfo: string | null
+    minQuantity: number
+  } => {
     // Find applicable pricelist items for this product (sorted by min_quantity desc to get best tier)
     const applicableItems = pricelistItems
       .filter(item => item.productId === productId && item.minQuantity <= quantity)
       .sort((a, b) => b.minQuantity - a.minQuantity)
 
     if (applicableItems.length === 0) {
-      return { price: basePrice, hasDiscount: false, discountInfo: null }
+      return { price: basePrice, hasDiscount: false, discountInfo: null, minQuantity: 1 }
     }
 
     const item = applicableItems[0] // Best applicable tier
@@ -330,25 +338,56 @@ export default function CreateInvoicePage() {
       return {
         price: item.fixedPrice,
         hasDiscount: true,
-        discountInfo: `Precio fijo de lista (-${discount.toFixed(0)}%)`
+        discountInfo: item.minQuantity > 1
+          ? `Desde ${item.minQuantity} uds: $${item.fixedPrice.toFixed(2)} (-${discount.toFixed(0)}%)`
+          : `Precio de lista (-${discount.toFixed(0)}%)`,
+        minQuantity: item.minQuantity
       }
     } else if (item.priceType === 'discount_percent' && item.discountPercent !== null) {
       const discountedPrice = basePrice * (1 - item.discountPercent / 100)
       return {
         price: discountedPrice,
         hasDiscount: true,
-        discountInfo: `${item.discountPercent}% descuento de lista`
+        discountInfo: item.minQuantity > 1
+          ? `Desde ${item.minQuantity} uds: ${item.discountPercent}% desc.`
+          : `${item.discountPercent}% descuento de lista`,
+        minQuantity: item.minQuantity
       }
     } else if (item.priceType === 'discount_amount' && item.discountAmount !== null) {
       const discountedPrice = Math.max(0, basePrice - item.discountAmount)
       return {
         price: discountedPrice,
         hasDiscount: true,
-        discountInfo: `$${item.discountAmount} descuento de lista`
+        discountInfo: item.minQuantity > 1
+          ? `Desde ${item.minQuantity} uds: -$${item.discountAmount}`
+          : `$${item.discountAmount} descuento de lista`,
+        minQuantity: item.minQuantity
       }
     }
 
-    return { price: basePrice, hasDiscount: false, discountInfo: null }
+    return { price: basePrice, hasDiscount: false, discountInfo: null, minQuantity: 1 }
+  }
+
+  // Get all available tiers for a product to show upcoming discounts
+  const getProductTiers = (productId: number, basePrice: number) => {
+    return pricelistItems
+      .filter(item => item.productId === productId)
+      .sort((a, b) => a.minQuantity - b.minQuantity)
+      .map(item => {
+        let price = basePrice
+        if (item.priceType === 'fixed' && item.fixedPrice !== null) {
+          price = item.fixedPrice
+        } else if (item.priceType === 'discount_percent' && item.discountPercent !== null) {
+          price = basePrice * (1 - item.discountPercent / 100)
+        } else if (item.priceType === 'discount_amount' && item.discountAmount !== null) {
+          price = Math.max(0, basePrice - item.discountAmount)
+        }
+        return {
+          minQuantity: item.minQuantity,
+          price,
+          savings: ((basePrice - price) / basePrice) * 100
+        }
+      })
   }
 
   const addProduct = (product: Product) => {
@@ -369,7 +408,7 @@ export default function CreateInvoicePage() {
     const costPriceCup = product.costPriceCup || product.costPrice * exchangeRate
 
     // Check if there's a pricelist price for this product
-    const { price: pricelistPrice, hasDiscount, discountInfo } = getPricelistPrice(
+    const { price: pricelistPrice, hasDiscount, discountInfo, minQuantity } = getPricelistPrice(
       product.id,
       product.sellingPrice,
       1 // Initial quantity for price tier
@@ -388,6 +427,7 @@ export default function CreateInvoicePage() {
       productSku: product.sku || '',
       quantity: 0, // Will be calculated from warehouse quantities
       unitPrice,
+      previousUnitPrice: unitPrice,
       costPrice: product.costPrice,
       originalPrice: product.sellingPrice, // Keep base price for reference
       discountPercent: 0, // Additional discount on top of pricelist price
@@ -398,7 +438,9 @@ export default function CreateInvoicePage() {
       profitMargin,
       costPriceCup,
       hasPricelistPrice: hasDiscount,
-      pricelistDiscountInfo: discountInfo
+      pricelistDiscountInfo: discountInfo,
+      currentTierMinQty: minQuantity,
+      priceJustChanged: false
     }])
 
     // Expand the newly added line
@@ -416,9 +458,43 @@ export default function CreateInvoicePage() {
     line.warehouseQuantities[warehouseId.toString()] = clampedQuantity
 
     // Calculate total quantity from all warehouses
-    line.quantity = Object.values(line.warehouseQuantities).reduce((sum, q) => sum + q, 0)
+    const newTotalQuantity = Object.values(line.warehouseQuantities).reduce((sum, q) => sum + q, 0)
+    line.quantity = newTotalQuantity
 
-    // Recalculate subtotal
+    // Store previous price for animation
+    const previousPrice = line.unitPrice
+
+    // Recalculate pricelist price based on new total quantity
+    const { price: newPrice, hasDiscount, discountInfo, minQuantity } = getPricelistPrice(
+      line.productId,
+      line.originalPrice,
+      newTotalQuantity
+    )
+
+    // Check if price changed for animation effect
+    const priceChanged = Math.abs(newPrice - previousPrice) > 0.001
+    if (priceChanged) {
+      line.previousUnitPrice = previousPrice
+      line.priceJustChanged = true
+      // Reset the animation flag after a delay
+      setTimeout(() => {
+        setLines(prev => prev.map((l, i) =>
+          i === lineIndex ? { ...l, priceJustChanged: false } : l
+        ))
+      }, 1500)
+    }
+
+    line.unitPrice = newPrice
+    line.hasPricelistPrice = hasDiscount
+    line.pricelistDiscountInfo = discountInfo
+    line.currentTierMinQty = minQuantity
+
+    // Recalculate profit margin with new price
+    line.profitMargin = line.costPrice > 0
+      ? ((newPrice - line.costPrice) / line.costPrice) * 100
+      : 0
+
+    // Recalculate subtotal with new price
     const discountMultiplier = 1 - line.discountPercent / 100
     line.subtotal = line.quantity * line.unitPrice * discountMultiplier
     line.discountAmount = line.quantity * line.unitPrice * (line.discountPercent / 100)
@@ -1032,7 +1108,14 @@ export default function CreateInvoicePage() {
                       {lines.map((line, index) => (
                         <div key={index}>
                           {/* Main Row */}
-                          <div
+                          <motion.div
+                            animate={line.priceJustChanged ? {
+                              backgroundColor: [
+                                theme === 'dark' ? 'rgba(34, 197, 94, 0.3)' : 'rgba(34, 197, 94, 0.2)',
+                                theme === 'dark' ? 'rgba(34, 197, 94, 0)' : 'rgba(34, 197, 94, 0)'
+                              ]
+                            } : {}}
+                            transition={{ duration: 1 }}
                             className={cn(
                               'grid grid-cols-12 gap-2 p-3 items-center cursor-pointer transition-colors',
                               expandedLineIndex === index
@@ -1059,9 +1142,25 @@ export default function CreateInvoicePage() {
                                   <span className="text-xs text-gray-400 line-through block">
                                     {formatCurrency(line.originalPrice)}
                                   </span>
-                                  <span className="text-sm font-medium text-green-600">
+                                  <motion.span
+                                    key={`${line.productId}-${line.unitPrice}`}
+                                    initial={line.priceJustChanged ? { scale: 1.3, color: '#22c55e' } : false}
+                                    animate={{ scale: 1, color: '#16a34a' }}
+                                    transition={{ duration: 0.5, type: 'spring' }}
+                                    className="text-sm font-medium text-green-600 block"
+                                  >
                                     {formatCurrency(line.unitPrice)}
-                                  </span>
+                                  </motion.span>
+                                  {line.priceJustChanged && (
+                                    <motion.span
+                                      initial={{ opacity: 1, y: 0 }}
+                                      animate={{ opacity: 0, y: -10 }}
+                                      transition={{ duration: 1 }}
+                                      className="text-[10px] text-green-500 block"
+                                    >
+                                      -${(line.previousUnitPrice - line.unitPrice).toFixed(2)}
+                                    </motion.span>
+                                  )}
                                 </div>
                               ) : (
                                 <span className="text-sm font-medium text-green-600">
@@ -1103,8 +1202,16 @@ export default function CreateInvoicePage() {
                                 {line.quantity}
                               </span>
                             </div>
-                            <div className="col-span-2 text-right font-bold text-green-600">
-                              {formatCurrency(line.subtotal)}
+                            <div className="col-span-2 text-right">
+                              <motion.span
+                                key={`subtotal-${line.productId}-${line.subtotal.toFixed(2)}`}
+                                initial={line.priceJustChanged ? { scale: 1.2 } : false}
+                                animate={{ scale: 1 }}
+                                transition={{ duration: 0.3, type: 'spring' }}
+                                className="font-bold text-green-600"
+                              >
+                                {formatCurrency(line.subtotal)}
+                              </motion.span>
                             </div>
                             <div className="col-span-1 text-right" onClick={e => e.stopPropagation()}>
                               <button
@@ -1114,7 +1221,7 @@ export default function CreateInvoicePage() {
                                 <Trash2 className="w-4 h-4" />
                               </button>
                             </div>
-                          </div>
+                          </motion.div>
 
                           {/* Expanded: Warehouse Stock Section */}
                           <AnimatePresence>
@@ -1128,7 +1235,88 @@ export default function CreateInvoicePage() {
                                   theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
                                 )}
                               >
-                                <div className="p-4 space-y-3">
+                                <div className="p-4 space-y-4">
+                                  {/* Price Tiers Section */}
+                                  {(() => {
+                                    const tiers = getProductTiers(line.productId, line.originalPrice)
+                                    if (tiers.length > 0) {
+                                      return (
+                                        <div className="space-y-2">
+                                          <div className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400">
+                                            <TrendingUp className="w-4 h-4" />
+                                            Descuentos por Cantidad
+                                          </div>
+                                          <div className="flex flex-wrap gap-2">
+                                            {tiers.map((tier, tierIdx) => {
+                                              const isActive = line.quantity >= tier.minQuantity &&
+                                                (tierIdx === tiers.length - 1 || line.quantity < tiers[tierIdx + 1].minQuantity)
+                                              const isReached = line.quantity >= tier.minQuantity
+                                              const unitsNeeded = tier.minQuantity - line.quantity
+
+                                              return (
+                                                <motion.div
+                                                  key={tier.minQuantity}
+                                                  initial={false}
+                                                  animate={{
+                                                    scale: isActive ? 1.05 : 1,
+                                                    borderColor: isActive ? '#22c55e' : isReached ? '#86efac' : '#374151'
+                                                  }}
+                                                  className={cn(
+                                                    'relative px-3 py-2 rounded-lg border-2 text-center min-w-[80px] transition-all',
+                                                    isActive
+                                                      ? 'bg-green-500/20 border-green-500'
+                                                      : isReached
+                                                        ? 'bg-green-500/10 border-green-300 dark:border-green-700'
+                                                        : theme === 'dark'
+                                                          ? 'bg-gray-800/50 border-gray-700'
+                                                          : 'bg-gray-100 border-gray-300'
+                                                  )}
+                                                >
+                                                  {isActive && (
+                                                    <motion.div
+                                                      initial={{ scale: 0 }}
+                                                      animate={{ scale: 1 }}
+                                                      className="absolute -top-2 -right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center"
+                                                    >
+                                                      <CheckCircle className="w-3 h-3 text-white" />
+                                                    </motion.div>
+                                                  )}
+                                                  <p className={cn(
+                                                    'text-xs font-medium',
+                                                    isActive || isReached ? 'text-green-600 dark:text-green-400' : 'text-gray-500'
+                                                  )}>
+                                                    {tier.minQuantity === 1 ? 'Base' : `+${tier.minQuantity} uds`}
+                                                  </p>
+                                                  <p className={cn(
+                                                    'font-bold text-sm',
+                                                    isActive ? 'text-green-600' : theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                                  )}>
+                                                    ${tier.price.toFixed(2)}
+                                                  </p>
+                                                  {tier.savings > 0 && (
+                                                    <p className={cn(
+                                                      'text-[10px]',
+                                                      isActive || isReached ? 'text-green-500' : 'text-gray-400'
+                                                    )}>
+                                                      -{tier.savings.toFixed(0)}%
+                                                    </p>
+                                                  )}
+                                                  {!isReached && unitsNeeded > 0 && (
+                                                    <p className="text-[10px] text-orange-500 mt-1">
+                                                      Faltan {unitsNeeded}
+                                                    </p>
+                                                  )}
+                                                </motion.div>
+                                              )
+                                            })}
+                                          </div>
+                                        </div>
+                                      )
+                                    }
+                                    return null
+                                  })()}
+
+                                  {/* Warehouse Stock Section */}
                                   <div className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400">
                                     <Warehouse className="w-4 h-4" />
                                     Stock por Almacen - Total: {line.quantity}
