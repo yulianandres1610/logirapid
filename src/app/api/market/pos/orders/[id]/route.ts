@@ -142,16 +142,20 @@ export async function GET(
           promotionId: line.promotion_id,
           promotionName: line.promotion_name
         })),
-        payments: paymentsResult.rows.map(p => ({
-          id: p.id,
-          method: p.payment_method,
-          amount: parseFloat(p.amount) || 0,
-          currency: p.currency,
-          amountTendered: p.amount_tendered ? parseFloat(p.amount_tendered) : null,
-          changeAmount: p.change_amount ? parseFloat(p.change_amount) : null,
-          reference: p.reference,
-          createdAt: p.created_at
-        }))
+        payments: paymentsResult.rows.map(p => {
+          const rawAmount = parseFloat(p.amount) || 0
+          const change = p.change_amount ? parseFloat(p.change_amount) : 0
+          return {
+            id: p.id,
+            method: p.payment_method,
+            amount: rawAmount - change, // Actual collected after change
+            amountTendered: rawAmount,  // What was given
+            changeAmount: change > 0 ? change : null,
+            currency: p.currency,
+            reference: p.reference,
+            createdAt: p.created_at
+          }
+        })
       }
     })
 

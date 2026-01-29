@@ -124,11 +124,13 @@ export async function GET(
     // ==============================================================
     // STEP 2: Now get payment totals (AFTER auto-fix)
     // ==============================================================
+    // Include change_amount to calculate actual cash collected
     const paymentsResult = await db.query(`
       SELECT
         p.payment_method,
         p.currency,
         SUM(p.amount) as total_amount,
+        SUM(COALESCE(p.change_amount, 0)) as total_change,
         COUNT(*) as count
       FROM market_pos_payments p
       JOIN market_pos_orders o ON p.order_id = o.id
@@ -164,11 +166,16 @@ export async function GET(
       paymentsCount: paymentsResult.rows.length
     })
 
-    // Calculate expected cash by currency
+    // Calculate expected cash by currency (actual collected = amount - change)
     const cashPayments: Record<string, number> = {}
+    const cashChange: Record<string, number> = {}
     for (const p of paymentsResult.rows) {
       if (p.payment_method === 'cash') {
-        cashPayments[p.currency] = (cashPayments[p.currency] || 0) + parseFloat(p.total_amount)
+        const amount = parseFloat(p.total_amount) || 0
+        const change = parseFloat(p.total_change) || 0
+        // Actual cash collected is amount minus change given
+        cashPayments[p.currency] = (cashPayments[p.currency] || 0) + (amount - change)
+        cashChange[p.currency] = (cashChange[p.currency] || 0) + change
       }
     }
 
@@ -221,12 +228,23 @@ export async function GET(
           totalDiscounts: parseFloat(ordersSummary.total_discounts) || 0,
           draftTotal: parseFloat(ordersSummary.draft_total) || 0
         },
-        paymentsByMethod: paymentsResult.rows.map(p => ({
-          method: p.payment_method,
-          currency: p.currency,
-          amount: parseFloat(p.total_amount) || 0,
-          count: parseInt(p.count) || 0
-        }))
+        paymentsByMethod: paymentsResult.rows.map(p => {
+          const amount = parseFloat(p.total_amount) || 0
+          const change = parseFloat(p.total_change) || 0
+          return {
+            method: p.payment_method,
+            currency: p.currency,
+            amount: amount - change, // Actual collected (after change given)
+            amountTendered: amount,  // What customer gave
+            changeGiven: change,     // Change returned
+            count: parseInt(p.count) || 0
+          }
+        }),
+        cashChange: {
+          usd: cashChange['USD'] || 0,
+          cup: cashChange['CUP'] || 0,
+          mlc: cashChange['MLC'] || 0
+        }
       }
     })
 
@@ -335,11 +353,12 @@ export async function PUT(
 
       const totals = totalsResult.rows[0]
 
-      // Get cash payments to calculate expected
-      const cashPayments = await db.query(`
+      // Get cash payments to calculate expected (subtract change given)
+      const cashPaymentsResult = await db.query(`
         SELECT
           p.currency,
-          SUM(p.amount) as total
+          SUM(p.amount) as total,
+          SUM(COALESCE(p.change_amount, 0)) as total_change
         FROM market_pos_payments p
         JOIN market_pos_orders o ON p.order_id = o.id
         WHERE o.pos_session_id = $1 AND o.status = 'paid' AND p.payment_method = 'cash'
@@ -347,8 +366,11 @@ export async function PUT(
       `, [sessionId])
 
       const cashByurrency: Record<string, number> = {}
-      for (const p of cashPayments.rows) {
-        cashByurrency[p.currency] = parseFloat(p.total) || 0
+      for (const p of cashPaymentsResult.rows) {
+        const amount = parseFloat(p.total) || 0
+        const change = parseFloat(p.total_change) || 0
+        // Actual cash collected is amount minus change given
+        cashByurrency[p.currency] = amount - change
       }
 
       // Get inventory shortage value (faltante de inventario)

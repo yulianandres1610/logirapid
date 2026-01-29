@@ -212,13 +212,19 @@ export async function GET(request: NextRequest) {
 
     const countResult = await db.query(countQuery, countParams)
 
-    // Get payments for all orders
+    // Get payments for all orders (include change details)
     const orderIds = result.rows.map(r => r.id)
-    let paymentsMap: Record<number, { method: string; amount: number; currency: string }[]> = {}
+    let paymentsMap: Record<number, {
+      method: string
+      amount: number
+      amountTendered: number | null
+      changeAmount: number | null
+      currency: string
+    }[]> = {}
 
     if (orderIds.length > 0) {
       const paymentsResult = await db.query(`
-        SELECT order_id, payment_method, amount, currency
+        SELECT order_id, payment_method, amount, currency, amount_tendered, change_amount
         FROM market_pos_payments
         WHERE order_id = ANY($1)
         ORDER BY order_id, id
@@ -228,9 +234,14 @@ export async function GET(request: NextRequest) {
         if (!paymentsMap[p.order_id]) {
           paymentsMap[p.order_id] = []
         }
+        const amount = parseFloat(p.amount) || 0
+        const tendered = p.amount_tendered ? parseFloat(p.amount_tendered) : null
+        const change = p.change_amount ? parseFloat(p.change_amount) : null
         paymentsMap[p.order_id].push({
           method: p.payment_method,
-          amount: parseFloat(p.amount) || 0,
+          amount: change ? amount - change : amount, // Actual collected after change
+          amountTendered: tendered,
+          changeAmount: change,
           currency: p.currency || 'USD'
         })
       }

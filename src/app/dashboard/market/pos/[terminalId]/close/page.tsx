@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   ChevronLeft,
   CheckCircle,
@@ -19,13 +20,25 @@ import {
   CreditCard,
   Banknote,
   ShoppingCart,
-  Percent
+  Percent,
+  ArrowRightLeft,
+  DollarSign,
+  Wallet
 } from 'lucide-react'
 import { useRouter, useParams } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+
+interface PaymentByMethod {
+  method: string
+  currency: string
+  amount: number
+  amountTendered?: number
+  changeGiven?: number
+  count: number
+}
 
 interface SessionDetails {
   id: number
@@ -34,6 +47,7 @@ interface SessionDetails {
   openedAt: string
   openingCash: { usd: number; cup: number; mlc: number }
   expectedCash: { usd: number; cup: number; mlc: number }
+  cashChange?: { usd: number; cup: number; mlc: number }
   inventoryShortageValue: number
   summary: {
     paidOrders: number
@@ -43,12 +57,7 @@ interface SessionDetails {
     totalRefunds: number
     totalDiscounts: number
   }
-  paymentsByMethod: Array<{
-    method: string
-    currency: string
-    amount: number
-    count: number
-  }>
+  paymentsByMethod: PaymentByMethod[]
 }
 
 interface InventoryCountSummary {
@@ -267,6 +276,34 @@ export default function CloseSessionPage() {
     setFn(prev => ({ ...prev, [value]: Math.max(0, count) }))
   }
 
+  const getPaymentMethodIcon = (method: string) => {
+    switch (method) {
+      case 'cash': return <Banknote className="w-4 h-4" />
+      case 'card': return <CreditCard className="w-4 h-4" />
+      case 'transfer': return <ArrowRightLeft className="w-4 h-4" />
+      default: return <DollarSign className="w-4 h-4" />
+    }
+  }
+
+  const getPaymentMethodLabel = (method: string) => {
+    switch (method) {
+      case 'cash': return 'Efectivo'
+      case 'card': return 'Tarjeta'
+      case 'transfer': return 'Transferencia'
+      case 'credit': return 'Crédito'
+      default: return method
+    }
+  }
+
+  const formatCurrency = (amount: number, currency: string) => {
+    if (currency === 'CUP') {
+      return `${amount.toLocaleString('es', { maximumFractionDigits: 0 })} CUP`
+    } else if (currency === 'MLC') {
+      return `$${amount.toFixed(2)} MLC`
+    }
+    return `$${amount.toFixed(2)}`
+  }
+
   const inventoryShortage = session?.inventoryShortageValue || 0
   const adjustedExpectedCash = session ? {
     usd: session.expectedCash.usd + inventoryShortage,
@@ -282,12 +319,19 @@ export default function CloseSessionPage() {
 
   const totalDifferenceUsd = differences.usd + (differences.cup / 250) + (differences.mlc * 1.1)
 
+  // Group payments by method for summary
+  const cashPayments = session?.paymentsByMethod.filter(p => p.method === 'cash') || []
+  const otherPayments = session?.paymentsByMethod.filter(p => p.method !== 'cash') || []
+
   if (loading) {
     return (
       <ProtectedRoute>
         <DashboardLayout hideSidebar>
           <div className="min-h-screen flex items-center justify-center">
-            <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+            <div className="text-center">
+              <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto" />
+              <p className="mt-4 text-gray-500">Cargando datos de cierre...</p>
+            </div>
           </div>
         </DashboardLayout>
       </ProtectedRoute>
@@ -299,16 +343,48 @@ export default function CloseSessionPage() {
       <ProtectedRoute>
         <DashboardLayout hideSidebar>
           <div className="min-h-screen flex items-center justify-center p-4">
-            <div className={cn('w-full max-w-sm rounded-xl border p-6 text-center', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
-              <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-amber-500" />
-              <h2 className="text-lg font-bold mb-2">Conteo Requerido</h2>
-              <p className="text-sm text-gray-500 mb-4">Completa el conteo de inventario antes de cerrar.</p>
-              <div className="space-y-2">
-                <button onClick={() => router.push(`/dashboard/market/pos/${terminalId}/count`)} className="w-full py-3 bg-blue-500 text-white rounded-lg font-medium">Ir a Contar</button>
-                <button onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)} className={cn('w-full py-3 rounded-lg', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100')}>Volver</button>
-                {isAdmin && <button onClick={handleForceClose} disabled={forceClosing} className="w-full py-3 rounded-lg bg-red-500/20 text-red-400 border border-red-500/50">{forceClosing ? 'Cerrando...' : 'Cerrar sin Conteo'}</button>}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className={cn(
+                'w-full max-w-md rounded-2xl border p-8 text-center shadow-xl',
+                theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+              )}
+            >
+              <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle className="w-8 h-8 text-amber-500" />
               </div>
-            </div>
+              <h2 className="text-xl font-bold mb-2">Conteo de Inventario Requerido</h2>
+              <p className="text-gray-500 mb-6">
+                Debes completar el conteo de inventario antes de cerrar la caja.
+              </p>
+              <div className="space-y-3">
+                <button
+                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}/count`)}
+                  className="w-full py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all"
+                >
+                  Ir a Contar Inventario
+                </button>
+                <button
+                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)}
+                  className={cn(
+                    'w-full py-3 rounded-xl font-medium transition-colors',
+                    theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'
+                  )}
+                >
+                  Volver al POS
+                </button>
+                {isAdmin && (
+                  <button
+                    onClick={handleForceClose}
+                    disabled={forceClosing}
+                    className="w-full py-3 rounded-xl bg-red-500/10 text-red-500 border border-red-500/30 font-medium hover:bg-red-500/20 transition-colors"
+                  >
+                    {forceClosing ? 'Cerrando...' : 'Cerrar sin Conteo (Admin)'}
+                  </button>
+                )}
+              </div>
+            </motion.div>
           </div>
         </DashboardLayout>
       </ProtectedRoute>
@@ -320,15 +396,45 @@ export default function CloseSessionPage() {
       <ProtectedRoute>
         <DashboardLayout hideSidebar>
           <div className="min-h-screen flex items-center justify-center p-4">
-            <div className={cn('w-full max-w-sm rounded-xl border p-6 text-center', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
-              <Clock className="w-12 h-12 mx-auto mb-4 text-amber-500" />
-              <h2 className="text-lg font-bold mb-2">Pendiente de Aprobación</h2>
-              <p className="text-sm text-gray-500 mb-4">El conteo tiene {inventoryCount.productsWithDifferences} productos con diferencias.</p>
-              <div className="space-y-2">
-                <button onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)} className={cn('w-full py-3 rounded-lg', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100')}>Volver</button>
-                {isAdmin && <button onClick={handleForceClose} disabled={forceClosing} className="w-full py-3 rounded-lg bg-red-500/20 text-red-400 border border-red-500/50">{forceClosing ? 'Cerrando...' : 'Cerrar sin Aprobación'}</button>}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className={cn(
+                'w-full max-w-md rounded-2xl border p-8 text-center shadow-xl',
+                theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+              )}
+            >
+              <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto mb-4">
+                <Clock className="w-8 h-8 text-amber-500" />
               </div>
-            </div>
+              <h2 className="text-xl font-bold mb-2">Pendiente de Aprobación</h2>
+              <p className="text-gray-500 mb-4">
+                El conteo de inventario tiene <span className="font-bold text-amber-500">{inventoryCount.productsWithDifferences}</span> productos con diferencias.
+              </p>
+              <p className="text-sm text-gray-400 mb-6">
+                Un administrador debe aprobar o ajustar las diferencias antes de cerrar.
+              </p>
+              <div className="space-y-3">
+                <button
+                  onClick={() => router.push(`/dashboard/market/pos/${terminalId}`)}
+                  className={cn(
+                    'w-full py-3 rounded-xl font-medium transition-colors',
+                    theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'
+                  )}
+                >
+                  Volver al POS
+                </button>
+                {isAdmin && (
+                  <button
+                    onClick={handleForceClose}
+                    disabled={forceClosing}
+                    className="w-full py-3 rounded-xl bg-red-500/10 text-red-500 border border-red-500/30 font-medium hover:bg-red-500/20 transition-colors"
+                  >
+                    {forceClosing ? 'Cerrando...' : 'Cerrar sin Aprobación (Admin)'}
+                  </button>
+                )}
+              </div>
+            </motion.div>
           </div>
         </DashboardLayout>
       </ProtectedRoute>
@@ -360,208 +466,345 @@ export default function CloseSessionPage() {
       <DashboardLayout hideSidebar>
         <div className="h-screen flex flex-col overflow-hidden">
           {/* Header */}
-          <div className={cn('flex-shrink-0 px-3 py-2 border-b flex items-center justify-between', theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200')}>
-            <div className="flex items-center gap-2">
-              <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={cn(
+              'flex-shrink-0 px-4 py-3 border-b flex items-center justify-between',
+              theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.back()}
+                className={cn(
+                  'p-2 rounded-xl transition-colors',
+                  theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
+                )}
+              >
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="font-bold text-base">Cierre de Caja</h1>
-                <p className="text-xs text-gray-500">{session.sessionCode} • {session.terminalName}</p>
+                <h1 className="font-bold text-lg">Cierre de Caja</h1>
+                <p className="text-sm text-gray-500">{session.sessionCode} • {session.terminalName}</p>
               </div>
             </div>
-          </div>
+            <div className={cn(
+              'px-3 py-1.5 rounded-full text-sm font-medium',
+              theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600'
+            )}>
+              <Clock className="w-4 h-4 inline mr-1" />
+              {new Date(session.openedAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
+            </div>
+          </motion.div>
 
           {/* Main Content */}
           <div className="flex-1 overflow-auto">
             <div className="max-w-7xl mx-auto p-4">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                {/* Left: Session Summary */}
+                {/* Left Column - Session Summary */}
                 <div className="lg:col-span-4 space-y-4">
-                  {/* Session Info */}
-                  <div className={cn('rounded-xl border p-4', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
-                    <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
-                      <Receipt className="w-4 h-4" /> Resumen de Sesión
-                    </h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Apertura</span>
-                        <span>{new Date(session.openedAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
-                      <div className="flex justify-between">
+                  {/* Sales Summary Card */}
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className={cn(
+                      'rounded-2xl border overflow-hidden shadow-lg',
+                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    )}
+                  >
+                    <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-4 py-3">
+                      <h3 className="font-bold text-white flex items-center gap-2">
+                        <ShoppingCart className="w-5 h-5" />
+                        Resumen de Ventas
+                      </h3>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      <div className="flex justify-between items-center">
                         <span className="text-gray-500">Órdenes pagadas</span>
-                        <span className="font-medium">{session.summary.paidOrders}</span>
+                        <span className="font-bold text-lg">{session.summary.paidOrders}</span>
                       </div>
                       {session.summary.voidedOrders > 0 && (
-                        <div className="flex justify-between text-amber-500">
-                          <span>Anuladas</span>
-                          <span>{session.summary.voidedOrders}</span>
+                        <div className="flex justify-between items-center text-amber-500">
+                          <span>Órdenes anuladas</span>
+                          <span className="font-medium">{session.summary.voidedOrders}</span>
                         </div>
                       )}
-                    </div>
-                    <div className="mt-3 pt-3 border-t border-gray-700/50 space-y-2">
-                      <div className="flex justify-between text-green-500">
-                        <span className="flex items-center gap-1"><ShoppingCart className="w-3 h-3" /> Ventas</span>
-                        <span className="font-bold">${session.summary.totalSales.toFixed(2)}</span>
+                      <div className={cn(
+                        'pt-3 border-t',
+                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                      )}>
+                        <div className="flex justify-between items-center">
+                          <span className="text-green-500 font-medium">Total Ventas</span>
+                          <span className="font-bold text-xl text-green-500">${session.summary.totalSales.toFixed(2)}</span>
+                        </div>
+                        {session.summary.totalDiscounts > 0 && (
+                          <div className="flex justify-between items-center text-sm text-amber-500 mt-1">
+                            <span>Descuentos aplicados</span>
+                            <span>-${session.summary.totalDiscounts.toFixed(2)}</span>
+                          </div>
+                        )}
                       </div>
-                      {session.summary.totalDiscounts > 0 && (
-                        <div className="flex justify-between text-amber-500">
-                          <span className="flex items-center gap-1"><Percent className="w-3 h-3" /> Descuentos</span>
-                          <span>-${session.summary.totalDiscounts.toFixed(2)}</span>
-                        </div>
-                      )}
                     </div>
-                  </div>
+                  </motion.div>
 
-                  {/* Payments by Method */}
-                  {session.paymentsByMethod.length > 0 && (
-                    <div className={cn('rounded-xl border p-4', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
-                      <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
-                        <CreditCard className="w-4 h-4" /> Pagos Recibidos
+                  {/* Payments Received Card */}
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className={cn(
+                      'rounded-2xl border overflow-hidden shadow-lg',
+                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    )}
+                  >
+                    <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-4 py-3">
+                      <h3 className="font-bold text-white flex items-center gap-2">
+                        <Wallet className="w-5 h-5" />
+                        Cobros Realizados
                       </h3>
-                      <div className="space-y-2">
-                        {session.paymentsByMethod.map((p, i) => {
-                          const formatAmount = (amount: number, currency: string) => {
-                            if (currency === 'CUP') {
-                              return `${amount.toLocaleString('es', { maximumFractionDigits: 0 })} CUP`
-                            } else if (currency === 'MLC') {
-                              return `$${amount.toFixed(2)} MLC`
-                            }
-                            return `$${amount.toFixed(2)}`
-                          }
-                          return (
-                            <div key={i} className="flex justify-between text-sm">
-                              <span className="text-gray-500 capitalize">{p.method} <span className="text-xs">({p.currency})</span></span>
-                              <span className="font-mono">{formatAmount(p.amount, p.currency)} <span className="text-xs text-gray-500">×{p.count}</span></span>
-                            </div>
-                          )
-                        })}
-                      </div>
                     </div>
-                  )}
+                    <div className="p-4">
+                      {/* Cash Payments */}
+                      {cashPayments.length > 0 && (
+                        <div className="mb-4">
+                          <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                            <Banknote className="w-3 h-3" />
+                            Efectivo Recibido
+                          </p>
+                          <div className="space-y-2">
+                            {cashPayments.map((p, i) => (
+                              <div key={i} className={cn(
+                                'p-3 rounded-xl',
+                                theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+                              )}>
+                                <div className="flex justify-between items-center">
+                                  <span className="font-medium">{p.currency}</span>
+                                  <span className="font-mono font-bold">
+                                    {formatCurrency(p.amount, p.currency)}
+                                  </span>
+                                </div>
+                                {p.changeGiven && p.changeGiven > 0 && (
+                                  <div className="flex justify-between text-xs mt-1 text-amber-500">
+                                    <span>Recibido: {formatCurrency(p.amountTendered || p.amount + p.changeGiven, p.currency)}</span>
+                                    <span>Cambio: -{formatCurrency(p.changeGiven, p.currency)}</span>
+                                  </div>
+                                )}
+                                <p className="text-xs text-gray-400 mt-1">
+                                  {p.count} {p.count === 1 ? 'transacción' : 'transacciones'}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Other Payments */}
+                      {otherPayments.length > 0 && (
+                        <div>
+                          <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                            <CreditCard className="w-3 h-3" />
+                            Otros Métodos
+                          </p>
+                          <div className="space-y-2">
+                            {otherPayments.map((p, i) => (
+                              <div key={i} className={cn(
+                                'p-3 rounded-xl flex items-center justify-between',
+                                theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+                              )}>
+                                <div className="flex items-center gap-2">
+                                  {getPaymentMethodIcon(p.method)}
+                                  <div>
+                                    <span className="font-medium">{getPaymentMethodLabel(p.method)}</span>
+                                    <span className="text-xs text-gray-400 ml-2">({p.currency})</span>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <span className="font-mono font-bold">{formatCurrency(p.amount, p.currency)}</span>
+                                  <p className="text-xs text-gray-400">{p.count}x</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {session.paymentsByMethod.length === 0 && (
+                        <p className="text-center text-gray-500 py-4">No hay cobros registrados</p>
+                      )}
+                    </div>
+                  </motion.div>
 
                   {/* Opening Cash */}
-                  <div className={cn('rounded-xl border p-4', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className={cn(
+                      'rounded-2xl border p-4 shadow-lg',
+                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    )}
+                  >
                     <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
-                      <Banknote className="w-4 h-4" /> Efectivo Inicial
+                      <Receipt className="w-4 h-4" />
+                      Fondo de Apertura
                     </h3>
                     <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                      <div className={cn('p-2 rounded-lg', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100')}>
-                        <p className="text-xs text-gray-500">USD</p>
+                      <div className={cn('p-3 rounded-xl', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100')}>
+                        <p className="text-xs text-gray-500 mb-1">USD</p>
                         <p className="font-mono font-bold">${session.openingCash.usd.toFixed(2)}</p>
                       </div>
-                      <div className={cn('p-2 rounded-lg', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100')}>
-                        <p className="text-xs text-gray-500">CUP</p>
-                        <p className="font-mono font-bold">${session.openingCash.cup.toFixed(0)}</p>
+                      <div className={cn('p-3 rounded-xl', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100')}>
+                        <p className="text-xs text-gray-500 mb-1">CUP</p>
+                        <p className="font-mono font-bold">{session.openingCash.cup.toLocaleString()}</p>
                       </div>
-                      <div className={cn('p-2 rounded-lg', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100')}>
-                        <p className="text-xs text-gray-500">MLC</p>
+                      <div className={cn('p-3 rounded-xl', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100')}>
+                        <p className="text-xs text-gray-500 mb-1">MLC</p>
                         <p className="font-mono font-bold">${session.openingCash.mlc.toFixed(2)}</p>
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
 
                   {/* Inventory Shortage */}
                   {inventoryShortage > 0 && (
-                    <div className="rounded-xl border-2 border-red-500 bg-red-500/10 p-4">
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.3 }}
+                      className="rounded-2xl border-2 border-red-500 bg-red-500/10 p-4"
+                    >
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Package className="w-5 h-5 text-red-500" />
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center">
+                            <Package className="w-5 h-5 text-red-500" />
+                          </div>
                           <div>
-                            <p className="font-bold text-red-500">Faltante Inventario</p>
-                            <p className="text-xs text-gray-400">Se suma al esperado</p>
+                            <p className="font-bold text-red-500">Faltante de Inventario</p>
+                            <p className="text-xs text-gray-400">Se suma al esperado en USD</p>
                           </div>
                         </div>
-                        <p className="text-xl font-bold text-red-500">${inventoryShortage.toFixed(2)}</p>
+                        <p className="text-2xl font-bold text-red-500">${inventoryShortage.toFixed(2)}</p>
                       </div>
-                    </div>
+                    </motion.div>
                   )}
 
                   {/* Notes */}
-                  <div className={cn('rounded-xl border p-4', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
-                    <label className="text-sm text-gray-500 mb-2 block">Notas del cierre</label>
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.4 }}
+                    className={cn(
+                      'rounded-2xl border p-4 shadow-lg',
+                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    )}
+                  >
+                    <label className="text-sm text-gray-500 mb-2 block">Notas del cierre (opcional)</label>
                     <textarea
                       value={closingNotes}
                       onChange={(e) => setClosingNotes(e.target.value)}
-                      rows={2}
-                      placeholder="Observaciones..."
-                      className={cn('w-full px-3 py-2 rounded-lg border text-sm resize-none', theme === 'dark' ? 'bg-gray-900 border-gray-600' : 'bg-gray-50 border-gray-200', 'focus:outline-none focus:ring-1 focus:ring-blue-500')}
+                      rows={3}
+                      placeholder="Observaciones sobre el cierre de caja..."
+                      className={cn(
+                        'w-full px-3 py-2 rounded-xl border text-sm resize-none',
+                        theme === 'dark' ? 'bg-gray-900 border-gray-600' : 'bg-gray-50 border-gray-200',
+                        'focus:outline-none focus:ring-2 focus:ring-blue-500/50'
+                      )}
                     />
-                  </div>
+                  </motion.div>
                 </div>
 
-                {/* Right: Cash Count */}
+                {/* Right Column - Cash Count */}
                 <div className="lg:col-span-8 space-y-4">
                   {/* Currency Tabs */}
-                  <div className="grid grid-cols-3 gap-2">
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="grid grid-cols-3 gap-3"
+                  >
                     {(['usd', 'cup', 'mlc'] as const).map(c => {
                       const isActive = activeTab === c
                       const diff = differences[c]
+                      const currencyLabel = c.toUpperCase()
                       return (
                         <button
                           key={c}
                           onClick={() => setActiveTab(c)}
                           className={cn(
-                            'p-4 rounded-xl text-center transition-all border-2',
+                            'p-4 rounded-2xl text-center transition-all border-2 shadow-lg',
                             isActive
-                              ? 'bg-blue-500 border-blue-500 text-white'
+                              ? 'bg-gradient-to-br from-blue-500 to-blue-600 border-blue-500 text-white shadow-blue-500/25'
                               : theme === 'dark'
                                 ? 'bg-gray-800 border-gray-700 hover:border-gray-600'
                                 : 'bg-white border-gray-200 hover:border-gray-300'
                           )}
                         >
-                          <p className="text-2xl font-bold uppercase">{c}</p>
-                          <p className={cn('text-lg font-mono', isActive ? 'text-blue-100' : 'text-gray-500')}>
-                            ${fmt(closingCash[c], c)}
+                          <p className="text-2xl font-bold">{currencyLabel}</p>
+                          <p className={cn('text-lg font-mono mt-1', isActive ? 'text-blue-100' : 'text-gray-500')}>
+                            {c === 'cup' ? closingCash[c].toLocaleString() : `$${closingCash[c].toFixed(2)}`}
                           </p>
                           <div className={cn(
-                            'mt-2 pt-2 border-t text-sm',
-                            isActive ? 'border-blue-400/50' : 'border-gray-600/50'
+                            'mt-3 pt-3 border-t text-sm space-y-1',
+                            isActive ? 'border-blue-400/50' : theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                           )}>
                             <div className="flex justify-between">
                               <span className={isActive ? 'text-blue-200' : 'text-gray-500'}>Esperado</span>
-                              <span className="font-mono">${fmt(adjustedExpectedCash[c], c)}</span>
+                              <span className="font-mono">
+                                {c === 'cup' ? adjustedExpectedCash[c].toLocaleString() : `$${adjustedExpectedCash[c].toFixed(2)}`}
+                              </span>
                             </div>
-                            <div className="flex justify-between mt-1">
+                            <div className="flex justify-between">
                               <span className={isActive ? 'text-blue-200' : 'text-gray-500'}>Diferencia</span>
                               <span className={cn(
                                 'font-mono font-bold',
                                 diff === 0 ? '' : diff > 0 ? 'text-green-400' : 'text-red-400'
                               )}>
-                                {diff >= 0 ? '+' : ''}{fmt(diff, c)}
+                                {diff >= 0 ? '+' : ''}{c === 'cup' ? diff.toFixed(0) : diff.toFixed(2)}
                               </span>
                             </div>
                           </div>
                         </button>
                       )
                     })}
-                  </div>
+                  </motion.div>
 
                   {/* Denominations */}
-                  <div className={cn('rounded-xl border p-4', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-2">
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className={cn(
+                      'rounded-2xl border p-4 shadow-lg',
+                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    )}
+                  >
+                    <h3 className="font-bold text-sm mb-4">Contar {activeTab.toUpperCase()}</h3>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-3">
                       {getDenominations().map(d => {
                         const count = getCounts()[d.value] || 0
                         return (
                           <div
                             key={d.value}
                             className={cn(
-                              'rounded-lg p-3 text-center border-2 transition-all',
+                              'rounded-xl p-3 text-center border-2 transition-all',
                               count > 0
-                                ? 'bg-blue-500/20 border-blue-500'
+                                ? 'bg-blue-500/10 border-blue-500'
                                 : theme === 'dark'
                                   ? 'bg-gray-700 border-gray-600'
                                   : 'bg-gray-50 border-gray-200'
                             )}
                           >
-                            <p className="font-bold mb-2">{d.label}</p>
+                            <p className="font-bold text-sm mb-2">{d.label}</p>
                             <div className="flex items-center justify-center gap-1">
                               <button
                                 onClick={() => updateCount(activeTab, d.value, -1)}
                                 disabled={count === 0}
                                 className={cn(
-                                  'w-8 h-8 rounded flex items-center justify-center',
-                                  count === 0 ? 'opacity-30' : theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-200 hover:bg-gray-300'
+                                  'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+                                  count === 0
+                                    ? 'opacity-30 cursor-not-allowed'
+                                    : theme === 'dark'
+                                    ? 'bg-gray-600 hover:bg-gray-500'
+                                    : 'bg-gray-200 hover:bg-gray-300'
                                 )}
                               >
                                 <Minus className="w-4 h-4" />
@@ -572,47 +815,61 @@ export default function CloseSessionPage() {
                                 value={count}
                                 onChange={e => setCount(activeTab, d.value, parseInt(e.target.value) || 0)}
                                 className={cn(
-                                  'w-12 h-8 text-center font-bold rounded border',
+                                  'w-12 h-8 text-center font-bold rounded-lg border',
                                   theme === 'dark' ? 'bg-gray-900 border-gray-600' : 'bg-white border-gray-200',
-                                  'focus:outline-none focus:ring-1 focus:ring-blue-500'
+                                  'focus:outline-none focus:ring-2 focus:ring-blue-500/50'
                                 )}
                               />
                               <button
                                 onClick={() => updateCount(activeTab, d.value, 1)}
-                                className="w-8 h-8 rounded flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white"
+                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white transition-colors"
                               >
                                 <Plus className="w-4 h-4" />
                               </button>
                             </div>
                             {count > 0 && (
-                              <p className="text-xs text-blue-400 mt-1 font-mono">= ${fmt(count * d.value, activeTab)}</p>
+                              <p className="text-xs text-blue-400 mt-2 font-mono">
+                                = {activeTab === 'cup' ? (count * d.value).toLocaleString() : `$${(count * d.value).toFixed(2)}`}
+                              </p>
                             )}
                           </div>
                         )
                       })}
                     </div>
-                  </div>
+                  </motion.div>
 
                   {/* Total Difference */}
-                  <div className={cn(
-                    'rounded-xl border-2 p-4',
-                    Math.abs(totalDifferenceUsd) < 0.01
-                      ? 'border-green-500 bg-green-500/10'
-                      : totalDifferenceUsd > 0
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className={cn(
+                      'rounded-2xl border-2 p-6 shadow-lg',
+                      Math.abs(totalDifferenceUsd) < 0.01
                         ? 'border-green-500 bg-green-500/10'
-                        : 'border-red-500 bg-red-500/10'
-                  )}>
+                        : totalDifferenceUsd > 0
+                          ? 'border-green-500 bg-green-500/10'
+                          : 'border-red-500 bg-red-500/10'
+                    )}
+                  >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-gray-400 mb-1">Diferencia Total (equivalente USD)</p>
-                        <div className="flex items-center gap-2">
-                          {totalDifferenceUsd > 0 ? (
-                            <TrendingUp className="w-8 h-8 text-green-500" />
-                          ) : totalDifferenceUsd < 0 ? (
-                            <TrendingDown className="w-8 h-8 text-red-500" />
-                          ) : (
-                            <CheckCircle className="w-8 h-8 text-green-500" />
-                          )}
+                        <p className="text-sm text-gray-400 mb-2">Diferencia Total (equivalente USD)</p>
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            'w-12 h-12 rounded-xl flex items-center justify-center',
+                            Math.abs(totalDifferenceUsd) < 0.01 || totalDifferenceUsd > 0
+                              ? 'bg-green-500/20'
+                              : 'bg-red-500/20'
+                          )}>
+                            {totalDifferenceUsd > 0 ? (
+                              <TrendingUp className="w-6 h-6 text-green-500" />
+                            ) : totalDifferenceUsd < 0 ? (
+                              <TrendingDown className="w-6 h-6 text-red-500" />
+                            ) : (
+                              <CheckCircle className="w-6 h-6 text-green-500" />
+                            )}
+                          </div>
                           <p className={cn(
                             'text-4xl font-bold font-mono',
                             Math.abs(totalDifferenceUsd) < 0.01 ? 'text-green-500' :
@@ -622,55 +879,103 @@ export default function CloseSessionPage() {
                           </p>
                         </div>
                       </div>
-                      <div className="text-right space-y-1">
-                        <div className={cn('px-3 py-1 rounded text-sm font-mono', differences.usd === 0 ? 'bg-gray-700' : differences.usd > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400')}>
+                      <div className="text-right space-y-2">
+                        <div className={cn(
+                          'px-4 py-2 rounded-xl text-sm font-mono',
+                          differences.usd === 0
+                            ? theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                            : differences.usd > 0
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-red-500/20 text-red-400'
+                        )}>
                           USD: {differences.usd >= 0 ? '+' : ''}${differences.usd.toFixed(2)}
                         </div>
-                        <div className={cn('px-3 py-1 rounded text-sm font-mono', differences.cup === 0 ? 'bg-gray-700' : differences.cup > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400')}>
-                          CUP: {differences.cup >= 0 ? '+' : ''}${differences.cup.toFixed(0)}
+                        <div className={cn(
+                          'px-4 py-2 rounded-xl text-sm font-mono',
+                          differences.cup === 0
+                            ? theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                            : differences.cup > 0
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-red-500/20 text-red-400'
+                        )}>
+                          CUP: {differences.cup >= 0 ? '+' : ''}{differences.cup.toFixed(0)}
                         </div>
-                        <div className={cn('px-3 py-1 rounded text-sm font-mono', differences.mlc === 0 ? 'bg-gray-700' : differences.mlc > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400')}>
+                        <div className={cn(
+                          'px-4 py-2 rounded-xl text-sm font-mono',
+                          differences.mlc === 0
+                            ? theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                            : differences.mlc > 0
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-red-500/20 text-red-400'
+                        )}>
                           MLC: {differences.mlc >= 0 ? '+' : ''}${differences.mlc.toFixed(2)}
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Error */}
-          {error && (
-            <div className="px-4 pb-2">
-              <div className="max-w-7xl mx-auto p-3 rounded-lg bg-red-500/20 border border-red-500/50 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-500" />
-                <span className="text-red-500 text-sm flex-1">{error}</span>
-                <button onClick={() => setError(null)}><X className="w-4 h-4 text-red-500" /></button>
-              </div>
-            </div>
-          )}
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                className="px-4 pb-2"
+              >
+                <div className="max-w-7xl mx-auto p-3 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                  <span className="text-red-500 text-sm flex-1">{error}</span>
+                  <button onClick={() => setError(null)} className="p-1 hover:bg-red-500/20 rounded-lg">
+                    <X className="w-4 h-4 text-red-500" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Footer Actions */}
-          <div className={cn('flex-shrink-0 px-3 py-2 border-t', theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200')}>
-            <div className="max-w-7xl mx-auto flex gap-2">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={cn(
+              'flex-shrink-0 px-4 py-3 border-t',
+              theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
+            )}
+          >
+            <div className="max-w-7xl mx-auto flex gap-3">
               <button
                 onClick={() => router.back()}
                 disabled={closing}
-                className={cn('flex-1 py-3 rounded-xl font-medium', theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200')}
+                className={cn(
+                  'flex-1 py-3.5 rounded-xl font-medium transition-colors',
+                  theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'
+                )}
               >
                 Cancelar
               </button>
               <button
                 onClick={handleCloseSession}
                 disabled={closing}
-                className={cn('flex-[2] py-3 rounded-xl font-bold flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 text-white', closing && 'opacity-70')}
+                className={cn(
+                  'flex-[2] py-3.5 rounded-xl font-bold flex items-center justify-center gap-2',
+                  'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:shadow-xl transition-all',
+                  closing && 'opacity-70'
+                )}
               >
-                {closing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
-                {closing ? 'Cerrando...' : 'Cerrar Caja'}
+                {closing ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <CheckCircle className="w-5 h-5" />
+                )}
+                {closing ? 'Cerrando Caja...' : 'Cerrar Caja'}
               </button>
             </div>
-          </div>
+          </motion.div>
         </div>
       </DashboardLayout>
     </ProtectedRoute>
