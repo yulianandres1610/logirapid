@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft,
@@ -25,7 +25,7 @@ import {
   DollarSign
 } from 'lucide-react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
@@ -101,13 +101,41 @@ const STEPS: WizardStep[] = [
   { id: 'review', title: 'Confirmar', description: 'Revisar y crear', icon: Check }
 ]
 
+const STORAGE_KEY = 'wholesale_quote_draft'
+
+// Helper to serialize lines for storage
+const serializeLines = (lines: QuoteLine[]) => {
+  return lines.map(line => ({
+    productId: line.productId,
+    variantId: line.variantId,
+    productName: line.productName,
+    productSku: line.productSku,
+    quantity: line.quantity,
+    unitPrice: line.unitPrice,
+    unitPriceCup: line.unitPriceCup,
+    originalPrice: line.originalPrice,
+    subtotal: line.subtotal,
+    subtotalCup: line.subtotalCup,
+    costPrice: line.costPrice,
+    profitMargin: line.profitMargin,
+    hasPricelistPrice: line.hasPricelistPrice,
+    pricelistDiscountInfo: line.pricelistDiscountInfo
+  }))
+}
+
 export default function CreateQuotePage() {
   const { theme } = useTheme()
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const preselectedCustomerId = searchParams.get('customerId')
 
-  const [currentStep, setCurrentStep] = useState<Step>('customer')
+  // Read initial step from URL
+  const initialStep = searchParams.get('step') as Step | null
+  const validSteps = STEPS.map(s => s.id)
+  const [currentStep, setCurrentStep] = useState<Step>(
+    initialStep && validSteps.includes(initialStep) ? initialStep : 'customer'
+  )
   const [saving, setSaving] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
 
@@ -136,7 +164,115 @@ export default function CreateQuotePage() {
   // Exchange rates
   const [exchangeRateBCC, setExchangeRateBCC] = useState(411) // BCC rate for selling
 
+  const [isRestoring, setIsRestoring] = useState(true)
+
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
+
+  // Update URL with current step and customer
+  const updateURL = useCallback((step: string, customerId?: number) => {
+    const params = new URLSearchParams()
+    params.set('step', step)
+    if (customerId) {
+      params.set('customerId', customerId.toString())
+    }
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }, [pathname, router])
+
+  // Save form state to localStorage
+  const saveToStorage = useCallback(() => {
+    if (isRestoring) return
+    const state = {
+      customerId: selectedCustomer?.id || null,
+      warehouseId: selectedWarehouse,
+      lines: serializeLines(lines),
+      validUntil,
+      discountPercent,
+      notes,
+      internalNotes,
+      timestamp: Date.now()
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  }, [selectedCustomer, selectedWarehouse, lines, validUntil, discountPercent, notes, internalNotes, isRestoring])
+
+  // Clear storage after successful save
+  const clearStorage = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY)
+  }, [])
+
+  // Restore state from localStorage on mount
+  useEffect(() => {
+    const savedState = localStorage.getItem(STORAGE_KEY)
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState)
+        // Check if saved state is less than 24 hours old
+        if (state.timestamp && Date.now() - state.timestamp < 24 * 60 * 60 * 1000) {
+          if (state.warehouseId) setSelectedWarehouse(state.warehouseId)
+          if (state.validUntil) setValidUntil(state.validUntil)
+          if (state.discountPercent) setDiscountPercent(state.discountPercent)
+          if (state.notes) setNotes(state.notes)
+          if (state.internalNotes) setInternalNotes(state.internalNotes)
+        } else {
+          localStorage.removeItem(STORAGE_KEY)
+        }
+      } catch (e) {
+        console.error('Error restoring saved state:', e)
+        localStorage.removeItem(STORAGE_KEY)
+      }
+    }
+    setIsRestoring(false)
+  }, [])
+
+  // Restore customer and lines after data is loaded
+  useEffect(() => {
+    if (isRestoring || customers.length === 0 || products.length === 0) return
+
+    const savedState = localStorage.getItem(STORAGE_KEY)
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState)
+        if (state.timestamp && Date.now() - state.timestamp < 24 * 60 * 60 * 1000) {
+          // Restore customer if not already set
+          if (state.customerId && !selectedCustomer) {
+            const customer = customers.find(c => c.id === state.customerId)
+            if (customer) {
+              setSelectedCustomer(customer)
+              if (customer.pricelistId) {
+                fetchPricelistItems(customer.pricelistId)
+              }
+            }
+          }
+          // Restore lines
+          if (state.lines && state.lines.length > 0 && lines.length === 0) {
+            const restoredLines = state.lines.map((savedLine: Partial<QuoteLine>) => {
+              const product = products.find(p => p.id === savedLine.productId)
+              if (product) {
+                return {
+                  ...savedLine
+                } as QuoteLine
+              }
+              return null
+            }).filter(Boolean) as QuoteLine[]
+            if (restoredLines.length > 0) {
+              setLines(restoredLines)
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error restoring customer/lines:', e)
+      }
+    }
+  }, [isRestoring, customers, products, selectedCustomer, lines.length])
+
+  // Save to storage when state changes
+  useEffect(() => {
+    saveToStorage()
+  }, [saveToStorage])
+
+  // Update URL when step changes
+  useEffect(() => {
+    updateURL(currentStep, selectedCustomer?.id)
+  }, [currentStep, selectedCustomer?.id, updateURL])
 
   useEffect(() => {
     fetchCustomers()
@@ -404,6 +540,7 @@ export default function CreateQuotePage() {
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
+          clearStorage() // Clear saved draft on success
           router.push(`/dashboard/market/wholesale/quotes/${result.data.id}`)
         }
       }
@@ -1253,7 +1390,10 @@ export default function CreateQuotePage() {
                     Continuar editando
                   </button>
                   <button
-                    onClick={() => router.push('/dashboard/market/wholesale/quotes')}
+                    onClick={() => {
+                      clearStorage()
+                      router.push('/dashboard/market/wholesale/quotes')
+                    }}
                     className="flex-1 px-4 py-2.5 rounded-xl font-medium bg-red-500 hover:bg-red-600 text-white transition-colors"
                   >
                     Sí, cancelar

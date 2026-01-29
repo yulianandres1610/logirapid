@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useEffect, useState, useMemo } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Users,
@@ -132,13 +132,45 @@ const STEPS = [
   { id: 'confirm', title: 'Confirmación', icon: CheckCircle }
 ]
 
+const STORAGE_KEY = 'wholesale_invoice_draft'
+
+// Helper to serialize lines for storage (remove non-serializable data)
+const serializeLines = (lines: InvoiceLine[]) => {
+  return lines.map(line => ({
+    productId: line.productId,
+    variantId: line.variantId,
+    productName: line.productName,
+    productSku: line.productSku,
+    quantity: line.quantity,
+    unitPrice: line.unitPrice,
+    unitPriceCup: line.unitPriceCup,
+    costPrice: line.costPrice,
+    originalPrice: line.originalPrice,
+    subtotal: line.subtotal,
+    subtotalCup: line.subtotalCup,
+    warehouseQuantities: line.warehouseQuantities,
+    warehouseStock: line.warehouseStock,
+    profitMargin: line.profitMargin,
+    costPriceCup: line.costPriceCup,
+    hasPricelistPrice: line.hasPricelistPrice,
+    pricelistDiscountInfo: line.pricelistDiscountInfo,
+    currentTierMinQty: line.currentTierMinQty
+  }))
+}
+
 export default function CreateInvoicePage() {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const { theme } = useTheme()
   const preselectedCustomerId = searchParams.get('customerId')
 
-  const [currentStep, setCurrentStep] = useState<string>('customer')
+  // Read initial step from URL
+  const initialStep = searchParams.get('step') || 'customer'
+  const validSteps = STEPS.map(s => s.id)
+  const [currentStep, setCurrentStep] = useState<string>(
+    validSteps.includes(initialStep) ? initialStep : 'customer'
+  )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [showCancelModal, setShowCancelModal] = useState(false)
@@ -187,6 +219,116 @@ export default function CreateInvoicePage() {
     creditDays: '0'
   })
   const [savingCustomer, setSavingCustomer] = useState(false)
+  const [isRestoring, setIsRestoring] = useState(true)
+
+  // Update URL with current step and customer
+  const updateURL = useCallback((step: string, customerId?: number) => {
+    const params = new URLSearchParams()
+    params.set('step', step)
+    if (customerId) {
+      params.set('customerId', customerId.toString())
+    }
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }, [pathname, router])
+
+  // Save form state to localStorage
+  const saveToStorage = useCallback(() => {
+    if (isRestoring) return
+    const state = {
+      customerId: selectedCustomer?.id || null,
+      lines: serializeLines(lines),
+      dueDate,
+      discountPercent,
+      notes,
+      internalNotes,
+      timestamp: Date.now()
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  }, [selectedCustomer, lines, dueDate, discountPercent, notes, internalNotes, isRestoring])
+
+  // Clear storage after successful save
+  const clearStorage = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY)
+  }, [])
+
+  // Restore state from localStorage on mount
+  useEffect(() => {
+    const savedState = localStorage.getItem(STORAGE_KEY)
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState)
+        // Check if saved state is less than 24 hours old
+        if (state.timestamp && Date.now() - state.timestamp < 24 * 60 * 60 * 1000) {
+          // Will restore customer after customers are loaded
+          if (state.dueDate) setDueDate(state.dueDate)
+          if (state.discountPercent) setDiscountPercent(state.discountPercent)
+          if (state.notes) setNotes(state.notes)
+          if (state.internalNotes) setInternalNotes(state.internalNotes)
+        } else {
+          // Clear old saved state
+          localStorage.removeItem(STORAGE_KEY)
+        }
+      } catch (e) {
+        console.error('Error restoring saved state:', e)
+        localStorage.removeItem(STORAGE_KEY)
+      }
+    }
+    setIsRestoring(false)
+  }, [])
+
+  // Restore customer and lines after data is loaded
+  useEffect(() => {
+    if (isRestoring || customers.length === 0 || products.length === 0) return
+
+    const savedState = localStorage.getItem(STORAGE_KEY)
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState)
+        if (state.timestamp && Date.now() - state.timestamp < 24 * 60 * 60 * 1000) {
+          // Restore customer if not already set by URL
+          if (state.customerId && !selectedCustomer) {
+            const customer = customers.find(c => c.id === state.customerId)
+            if (customer) {
+              setSelectedCustomer(customer)
+              if (customer.pricelistId) {
+                fetchPricelistItems(customer.pricelistId)
+              }
+            }
+          }
+          // Restore lines with fresh warehouse stock data
+          if (state.lines && state.lines.length > 0 && lines.length === 0) {
+            const restoredLines = state.lines.map((savedLine: Partial<InvoiceLine>) => {
+              const product = products.find(p => p.id === savedLine.productId)
+              if (product) {
+                return {
+                  ...savedLine,
+                  warehouseStock: product.warehouseStock || [],
+                  previousUnitPrice: savedLine.unitPrice || 0,
+                  priceJustChanged: false
+                } as InvoiceLine
+              }
+              return null
+            }).filter(Boolean) as InvoiceLine[]
+            if (restoredLines.length > 0) {
+              setLines(restoredLines)
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error restoring customer/lines:', e)
+      }
+    }
+  }, [isRestoring, customers, products, selectedCustomer, lines.length])
+
+  // Save to storage when state changes
+  useEffect(() => {
+    saveToStorage()
+  }, [saveToStorage])
+
+  // Update URL when step changes
+  useEffect(() => {
+    updateURL(currentStep, selectedCustomer?.id)
+  }, [currentStep, selectedCustomer?.id, updateURL])
 
   useEffect(() => {
     fetchCustomers()
@@ -699,6 +841,7 @@ export default function CreateInvoicePage() {
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
+          clearStorage() // Clear saved draft on success
           router.push(`/dashboard/market/wholesale/invoices/${result.data.id}`)
         }
       }
@@ -1787,7 +1930,10 @@ export default function CreateInvoicePage() {
                   Continuar editando
                 </button>
                 <button
-                  onClick={() => router.push('/dashboard/market/wholesale/invoices')}
+                  onClick={() => {
+                    clearStorage()
+                    router.push('/dashboard/market/wholesale/invoices')
+                  }}
                   className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors"
                 >
                   Si, cancelar
