@@ -13,9 +13,10 @@ import { ChatNotificationListener } from '@/components/chat/ChatNotificationList
 interface DashboardLayoutProps {
   children: React.ReactNode
   hideSidebar?: boolean // Used for POS mode to prevent navigation escape
+  noPadding?: boolean // Used for full-screen layouts like POS close
 }
 
-export function DashboardLayout({ children, hideSidebar = false }: DashboardLayoutProps) {
+export function DashboardLayout({ children, hideSidebar = false, noPadding = false }: DashboardLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('sidebar-collapsed')
@@ -152,14 +153,18 @@ export function DashboardLayout({ children, hideSidebar = false }: DashboardLayo
           "flex-1 overflow-auto",
           hideSidebar ? "mt-0" : "mt-16"
         )}>
-          <motion.main
-            className="p-3 md:p-6"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            {children}
-          </motion.main>
+          {noPadding ? (
+            children
+          ) : (
+            <motion.main
+              className="p-3 md:p-6"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+            >
+              {children}
+            </motion.main>
+          )}
         </div>
       </div>
 

@@ -463,8 +463,8 @@ export default function CloseSessionPage() {
 
   return (
     <ProtectedRoute>
-      <DashboardLayout hideSidebar>
-        <div className="h-screen flex flex-col overflow-hidden">
+      <DashboardLayout hideSidebar noPadding>
+        <div className="fixed inset-0 flex flex-col overflow-hidden">
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -500,7 +500,7 @@ export default function CloseSessionPage() {
 
           {/* Main Content */}
           <div className="flex-1 overflow-auto">
-            <div className="max-w-7xl mx-auto p-4">
+            <div className="p-4">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                 {/* Left Column - Session Summary */}
                 <div className="lg:col-span-4 space-y-4">
@@ -927,7 +927,7 @@ export default function CloseSessionPage() {
                 exit={{ opacity: 0, y: 20 }}
                 className="px-4 pb-2"
               >
-                <div className="max-w-7xl mx-auto p-3 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center gap-3">
                   <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
                   <span className="text-red-500 text-sm flex-1">{error}</span>
                   <button onClick={() => setError(null)} className="p-1 hover:bg-red-500/20 rounded-lg">
@@ -947,7 +947,7 @@ export default function CloseSessionPage() {
               theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
             )}
           >
-            <div className="max-w-7xl mx-auto flex gap-3">
+            <div className="flex gap-3">
               <button
                 onClick={() => router.back()}
                 disabled={closing}
