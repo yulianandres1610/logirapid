@@ -204,7 +204,11 @@ export async function POST(request: NextRequest) {
       notes,
       internalNotes,
       lines,
-      payment // Optional payment data for immediate payment
+      payment, // Optional payment data for immediate payment
+      // New downpayment fields
+      downpaymentType, // 'percentage' | 'fixed_amount' | null
+      downpaymentValue, // number (percentage or amount)
+      wholesaleExchangeRate // Store the exchange rate used for this invoice
     } = body
 
     if (!customerId) {
@@ -274,23 +278,43 @@ export async function POST(request: NextRequest) {
     const discountAmount = discountPercent ? (subtotal * discountPercent / 100) : 0
     const totalAmount = subtotal - discountAmount
 
+    // Calculate downpayment amount if specified
+    let downpaymentAmount = 0
+    if (downpaymentType && downpaymentValue) {
+      if (downpaymentType === 'percentage') {
+        downpaymentAmount = (totalAmount * downpaymentValue) / 100
+      } else if (downpaymentType === 'fixed_amount') {
+        downpaymentAmount = Math.min(downpaymentValue, totalAmount)
+      }
+    }
+
     // Determine initial status based on payment
     const hasImmediatePayment = payment && payment.amount > 0
+    const hasDownpayment = downpaymentAmount > 0 && hasImmediatePayment
+
+    // Status logic:
+    // - Immediate full payment: confirmed + paid
+    // - With downpayment paid: confirmed + partial
+    // - Credit (no immediate payment): draft + pending
     const initialStatus = hasImmediatePayment ? 'confirmed' : 'draft'
-    const initialPaymentStatus = hasImmediatePayment ? 'paid' : 'pending'
-    const initialAmountDue = hasImmediatePayment ? 0 : totalAmount
-    const initialAmountPaid = hasImmediatePayment ? totalAmount : 0
+    const initialPaymentStatus = hasImmediatePayment
+      ? (hasDownpayment && payment.amount < totalAmount ? 'partial' : 'paid')
+      : 'pending'
+    const paidAmount = hasImmediatePayment ? (hasDownpayment ? downpaymentAmount : totalAmount) : 0
+    const initialAmountDue = totalAmount - paidAmount
+    const initialAmountPaid = paidAmount
 
     // Create invoice using transaction
     const result = await db.transaction(async (client) => {
-      // Insert invoice
+      // Insert invoice with new downpayment fields
       const invoiceResult = await client.query(`
         INSERT INTO market_invoices (
           company_id, invoice_number, customer_id, pricelist_id, warehouse_id,
           status, payment_status, subtotal, discount_percent, discount_amount, total_amount,
           amount_due, amount_paid, currency, due_date, notes, internal_notes, created_by,
-          confirmed_at, paid_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+          confirmed_at, paid_at,
+          downpayment_type, downpayment_value, downpayment_amount, wholesale_exchange_rate
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
         RETURNING id
       `, [
         payload.companyId,
@@ -312,7 +336,11 @@ export async function POST(request: NextRequest) {
         internalNotes || null,
         payload.userId,
         hasImmediatePayment ? new Date().toISOString() : null,
-        hasImmediatePayment ? new Date().toISOString() : null
+        hasImmediatePayment && initialPaymentStatus === 'paid' ? new Date().toISOString() : null,
+        downpaymentType || null,
+        downpaymentValue || null,
+        downpaymentAmount || null,
+        wholesaleExchangeRate || null
       ])
 
       const invoiceId = invoiceResult.rows[0].id
@@ -379,6 +407,16 @@ export async function POST(request: NextRequest) {
         }
         const paymentNumber = `PAY-${year}-${String(nextPaymentNumber).padStart(4, '0')}`
 
+        // Record the actual payment amount (could be downpayment or full amount)
+        const actualPaymentAmount = hasDownpayment ? downpaymentAmount : payment.amount
+        const paymentNotes = []
+        if (hasDownpayment) {
+          paymentNotes.push(`Anticipo (${downpaymentType === 'percentage' ? `${downpaymentValue}%` : `$${downpaymentValue}`})`)
+        }
+        if (payment.amountTendered && payment.amountTendered > actualPaymentAmount) {
+          paymentNotes.push(`Cambio: $${(payment.amountTendered - actualPaymentAmount).toFixed(2)}`)
+        }
+
         await client.query(`
           INSERT INTO market_invoice_payments (
             invoice_id, payment_number, amount, currency, payment_method, reference, payment_date, notes, created_by
@@ -386,14 +424,12 @@ export async function POST(request: NextRequest) {
         `, [
           invoiceId,
           paymentNumber,
-          payment.amount,
+          actualPaymentAmount,
           payment.currency || 'USD',
           payment.method || 'cash',
           payment.reference || null,
           new Date().toISOString().split('T')[0],
-          payment.amountTendered && payment.amountTendered > payment.amount
-            ? `Cambio: $${(payment.amountTendered - payment.amount).toFixed(2)}`
-            : null,
+          paymentNotes.length > 0 ? paymentNotes.join(' | ') : null,
           payload.userId
         ])
       }

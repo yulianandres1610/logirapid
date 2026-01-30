@@ -34,7 +34,10 @@ import {
   Banknote,
   Smartphone,
   Clock,
-  Receipt
+  Receipt,
+  Eye,
+  Percent,
+  QrCode
 } from 'lucide-react'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
@@ -131,8 +134,9 @@ const STEPS = [
   { id: 'customer', title: 'Cliente', icon: Users },
   { id: 'products', title: 'Productos', icon: Package },
   { id: 'terms', title: 'Términos', icon: Calendar },
+  { id: 'review', title: 'Revisión', icon: Eye },
   { id: 'payment', title: 'Pago', icon: CreditCard },
-  { id: 'print', title: 'Imprimir', icon: Printer }
+  { id: 'confirm', title: 'Confirmar', icon: Printer }
 ]
 
 const STORAGE_KEY = 'wholesale_invoice_draft'
@@ -192,6 +196,7 @@ export default function CreateInvoicePage() {
   const [exchangeRateBCC, setExchangeRateBCC] = useState(411) // BCC rate for selling
   const [pricelistItems, setPricelistItems] = useState<PricelistItem[]>([])
   const [loadingPricelist, setLoadingPricelist] = useState(false)
+  const [exchangeRateWholesale, setExchangeRateWholesale] = useState(355) // ElToque + 15 for wholesale
 
   // Step 1: Customer
   const [customerSearch, setCustomerSearch] = useState('')
@@ -207,6 +212,10 @@ export default function CreateInvoicePage() {
   const [customDueDate, setCustomDueDate] = useState('')
   const [notes, setNotes] = useState('')
   const [internalNotes, setInternalNotes] = useState('')
+  // Downpayment (anticipo)
+  const [requiresDownpayment, setRequiresDownpayment] = useState(false)
+  const [downpaymentType, setDownpaymentType] = useState<'percentage' | 'fixed_amount'>('percentage')
+  const [downpaymentValue, setDownpaymentValue] = useState<string>('30')
 
   // Step 4: Payment
   const [paymentMethod, setPaymentMethod] = useState<string>('cash')
@@ -222,6 +231,7 @@ export default function CreateInvoicePage() {
     total: number
     paymentStatus: string
     dueDate: string | null
+    downpaymentAmount?: number
   }
   const [createdInvoice, setCreatedInvoice] = useState<CreatedInvoice | null>(null)
 
@@ -366,6 +376,7 @@ export default function CreateInvoicePage() {
         if (result.success && result.rates) {
           setExchangeRate(result.rates.CUP || 340)
           setExchangeRateBCC(result.rates.CUP_BCC || 411)
+          setExchangeRateWholesale(result.rates.CUP_WHOLESALE || 355)
         }
       }
     } catch (error) {
@@ -606,7 +617,7 @@ export default function CreateInvoicePage() {
       productSku: product.sku || '',
       quantity: 0, // Will be calculated from warehouse quantities
       unitPrice,
-      unitPriceCup: unitPrice * exchangeRateBCC, // BCC rate for selling
+      unitPriceCup: unitPrice * exchangeRateWholesale, // Wholesale rate (ElToque + 15) for selling
       previousUnitPrice: unitPrice,
       costPrice: product.costPrice,
       originalPrice: product.sellingPrice, // Keep base price for reference
@@ -664,7 +675,7 @@ export default function CreateInvoicePage() {
     }
 
     line.unitPrice = newPrice
-    line.unitPriceCup = newPrice * exchangeRateBCC // Update CUP price with BCC rate
+    line.unitPriceCup = newPrice * exchangeRateWholesale // Update CUP price with wholesale rate
     line.hasPricelistPrice = hasDiscount
     line.pricelistDiscountInfo = discountInfo
     line.currentTierMinQty = minQuantity
@@ -676,7 +687,7 @@ export default function CreateInvoicePage() {
 
     // Recalculate subtotal with new price (no manual discounts)
     line.subtotal = line.quantity * line.unitPrice
-    line.subtotalCup = line.subtotal * exchangeRateBCC
+    line.subtotalCup = line.subtotal * exchangeRateWholesale
 
     setLines(newLines)
   }
@@ -880,6 +891,21 @@ export default function CreateInvoicePage() {
     try {
       const effectiveDueDate = calculateDueDate(paymentTerms, customDueDate)
       const isImmediatePayment = paymentTerms === 'immediate'
+      const hasDownpayment = !isImmediatePayment && requiresDownpayment
+      const needsPayment = isImmediatePayment || hasDownpayment
+
+      // Calculate downpayment amount
+      let downpaymentAmount = 0
+      if (hasDownpayment) {
+        if (downpaymentType === 'percentage') {
+          downpaymentAmount = (total * parseFloat(downpaymentValue || '0')) / 100
+        } else {
+          downpaymentAmount = parseFloat(downpaymentValue || '0')
+        }
+      }
+
+      // Amount to pay now: full amount for immediate, downpayment for credit with anticipo
+      const amountToPay = isImmediatePayment ? total : downpaymentAmount
 
       const response = await fetch('/api/market/wholesale/invoices', {
         method: 'POST',
@@ -902,12 +928,16 @@ export default function CreateInvoicePage() {
             originalPrice: l.originalPrice,
             warehouseQuantities: l.warehouseQuantities
           })),
-          // Payment data for immediate payment
-          payment: isImmediatePayment ? {
+          // Downpayment fields
+          downpaymentType: hasDownpayment ? downpaymentType : null,
+          downpaymentValue: hasDownpayment ? parseFloat(downpaymentValue || '0') : null,
+          wholesaleExchangeRate: exchangeRateWholesale,
+          // Payment data for immediate payment or downpayment
+          payment: needsPayment ? {
             method: paymentMethod,
             currency: paymentCurrency,
-            amount: total,
-            amountTendered: paymentMethod === 'cash' ? parseFloat(amountTendered || String(total)) : total,
+            amount: amountToPay,
+            amountTendered: paymentMethod === 'cash' ? parseFloat(amountTendered || String(amountToPay)) : amountToPay,
             reference: paymentReference || null
           } : null
         })
@@ -917,17 +947,24 @@ export default function CreateInvoicePage() {
         const result = await response.json()
         if (result.success) {
           clearStorage() // Clear saved draft on success
-          // Set created invoice data for print step
+          // Determine payment status
+          const paymentStatus = isImmediatePayment
+            ? 'paid'
+            : hasDownpayment
+              ? 'partial'
+              : 'pending'
+          // Set created invoice data for confirm step
           setCreatedInvoice({
             id: result.data.id,
             invoiceNumber: result.data.invoiceNumber,
             customerName: selectedCustomer.businessName,
             total: total,
-            paymentStatus: isImmediatePayment ? 'paid' : 'pending',
-            dueDate: isImmediatePayment ? null : effectiveDueDate
+            paymentStatus,
+            dueDate: isImmediatePayment ? null : effectiveDueDate,
+            downpaymentAmount: hasDownpayment ? downpaymentAmount : 0
           })
-          // Move to print step
-          setCurrentStep('print')
+          // Move to confirm step
+          setCurrentStep('confirm')
         } else {
           setError(result.error || 'Error al crear factura')
         }
@@ -1234,10 +1271,10 @@ export default function CreateInvoicePage() {
                   </div>
                   <div className={cn(
                     'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm',
-                    theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                    theme === 'dark' ? 'bg-green-900/30 text-green-300' : 'bg-green-100 text-green-700'
                   )}>
                     <DollarSign className="w-4 h-4" />
-                    Tasa BCC: $1 = {exchangeRateBCC.toLocaleString()} CUP
+                    Tasa Mayoreo: $1 = {exchangeRateWholesale.toLocaleString()} CUP
                   </div>
                 </div>
 
@@ -1651,7 +1688,7 @@ export default function CreateInvoicePage() {
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-500">Subtotal CUP:</span>
-                            <span className="font-medium text-gray-600 dark:text-gray-300">{formatCUP(subtotal * exchangeRateBCC)}</span>
+                            <span className="font-medium text-gray-600 dark:text-gray-300">{formatCUP(subtotal * exchangeRateWholesale)}</span>
                           </div>
                           <div className="flex justify-between text-xl font-bold pt-2 border-t border-gray-200 dark:border-gray-700">
                             <span>Total USD:</span>
@@ -1661,7 +1698,10 @@ export default function CreateInvoicePage() {
                             <span className="text-gray-500">Total CUP:</span>
                             <span className={cn(
                               theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                            )}>{formatCUP(subtotal * exchangeRateBCC)}</span>
+                            )}>{formatCUP(subtotal * exchangeRateWholesale)}</span>
+                          </div>
+                          <div className="text-xs text-center text-gray-400 mt-1">
+                            Tasa mayoreo: {exchangeRateWholesale} CUP/USD
                           </div>
                         </div>
                       </div>
@@ -1785,6 +1825,152 @@ export default function CreateInvoicePage() {
                     </div>
                   )}
 
+                  {/* Downpayment Section (only for credit terms) */}
+                  {paymentTerms !== 'immediate' && (
+                    <div className="space-y-4">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={requiresDownpayment}
+                          onChange={(e) => setRequiresDownpayment(e.target.checked)}
+                          className="w-5 h-5 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                        />
+                        <span className={cn(
+                          'font-medium',
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        )}>
+                          Requiere anticipo (downpayment)
+                        </span>
+                      </label>
+
+                      {requiresDownpayment && (
+                        <div className={cn(
+                          'p-4 rounded-xl border space-y-4',
+                          theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-200'
+                        )}>
+                          {/* Downpayment Type */}
+                          <div className="grid grid-cols-2 gap-3">
+                            <button
+                              onClick={() => setDownpaymentType('percentage')}
+                              className={cn(
+                                'py-3 px-4 rounded-xl font-medium transition-all border-2 flex items-center justify-center gap-2',
+                                downpaymentType === 'percentage'
+                                  ? 'bg-green-500 text-white border-green-500'
+                                  : theme === 'dark'
+                                    ? 'bg-gray-800 border-gray-700 text-gray-300 hover:border-green-500/50'
+                                    : 'bg-white border-gray-200 text-gray-700 hover:border-green-500/50'
+                              )}
+                            >
+                              <Percent className="w-4 h-4" />
+                              Porcentaje
+                            </button>
+                            <button
+                              onClick={() => setDownpaymentType('fixed_amount')}
+                              className={cn(
+                                'py-3 px-4 rounded-xl font-medium transition-all border-2 flex items-center justify-center gap-2',
+                                downpaymentType === 'fixed_amount'
+                                  ? 'bg-green-500 text-white border-green-500'
+                                  : theme === 'dark'
+                                    ? 'bg-gray-800 border-gray-700 text-gray-300 hover:border-green-500/50'
+                                    : 'bg-white border-gray-200 text-gray-700 hover:border-green-500/50'
+                              )}
+                            >
+                              <DollarSign className="w-4 h-4" />
+                              Monto Fijo
+                            </button>
+                          </div>
+
+                          {/* Downpayment Value */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              {downpaymentType === 'percentage' ? 'Porcentaje del anticipo' : 'Monto del anticipo (USD)'}
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                min="1"
+                                max={downpaymentType === 'percentage' ? 99 : total}
+                                step={downpaymentType === 'percentage' ? 1 : 0.01}
+                                value={downpaymentValue}
+                                onChange={(e) => setDownpaymentValue(e.target.value)}
+                                className={cn(
+                                  'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
+                                  theme === 'dark'
+                                    ? 'bg-gray-800 border-gray-700 text-white focus:border-green-500 focus:ring-green-500/20'
+                                    : 'bg-white border-gray-300 text-gray-900 focus:border-green-500 focus:ring-green-500/20'
+                                )}
+                              />
+                              <span className={cn(
+                                'absolute right-4 top-1/2 -translate-y-1/2 text-sm',
+                                theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                              )}>
+                                {downpaymentType === 'percentage' ? '%' : 'USD'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Quick percentages (only for percentage type) */}
+                          {downpaymentType === 'percentage' && (
+                            <div className="flex gap-2">
+                              {[25, 30, 50].map(pct => (
+                                <button
+                                  key={pct}
+                                  onClick={() => setDownpaymentValue(pct.toString())}
+                                  className={cn(
+                                    'flex-1 py-2 rounded-lg text-sm font-medium transition-all',
+                                    downpaymentValue === pct.toString()
+                                      ? 'bg-green-500 text-white'
+                                      : theme === 'dark'
+                                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                  )}
+                                >
+                                  {pct}%
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Payment Summary */}
+                          <div className={cn(
+                            'p-4 rounded-lg',
+                            theme === 'dark' ? 'bg-green-900/30' : 'bg-green-50'
+                          )}>
+                            <p className="text-sm font-medium text-green-700 dark:text-green-300 mb-2">Resumen de Pago:</p>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600 dark:text-gray-400">Total de factura:</span>
+                                <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(total)}</span>
+                              </div>
+                              <div className="flex justify-between text-green-600">
+                                <span>
+                                  Anticipo ({downpaymentType === 'percentage' ? `${downpaymentValue}%` : 'fijo'}):
+                                </span>
+                                <span className="font-bold">
+                                  {formatCurrency(
+                                    downpaymentType === 'percentage'
+                                      ? (total * parseFloat(downpaymentValue || '0')) / 100
+                                      : parseFloat(downpaymentValue || '0')
+                                  )}
+                                </span>
+                              </div>
+                              <div className="flex justify-between pt-1 border-t border-green-200 dark:border-green-800">
+                                <span className="text-gray-600 dark:text-gray-400">Restante (a {paymentTerms === 'custom' ? 'fecha' : `${paymentTerms} días`}):</span>
+                                <span className="font-medium text-amber-600">
+                                  {formatCurrency(
+                                    total - (downpaymentType === 'percentage'
+                                      ? (total * parseFloat(downpaymentValue || '0')) / 100
+                                      : parseFloat(downpaymentValue || '0'))
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Notes for client */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -1829,33 +2015,384 @@ export default function CreateInvoicePage() {
               </motion.div>
             )}
 
-            {/* Step 4: Payment */}
-            {currentStep === 'payment' && (
+            {/* Step 4: Review */}
+            {currentStep === 'review' && (
               <motion.div
-                key="step4"
+                key="step4-review"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
-                {paymentTerms === 'immediate' ? (
-                  <>
-                    {/* Immediate Payment Mode */}
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                      Pago de Factura
-                    </h2>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  Revisión de Factura
+                </h2>
 
-                    {/* Total Amount */}
-                    <div className={cn(
-                      'rounded-xl p-6 text-center',
-                      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-                    )}>
-                      <p className="text-sm text-gray-500 mb-1">Total a Pagar</p>
-                      <p className="text-4xl font-bold text-green-600">{formatCurrency(total)}</p>
-                      <p className="text-lg text-gray-500 mt-1">
-                        {formatCUP(total * exchangeRateBCC)} <span className="text-xs">(Tasa BCC: {exchangeRateBCC})</span>
-                      </p>
+                {/* Invoice Preview */}
+                <div className={cn(
+                  'rounded-xl border-2 overflow-hidden',
+                  theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
+                )}>
+                  {/* Invoice Header */}
+                  <div className={cn(
+                    'p-6 border-b',
+                    theme === 'dark' ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gray-50'
+                  )}>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-2xl font-bold text-green-600">FACTURA PROFORMA</p>
+                        <p className={cn(
+                          'text-sm mt-1',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                        )}>
+                          {new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className={cn(
+                          'text-sm',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                        )}>
+                          Vencimiento: {paymentTerms === 'immediate'
+                            ? 'Inmediato'
+                            : formatDateSpanish(calculateDueDate(paymentTerms, customDueDate))}
+                        </p>
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Customer Info */}
+                  <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <p className={cn(
+                      'text-sm uppercase tracking-wider mb-2',
+                      theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                    )}>
+                      Cliente
+                    </p>
+                    <p className={cn(
+                      'text-lg font-bold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      {selectedCustomer?.businessName}
+                    </p>
+                    {selectedCustomer?.taxId && (
+                      <p className="text-sm text-gray-500">RUC: {selectedCustomer.taxId}</p>
+                    )}
+                    {selectedCustomer?.address && (
+                      <p className="text-sm text-gray-500">{selectedCustomer.address}</p>
+                    )}
+                  </div>
+
+                  {/* Products Table */}
+                  <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <table className="w-full">
+                      <thead>
+                        <tr className={cn(
+                          'text-sm border-b',
+                          theme === 'dark' ? 'text-gray-400 border-gray-700' : 'text-gray-500 border-gray-200'
+                        )}>
+                          <th className="text-left py-2">Producto</th>
+                          <th className="text-center py-2">Cant.</th>
+                          <th className="text-right py-2">P.Unit USD</th>
+                          <th className="text-right py-2">P.Unit CUP</th>
+                          <th className="text-right py-2">Subtotal USD</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lines.filter(l => l.quantity > 0).map((line, idx) => (
+                          <tr key={idx} className={cn(
+                            'border-b text-sm',
+                            theme === 'dark' ? 'border-gray-700' : 'border-gray-100'
+                          )}>
+                            <td className="py-3">
+                              <p className={cn(
+                                'font-medium',
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>{line.productName}</p>
+                              <p className="text-xs text-gray-500">{line.productSku}</p>
+                            </td>
+                            <td className="text-center py-3">{line.quantity}</td>
+                            <td className="text-right py-3">{formatCurrency(line.unitPrice)}</td>
+                            <td className="text-right py-3 text-gray-500">{formatCUP(line.unitPriceCup)}</td>
+                            <td className="text-right py-3 font-medium text-green-600">{formatCurrency(line.subtotal)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Totals */}
+                  <div className="p-6">
+                    <div className="flex justify-end">
+                      <div className="w-72 space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500">Subtotal:</span>
+                          <span className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                            {formatCurrency(total)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm text-gray-500">
+                          <span>En CUP:</span>
+                          <span>{formatCUP(total * exchangeRateWholesale)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-400 pt-1">
+                          <span>Tasa mayoreo:</span>
+                          <span>$1 = {exchangeRateWholesale} CUP</span>
+                        </div>
+                        <div className={cn(
+                          'flex justify-between text-xl font-bold pt-3 mt-2 border-t',
+                          theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                        )}>
+                          <span>TOTAL:</span>
+                          <span className="text-green-600">{formatCurrency(total)}</span>
+                        </div>
+
+                        {/* Downpayment Summary in Review */}
+                        {requiresDownpayment && paymentTerms !== 'immediate' && (
+                          <div className={cn(
+                            'mt-4 p-3 rounded-lg text-sm',
+                            theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-50'
+                          )}>
+                            <p className="font-medium text-amber-700 dark:text-amber-300 mb-2">Términos de Pago:</p>
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                                <span>Anticipo ({downpaymentType === 'percentage' ? `${downpaymentValue}%` : 'fijo'}):</span>
+                                <span className="font-bold">
+                                  {formatCurrency(
+                                    downpaymentType === 'percentage'
+                                      ? (total * parseFloat(downpaymentValue || '0')) / 100
+                                      : parseFloat(downpaymentValue || '0')
+                                  )}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                                <span>Plazo: {paymentTerms === 'custom' ? formatDateSpanish(customDueDate) : `${paymentTerms} días`}</span>
+                                <span>
+                                  {formatCurrency(
+                                    total - (downpaymentType === 'percentage'
+                                      ? (total * parseFloat(downpaymentValue || '0')) / 100
+                                      : parseFloat(downpaymentValue || '0'))
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Deliveries Preview */}
+                {deliveriesPreview.length > 0 && (
+                  <div className={cn(
+                    'rounded-xl p-4',
+                    theme === 'dark' ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200'
+                  )}>
+                    <h3 className="font-medium text-blue-900 dark:text-blue-200 mb-3 flex items-center gap-2">
+                      <Warehouse className="w-5 h-5" />
+                      Entregas a generar ({deliveriesPreview.length} tickets)
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {deliveriesPreview.map((delivery) => (
+                        <div
+                          key={delivery.warehouseId}
+                          className={cn(
+                            'p-3 rounded-lg flex items-center justify-between',
+                            theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <QrCode className="w-4 h-4 text-blue-500" />
+                            <span className="font-medium text-sm text-gray-900 dark:text-white">
+                              {delivery.warehouseName}
+                            </span>
+                          </div>
+                          <span className="text-sm text-gray-500">
+                            {delivery.products.length} productos ({delivery.products.reduce((sum, p) => sum + p.quantity, 0)} uds)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Notes Preview */}
+                {(notes || internalNotes) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {notes && (
+                      <div className={cn(
+                        'p-4 rounded-xl',
+                        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+                      )}>
+                        <p className="text-sm font-medium text-gray-500 mb-1">Notas para el cliente:</p>
+                        <p className={cn('text-sm', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>{notes}</p>
+                      </div>
+                    )}
+                    {internalNotes && (
+                      <div className={cn(
+                        'p-4 rounded-xl border border-dashed',
+                        theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-300'
+                      )}>
+                        <p className="text-sm font-medium text-gray-400 mb-1">Notas internas:</p>
+                        <p className="text-sm text-gray-500">{internalNotes}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {/* Step 5: Payment */}
+            {currentStep === 'payment' && (
+              <motion.div
+                key="step5"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-6"
+              >
+                {/* Determine what amount to pay */}
+                {(() => {
+                  const showPaymentScreen = paymentTerms === 'immediate' || requiresDownpayment
+                  const amountToPay = paymentTerms === 'immediate'
+                    ? total
+                    : (downpaymentType === 'percentage'
+                        ? (total * parseFloat(downpaymentValue || '0')) / 100
+                        : parseFloat(downpaymentValue || '0'))
+                  const paymentLabel = paymentTerms === 'immediate'
+                    ? 'Total a Pagar'
+                    : `Anticipo (${downpaymentType === 'percentage' ? downpaymentValue + '%' : formatCurrency(parseFloat(downpaymentValue || '0'))})`
+
+                  if (!showPaymentScreen) {
+                    // Credit without downpayment - just show summary
+                    return (
+                      <>
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                          Resumen de Factura a Crédito
+                        </h2>
+
+                        <div className={cn(
+                          'rounded-xl p-6',
+                          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+                        )}>
+                          <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
+                            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-bold text-xl">
+                              {selectedCustomer?.businessName.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-lg text-gray-900 dark:text-white">
+                                {selectedCustomer?.businessName}
+                              </p>
+                              <p className="text-sm text-gray-500">{selectedCustomer?.code}</p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Productos</span>
+                              <span className="font-medium text-gray-900 dark:text-white">
+                                {lines.filter(l => l.quantity > 0).length} items
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-xl font-bold">
+                              <span>Total</span>
+                              <span className="text-green-600">{formatCurrency(total)}</span>
+                            </div>
+
+                            <div className={cn(
+                              'mt-4 p-4 rounded-xl flex items-center gap-3',
+                              theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-50'
+                            )}>
+                              <Clock className="w-6 h-6 text-blue-500" />
+                              <div>
+                                <p className="font-medium text-blue-700 dark:text-blue-300">
+                                  Términos: {paymentTerms === 'custom' ? 'Fecha específica' : `${paymentTerms} días`}
+                                </p>
+                                <p className="text-sm text-blue-600 dark:text-blue-400">
+                                  Vencimiento: {formatDateSpanish(calculateDueDate(paymentTerms, customDueDate))}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className={cn(
+                              'p-4 rounded-xl flex items-start gap-3',
+                              theme === 'dark' ? 'bg-yellow-900/20' : 'bg-yellow-50'
+                            )}>
+                              <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                              <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                                Esta factura quedará en estado <strong>Pendiente de Pago</strong>.
+                                El cliente podrá pagar posteriormente.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Deliveries Preview */}
+                        <div className={cn(
+                          'rounded-xl p-4',
+                          theme === 'dark' ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200'
+                        )}>
+                          <h3 className="font-medium text-blue-900 dark:text-blue-200 mb-3 flex items-center gap-2">
+                            <Truck className="w-5 h-5" />
+                            Entregas a generar ({deliveriesPreview.length})
+                          </h3>
+                          <div className="space-y-2">
+                            {deliveriesPreview.map((delivery) => (
+                              <div
+                                key={delivery.warehouseId}
+                                className={cn(
+                                  'p-3 rounded-lg flex items-center justify-between',
+                                  theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                                )}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Warehouse className="w-4 h-4 text-blue-500" />
+                                  <span className="font-medium text-sm text-gray-900 dark:text-white">
+                                    {delivery.warehouseName}
+                                  </span>
+                                </div>
+                                <span className="text-sm text-gray-500">
+                                  {delivery.products.reduce((sum, p) => sum + p.quantity, 0)} productos
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )
+                  }
+
+                  // Show payment screen (immediate or downpayment)
+                  return (
+                    <>
+                      <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                        {paymentTerms === 'immediate' ? 'Pago de Factura' : 'Pago del Anticipo'}
+                      </h2>
+
+                      {/* Amount to Pay */}
+                      <div className={cn(
+                        'rounded-xl p-6 text-center',
+                        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+                      )}>
+                        <p className="text-sm text-gray-500 mb-1">{paymentLabel}</p>
+                        <p className="text-4xl font-bold text-green-600">{formatCurrency(amountToPay)}</p>
+                        <p className="text-lg text-gray-500 mt-1">
+                          {formatCUP(amountToPay * exchangeRateWholesale)} <span className="text-xs">(Tasa Mayoreo: {exchangeRateWholesale})</span>
+                        </p>
+
+                        {paymentTerms !== 'immediate' && (
+                          <div className={cn(
+                            'mt-4 pt-4 border-t text-sm',
+                            theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                          )}>
+                            <p className="text-gray-500">
+                              Restante: <span className="font-medium text-amber-600">{formatCurrency(total - amountToPay)}</span>
+                              <span className="text-gray-400"> (vence {formatDateSpanish(calculateDueDate(paymentTerms, customDueDate))})</span>
+                            </p>
+                          </div>
+                        )}
+                      </div>
 
                     {/* Payment Method */}
                     <div>
@@ -1991,113 +2528,15 @@ export default function CreateInvoicePage() {
                       </div>
                     )}
                   </>
-                ) : (
-                  <>
-                    {/* Credit Payment Mode - Summary */}
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                      Resumen de Factura
-                    </h2>
-
-                    <div className={cn(
-                      'rounded-xl p-6',
-                      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-                    )}>
-                      {/* Customer Summary */}
-                      <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
-                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-bold text-xl">
-                          {selectedCustomer?.businessName.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-lg text-gray-900 dark:text-white">
-                            {selectedCustomer?.businessName}
-                          </p>
-                          <p className="text-sm text-gray-500">{selectedCustomer?.code}</p>
-                        </div>
-                      </div>
-
-                      {/* Invoice Details */}
-                      <div className="space-y-4">
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Productos</span>
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {lines.filter(l => l.quantity > 0).length} items
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-xl font-bold">
-                          <span>Total</span>
-                          <span className="text-green-600">{formatCurrency(total)}</span>
-                        </div>
-
-                        <div className={cn(
-                          'mt-4 p-4 rounded-xl flex items-center gap-3',
-                          theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-50'
-                        )}>
-                          <Clock className="w-6 h-6 text-blue-500" />
-                          <div>
-                            <p className="font-medium text-blue-700 dark:text-blue-300">
-                              Términos de Pago: {paymentTerms === 'custom' ? 'Fecha específica' : `${paymentTerms} días`}
-                            </p>
-                            <p className="text-sm text-blue-600 dark:text-blue-400">
-                              Vencimiento: {formatDateSpanish(calculateDueDate(paymentTerms, customDueDate))}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className={cn(
-                          'p-4 rounded-xl flex items-start gap-3',
-                          theme === 'dark' ? 'bg-yellow-900/20' : 'bg-yellow-50'
-                        )}>
-                          <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-sm text-yellow-700 dark:text-yellow-400">
-                              Esta factura quedará en estado <strong>Pendiente de Pago</strong>.
-                              El cliente podrá pagar posteriormente.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Deliveries Preview */}
-                    <div className={cn(
-                      'rounded-xl p-4',
-                      theme === 'dark' ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200'
-                    )}>
-                      <h3 className="font-medium text-blue-900 dark:text-blue-200 mb-3 flex items-center gap-2">
-                        <Truck className="w-5 h-5" />
-                        Entregas a generar ({deliveriesPreview.length})
-                      </h3>
-                      <div className="space-y-2">
-                        {deliveriesPreview.map((delivery) => (
-                          <div
-                            key={delivery.warehouseId}
-                            className={cn(
-                              'p-3 rounded-lg flex items-center justify-between',
-                              theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-                            )}
-                          >
-                            <div className="flex items-center gap-2">
-                              <Warehouse className="w-4 h-4 text-blue-500" />
-                              <span className="font-medium text-sm text-gray-900 dark:text-white">
-                                {delivery.warehouseName}
-                              </span>
-                            </div>
-                            <span className="text-sm text-gray-500">
-                              {delivery.products.reduce((sum, p) => sum + p.quantity, 0)} productos
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
+                  )
+                })()}
               </motion.div>
             )}
 
-            {/* Step 5: Print/Confirmation */}
-            {currentStep === 'print' && createdInvoice && (
+            {/* Step 6: Confirmation */}
+            {currentStep === 'confirm' && createdInvoice && (
               <motion.div
-                key="step5"
+                key="step6-confirm"
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
@@ -2146,11 +2585,23 @@ export default function CreateInvoicePage() {
                         'px-3 py-1 rounded-full text-sm font-medium',
                         createdInvoice.paymentStatus === 'paid'
                           ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400'
-                          : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400'
+                          : createdInvoice.paymentStatus === 'partial'
+                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400'
+                            : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400'
                       )}>
-                        {createdInvoice.paymentStatus === 'paid' ? 'Pagada' : 'Pendiente de Pago'}
+                        {createdInvoice.paymentStatus === 'paid'
+                          ? 'Pagada'
+                          : createdInvoice.paymentStatus === 'partial'
+                            ? 'Pago Parcial'
+                            : 'Pendiente de Pago'}
                       </span>
                     </div>
+                    {createdInvoice.downpaymentAmount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Anticipo Pagado</span>
+                        <span className="font-medium text-blue-600">{formatCurrency(createdInvoice.downpaymentAmount)}</span>
+                      </div>
+                    )}
                     {createdInvoice.dueDate && (
                       <div className="flex justify-between">
                         <span className="text-gray-500">Vencimiento</span>
@@ -2162,9 +2613,68 @@ export default function CreateInvoicePage() {
                   </div>
                 </div>
 
+                {/* Warehouse Tickets with QR */}
+                {deliveriesPreview.length > 0 && (
+                  <div className={cn(
+                    'rounded-xl p-4 max-w-2xl mx-auto',
+                    theme === 'dark' ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200'
+                  )}>
+                    <h3 className="font-medium text-blue-900 dark:text-blue-200 mb-3 flex items-center gap-2">
+                      <QrCode className="w-5 h-5" />
+                      Tickets de Recogida por Almacén
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {deliveriesPreview.map((delivery, idx) => (
+                        <button
+                          key={delivery.warehouseId}
+                          onClick={() => {
+                            window.open(`/dashboard/market/wholesale/invoices/${createdInvoice.id}/print?format=warehouse-ticket&warehouse=${delivery.warehouseId}`, '_blank')
+                          }}
+                          className={cn(
+                            'p-3 rounded-lg flex items-center justify-between transition-all border-2 hover:border-blue-500',
+                            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className={cn(
+                              'w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold',
+                              theme === 'dark' ? 'bg-blue-900 text-blue-300' : 'bg-blue-100 text-blue-700'
+                            )}>
+                              {idx + 1}
+                            </div>
+                            <div className="text-left">
+                              <span className="font-medium text-sm text-gray-900 dark:text-white block">
+                                {delivery.warehouseName}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {delivery.products.length} productos, {delivery.products.reduce((sum, p) => sum + p.quantity, 0)} uds
+                              </span>
+                            </div>
+                          </div>
+                          <Printer className="w-4 h-4 text-blue-500" />
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => {
+                        window.open(`/dashboard/market/wholesale/invoices/${createdInvoice.id}/print?format=warehouse-tickets-all`, '_blank')
+                      }}
+                      className={cn(
+                        'w-full mt-3 py-2.5 rounded-lg font-medium text-sm transition-all border-2 flex items-center justify-center gap-2',
+                        theme === 'dark'
+                          ? 'border-blue-500 text-blue-400 hover:bg-blue-500/10'
+                          : 'border-blue-600 text-blue-600 hover:bg-blue-50'
+                      )}
+                    >
+                      <Printer className="w-4 h-4" />
+                      Imprimir Todos los Tickets
+                    </button>
+                  </div>
+                )}
+
                 {/* Print Options */}
                 <div className="space-y-3 max-w-md mx-auto">
-                  <p className="text-sm text-gray-500 font-medium">¿Desea imprimir?</p>
+                  <p className="text-sm text-gray-500 font-medium">Documentos de Factura</p>
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       onClick={() => {
@@ -2210,6 +2720,9 @@ export default function CreateInvoicePage() {
                       setCustomDueDate('')
                       setNotes('')
                       setInternalNotes('')
+                      setRequiresDownpayment(false)
+                      setDownpaymentType('percentage')
+                      setDownpaymentValue('30')
                       setPaymentMethod('cash')
                       setPaymentCurrency('USD')
                       setAmountTendered('')
@@ -2258,8 +2771,8 @@ export default function CreateInvoicePage() {
             )}
           </AnimatePresence>
 
-          {/* Navigation Buttons - Hide on print step */}
-          {currentStep !== 'print' && (
+          {/* Navigation Buttons - Hide on confirm step */}
+          {currentStep !== 'confirm' && (
             <div className={cn(
               "flex items-center justify-between mt-8 pt-6 border-t",
               theme === 'dark' ? 'border-gray-700' : 'border-gray-200'

@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// Constante para margen mayorista sobre ElToque
+const WHOLESALE_MARGIN_CUP = 15
+
 // Cache para evitar múltiples llamadas
 let cachedRates: {
-  CUP: number       // ElToque (para costo)
-  CUP_BCC: number   // BCC Banco Central (para venta)
+  CUP: number           // ElToque (para costo)
+  CUP_BCC: number       // BCC Banco Central (para venta POS)
+  CUP_WHOLESALE: number // ElToque + 15 (para venta mayoreo)
   MLC: number
   EUR: number
   timestamp: string
@@ -98,14 +102,19 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Calcular tasa mayoreo (ElToque + margen)
+    const wholesaleRate = elToqueRate + WHOLESALE_MARGIN_CUP
+
     // Construir respuesta para el POS
     const posRates = {
-      CUP: elToqueRate,       // ElToque para COSTO
-      CUP_BCC: bccRate,       // BCC para VENTA
+      CUP: elToqueRate,          // ElToque para COSTO
+      CUP_BCC: bccRate,          // BCC para VENTA POS
+      CUP_WHOLESALE: wholesaleRate, // ElToque + 15 para VENTA MAYOREO
       MLC: mlcRate,
       EUR: eurRate,
       USD_CUP: elToqueRate,
       USD_CUP_BCC: bccRate,
+      USD_CUP_WHOLESALE: wholesaleRate,
       timestamp: elToqueTimestamp,
       timestampBCC: bccTimestamp,
       source: elToqueSource
@@ -115,6 +124,7 @@ export async function GET(request: NextRequest) {
     cachedRates = {
       CUP: posRates.CUP,
       CUP_BCC: posRates.CUP_BCC,
+      CUP_WHOLESALE: posRates.CUP_WHOLESALE,
       MLC: posRates.MLC,
       EUR: eurRate,
       timestamp: elToqueTimestamp,
@@ -126,6 +136,7 @@ export async function GET(request: NextRequest) {
     console.log('[POS Exchange Rates] Updated rates:', {
       CUP: posRates.CUP,
       CUP_BCC: posRates.CUP_BCC,
+      CUP_WHOLESALE: posRates.CUP_WHOLESALE,
       MLC: posRates.MLC,
       source: elToqueSource
     })
@@ -155,6 +166,7 @@ export async function GET(request: NextRequest) {
     const defaultRates = {
       CUP: 440,
       CUP_BCC: 411,
+      CUP_WHOLESALE: 440 + WHOLESALE_MARGIN_CUP, // 455
       MLC: 1.11,
       EUR: 485,
       timestamp: new Date().toISOString(),

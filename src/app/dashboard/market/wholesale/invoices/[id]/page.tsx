@@ -298,6 +298,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
+                  onClick={() => window.open(`/dashboard/market/wholesale/invoices/${invoice.id}/print?format=letter`, '_blank')}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 rounded-lg border',
                     theme === 'dark'
@@ -662,42 +663,176 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
 
                 {activeTab === 'history' && (
                   <div className="space-y-4">
-                    <h3 className="font-medium">Historial de la Factura</h3>
-                    <div className="space-y-3">
+                    <h3 className="font-medium">Historial de Actividad</h3>
+
+                    {/* Timeline Visual */}
+                    <div className="relative">
+                      {/* Vertical line */}
                       <div className={cn(
-                        'p-3 rounded-lg',
-                        theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-50'
-                      )}>
-                        <p className="text-sm">Factura creada</p>
-                        <p className="text-xs text-gray-500">{formatDate(invoice.createdAt)} por {invoice.createdBy}</p>
+                        'absolute left-4 top-8 bottom-4 w-0.5',
+                        theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                      )} />
+
+                      <div className="space-y-4">
+                        {/* Creation Event */}
+                        <div className="relative flex gap-4">
+                          <div className={cn(
+                            'w-8 h-8 rounded-full flex items-center justify-center z-10 flex-shrink-0',
+                            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                          )}>
+                            <FileText className="w-4 h-4 text-gray-500" />
+                          </div>
+                          <div className={cn(
+                            'flex-1 p-4 rounded-lg',
+                            theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-50'
+                          )}>
+                            <div className="flex items-center justify-between">
+                              <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                Factura creada
+                              </p>
+                              <p className="text-xs text-gray-500">{formatDate(invoice.createdAt)}</p>
+                            </div>
+                            <p className="text-sm text-gray-500 mt-1">
+                              Por: {invoice.createdBy}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              Total: {formatCurrency(invoice.totalAmount)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Confirmation Event */}
+                        {invoice.confirmedAt && (
+                          <div className="relative flex gap-4">
+                            <div className={cn(
+                              'w-8 h-8 rounded-full flex items-center justify-center z-10 flex-shrink-0',
+                              'bg-blue-500'
+                            )}>
+                              <CheckCircle className="w-4 h-4 text-white" />
+                            </div>
+                            <div className={cn(
+                              'flex-1 p-4 rounded-lg',
+                              theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'
+                            )}>
+                              <div className="flex items-center justify-between">
+                                <p className="font-medium text-blue-700 dark:text-blue-300">
+                                  Factura confirmada
+                                </p>
+                                <p className="text-xs text-gray-500">{formatDate(invoice.confirmedAt)}</p>
+                              </div>
+                              {invoice.deliveries.length > 0 && (
+                                <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                                  {invoice.deliveries.length} entrega(s) generada(s): {invoice.deliveries.map(d => d.deliveryNumber).join(', ')}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Payment Events */}
+                        {invoice.payments.map((payment, idx) => (
+                          <div key={payment.id} className="relative flex gap-4">
+                            <div className={cn(
+                              'w-8 h-8 rounded-full flex items-center justify-center z-10 flex-shrink-0',
+                              'bg-green-500'
+                            )}>
+                              <DollarSign className="w-4 h-4 text-white" />
+                            </div>
+                            <div className={cn(
+                              'flex-1 p-4 rounded-lg',
+                              theme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'
+                            )}>
+                              <div className="flex items-center justify-between">
+                                <p className="font-medium text-green-700 dark:text-green-300">
+                                  Pago registrado
+                                </p>
+                                <p className="text-xs text-gray-500">{formatDate(payment.paymentDate)}</p>
+                              </div>
+                              <div className="mt-1 flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm text-green-600 dark:text-green-400">
+                                    {payment.paymentNumber} - {payment.paymentMethod === 'cash' ? 'Efectivo' : payment.paymentMethod === 'transfer' ? 'Transferencia' : payment.paymentMethod === 'check' ? 'Cheque' : payment.paymentMethod}
+                                  </p>
+                                  {payment.reference && (
+                                    <p className="text-xs text-gray-500">Ref: {payment.reference}</p>
+                                  )}
+                                </div>
+                                <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                                  {formatCurrency(payment.amount)}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => window.open(`/dashboard/market/wholesale/invoices/${invoice.id}/print?format=payment-receipt&payment=${payment.id}`, '_blank')}
+                                className="mt-2 text-xs text-green-600 hover:text-green-700 flex items-center gap-1"
+                              >
+                                <Printer className="w-3 h-3" />
+                                Imprimir Recibo
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Delivery Events */}
+                        {invoice.deliveries.map((delivery) => (
+                          <div key={delivery.id} className="relative flex gap-4">
+                            <div className={cn(
+                              'w-8 h-8 rounded-full flex items-center justify-center z-10 flex-shrink-0',
+                              delivery.status === 'delivered'
+                                ? 'bg-green-500'
+                                : delivery.status === 'dispatched'
+                                  ? 'bg-blue-500'
+                                  : 'bg-yellow-500'
+                            )}>
+                              <Truck className="w-4 h-4 text-white" />
+                            </div>
+                            <div className={cn(
+                              'flex-1 p-4 rounded-lg',
+                              delivery.status === 'delivered'
+                                ? theme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'
+                                : delivery.status === 'dispatched'
+                                  ? theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'
+                                  : theme === 'dark' ? 'bg-yellow-900/20' : 'bg-yellow-50'
+                            )}>
+                              <div className="flex items-center justify-between">
+                                <p className={cn(
+                                  'font-medium',
+                                  delivery.status === 'delivered'
+                                    ? 'text-green-700 dark:text-green-300'
+                                    : delivery.status === 'dispatched'
+                                      ? 'text-blue-700 dark:text-blue-300'
+                                      : 'text-yellow-700 dark:text-yellow-300'
+                                )}>
+                                  {delivery.status === 'delivered' ? 'Entrega completada' : delivery.status === 'dispatched' ? 'Entrega despachada' : 'Entrega pendiente'}
+                                </p>
+                                <p className="text-xs text-gray-500">{formatDate(delivery.createdAt)}</p>
+                              </div>
+                              <p className="text-sm mt-1 text-gray-600 dark:text-gray-400">
+                                {delivery.deliveryNumber}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Final payment event */}
+                        {invoice.paidAt && invoice.paymentStatus === 'paid' && (
+                          <div className="relative flex gap-4">
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center z-10 flex-shrink-0 bg-green-600">
+                              <CheckCircle className="w-4 h-4 text-white" />
+                            </div>
+                            <div className={cn(
+                              'flex-1 p-4 rounded-lg',
+                              theme === 'dark' ? 'bg-green-900/30' : 'bg-green-100'
+                            )}>
+                              <div className="flex items-center justify-between">
+                                <p className="font-medium text-green-700 dark:text-green-300">
+                                  Factura pagada en su totalidad
+                                </p>
+                                <p className="text-xs text-gray-500">{formatDate(invoice.paidAt)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      {invoice.confirmedAt && (
-                        <div className={cn(
-                          'p-3 rounded-lg',
-                          theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'
-                        )}>
-                          <p className="text-sm text-blue-600">Factura confirmada</p>
-                          <p className="text-xs text-gray-500">{formatDate(invoice.confirmedAt)}</p>
-                        </div>
-                      )}
-                      {invoice.deliveredAt && (
-                        <div className={cn(
-                          'p-3 rounded-lg',
-                          theme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'
-                        )}>
-                          <p className="text-sm text-green-600">Entrega completada</p>
-                          <p className="text-xs text-gray-500">{formatDate(invoice.deliveredAt)}</p>
-                        </div>
-                      )}
-                      {invoice.paidAt && (
-                        <div className={cn(
-                          'p-3 rounded-lg',
-                          theme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'
-                        )}>
-                          <p className="text-sm text-green-600">Pago completado</p>
-                          <p className="text-xs text-gray-500">{formatDate(invoice.paidAt)}</p>
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}

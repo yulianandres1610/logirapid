@@ -151,6 +151,17 @@ export async function initializeWholesaleTables() {
     // Column may already exist
   }
 
+  // Add downpayment and wholesale exchange rate columns to market_invoices
+  try {
+    await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS downpayment_type VARCHAR(20)`)
+    await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS downpayment_value DECIMAL(10,2)`)
+    await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS downpayment_amount DECIMAL(10,2)`)
+    await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS wholesale_exchange_rate DECIMAL(10,2)`)
+    console.log('[Wholesale] Added downpayment and exchange rate columns')
+  } catch {
+    // Columns may already exist
+  }
+
   // 6. Invoice Deliveries
   await db.query(`
     CREATE TABLE IF NOT EXISTS market_invoice_deliveries (

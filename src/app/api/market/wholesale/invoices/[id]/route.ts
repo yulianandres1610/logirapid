@@ -138,6 +138,11 @@ export async function GET(
       dueDate: row.due_date,
       notes: row.notes,
       internalNotes: row.internal_notes,
+      // Downpayment fields
+      downpaymentType: row.downpayment_type,
+      downpaymentValue: row.downpayment_value ? parseFloat(row.downpayment_value) : null,
+      downpaymentAmount: row.downpayment_amount ? parseFloat(row.downpayment_amount) : null,
+      wholesaleExchangeRate: row.wholesale_exchange_rate ? parseFloat(row.wholesale_exchange_rate) : null,
       createdBy: row.created_by_email,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -159,21 +164,44 @@ export async function GET(
         discountPercent: parseFloat(line.discount_percent) || 0,
         discountAmount: parseFloat(line.discount_amount) || 0,
         subtotal: parseFloat(line.subtotal) || 0,
+        warehouseQuantities: line.warehouse_quantities || {},
         notes: line.notes
       })),
-      deliveries: deliveriesResult.rows.map(d => ({
-        id: d.id,
-        deliveryNumber: d.delivery_number,
-        warehouseId: d.warehouse_id,
-        warehouseName: d.warehouse_name,
-        status: d.status,
-        deliveryDate: d.delivery_date,
-        deliveryAddress: d.delivery_address,
-        notes: d.notes,
-        createdBy: d.created_by_email,
-        createdAt: d.created_at,
-        dispatchedAt: d.dispatched_at,
-        deliveredAt: d.delivered_at
+      deliveries: await Promise.all(deliveriesResult.rows.map(async d => {
+        // Get delivery lines for each delivery
+        const deliveryLinesResult = await db.query(`
+          SELECT
+            dl.*,
+            il.product_name,
+            il.product_sku
+          FROM market_invoice_delivery_lines dl
+          JOIN market_invoice_lines il ON il.id = dl.invoice_line_id
+          WHERE dl.delivery_id = $1
+          ORDER BY dl.id
+        `, [d.id])
+
+        return {
+          id: d.id,
+          deliveryNumber: d.delivery_number,
+          warehouseId: d.warehouse_id,
+          warehouseName: d.warehouse_name,
+          status: d.status,
+          deliveryDate: d.delivery_date,
+          deliveryAddress: d.delivery_address,
+          notes: d.notes,
+          createdBy: d.created_by_email,
+          createdAt: d.created_at,
+          dispatchedAt: d.dispatched_at,
+          deliveredAt: d.delivered_at,
+          lines: deliveryLinesResult.rows.map(dl => ({
+            id: dl.id,
+            productId: dl.product_id,
+            productName: dl.product_name,
+            productSku: dl.product_sku,
+            quantity: parseFloat(dl.quantity_to_deliver) || 0,
+            quantityDelivered: parseFloat(dl.quantity_delivered) || 0
+          }))
+        }
       })),
       payments: paymentsResult.rows.map(p => ({
         id: p.id,
