@@ -68,14 +68,14 @@ export async function GET(
       SELECT
         o.id,
         o.operation_number,
-        o.reference_number as invoice_number,
+        COALESCE(i.invoice_number, o.reference_id::text) as invoice_number,
         o.reference_id as invoice_id,
         o.status,
         o.validation_status,
         o.notes,
         o.created_at,
         o.created_by,
-        CONCAT(u.firstname, ' ', u.lastname) as created_by_name,
+        COALESCE(CONCAT(NULLIF(TRIM(u.firstname), ''), ' ', NULLIF(TRIM(u.lastname), '')), u.email, 'Sistema') as created_by_name,
         i.customer_id,
         c.business_name as customer_name,
         c.code as customer_code,
@@ -83,13 +83,13 @@ export async function GET(
         (SELECT COALESCE(SUM(quantity_planned), 0) FROM market_warehouse_operation_lines WHERE operation_id = o.id) as total_units
       FROM market_warehouse_operations o
       LEFT JOIN users u ON u.id = o.created_by
-      LEFT JOIN market_invoices i ON i.id = o.reference_id
+      LEFT JOIN market_invoices i ON i.id = o.reference_id AND o.reference_type = 'wholesale_invoice'
       LEFT JOIN market_wholesale_customers c ON c.id = i.customer_id
       WHERE o.source_warehouse_id = $1
         AND o.company_id = $2
         AND o.operation_type = 'wholesale_delivery'
         AND o.status = 'pending'
-        AND o.validation_status = 'pending_validation'
+        AND (o.validation_status = 'pending_validation' OR o.validation_status IS NULL)
       ORDER BY o.created_at DESC
     `, [warehouseId, payload.companyId])
 
