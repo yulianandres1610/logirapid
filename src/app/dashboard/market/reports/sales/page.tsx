@@ -369,8 +369,15 @@ export default function SalesReportPage() {
                     <YAxis stroke="#6B7280" fontSize={12} tickFormatter={(v) => `$${v}`} />
                     <Tooltip
                       formatter={(value: number) => formatCurrency(value)}
-                      labelStyle={{ color: '#111827' }}
-                      contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                      labelStyle={{ color: 'inherit' }}
+                      contentStyle={{
+                        backgroundColor: '#1f2937',
+                        borderRadius: '8px',
+                        border: '1px solid #374151',
+                        color: '#f3f4f6',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)'
+                      }}
+                      itemStyle={{ color: '#f3f4f6' }}
                     />
                     <Legend />
                     <Line type="monotone" dataKey="sales" name="Ventas" stroke="#3B82F6" strokeWidth={2} dot={{ r: 4 }} />
@@ -388,7 +395,16 @@ export default function SalesReportPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
                       <XAxis type="number" stroke="#6B7280" fontSize={12} tickFormatter={(v) => `$${v}`} />
                       <YAxis dataKey="productName" type="category" stroke="#6B7280" fontSize={11} width={150} />
-                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                      <Tooltip
+                        formatter={(value: number) => formatCurrency(value)}
+                        contentStyle={{
+                          backgroundColor: 'var(--tooltip-bg, #1f2937)',
+                          borderRadius: '8px',
+                          border: '1px solid var(--tooltip-border, #374151)',
+                          color: 'var(--tooltip-text, #f3f4f6)'
+                        }}
+                        itemStyle={{ color: '#f3f4f6' }}
+                      />
                       <Bar dataKey="sales" fill="#3B82F6" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -437,7 +453,16 @@ export default function SalesReportPage() {
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                      <Tooltip
+                        formatter={(value: number) => formatCurrency(value)}
+                        contentStyle={{
+                          backgroundColor: 'var(--tooltip-bg, #1f2937)',
+                          borderRadius: '8px',
+                          border: '1px solid var(--tooltip-border, #374151)',
+                          color: 'var(--tooltip-text, #f3f4f6)'
+                        }}
+                        itemStyle={{ color: '#f3f4f6' }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="overflow-x-auto">
@@ -475,7 +500,17 @@ export default function SalesReportPage() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
                     <XAxis dataKey="terminalName" stroke="#6B7280" fontSize={12} />
                     <YAxis stroke="#6B7280" fontSize={12} tickFormatter={(v) => `$${v}`} />
-                    <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                    <Tooltip
+                      formatter={(value: number) => formatCurrency(value)}
+                      contentStyle={{
+                        backgroundColor: '#1f2937',
+                        borderRadius: '8px',
+                        border: '1px solid #374151',
+                        color: '#f3f4f6',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)'
+                      }}
+                      itemStyle={{ color: '#f3f4f6' }}
+                    />
                     <Legend />
                     <Bar dataKey="sales" name="Ventas" fill="#3B82F6" radius={[4, 4, 0, 0]} />
                   </BarChart>
@@ -518,6 +553,14 @@ export default function SalesReportPage() {
                         name === 'sales' ? formatCurrency(value) : value
                       }
                       labelFormatter={(h) => `${h}:00 - ${h}:59`}
+                      contentStyle={{
+                        backgroundColor: '#1f2937',
+                        borderRadius: '8px',
+                        border: '1px solid #374151',
+                        color: '#f3f4f6',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)'
+                      }}
+                      itemStyle={{ color: '#f3f4f6' }}
                     />
                     <Legend />
                     <Bar dataKey="sales" name="Ventas" fill="#10B981" radius={[4, 4, 0, 0]} />
