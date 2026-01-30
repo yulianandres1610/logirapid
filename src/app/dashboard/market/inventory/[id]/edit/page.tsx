@@ -304,8 +304,8 @@ export default function EditProductPage() {
               unitOfMeasure: p.unitOfMeasure || 'unidad',
               imageUrl: p.imageUrl || '',
               imageFile: null,
-              costPrice: p.costPrice?.toString() || '',
-              sellingPrice: p.sellingPrice?.toString() || '',
+              costPrice: p.costPrice ? parseFloat(p.costPrice).toFixed(2) : '',
+              sellingPrice: p.sellingPrice ? parseFloat(p.sellingPrice).toFixed(2) : '',
               currency: p.currency || 'USD',
               sku: p.sku || '',
               barcode: p.barcode || '',
@@ -323,8 +323,8 @@ export default function EditProductPage() {
                 name: v.name || '',
                 sku: v.sku || '',
                 barcode: v.barcode || '',
-                costPrice: v.costPrice?.toString() || '',
-                sellingPrice: v.sellingPrice?.toString() || '',
+                costPrice: v.costPrice ? parseFloat(v.costPrice).toFixed(2) : '',
+                sellingPrice: v.sellingPrice ? parseFloat(v.sellingPrice).toFixed(2) : '',
                 options: v.options || [],
                 imageUrl: v.imageUrl || ''
               }))
