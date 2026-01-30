@@ -333,6 +333,12 @@ export default function POSOrderDetailPage() {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    window.open(
+                      `/dashboard/market/pos/${order.terminalId}/receipt?orderId=${order.id}&orderNumber=${order.orderNumber}`,
+                      '_blank'
+                    )
+                  }}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
                     theme === 'dark'
