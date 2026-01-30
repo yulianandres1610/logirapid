@@ -83,7 +83,7 @@ export function MultiCurrencyPriceInline({
   return (
     <div className={cn(sizeClasses[size], 'flex items-center gap-1.5', className)}>
       <span className="text-blue-600 font-medium">
-        ${Math.round(priceCUP).toLocaleString()} CUP
+        ${priceCUP.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CUP
       </span>
       <span className="text-gray-400">·</span>
       <span className="text-purple-600 font-medium">

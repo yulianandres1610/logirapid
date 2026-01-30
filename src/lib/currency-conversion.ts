@@ -176,7 +176,7 @@ export function formatCurrency(amount: number, currency: SupportedCurrency): str
     case 'USD':
       return `$${amount.toFixed(2)} USD`
     case 'CUP':
-      return `$${Math.round(amount).toLocaleString()} CUP`
+      return `$${amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CUP`
     case 'MLC':
       return `$${amount.toFixed(2)} MLC`
     default:

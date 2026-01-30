@@ -291,8 +291,8 @@ const AlertIcon = () => (
   </svg>
 )
 
-// Redondear CUP al múltiplo de 5 más cercano (convención cubana)
-const roundCUP = (amount: number): number => Math.round(amount / 5) * 5
+// Formatear CUP con 2 decimales (sin redondeo)
+const formatCUP = (amount: number): string => amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 function ReceiptContent() {
   const router = useRouter()
@@ -527,25 +527,25 @@ function ReceiptContent() {
     fetchOrder()
   }, [isClient, orderId, offlineId, isOfflineOrder, orderNumber])
 
-  // Format currency
+  // Format currency (sin redondeo para CUP)
   const formatCurrency = (amount: number, currency: string = 'USD') => {
     if (currency === 'CUP') {
-      return `${Math.round(amount).toLocaleString('es-ES')} CUP`
+      return `${formatCUP(amount)} CUP`
     }
     return `$${amount.toFixed(2)}`
   }
 
-  // Convert USD to CUP (redondear al múltiplo de 5 más cercano)
+  // Convert USD to CUP (sin redondeo)
   const toCUP = (amountUSD: number): number => {
-    return roundCUP(amountUSD * exchangeRate)
+    return amountUSD * exchangeRate
   }
 
-  // Calculate total CUP using per-unit rounding (redondear al múltiplo de 5)
+  // Calculate total CUP (sin redondeo para precisión exacta)
   const calcOrderTotalCUP = (lines: OrderLine[]): number => {
     return lines.reduce((sum, line) => {
-      const unitCUP = roundCUP(line.unitPrice * exchangeRate)
+      const unitCUP = line.unitPrice * exchangeRate
       const lineCUP = unitCUP * line.quantity
-      const discountCUP = roundCUP(line.discountAmount * exchangeRate)
+      const discountCUP = line.discountAmount * exchangeRate
       return sum + lineCUP - discountCUP
     }, 0)
   }
@@ -553,7 +553,7 @@ function ReceiptContent() {
   // Format dual currency (USD with CUP equivalent)
   const formatDualCurrency = (amountUSD: number): string => {
     const cup = toCUP(amountUSD)
-    return `$${amountUSD.toFixed(2)} (${cup.toLocaleString('es-ES')} CUP)`
+    return `$${amountUSD.toFixed(2)} (${formatCUP(cup)} CUP)`
   }
 
   // Format date
@@ -1015,7 +1015,7 @@ function ReceiptContent() {
 
     const totalCUP = calcOrderTotalCUP(order.lines)
     const subtotalCUP = order.lines.reduce((sum, line) => {
-      return sum + roundCUP(line.unitPrice * exchangeRate) * line.quantity
+      return sum + (line.unitPrice * exchangeRate) * line.quantity
     }, 0)
 
     const receiptContent = `
@@ -1049,10 +1049,10 @@ Pagos:
 ${order.payments.map(p => {
   let line = `  ${getPaymentMethodLabel(p.method)}: $${p.amount.toFixed(2)}`
   if (p.amountTendered && p.amountTendered > 0) {
-    line += `\n  Entregado: ${p.currency === 'CUP' ? `${Math.round(p.amountTendered).toLocaleString('es-ES')} CUP` : `$${p.amountTendered.toFixed(2)} USD`}`
+    line += `\n  Entregado: ${p.currency === 'CUP' ? `${formatCUP(p.amountTendered)} CUP` : `$${p.amountTendered.toFixed(2)} USD`}`
   }
   if (p.changeAmount && p.changeAmount > 0) {
-    line += `\n  Cambio: ${p.currency === 'CUP' ? `${Math.round(p.changeAmount).toLocaleString('es-ES')} CUP` : `$${p.changeAmount.toFixed(2)} USD`}`
+    line += `\n  Cambio: ${p.currency === 'CUP' ? `${formatCUP(p.changeAmount)} CUP` : `$${p.changeAmount.toFixed(2)} USD`}`
   }
   return line
 }).join('\n')}
@@ -1177,7 +1177,7 @@ ${order.payments.map(p => {
 
               <div className={`border-t border-b ${tc.border} py-4 my-4 space-y-2`}>
                 {order?.lines.map((line, idx) => {
-                  const lineCUP = roundCUP(line.unitPrice * exchangeRate) * line.quantity
+                  const lineCUP = (line.unitPrice * exchangeRate) * line.quantity
                   const hasWholesale = line.originalPrice && line.originalPrice > line.unitPrice
                   return (
                     <div key={idx}>
@@ -1186,7 +1186,7 @@ ${order.payments.map(p => {
                         <div className="ml-2 text-right">
                           <span>{formatCurrency(line.total)}</span>
                           <span className="text-xs text-green-500 ml-1">
-                            ({lineCUP.toLocaleString('es-ES')} CUP)
+                            ({formatCUP(lineCUP)} CUP)
                           </span>
                         </div>
                       </div>
@@ -1244,7 +1244,7 @@ ${order.payments.map(p => {
                         <span className="ml-4">Entregado:</span>
                         <span>
                           {payment.currency === 'CUP'
-                            ? `${Math.round(payment.amountTendered).toLocaleString('es-ES')} CUP`
+                            ? `${formatCUP(payment.amountTendered)} CUP`
                             : `$${payment.amountTendered.toFixed(2)} USD`}
                         </span>
                       </div>
@@ -1255,7 +1255,7 @@ ${order.payments.map(p => {
                         <span className="ml-4">Cambio:</span>
                         <span>
                           {payment.currency === 'CUP'
-                            ? `${Math.round(payment.changeAmount).toLocaleString('es-ES')} CUP`
+                            ? `${formatCUP(payment.changeAmount)} CUP`
                             : `$${payment.changeAmount.toFixed(2)} USD`}
                         </span>
                       </div>

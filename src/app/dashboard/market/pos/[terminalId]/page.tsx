@@ -158,8 +158,10 @@ interface WarehouseStock {
   isCurrentWarehouse: boolean
 }
 
-// Redondear CUP al múltiplo de 5 más cercano (convención cubana)
-const roundCUP = (amount: number): number => Math.round(amount / 5) * 5
+// Convertir a CUP sin redondeo (mantener precisión para cálculos exactos)
+const toCUP = (amountUSD: number, rate: number): number => amountUSD * rate
+// Formatear CUP con 2 decimales para mostrar
+const formatCUP = (amount: number): string => amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export default function POSTerminalPage() {
   const { theme } = useTheme()
@@ -720,11 +722,11 @@ export default function POSTerminalPage() {
       }
       return sum
     }, 0)
-    // CUP: redondear al múltiplo de 5 más cercano (convención cubana)
+    // CUP: calcular sin redondeo para mantener precisión
     const totalCUP = cart.reduce((sum, item) => {
-      const unitCUP = roundCUP(item.unitPrice * USD_CUP_BCC)
+      const unitCUP = item.unitPrice * USD_CUP_BCC
       const lineCUP = unitCUP * item.quantity
-      const discountCUP = roundCUP(item.discountAmount * USD_CUP_BCC)
+      const discountCUP = item.discountAmount * USD_CUP_BCC
       return sum + lineCUP - discountCUP
     }, 0)
     return { subtotal, discounts, total, itemCount, totalCUP, wholesaleSavings }
@@ -1461,7 +1463,7 @@ export default function POSTerminalPage() {
                   </span>
                 )}
               </div>
-              <span className="font-bold text-lg">${cartTotals.total.toFixed(2)} <span className="text-xs text-green-600 font-normal">(${cartTotals.totalCUP.toLocaleString()} CUP)</span></span>
+              <span className="font-bold text-lg">${cartTotals.total.toFixed(2)} <span className="text-xs text-green-600 font-normal">(${formatCUP(cartTotals.totalCUP)} CUP)</span></span>
             </div>
             {showMobileCart ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
           </button>
@@ -1666,7 +1668,7 @@ export default function POSTerminalPage() {
                 <div className="text-right">
                   <span>${cartTotals.total.toFixed(2)}</span>
                   <p className="text-xs lg:text-sm font-normal text-green-600">
-                    ${cartTotals.totalCUP.toLocaleString()} CUP
+                    ${formatCUP(cartTotals.totalCUP)} CUP
                   </p>
                 </div>
               </div>
@@ -1723,7 +1725,7 @@ export default function POSTerminalPage() {
                 )}
               >
                 <CreditCard className="w-4 h-4 lg:w-5 lg:h-5" />
-                <span>${cartTotals.total.toFixed(2)} <span className="text-[10px] lg:text-xs opacity-80">(${cartTotals.totalCUP.toLocaleString()} CUP)</span></span>
+                <span>${cartTotals.total.toFixed(2)} <span className="text-[10px] lg:text-xs opacity-80">(${formatCUP(cartTotals.totalCUP)} CUP)</span></span>
               </button>
             </div>
           </div>
@@ -1830,7 +1832,7 @@ export default function POSTerminalPage() {
 
                     {/* Precios en otras monedas (tasa BCC para venta) */}
                     <div className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 space-y-0">
-                      <p className="text-green-600">${roundCUP(product.price * USD_CUP_BCC).toLocaleString()} CUP</p>
+                      <p className="text-green-600">${formatCUP(product.price * USD_CUP_BCC)} CUP</p>
                       <p className="text-purple-600">${(product.price * USD_MLC).toFixed(2)} MLC</p>
                     </div>
 
@@ -1921,7 +1923,7 @@ export default function POSTerminalPage() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-2xl font-bold">Cobrar ${cartTotals.total.toFixed(2)}</h3>
-                  <p className="text-sm text-green-600 font-normal">${cartTotals.totalCUP.toLocaleString()} CUP</p>
+                  <p className="text-sm text-green-600 font-normal">${formatCUP(cartTotals.totalCUP)} CUP</p>
                 </div>
                 <button
                   onClick={() => setShowPaymentModal(false)}
@@ -2361,7 +2363,7 @@ export default function POSTerminalPage() {
                   </p>
                   {/* Precios en otras monedas (tasa BCC para venta) */}
                   <div className="flex gap-3 mt-1 text-sm">
-                    <span className="text-green-600">${roundCUP(selectedProductForDetails.price * USD_CUP_BCC).toLocaleString()} CUP <span className="text-gray-400 text-xs">(BCC)</span></span>
+                    <span className="text-green-600">${formatCUP(selectedProductForDetails.price * USD_CUP_BCC)} CUP <span className="text-gray-400 text-xs">(BCC)</span></span>
                     <span className="text-purple-600">${(selectedProductForDetails.price * USD_MLC).toFixed(2)} MLC</span>
                   </div>
                 </div>

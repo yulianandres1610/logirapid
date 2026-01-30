@@ -264,8 +264,8 @@ const DEFAULT_RATES: ExchangeRates = {
   MLC: 1.11
 }
 
-// Redondear CUP al múltiplo de 5 más cercano (convención cubana)
-const roundCUP = (amount: number): number => Math.round(amount / 5) * 5
+// Formatear CUP con 2 decimales (sin redondeo)
+const formatCUP = (amount: number): string => amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 // Simple SVG icons inline
 const BackIcon = () => (
@@ -538,11 +538,11 @@ function PaymentContent() {
     const subtotal = cart.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)
     const discount = cart.reduce((sum, item) => sum + item.discountAmount, 0)
     const total = subtotal - discount
-    // CUP: redondear al múltiplo de 5 más cercano (convención cubana)
+    // CUP: calcular sin redondeo para precisión exacta
     const totalCUP = cart.reduce((sum, item) => {
-      const unitCUP = roundCUP(item.unitPrice * rates.CUP_BCC)
+      const unitCUP = item.unitPrice * rates.CUP_BCC
       const lineCUP = unitCUP * item.quantity
-      const discountCUP = roundCUP(item.discountAmount * rates.CUP_BCC)
+      const discountCUP = item.discountAmount * rates.CUP_BCC
       return sum + lineCUP - discountCUP
     }, 0)
     return { subtotal, discount, total, totalCUP }
@@ -564,9 +564,9 @@ function PaymentContent() {
       if (p.currency === 'CUP') {
         return sum + p.amount  // Usar monto original en CUP
       } else if (p.currency === 'USD') {
-        return sum + roundCUP(p.amount * rates.CUP_BCC)
+        return sum + (p.amount * rates.CUP_BCC)
       } else if (p.currency === 'MLC') {
-        return sum + roundCUP((p.amount / rates.MLC) * rates.CUP_BCC)
+        return sum + ((p.amount / rates.MLC) * rates.CUP_BCC)
       }
       return sum
     }, 0)
@@ -576,9 +576,9 @@ function PaymentContent() {
   const changeAmount = useMemo(() => {
     if (remainingUSD < -0.01) {
       if (changeCurrency === 'CUP') {
-        // Calcular cambio directamente en CUP: pagado - total
+        // Calcular cambio directamente en CUP: pagado - total (sin redondeo)
         const changeCUP = totalPaidCUP - totals.totalCUP
-        return Math.max(0, roundCUP(changeCUP))
+        return Math.max(0, changeCUP)
       }
       // Para USD, usar el cálculo normal
       return Math.abs(remainingUSD)
@@ -624,10 +624,10 @@ function PaymentContent() {
   const setExactAmount = () => {
     if (remainingUSD > 0.01) {
       if (selectedCurrency === 'CUP') {
-        // Calcular pendiente CUP usando redondeo al múltiplo de 5
-        const paidCUP = roundCUP(totalPaidUSD * rates.CUP_BCC)
+        // Calcular pendiente CUP sin redondeo
+        const paidCUP = totalPaidUSD * rates.CUP_BCC
         const remainingCUP = Math.max(0, totals.totalCUP - paidCUP)
-        setAmount(String(remainingCUP))
+        setAmount(remainingCUP.toFixed(2))
       } else if (selectedCurrency === 'MLC') {
         setAmount((remainingUSD * rates.MLC).toFixed(2))
       } else {
@@ -664,7 +664,7 @@ function PaymentContent() {
           if (changeCurrency === p.currency) {
             paymentChange = changeAmount
           } else if (p.currency === 'CUP' && changeCurrency === 'USD') {
-            paymentChange = roundCUP(changeAmount * rates.CUP_BCC)
+            paymentChange = changeAmount * rates.CUP_BCC
           } else if (p.currency === 'USD' && changeCurrency === 'CUP') {
             paymentChange = changeAmount / rates.CUP_BCC
           } else {
@@ -763,7 +763,7 @@ function PaymentContent() {
                 if (changeCurrency === p.currency) {
                   paymentChange = changeAmount
                 } else if (p.currency === 'CUP' && changeCurrency === 'USD') {
-                  paymentChange = roundCUP(changeAmount * rates.CUP_BCC)
+                  paymentChange = changeAmount * rates.CUP_BCC
                 } else if (p.currency === 'USD' && changeCurrency === 'CUP') {
                   paymentChange = changeAmount / rates.CUP_BCC
                 } else {
@@ -799,12 +799,12 @@ function PaymentContent() {
     }
   }
 
-  // Format currency - USD y MLC con 2 decimales, CUP entero
+  // Format currency - todas las monedas con 2 decimales (sin redondeo)
   const formatCurrency = (amount: number, currency: 'USD' | 'CUP' | 'MLC' = 'USD') => {
     const symbol = CURRENCIES.find(c => c.id === currency)?.symbol || '$'
     if (currency === 'CUP') {
-      // CUP se muestra como entero (los valores son grandes)
-      return `${symbol}${Math.round(amount).toLocaleString('es-ES')}`
+      // CUP con 2 decimales (sin redondeo para precisión exacta)
+      return `${symbol}${formatCUP(amount)}`
     }
     // USD y MLC con 2 decimales
     return `${symbol}${amount.toFixed(2)}`
@@ -903,7 +903,7 @@ function PaymentContent() {
               <h2 className="text-lg font-semibold mb-4">Resumen de Orden</h2>
               <div className="space-y-2 max-h-48 overflow-auto">
                 {cart.map((item, idx) => {
-                  const lineCUP = roundCUP(item.unitPrice * rates.CUP_BCC) * item.quantity
+                  const lineCUP = (item.unitPrice * rates.CUP_BCC) * item.quantity
                   return (
                     <div key={idx} className="flex justify-between text-sm">
                       <span className="truncate flex-1">
@@ -998,7 +998,7 @@ function PaymentContent() {
                     </span>
                     {remainingUSD > 0 && (
                       <p className="text-xs font-normal opacity-80">
-                        ({formatCurrency(Math.max(0, totals.totalCUP - roundCUP(totalPaidUSD * rates.CUP_BCC)), 'CUP')})
+                        ({formatCurrency(Math.max(0, totals.totalCUP - (totalPaidUSD * rates.CUP_BCC)), 'CUP')})
                       </p>
                     )}
                   </div>
@@ -1174,7 +1174,7 @@ function PaymentContent() {
                       changeCurrency === 'CUP' ? 'bg-blue-500 text-white' : tc.button
                     }`}
                   >
-                    CUP ({formatCurrency(Math.max(0, roundCUP(totalPaidCUP - totals.totalCUP)), 'CUP')})
+                    CUP ({formatCurrency(Math.max(0, totalPaidCUP - totals.totalCUP), 'CUP')})
                   </button>
                 </div>
               </div>

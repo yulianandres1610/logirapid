@@ -2116,7 +2116,7 @@ export default function CreateProductPage() {
                               "px-2 py-1 rounded-lg text-sm font-medium",
                               theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
                             )}>
-                              ${Math.round(parseFloat(formData.sellingPrice) * (USD_CUP_BCC || 411)).toLocaleString()} CUP
+                              ${(parseFloat(formData.sellingPrice) * (USD_CUP_BCC || 411)).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CUP
                             </span>
                             <span className={cn(
                               "px-2 py-1 rounded-lg text-sm font-medium",
