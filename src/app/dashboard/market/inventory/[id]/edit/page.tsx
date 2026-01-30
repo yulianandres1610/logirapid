@@ -2081,8 +2081,8 @@ export default function EditProductPage() {
                             type="number"
                             value={formData.costPrice}
                             onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
-                            placeholder="0.0000"
-                            step="0.0001"
+                            placeholder="0.00"
+                            step="0.01"
                             min="0"
                             className={cn(
                               'w-full pl-8 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
@@ -2113,8 +2113,8 @@ export default function EditProductPage() {
                             type="number"
                             value={formData.sellingPrice}
                             onChange={(e) => setFormData({ ...formData, sellingPrice: e.target.value })}
-                            placeholder="0.0000"
-                            step="0.0001"
+                            placeholder="0.00"
+                            step="0.01"
                             min="0"
                             className={cn(
                               'w-full pl-8 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
@@ -2153,7 +2153,7 @@ export default function EditProductPage() {
                               "text-xs mt-1",
                               theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
                             )}>
-                              Ganancia: {symbol}{(parseFloat(formData.sellingPrice) - parseFloat(formData.costPrice)).toFixed(4)} por {selectedUnit?.abbr}
+                              Ganancia: {symbol}{(parseFloat(formData.sellingPrice) - parseFloat(formData.costPrice)).toFixed(2)} por {selectedUnit?.abbr}
                             </p>
                           </div>
                           <span className={cn(
@@ -2178,7 +2178,7 @@ export default function EditProductPage() {
                               "px-2 py-1 rounded-lg text-sm font-medium",
                               theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'
                             )}>
-                              ${parseFloat(formData.sellingPrice).toFixed(4)} USD
+                              ${parseFloat(formData.sellingPrice).toFixed(2)} USD
                             </span>
                             <span className={cn(
                               "px-2 py-1 rounded-lg text-sm font-medium",
