@@ -7,7 +7,7 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts'
-import { DollarSign, ShoppingCart, TrendingUp, Users, X, Receipt, Clock, CreditCard, ExternalLink } from 'lucide-react'
+import { DollarSign, ShoppingCart, TrendingUp, Users, X, Receipt, Clock, CreditCard, ExternalLink, RefreshCw, Banknote, Smartphone, Zap } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { ReportFilters } from '@/components/market/reports/ReportFilters'
@@ -71,12 +71,40 @@ interface OrderDetail {
   lines: Array<{ productName: string; quantity: number; unitPrice: number; total: number }>
 }
 
+interface RealtimeData {
+  date: string
+  lastUpdated: string
+  grandTotal: {
+    orders: number
+    sales: number
+  }
+  currencyTotals: {
+    USD: { cash: number; card: number; transfer: number; credit: number; total: number }
+    CUP: { cash: number; card: number; transfer: number; credit: number; total: number }
+  }
+  paymentTotals: Array<{ method: string; currency: string; orders: number; amount: number }>
+  terminals: Array<{
+    terminalId: number
+    terminalName: string
+    terminalCode: string
+    totalOrders: number
+    totalSales: number
+    byPaymentMethod: Array<{ method: string; currency: string; orders: number; amount: number }>
+  }>
+}
+
 export default function SalesReportPage() {
   const router = useRouter()
   const reportRef = useRef<HTMLDivElement>(null)
   const [data, setData] = useState<SalesData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'trend' | 'products' | 'categories' | 'terminals' | 'hours'>('trend')
+  const [activeTab, setActiveTab] = useState<'trend' | 'products' | 'categories' | 'terminals' | 'hours' | 'realtime'>('trend')
+
+  // Realtime data
+  const [realtimeData, setRealtimeData] = useState<RealtimeData | null>(null)
+  const [realtimeLoading, setRealtimeLoading] = useState(false)
+  const [realtimeDate, setRealtimeDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [autoRefresh, setAutoRefresh] = useState(true)
 
   // Order details modal
   const [showOrdersModal, setShowOrdersModal] = useState(false)
@@ -97,6 +125,40 @@ export default function SalesReportPage() {
   useEffect(() => {
     fetchData()
   }, [startDate, endDate, period, selectedTerminalId])
+
+  // Fetch realtime data
+  const fetchRealtimeData = useCallback(async () => {
+    setRealtimeLoading(true)
+    try {
+      const response = await fetch(`/api/market/reports/sales/realtime?date=${realtimeDate}`)
+      const result = await response.json()
+      if (result.success) {
+        setRealtimeData(result.data)
+      }
+    } catch (error) {
+      console.error('Error fetching realtime data:', error)
+    } finally {
+      setRealtimeLoading(false)
+    }
+  }, [realtimeDate])
+
+  // Fetch realtime when tab is active or date changes
+  useEffect(() => {
+    if (activeTab === 'realtime') {
+      fetchRealtimeData()
+    }
+  }, [activeTab, realtimeDate, fetchRealtimeData])
+
+  // Auto-refresh every 30 seconds when on realtime tab
+  useEffect(() => {
+    if (activeTab !== 'realtime' || !autoRefresh) return
+
+    const interval = setInterval(() => {
+      fetchRealtimeData()
+    }, 30000) // 30 seconds
+
+    return () => clearInterval(interval)
+  }, [activeTab, autoRefresh, fetchRealtimeData])
 
   // Handler for clicking on a chart bar/point
   const handleChartClick = useCallback(async (dateStr: string) => {
@@ -155,8 +217,37 @@ export default function SalesReportPage() {
     { id: 'products', label: 'Por Producto' },
     { id: 'categories', label: 'Por Categoría' },
     { id: 'terminals', label: 'Por Terminal' },
-    { id: 'hours', label: 'Por Hora' }
+    { id: 'hours', label: 'Por Hora' },
+    { id: 'realtime', label: 'Tiempo Real', icon: Zap }
   ]
+
+  const formatPaymentMethod = (method: string) => {
+    const methods: Record<string, string> = {
+      'cash': 'Efectivo',
+      'efectivo': 'Efectivo',
+      'card': 'Tarjeta',
+      'tarjeta': 'Tarjeta',
+      'transfer': 'Transferencia',
+      'transferencia': 'Transferencia',
+      'credit': 'Crédito',
+      'credito': 'Crédito'
+    }
+    return methods[method.toLowerCase()] || method
+  }
+
+  const getPaymentMethodIcon = (method: string) => {
+    const icons: Record<string, React.ReactNode> = {
+      'cash': <Banknote className="w-4 h-4" />,
+      'efectivo': <Banknote className="w-4 h-4" />,
+      'card': <CreditCard className="w-4 h-4" />,
+      'tarjeta': <CreditCard className="w-4 h-4" />,
+      'transfer': <Smartphone className="w-4 h-4" />,
+      'transferencia': <Smartphone className="w-4 h-4" />,
+      'credit': <Users className="w-4 h-4" />,
+      'credito': <Users className="w-4 h-4" />
+    }
+    return icons[method.toLowerCase()] || <DollarSign className="w-4 h-4" />
+  }
 
   return (
     <ProtectedRoute>
@@ -236,12 +327,15 @@ export default function SalesReportPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
+                className={`px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${
                   activeTab === tab.id
-                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    ? tab.id === 'realtime'
+                      ? 'text-green-600 border-b-2 border-green-600'
+                      : 'text-blue-600 border-b-2 border-blue-600'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
+                {tab.id === 'realtime' && <Zap className="w-4 h-4" />}
                 {tab.label}
               </button>
             ))}
@@ -430,6 +524,228 @@ export default function SalesReportPage() {
                     <Bar dataKey="orders" name="Órdenes" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+            )}
+
+            {activeTab === 'realtime' && (
+              <div className="space-y-6">
+                {/* Header with date picker and refresh */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <Zap className="w-6 h-6 text-green-500" />
+                    <div>
+                      <h3 className="text-lg font-semibold">Ventas en Tiempo Real</h3>
+                      <p className="text-sm text-gray-500">
+                        Por terminal y método de pago
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="date"
+                      value={realtimeDate}
+                      onChange={(e) => setRealtimeDate(e.target.value)}
+                      max={new Date().toISOString().split('T')[0]}
+                      className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                    <button
+                      onClick={() => setAutoRefresh(!autoRefresh)}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${
+                        autoRefresh
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                          : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                      }`}
+                    >
+                      <RefreshCw className={`w-4 h-4 ${autoRefresh ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} />
+                      Auto
+                    </button>
+                    <button
+                      onClick={fetchRealtimeData}
+                      disabled={realtimeLoading}
+                      className="px-3 py-2 rounded-lg bg-green-500 text-white text-sm font-medium hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${realtimeLoading ? 'animate-spin' : ''}`} />
+                      Actualizar
+                    </button>
+                  </div>
+                </div>
+
+                {realtimeLoading && !realtimeData ? (
+                  <div className="flex items-center justify-center h-48">
+                    <div className="animate-spin w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full" />
+                  </div>
+                ) : realtimeData ? (
+                  <>
+                    {/* Last updated */}
+                    <p className="text-xs text-gray-400 text-right">
+                      Última actualización: {new Date(realtimeData.lastUpdated).toLocaleTimeString('es')}
+                    </p>
+
+                    {/* Grand Totals */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 text-white">
+                        <p className="text-sm opacity-80">Total del Día</p>
+                        <p className="text-2xl font-bold">{formatCurrency(realtimeData.grandTotal.sales)}</p>
+                        <p className="text-sm opacity-80">{realtimeData.grandTotal.orders} órdenes</p>
+                      </div>
+                      <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white">
+                        <p className="text-sm opacity-80">Efectivo USD</p>
+                        <p className="text-2xl font-bold">{formatCurrency(realtimeData.currencyTotals.USD.cash)}</p>
+                      </div>
+                      <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-4 text-white">
+                        <p className="text-sm opacity-80">Transferencias USD</p>
+                        <p className="text-2xl font-bold">{formatCurrency(realtimeData.currencyTotals.USD.transfer)}</p>
+                      </div>
+                      <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-4 text-white">
+                        <p className="text-sm opacity-80">Efectivo CUP</p>
+                        <p className="text-2xl font-bold">{realtimeData.currencyTotals.CUP.cash.toLocaleString()} CUP</p>
+                      </div>
+                    </div>
+
+                    {/* Payment Method Totals */}
+                    <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-4">
+                      <h4 className="font-semibold mb-3 flex items-center gap-2">
+                        <CreditCard className="w-5 h-5 text-gray-500" />
+                        Resumen por Método de Pago
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                        {realtimeData.paymentTotals.map((payment, i) => (
+                          <div
+                            key={i}
+                            className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              {getPaymentMethodIcon(payment.method)}
+                              <span className="text-sm font-medium">
+                                {formatPaymentMethod(payment.method)}
+                              </span>
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700">
+                                {payment.currency}
+                              </span>
+                            </div>
+                            <p className="text-lg font-bold text-gray-900 dark:text-white">
+                              {payment.currency === 'CUP'
+                                ? `${payment.amount.toLocaleString()} CUP`
+                                : formatCurrency(payment.amount)}
+                            </p>
+                            <p className="text-xs text-gray-500">{payment.orders} órdenes</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Terminals Table */}
+                    <div>
+                      <h4 className="font-semibold mb-3 flex items-center gap-2">
+                        <Receipt className="w-5 h-5 text-gray-500" />
+                        Ventas por Terminal
+                      </h4>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Terminal</TableHead>
+                              <TableHead className="text-right">Órdenes</TableHead>
+                              <TableHead className="text-right">Total USD</TableHead>
+                              <TableHead className="text-center">Efectivo USD</TableHead>
+                              <TableHead className="text-center">Transfer USD</TableHead>
+                              <TableHead className="text-center">Tarjeta USD</TableHead>
+                              <TableHead className="text-center">Efectivo CUP</TableHead>
+                              <TableHead className="text-center">Transfer CUP</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {realtimeData.terminals.map((terminal) => {
+                              // Group payment methods by type and currency
+                              const getAmount = (method: string, currency: string) => {
+                                const payment = terminal.byPaymentMethod.find(
+                                  p => (p.method === method || p.method === method.toLowerCase()) && p.currency === currency
+                                )
+                                return payment?.amount || 0
+                              }
+
+                              return (
+                                <TableRow key={terminal.terminalId}>
+                                  <TableCell>
+                                    <div>
+                                      <p className="font-medium">{terminal.terminalName}</p>
+                                      <p className="text-xs text-gray-500">{terminal.terminalCode}</p>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-right font-medium">
+                                    {terminal.totalOrders}
+                                  </TableCell>
+                                  <TableCell className="text-right font-bold text-green-600 dark:text-green-400">
+                                    {formatCurrency(terminal.totalSales)}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <span className={getAmount('cash', 'USD') > 0 ? 'font-medium' : 'text-gray-400'}>
+                                      {formatCurrency(getAmount('cash', 'USD'))}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <span className={getAmount('transfer', 'USD') > 0 ? 'font-medium text-purple-600 dark:text-purple-400' : 'text-gray-400'}>
+                                      {formatCurrency(getAmount('transfer', 'USD'))}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <span className={getAmount('card', 'USD') > 0 ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-gray-400'}>
+                                      {formatCurrency(getAmount('card', 'USD'))}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <span className={getAmount('cash', 'CUP') > 0 ? 'font-medium text-amber-600 dark:text-amber-400' : 'text-gray-400'}>
+                                      {getAmount('cash', 'CUP').toLocaleString()} CUP
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <span className={getAmount('transfer', 'CUP') > 0 ? 'font-medium text-amber-600 dark:text-amber-400' : 'text-gray-400'}>
+                                      {getAmount('transfer', 'CUP').toLocaleString()} CUP
+                                    </span>
+                                  </TableCell>
+                                </TableRow>
+                              )
+                            })}
+                            {/* Totals row */}
+                            <TableRow className="bg-gray-50 dark:bg-gray-900/50 font-bold">
+                              <TableCell>TOTAL</TableCell>
+                              <TableCell className="text-right">{realtimeData.grandTotal.orders}</TableCell>
+                              <TableCell className="text-right text-green-600 dark:text-green-400">
+                                {formatCurrency(realtimeData.grandTotal.sales)}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {formatCurrency(realtimeData.currencyTotals.USD.cash)}
+                              </TableCell>
+                              <TableCell className="text-center text-purple-600 dark:text-purple-400">
+                                {formatCurrency(realtimeData.currencyTotals.USD.transfer)}
+                              </TableCell>
+                              <TableCell className="text-center text-blue-600 dark:text-blue-400">
+                                {formatCurrency(realtimeData.currencyTotals.USD.card)}
+                              </TableCell>
+                              <TableCell className="text-center text-amber-600 dark:text-amber-400">
+                                {realtimeData.currencyTotals.CUP.cash.toLocaleString()} CUP
+                              </TableCell>
+                              <TableCell className="text-center text-amber-600 dark:text-amber-400">
+                                {realtimeData.currencyTotals.CUP.transfer.toLocaleString()} CUP
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-12 text-gray-500">
+                    <Zap className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p>No hay datos disponibles</p>
+                    <button
+                      onClick={fetchRealtimeData}
+                      className="mt-3 px-4 py-2 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600"
+                    >
+                      Cargar datos
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </motion.div>
