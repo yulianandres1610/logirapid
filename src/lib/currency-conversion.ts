@@ -69,7 +69,8 @@ export function convertToUSD(
   return {
     originalAmount: amount,
     originalCurrency: fromCurrency,
-    convertedAmount: Math.round(convertedAmount * 100) / 100,
+    // No redondear - mantener precisión completa para cálculos exactos
+    convertedAmount: convertedAmount,
     targetCurrency: 'USD',
     rate,
     rateDescription
@@ -120,7 +121,8 @@ export function convertFromUSD(
   return {
     originalAmount: amountUSD,
     originalCurrency: 'USD',
-    convertedAmount: Math.round(convertedAmount * 100) / 100,
+    // No redondear - mantener precisión completa para cálculos exactos
+    convertedAmount: convertedAmount,
     targetCurrency: toCurrency,
     rate,
     rateDescription
@@ -189,7 +191,8 @@ export function formatCurrency(amount: number, currency: SupportedCurrency): str
  * @returns Suggested selling price
  */
 export function calculateSuggestedPrice(costPrice: number, marginPercent: number = 4): number {
-  return Math.round(costPrice * (1 + marginPercent / 100) * 100) / 100
+  // No redondear - mantener precisión completa
+  return costPrice * (1 + marginPercent / 100)
 }
 
 /**

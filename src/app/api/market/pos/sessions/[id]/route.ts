@@ -414,7 +414,7 @@ export async function PUT(
         parseFloat(totals.total_sales) || 0,
         parseFloat(totals.total_refunds) || 0,
         parseInt(totals.total_orders) || 0,
-        Math.round(differenceUsd * 100) / 100,
+        differenceUsd,
         closingNotes || null,
         sessionId
       ])
@@ -424,7 +424,7 @@ export async function PUT(
       return NextResponse.json({
         success: true,
         data: {
-          cashDifference: Math.round(differenceUsd * 100) / 100,
+          cashDifference: differenceUsd,
           expected: { usd: expectedUsd, cup: expectedCup, mlc: expectedMlc },
           reported: { usd: reportedUsd, cup: reportedCup, mlc: reportedMlc }
         },

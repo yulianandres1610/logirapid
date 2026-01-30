@@ -307,9 +307,9 @@ export async function GET(request: NextRequest) {
         ? variants.reduce((sum, v) => sum + v.totalStock, 0)
         : parseFloat(p.total_stock) || 0
 
-      // IMPORTANTE: El precio final NO debe tener redondeo si no hay pricelist activo
-      // Si priceSource === 'base', usar basePrice directamente para evitar errores de punto flotante
-      const calculatedPrice = priceSource === 'base' ? basePrice : Math.round(finalPrice * 100) / 100
+      // IMPORTANTE: NO redondear precios - mantener precisión completa
+      // El redondeo solo se hace en la UI al mostrar con toFixed(2)
+      const calculatedPrice = priceSource === 'base' ? basePrice : finalPrice
 
       // Log if price differs from base for debugging
       if (calculatedPrice !== basePrice) {

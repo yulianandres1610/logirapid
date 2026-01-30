@@ -808,7 +808,8 @@ export default function POSTerminalPage() {
       unitPrice = Math.max(0, basePrice - applicableTier.discountAmount)
     }
 
-    unitPrice = Math.round(unitPrice * 100) / 100
+    // No redondear - mantener precisión completa para cálculos exactos
+    // El redondeo solo se hace al mostrar valores con toFixed(2)
     const applied = applicableTier.minQuantity > 1 && unitPrice < basePrice
 
     return {
