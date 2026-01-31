@@ -167,6 +167,7 @@ export async function GET(
     })
 
     // Calculate expected cash by currency (actual collected = amount - change)
+    // CUP debe ser entero, USD/MLC con 4 decimales para precision
     const cashPayments: Record<string, number> = {}
     const cashChange: Record<string, number> = {}
     for (const p of paymentsResult.rows) {
@@ -174,8 +175,16 @@ export async function GET(
         const amount = parseFloat(p.total_amount) || 0
         const change = parseFloat(p.total_change) || 0
         // Actual cash collected is amount minus change given
-        cashPayments[p.currency] = (cashPayments[p.currency] || 0) + (amount - change)
-        cashChange[p.currency] = (cashChange[p.currency] || 0) + change
+        const collected = amount - change
+        // CUP: redondear a entero para evitar errores de precision
+        if (p.currency === 'CUP') {
+          cashPayments[p.currency] = (cashPayments[p.currency] || 0) + Math.round(collected)
+          cashChange[p.currency] = (cashChange[p.currency] || 0) + Math.round(change)
+        } else {
+          // USD/MLC: mantener 4 decimales de precision
+          cashPayments[p.currency] = Math.round(((cashPayments[p.currency] || 0) + collected) * 10000) / 10000
+          cashChange[p.currency] = Math.round(((cashChange[p.currency] || 0) + change) * 10000) / 10000
+        }
       }
     }
 
@@ -370,7 +379,13 @@ export async function PUT(
         const amount = parseFloat(p.total) || 0
         const change = parseFloat(p.total_change) || 0
         // Actual cash collected is amount minus change given
-        cashByurrency[p.currency] = amount - change
+        const collected = amount - change
+        // CUP: redondear a entero, USD/MLC: 4 decimales
+        if (p.currency === 'CUP') {
+          cashByurrency[p.currency] = Math.round(collected)
+        } else {
+          cashByurrency[p.currency] = Math.round(collected * 10000) / 10000
+        }
       }
 
       // Get inventory shortage value (faltante de inventario)
