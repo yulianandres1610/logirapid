@@ -1,0 +1,8 @@
+version: 1.49.1
+files:
+  - url: LogiRapid-Print-Service-1.49.1-Setup.exe
+    sha512: 71xrVNqOTOnTLNs3LpRLe4yEAOxmwEYbPKuZAG4hzFAK3YOf757UgnrC8ET1gxqVPV3eDE5dJyuHs3VFSerppw==
+    size: 85288758
+path: LogiRapid-Print-Service-1.49.1-Setup.exe
+sha512: 71xrVNqOTOnTLNs3LpRLe4yEAOxmwEYbPKuZAG4hzFAK3YOf757UgnrC8ET1gxqVPV3eDE5dJyuHs3VFSerppw==
+releaseDate: '2026-01-21T18:00:10.620Z'

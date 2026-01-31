@@ -3,8 +3,16 @@ node_modules/
 
 # Build outputs
 dist/
-release/
 out/
+
+# Release - ignore intermediate files, keep final binaries
+release/mac-arm64/
+release/win-unpacked/
+release/linux-unpacked/
+release/.icon-icns/
+release/.icon-ico/
+release/builder-debug.yml
+release/builder-effective-config.yaml
 
 # IDE
 .idea/
