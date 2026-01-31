@@ -2013,8 +2013,8 @@ export default function CreateProductPage() {
                               const sellingPrice = cost ? (parseFloat(cost) * 1.30).toFixed(2) : ''
                               setFormData({ ...formData, costPrice: cost, sellingPrice })
                             }}
-                            placeholder="0.00"
-                            step="0.01"
+                            placeholder="0.0000"
+                            step="0.0001"
                             min="0"
                             className={cn(
                               'w-full pl-8 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
@@ -2045,8 +2045,8 @@ export default function CreateProductPage() {
                             type="number"
                             value={formData.sellingPrice}
                             onChange={(e) => setFormData({ ...formData, sellingPrice: e.target.value })}
-                            placeholder="0.00"
-                            step="0.01"
+                            placeholder="0.0000"
+                            step="0.0001"
                             min="0"
                             className={cn(
                               'w-full pl-8 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',

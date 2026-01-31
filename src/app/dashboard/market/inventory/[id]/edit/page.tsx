@@ -304,8 +304,8 @@ export default function EditProductPage() {
               unitOfMeasure: p.unitOfMeasure || 'unidad',
               imageUrl: p.imageUrl || '',
               imageFile: null,
-              costPrice: p.costPrice ? parseFloat(p.costPrice).toFixed(2) : '',
-              sellingPrice: p.sellingPrice ? parseFloat(p.sellingPrice).toFixed(2) : '',
+              costPrice: p.costPrice ? String(parseFloat(p.costPrice)) : '',
+              sellingPrice: p.sellingPrice ? String(parseFloat(p.sellingPrice)) : '',
               currency: p.currency || 'USD',
               sku: p.sku || '',
               barcode: p.barcode || '',
@@ -323,8 +323,8 @@ export default function EditProductPage() {
                 name: v.name || '',
                 sku: v.sku || '',
                 barcode: v.barcode || '',
-                costPrice: v.costPrice ? parseFloat(v.costPrice).toFixed(2) : '',
-                sellingPrice: v.sellingPrice ? parseFloat(v.sellingPrice).toFixed(2) : '',
+                costPrice: v.costPrice ? String(parseFloat(v.costPrice)) : '',
+                sellingPrice: v.sellingPrice ? String(parseFloat(v.sellingPrice)) : '',
                 options: v.options || [],
                 imageUrl: v.imageUrl || ''
               }))
@@ -2081,8 +2081,8 @@ export default function EditProductPage() {
                             type="number"
                             value={formData.costPrice}
                             onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
-                            placeholder="0.00"
-                            step="0.01"
+                            placeholder="0.0000"
+                            step="0.0001"
                             min="0"
                             className={cn(
                               'w-full pl-8 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
@@ -2113,8 +2113,8 @@ export default function EditProductPage() {
                             type="number"
                             value={formData.sellingPrice}
                             onChange={(e) => setFormData({ ...formData, sellingPrice: e.target.value })}
-                            placeholder="0.00"
-                            step="0.01"
+                            placeholder="0.0000"
+                            step="0.0001"
                             min="0"
                             className={cn(
                               'w-full pl-8 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
@@ -2492,6 +2492,8 @@ export default function EditProductPage() {
                                           type="number"
                                           value={variant.costPrice}
                                           onChange={(e) => updateVariant(variant.id, 'costPrice', e.target.value)}
+                                          step="0.0001"
+                                          min="0"
                                           className={cn(
                                             'w-full pl-6 pr-2 py-1.5 rounded-lg border text-sm focus:outline-none',
                                             theme === 'dark'
@@ -2509,6 +2511,8 @@ export default function EditProductPage() {
                                           type="number"
                                           value={variant.sellingPrice}
                                           onChange={(e) => updateVariant(variant.id, 'sellingPrice', e.target.value)}
+                                          step="0.0001"
+                                          min="0"
                                           className={cn(
                                             'w-full pl-6 pr-2 py-1.5 rounded-lg border text-sm focus:outline-none',
                                             theme === 'dark'
