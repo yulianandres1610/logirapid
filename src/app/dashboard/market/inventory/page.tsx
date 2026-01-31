@@ -706,7 +706,7 @@ export default function MarketInventoryPage() {
                                   {symbol}{product.costPrice.toFixed(2)}
                                 </span>
                                 <div className="text-[10px] mt-0.5 space-y-0">
-                                  <p className="text-orange-600">${Math.round(product.costPrice * USD_CUP).toLocaleString('es-ES')} CUP <span className="text-gray-400">(ElToque)</span></p>
+                                  <p className="text-orange-600">${Math.round(product.costPrice * USD_CUP).toLocaleString('es-ES')} CUP</p>
                                   <p className="text-purple-600">${(product.costPrice * USD_MLC).toFixed(2)} MLC</p>
                                 </div>
                               </div>
