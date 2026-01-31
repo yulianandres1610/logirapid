@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { db } from '@/lib/database'
 
-// Ensure table exists
+// Ensure table exists - called before each operation
 async function ensureTableExists() {
   try {
     await db.query(`
@@ -13,39 +13,64 @@ async function ensureTableExists() {
         updated_by INTEGER,
         updated_by_email VARCHAR(255),
         updated_at TIMESTAMP DEFAULT NOW(),
-        created_at TIMESTAMP DEFAULT NOW(),
-        CONSTRAINT fk_company FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        created_at TIMESTAMP DEFAULT NOW()
       )
     `)
+    console.log('[Exchange Rate Config] Table ensured')
   } catch (error) {
     console.error('[Exchange Rate Config] Error creating table:', error)
+    // Try without foreign key constraint if it fails
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS market_exchange_rate_config (
+          id SERIAL PRIMARY KEY,
+          company_id INTEGER NOT NULL UNIQUE,
+          manual_rate DECIMAL(10,4),
+          updated_by INTEGER,
+          updated_by_email VARCHAR(255),
+          updated_at TIMESTAMP DEFAULT NOW(),
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `)
+    } catch (e) {
+      console.error('[Exchange Rate Config] Fallback table creation also failed:', e)
+    }
   }
 }
 
-// Initialize table on first import
-ensureTableExists()
-
 // Helper to get current user from cookies
 async function getCurrentUser() {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('auth-token')?.value
-  const companyId = cookieStore.get('user-company-id')?.value
-  const role = cookieStore.get('user-role')?.value
-
-  if (!token) {
-    return null
-  }
-
   try {
-    const decoded = Buffer.from(token, 'base64').toString('utf-8')
-    const [userId, email, tokenRole] = decoded.split(':')
-    return {
-      userId: parseInt(userId),
-      email,
-      role: role || tokenRole,
-      companyId: companyId ? parseInt(companyId) : null
+    const cookieStore = await cookies()
+    const token = cookieStore.get('auth-token')?.value
+    const companyId = cookieStore.get('user-company-id')?.value
+    const role = cookieStore.get('user-role')?.value
+
+    console.log('[Exchange Rate Config] Cookies:', {
+      hasToken: !!token,
+      companyId,
+      role
+    })
+
+    if (!token) {
+      return null
     }
-  } catch {
+
+    try {
+      const decoded = Buffer.from(token, 'base64').toString('utf-8')
+      const [userId, email, tokenRole] = decoded.split(':')
+      return {
+        userId: parseInt(userId),
+        email,
+        role: role || tokenRole,
+        companyId: companyId ? parseInt(companyId) : null
+      }
+    } catch (decodeError) {
+      console.error('[Exchange Rate Config] Token decode error:', decodeError)
+      return null
+    }
+  } catch (cookieError) {
+    console.error('[Exchange Rate Config] Cookie access error:', cookieError)
     return null
   }
 }
@@ -84,6 +109,9 @@ async function fetchElToqueRate(): Promise<{ rate: number; timestamp: string } |
  */
 export async function GET(request: NextRequest) {
   try {
+    // Ensure table exists
+    await ensureTableExists()
+
     const user = await getCurrentUser()
 
     if (!user) {
@@ -169,7 +197,11 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Ensure table exists
+    await ensureTableExists()
+
     const user = await getCurrentUser()
+    console.log('[Exchange Rate Config] POST - User:', user)
 
     if (!user) {
       return NextResponse.json(
@@ -178,17 +210,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check permissions - only ADMIN, SUPER_ADMIN, MARKET_ADMIN, MARKET_MANAGER can update
+    // Check permissions - allow ADMIN, SUPER_ADMIN, and all MARKET roles that manage
     const allowedRoles = ['ADMIN', 'SUPER_ADMIN', 'MARKET_ADMIN', 'MARKET_MANAGER']
-    if (!allowedRoles.includes(user.role || '')) {
+    const userRole = user.role || ''
+
+    console.log('[Exchange Rate Config] Checking role:', userRole, 'allowed:', allowedRoles)
+
+    if (!allowedRoles.includes(userRole)) {
       return NextResponse.json(
-        { success: false, error: 'No tiene permisos para modificar la tasa de cambio' },
+        { success: false, error: `No tiene permisos para modificar la tasa de cambio. Rol actual: ${userRole}` },
         { status: 403 }
       )
     }
 
     const body = await request.json()
     const { manualRate, companyId: bodyCompanyId } = body
+
+    console.log('[Exchange Rate Config] POST body:', { manualRate, bodyCompanyId })
 
     // Validate manualRate
     if (manualRate !== null && manualRate !== undefined) {
@@ -219,6 +257,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    console.log('[Exchange Rate Config] Saving config for company:', companyId, 'rate:', manualRate)
+
     // Upsert the configuration
     const result = await db.query(
       `INSERT INTO market_exchange_rate_config
@@ -234,6 +274,7 @@ export async function POST(request: NextRequest) {
     )
 
     const savedConfig = result.rows[0]
+    console.log('[Exchange Rate Config] Saved:', savedConfig)
 
     // Fetch ElToque for response
     const elToqueData = await fetchElToqueRate()
@@ -258,10 +299,10 @@ export async function POST(request: NextRequest) {
       }
     })
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('[Exchange Rate Config] POST Error:', error)
     return NextResponse.json(
-      { success: false, error: 'Error al actualizar configuración' },
+      { success: false, error: `Error al actualizar configuración: ${error.message || 'Unknown error'}` },
       { status: 500 }
     )
   }
