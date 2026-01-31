@@ -282,10 +282,7 @@ export default function ProductionOrderDetailPage() {
   return (
     <ProtectedRoute requiredRole={['SUPER_ADMIN', 'ADMIN', 'MARKET_ADMIN', 'MARKET_MANAGER', 'MARKET_COMERCIAL', 'MARKET_ALMACENERO']}>
       <DashboardLayout>
-        <div className={cn(
-          "min-h-screen p-6",
-          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-        )}>
+        <div className="min-h-screen p-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -326,10 +323,16 @@ export default function ProductionOrderDetailPage() {
 
           {/* Progress Steps */}
           {order.status !== 'cancelled' && (
-            <div className={cn(
-              "p-4 rounded-xl mb-6",
-              theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
-            )}>
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                "p-4 rounded-2xl border shadow-xl mb-6",
+                theme === 'dark'
+                  ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                  : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+              )}
+            >
               <div className="flex items-center justify-between">
                 {['draft', 'confirmed', 'materials_out', 'in_production', 'completed'].map((step, index) => {
                   const stepConfig = STATUS_CONFIG[step]
@@ -375,17 +378,23 @@ export default function ProductionOrderDetailPage() {
                   )
                 })}
               </div>
-            </div>
+            </motion.div>
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main Content */}
             <div className="lg:col-span-2 space-y-6">
               {/* Product Info */}
-              <div className={cn(
-                "p-6 rounded-xl",
-                theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
-              )}>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={cn(
+                  "p-6 rounded-2xl border shadow-xl",
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                )}
+              >
                 <h2 className={cn(
                   "font-semibold mb-4",
                   theme === 'dark' ? 'text-white' : 'text-gray-900'
@@ -433,13 +442,20 @@ export default function ProductionOrderDetailPage() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </motion.div>
 
               {/* Materials List */}
-              <div className={cn(
-                "p-6 rounded-xl",
-                theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
-              )}>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className={cn(
+                  "p-6 rounded-2xl border shadow-xl",
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                )}
+              >
                 <h2 className={cn(
                   "font-semibold mb-4",
                   theme === 'dark' ? 'text-white' : 'text-gray-900'
@@ -519,16 +535,23 @@ export default function ProductionOrderDetailPage() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </motion.div>
             </div>
 
             {/* Sidebar */}
             <div className="space-y-6">
               {/* Summary */}
-              <div className={cn(
-                "p-6 rounded-xl",
-                theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
-              )}>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className={cn(
+                  "p-6 rounded-2xl border shadow-xl",
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                )}
+              >
                 <h2 className={cn(
                   "font-semibold mb-4",
                   theme === 'dark' ? 'text-white' : 'text-gray-900'
@@ -624,14 +647,21 @@ export default function ProductionOrderDetailPage() {
                     )}
                   </div>
                 </div>
-              </div>
+              </motion.div>
 
               {/* Actions */}
               {order.status !== 'completed' && order.status !== 'cancelled' && (
-                <div className={cn(
-                  "p-6 rounded-xl space-y-3",
-                  theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
-                )}>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className={cn(
+                    "p-6 rounded-2xl border shadow-xl space-y-3",
+                    theme === 'dark'
+                      ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                      : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                  )}
+                >
                   <h2 className={cn(
                     "font-semibold mb-4",
                     theme === 'dark' ? 'text-white' : 'text-gray-900'
@@ -704,7 +734,7 @@ export default function ProductionOrderDetailPage() {
                       Cancelar Orden
                     </button>
                   )}
-                </div>
+                </motion.div>
               )}
             </div>
           </div>

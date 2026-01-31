@@ -268,10 +268,7 @@ export default function CreateBOMPage() {
   return (
     <ProtectedRoute requiredRole={['SUPER_ADMIN', 'ADMIN', 'MARKET_ADMIN', 'MARKET_MANAGER', 'MARKET_COMERCIAL']}>
       <DashboardLayout>
-        <div className={cn(
-          "min-h-screen p-6",
-          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-        )}>
+        <div className="min-h-screen p-6">
           {/* Header */}
           <div className="flex items-center gap-3 mb-6">
             <Link
@@ -305,10 +302,16 @@ export default function CreateBOMPage() {
               {/* Main Form */}
               <div className="lg:col-span-2 space-y-6">
                 {/* Basic Info */}
-                <div className={cn(
-                  "p-6 rounded-xl",
-                  theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
-                )}>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={cn(
+                    "p-6 rounded-2xl border shadow-xl",
+                    theme === 'dark'
+                      ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                      : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                  )}
+                >
                   <h2 className={cn(
                     "font-semibold mb-4",
                     theme === 'dark' ? 'text-white' : 'text-gray-900'
@@ -584,13 +587,20 @@ export default function CreateBOMPage() {
                       />
                     </div>
                   </div>
-                </div>
+                </motion.div>
 
                 {/* Materials */}
-                <div className={cn(
-                  "p-6 rounded-xl",
-                  theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
-                )}>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className={cn(
+                    "p-6 rounded-2xl border shadow-xl",
+                    theme === 'dark'
+                      ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                      : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                  )}
+                >
                   <h2 className={cn(
                     "font-semibold mb-4",
                     theme === 'dark' ? 'text-white' : 'text-gray-900'
@@ -810,15 +820,22 @@ export default function CreateBOMPage() {
                       ))}
                     </div>
                   )}
-                </div>
+                </motion.div>
               </div>
 
               {/* Summary Sidebar */}
               <div className="space-y-6">
-                <div className={cn(
-                  "p-6 rounded-xl sticky top-6",
-                  theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
-                )}>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className={cn(
+                    "p-6 rounded-2xl border shadow-xl sticky top-6",
+                    theme === 'dark'
+                      ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                      : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                  )}
+                >
                   <h2 className={cn(
                     "font-semibold mb-4",
                     theme === 'dark' ? 'text-white' : 'text-gray-900'
@@ -927,7 +944,7 @@ export default function CreateBOMPage() {
                       )}
                     </button>
                   </div>
-                </div>
+                </motion.div>
               </div>
             </div>
           </form>

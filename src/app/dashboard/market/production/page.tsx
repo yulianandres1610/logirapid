@@ -168,10 +168,7 @@ export default function ProductionPage() {
   return (
     <ProtectedRoute requiredRole={['SUPER_ADMIN', 'ADMIN', 'MARKET_ADMIN', 'MARKET_MANAGER', 'MARKET_COMERCIAL', 'MARKET_ALMACENERO']}>
       <DashboardLayout>
-        <div className={cn(
-          "min-h-screen p-6",
-          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-        )}>
+        <div className="min-h-screen p-6">
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
             <div>
@@ -218,7 +215,7 @@ export default function ProductionPage() {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5 mb-6">
             {Object.entries(STATUS_CONFIG).map(([status, config]) => {
               const Icon = config.icon
               const count = stats[status as keyof Stats] || 0
@@ -228,32 +225,42 @@ export default function ProductionPage() {
                 <motion.button
                   key={status}
                   onClick={() => setSelectedStatus(isActive ? null : status)}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   className={cn(
-                    "p-4 rounded-xl transition-all text-left",
+                    "relative overflow-hidden p-4 rounded-2xl transition-all text-left border shadow-xl",
                     theme === 'dark'
                       ? isActive
-                        ? 'bg-gray-700 ring-2 ring-purple-500'
-                        : 'bg-gray-800 hover:bg-gray-750'
+                        ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-purple-500 ring-2 ring-purple-500'
+                        : 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700 hover:border-gray-600'
                       : isActive
-                        ? 'bg-white ring-2 ring-purple-500 shadow-md'
-                        : 'bg-white hover:bg-gray-50 shadow-sm'
+                        ? 'bg-gradient-to-br from-slate-50 to-white border-purple-500 ring-2 ring-purple-500'
+                        : 'bg-gradient-to-br from-slate-50 to-white border-slate-200 hover:border-slate-300'
                   )}
                 >
+                  <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${config.gradient}`}></div>
                   <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg bg-gradient-to-r ${config.gradient}`}>
-                      <Icon className="w-4 h-4 text-white" />
+                    <div className={cn(
+                      'p-2 rounded-xl shadow-sm',
+                      theme === 'dark'
+                        ? `bg-gradient-to-br from-${config.color}-900/30 border border-${config.color}-800/50`
+                        : `bg-gradient-to-br from-${config.color}-50 to-${config.color}-100 border border-${config.color}-200`
+                    )}>
+                      <div className={`p-1.5 rounded-lg bg-gradient-to-r ${config.gradient}`}>
+                        <Icon className="w-4 h-4 text-white" />
+                      </div>
                     </div>
                     <div>
                       <p className={cn(
-                        "text-xl font-bold",
+                        "text-2xl font-bold",
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
                       )}>
                         {count}
                       </p>
                       <p className={cn(
-                        "text-xs",
+                        "text-xs font-medium",
                         theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
                       )}>
                         {config.label}
@@ -266,10 +273,16 @@ export default function ProductionPage() {
           </div>
 
           {/* Search and Filters */}
-          <div className={cn(
-            "p-4 rounded-xl mb-6",
-            theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
-          )}>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={cn(
+              "p-4 rounded-2xl border shadow-xl mb-6",
+              theme === 'dark'
+                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+            )}
+          >
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1 relative">
                 <Search className={cn(
@@ -322,13 +335,19 @@ export default function ProductionPage() {
                 Última actualización: {lastUpdated.toLocaleTimeString()}
               </p>
             )}
-          </div>
+          </motion.div>
 
           {/* Orders Table */}
-          <div className={cn(
-            "rounded-xl overflow-hidden",
-            theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
-          )}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={cn(
+              "rounded-2xl border shadow-xl overflow-hidden",
+              theme === 'dark'
+                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+            )}
+          >
             {loading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
@@ -362,72 +381,35 @@ export default function ProductionPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className={cn(
-                    theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
-                  )}>
-                    <tr>
-                      <th className={cn(
-                        "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider",
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                      )}>
-                        Orden
-                      </th>
-                      <th className={cn(
-                        "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider",
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                      )}>
-                        Producto
-                      </th>
-                      <th className={cn(
-                        "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider",
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                      )}>
-                        Almacén
-                      </th>
-                      <th className={cn(
-                        "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider",
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                      )}>
-                        Cantidad
-                      </th>
-                      <th className={cn(
-                        "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider",
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                      )}>
-                        Costo
-                      </th>
-                      <th className={cn(
-                        "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider",
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                      )}>
-                        Estado
-                      </th>
-                      <th className={cn(
-                        "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider",
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                      )}>
-                        Fecha
-                      </th>
-                      <th className={cn(
-                        "px-4 py-3 text-right text-xs font-medium uppercase tracking-wider",
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                      )}>
-                        Acciones
-                      </th>
+                  <thead>
+                    <tr className={cn(
+                      'border-b',
+                      theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                    )}>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Orden</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Almacén</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Cantidad</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Costo</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {orders.map((order) => (
+                    {orders.map((order, index) => (
                       <motion.tr
                         key={order.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.02 }}
+                        onClick={() => router.push(`/dashboard/market/production/orders/${order.id}`)}
                         className={cn(
-                          "transition-colors",
-                          theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'
+                          "group transition-colors cursor-pointer",
+                          theme === 'dark' ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'
                         )}
                       >
-                        <td className="px-4 py-4">
+                        <td className="py-4 px-4">
                           <div>
                             <p className={cn(
                               "font-medium",
@@ -569,53 +551,47 @@ export default function ProductionPage() {
             {pagination.totalPages > 1 && (
               <div className={cn(
                 "flex items-center justify-between px-4 py-3 border-t",
-                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
               )}>
-                <p className={cn(
-                  "text-sm",
-                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                )}>
+                <p className="text-sm text-gray-500">
                   Mostrando {((pagination.page - 1) * pagination.limit) + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total}
                 </p>
                 <div className="flex items-center gap-2">
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={() => fetchOrders(pagination.page - 1, selectedStatus, search)}
                     disabled={pagination.page === 1}
                     className={cn(
-                      "p-2 rounded-lg transition-all",
-                      pagination.page === 1
-                        ? 'opacity-50 cursor-not-allowed'
-                        : theme === 'dark'
-                          ? 'hover:bg-gray-700'
-                          : 'hover:bg-gray-100'
+                      "p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+                      theme === 'dark'
+                        ? 'hover:bg-gray-700 text-gray-300'
+                        : 'hover:bg-gray-200 text-gray-600'
                     )}
                   >
                     <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <span className={cn(
-                    "px-3 py-1 rounded-lg text-sm",
-                    theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-900'
-                  )}>
+                  </motion.button>
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     {pagination.page} / {pagination.totalPages}
                   </span>
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={() => fetchOrders(pagination.page + 1, selectedStatus, search)}
                     disabled={pagination.page === pagination.totalPages}
                     className={cn(
-                      "p-2 rounded-lg transition-all",
-                      pagination.page === pagination.totalPages
-                        ? 'opacity-50 cursor-not-allowed'
-                        : theme === 'dark'
-                          ? 'hover:bg-gray-700'
-                          : 'hover:bg-gray-100'
+                      "p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+                      theme === 'dark'
+                        ? 'hover:bg-gray-700 text-gray-300'
+                        : 'hover:bg-gray-200 text-gray-600'
                     )}
                   >
                     <ChevronRight className="w-5 h-5" />
-                  </button>
+                  </motion.button>
                 </div>
               </div>
             )}
-          </div>
+          </motion.div>
         </div>
       </DashboardLayout>
     </ProtectedRoute>

@@ -151,10 +151,7 @@ export default function BOMListPage() {
   return (
     <ProtectedRoute requiredRole={['SUPER_ADMIN', 'ADMIN', 'MARKET_ADMIN', 'MARKET_MANAGER', 'MARKET_COMERCIAL']}>
       <DashboardLayout>
-        <div className={cn(
-          "min-h-screen p-6",
-          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-        )}>
+        <div className="min-h-screen p-6">
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
             <div>
@@ -197,10 +194,16 @@ export default function BOMListPage() {
           </div>
 
           {/* Search and Filters */}
-          <div className={cn(
-            "p-4 rounded-xl mb-6",
-            theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
-          )}>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={cn(
+              "p-4 rounded-2xl border shadow-xl mb-6",
+              theme === 'dark'
+                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+            )}
+          >
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1 relative">
                 <Search className={cn(
@@ -270,13 +273,19 @@ export default function BOMListPage() {
                 Última actualización: {lastUpdated.toLocaleTimeString()}
               </p>
             )}
-          </div>
+          </motion.div>
 
           {/* BOM List */}
-          <div className={cn(
-            "rounded-xl overflow-hidden",
-            theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
-          )}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={cn(
+              "rounded-2xl border shadow-xl overflow-hidden",
+              theme === 'dark'
+                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+            )}
+          >
             {loading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
@@ -517,53 +526,47 @@ export default function BOMListPage() {
             {pagination.totalPages > 1 && (
               <div className={cn(
                 "flex items-center justify-between px-4 py-3 border-t",
-                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
               )}>
-                <p className={cn(
-                  "text-sm",
-                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                )}>
+                <p className="text-sm text-gray-500">
                   Mostrando {((pagination.page - 1) * pagination.limit) + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total}
                 </p>
                 <div className="flex items-center gap-2">
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={() => fetchBOMs(pagination.page - 1, search, showActiveOnly ? true : undefined)}
                     disabled={pagination.page === 1}
                     className={cn(
-                      "p-2 rounded-lg transition-all",
-                      pagination.page === 1
-                        ? 'opacity-50 cursor-not-allowed'
-                        : theme === 'dark'
-                          ? 'hover:bg-gray-700'
-                          : 'hover:bg-gray-100'
+                      "p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+                      theme === 'dark'
+                        ? 'hover:bg-gray-700 text-gray-300'
+                        : 'hover:bg-gray-200 text-gray-600'
                     )}
                   >
                     <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <span className={cn(
-                    "px-3 py-1 rounded-lg text-sm",
-                    theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-900'
-                  )}>
+                  </motion.button>
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     {pagination.page} / {pagination.totalPages}
                   </span>
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={() => fetchBOMs(pagination.page + 1, search, showActiveOnly ? true : undefined)}
                     disabled={pagination.page === pagination.totalPages}
                     className={cn(
-                      "p-2 rounded-lg transition-all",
-                      pagination.page === pagination.totalPages
-                        ? 'opacity-50 cursor-not-allowed'
-                        : theme === 'dark'
-                          ? 'hover:bg-gray-700'
-                          : 'hover:bg-gray-100'
+                      "p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+                      theme === 'dark'
+                        ? 'hover:bg-gray-700 text-gray-300'
+                        : 'hover:bg-gray-200 text-gray-600'
                     )}
                   >
                     <ChevronRight className="w-5 h-5" />
-                  </button>
+                  </motion.button>
                 </div>
               </div>
             )}
-          </div>
+          </motion.div>
         </div>
       </DashboardLayout>
     </ProtectedRoute>

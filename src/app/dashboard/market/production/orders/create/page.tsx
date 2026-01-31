@@ -275,10 +275,7 @@ export default function CreateProductionOrderPage() {
   return (
     <ProtectedRoute requiredRole={['SUPER_ADMIN', 'ADMIN', 'MARKET_ADMIN', 'MARKET_MANAGER', 'MARKET_COMERCIAL', 'MARKET_ALMACENERO']}>
       <DashboardLayout>
-        <div className={cn(
-          "min-h-screen p-6",
-          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-        )}>
+        <div className="min-h-screen p-6">
           {/* Header */}
           <div className="flex items-center gap-3 mb-6">
             <Link
@@ -312,10 +309,16 @@ export default function CreateProductionOrderPage() {
               {/* Main Form */}
               <div className="lg:col-span-2 space-y-6">
                 {/* Recipe Selection */}
-                <div className={cn(
-                  "p-6 rounded-xl",
-                  theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
-                )}>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={cn(
+                    "p-6 rounded-2xl border shadow-xl",
+                    theme === 'dark'
+                      ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                      : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                  )}
+                >
                   <h2 className={cn(
                     "font-semibold mb-4 flex items-center gap-2",
                     theme === 'dark' ? 'text-white' : 'text-gray-900'
@@ -408,13 +411,20 @@ export default function CreateProductionOrderPage() {
                       )}
                     </div>
                   )}
-                </div>
+                </motion.div>
 
                 {/* Production Details */}
-                <div className={cn(
-                  "p-6 rounded-xl",
-                  theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
-                )}>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className={cn(
+                    "p-6 rounded-2xl border shadow-xl",
+                    theme === 'dark'
+                      ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                      : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                  )}
+                >
                   <h2 className={cn(
                     "font-semibold mb-4 flex items-center gap-2",
                     theme === 'dark' ? 'text-white' : 'text-gray-900'
@@ -533,14 +543,21 @@ export default function CreateProductionOrderPage() {
                       />
                     </div>
                   </div>
-                </div>
+                </motion.div>
 
                 {/* Material Requirements */}
                 {materialRequirements.length > 0 && (
-                  <div className={cn(
-                    "p-6 rounded-xl",
-                    theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
-                  )}>
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className={cn(
+                      "p-6 rounded-2xl border shadow-xl",
+                      theme === 'dark'
+                        ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                        : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                    )}
+                  >
                     <div className="flex items-center justify-between mb-4">
                       <h2 className={cn(
                         "font-semibold flex items-center gap-2",
@@ -614,16 +631,23 @@ export default function CreateProductionOrderPage() {
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </motion.div>
                 )}
               </div>
 
               {/* Summary Sidebar */}
               <div className="space-y-6">
-                <div className={cn(
-                  "p-6 rounded-xl sticky top-6",
-                  theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-sm'
-                )}>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className={cn(
+                    "p-6 rounded-2xl border shadow-xl sticky top-6",
+                    theme === 'dark'
+                      ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                      : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                  )}
+                >
                   <h2 className={cn(
                     "font-semibold mb-4",
                     theme === 'dark' ? 'text-white' : 'text-gray-900'
@@ -715,7 +739,7 @@ export default function CreateProductionOrderPage() {
                       </p>
                     )}
                   </div>
-                </div>
+                </motion.div>
               </div>
             </div>
           </form>
