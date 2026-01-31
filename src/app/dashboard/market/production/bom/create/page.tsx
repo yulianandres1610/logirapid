@@ -1,21 +1,25 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
-  BookOpen,
   ArrowLeft,
+  ArrowRight,
   Save,
   Plus,
   Trash2,
   Search,
   Package,
   Loader2,
-  DollarSign,
-  AlertCircle,
   Check,
-  X
+  X,
+  ChevronDown,
+  Percent,
+  Calculator,
+  Boxes,
+  Target,
+  Sparkles
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -50,6 +54,7 @@ interface BOMLine {
   variantId: number | null
   productName: string
   productSku: string
+  productImage: string | null
   productCostPrice: number
   quantityRequired: number
   unit: string
@@ -57,10 +62,21 @@ interface BOMLine {
   lineCost: number
 }
 
+const UNITS = [
+  { value: 'unidad', label: 'Unidad', abbr: 'ud' },
+  { value: 'kg', label: 'Kilogramo', abbr: 'kg' },
+  { value: 'g', label: 'Gramo', abbr: 'g' },
+  { value: 'lb', label: 'Libra', abbr: 'lb' },
+  { value: 'lt', label: 'Litro', abbr: 'lt' },
+  { value: 'ml', label: 'Mililitro', abbr: 'ml' }
+]
+
 export default function CreateBOMPage() {
   const router = useRouter()
   const { theme } = useTheme()
   const [saving, setSaving] = useState(false)
+  const outputSearchRef = useRef<HTMLInputElement>(null)
+  const materialSearchRef = useRef<HTMLInputElement>(null)
 
   // Form state
   const [bomName, setBomName] = useState('')
@@ -81,11 +97,12 @@ export default function CreateBOMPage() {
   const [searchingLine, setSearchingLine] = useState(false)
   const [showOutputDropdown, setShowOutputDropdown] = useState(false)
   const [showLineDropdown, setShowLineDropdown] = useState(false)
-  const [editingLineIndex, setEditingLineIndex] = useState<number | null>(null)
 
   // Calculate totals
   const totalMaterialCost = lines.reduce((sum, line) => sum + line.lineCost, 0)
   const unitCost = outputQuantity > 0 ? totalMaterialCost / outputQuantity : 0
+  const wasteAmount = (totalMaterialCost * expectedWastePercent) / 100
+  const effectiveUnitCost = outputQuantity > 0 ? (totalMaterialCost + wasteAmount) / outputQuantity : 0
 
   // Search products
   const searchProducts = async (term: string, forOutput: boolean) => {
@@ -129,6 +146,20 @@ export default function CreateBOMPage() {
     return () => clearTimeout(timer)
   }, [productSearchLine])
 
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (outputSearchRef.current && !outputSearchRef.current.contains(e.target as Node)) {
+        setShowOutputDropdown(false)
+      }
+      if (materialSearchRef.current && !materialSearchRef.current.contains(e.target as Node)) {
+        setShowLineDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
   const selectOutputProduct = (product: Product, variant?: ProductVariant) => {
     setOutputProduct(product)
     setOutputVariant(variant || null)
@@ -150,6 +181,7 @@ export default function CreateBOMPage() {
       variantId: variant?.id || null,
       productName: variant ? `${product.name} - ${variant.variantName}` : product.name,
       productSku: variant?.sku || product.sku,
+      productImage: product.imageUrl,
       productCostPrice: costPrice,
       quantityRequired: 1,
       unit: product.unitOfMeasure || 'unidad',
@@ -170,7 +202,6 @@ export default function CreateBOMPage() {
       [field]: value
     }
 
-    // Recalculate line cost
     if (field === 'quantityRequired') {
       updatedLines[index].lineCost = updatedLines[index].productCostPrice * value
     }
@@ -180,7 +211,6 @@ export default function CreateBOMPage() {
 
   const removeLine = (index: number) => {
     const updatedLines = lines.filter((_, i) => i !== index)
-    // If removed line was primary and there are still lines, make first one primary
     if (lines[index].isPrimary && updatedLines.length > 0) {
       updatedLines[0].isPrimary = true
     }
@@ -261,170 +291,190 @@ export default function CreateBOMPage() {
     return new Intl.NumberFormat('es-US', {
       style: 'currency',
       currency: 'USD',
-      minimumFractionDigits: 2
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 4
     }).format(amount)
   }
+
+  const canSave = outputProduct && bomName.trim() && outputQuantity > 0 && lines.length > 0
 
   return (
     <ProtectedRoute requiredRole={['SUPER_ADMIN', 'ADMIN', 'MARKET_ADMIN', 'MARKET_MANAGER', 'MARKET_COMERCIAL']}>
       <DashboardLayout>
         <div className="min-h-screen p-6">
-          {/* Header */}
-          <div className="flex items-center gap-3 mb-6">
-            <Link
-              href="/dashboard/market/production/bom"
-              className={cn(
-                "p-2 rounded-lg transition-all",
-                theme === 'dark' ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
-              )}
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <div>
-              <h1 className={cn(
-                "text-2xl font-bold flex items-center gap-2",
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              )}>
-                <BookOpen className="w-7 h-7 text-purple-500" />
-                Nueva Receta de Producción
-              </h1>
-              <p className={cn(
-                "text-sm",
-                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-              )}>
-                Define los materiales necesarios para fabricar un producto
-              </p>
-            </div>
-          </div>
-
-          <form onSubmit={handleSubmit}>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Main Form */}
-              <div className="lg:col-span-2 space-y-6">
-                {/* Basic Info */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="max-w-5xl mx-auto"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-4">
+                <Link
+                  href="/dashboard/market/production/bom"
                   className={cn(
-                    "p-6 rounded-2xl border shadow-xl",
+                    "p-2 rounded-xl transition-all",
                     theme === 'dark'
-                      ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                      : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                      ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
+                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
                   )}
                 >
-                  <h2 className={cn(
-                    "font-semibold mb-4",
+                  <ArrowLeft className="w-5 h-5" />
+                </Link>
+                <div>
+                  <h1 className={cn(
+                    "text-2xl font-bold",
                     theme === 'dark' ? 'text-white' : 'text-gray-900'
                   )}>
-                    Información básica
-                  </h2>
+                    Nueva Receta
+                  </h1>
+                  <p className={cn(
+                    "text-sm",
+                    theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                  )}>
+                    Define los materiales para fabricar un producto
+                  </p>
+                </div>
+              </div>
 
+              <button
+                onClick={handleSubmit}
+                disabled={saving || !canSave}
+                className={cn(
+                  "flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium transition-all",
+                  canSave
+                    ? 'bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white shadow-lg shadow-purple-500/25'
+                    : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed'
+                )}
+              >
+                {saving ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Save className="w-5 h-5" />
+                )}
+                {saving ? 'Guardando...' : 'Guardar Receta'}
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Step 1: Output Product */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className={cn(
+                  "p-6 rounded-2xl border shadow-xl",
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-white to-gray-50 border-gray-200'
+                )}
+              >
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-purple-500 text-white text-sm font-bold">
+                    1
+                  </div>
+                  <div>
+                    <h2 className={cn(
+                      "font-semibold",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      Producto a Fabricar
+                    </h2>
+                    <p className={cn(
+                      "text-xs",
+                      theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                    )}>
+                      Selecciona el producto final que vas a producir
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Product Search */}
                   <div className="space-y-4">
-                    <div>
-                      <label className={cn(
-                        "block text-sm font-medium mb-1",
-                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                    {outputProduct ? (
+                      <div className={cn(
+                        "flex items-center gap-4 p-4 rounded-xl border-2 border-purple-500/50",
+                        theme === 'dark' ? 'bg-purple-900/20' : 'bg-purple-50'
                       )}>
-                        Nombre de la receta *
-                      </label>
-                      <input
-                        type="text"
-                        value={bomName}
-                        onChange={(e) => setBomName(e.target.value)}
-                        placeholder="Ej: Empaque Frijoles 3kg"
-                        className={cn(
-                          "w-full px-4 py-2 rounded-lg border transition-all",
-                          theme === 'dark'
-                            ? 'bg-gray-700 border-gray-600 text-white'
-                            : 'bg-gray-50 border-gray-200 text-gray-900'
+                        {outputProduct.imageUrl ? (
+                          <img
+                            src={outputProduct.imageUrl}
+                            alt=""
+                            className="w-16 h-16 rounded-xl object-cover"
+                          />
+                        ) : (
+                          <div className={cn(
+                            "w-16 h-16 rounded-xl flex items-center justify-center",
+                            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                          )}>
+                            <Package className="w-8 h-8 text-gray-400" />
+                          </div>
                         )}
-                        required
-                      />
-                    </div>
-
-                    {/* Output Product Search */}
-                    <div>
-                      <label className={cn(
-                        "block text-sm font-medium mb-1",
-                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                      )}>
-                        Producto a fabricar *
-                      </label>
-                      {outputProduct ? (
-                        <div className={cn(
-                          "flex items-center justify-between p-3 rounded-lg border",
-                          theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'
-                        )}>
-                          <div className="flex items-center gap-3">
-                            {outputProduct.imageUrl ? (
-                              <img src={outputProduct.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover" />
-                            ) : (
-                              <div className={cn(
-                                "w-10 h-10 rounded-lg flex items-center justify-center",
-                                theme === 'dark' ? 'bg-gray-600' : 'bg-gray-200'
-                              )}>
-                                <Package className="w-5 h-5 text-gray-400" />
-                              </div>
-                            )}
-                            <div>
-                              <p className={cn(
-                                "font-medium",
-                                theme === 'dark' ? 'text-white' : 'text-gray-900'
-                              )}>
-                                {outputVariant ? `${outputProduct.name} - ${outputVariant.variantName}` : outputProduct.name}
-                              </p>
-                              <p className={cn(
-                                "text-sm",
-                                theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                              )}>
-                                {outputVariant?.sku || outputProduct.sku}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setOutputProduct(null)
-                              setOutputVariant(null)
-                            }}
-                            className="p-1 text-red-500 hover:bg-red-500/10 rounded"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
+                        <div className="flex-1 min-w-0">
+                          <p className={cn(
+                            "font-semibold truncate",
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            {outputVariant ? `${outputProduct.name} - ${outputVariant.variantName}` : outputProduct.name}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            SKU: {outputVariant?.sku || outputProduct.sku}
+                          </p>
+                          <p className="text-sm text-purple-500 font-medium">
+                            {formatCurrency(outputVariant?.costPrice || outputProduct.costPrice)} costo actual
+                          </p>
                         </div>
-                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOutputProduct(null)
+                            setOutputVariant(null)
+                          }}
+                          className="p-2 rounded-lg text-red-500 hover:bg-red-500/10 transition-colors"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div ref={outputSearchRef} className="relative">
                         <div className="relative">
-                          <div className="relative">
-                            <Search className={cn(
-                              "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4",
-                              theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                            )} />
-                            <input
-                              type="text"
-                              value={productSearchOutput}
-                              onChange={(e) => {
-                                setProductSearchOutput(e.target.value)
-                                setShowOutputDropdown(true)
-                              }}
-                              onFocus={() => setShowOutputDropdown(true)}
-                              placeholder="Buscar producto por nombre, SKU o código de barras..."
-                              className={cn(
-                                "w-full pl-10 pr-4 py-2 rounded-lg border transition-all",
-                                theme === 'dark'
-                                  ? 'bg-gray-700 border-gray-600 text-white'
-                                  : 'bg-gray-50 border-gray-200 text-gray-900'
-                              )}
-                            />
-                            {searchingOutput && (
-                              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-400" />
+                          <Search className={cn(
+                            "absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5",
+                            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                          )} />
+                          <input
+                            type="text"
+                            value={productSearchOutput}
+                            onChange={(e) => {
+                              setProductSearchOutput(e.target.value)
+                              setShowOutputDropdown(true)
+                            }}
+                            onFocus={() => setShowOutputDropdown(true)}
+                            placeholder="Buscar producto por nombre o SKU..."
+                            className={cn(
+                              "w-full pl-12 pr-4 py-4 rounded-xl border-2 transition-all text-lg",
+                              theme === 'dark'
+                                ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-500 focus:border-purple-500'
+                                : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-purple-500'
                             )}
-                          </div>
+                          />
+                          {searchingOutput && (
+                            <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 animate-spin text-purple-500" />
+                          )}
+                        </div>
 
+                        <AnimatePresence>
                           {showOutputDropdown && searchResultsOutput.length > 0 && (
-                            <div className={cn(
-                              "absolute z-10 w-full mt-1 max-h-60 overflow-auto rounded-lg border shadow-lg",
-                              theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                            )}>
+                            <motion.div
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -10 }}
+                              className={cn(
+                                "absolute z-50 w-full mt-2 max-h-80 overflow-auto rounded-xl border shadow-2xl",
+                                theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                              )}
+                            >
                               {searchResultsOutput.map((product) => (
                                 <div key={product.id}>
                                   {product.hasVariants && product.variants ? (
@@ -434,23 +484,29 @@ export default function CreateBOMPage() {
                                         type="button"
                                         onClick={() => selectOutputProduct(product, variant)}
                                         className={cn(
-                                          "w-full flex items-center gap-3 p-3 text-left transition-colors",
+                                          "w-full flex items-center gap-4 p-4 text-left transition-colors",
                                           theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
                                         )}
                                       >
-                                        <Package className="w-8 h-8 text-gray-400" />
-                                        <div>
+                                        {product.imageUrl ? (
+                                          <img src={product.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover" />
+                                        ) : (
+                                          <div className={cn(
+                                            "w-12 h-12 rounded-lg flex items-center justify-center",
+                                            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                                          )}>
+                                            <Package className="w-6 h-6 text-gray-400" />
+                                          </div>
+                                        )}
+                                        <div className="flex-1">
                                           <p className={cn(
                                             "font-medium",
                                             theme === 'dark' ? 'text-white' : 'text-gray-900'
                                           )}>
                                             {product.name} - {variant.variantName}
                                           </p>
-                                          <p className={cn(
-                                            "text-sm",
-                                            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                                          )}>
-                                            {variant.sku} • {formatCurrency(variant.costPrice)}
+                                          <p className="text-sm text-gray-500">
+                                            {variant.sku} &bull; {formatCurrency(variant.costPrice)}
                                           </p>
                                         </div>
                                       </button>
@@ -460,46 +516,73 @@ export default function CreateBOMPage() {
                                       type="button"
                                       onClick={() => selectOutputProduct(product)}
                                       className={cn(
-                                        "w-full flex items-center gap-3 p-3 text-left transition-colors",
+                                        "w-full flex items-center gap-4 p-4 text-left transition-colors",
                                         theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
                                       )}
                                     >
                                       {product.imageUrl ? (
-                                        <img src={product.imageUrl} alt="" className="w-8 h-8 rounded object-cover" />
+                                        <img src={product.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover" />
                                       ) : (
-                                        <Package className="w-8 h-8 text-gray-400" />
+                                        <div className={cn(
+                                          "w-12 h-12 rounded-lg flex items-center justify-center",
+                                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                                        )}>
+                                          <Package className="w-6 h-6 text-gray-400" />
+                                        </div>
                                       )}
-                                      <div>
+                                      <div className="flex-1">
                                         <p className={cn(
                                           "font-medium",
                                           theme === 'dark' ? 'text-white' : 'text-gray-900'
                                         )}>
                                           {product.name}
                                         </p>
-                                        <p className={cn(
-                                          "text-sm",
-                                          theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                                        )}>
-                                          {product.sku} • {formatCurrency(product.costPrice)}
+                                        <p className="text-sm text-gray-500">
+                                          {product.sku} &bull; {formatCurrency(product.costPrice)}
                                         </p>
                                       </div>
                                     </button>
                                   )}
                                 </div>
                               ))}
-                            </div>
+                            </motion.div>
                           )}
-                        </div>
-                      )}
-                    </div>
+                        </AnimatePresence>
+                      </div>
+                    )}
 
+                    {/* Recipe Name */}
+                    <div>
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                      )}>
+                        Nombre de la receta
+                      </label>
+                      <input
+                        type="text"
+                        value={bomName}
+                        onChange={(e) => setBomName(e.target.value)}
+                        placeholder="Ej: Empaque de Frijoles 3kg"
+                        className={cn(
+                          "w-full px-4 py-3 rounded-xl border transition-all",
+                          theme === 'dark'
+                            ? 'bg-gray-800 border-gray-600 text-white focus:border-purple-500'
+                            : 'bg-white border-gray-200 text-gray-900 focus:border-purple-500'
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Production Settings */}
+                  <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className={cn(
-                          "block text-sm font-medium mb-1",
+                          "block text-sm font-medium mb-2",
                           theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                         )}>
-                          Cantidad producida *
+                          Cantidad producida
                         </label>
                         <input
                           type="number"
@@ -508,17 +591,16 @@ export default function CreateBOMPage() {
                           min="0.001"
                           step="0.001"
                           className={cn(
-                            "w-full px-4 py-2 rounded-lg border transition-all",
+                            "w-full px-4 py-3 rounded-xl border transition-all text-center text-lg font-bold",
                             theme === 'dark'
-                              ? 'bg-gray-700 border-gray-600 text-white'
-                              : 'bg-gray-50 border-gray-200 text-gray-900'
+                              ? 'bg-gray-800 border-gray-600 text-white focus:border-purple-500'
+                              : 'bg-white border-gray-200 text-gray-900 focus:border-purple-500'
                           )}
-                          required
                         />
                       </div>
                       <div>
                         <label className={cn(
-                          "block text-sm font-medium mb-1",
+                          "block text-sm font-medium mb-2",
                           theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                         )}>
                           Unidad
@@ -527,120 +609,153 @@ export default function CreateBOMPage() {
                           value={outputUnit}
                           onChange={(e) => setOutputUnit(e.target.value)}
                           className={cn(
-                            "w-full px-4 py-2 rounded-lg border transition-all",
+                            "w-full px-4 py-3 rounded-xl border transition-all",
                             theme === 'dark'
-                              ? 'bg-gray-700 border-gray-600 text-white'
-                              : 'bg-gray-50 border-gray-200 text-gray-900'
+                              ? 'bg-gray-800 border-gray-600 text-white focus:border-purple-500'
+                              : 'bg-white border-gray-200 text-gray-900 focus:border-purple-500'
                           )}
                         >
-                          <option value="unidad">Unidad</option>
-                          <option value="kg">Kilogramo</option>
-                          <option value="g">Gramo</option>
-                          <option value="lb">Libra</option>
-                          <option value="lt">Litro</option>
-                          <option value="ml">Mililitro</option>
+                          {UNITS.map((u) => (
+                            <option key={u.value} value={u.value}>{u.label}</option>
+                          ))}
                         </select>
                       </div>
                     </div>
 
                     <div>
                       <label className={cn(
-                        "block text-sm font-medium mb-1",
+                        "block text-sm font-medium mb-2",
                         theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                       )}>
-                        Merma esperada (%)
+                        <div className="flex items-center gap-2">
+                          <Percent className="w-4 h-4" />
+                          Merma esperada
+                        </div>
                       </label>
-                      <input
-                        type="number"
-                        value={expectedWastePercent}
-                        onChange={(e) => setExpectedWastePercent(parseFloat(e.target.value) || 0)}
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        className={cn(
-                          "w-full px-4 py-2 rounded-lg border transition-all",
-                          theme === 'dark'
-                            ? 'bg-gray-700 border-gray-600 text-white'
-                            : 'bg-gray-50 border-gray-200 text-gray-900'
-                        )}
-                      />
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={expectedWastePercent}
+                          onChange={(e) => setExpectedWastePercent(parseFloat(e.target.value) || 0)}
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          className={cn(
+                            "w-full px-4 py-3 rounded-xl border transition-all pr-12",
+                            theme === 'dark'
+                              ? 'bg-gray-800 border-gray-600 text-white focus:border-purple-500'
+                              : 'bg-white border-gray-200 text-gray-900 focus:border-purple-500'
+                          )}
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500">%</span>
+                      </div>
                     </div>
 
                     <div>
                       <label className={cn(
-                        "block text-sm font-medium mb-1",
+                        "block text-sm font-medium mb-2",
                         theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                       )}>
-                        Notas
+                        Notas (opcional)
                       </label>
                       <textarea
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
-                        rows={3}
-                        placeholder="Instrucciones o notas adicionales..."
+                        rows={2}
+                        placeholder="Instrucciones adicionales..."
                         className={cn(
-                          "w-full px-4 py-2 rounded-lg border transition-all resize-none",
+                          "w-full px-4 py-3 rounded-xl border transition-all resize-none",
                           theme === 'dark'
-                            ? 'bg-gray-700 border-gray-600 text-white'
-                            : 'bg-gray-50 border-gray-200 text-gray-900'
+                            ? 'bg-gray-800 border-gray-600 text-white focus:border-purple-500'
+                            : 'bg-white border-gray-200 text-gray-900 focus:border-purple-500'
                         )}
                       />
                     </div>
                   </div>
-                </motion.div>
+                </div>
+              </motion.div>
 
-                {/* Materials */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className={cn(
-                    "p-6 rounded-2xl border shadow-xl",
-                    theme === 'dark'
-                      ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                      : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-                  )}
-                >
-                  <h2 className={cn(
-                    "font-semibold mb-4",
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>
-                    Materias primas necesarias
-                  </h2>
-
-                  {/* Add Material */}
-                  <div className="mb-4 relative">
-                    <div className="relative">
-                      <Search className={cn(
-                        "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4",
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                      )} />
-                      <input
-                        type="text"
-                        value={productSearchLine}
-                        onChange={(e) => {
-                          setProductSearchLine(e.target.value)
-                          setShowLineDropdown(true)
-                        }}
-                        onFocus={() => setShowLineDropdown(true)}
-                        placeholder="Agregar materia prima..."
-                        className={cn(
-                          "w-full pl-10 pr-4 py-2 rounded-lg border transition-all",
-                          theme === 'dark'
-                            ? 'bg-gray-700 border-gray-600 text-white'
-                            : 'bg-gray-50 border-gray-200 text-gray-900'
-                        )}
-                      />
-                      {searchingLine && (
-                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-400" />
-                      )}
+              {/* Step 2: Materials */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className={cn(
+                  "p-6 rounded-2xl border shadow-xl",
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
+                    : 'bg-gradient-to-br from-white to-gray-50 border-gray-200'
+                )}
+              >
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-500 text-white text-sm font-bold">
+                      2
                     </div>
-
-                    {showLineDropdown && searchResultsLine.length > 0 && (
-                      <div className={cn(
-                        "absolute z-10 w-full mt-1 max-h-60 overflow-auto rounded-lg border shadow-lg",
-                        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    <div>
+                      <h2 className={cn(
+                        "font-semibold",
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
                       )}>
+                        Materias Primas
+                      </h2>
+                      <p className={cn(
+                        "text-xs",
+                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                      )}>
+                        Agrega los ingredientes o materiales necesarios
+                      </p>
+                    </div>
+                  </div>
+                  <span className={cn(
+                    "text-sm font-medium px-3 py-1 rounded-full",
+                    lines.length > 0
+                      ? 'bg-blue-500/20 text-blue-500'
+                      : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500'
+                  )}>
+                    {lines.length} material{lines.length !== 1 ? 'es' : ''}
+                  </span>
+                </div>
+
+                {/* Add Material Search */}
+                <div ref={materialSearchRef} className="relative mb-4">
+                  <div className="relative">
+                    <Plus className={cn(
+                      "absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5",
+                      theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                    )} />
+                    <input
+                      type="text"
+                      value={productSearchLine}
+                      onChange={(e) => {
+                        setProductSearchLine(e.target.value)
+                        setShowLineDropdown(true)
+                      }}
+                      onFocus={() => setShowLineDropdown(true)}
+                      placeholder="Agregar materia prima..."
+                      className={cn(
+                        "w-full pl-12 pr-4 py-3 rounded-xl border-2 border-dashed transition-all",
+                        theme === 'dark'
+                          ? 'bg-gray-800/50 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500 focus:bg-gray-800'
+                          : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:bg-white'
+                      )}
+                    />
+                    {searchingLine && (
+                      <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 animate-spin text-blue-500" />
+                    )}
+                  </div>
+
+                  <AnimatePresence>
+                    {showLineDropdown && searchResultsLine.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className={cn(
+                          "absolute z-50 w-full mt-2 max-h-64 overflow-auto rounded-xl border shadow-2xl",
+                          theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                        )}
+                      >
                         {searchResultsLine.map((product) => (
                           <div key={product.id}>
                             {product.hasVariants && product.variants ? (
@@ -654,21 +769,24 @@ export default function CreateBOMPage() {
                                     theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
                                   )}
                                 >
-                                  <Package className="w-8 h-8 text-gray-400" />
-                                  <div>
+                                  <div className={cn(
+                                    "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
+                                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                                  )}>
+                                    <Package className="w-5 h-5 text-gray-400" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
                                     <p className={cn(
-                                      "font-medium",
+                                      "font-medium truncate",
                                       theme === 'dark' ? 'text-white' : 'text-gray-900'
                                     )}>
                                       {product.name} - {variant.variantName}
                                     </p>
-                                    <p className={cn(
-                                      "text-sm",
-                                      theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                                    )}>
-                                      {variant.sku} • {formatCurrency(variant.costPrice)}
+                                    <p className="text-xs text-gray-500">
+                                      {formatCurrency(variant.costPrice)}
                                     </p>
                                   </div>
+                                  <Plus className="w-5 h-5 text-blue-500" />
                                 </button>
                               ))
                             ) : (
@@ -681,92 +799,104 @@ export default function CreateBOMPage() {
                                 )}
                               >
                                 {product.imageUrl ? (
-                                  <img src={product.imageUrl} alt="" className="w-8 h-8 rounded object-cover" />
+                                  <img src={product.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover" />
                                 ) : (
-                                  <Package className="w-8 h-8 text-gray-400" />
+                                  <div className={cn(
+                                    "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
+                                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                                  )}>
+                                    <Package className="w-5 h-5 text-gray-400" />
+                                  </div>
                                 )}
-                                <div>
+                                <div className="flex-1 min-w-0">
                                   <p className={cn(
-                                    "font-medium",
+                                    "font-medium truncate",
                                     theme === 'dark' ? 'text-white' : 'text-gray-900'
                                   )}>
                                     {product.name}
                                   </p>
-                                  <p className={cn(
-                                    "text-sm",
-                                    theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                                  )}>
-                                    {product.sku} • {formatCurrency(product.costPrice)}
+                                  <p className="text-xs text-gray-500">
+                                    {formatCurrency(product.costPrice)}
                                   </p>
                                 </div>
+                                <Plus className="w-5 h-5 text-blue-500" />
                               </button>
                             )}
                           </div>
                         ))}
-                      </div>
+                      </motion.div>
                     )}
-                  </div>
+                  </AnimatePresence>
+                </div>
 
-                  {/* Lines Table */}
-                  {lines.length === 0 ? (
-                    <div className={cn(
-                      "text-center py-8 border-2 border-dashed rounded-lg",
-                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                {/* Materials List */}
+                {lines.length === 0 ? (
+                  <div className={cn(
+                    "text-center py-12 border-2 border-dashed rounded-xl",
+                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                  )}>
+                    <Boxes className={cn(
+                      "w-12 h-12 mx-auto mb-3",
+                      theme === 'dark' ? 'text-gray-600' : 'text-gray-300'
+                    )} />
+                    <p className={cn(
+                      "text-sm",
+                      theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
                     )}>
-                      <Package className={cn(
-                        "w-12 h-12 mx-auto mb-2",
-                        theme === 'dark' ? 'text-gray-600' : 'text-gray-300'
-                      )} />
-                      <p className={cn(
-                        "text-sm",
-                        theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
-                      )}>
-                        Agregue las materias primas necesarias
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
+                      Busca y agrega las materias primas necesarias
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <AnimatePresence>
                       {lines.map((line, index) => (
                         <motion.div
                           key={line.id}
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 20 }}
                           className={cn(
-                            "flex items-center gap-4 p-3 rounded-lg border",
+                            "flex items-center gap-3 p-3 rounded-xl transition-all",
                             line.isPrimary
-                              ? theme === 'dark' ? 'bg-purple-900/20 border-purple-700' : 'bg-purple-50 border-purple-200'
-                              : theme === 'dark' ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
+                              ? theme === 'dark'
+                                ? 'bg-purple-900/30 border border-purple-700/50'
+                                : 'bg-purple-50 border border-purple-200'
+                              : theme === 'dark'
+                                ? 'bg-gray-800/50 border border-gray-700'
+                                : 'bg-gray-50 border border-gray-200'
                           )}
                         >
+                          {/* Primary indicator */}
                           <button
                             type="button"
                             onClick={() => setPrimaryLine(index)}
                             className={cn(
-                              "p-1 rounded transition-all",
+                              "flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
                               line.isPrimary
-                                ? 'text-purple-500'
-                                : theme === 'dark' ? 'text-gray-500 hover:text-purple-400' : 'text-gray-400 hover:text-purple-500'
+                                ? 'border-purple-500 bg-purple-500 text-white'
+                                : theme === 'dark'
+                                  ? 'border-gray-600 hover:border-purple-500'
+                                  : 'border-gray-300 hover:border-purple-500'
                             )}
-                            title={line.isPrimary ? 'Principal' : 'Marcar como principal'}
+                            title={line.isPrimary ? 'Material principal' : 'Marcar como principal'}
                           >
-                            <Check className="w-4 h-4" />
+                            {line.isPrimary && <Check className="w-3 h-3" />}
                           </button>
 
-                          <div className="flex-1">
+                          {/* Product info */}
+                          <div className="flex-1 min-w-0">
                             <p className={cn(
-                              "font-medium text-sm",
+                              "font-medium text-sm truncate",
                               theme === 'dark' ? 'text-white' : 'text-gray-900'
                             )}>
                               {line.productName}
                             </p>
-                            <p className={cn(
-                              "text-xs",
-                              theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                            )}>
-                              {line.productSku} • {formatCurrency(line.productCostPrice)}/{line.unit}
+                            <p className="text-xs text-gray-500">
+                              {formatCurrency(line.productCostPrice)} / {line.unit}
                             </p>
                           </div>
 
+                          {/* Quantity input */}
                           <div className="flex items-center gap-2">
                             <input
                               type="number"
@@ -775,9 +905,9 @@ export default function CreateBOMPage() {
                               min="0.001"
                               step="0.001"
                               className={cn(
-                                "w-20 px-2 py-1 rounded border text-sm text-center",
+                                "w-20 px-2 py-1.5 rounded-lg border text-sm text-center font-medium",
                                 theme === 'dark'
-                                  ? 'bg-gray-600 border-gray-500 text-white'
+                                  ? 'bg-gray-700 border-gray-600 text-white'
                                   : 'bg-white border-gray-300 text-gray-900'
                               )}
                             />
@@ -785,169 +915,144 @@ export default function CreateBOMPage() {
                               value={line.unit}
                               onChange={(e) => updateLine(index, 'unit', e.target.value)}
                               className={cn(
-                                "px-2 py-1 rounded border text-sm",
+                                "px-2 py-1.5 rounded-lg border text-sm",
                                 theme === 'dark'
-                                  ? 'bg-gray-600 border-gray-500 text-white'
+                                  ? 'bg-gray-700 border-gray-600 text-white'
                                   : 'bg-white border-gray-300 text-gray-900'
                               )}
                             >
-                              <option value="unidad">ud</option>
-                              <option value="kg">kg</option>
-                              <option value="g">g</option>
-                              <option value="lb">lb</option>
-                              <option value="lt">lt</option>
-                              <option value="ml">ml</option>
+                              {UNITS.map((u) => (
+                                <option key={u.value} value={u.value}>{u.abbr}</option>
+                              ))}
                             </select>
                           </div>
 
+                          {/* Line cost */}
                           <div className="w-24 text-right">
                             <p className={cn(
-                              "font-medium",
+                              "font-bold text-sm",
                               theme === 'dark' ? 'text-white' : 'text-gray-900'
                             )}>
                               {formatCurrency(line.lineCost)}
                             </p>
                           </div>
 
+                          {/* Delete button */}
                           <button
                             type="button"
                             onClick={() => removeLine(index)}
-                            className="p-1 text-red-500 hover:bg-red-500/10 rounded"
+                            className="flex-shrink-0 p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </motion.div>
                       ))}
-                    </div>
-                  )}
-                </motion.div>
-              </div>
+                    </AnimatePresence>
+                  </div>
+                )}
+              </motion.div>
 
-              {/* Summary Sidebar */}
-              <div className="space-y-6">
+              {/* Step 3: Cost Summary */}
+              {lines.length > 0 && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
+                  transition={{ delay: 0.3 }}
                   className={cn(
-                    "p-6 rounded-2xl border shadow-xl sticky top-6",
+                    "p-6 rounded-2xl border shadow-xl",
                     theme === 'dark'
-                      ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                      : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+                      ? 'bg-gradient-to-br from-emerald-900/30 to-gray-900 border-emerald-700/50'
+                      : 'bg-gradient-to-br from-emerald-50 to-white border-emerald-200'
                   )}
                 >
-                  <h2 className={cn(
-                    "font-semibold mb-4",
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>
-                    Resumen de costos
-                  </h2>
-
-                  <div className="space-y-4">
-                    <div className={cn(
-                      "p-4 rounded-lg",
-                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
-                    )}>
-                      <p className={cn(
-                        "text-sm mb-1",
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                  <div className="flex items-center gap-3 mb-5">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500 text-white text-sm font-bold">
+                      3
+                    </div>
+                    <div>
+                      <h2 className={cn(
+                        "font-semibold",
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
                       )}>
-                        Costo total de materiales
-                      </p>
+                        Resumen de Costos
+                      </h2>
                       <p className={cn(
-                        "text-2xl font-bold",
+                        "text-xs",
+                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                      )}>
+                        Costo calculado por unidad producida
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className={cn(
+                      "p-4 rounded-xl",
+                      theme === 'dark' ? 'bg-gray-800/50' : 'bg-white/80'
+                    )}>
+                      <p className="text-xs text-gray-500 mb-1">Total materiales</p>
+                      <p className={cn(
+                        "text-xl font-bold",
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
                       )}>
                         {formatCurrency(totalMaterialCost)}
                       </p>
                     </div>
 
-                    <div className={cn(
-                      "p-4 rounded-lg",
-                      theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-50'
-                    )}>
-                      <p className={cn(
-                        "text-sm mb-1",
-                        theme === 'dark' ? 'text-purple-300' : 'text-purple-700'
-                      )}>
-                        Costo por unidad producida
-                      </p>
-                      <p className={cn(
-                        "text-2xl font-bold",
-                        theme === 'dark' ? 'text-purple-300' : 'text-purple-700'
-                      )}>
-                        {formatCurrency(unitCost)}
-                      </p>
-                      <p className={cn(
-                        "text-xs mt-1",
-                        theme === 'dark' ? 'text-purple-400' : 'text-purple-600'
-                      )}>
-                        {totalMaterialCost > 0 && outputQuantity > 0 && (
-                          <>
-                            {formatCurrency(totalMaterialCost)} / {outputQuantity} {outputUnit}
-                          </>
-                        )}
-                      </p>
-                    </div>
-
-                    {lines.length > 0 && (
+                    {expectedWastePercent > 0 && (
                       <div className={cn(
-                        "p-4 rounded-lg",
-                        theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                        "p-4 rounded-xl",
+                        theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-50'
                       )}>
-                        <p className={cn(
-                          "text-sm mb-2",
-                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                        )}>
-                          Desglose
+                        <p className="text-xs text-amber-600 mb-1">Merma ({expectedWastePercent}%)</p>
+                        <p className="text-xl font-bold text-amber-600">
+                          +{formatCurrency(wasteAmount)}
                         </p>
-                        <div className="space-y-1">
-                          {lines.map((line, index) => (
-                            <div key={line.id} className="flex justify-between text-sm">
-                              <span className={cn(
-                                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                              )}>
-                                {line.productName.length > 20 ? line.productName.substring(0, 20) + '...' : line.productName}
-                              </span>
-                              <span className={cn(
-                                "font-medium",
-                                theme === 'dark' ? 'text-white' : 'text-gray-900'
-                              )}>
-                                {formatCurrency(line.lineCost)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
                       </div>
                     )}
 
-                    <button
-                      type="submit"
-                      disabled={saving || !outputProduct || lines.length === 0}
-                      className={cn(
-                        "w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all",
-                        saving || !outputProduct || lines.length === 0
-                          ? 'bg-gray-400 cursor-not-allowed text-gray-200'
-                          : 'bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white'
-                      )}
-                    >
-                      {saving ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Guardando...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="w-4 h-4" />
-                          Guardar Receta
-                        </>
-                      )}
-                    </button>
+                    <div className={cn(
+                      "p-4 rounded-xl",
+                      theme === 'dark' ? 'bg-gray-800/50' : 'bg-white/80'
+                    )}>
+                      <p className="text-xs text-gray-500 mb-1">Producción</p>
+                      <p className={cn(
+                        "text-xl font-bold",
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        {outputQuantity} {UNITS.find(u => u.value === outputUnit)?.abbr || outputUnit}
+                      </p>
+                    </div>
+
+                    <div className={cn(
+                      "p-4 rounded-xl border-2",
+                      theme === 'dark'
+                        ? 'bg-emerald-900/30 border-emerald-500/50'
+                        : 'bg-emerald-50 border-emerald-300'
+                    )}>
+                      <p className="text-xs text-emerald-600 mb-1 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" />
+                        Costo por unidad
+                      </p>
+                      <p className="text-2xl font-bold text-emerald-600">
+                        {formatCurrency(expectedWastePercent > 0 ? effectiveUnitCost : unitCost)}
+                      </p>
+                    </div>
                   </div>
+
+                  {outputProduct && (
+                    <div className={cn(
+                      "mt-4 p-3 rounded-lg text-sm",
+                      theme === 'dark' ? 'bg-gray-800/50 text-gray-400' : 'bg-white/50 text-gray-600'
+                    )}>
+                      <Calculator className="w-4 h-4 inline mr-2" />
+                      {formatCurrency(totalMaterialCost + wasteAmount)} / {outputQuantity} {UNITS.find(u => u.value === outputUnit)?.abbr} = <strong className="text-emerald-500">{formatCurrency(expectedWastePercent > 0 ? effectiveUnitCost : unitCost)}</strong> por {UNITS.find(u => u.value === outputUnit)?.abbr}
+                    </div>
+                  )}
                 </motion.div>
-              </div>
-            </div>
-          </form>
+              )}
+            </form>
+          </motion.div>
         </div>
       </DashboardLayout>
     </ProtectedRoute>
