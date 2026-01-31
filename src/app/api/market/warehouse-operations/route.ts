@@ -124,7 +124,10 @@ export async function GET(request: NextRequest) {
       reception: { draft: 0, confirmed: 0, in_progress: 0, done: 0, cancelled: 0 },
       picking: { draft: 0, confirmed: 0, in_progress: 0, done: 0, cancelled: 0 },
       scrap: { draft: 0, confirmed: 0, done: 0, cancelled: 0 },
-      adjustment: { draft: 0, done: 0, cancelled: 0 }
+      adjustment: { draft: 0, done: 0, cancelled: 0 },
+      wholesale_delivery: { draft: 0, confirmed: 0, in_progress: 0, done: 0, cancelled: 0 },
+      production_out: { draft: 0, confirmed: 0, done: 0, cancelled: 0 },
+      production_in: { draft: 0, confirmed: 0, done: 0, cancelled: 0 }
     }
 
     for (const row of statsResult.rows) {
@@ -230,7 +233,7 @@ export async function POST(request: NextRequest) {
     } = body
 
     // Validate operation type
-    const validTypes = ['transfer', 'reception', 'picking', 'scrap', 'adjustment']
+    const validTypes = ['transfer', 'reception', 'picking', 'scrap', 'adjustment', 'wholesale_delivery', 'production_out', 'production_in']
     if (!validTypes.includes(operationType)) {
       return NextResponse.json({
         success: false,
@@ -274,7 +277,10 @@ export async function POST(request: NextRequest) {
       reception: 'RCP',
       picking: 'PCK',
       scrap: 'SCR',
-      adjustment: 'ADJ'
+      adjustment: 'ADJ',
+      wholesale_delivery: 'WSD',
+      production_out: 'POU',
+      production_in: 'PIN'
     }[operationType]
 
     const year = new Date().getFullYear()

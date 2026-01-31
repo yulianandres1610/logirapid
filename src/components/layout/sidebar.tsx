@@ -51,7 +51,8 @@ import {
   Clock,
   Calendar,
   Fingerprint,
-  Briefcase
+  Briefcase,
+  Factory
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -321,6 +322,13 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         'Mayoreo': true
       }))
     }
+    // Auto-expand Production submenu
+    if (pathname.includes('/market/production')) {
+      setOpenSubmenus(prev => ({
+        ...prev,
+        'Producción': true
+      }))
+    }
   }, [pathname])
 
   // Fetch branding data for company logo
@@ -544,6 +552,16 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       ]
     },
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
+    {
+      icon: Factory,
+      label: "Producción",
+      href: "/dashboard/market/production",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: ClipboardList, label: "Órdenes", href: "/dashboard/market/production" },
+        { icon: BookOpen, label: "Recetas (BOM)", href: "/dashboard/market/production/bom" },
+      ]
+    },
     {
       icon: Briefcase,
       label: "Mayoreo",
