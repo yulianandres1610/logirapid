@@ -792,15 +792,15 @@ function PaymentContent() {
     }
   }
 
-  // Format currency - todas las monedas con 2 decimales (sin redondeo)
+  // Format currency - USD con 4 decimales para precisión, CUP entero
   const formatCurrency = (amount: number, currency: 'USD' | 'CUP' | 'MLC' = 'USD') => {
     const symbol = CURRENCIES.find(c => c.id === currency)?.symbol || '$'
     if (currency === 'CUP') {
-      // CUP con 2 decimales (sin redondeo para precisión exacta)
+      // CUP: entero sin decimales (requisito Cuba)
       return `${symbol}${formatCUP(amount)}`
     }
-    // USD y MLC con 2 decimales
-    return `${symbol}${amount.toFixed(2)}`
+    // USD con 4 decimales para cuadre exacto, MLC con 2
+    return `${symbol}${amount.toFixed(currency === 'USD' ? 4 : 2)}`
   }
 
   // Numpad handler
@@ -896,16 +896,18 @@ function PaymentContent() {
               <h2 className="text-lg font-semibold mb-4">Resumen de Orden</h2>
               <div className="space-y-2 max-h-48 overflow-auto">
                 {cart.map((item, idx) => {
-                  const lineCUP = (item.unitPrice * rates.CUP) * item.quantity
+                  // CUP: calcular desde el total de línea (USD) para evitar errores de redondeo
+                  // Ejemplo: $1.3875 x 3 = $4.1625 -> 4.1625 * 400 = 1665 CUP (exacto)
+                  const lineCUP = Math.round(item.total * rates.CUP)
                   return (
                     <div key={idx} className="flex justify-between text-sm">
                       <span className="truncate flex-1">
                         {item.variantName ? `${item.productName} - ${item.variantName}` : item.productName} x{item.quantity}
                       </span>
                       <div className="ml-2 text-right">
-                        <span>{formatCurrency(item.total)}</span>
+                        <span>${item.total.toFixed(4)}</span>
                         <span className="text-xs text-green-500 ml-1">
-                          ({formatCurrency(lineCUP, 'CUP')})
+                          ({formatCUP(lineCUP)} CUP)
                         </span>
                       </div>
                     </div>
@@ -991,7 +993,7 @@ function PaymentContent() {
                     </span>
                     {remainingUSD > 0 && (
                       <p className="text-xs font-normal opacity-80">
-                        ({formatCurrency(Math.max(0, totals.totalCUP - (totalPaidUSD * rates.CUP)), 'CUP')})
+                        ({formatCUP(Math.max(0, totals.totalCUP - Math.round(totalPaidUSD * rates.CUP)))} CUP)
                       </p>
                     )}
                   </div>
