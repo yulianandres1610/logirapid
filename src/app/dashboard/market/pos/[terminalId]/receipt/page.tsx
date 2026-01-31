@@ -291,8 +291,8 @@ const AlertIcon = () => (
   </svg>
 )
 
-// Formatear CUP con 2 decimales (sin redondeo)
-const formatCUP = (amount: number): string => amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+// Formatear CUP como entero (sin decimales - requisito Cuba)
+const formatCUP = (amount: number): string => Math.round(amount).toLocaleString('es-ES')
 
 function ReceiptContent() {
   const router = useRouter()
@@ -381,9 +381,9 @@ function ReceiptContent() {
       try {
         const res = await fetch('/api/market/pos/exchange-rates')
         const data = await res.json()
-        // Usar tasa BCC para recibo de venta (no ElToque)
-        if (data.success && data.rates?.CUP_BCC) {
-          setExchangeRate(data.rates.CUP_BCC)
+        // Usar tasa ElToque para recibo de venta
+        if (data.success && data.rates?.CUP) {
+          setExchangeRate(data.rates.CUP)
         }
       } catch (err) {
         console.log('[Receipt] Using default exchange rate:', err)

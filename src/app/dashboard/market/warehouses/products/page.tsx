@@ -63,7 +63,7 @@ export default function WarehouseProductsPage() {
   const { user } = useAuth()
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
-  const { USD_CUP_BCC } = useMarketExchangeRates() // Tasa BCC para etiquetas
+  const { USD_CUP } = useMarketExchangeRates() // Tasa ElToque para etiquetas
 
   // State
   const [loading, setLoading] = useState(true)
@@ -205,9 +205,9 @@ export default function WarehouseProductsPage() {
     try {
       setPrinting(true)
 
-      // Calculate price in CUP using BCC rate
-      const priceCUP = includePrice && USD_CUP_BCC > 0
-        ? Math.round(product.sellingPrice * USD_CUP_BCC)
+      // Calculate price in CUP using ElToque rate
+      const priceCUP = includePrice && USD_CUP > 0
+        ? Math.round(product.sellingPrice * USD_CUP)
         : undefined
 
       const response = await fetch('/api/print/jobs', {

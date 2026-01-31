@@ -106,8 +106,8 @@ export default function MarketInventoryPage() {
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
 
   // Exchange rates for multi-currency display
-  // USD_CUP = ElToque (costo), USD_CUP_BCC = Banco Central (venta)
-  const { USD_CUP, USD_CUP_BCC, USD_MLC } = useMarketExchangeRates()
+  // USD_CUP = ElToque (tasa única de referencia)
+  const { USD_CUP, USD_MLC } = useMarketExchangeRates()
 
   useEffect(() => {
     fetchProducts()
@@ -706,7 +706,7 @@ export default function MarketInventoryPage() {
                                   {symbol}{product.costPrice.toFixed(2)}
                                 </span>
                                 <div className="text-[10px] mt-0.5 space-y-0">
-                                  <p className="text-orange-600">${(product.costPrice * USD_CUP).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CUP <span className="text-gray-400">(ElToque)</span></p>
+                                  <p className="text-orange-600">${Math.round(product.costPrice * USD_CUP).toLocaleString('es-ES')} CUP <span className="text-gray-400">(ElToque)</span></p>
                                   <p className="text-purple-600">${(product.costPrice * USD_MLC).toFixed(2)} MLC</p>
                                 </div>
                               </div>
@@ -717,7 +717,7 @@ export default function MarketInventoryPage() {
                                   {symbol}{product.sellingPrice.toFixed(2)}
                                 </span>
                                 <div className="text-[10px] mt-0.5 space-y-0">
-                                  <p className="text-green-600 font-medium">${(product.sellingPrice * USD_CUP_BCC).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CUP <span className="text-gray-400">(BCC)</span></p>
+                                  <p className="text-green-600 font-medium">${Math.round(product.sellingPrice * USD_CUP).toLocaleString('es-ES')} CUP <span className="text-gray-400">(BCC)</span></p>
                                   <p className="text-purple-600 font-medium">${(product.sellingPrice * USD_MLC).toFixed(2)} MLC</p>
                                 </div>
                               </div>
@@ -929,7 +929,7 @@ export default function MarketInventoryPage() {
                           {CURRENCY_SYMBOLS[selectedProduct.currency] || '$'}{selectedProduct.costPrice.toFixed(2)}
                         </p>
                         <div className="text-xs mt-1 space-y-0.5">
-                          <p className="text-blue-600">${(selectedProduct.costPrice * USD_CUP).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CUP</p>
+                          <p className="text-blue-600">${Math.round(selectedProduct.costPrice * USD_CUP).toLocaleString('es-ES')} CUP</p>
                           <p className="text-purple-600">${(selectedProduct.costPrice * USD_MLC).toFixed(2)} MLC</p>
                         </div>
                       </div>
@@ -942,7 +942,7 @@ export default function MarketInventoryPage() {
                           {CURRENCY_SYMBOLS[selectedProduct.currency] || '$'}{selectedProduct.sellingPrice.toFixed(2)}
                         </p>
                         <div className="text-xs mt-1 space-y-0.5">
-                          <p className="text-green-600 font-medium">${(selectedProduct.sellingPrice * USD_CUP_BCC).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CUP <span className="text-gray-400">(BCC)</span></p>
+                          <p className="text-green-600 font-medium">${Math.round(selectedProduct.sellingPrice * USD_CUP).toLocaleString('es-ES')} CUP <span className="text-gray-400">(BCC)</span></p>
                           <p className="text-purple-600 font-medium">${(selectedProduct.sellingPrice * USD_MLC).toFixed(2)} MLC</p>
                         </div>
                       </div>

@@ -85,9 +85,9 @@ export function useMarketExchangeRates(): UseMarketExchangeRatesReturn {
     return priceUSD
   }
 
-  // Función para convertir precios usando tasa BCC (oficial)
+  // Función para convertir precios usando tasa ElToque (referencia única)
   const convertPriceBCC = (priceUSD: number): number => {
-    return priceUSD * rates.USD_CUP_BCC
+    return priceUSD * rates.USD_CUP
   }
 
   // Funciones de formateo

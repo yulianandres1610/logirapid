@@ -158,16 +158,16 @@ interface WarehouseStock {
   isCurrentWarehouse: boolean
 }
 
-// Convertir a CUP sin redondeo (mantener precisión para cálculos exactos)
-const toCUP = (amountUSD: number, rate: number): number => amountUSD * rate
-// Formatear CUP con 2 decimales para mostrar
-const formatCUP = (amount: number): string => amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+// Convertir a CUP (redondeado a entero - requisito Cuba)
+const toCUP = (amountUSD: number, rate: number): number => Math.round(amountUSD * rate)
+// Formatear CUP como entero (sin decimales - requisito Cuba)
+const formatCUP = (amount: number): string => Math.round(amount).toLocaleString('es-ES')
 
 export default function POSTerminalPage() {
   const { theme } = useTheme()
   const { user } = useAuth()
-  // USD_CUP = ElToque (costo), USD_CUP_BCC = Banco Central (venta)
-  const { USD_CUP, USD_CUP_BCC, USD_MLC } = useMarketExchangeRates()
+  // USD_CUP = ElToque (tasa única de referencia)
+  const { USD_CUP, USD_MLC } = useMarketExchangeRates()
   const router = useRouter()
   const params = useParams()
   const searchParams = useSearchParams()
@@ -724,13 +724,13 @@ export default function POSTerminalPage() {
     }, 0)
     // CUP: calcular sin redondeo para mantener precisión
     const totalCUP = cart.reduce((sum, item) => {
-      const unitCUP = item.unitPrice * USD_CUP_BCC
+      const unitCUP = item.unitPrice * USD_CUP
       const lineCUP = unitCUP * item.quantity
-      const discountCUP = item.discountAmount * USD_CUP_BCC
+      const discountCUP = item.discountAmount * USD_CUP
       return sum + lineCUP - discountCUP
     }, 0)
     return { subtotal, discounts, total, itemCount, totalCUP, wholesaleSavings }
-  }, [cart, USD_CUP_BCC])
+  }, [cart, USD_CUP])
 
   // Handle exit confirmation with password
   const handleExitRequest = (destination: string = '/dashboard/market/pos', actionLabel: string = 'Salir del POS') => {
@@ -1830,9 +1830,9 @@ export default function POSTerminalPage() {
                       ${product.price.toFixed(2)}
                     </p>
 
-                    {/* Precios en otras monedas (tasa BCC para venta) */}
+                    {/* Precios en otras monedas (tasa ElToque) */}
                     <div className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 space-y-0">
-                      <p className="text-green-600">${formatCUP(product.price * USD_CUP_BCC)} CUP</p>
+                      <p className="text-green-600">${formatCUP(product.price * USD_CUP)} CUP</p>
                       <p className="text-purple-600">${(product.price * USD_MLC).toFixed(2)} MLC</p>
                     </div>
 
@@ -2361,9 +2361,9 @@ export default function POSTerminalPage() {
                   <p className="text-xl font-bold text-blue-500 mt-1">
                     ${selectedProductForDetails.price.toFixed(2)}
                   </p>
-                  {/* Precios en otras monedas (tasa BCC para venta) */}
+                  {/* Precios en otras monedas (tasa ElToque) */}
                   <div className="flex gap-3 mt-1 text-sm">
-                    <span className="text-green-600">${formatCUP(selectedProductForDetails.price * USD_CUP_BCC)} CUP <span className="text-gray-400 text-xs">(BCC)</span></span>
+                    <span className="text-green-600">${formatCUP(selectedProductForDetails.price * USD_CUP)} CUP</span>
                     <span className="text-purple-600">${(selectedProductForDetails.price * USD_MLC).toFixed(2)} MLC</span>
                   </div>
                 </div>

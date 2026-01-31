@@ -112,7 +112,7 @@ export default function CreateProductPage() {
   const router = useRouter()
 
   // Exchange rates for currency conversion
-  const { USD_CUP_BCC, USD_MLC } = useMarketExchangeRates()
+  const { USD_CUP, USD_MLC } = useMarketExchangeRates()
 
   const [currentStep, setCurrentStep] = useState<Step>('info')
   const [loading, setLoading] = useState(false)
@@ -2116,7 +2116,7 @@ export default function CreateProductPage() {
                               "px-2 py-1 rounded-lg text-sm font-medium",
                               theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
                             )}>
-                              ${(parseFloat(formData.sellingPrice) * (USD_CUP_BCC || 411)).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CUP
+                              ${Math.round(parseFloat(formData.sellingPrice) * (USD_CUP || 450)).toLocaleString('es-ES')} CUP
                             </span>
                             <span className={cn(
                               "px-2 py-1 rounded-lg text-sm font-medium",

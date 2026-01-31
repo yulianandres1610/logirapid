@@ -57,6 +57,7 @@ interface ReceiptData {
 
 /**
  * Format currency amount
+ * CUP is formatted as integer (no decimals) - requirement for Cuba
  */
 function formatCurrency(amount: number, currency: string = 'USD'): string {
   const symbols: Record<string, string> = {
@@ -65,6 +66,10 @@ function formatCurrency(amount: number, currency: string = 'USD'): string {
     MLC: '€'
   }
   const symbol = symbols[currency] || '$'
+  // CUP must be integer (no decimals) - Cuban requirement
+  if (currency === 'CUP') {
+    return `${symbol}${Math.round(amount).toLocaleString('es-ES')}`
+  }
   return `${symbol}${amount.toFixed(2)}`
 }
 

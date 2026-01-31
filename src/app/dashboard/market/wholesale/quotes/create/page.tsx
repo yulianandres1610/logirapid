@@ -287,7 +287,7 @@ export default function CreateQuotePage() {
       if (response.ok) {
         const result = await response.json()
         if (result.success && result.rates) {
-          setExchangeRateBCC(result.rates.CUP_BCC || 411)
+          setExchangeRateBCC(result.rates.CUP || 411)
         }
       }
     } catch (error) {

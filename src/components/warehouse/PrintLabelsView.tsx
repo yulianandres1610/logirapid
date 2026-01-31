@@ -52,7 +52,7 @@ export default function PrintLabelsView({
   onBack
 }: PrintLabelsViewProps) {
   const { theme } = useTheme()
-  const { USD_CUP_BCC } = useMarketExchangeRates()
+  const { USD_CUP } = useMarketExchangeRates()
 
   const [loading, setLoading] = useState(true)
   const [products, setProducts] = useState<Product[]>([])
@@ -135,7 +135,7 @@ export default function PrintLabelsView({
   }
 
   const formatPriceCUP = (priceUSD: number) => {
-    const rate = USD_CUP_BCC || 411
+    const rate = USD_CUP || 411
     return Math.round(priceUSD * rate)
   }
 

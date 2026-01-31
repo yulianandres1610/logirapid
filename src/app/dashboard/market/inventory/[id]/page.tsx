@@ -265,7 +265,7 @@ export default function ProductDetailPage() {
   const router = useRouter()
   const productId = params.id as string
   const { theme } = useTheme()
-  const { USD_CUP, USD_CUP_BCC, USD_MLC } = useMarketExchangeRates()
+  const { USD_CUP, USD_MLC } = useMarketExchangeRates()
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
   const [prevProductId, setPrevProductId] = useState<number | null>(null)
@@ -809,7 +809,7 @@ export default function ProductDetailPage() {
                       <p className="text-xs text-emerald-600 dark:text-emerald-400 uppercase tracking-wide mb-1">Precio Venta</p>
                       <p className="text-3xl font-bold text-emerald-600">{symbol}{Number(product.sellingPrice).toFixed(2)}</p>
                       <div className="mt-2 pt-2 border-t border-emerald-200/30 dark:border-emerald-800/30 space-y-0.5">
-                        <p className="text-xs text-blue-600 font-medium">${(product.sellingPrice * USD_CUP_BCC).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CUP</p>
+                        <p className="text-xs text-blue-600 font-medium">${Math.round(product.sellingPrice * USD_CUP).toLocaleString('es-ES')} CUP</p>
                         <p className="text-xs text-purple-600 font-medium">${(product.sellingPrice * USD_MLC).toFixed(2)} MLC</p>
                       </div>
                     </div>
@@ -824,7 +824,7 @@ export default function ProductDetailPage() {
                         'text-2xl font-bold',
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
                       )}>{symbol}{Number(product.costPrice).toFixed(2)}</p>
-                      <p className="text-xs text-blue-600 mt-1">${(product.costPrice * USD_CUP).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CUP</p>
+                      <p className="text-xs text-blue-600 mt-1">${Math.round(product.costPrice * USD_CUP).toLocaleString('es-ES')} CUP</p>
                     </div>
 
                     {/* Margin */}
@@ -867,7 +867,7 @@ export default function ProductDetailPage() {
                   value: `${symbol}${Number(product.costPrice).toFixed(2)}`,
                   icon: DollarSign,
                   color: 'blue',
-                  subtext: `$${(product.costPrice * USD_CUP).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CUP`
+                  subtext: `$${Math.round(product.costPrice * USD_CUP).toLocaleString('es-ES')} CUP`
                 },
                 {
                   label: 'Margen',

@@ -375,7 +375,7 @@ export default function CreateInvoicePage() {
         const result = await response.json()
         if (result.success && result.rates) {
           setExchangeRate(result.rates.CUP || 340)
-          setExchangeRateBCC(result.rates.CUP_BCC || 411)
+          setExchangeRateBCC(result.rates.CUP || 411)
           setExchangeRateWholesale(result.rates.CUP_WHOLESALE || 355)
         }
       }
@@ -987,12 +987,13 @@ export default function CreateInvoicePage() {
     }).format(value)
   }
 
+  // CUP como entero (sin decimales - requisito Cuba)
   const formatCUP = (value: number) => {
     return new Intl.NumberFormat('es-CU', {
       style: 'decimal',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(value) + ' CUP'
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(Math.round(value)) + ' CUP'
   }
 
   const filteredCustomers = customers.filter(c =>

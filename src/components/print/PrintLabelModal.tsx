@@ -59,7 +59,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
   const exchangeRates = useMarketExchangeRates()
-  const USD_CUP_BCC = exchangeRates?.USD_CUP_BCC || 411
+  const USD_CUP = exchangeRates?.USD_CUP || 411
 
   const [loading, setLoading] = useState(true)
   const [printing, setPrinting] = useState(false)
@@ -181,7 +181,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
 
       const calculatePriceCUP = (priceUSD: number) => {
         if (!includePrice) return undefined
-        const rate = USD_CUP_BCC || 411
+        const rate = USD_CUP || 411
         const price = Number(priceUSD) || 0
         if (rate <= 0 || price <= 0) return undefined
         return Math.round(price * rate)
