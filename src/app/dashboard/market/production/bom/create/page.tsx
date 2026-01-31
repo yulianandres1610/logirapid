@@ -116,12 +116,32 @@ export default function CreateBOMPage() {
       if (forOutput) setSearchingOutput(true)
       else setSearchingLine(true)
 
-      const response = await fetch(`/api/market/products/match?term=${encodeURIComponent(term)}&limit=10`)
+      const response = await fetch(`/api/market/products?search=${encodeURIComponent(term)}&limit=10`)
       const data = await response.json()
 
       if (data.success) {
-        if (forOutput) setSearchResultsOutput(data.data.products || [])
-        else setSearchResultsLine(data.data.products || [])
+        // Map the response to match our Product interface
+        const products = (data.data.products || []).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          sku: p.sku,
+          barcode: p.barcode,
+          costPrice: p.costPrice || 0,
+          sellingPrice: p.sellingPrice || 0,
+          imageUrl: p.imageUrl,
+          unitOfMeasure: p.unitOfMeasure || 'unidad',
+          hasVariants: p.hasVariants || false,
+          variants: p.variants?.map((v: any) => ({
+            id: v.id,
+            variantName: v.name,
+            sku: v.sku,
+            costPrice: v.costPrice || 0,
+            sellingPrice: v.price || 0
+          }))
+        }))
+
+        if (forOutput) setSearchResultsOutput(products)
+        else setSearchResultsLine(products)
       }
     } catch (error) {
       console.error('Error searching products:', error)
