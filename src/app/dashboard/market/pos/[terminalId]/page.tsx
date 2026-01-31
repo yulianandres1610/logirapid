@@ -180,6 +180,7 @@ export default function POSTerminalPage() {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [stockNotification, setStockNotification] = useState<string | null>(null) // Notificación de stock (no bloquea UI)
   const [mounted, setMounted] = useState(false)
 
   // Cart state
@@ -830,8 +831,8 @@ export default function POSTerminalPage() {
       const otherStockMsg = totalOtherStock > 0
         ? ` (Hay ${totalOtherStock} en otros almacenes - ver detalles)`
         : ''
-      setError(`Sin stock en este almacén: ${itemName}${otherStockMsg}`)
-      setTimeout(() => setError(null), 4000)
+      setStockNotification(`Sin stock en este almacén: ${itemName}${otherStockMsg}`)
+      setTimeout(() => setStockNotification(null), 4000)
       return
     }
 
@@ -849,8 +850,8 @@ export default function POSTerminalPage() {
 
         // Validate stock for quantity increase
         if (product.trackInventory && newQuantity > stock) {
-          setError(`Stock insuficiente. Disponible: ${stock}`)
-          setTimeout(() => setError(null), 3000)
+          setStockNotification(`Stock insuficiente. Disponible: ${stock}`)
+          setTimeout(() => setStockNotification(null), 3000)
           return prev
         }
 
@@ -935,9 +936,9 @@ export default function POSTerminalPage() {
       }
       setSearch('')
     } else {
-      // Show error - product not found
-      setError(`Producto no encontrado: ${barcode}`)
-      setTimeout(() => setError(null), 3000)
+      // Show notification - product not found
+      setStockNotification(`Producto no encontrado: ${barcode}`)
+      setTimeout(() => setStockNotification(null), 3000)
     }
   }, [products, addToCart])
 
@@ -1039,8 +1040,8 @@ export default function POSTerminalPage() {
           : undefined
         const effectiveStock = variantStock ?? currentItem.product.stock
         if (updates.quantity > effectiveStock) {
-          setError(`Stock insuficiente. Disponible: ${effectiveStock}`)
-          setTimeout(() => setError(null), 3000)
+          setStockNotification(`Stock insuficiente. Disponible: ${effectiveStock}`)
+          setTimeout(() => setStockNotification(null), 3000)
           return prev
         }
         if (updates.quantity < 0) {
@@ -1296,6 +1297,34 @@ export default function POSTerminalPage() {
         theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'
       )}
     >
+      {/* Stock/Product Notification Toast */}
+      <AnimatePresence>
+        {stockNotification && (
+          <motion.div
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-50"
+          >
+            <div className={cn(
+              'flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border',
+              theme === 'dark'
+                ? 'bg-red-900/90 border-red-700 text-red-100'
+                : 'bg-red-50 border-red-200 text-red-800'
+            )}>
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+              <p className="text-sm font-medium">{stockNotification}</p>
+              <button
+                onClick={() => setStockNotification(null)}
+                className="p-1 hover:bg-red-500/20 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header - Responsive */}
       <motion.header
         initial={{ y: -20, opacity: 0 }}
