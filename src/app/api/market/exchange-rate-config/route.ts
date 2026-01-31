@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
+
+interface JWTPayload {
+  userId: number
+  email: string
+  role: string
+  companyId: number
+  companyName: string
+}
 
 // Ensure table exists - called before each operation
 async function ensureTableExists() {
@@ -16,57 +25,33 @@ async function ensureTableExists() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `)
-    console.log('[Exchange Rate Config] Table ensured')
   } catch (error) {
     console.error('[Exchange Rate Config] Error creating table:', error)
-    // Try without foreign key constraint if it fails
-    try {
-      await db.query(`
-        CREATE TABLE IF NOT EXISTS market_exchange_rate_config (
-          id SERIAL PRIMARY KEY,
-          company_id INTEGER NOT NULL UNIQUE,
-          manual_rate DECIMAL(10,4),
-          updated_by INTEGER,
-          updated_by_email VARCHAR(255),
-          updated_at TIMESTAMP DEFAULT NOW(),
-          created_at TIMESTAMP DEFAULT NOW()
-        )
-      `)
-    } catch (e) {
-      console.error('[Exchange Rate Config] Fallback table creation also failed:', e)
-    }
   }
 }
 
-// Helper to get current user from cookies
-async function getCurrentUser() {
+// Helper to get current user from JWT token (same as products endpoint)
+async function getCurrentUser(): Promise<JWTPayload | null> {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get('auth-token')?.value
-    const companyId = cookieStore.get('user-company-id')?.value
-    const role = cookieStore.get('user-role')?.value
+    const authToken = cookieStore.get('auth-token')?.value
 
-    console.log('[Exchange Rate Config] Cookies:', {
-      hasToken: !!token,
-      companyId,
-      role
-    })
-
-    if (!token) {
+    if (!authToken) {
+      console.log('[Exchange Rate Config] No auth token found')
       return null
     }
 
     try {
-      const decoded = Buffer.from(token, 'base64').toString('utf-8')
-      const [userId, email, tokenRole] = decoded.split(':')
-      return {
-        userId: parseInt(userId),
-        email,
-        role: role || tokenRole,
-        companyId: companyId ? parseInt(companyId) : null
-      }
-    } catch (decodeError) {
-      console.error('[Exchange Rate Config] Token decode error:', decodeError)
+      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+      const payload = jwt.verify(authToken, secret) as JWTPayload
+      console.log('[Exchange Rate Config] User authenticated:', {
+        email: payload.email,
+        role: payload.role,
+        companyId: payload.companyId
+      })
+      return payload
+    } catch (jwtError) {
+      console.error('[Exchange Rate Config] JWT verification failed:', jwtError)
       return null
     }
   } catch (cookieError) {
@@ -121,23 +106,12 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get company ID from query or user's company
-    const { searchParams } = new URL(request.url)
-    const queryCompanyId = searchParams.get('companyId')
-    const companyId = queryCompanyId ? parseInt(queryCompanyId) : user.companyId
+    const companyId = user.companyId
 
     if (!companyId) {
       return NextResponse.json(
         { success: false, error: 'Company ID requerido' },
         { status: 400 }
-      )
-    }
-
-    // Only allow access to own company unless SUPER_ADMIN
-    if (user.role !== 'SUPER_ADMIN' && companyId !== user.companyId) {
-      return NextResponse.json(
-        { success: false, error: 'No tiene permisos para ver esta configuración' },
-        { status: 403 }
       )
     }
 
@@ -201,7 +175,6 @@ export async function POST(request: NextRequest) {
     await ensureTableExists()
 
     const user = await getCurrentUser()
-    console.log('[Exchange Rate Config] POST - User:', user)
 
     if (!user) {
       return NextResponse.json(
@@ -210,11 +183,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check permissions - allow ADMIN, SUPER_ADMIN, and all MARKET roles that manage
+    // Check permissions - allow ADMIN, SUPER_ADMIN, and MARKET roles that manage
     const allowedRoles = ['ADMIN', 'SUPER_ADMIN', 'MARKET_ADMIN', 'MARKET_MANAGER']
     const userRole = user.role || ''
 
-    console.log('[Exchange Rate Config] Checking role:', userRole, 'allowed:', allowedRoles)
+    console.log('[Exchange Rate Config] POST - User role:', userRole, 'companyId:', user.companyId)
 
     if (!allowedRoles.includes(userRole)) {
       return NextResponse.json(
@@ -224,9 +197,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { manualRate, companyId: bodyCompanyId } = body
+    const { manualRate } = body
 
-    console.log('[Exchange Rate Config] POST body:', { manualRate, bodyCompanyId })
+    console.log('[Exchange Rate Config] POST body:', { manualRate })
 
     // Validate manualRate
     if (manualRate !== null && manualRate !== undefined) {
@@ -239,8 +212,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Determine company ID
-    const companyId = bodyCompanyId ? parseInt(bodyCompanyId) : user.companyId
+    const companyId = user.companyId
 
     if (!companyId) {
       return NextResponse.json(
@@ -249,15 +221,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Only allow updating own company unless SUPER_ADMIN
-    if (user.role !== 'SUPER_ADMIN' && companyId !== user.companyId) {
-      return NextResponse.json(
-        { success: false, error: 'No tiene permisos para modificar esta configuración' },
-        { status: 403 }
-      )
-    }
-
-    console.log('[Exchange Rate Config] Saving config for company:', companyId, 'rate:', manualRate)
+    console.log('[Exchange Rate Config] Saving for company:', companyId, 'rate:', manualRate)
 
     // Upsert the configuration
     const result = await db.query(
@@ -274,16 +238,10 @@ export async function POST(request: NextRequest) {
     )
 
     const savedConfig = result.rows[0]
-    console.log('[Exchange Rate Config] Saved:', savedConfig)
+    console.log('[Exchange Rate Config] Saved successfully')
 
     // Fetch ElToque for response
     const elToqueData = await fetchElToqueRate()
-
-    console.log('[Exchange Rate Config] Updated:', {
-      companyId,
-      manualRate,
-      updatedBy: user.email
-    })
 
     return NextResponse.json({
       success: true,
