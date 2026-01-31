@@ -1,39 +1,92 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { db } from '@/lib/database'
 
 // Constante para margen mayorista sobre ElToque
 const WHOLESALE_MARGIN_CUP = 15
 
 // Cache para evitar múltiples llamadas
 let cachedRates: {
-  CUP: number           // ElToque (para costo)
-  CUP_BCC: number       // BCC Banco Central (para venta POS)
-  CUP_WHOLESALE: number // ElToque + 15 (para venta mayoreo)
+  CUP: number           // Tasa principal (manual o ElToque)
+  CUP_BCC: number       // BCC Banco Central (para referencia)
+  CUP_WHOLESALE: number // Tasa + margen para mayoreo
+  CUP_ELTOQUE: number   // Siempre ElToque (para referencia)
   MLC: number
   EUR: number
   timestamp: string
   timestampBCC: string
-  source: string
+  source: string        // 'manual' | 'eltoque' | 'fallback'
+  companyId?: number
 } | null = null
 let cacheTimestamp: number = 0
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutos
 
+// Helper to get company ID from cookies
+async function getCompanyIdFromCookies(): Promise<number | null> {
+  try {
+    const cookieStore = await cookies()
+    const companyId = cookieStore.get('user-company-id')?.value
+    return companyId ? parseInt(companyId) : null
+  } catch {
+    return null
+  }
+}
+
+// Get manual rate from database
+async function getManualRate(companyId: number): Promise<{ rate: number; updatedAt: string } | null> {
+  try {
+    const result = await db.query(
+      `SELECT manual_rate, updated_at FROM market_exchange_rate_config WHERE company_id = $1`,
+      [companyId]
+    )
+
+    if (result.rows[0]?.manual_rate) {
+      const rate = parseFloat(result.rows[0].manual_rate)
+      if (rate > 0) {
+        return {
+          rate,
+          updatedAt: result.rows[0].updated_at
+        }
+      }
+    }
+    return null
+  } catch (error) {
+    console.warn('[POS Exchange Rates] Error fetching manual rate:', error)
+    return null
+  }
+}
+
 /**
  * GET /api/market/pos/exchange-rates
  * Obtiene tasas de cambio actualizadas para el POS
- * - CUP: Tasa ElToque (informal) para COSTO
- * - CUP_BCC: Tasa BCC (oficial) para VENTA
+ * - Prioridad: Tasa manual configurada > ElToque
+ * - CUP: Tasa principal (manual si existe, sino ElToque)
+ * - CUP_ELTOQUE: Siempre ElToque (para referencia)
+ * - CUP_BCC: Tasa BCC (para referencia)
  */
 export async function GET(request: NextRequest) {
   try {
     const now = Date.now()
 
-    // Usar cache si es válido
-    if (cachedRates && (now - cacheTimestamp) < CACHE_DURATION) {
+    // Get company ID from query params or cookies
+    const { searchParams } = new URL(request.url)
+    const queryCompanyId = searchParams.get('companyId')
+    const cookieCompanyId = await getCompanyIdFromCookies()
+    const companyId = queryCompanyId ? parseInt(queryCompanyId) : cookieCompanyId
+
+    // Check if we can use cache (same company)
+    if (cachedRates && (now - cacheTimestamp) < CACHE_DURATION && cachedRates.companyId === companyId) {
       return NextResponse.json({
         success: true,
         rates: cachedRates,
         cached: true
       })
+    }
+
+    // Check for manual rate first
+    let manualRateData: { rate: number; updatedAt: string } | null = null
+    if (companyId) {
+      manualRateData = await getManualRate(companyId)
     }
 
     // Fetch desde ambas APIs en paralelo
@@ -58,7 +111,7 @@ export async function GET(request: NextRequest) {
       })
     ])
 
-    // Procesar tasa BCC (para venta)
+    // Procesar tasa BCC (para referencia)
     let bccRate = 411 // Fallback
     let bccTimestamp = new Date().toISOString()
     if (bccResponse && bccResponse.ok) {
@@ -76,7 +129,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Procesar tasa ElToque (para costo)
+    // Procesar tasa ElToque (siempre se obtiene para referencia)
     let elToqueRate = 440 // Fallback
     let mlcRate = 1.11
     let eurRate = 485
@@ -95,29 +148,50 @@ export async function GET(request: NextRequest) {
           mlcRate = rates.MLC ? (rates.USD / rates.MLC) : 1.11
           eurRate = rates.EUR || 485
           elToqueTimestamp = data.fecha_actualizacion
-          elToqueSource = data.origen || 'eltoque'
+          elToqueSource = 'eltoque'
         }
       } catch (e) {
         console.warn('[POS Exchange Rates] Error parsing ElToque response:', e)
       }
     }
 
-    // Calcular tasa mayoreo (ElToque + margen)
-    const wholesaleRate = elToqueRate + WHOLESALE_MARGIN_CUP
+    // Determinar tasa principal: manual si existe, sino ElToque
+    let mainRate: number
+    let mainSource: string
+    let mainTimestamp: string
+
+    if (manualRateData) {
+      mainRate = manualRateData.rate
+      mainSource = 'manual'
+      mainTimestamp = manualRateData.updatedAt
+      console.log('[POS Exchange Rates] Using manual rate:', mainRate)
+    } else {
+      mainRate = elToqueRate
+      mainSource = elToqueSource
+      mainTimestamp = elToqueTimestamp
+      console.log('[POS Exchange Rates] Using ElToque rate:', mainRate)
+    }
+
+    // Calcular tasa mayoreo (tasa principal + margen)
+    const wholesaleRate = mainRate + WHOLESALE_MARGIN_CUP
 
     // Construir respuesta para el POS
     const posRates = {
-      CUP: elToqueRate,          // ElToque para COSTO
-      CUP_BCC: bccRate,          // BCC para VENTA POS
-      CUP_WHOLESALE: wholesaleRate, // ElToque + 15 para VENTA MAYOREO
+      CUP: mainRate,               // Tasa principal (manual o ElToque)
+      CUP_BCC: bccRate,            // BCC para referencia
+      CUP_WHOLESALE: wholesaleRate, // Tasa principal + 15 para mayoreo
+      CUP_ELTOQUE: elToqueRate,    // Siempre ElToque (para referencia)
       MLC: mlcRate,
       EUR: eurRate,
-      USD_CUP: elToqueRate,
+      USD_CUP: mainRate,           // Alias para compatibilidad
       USD_CUP_BCC: bccRate,
       USD_CUP_WHOLESALE: wholesaleRate,
-      timestamp: elToqueTimestamp,
+      USD_CUP_ELTOQUE: elToqueRate,
+      timestamp: mainTimestamp,
       timestampBCC: bccTimestamp,
-      source: elToqueSource
+      timestampElToque: elToqueTimestamp,
+      source: mainSource,
+      companyId
     }
 
     // Actualizar cache
@@ -125,20 +199,22 @@ export async function GET(request: NextRequest) {
       CUP: posRates.CUP,
       CUP_BCC: posRates.CUP_BCC,
       CUP_WHOLESALE: posRates.CUP_WHOLESALE,
+      CUP_ELTOQUE: posRates.CUP_ELTOQUE,
       MLC: posRates.MLC,
       EUR: eurRate,
-      timestamp: elToqueTimestamp,
+      timestamp: mainTimestamp,
       timestampBCC: bccTimestamp,
-      source: elToqueSource
+      source: mainSource,
+      companyId
     }
     cacheTimestamp = now
 
     console.log('[POS Exchange Rates] Updated rates:', {
       CUP: posRates.CUP,
+      CUP_ELTOQUE: posRates.CUP_ELTOQUE,
       CUP_BCC: posRates.CUP_BCC,
       CUP_WHOLESALE: posRates.CUP_WHOLESALE,
-      MLC: posRates.MLC,
-      source: elToqueSource
+      source: mainSource
     })
 
     return NextResponse.json({
@@ -167,6 +243,7 @@ export async function GET(request: NextRequest) {
       CUP: 440,
       CUP_BCC: 411,
       CUP_WHOLESALE: 440 + WHOLESALE_MARGIN_CUP, // 455
+      CUP_ELTOQUE: 440,
       MLC: 1.11,
       EUR: 485,
       timestamp: new Date().toISOString(),
