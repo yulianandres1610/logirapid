@@ -28,8 +28,10 @@ import {
   Ban,
   History,
   Send,
-  Edit3
+  Edit3,
+  FileDown
 } from 'lucide-react'
+import jsPDF from 'jspdf'
 import Link from 'next/link'
 import Image from 'next/image'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -184,6 +186,8 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
   const [resubmitting, setResubmitting] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
 
+  const [downloadingPdf, setDownloadingPdf] = useState<'receipt' | 'letter' | null>(null)
+
   // Get user role from cookies
   useEffect(() => {
     try {
@@ -197,6 +201,349 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
       console.error('Error reading role cookie:', e)
     }
   }, [])
+
+  // PDF Generation Functions
+  const generatePdfReceipt = async () => {
+    if (!order) return
+    setDownloadingPdf('receipt')
+
+    try {
+      // Receipt format: 80mm width (about 226 points)
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [80, 200] // 80mm width, dynamic height
+      })
+
+      const pageWidth = 80
+      const margin = 5
+      let y = 10
+
+      // Header
+      doc.setFontSize(12)
+      doc.setFont('helvetica', 'bold')
+      doc.text('FACTURA DE COMPRA', pageWidth / 2, y, { align: 'center' })
+      y += 6
+
+      doc.setFontSize(10)
+      doc.text(order.purchaseNumber, pageWidth / 2, y, { align: 'center' })
+      y += 8
+
+      // Line separator
+      doc.setLineWidth(0.3)
+      doc.line(margin, y, pageWidth - margin, y)
+      y += 6
+
+      // Supplier info
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'normal')
+      doc.text('Proveedor:', margin, y)
+      y += 4
+      doc.setFont('helvetica', 'bold')
+      doc.text(order.supplierName.substring(0, 30), margin, y)
+      y += 4
+
+      if (order.supplierCode) {
+        doc.setFont('helvetica', 'normal')
+        doc.text(`Código: ${order.supplierCode}`, margin, y)
+        y += 4
+      }
+      y += 2
+
+      // Date
+      doc.text(`Fecha: ${formatDate(order.purchaseDate)}`, margin, y)
+      y += 6
+
+      // Line separator
+      doc.line(margin, y, pageWidth - margin, y)
+      y += 5
+
+      // Products header
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(7)
+      doc.text('Producto', margin, y)
+      doc.text('Cant', pageWidth - margin - 20, y)
+      doc.text('Total', pageWidth - margin - 5, y, { align: 'right' })
+      y += 4
+
+      // Products
+      doc.setFont('helvetica', 'normal')
+      for (const line of order.lines) {
+        const productName = line.productName.substring(0, 25)
+        doc.text(productName, margin, y)
+        doc.text(String(line.quantity), pageWidth - margin - 18, y)
+        doc.text(`$${line.totalPrice.toFixed(2)}`, pageWidth - margin, y, { align: 'right' })
+        y += 4
+
+        if (line.variantName) {
+          doc.setFontSize(6)
+          doc.text(`  ${line.variantName}`, margin, y)
+          y += 3
+          doc.setFontSize(7)
+        }
+      }
+      y += 2
+
+      // Line separator
+      doc.line(margin, y, pageWidth - margin, y)
+      y += 5
+
+      // Totals
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.text('TOTAL:', margin, y)
+      doc.text(`$${order.totalAmount.toFixed(2)} ${order.currency}`, pageWidth - margin, y, { align: 'right' })
+      y += 8
+
+      // Footer
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6)
+      doc.text('--- Generado por LogiRapid ---', pageWidth / 2, y, { align: 'center' })
+
+      // Adjust page height
+      const finalHeight = y + 10
+      doc.internal.pageSize.height = finalHeight
+
+      doc.save(`${order.purchaseNumber}-recibo.pdf`)
+      showNotification('success', 'PDF descargado', 'Factura en formato recibo descargada')
+    } catch (error) {
+      console.error('Error generating receipt PDF:', error)
+      showNotification('error', 'Error', 'No se pudo generar el PDF')
+    } finally {
+      setDownloadingPdf(null)
+    }
+  }
+
+  const generatePdfLetter = async () => {
+    if (!order) return
+    setDownloadingPdf('letter')
+
+    try {
+      // Letter format: A4/Letter size
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'letter'
+      })
+
+      const pageWidth = 215.9
+      const pageHeight = 279.4
+      const margin = 20
+      const contentWidth = pageWidth - margin * 2
+      let y = 25
+
+      // Header
+      doc.setFontSize(24)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(26, 54, 93) // Dark blue
+      doc.text('FACTURA DE COMPRA', pageWidth / 2, y, { align: 'center' })
+      y += 12
+
+      // Order number and status
+      doc.setFontSize(14)
+      doc.setTextColor(0, 0, 0)
+      doc.text(order.purchaseNumber, pageWidth / 2, y, { align: 'center' })
+      y += 8
+
+      // Status badge
+      const statusLabel = STATUS_CONFIG[order.status]?.label || order.status
+      doc.setFontSize(10)
+      doc.setTextColor(100, 100, 100)
+      doc.text(`Estado: ${statusLabel}`, pageWidth / 2, y, { align: 'center' })
+      y += 15
+
+      // Horizontal line
+      doc.setDrawColor(200, 200, 200)
+      doc.setLineWidth(0.5)
+      doc.line(margin, y, pageWidth - margin, y)
+      y += 12
+
+      // Two-column layout for supplier and order info
+      doc.setTextColor(0, 0, 0)
+
+      // Left column - Supplier
+      doc.setFontSize(11)
+      doc.setFont('helvetica', 'bold')
+      doc.text('PROVEEDOR', margin, y)
+      y += 6
+
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10)
+      doc.text(order.supplierName, margin, y)
+      y += 5
+
+      if (order.supplierCode) {
+        doc.setTextColor(100, 100, 100)
+        doc.text(`Código: ${order.supplierCode}`, margin, y)
+        y += 5
+      }
+
+      if (order.supplierContact) {
+        doc.setTextColor(0, 0, 0)
+        doc.text(`Contacto: ${order.supplierContact}`, margin, y)
+        y += 5
+      }
+
+      if (order.supplierPhone) {
+        doc.text(`Tel: ${order.supplierPhone}`, margin, y)
+        y += 5
+      }
+
+      if (order.supplierEmail) {
+        doc.text(`Email: ${order.supplierEmail}`, margin, y)
+        y += 5
+      }
+
+      // Right column - Order dates (at the same height as supplier start)
+      const rightX = pageWidth / 2 + 10
+      let rightY = y - (order.supplierContact ? 20 : 15) - (order.supplierPhone ? 5 : 0) - (order.supplierEmail ? 5 : 0) - (order.supplierCode ? 5 : 0)
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(11)
+      doc.text('INFORMACIÓN', rightX, rightY)
+      rightY += 6
+
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10)
+      doc.setTextColor(0, 0, 0)
+      doc.text(`Fecha de compra: ${formatDate(order.purchaseDate)}`, rightX, rightY)
+      rightY += 5
+
+      if (order.expectedDate) {
+        doc.text(`Entrega esperada: ${formatDate(order.expectedDate)}`, rightX, rightY)
+        rightY += 5
+      }
+
+      if (order.warehouseName) {
+        doc.text(`Almacén: ${order.warehouseName}`, rightX, rightY)
+        rightY += 5
+      }
+
+      doc.text(`Creado por: ${order.createdByName}`, rightX, rightY)
+
+      y = Math.max(y, rightY) + 15
+
+      // Horizontal line before products
+      doc.setDrawColor(200, 200, 200)
+      doc.line(margin, y, pageWidth - margin, y)
+      y += 10
+
+      // Products table header
+      doc.setFillColor(245, 247, 250)
+      doc.rect(margin, y - 5, contentWidth, 10, 'F')
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(60, 60, 60)
+      doc.text('PRODUCTO', margin + 5, y)
+      doc.text('SKU', margin + 85, y)
+      doc.text('CANT', margin + 115, y, { align: 'center' })
+      doc.text('P.UNIT', margin + 140, y, { align: 'right' })
+      doc.text('TOTAL', pageWidth - margin - 5, y, { align: 'right' })
+      y += 8
+
+      // Products
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(0, 0, 0)
+
+      for (const line of order.lines) {
+        // Check if we need a new page
+        if (y > pageHeight - 60) {
+          doc.addPage()
+          y = 25
+        }
+
+        const productName = line.productName.length > 40
+          ? line.productName.substring(0, 40) + '...'
+          : line.productName
+        const sku = (line.variantSku || line.productSku || '').substring(0, 15)
+
+        doc.text(productName, margin + 5, y)
+        doc.text(sku, margin + 85, y)
+        doc.text(String(line.quantity), margin + 115, y, { align: 'center' })
+        doc.text(`$${line.unitPrice.toFixed(2)}`, margin + 140, y, { align: 'right' })
+        doc.text(`$${line.totalPrice.toFixed(2)}`, pageWidth - margin - 5, y, { align: 'right' })
+        y += 6
+
+        if (line.variantName) {
+          doc.setTextColor(128, 90, 213) // Purple for variant
+          doc.setFontSize(8)
+          doc.text(`  ${line.variantName}`, margin + 5, y)
+          doc.setTextColor(0, 0, 0)
+          doc.setFontSize(9)
+          y += 5
+        }
+
+        if (line.lotNumber) {
+          doc.setTextColor(100, 100, 100)
+          doc.setFontSize(8)
+          doc.text(`  Lote: ${line.lotNumber}`, margin + 5, y)
+          doc.setTextColor(0, 0, 0)
+          doc.setFontSize(9)
+          y += 5
+        }
+      }
+
+      y += 5
+
+      // Totals section
+      doc.setDrawColor(200, 200, 200)
+      doc.line(margin + 100, y, pageWidth - margin, y)
+      y += 8
+
+      doc.setFontSize(10)
+      doc.text('Subtotal:', margin + 120, y)
+      doc.text(`$${order.subtotal.toFixed(2)}`, pageWidth - margin - 5, y, { align: 'right' })
+      y += 6
+
+      if (order.taxAmount > 0) {
+        doc.text('Impuestos:', margin + 120, y)
+        doc.text(`$${order.taxAmount.toFixed(2)}`, pageWidth - margin - 5, y, { align: 'right' })
+        y += 6
+      }
+
+      y += 3
+      doc.setFillColor(26, 54, 93) // Dark blue
+      doc.rect(margin + 100, y - 5, contentWidth - 100, 12, 'F')
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(12)
+      doc.setTextColor(255, 255, 255)
+      doc.text('TOTAL:', margin + 120, y + 2)
+      doc.text(`$${order.totalAmount.toFixed(2)} ${order.currency}`, pageWidth - margin - 5, y + 2, { align: 'right' })
+      y += 20
+
+      // Notes section if exists
+      if (order.notes) {
+        doc.setTextColor(0, 0, 0)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(10)
+        doc.text('NOTAS:', margin, y)
+        y += 6
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        const splitNotes = doc.splitTextToSize(order.notes, contentWidth)
+        doc.text(splitNotes, margin, y)
+        y += splitNotes.length * 5 + 10
+      }
+
+      // Footer
+      doc.setTextColor(150, 150, 150)
+      doc.setFontSize(8)
+      doc.text('Documento generado por LogiRapid', pageWidth / 2, pageHeight - 15, { align: 'center' })
+      doc.text(new Date().toLocaleString('es-ES'), pageWidth / 2, pageHeight - 10, { align: 'center' })
+
+      doc.save(`${order.purchaseNumber}-factura.pdf`)
+      showNotification('success', 'PDF descargado', 'Factura en formato carta descargada')
+    } catch (error) {
+      console.error('Error generating letter PDF:', error)
+      showNotification('error', 'Error', 'No se pudo generar el PDF')
+    } finally {
+      setDownloadingPdf(null)
+    }
+  }
 
   useEffect(() => {
     fetchOrder()
@@ -531,20 +878,70 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                 </motion.button>
               </Link>
 
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => window.print()}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
-                  theme === 'dark'
-                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                )}
-              >
-                <Printer className="w-4 h-4" />
-                <span className="font-medium">Imprimir</span>
-              </motion.button>
+              <div className="flex items-center gap-2">
+                {/* Download Receipt PDF Button */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={generatePdfReceipt}
+                  disabled={downloadingPdf !== null}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-2 rounded-xl transition-colors',
+                    theme === 'dark'
+                      ? 'bg-emerald-900/30 text-emerald-400 hover:bg-emerald-900/50'
+                      : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200',
+                    downloadingPdf === 'receipt' && 'opacity-50 cursor-not-allowed'
+                  )}
+                  title="Descargar PDF formato recibo"
+                >
+                  {downloadingPdf === 'receipt' ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Receipt className="w-4 h-4" />
+                  )}
+                  <span className="font-medium text-sm hidden sm:inline">Recibo</span>
+                </motion.button>
+
+                {/* Download Letter PDF Button */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={generatePdfLetter}
+                  disabled={downloadingPdf !== null}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-2 rounded-xl transition-colors',
+                    theme === 'dark'
+                      ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50'
+                      : 'bg-blue-100 text-blue-700 hover:bg-blue-200',
+                    downloadingPdf === 'letter' && 'opacity-50 cursor-not-allowed'
+                  )}
+                  title="Descargar PDF formato carta"
+                >
+                  {downloadingPdf === 'letter' ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FileDown className="w-4 h-4" />
+                  )}
+                  <span className="font-medium text-sm hidden sm:inline">Carta</span>
+                </motion.button>
+
+                {/* Print Button */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => window.print()}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-2 rounded-xl transition-colors',
+                    theme === 'dark'
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  )}
+                  title="Imprimir página"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span className="font-medium text-sm hidden sm:inline">Imprimir</span>
+                </motion.button>
+              </div>
             </div>
 
             {/* Order Header Card */}

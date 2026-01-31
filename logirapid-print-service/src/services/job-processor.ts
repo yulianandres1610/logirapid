@@ -463,8 +463,8 @@ class JobProcessor {
                       ['pos_receipt', 'unified_reception'].includes(job.documentType)
     const isReceiptOrReport = ['purchase_invoice', 'invoice', 'sales_report',
                                'inventory_count_report', 'audit_count_report', 'cash_register_report',
-                               'warehouse_operation', 'unified_reception'].includes(job.documentType)
-    const isPdfOnly = ['consignment_receipt', 'transfer_receipt'].includes(job.documentType)
+                               'warehouse_operation', 'unified_reception', 'consignment_receipt'].includes(job.documentType)
+    const isPdfOnly = ['transfer_receipt'].includes(job.documentType)
 
     console.log(`[Job Processor] Print method selection:`)
     console.log(`[Job Processor]   - useRawLabelPrint (ZPL/TSPL): ${useRawLabelPrint}`)
