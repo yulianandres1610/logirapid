@@ -169,51 +169,6 @@ export default function ProductionPage() {
     <ProtectedRoute requiredRole={['SUPER_ADMIN', 'ADMIN', 'MARKET_ADMIN', 'MARKET_MANAGER', 'MARKET_COMERCIAL', 'MARKET_ALMACENERO']}>
       <DashboardLayout>
         <div className="min-h-screen p-6">
-          {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-            <div>
-              <h1 className={cn(
-                "text-2xl font-bold flex items-center gap-2",
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              )}>
-                <Factory className="w-7 h-7 text-purple-500" />
-                Producción
-              </h1>
-              <p className={cn(
-                "text-sm mt-1",
-                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-              )}>
-                Gestiona la fabricación y empaquetado de productos
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Link
-                href="/dashboard/market/production/bom"
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg transition-all",
-                  theme === 'dark'
-                    ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                    : 'bg-white hover:bg-gray-100 text-gray-900 border border-gray-200'
-                )}
-              >
-                <BookOpen className="w-4 h-4" />
-                <span>Recetas (BOM)</span>
-              </Link>
-
-              <Link
-                href="/dashboard/market/production/orders/create"
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg transition-all",
-                  "bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white"
-                )}
-              >
-                <Plus className="w-4 h-4" />
-                <span>Nueva Orden</span>
-              </Link>
-            </div>
-          </div>
-
           {/* Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5 mb-6">
             {Object.entries(STATUS_CONFIG).map(([status, config]) => {
@@ -323,8 +278,28 @@ export default function ProductionPage() {
                 )}
               >
                 <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
-                Actualizar
               </button>
+
+              <Link
+                href="/dashboard/market/production/bom"
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 rounded-lg transition-all",
+                  theme === 'dark'
+                    ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                    : 'bg-white hover:bg-gray-100 text-gray-900 border border-gray-200'
+                )}
+              >
+                <BookOpen className="w-4 h-4" />
+                <span>Recetas (BOM)</span>
+              </Link>
+
+              <Link
+                href="/dashboard/market/production/orders/create"
+                className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all shadow-lg shadow-purple-500/25"
+              >
+                <Plus className="w-5 h-5" />
+                Nueva Orden
+              </Link>
             </div>
 
             {lastUpdated && (
