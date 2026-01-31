@@ -893,7 +893,7 @@ export default function CreateQuotePage() {
                         theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
                       )}>
                         <DollarSign className="w-4 h-4" />
-                        Tasa BCC: $1 = {exchangeRateBCC.toLocaleString()} CUP
+                        Tasa: $1 = {exchangeRateBCC.toLocaleString()} CUP
                       </div>
                     </div>
 

@@ -717,7 +717,7 @@ export default function MarketInventoryPage() {
                                   {symbol}{product.sellingPrice.toFixed(2)}
                                 </span>
                                 <div className="text-[10px] mt-0.5 space-y-0">
-                                  <p className="text-green-600 font-medium">${Math.round(product.sellingPrice * USD_CUP).toLocaleString('es-ES')} CUP <span className="text-gray-400">(BCC)</span></p>
+                                  <p className="text-green-600 font-medium">${Math.round(product.sellingPrice * USD_CUP).toLocaleString('es-ES')} CUP</p>
                                   <p className="text-purple-600 font-medium">${(product.sellingPrice * USD_MLC).toFixed(2)} MLC</p>
                                 </div>
                               </div>
@@ -942,7 +942,7 @@ export default function MarketInventoryPage() {
                           {CURRENCY_SYMBOLS[selectedProduct.currency] || '$'}{selectedProduct.sellingPrice.toFixed(2)}
                         </p>
                         <div className="text-xs mt-1 space-y-0.5">
-                          <p className="text-green-600 font-medium">${Math.round(selectedProduct.sellingPrice * USD_CUP).toLocaleString('es-ES')} CUP <span className="text-gray-400">(BCC)</span></p>
+                          <p className="text-green-600 font-medium">${Math.round(selectedProduct.sellingPrice * USD_CUP).toLocaleString('es-ES')} CUP</p>
                           <p className="text-purple-600 font-medium">${(selectedProduct.sellingPrice * USD_MLC).toFixed(2)} MLC</p>
                         </div>
                       </div>
