@@ -14,15 +14,16 @@ import {
   CheckCircle,
   AlertCircle,
   Settings,
-  History,
   X,
-  DollarSign,
-  ArrowLeft
+  Maximize,
+  Minimize,
+  ArrowLeft,
+  Home
 } from 'lucide-react'
-import Link from 'next/link'
-import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
+import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
 import { cn } from '@/lib/utils'
 
 interface WeightProduct {
@@ -49,19 +50,39 @@ interface GeneratedLabel {
 
 export default function WeightLabelsPage() {
   const { theme } = useTheme()
+  const router = useRouter()
+  const { USD_CUP, formatCUP, source, loading: ratesLoading } = useMarketExchangeRates()
+
   const [products, setProducts] = useState<WeightProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedProduct, setSelectedProduct] = useState<WeightProduct | null>(null)
   const [weight, setWeight] = useState('')
   const [copies, setCopies] = useState(1)
   const [search, setSearch] = useState('')
-  const [exchangeRate, setExchangeRate] = useState(380)
   const [printing, setPrinting] = useState(false)
   const [lastLabel, setLastLabel] = useState<GeneratedLabel | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const [showPrefixModal, setShowPrefixModal] = useState(false)
   const [prefixInput, setPrefixInput] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [isFullscreen, setIsFullscreen] = useState(true) // Start fullscreen by default
+  const [mounted, setMounted] = useState(false)
+
+  // Client-side mount
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Fullscreen toggle
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {})
+      setIsFullscreen(true)
+    } else {
+      document.exitFullscreen().catch(() => {})
+      setIsFullscreen(false)
+    }
+  }, [])
 
   // Fetch products
   const fetchProducts = useCallback(async (searchTerm = '') => {
@@ -83,28 +104,9 @@ export default function WeightLabelsPage() {
     }
   }, [])
 
-  // Fetch exchange rate
-  const fetchExchangeRate = useCallback(async () => {
-    try {
-      const response = await fetch('/api/agency-rates/current')
-      const data = await response.json()
-      if (data.success && data.data?.exchangeRate) {
-        setExchangeRate(data.data.exchangeRate)
-      }
-    } catch (err) {
-      console.error('Error fetching exchange rate:', err)
-    }
-  }, [])
-
   useEffect(() => {
     fetchProducts()
-    fetchExchangeRate()
-  }, [fetchProducts, fetchExchangeRate])
-
-  // Handle search
-  const handleSearch = () => {
-    fetchProducts(search)
-  }
+  }, [fetchProducts])
 
   // Handle numpad input
   const handleNumpadPress = (key: string) => {
@@ -132,7 +134,7 @@ export default function WeightLabelsPage() {
   const weightNum = parseFloat(weight) || 0
   const pricePerKg = parseFloat(String(selectedProduct?.sellingPrice)) || 0
   const priceUSD = weightNum * pricePerKg
-  const priceCUP = Math.round(priceUSD * exchangeRate)
+  const priceCUP = Math.round(priceUSD * USD_CUP)
 
   // Generate barcode preview
   const generateBarcodePreview = () => {
@@ -219,586 +221,480 @@ export default function WeightLabelsPage() {
 
   const barcodePreview = generateBarcodePreview()
 
+  if (!mounted) {
+    return (
+      <div className="h-screen w-screen bg-gray-900 flex items-center justify-center">
+        <RefreshCw className="w-12 h-12 animate-spin text-purple-500" />
+      </div>
+    )
+  }
+
   return (
     <ProtectedRoute requiredRole={['SUPER_ADMIN', 'ADMIN', 'MARKET_ADMIN', 'MARKET_MANAGER', 'MARKET_COMERCIAL', 'MARKET_ALMACENERO']}>
-      <DashboardLayout>
-        <div className="min-h-screen p-4 md:p-6">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <Link
-                href="/dashboard/market/production"
-                className={cn(
-                  "p-2 rounded-lg transition-colors",
-                  theme === 'dark'
-                    ? 'hover:bg-gray-800 text-gray-400'
-                    : 'hover:bg-gray-100 text-gray-600'
-                )}
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-              <div>
-                <h1 className={cn(
-                  "text-2xl font-bold flex items-center gap-3",
-                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                )}>
-                  <Scale className="w-8 h-8 text-purple-500" />
-                  Etiquetas de Peso
-                </h1>
-                <p className={cn(
-                  "text-sm",
-                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                )}>
-                  Imprime etiquetas con peso y código de barra embebido
-                </p>
-              </div>
-            </div>
-
-            <div className={cn(
-              "px-4 py-2 rounded-lg border",
-              theme === 'dark'
-                ? 'bg-gray-800 border-gray-700'
-                : 'bg-white border-gray-200'
-            )}>
-              <span className={cn(
-                "text-sm",
-                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-              )}>
-                Tasa:
-              </span>
-              <span className={cn(
-                "ml-2 font-bold",
-                theme === 'dark' ? 'text-green-400' : 'text-green-600'
-              )}>
-                {exchangeRate.toLocaleString()} CUP
-              </span>
+      <div className={cn(
+        "h-screen w-screen overflow-hidden flex flex-col",
+        "bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900"
+      )}>
+        {/* Header Bar */}
+        <div className="flex-shrink-0 h-14 bg-gray-800/90 backdrop-blur border-b border-gray-700 flex items-center justify-between px-4">
+          {/* Left - Navigation */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push('/dashboard/market/production')}
+              className="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+              title="Volver a Producción"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => router.push('/dashboard/market')}
+              className="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+              title="Ir al Dashboard"
+            >
+              <Home className="w-5 h-5" />
+            </button>
+            <div className="h-6 w-px bg-gray-600" />
+            <div className="flex items-center gap-2">
+              <Scale className="w-6 h-6 text-purple-400" />
+              <span className="font-bold text-white text-lg hidden sm:block">Etiquetas de Peso</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Panel - Product Selection */}
+          {/* Center - Exchange Rate */}
+          <div className="flex items-center gap-4">
             <div className={cn(
-              "rounded-2xl border shadow-xl overflow-hidden",
-              theme === 'dark'
-                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
+              "px-4 py-1.5 rounded-full flex items-center gap-2",
+              "bg-green-500/20 border border-green-500/50"
             )}>
-              {/* Search */}
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex gap-2">
-                  <div className="flex-1 relative">
-                    <Search className={cn(
-                      "absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4",
-                      theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                    )} />
-                    <input
-                      type="text"
-                      placeholder="Buscar producto..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                      className={cn(
-                        "w-full pl-10 pr-4 py-3 rounded-xl border transition-all text-lg",
-                        theme === 'dark'
-                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
-                          : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-500'
-                      )}
-                    />
-                  </div>
-                  <button
-                    onClick={() => fetchProducts(search)}
-                    className="px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition-all"
-                  >
-                    <RefreshCw className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
+              <span className="text-sm text-green-400">Tasa:</span>
+              <span className="font-bold text-green-400 text-lg">
+                {ratesLoading ? '...' : USD_CUP.toLocaleString()} CUP
+              </span>
+              {source === 'manual' && (
+                <span className="text-xs text-green-300/60">(manual)</span>
+              )}
+            </div>
+          </div>
 
-              {/* Products Grid */}
-              <div className="p-4 h-[500px] overflow-y-auto">
-                {loading ? (
-                  <div className="flex items-center justify-center h-full">
-                    <RefreshCw className="w-8 h-8 animate-spin text-purple-500" />
-                  </div>
-                ) : products.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center">
-                    <Package className={cn(
-                      "w-16 h-16 mb-4",
-                      theme === 'dark' ? 'text-gray-600' : 'text-gray-300'
-                    )} />
-                    <p className={cn(
-                      "text-lg font-medium",
-                      theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                    )}>
-                      No hay productos de peso
-                    </p>
-                    <p className={cn(
-                      "text-sm mt-1",
-                      theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
-                    )}>
-                      Agrega productos con unidad kg, lb o g
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {products.map((product) => (
-                      <motion.button
-                        key={product.id}
-                        onClick={() => setSelectedProduct(product)}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        className={cn(
-                          "p-4 rounded-xl border text-left transition-all relative overflow-hidden",
-                          selectedProduct?.id === product.id
-                            ? theme === 'dark'
-                              ? 'bg-purple-900/30 border-purple-500 ring-2 ring-purple-500'
-                              : 'bg-purple-50 border-purple-500 ring-2 ring-purple-500'
-                            : theme === 'dark'
-                              ? 'bg-gray-800 border-gray-700 hover:border-gray-600'
-                              : 'bg-white border-gray-200 hover:border-gray-300'
-                        )}
-                      >
-                        {/* No prefix indicator */}
-                        {!product.weightBarcodePrefix && (
-                          <span className="absolute top-2 right-2 w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
-                        )}
+          {/* Right - Controls */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fetchProducts(search)}
+              className="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+              title="Recargar productos"
+            >
+              <RefreshCw className={cn("w-5 h-5", loading && "animate-spin")} />
+            </button>
+            <button
+              onClick={toggleFullscreen}
+              className="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+              title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+            >
+              {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+            </button>
+          </div>
+        </div>
 
-                        {product.imageUrl ? (
-                          <img
-                            src={product.imageUrl}
-                            alt={product.name}
-                            className="w-full h-20 object-cover rounded-lg mb-2"
-                          />
-                        ) : (
-                          <div className={cn(
-                            "w-full h-20 rounded-lg mb-2 flex items-center justify-center",
-                            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                          )}>
-                            <Package className="w-8 h-8 text-gray-400" />
-                          </div>
-                        )}
-
-                        <p className={cn(
-                          "font-medium text-sm truncate",
-                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                        )}>
-                          {product.name}
-                        </p>
-
-                        <div className="flex items-center justify-between mt-1">
-                          <span className={cn(
-                            "text-xs",
-                            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                          )}>
-                            ${(parseFloat(String(product.sellingPrice)) || 0).toFixed(2)}/{product.unitOfMeasure || 'kg'}
-                          </span>
-                          <span className={cn(
-                            "text-xs font-medium",
-                            theme === 'dark' ? 'text-green-400' : 'text-green-600'
-                          )}>
-                            {Math.round((parseFloat(String(product.sellingPrice)) || 0) * exchangeRate).toLocaleString()} CUP
-                          </span>
-                        </div>
-                      </motion.button>
-                    ))}
-                  </div>
-                )}
+        {/* Main Content */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Left Panel - Product Selection */}
+          <div className="w-1/2 lg:w-2/5 flex flex-col border-r border-gray-700 bg-gray-800/50">
+            {/* Search */}
+            <div className="p-3 border-b border-gray-700">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar producto..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && fetchProducts(search)}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-700 border border-gray-600 text-white placeholder-gray-400 text-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
               </div>
             </div>
 
-            {/* Right Panel - Weight Input & Preview */}
-            <div className={cn(
-              "rounded-2xl border shadow-xl overflow-hidden",
-              theme === 'dark'
-                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-            )}>
-              {selectedProduct ? (
-                <div className="p-6">
-                  {/* Selected Product Info */}
-                  <div className={cn(
-                    "p-4 rounded-xl mb-4",
-                    theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
-                  )}>
-                    <div className="flex items-center gap-4">
-                      {selectedProduct.imageUrl ? (
-                        <img
-                          src={selectedProduct.imageUrl}
-                          alt={selectedProduct.name}
-                          className="w-16 h-16 object-cover rounded-lg"
-                        />
-                      ) : (
-                        <div className={cn(
-                          "w-16 h-16 rounded-lg flex items-center justify-center",
-                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                        )}>
-                          <Package className="w-8 h-8 text-gray-400" />
-                        </div>
-                      )}
-                      <div className="flex-1">
-                        <h3 className={cn(
-                          "font-bold text-lg",
-                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                        )}>
-                          {selectedProduct.name}
-                        </h3>
-                        <p className={cn(
-                          "text-sm",
-                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                        )}>
-                          ${(parseFloat(String(selectedProduct.sellingPrice)) || 0).toFixed(2)} / {selectedProduct.unitOfMeasure || 'kg'}
-                        </p>
-                      </div>
-                      {!selectedProduct.weightBarcodePrefix && (
-                        <button
-                          onClick={() => setShowPrefixModal(true)}
-                          className="p-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg"
-                          title="Configurar prefijo de código"
-                        >
-                          <Settings className="w-5 h-5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Weight Input Display */}
-                  <div className={cn(
-                    "p-6 rounded-xl mb-4 text-center",
-                    theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
-                  )}>
-                    <p className={cn(
-                      "text-sm mb-2",
-                      theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                    )}>
-                      PESO (kg)
-                    </p>
-                    <div className={cn(
-                      "text-5xl font-bold tracking-wider",
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      {weight || '0.000'}
-                    </div>
-                  </div>
-
-                  {/* Numpad */}
-                  <div className="grid grid-cols-3 gap-3 mb-6">
-                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'backspace'].map((key) => (
-                      <motion.button
-                        key={key}
-                        onClick={() => handleNumpadPress(key)}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        className={cn(
-                          "p-4 rounded-xl text-2xl font-bold transition-all",
-                          key === 'backspace'
-                            ? 'bg-red-500 hover:bg-red-600 text-white'
-                            : theme === 'dark'
-                              ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                              : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
-                        )}
-                      >
-                        {key === 'backspace' ? <Delete className="w-6 h-6 mx-auto" /> : key}
-                      </motion.button>
-                    ))}
-                  </div>
-
-                  {/* Price Preview */}
-                  <div className={cn(
-                    "p-6 rounded-xl mb-4",
-                    theme === 'dark'
-                      ? 'bg-gradient-to-r from-green-900/50 to-emerald-900/50 border border-green-700'
-                      : 'bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200'
-                  )}>
-                    <div className="text-center">
-                      <p className={cn(
-                        "text-sm mb-1",
-                        theme === 'dark' ? 'text-green-300' : 'text-green-700'
-                      )}>
-                        PRECIO
-                      </p>
-                      <div className={cn(
-                        "text-4xl font-bold",
-                        theme === 'dark' ? 'text-green-400' : 'text-green-600'
-                      )}>
-                        {priceCUP.toLocaleString()} CUP
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Barcode Preview */}
-                  {barcodePreview && (
-                    <div className={cn(
-                      "p-4 rounded-xl mb-4 text-center",
-                      theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
-                    )}>
-                      <p className={cn(
-                        "text-xs mb-2",
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                      )}>
-                        CÓDIGO DE BARRA
-                      </p>
-                      <div className="flex justify-center mb-2">
-                        <div className={cn(
-                          "px-4 py-2 rounded font-mono text-lg tracking-widest",
-                          theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'
-                        )}>
-                          {barcodePreview}
-                        </div>
-                      </div>
-                      <p className={cn(
-                        "text-xs",
-                        theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
-                      )}>
-                        EAN-13 con peso embebido
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Copies Selector */}
-                  <div className="flex items-center justify-center gap-4 mb-6">
-                    <button
-                      onClick={() => setCopies(Math.max(1, copies - 1))}
-                      className={cn(
-                        "p-3 rounded-xl transition-all",
-                        theme === 'dark'
-                          ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                          : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
-                      )}
-                    >
-                      <Minus className="w-5 h-5" />
-                    </button>
-                    <div className="text-center">
-                      <p className={cn(
-                        "text-sm",
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                      )}>
-                        Copias
-                      </p>
-                      <span className={cn(
-                        "text-2xl font-bold",
-                        theme === 'dark' ? 'text-white' : 'text-gray-900'
-                      )}>
-                        {copies}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setCopies(Math.min(10, copies + 1))}
-                      className={cn(
-                        "p-3 rounded-xl transition-all",
-                        theme === 'dark'
-                          ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                          : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
-                      )}
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  {/* Error Message */}
-                  {error && (
-                    <div className="p-4 mb-4 rounded-xl bg-red-500/20 border border-red-500 text-red-400 flex items-center gap-2">
-                      <AlertCircle className="w-5 h-5" />
-                      {error}
-                    </div>
-                  )}
-
-                  {/* Print Button */}
-                  <motion.button
-                    onClick={handlePrint}
-                    disabled={!weightNum || printing || !selectedProduct.weightBarcodePrefix}
-                    whileHover={{ scale: weightNum && !printing ? 1.02 : 1 }}
-                    whileTap={{ scale: weightNum && !printing ? 0.98 : 1 }}
-                    className={cn(
-                      "w-full py-5 rounded-xl text-xl font-bold transition-all flex items-center justify-center gap-3",
-                      !weightNum || printing || !selectedProduct.weightBarcodePrefix
-                        ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white shadow-lg shadow-purple-500/25'
-                    )}
-                  >
-                    {printing ? (
-                      <RefreshCw className="w-6 h-6 animate-spin" />
-                    ) : (
-                      <Printer className="w-6 h-6" />
-                    )}
-                    {printing ? 'Imprimiendo...' : `IMPRIMIR ETIQUETA (${copies})`}
-                  </motion.button>
-
-                  {!selectedProduct.weightBarcodePrefix && (
-                    <p className={cn(
-                      "text-center text-sm mt-3",
-                      theme === 'dark' ? 'text-amber-400' : 'text-amber-600'
-                    )}>
-                      Configure primero el prefijo de código de barra
-                    </p>
-                  )}
+            {/* Products Grid */}
+            <div className="flex-1 overflow-y-auto p-3">
+              {loading ? (
+                <div className="flex items-center justify-center h-full">
+                  <RefreshCw className="w-10 h-10 animate-spin text-purple-500" />
+                </div>
+              ) : products.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <Package className="w-16 h-16 mb-4 text-gray-600" />
+                  <p className="text-lg font-medium text-gray-400">No hay productos de peso</p>
+                  <p className="text-sm mt-1 text-gray-500">Agrega productos con unidad kg, lb o g</p>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-center p-8">
-                  <Scale className={cn(
-                    "w-20 h-20 mb-6",
-                    theme === 'dark' ? 'text-gray-600' : 'text-gray-300'
-                  )} />
-                  <p className={cn(
-                    "text-xl font-medium",
-                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                  )}>
-                    Selecciona un producto
-                  </p>
-                  <p className={cn(
-                    "text-sm mt-2",
-                    theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
-                  )}>
-                    Elige un producto de peso para generar su etiqueta
-                  </p>
+                <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
+                  {products.map((product) => (
+                    <motion.button
+                      key={product.id}
+                      onClick={() => {
+                        setSelectedProduct(product)
+                        setWeight('')
+                      }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={cn(
+                        "p-3 rounded-xl border text-left transition-all relative",
+                        selectedProduct?.id === product.id
+                          ? 'bg-purple-900/40 border-purple-500 ring-2 ring-purple-500/50'
+                          : 'bg-gray-800/80 border-gray-600 hover:border-gray-500'
+                      )}
+                    >
+                      {/* No prefix indicator */}
+                      {!product.weightBarcodePrefix && (
+                        <span className="absolute top-2 right-2 w-3 h-3 bg-amber-500 rounded-full animate-pulse" />
+                      )}
+
+                      {product.imageUrl ? (
+                        <img
+                          src={product.imageUrl}
+                          alt={product.name}
+                          className="w-full h-16 object-cover rounded-lg mb-2"
+                        />
+                      ) : (
+                        <div className="w-full h-16 rounded-lg mb-2 flex items-center justify-center bg-gray-700">
+                          <Package className="w-8 h-8 text-gray-500" />
+                        </div>
+                      )}
+
+                      <p className="font-medium text-sm text-white truncate">
+                        {product.name}
+                      </p>
+
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-xs text-gray-400">
+                          ${(parseFloat(String(product.sellingPrice)) || 0).toFixed(2)}/{product.unitOfMeasure || 'kg'}
+                        </span>
+                        <span className="text-xs font-bold text-green-400">
+                          {Math.round((parseFloat(String(product.sellingPrice)) || 0) * USD_CUP).toLocaleString()} CUP
+                        </span>
+                      </div>
+                    </motion.button>
+                  ))}
                 </div>
               )}
             </div>
           </div>
 
-          {/* Success Toast */}
-          <AnimatePresence>
-            {showSuccess && lastLabel && (
+          {/* Right Panel - Weight Input & Preview */}
+          <div className="flex-1 flex flex-col bg-gray-900/50">
+            {selectedProduct ? (
+              <>
+                {/* Selected Product Header */}
+                <div className="p-4 border-b border-gray-700 bg-gray-800/50">
+                  <div className="flex items-center gap-4">
+                    {selectedProduct.imageUrl ? (
+                      <img
+                        src={selectedProduct.imageUrl}
+                        alt={selectedProduct.name}
+                        className="w-14 h-14 object-cover rounded-xl"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-xl flex items-center justify-center bg-gray-700">
+                        <Package className="w-7 h-7 text-gray-400" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-xl text-white truncate">
+                        {selectedProduct.name}
+                      </h3>
+                      <p className="text-gray-400">
+                        ${(parseFloat(String(selectedProduct.sellingPrice)) || 0).toFixed(2)} / {selectedProduct.unitOfMeasure || 'kg'}
+                        <span className="ml-2 text-green-400 font-medium">
+                          ({Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP).toLocaleString()} CUP/kg)
+                        </span>
+                      </p>
+                    </div>
+                    {!selectedProduct.weightBarcodePrefix && (
+                      <button
+                        onClick={() => setShowPrefixModal(true)}
+                        className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg flex items-center gap-2"
+                        title="Configurar prefijo de código"
+                      >
+                        <Settings className="w-5 h-5" />
+                        <span className="hidden sm:inline">Configurar</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Main Input Area */}
+                <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+                  {/* Left - Numpad */}
+                  <div className="lg:w-1/2 p-4 flex flex-col">
+                    {/* Weight Display */}
+                    <div className="bg-gray-800 rounded-2xl p-6 mb-4 text-center border border-gray-700">
+                      <p className="text-gray-400 text-sm mb-2 uppercase tracking-wider">Peso (kg)</p>
+                      <div className="text-6xl font-bold text-white tracking-wider font-mono">
+                        {weight || '0.000'}
+                      </div>
+                    </div>
+
+                    {/* Numpad */}
+                    <div className="grid grid-cols-3 gap-2 flex-1">
+                      {['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', 'backspace'].map((key) => (
+                        <motion.button
+                          key={key}
+                          onClick={() => handleNumpadPress(key)}
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.97 }}
+                          className={cn(
+                            "rounded-xl text-3xl font-bold transition-all flex items-center justify-center min-h-[70px]",
+                            key === 'backspace'
+                              ? 'bg-red-500/80 hover:bg-red-500 text-white'
+                              : 'bg-gray-700 hover:bg-gray-600 text-white'
+                          )}
+                        >
+                          {key === 'backspace' ? <Delete className="w-8 h-8" /> : key}
+                        </motion.button>
+                      ))}
+                    </div>
+
+                    {/* Clear Button */}
+                    <button
+                      onClick={() => setWeight('')}
+                      className="mt-2 py-3 rounded-xl bg-gray-600 hover:bg-gray-500 text-white font-medium transition-colors"
+                    >
+                      Borrar Todo
+                    </button>
+                  </div>
+
+                  {/* Right - Preview & Actions */}
+                  <div className="lg:w-1/2 p-4 flex flex-col border-t lg:border-t-0 lg:border-l border-gray-700">
+                    {/* Price Display */}
+                    <div className={cn(
+                      "rounded-2xl p-6 text-center mb-4",
+                      "bg-gradient-to-br from-green-900/60 to-emerald-900/60 border-2 border-green-500/50"
+                    )}>
+                      <p className="text-green-300 text-sm mb-1 uppercase tracking-wider">Precio Total</p>
+                      <div className="text-5xl font-bold text-green-400">
+                        {priceCUP.toLocaleString()}
+                      </div>
+                      <div className="text-green-300/70 text-lg mt-1">CUP</div>
+                    </div>
+
+                    {/* Barcode Preview */}
+                    {barcodePreview ? (
+                      <div className="bg-gray-800 rounded-xl p-4 text-center mb-4 border border-gray-700">
+                        <p className="text-gray-400 text-xs mb-2 uppercase">Código de Barra</p>
+                        <div className="bg-white rounded-lg py-3 px-4 inline-block">
+                          <div className="flex justify-center gap-0.5 mb-1">
+                            {/* Simple barcode visualization */}
+                            {Array.from({ length: 30 }).map((_, i) => (
+                              <div
+                                key={i}
+                                className="bg-black"
+                                style={{
+                                  width: Math.random() > 0.5 ? '2px' : '1px',
+                                  height: '40px'
+                                }}
+                              />
+                            ))}
+                          </div>
+                          <p className="font-mono text-sm text-black tracking-widest">
+                            {barcodePreview}
+                          </p>
+                        </div>
+                        <p className="text-gray-500 text-xs mt-2">EAN-13 con peso embebido</p>
+                      </div>
+                    ) : (
+                      <div className="bg-gray-800/50 rounded-xl p-4 text-center mb-4 border border-dashed border-gray-600">
+                        <p className="text-gray-500 text-sm">
+                          {!selectedProduct.weightBarcodePrefix
+                            ? 'Configure el prefijo para ver el código'
+                            : 'Ingrese el peso para ver el código'}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Copies Selector */}
+                    <div className="flex items-center justify-center gap-6 mb-4 py-3 bg-gray-800 rounded-xl">
+                      <button
+                        onClick={() => setCopies(Math.max(1, copies - 1))}
+                        className="w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-600 text-white flex items-center justify-center transition-colors"
+                      >
+                        <Minus className="w-6 h-6" />
+                      </button>
+                      <div className="text-center">
+                        <p className="text-gray-400 text-xs uppercase">Copias</p>
+                        <span className="text-3xl font-bold text-white">{copies}</span>
+                      </div>
+                      <button
+                        onClick={() => setCopies(Math.min(10, copies + 1))}
+                        className="w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-600 text-white flex items-center justify-center transition-colors"
+                      >
+                        <Plus className="w-6 h-6" />
+                      </button>
+                    </div>
+
+                    {/* Error Message */}
+                    {error && (
+                      <div className="p-3 mb-4 rounded-xl bg-red-500/20 border border-red-500/50 text-red-400 flex items-center gap-2">
+                        <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                        <span className="text-sm">{error}</span>
+                        <button onClick={() => setError(null)} className="ml-auto">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Print Button */}
+                    <motion.button
+                      onClick={handlePrint}
+                      disabled={!weightNum || printing || !selectedProduct.weightBarcodePrefix}
+                      whileHover={{ scale: weightNum && !printing && selectedProduct.weightBarcodePrefix ? 1.02 : 1 }}
+                      whileTap={{ scale: weightNum && !printing && selectedProduct.weightBarcodePrefix ? 0.98 : 1 }}
+                      className={cn(
+                        "py-5 rounded-xl text-xl font-bold transition-all flex items-center justify-center gap-3 mt-auto",
+                        !weightNum || printing || !selectedProduct.weightBarcodePrefix
+                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 text-white shadow-xl shadow-purple-500/30'
+                      )}
+                    >
+                      {printing ? (
+                        <RefreshCw className="w-7 h-7 animate-spin" />
+                      ) : (
+                        <Printer className="w-7 h-7" />
+                      )}
+                      {printing ? 'Imprimiendo...' : `IMPRIMIR ${copies > 1 ? `(${copies})` : ''}`}
+                    </motion.button>
+
+                    {!selectedProduct.weightBarcodePrefix && (
+                      <p className="text-center text-sm mt-3 text-amber-400">
+                        Configure primero el prefijo de código de barra
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+                <div className="w-32 h-32 rounded-full bg-gray-800 flex items-center justify-center mb-6">
+                  <Scale className="w-16 h-16 text-gray-600" />
+                </div>
+                <p className="text-2xl font-medium text-gray-400">Selecciona un producto</p>
+                <p className="text-gray-500 mt-2 max-w-sm">
+                  Elige un producto de peso del panel izquierdo para generar su etiqueta con código de barra
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Success Toast */}
+        <AnimatePresence>
+          {showSuccess && lastLabel && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 50, scale: 0.9 }}
+              className="fixed bottom-6 right-6 p-5 bg-green-500 text-white rounded-2xl shadow-2xl flex items-center gap-4 z-50"
+            >
+              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                <CheckCircle className="w-7 h-7" />
+              </div>
+              <div>
+                <p className="font-bold text-lg">Etiqueta enviada</p>
+                <p className="text-sm opacity-90">
+                  {lastLabel.productName} - {lastLabel.weight}
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Prefix Configuration Modal */}
+        <AnimatePresence>
+          {showPrefixModal && selectedProduct && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+              onClick={() => setShowPrefixModal(false)}
+            >
               <motion.div
-                initial={{ opacity: 0, y: 50 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 50 }}
-                className="fixed bottom-6 right-6 p-4 bg-green-500 text-white rounded-xl shadow-2xl flex items-center gap-3"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-lg p-6 rounded-2xl shadow-2xl bg-gray-800 border border-gray-700"
               >
-                <CheckCircle className="w-6 h-6" />
-                <div>
-                  <p className="font-bold">Etiqueta enviada a imprimir</p>
-                  <p className="text-sm opacity-90">
-                    {lastLabel.productName} - {lastLabel.weight}
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-white">
+                    Configurar Prefijo de Código
+                  </h3>
+                  <button
+                    onClick={() => setShowPrefixModal(false)}
+                    className="p-2 rounded-lg hover:bg-gray-700"
+                  >
+                    <X className="w-5 h-5 text-gray-400" />
+                  </button>
+                </div>
+
+                <p className="text-gray-400 text-sm mb-4">
+                  Ingresa un código único de 5 dígitos para <strong className="text-white">{selectedProduct.name}</strong>. Este código se usará para identificar el producto en el código de barra de peso.
+                </p>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Prefijo de Producto (5 dígitos)
+                  </label>
+                  <input
+                    type="text"
+                    value={prefixInput}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '').substring(0, 5)
+                      setPrefixInput(val)
+                    }}
+                    placeholder="00001"
+                    className="w-full px-4 py-4 rounded-xl border bg-gray-700 border-gray-600 text-white text-center text-3xl font-mono tracking-widest focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="p-4 rounded-xl bg-gray-700/50 mb-6 border border-gray-600">
+                  <p className="text-gray-400 text-xs mb-2">Formato de código resultante:</p>
+                  <p className="font-mono text-xl text-white text-center">
+                    2<span className="text-purple-400">{prefixInput.padStart(5, '0')}</span><span className="text-green-400">WWWWW</span><span className="text-gray-500">C</span>
                   </p>
+                  <div className="flex justify-center gap-4 mt-3 text-xs">
+                    <span className="text-gray-400">2 = Peso</span>
+                    <span className="text-purple-400">{prefixInput.padStart(5, '0')} = Producto</span>
+                    <span className="text-green-400">W = Peso</span>
+                    <span className="text-gray-500">C = Check</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowPrefixModal(false)}
+                    className="flex-1 py-3 rounded-xl bg-gray-700 hover:bg-gray-600 text-white transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleSavePrefix}
+                    disabled={prefixInput.length !== 5}
+                    className={cn(
+                      "flex-1 py-3 rounded-xl transition-all font-bold",
+                      prefixInput.length !== 5
+                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                        : 'bg-purple-600 hover:bg-purple-500 text-white'
+                    )}
+                  >
+                    Guardar
+                  </button>
                 </div>
               </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Prefix Configuration Modal */}
-          <AnimatePresence>
-            {showPrefixModal && selectedProduct && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-                onClick={() => setShowPrefixModal(false)}
-              >
-                <motion.div
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.9, opacity: 0 }}
-                  onClick={(e) => e.stopPropagation()}
-                  className={cn(
-                    "w-full max-w-md p-6 rounded-2xl shadow-2xl",
-                    theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-                  )}
-                >
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className={cn(
-                      "text-xl font-bold",
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      Configurar Prefijo de Código
-                    </h3>
-                    <button
-                      onClick={() => setShowPrefixModal(false)}
-                      className={cn(
-                        "p-2 rounded-lg",
-                        theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-                      )}
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <p className={cn(
-                    "text-sm mb-4",
-                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                  )}>
-                    Ingresa un código único de 5 dígitos para <strong>{selectedProduct.name}</strong>. Este código se usará para identificar el producto en el código de barra de peso.
-                  </p>
-
-                  <div className="mb-4">
-                    <label className={cn(
-                      "block text-sm font-medium mb-2",
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                    )}>
-                      Prefijo de Producto (5 dígitos)
-                    </label>
-                    <input
-                      type="text"
-                      value={prefixInput}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/\D/g, '').substring(0, 5)
-                        setPrefixInput(val)
-                      }}
-                      placeholder="00001"
-                      className={cn(
-                        "w-full px-4 py-3 rounded-xl border text-center text-2xl font-mono tracking-widest",
-                        theme === 'dark'
-                          ? 'bg-gray-700 border-gray-600 text-white'
-                          : 'bg-gray-50 border-gray-200 text-gray-900'
-                      )}
-                    />
-                  </div>
-
-                  <div className={cn(
-                    "p-4 rounded-xl mb-6",
-                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                  )}>
-                    <p className={cn(
-                      "text-xs mb-2",
-                      theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                    )}>
-                      Formato de código resultante:
-                    </p>
-                    <p className={cn(
-                      "font-mono text-lg",
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      2{prefixInput.padStart(5, '0')}WWWWWC
-                    </p>
-                    <p className={cn(
-                      "text-xs mt-2",
-                      theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
-                    )}>
-                      2 = Prefijo peso | {prefixInput.padStart(5, '0')} = Producto | WWWWW = Peso | C = Check
-                    </p>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setShowPrefixModal(false)}
-                      className={cn(
-                        "flex-1 py-3 rounded-xl transition-all",
-                        theme === 'dark'
-                          ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                          : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
-                      )}
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleSavePrefix}
-                      disabled={prefixInput.length !== 5}
-                      className={cn(
-                        "flex-1 py-3 rounded-xl transition-all font-bold",
-                        prefixInput.length !== 5
-                          ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
-                          : 'bg-purple-600 hover:bg-purple-700 text-white'
-                      )}
-                    >
-                      Guardar
-                    </button>
-                  </div>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </DashboardLayout>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </ProtectedRoute>
   )
 }
