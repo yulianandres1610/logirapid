@@ -45,11 +45,14 @@ async function generateWeightBarcodePrefix(companyId: number): Promise<string> {
 }
 
 /**
- * Generate weight barcode in format 2PPPPP00000C
+ * Generate weight barcode in format 20PPPPPWWWWWC (EAN-13)
+ * - 20: Prefix for in-store variable weight products
+ * - PPPPP: 5-digit product code
+ * - WWWWW: 5-digit weight (00000 for base barcode)
  */
 function generateWeightBarcode(weightBarcodePrefix: string): string {
   const prefix = weightBarcodePrefix.padStart(5, '0').substring(0, 5)
-  const code12 = `2${prefix}00000`
+  const code12 = `20${prefix}00000` // 20 + 5-digit code + 00000
 
   let sum = 0
   for (let i = 0; i < 12; i++) {
@@ -352,10 +355,10 @@ export async function PUT(
     let weightBarcodePrefix: string | null = null
 
     if (isWeight) {
-      // Check if current barcode is valid weight format (2PPPPP00000C)
+      // Check if current barcode is valid weight format (20PPPPP00000C)
       const currentBarcode = barcode || current.barcode
       const isValidWeightBarcode = currentBarcode &&
-        /^2\d{5}00000\d$/.test(currentBarcode)
+        /^20\d{5}00000\d$/.test(currentBarcode)
 
       if (!isValidWeightBarcode) {
         // Generate new weight barcode prefix and barcode
@@ -363,8 +366,8 @@ export async function PUT(
         finalBarcode = generateWeightBarcode(weightBarcodePrefix)
         console.log(`[Product Update] Generated weight barcode: prefix=${weightBarcodePrefix}, barcode=${finalBarcode}`)
       } else if (currentBarcode) {
-        // Extract existing prefix from valid weight barcode
-        weightBarcodePrefix = currentBarcode.substring(1, 6)
+        // Extract existing prefix from valid weight barcode (positions 2-6 after "20")
+        weightBarcodePrefix = currentBarcode.substring(2, 7)
       }
     }
 

@@ -22,11 +22,12 @@ function calculateEAN13CheckDigit(code12: string): string {
 
 /**
  * Genera código EAN-13 con peso embebido
- * Formato: 2PPPPPWWWWWC
- * - 2: Prefijo para productos de peso variable
+ * Formato: 20PPPPPWWWWWC (estándar GS1 para productos de peso variable)
+ * - 20: Prefijo para productos de peso variable en tienda
  * - PPPPP: 5 dígitos del código de producto
  * - WWWWW: 5 dígitos del peso (ej: 01250 = 1.250 kg)
- * - C: Dígito verificador
+ * - C: Dígito verificador EAN-13
+ * Total: 12 dígitos + 1 verificador = 13 dígitos
  */
 function generateWeightBarcode(productPrefix: string, weightKg: number): string {
   // Validar y formatear prefijo de producto (5 dígitos)
@@ -37,8 +38,8 @@ function generateWeightBarcode(productPrefix: string, weightKg: number): string 
   const weightInt = Math.round(weightKg * 1000)
   const weightStr = weightInt.toString().padStart(5, '0').substring(0, 5)
 
-  // Código sin dígito verificador: 2 + PPPPP + WWWWW = 12 dígitos
-  const code12 = `2${prefix}${weightStr}`
+  // Código sin dígito verificador: 20 + PPPPP + WWWWW = 12 dígitos
+  const code12 = `20${prefix}${weightStr}`
 
   // Calcular dígito verificador
   const checkDigit = calculateEAN13CheckDigit(code12)

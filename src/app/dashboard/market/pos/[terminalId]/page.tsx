@@ -905,11 +905,11 @@ export default function POSTerminalPage() {
   const handleBarcodeScan = useCallback((barcode: string) => {
     const barcodeLower = barcode.toLowerCase()
 
-    // 0. Check for weight barcode (EAN-13 starting with "2")
-    // Format: 2PPPPPWWWWWC (2=weight prefix, PPPPP=product code, WWWWW=weight in grams, C=check digit)
-    if (barcode.length === 13 && barcode.startsWith('2') && /^\d{13}$/.test(barcode)) {
-      const productPrefix = barcode.substring(1, 6) // Positions 1-5 (5 digits)
-      const weightDigits = barcode.substring(6, 11) // Positions 6-10 (5 digits)
+    // 0. Check for weight barcode (EAN-13 starting with "20")
+    // Format: 20PPPPPWWWWWC (20=weight prefix, PPPPP=product code, WWWWW=weight in grams, C=check digit)
+    if (barcode.length === 13 && barcode.startsWith('20') && /^\d{13}$/.test(barcode)) {
+      const productPrefix = barcode.substring(2, 7) // Positions 2-6 (5 digits)
+      const weightDigits = barcode.substring(7, 12) // Positions 7-11 (5 digits)
       const weightValue = parseInt(weightDigits, 10) / 1000 // Convert to kg/lb (e.g., 01250 = 1.250)
 
       // Find product by weight barcode prefix

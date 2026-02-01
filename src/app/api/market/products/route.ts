@@ -771,15 +771,16 @@ async function generateWeightBarcodePrefix(companyId: number): Promise<string> {
 }
 
 /**
- * Generate weight barcode in format 2PPPPP00000C
- * - 2: Prefix for variable weight products
+ * Generate weight barcode in format 20PPPPPWWWWWC (EAN-13)
+ * - 20: Prefix for in-store variable weight products (GS1 standard)
  * - PPPPP: 5-digit product code
- * - 00000: Weight placeholder (0 for base barcode)
+ * - WWWWW: 5-digit weight placeholder (00000 for base barcode)
  * - C: EAN-13 check digit
+ * Total: 12 digits + 1 check digit = 13 digits
  */
 function generateWeightBarcode(weightBarcodePrefix: string): string {
   const prefix = weightBarcodePrefix.padStart(5, '0').substring(0, 5)
-  const code12 = `2${prefix}00000` // Weight = 0 for base barcode
+  const code12 = `20${prefix}00000` // 20 + 5-digit code + 5-digit weight (0)
 
   // Calculate EAN-13 check digit
   let sum = 0
