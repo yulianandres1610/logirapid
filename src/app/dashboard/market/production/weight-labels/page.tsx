@@ -236,16 +236,22 @@ export default function WeightLabelsPage() {
             s.printers && s.printers.length > 0
         )
 
-        // Filter for label printers (thermal or standard)
+        // Filter for LABEL printers only (label_4x6, label_barcode)
         const servicesWithPrinters = activeServices.map((service: { id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; printerType: string; supportedDocumentTypes?: string[] }> }) => ({
           ...service,
-          printers: service.printers.filter((p: { supportedDocumentTypes?: string[]; printerType: string }) => {
+          printers: service.printers.filter((p: { supportedDocumentTypes?: string[]; printerType: string; printerName: string }) => {
+            // Check if supportedDocumentTypes explicitly includes weight_label
             if (p.supportedDocumentTypes && p.supportedDocumentTypes.length > 0) {
-              return p.supportedDocumentTypes.includes('weight_label') || p.supportedDocumentTypes.includes('label')
+              return p.supportedDocumentTypes.includes('weight_label')
             }
-            // Accept thermal printers for labels
+            // Check if printerType is a label type
             const type = (p.printerType || '').toLowerCase()
-            return type.includes('thermal') || type.includes('label') || type.includes('58') || type.includes('80')
+            if (type === 'label_4x6' || type === 'label_barcode') {
+              return true
+            }
+            // Check printer name for label indicators
+            const name = (p.printerName || '').toLowerCase()
+            return name.includes('label') || name.includes('etiqueta') || name.includes('zebra') || name.includes('dymo') || name.includes('brother')
           })
         })).filter((s: { printers: unknown[] }) => s.printers.length > 0)
 
