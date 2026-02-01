@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
       VALUES ($1, $2, $3, $4, $5, $6, $7)
     `, [companyId, productId, variantId || null, weightKg, priceCUP, barcode, userId || null])
 
-    // Ensure print_jobs table exists
+    // Ensure print_jobs table exists with all columns
     await db.query(`
       CREATE TABLE IF NOT EXISTS print_jobs (
         id SERIAL PRIMARY KEY,
@@ -172,6 +172,10 @@ export async function POST(request: NextRequest) {
         printed_at TIMESTAMP
       )
     `)
+    // Add missing columns to existing table
+    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS printer_name VARCHAR(100)`)
+    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS copies INTEGER DEFAULT 1`)
+    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS priority VARCHAR(20) DEFAULT 'normal'`)
 
     // Crear trabajo de impresión
     const printJobResult = await db.query(`
