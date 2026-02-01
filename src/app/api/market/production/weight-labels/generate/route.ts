@@ -110,17 +110,16 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Obtener tasa de cambio vigente
+    // Obtener tasa de cambio vigente (CUP)
     const rateResult = await db.query(`
-      SELECT exchange_rate
+      SELECT baserate
       FROM agency_rates_history
-      WHERE company_id = $1
-        AND is_active = true
-      ORDER BY effective_date DESC, created_at DESC
+      WHERE currency = 'CUP'
+      ORDER BY timestamp DESC
       LIMIT 1
-    `, [companyId])
+    `)
 
-    const exchangeRate = rateResult.rows[0]?.exchange_rate || 380
+    const exchangeRate = rateResult.rows[0]?.baserate || 380
 
     // Calcular precios
     const pricePerKg = parseFloat(product.sellingPrice) || 0
