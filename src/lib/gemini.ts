@@ -95,8 +95,8 @@ async function compressImageForGemini(base64Data: string): Promise<string> {
 }
 
 /**
- * Normaliza una imagen a tamaño estándar 1024x1024 con fondo blanco
- * Esto asegura que todas las imágenes de productos tengan el mismo tamaño
+ * Normaliza una imagen a tamaño estándar 1024x1024 con fondo blanco PURO
+ * Esto asegura que todas las imágenes de productos tengan el mismo tamaño y fondo consistente
  */
 async function normalizeImageSize(base64Data: string): Promise<string> {
   try {
@@ -122,32 +122,36 @@ async function normalizeImageSize(base64Data: string): Promise<string> {
     const scaledWidth = Math.floor(width * scale)
     const scaledHeight = Math.floor(height * scale)
 
-    // Redimensionar la imagen manteniendo proporción
+    // Redimensionar la imagen y aplanar con fondo blanco (elimina transparencia)
     const resizedBuffer = await sharp(rotatedBuffer)
       .resize(scaledWidth, scaledHeight, {
         fit: 'inside',
         withoutEnlargement: false
       })
+      // Flatten any transparency with pure white background
+      .flatten({ background: { r: 255, g: 255, b: 255 } })
       .toBuffer()
 
-    // Crear imagen final 1024x1024 con fondo blanco y producto centrado
+    // Crear imagen final 1024x1024 con fondo blanco PURO y producto centrado
     const outputBuffer = await sharp({
       create: {
         width: STANDARD_IMAGE_SIZE,
         height: STANDARD_IMAGE_SIZE,
         channels: 3,
-        background: { r: 255, g: 255, b: 255 }
+        background: { r: 255, g: 255, b: 255 } // Pure white #FFFFFF
       }
     })
       .composite([{
         input: resizedBuffer,
         gravity: 'center'
       }])
-      .jpeg({ quality: 95 }) // Use JPEG for better compatibility
+      // Ensure the final output has pure white background (no transparency)
+      .flatten({ background: { r: 255, g: 255, b: 255 } })
+      .jpeg({ quality: 95, chromaSubsampling: '4:4:4' }) // High quality JPEG
       .toBuffer()
 
     const outputBase64 = outputBuffer.toString('base64')
-    console.log(`[Gemini Normalize] Output size: ${STANDARD_IMAGE_SIZE}x${STANDARD_IMAGE_SIZE}`)
+    console.log(`[Gemini Normalize] Output size: ${STANDARD_IMAGE_SIZE}x${STANDARD_IMAGE_SIZE} with pure white background`)
 
     return outputBase64
   } catch (error) {
@@ -223,21 +227,30 @@ export async function cleanProductImage(imageBase64: string): Promise<{
     const cleanBase64 = await compressImageForGemini(imageBase64)
 
     // Usar Gemini para editar la imagen y remover el fondo
-    // Prompt optimizado para generar imagenes del mismo tamano que las generadas (1024x1024)
-    const prompt = `Edit this product image for e-commerce:
+    // Prompt optimizado para generar imagenes con fondo blanco PURO como Amazon
+    const prompt = `Edit this product image for e-commerce use:
 
-CRITICAL REQUIREMENTS:
-1. Output MUST be exactly 1024x1024 pixels (square format)
-2. Remove the background completely and replace with pure white (#FFFFFF)
-3. Keep ONLY the main product - remove all other elements, text, watermarks
-4. Scale and position the product so it occupies approximately 80% of the frame
-5. Center the product both horizontally and vertically
-6. Add equal white padding on all sides (approximately 10% margin)
-7. Maintain the product's original colors, details, and proportions
-8. Apply professional studio lighting appearance
-9. Ensure sharp edges where product meets background
+ABSOLUTE REQUIREMENTS - MUST FOLLOW EXACTLY:
 
-The final image should match professional e-commerce product photography standards - clean, consistent, and ready for display on product pages.`
+1. BACKGROUND: Replace with SOLID PURE WHITE (#FFFFFF, RGB 255,255,255)
+   - NO gradients
+   - NO gray tones
+   - NO shadows on the background
+   - Completely flat white like Amazon product photos
+
+2. FORMAT: Output exactly 1024x1024 pixels (square)
+
+3. PRODUCT:
+   - Keep ONLY the main product
+   - Remove all text, labels, watermarks, other objects
+   - Center the product in frame
+   - Product should occupy ~75-80% of the image
+   - Maintain original colors and details
+   - Sharp, clean edges where product meets white background
+
+4. LIGHTING: Bright, even illumination - no harsh shadows
+
+The result must look like a professional Amazon/e-commerce product photo with a COMPLETELY WHITE background - this is critical for consistency.`
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_GENERATION_MODEL}:generateContent?key=${GOOGLE_AI_API_KEY}`,
@@ -336,17 +349,19 @@ export async function generateProductImage(
   try {
     console.log('[Gemini Image] Generating image for:', productName)
 
-    // Prompt optimizado para imágenes de productos e-commerce
-    const imagePrompt = `Generate a professional product photograph of "${productName}"${description ? `. ${description}` : ''}.
-Requirements:
-- Pure white background (#FFFFFF)
-- Professional studio lighting
-- Product centered in frame
-- Sharp focus, high detail
-- E-commerce photography style
-- Square format 1024x1024 pixels
-- No text, labels, or watermarks
-- Clean, minimalist presentation`
+    // Prompt optimizado para imágenes de productos e-commerce con fondo blanco PURO
+    const imagePrompt = `Generate a professional e-commerce product photograph of "${productName}"${description ? `. ${description}` : ''}.
+
+CRITICAL REQUIREMENTS - MUST FOLLOW:
+1. BACKGROUND: Solid pure white (#FFFFFF, RGB 255,255,255) - NO gradients, NO shadows on background, NO gray tones
+2. FORMAT: Square image exactly 1024x1024 pixels
+3. PRODUCT: Centered, occupying 70-80% of frame
+4. LIGHTING: Bright, even studio lighting - product well-lit from all sides
+5. STYLE: Clean Amazon/e-commerce product photography style
+6. QUALITY: High resolution, sharp focus, crisp details
+7. NO TEXT: No labels, watermarks, prices, or text of any kind
+
+The background MUST be completely white like a professional product photo on Amazon or similar e-commerce sites. This is absolutely critical.`
 
     console.log('[Gemini Image] Using model:', IMAGE_GENERATION_MODEL)
 
@@ -433,7 +448,10 @@ async function generateImageWithFallback(
   try {
     console.log('[Gemini Fallback] Generating image for:', productName)
 
-    const prompt = `Generate a professional product photograph of "${productName}"${description ? `. ${description}` : ''}. Pure white background, studio lighting, centered product, e-commerce style, square format 1024x1024, no text or watermarks.`
+    const prompt = `Generate a professional e-commerce product photograph of "${productName}"${description ? `. ${description}` : ''}.
+CRITICAL: Background MUST be solid pure white (#FFFFFF) - no gradients, no gray.
+Square 1024x1024, product centered at 75%, bright studio lighting, sharp focus, no text/watermarks.
+Style: Clean Amazon product photo with completely white background.`
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GOOGLE_AI_API_KEY}`,
