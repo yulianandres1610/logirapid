@@ -12,6 +12,54 @@ interface JWTPayload {
   companyName: string
 }
 
+// Weight units that should generate weight-embedded barcodes
+const WEIGHT_UNITS = ['kg', 'lb', 'g', 'oz', 'libra', 'kilogramo', 'gramo', 'onza']
+
+function isWeightUnit(unit: string): boolean {
+  if (!unit) return false
+  return WEIGHT_UNITS.includes(unit.toLowerCase())
+}
+
+/**
+ * Generate a unique 5-digit weight barcode prefix for a company
+ */
+async function generateWeightBarcodePrefix(companyId: number): Promise<string> {
+  const existingResult = await db.query(
+    'SELECT weight_barcode_prefix FROM market_products WHERE company_id = $1 AND weight_barcode_prefix IS NOT NULL',
+    [companyId]
+  )
+  const existingPrefixes = new Set(existingResult.rows.map(r => r.weight_barcode_prefix))
+
+  let prefix: string
+  let attempts = 0
+  do {
+    const num = Math.floor(Math.random() * 99999) + 1
+    prefix = num.toString().padStart(5, '0')
+    attempts++
+    if (attempts > 1000) {
+      throw new Error('No se pudo generar un prefijo único para el código de barras')
+    }
+  } while (existingPrefixes.has(prefix))
+
+  return prefix
+}
+
+/**
+ * Generate weight barcode in format 2PPPPP00000C
+ */
+function generateWeightBarcode(weightBarcodePrefix: string): string {
+  const prefix = weightBarcodePrefix.padStart(5, '0').substring(0, 5)
+  const code12 = `2${prefix}00000`
+
+  let sum = 0
+  for (let i = 0; i < 12; i++) {
+    sum += parseInt(code12[i]) * (i % 2 === 0 ? 1 : 3)
+  }
+  const checkDigit = (10 - (sum % 10)) % 10
+
+  return code12 + checkDigit
+}
+
 /**
  * Generate EAN-13 barcode
  */
@@ -298,6 +346,29 @@ export async function PUT(
       }
     }
 
+    // Handle weight products - regenerate barcode if unit is weight type
+    const isWeight = isWeightUnit(unitOfMeasure || '')
+    let finalBarcode = barcode
+    let weightBarcodePrefix: string | null = null
+
+    if (isWeight) {
+      // Check if current barcode is valid weight format (2PPPPP00000C)
+      const currentBarcode = barcode || current.barcode
+      const isValidWeightBarcode = currentBarcode &&
+        /^2\d{5}00000\d$/.test(currentBarcode)
+
+      if (!isValidWeightBarcode) {
+        // Generate new weight barcode prefix and barcode
+        weightBarcodePrefix = await generateWeightBarcodePrefix(parseInt(companyId))
+        finalBarcode = generateWeightBarcode(weightBarcodePrefix)
+        console.log(`[Product Update] Generated weight barcode: prefix=${weightBarcodePrefix}, barcode=${finalBarcode}`)
+      } else if (currentBarcode) {
+        // Extract existing prefix from valid weight barcode
+        weightBarcodePrefix = currentBarcode.substring(1, 6)
+      }
+    }
+
+    // Update with weight fields
     await db.query(`
       UPDATE market_products SET
         name = $1,
@@ -315,8 +386,10 @@ export async function PUT(
         supplier_reference = $13,
         minimum_stock = $14,
         is_active = $15,
+        is_weight_product = $16,
+        weight_barcode_prefix = $17,
         updated_at = NOW()
-      WHERE id = $16 AND company_id = $17
+      WHERE id = $18 AND company_id = $19
     `, [
       name,
       description || null,
@@ -327,12 +400,14 @@ export async function PUT(
       sellingPrice || 0,
       currency || 'USD',
       sku || null,
-      barcode || null,
+      finalBarcode || null,
       supplierName || null,
       supplierContact || null,
       supplierReference || null,
       parseInt(minimumStock) || 5,
       isActive !== false,
+      isWeight,
+      weightBarcodePrefix,
       productId,
       parseInt(companyId)
     ])
@@ -346,8 +421,8 @@ export async function PUT(
       cost_price: { dbField: 'cost_price', newValue: costPrice },
       selling_price: { dbField: 'selling_price', newValue: sellingPrice },
       currency: { dbField: 'currency', newValue: currency },
+      barcode: { dbField: 'barcode', newValue: finalBarcode },
       sku: { dbField: 'sku', newValue: sku },
-      barcode: { dbField: 'barcode', newValue: barcode },
       supplier_name: { dbField: 'supplier_name', newValue: supplierName },
       minimum_stock: { dbField: 'minimum_stock', newValue: minimumStock },
       is_active: { dbField: 'is_active', newValue: isActive }
