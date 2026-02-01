@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
     await db.query(`
       CREATE TABLE IF NOT EXISTS print_jobs (
         id SERIAL PRIMARY KEY,
-        company_id INTEGER NOT NULL,
+        company_id INTEGER,
         job_number VARCHAR(50),
         document_type VARCHAR(50),
         document_data JSONB,
@@ -172,10 +172,18 @@ export async function POST(request: NextRequest) {
         printed_at TIMESTAMP
       )
     `)
-    // Add missing columns to existing table
-    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS printer_name VARCHAR(100)`)
-    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS copies INTEGER DEFAULT 1`)
+    // Add ALL potentially missing columns to existing table
+    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS company_id INTEGER`)
+    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS job_number VARCHAR(50)`)
+    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS document_type VARCHAR(50)`)
+    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS document_data JSONB`)
+    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending'`)
     await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS priority VARCHAR(20) DEFAULT 'normal'`)
+    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS copies INTEGER DEFAULT 1`)
+    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS printer_name VARCHAR(100)`)
+    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS created_by INTEGER`)
+    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`)
+    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS printed_at TIMESTAMP`)
 
     // Crear trabajo de impresión
     const printJobResult = await db.query(`
