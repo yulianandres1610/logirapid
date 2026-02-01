@@ -484,8 +484,19 @@ export async function POST(request: NextRequest) {
     // Generate SKU if not provided
     const finalSku = sku || `SKU-${Date.now().toString(36).toUpperCase()}`
 
-    // Generate barcode if not provided (EAN-13 format)
-    const finalBarcode = barcode || generateBarcode()
+    // Check if this is a weight product based on unit of measure
+    const isWeight = isWeightUnit(unitOfMeasure || 'unidad')
+    let weightBarcodePrefix: string | null = null
+    let finalBarcode: string
+
+    if (isWeight && !barcode) {
+      // Generate weight barcode prefix and weight-format barcode
+      weightBarcodePrefix = await generateWeightBarcodePrefix(companyId)
+      finalBarcode = generateWeightBarcode(weightBarcodePrefix)
+    } else {
+      // Generate regular barcode if not provided
+      finalBarcode = barcode || generateBarcode()
+    }
 
     // Ensure unit_of_measure column exists
     try {
@@ -514,19 +525,23 @@ export async function POST(request: NextRequest) {
         cost_price, selling_price, currency, sku, barcode,
         supplier_name, supplier_contact, supplier_reference,
         quantity_on_hand, quantity_expected, minimum_stock,
+        is_weight_product, weight_barcode_prefix,
         is_active, created_by, created_at, updated_at
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10, $11,
         $12, $13, $14,
         0, 0, $15,
-        true, $16, NOW(), NOW()
+        $16, $17,
+        true, $18, NOW(), NOW()
       ) RETURNING id
     `, [
       companyId, name, description || null, imageUrl || null, category || null, unitOfMeasure || 'unidad',
       costPrice, sellingPrice, currency, finalSku, finalBarcode,
       supplierName || null, supplierContact || null, supplierReference || null,
-      parseInt(minimumStock) || 0, userId
+      parseInt(minimumStock) || 0,
+      isWeight, weightBarcodePrefix,
+      userId
     ])
 
     const productId = result.rows[0].id
@@ -562,6 +577,8 @@ export async function POST(request: NextRequest) {
         sku: finalSku,
         barcode: finalBarcode,
         unitOfMeasure: unitOfMeasure || 'unidad',
+        isWeightProduct: isWeight,
+        weightBarcodePrefix: weightBarcodePrefix,
         supplierName: supplierName || null,
         minimumStock
       })
@@ -697,6 +714,18 @@ export async function POST(request: NextRequest) {
 }
 
 /**
+ * Weight units that indicate a product is sold by weight
+ */
+const WEIGHT_UNITS = ['kg', 'lb', 'g', 'oz', 'libra', 'kilogramo', 'gramo', 'onza']
+
+/**
+ * Check if unit of measure indicates a weight product
+ */
+function isWeightUnit(unit: string): boolean {
+  return WEIGHT_UNITS.includes(unit.toLowerCase())
+}
+
+/**
  * Generate EAN-13 barcode
  */
 function generateBarcode(): string {
@@ -712,4 +741,52 @@ function generateBarcode(): string {
   const checkDigit = (10 - (sum % 10)) % 10
 
   return base + checkDigit
+}
+
+/**
+ * Generate a unique 5-digit weight barcode prefix for a company
+ */
+async function generateWeightBarcodePrefix(companyId: number): Promise<string> {
+  // Get all existing prefixes for this company
+  const existingResult = await db.query(
+    'SELECT weight_barcode_prefix FROM market_products WHERE company_id = $1 AND weight_barcode_prefix IS NOT NULL',
+    [companyId]
+  )
+  const existingPrefixes = new Set(existingResult.rows.map(r => r.weight_barcode_prefix))
+
+  // Generate a unique prefix (00001-99999)
+  let prefix: string
+  let attempts = 0
+  do {
+    // Start from a random number to spread distribution
+    const num = Math.floor(Math.random() * 99999) + 1
+    prefix = num.toString().padStart(5, '0')
+    attempts++
+    if (attempts > 1000) {
+      throw new Error('No se pudo generar un prefijo único para el código de barras')
+    }
+  } while (existingPrefixes.has(prefix))
+
+  return prefix
+}
+
+/**
+ * Generate weight barcode in format 2PPPPP00000C
+ * - 2: Prefix for variable weight products
+ * - PPPPP: 5-digit product code
+ * - 00000: Weight placeholder (0 for base barcode)
+ * - C: EAN-13 check digit
+ */
+function generateWeightBarcode(weightBarcodePrefix: string): string {
+  const prefix = weightBarcodePrefix.padStart(5, '0').substring(0, 5)
+  const code12 = `2${prefix}00000` // Weight = 0 for base barcode
+
+  // Calculate EAN-13 check digit
+  let sum = 0
+  for (let i = 0; i < 12; i++) {
+    sum += parseInt(code12[i]) * (i % 2 === 0 ? 1 : 3)
+  }
+  const checkDigit = (10 - (sum % 10)) % 10
+
+  return code12 + checkDigit
 }

@@ -129,8 +129,9 @@ export async function POST(request: NextRequest) {
     // Generar código de barra con peso embebido
     const barcode = generateWeightBarcode(product.weightBarcodePrefix, weightKg)
 
-    // Formatear peso para mostrar
-    const weightDisplay = `${weightKg.toFixed(3)} kg`
+    // Formatear peso para mostrar usando la unidad del producto
+    const unit = product.unitOfMeasure || 'kg'
+    const weightDisplay = `${weightKg.toFixed(3)} ${unit}`
 
     // Registrar en el log
     await db.query(`
