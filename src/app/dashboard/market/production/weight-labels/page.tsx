@@ -136,13 +136,13 @@ export default function WeightLabelsPage() {
   const priceUSD = weightNum * pricePerKg
   const priceCUP = Math.round(priceUSD * USD_CUP)
 
-  // Generate barcode preview
+  // Generate barcode preview (format: 20PPPPPWWWWWC)
   const generateBarcodePreview = () => {
     if (!selectedProduct?.weightBarcodePrefix || !weight) return null
     const prefix = selectedProduct.weightBarcodePrefix.padStart(5, '0')
     const weightInt = Math.round(weightNum * 1000)
     const weightStr = weightInt.toString().padStart(5, '0')
-    return `2${prefix}${weightStr}X` // X = check digit placeholder
+    return `20${prefix}${weightStr}X` // X = check digit placeholder
   }
 
   // Handle print
@@ -353,11 +353,11 @@ export default function WeightLabelsPage() {
                         <img
                           src={product.imageUrl}
                           alt={product.name}
-                          className="w-full h-16 object-cover rounded-lg mb-2"
+                          className="w-full aspect-square object-cover rounded-lg mb-2"
                         />
                       ) : (
-                        <div className="w-full h-16 rounded-lg mb-2 flex items-center justify-center bg-gray-700">
-                          <Package className="w-8 h-8 text-gray-500" />
+                        <div className="w-full aspect-square rounded-lg mb-2 flex items-center justify-center bg-gray-700">
+                          <Package className="w-10 h-10 text-gray-500" />
                         </div>
                       )}
 
@@ -405,7 +405,7 @@ export default function WeightLabelsPage() {
                       <p className="text-gray-400">
                         ${(parseFloat(String(selectedProduct.sellingPrice)) || 0).toFixed(2)} / {selectedProduct.unitOfMeasure || 'kg'}
                         <span className="ml-2 text-green-400 font-medium">
-                          ({Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP).toLocaleString()} CUP/kg)
+                          ({Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP).toLocaleString()} CUP/{selectedProduct.unitOfMeasure || 'kg'})
                         </span>
                       </p>
                     </div>
@@ -477,29 +477,49 @@ export default function WeightLabelsPage() {
                       <div className="text-green-300/70 text-lg mt-1">CUP</div>
                     </div>
 
-                    {/* Barcode Preview */}
+                    {/* Label Preview (3x2 inches = 76mm x 51mm) */}
                     {barcodePreview ? (
-                      <div className="bg-gray-800 rounded-xl p-4 text-center mb-4 border border-gray-700">
-                        <p className="text-gray-400 text-xs mb-2 uppercase">Código de Barra</p>
-                        <div className="bg-white rounded-lg py-3 px-4 inline-block">
-                          <div className="flex justify-center gap-0.5 mb-1">
-                            {/* Simple barcode visualization */}
-                            {Array.from({ length: 30 }).map((_, i) => (
-                              <div
-                                key={i}
-                                className="bg-black"
-                                style={{
-                                  width: Math.random() > 0.5 ? '2px' : '1px',
-                                  height: '40px'
-                                }}
-                              />
-                            ))}
-                          </div>
-                          <p className="font-mono text-sm text-black tracking-widest">
-                            {barcodePreview}
+                      <div className="bg-gray-800 rounded-xl p-3 mb-4 border border-gray-700">
+                        <p className="text-gray-400 text-xs mb-2 uppercase text-center">Vista Previa Etiqueta (3x2")</p>
+                        {/* Label simulation - 3:2 aspect ratio */}
+                        <div className="bg-white rounded-lg p-3 mx-auto" style={{ maxWidth: '240px', aspectRatio: '3/2' }}>
+                          {/* Product Name - Top */}
+                          <p className="font-bold text-black text-sm text-center truncate border-b border-gray-300 pb-1 mb-2">
+                            {selectedProduct.name}
                           </p>
+
+                          {/* Barcode - Center */}
+                          <div className="flex flex-col items-center justify-center flex-1 py-1">
+                            <div className="flex justify-center gap-0.5 mb-1">
+                              {Array.from({ length: 35 }).map((_, i) => (
+                                <div
+                                  key={i}
+                                  className="bg-black"
+                                  style={{
+                                    width: i % 3 === 0 ? '2px' : '1px',
+                                    height: '32px'
+                                  }}
+                                />
+                              ))}
+                            </div>
+                            <p className="font-mono text-xs text-black tracking-wider">
+                              {barcodePreview}
+                            </p>
+                          </div>
+
+                          {/* Price & Weight - Bottom */}
+                          <div className="flex justify-between items-end border-t border-gray-300 pt-1 mt-1">
+                            <div className="text-left">
+                              <p className="text-[10px] text-gray-500 uppercase">Precio/{selectedProduct.unitOfMeasure || 'kg'}</p>
+                              <p className="font-bold text-black text-sm">{priceCUP > 0 ? Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP).toLocaleString() : '---'} CUP</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[10px] text-gray-500 uppercase">Peso</p>
+                              <p className="font-bold text-black text-sm">{weight || '0.000'} {selectedProduct.unitOfMeasure || 'kg'}</p>
+                            </div>
+                          </div>
                         </div>
-                        <p className="text-gray-500 text-xs mt-2">EAN-13 con peso embebido</p>
+                        <p className="text-gray-500 text-xs mt-2 text-center">EAN-13 con peso embebido</p>
                       </div>
                     ) : (
                       <div className="bg-gray-800/50 rounded-xl p-4 text-center mb-4 border border-dashed border-gray-600">

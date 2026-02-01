@@ -134,12 +134,45 @@ export async function POST(request: NextRequest) {
     const unit = product.unitOfMeasure || 'kg'
     const weightDisplay = `${weightKg.toFixed(3)} ${unit}`
 
+    // Ensure log table exists
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_weight_labels_log (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        variant_id INTEGER,
+        weight_kg DECIMAL(10, 3) NOT NULL,
+        price_cup INTEGER,
+        barcode_generated VARCHAR(20),
+        printed_by INTEGER,
+        printed_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+
     // Registrar en el log
     await db.query(`
       INSERT INTO market_weight_labels_log
         (company_id, product_id, variant_id, weight_kg, price_cup, barcode_generated, printed_by)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
     `, [companyId, productId, variantId || null, weightKg, priceCUP, barcode, userId || null])
+
+    // Ensure print_jobs table exists
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS print_jobs (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL,
+        job_number VARCHAR(50),
+        document_type VARCHAR(50),
+        document_data JSONB,
+        status VARCHAR(20) DEFAULT 'pending',
+        priority VARCHAR(20) DEFAULT 'normal',
+        copies INTEGER DEFAULT 1,
+        printer_name VARCHAR(100),
+        created_by INTEGER,
+        created_at TIMESTAMP DEFAULT NOW(),
+        printed_at TIMESTAMP
+      )
+    `)
 
     // Crear trabajo de impresión
     const printJobResult = await db.query(`
@@ -158,6 +191,8 @@ export async function POST(request: NextRequest) {
         weightKg: weightKg,
         priceCUP: priceCUP,
         pricePerKg: pricePerKg,
+        pricePerUnit: Math.round(pricePerKg * exchangeRate),
+        unitOfMeasure: unit,
         barcode: barcode,
         barcodeType: 'ean13',
         printDate: new Date().toLocaleDateString('es-ES'),
@@ -190,7 +225,7 @@ export async function POST(request: NextRequest) {
     console.error('[Weight Labels API] Error:', error)
     return NextResponse.json({
       success: false,
-      error: 'Error al generar etiqueta de peso'
+      error: error instanceof Error ? error.message : 'Error al generar etiqueta de peso'
     }, { status: 500 })
   }
 }
