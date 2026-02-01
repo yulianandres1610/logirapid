@@ -130,7 +130,7 @@ export default function WeightLabelsPage() {
 
   // Calculate price
   const weightNum = parseFloat(weight) || 0
-  const pricePerKg = selectedProduct?.sellingPrice || 0
+  const pricePerKg = parseFloat(String(selectedProduct?.sellingPrice)) || 0
   const priceUSD = weightNum * pricePerKg
   const priceCUP = Math.round(priceUSD * exchangeRate)
 
@@ -390,13 +390,13 @@ export default function WeightLabelsPage() {
                             "text-xs",
                             theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
                           )}>
-                            ${(product.sellingPrice || 0).toFixed(2)}/{product.unitOfMeasure || 'kg'}
+                            ${(parseFloat(String(product.sellingPrice)) || 0).toFixed(2)}/{product.unitOfMeasure || 'kg'}
                           </span>
                           <span className={cn(
                             "text-xs font-medium",
                             theme === 'dark' ? 'text-green-400' : 'text-green-600'
                           )}>
-                            {Math.round((product.sellingPrice || 0) * exchangeRate).toLocaleString()} CUP
+                            {Math.round((parseFloat(String(product.sellingPrice)) || 0) * exchangeRate).toLocaleString()} CUP
                           </span>
                         </div>
                       </motion.button>
@@ -446,7 +446,7 @@ export default function WeightLabelsPage() {
                           "text-sm",
                           theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
                         )}>
-                          ${(selectedProduct.sellingPrice || 0).toFixed(2)} / {selectedProduct.unitOfMeasure || 'kg'}
+                          ${(parseFloat(String(selectedProduct.sellingPrice)) || 0).toFixed(2)} / {selectedProduct.unitOfMeasure || 'kg'}
                         </p>
                       </div>
                       {!selectedProduct.weightBarcodePrefix && (
