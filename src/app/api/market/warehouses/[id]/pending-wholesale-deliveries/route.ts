@@ -63,35 +63,83 @@ export async function GET(
       }, { status: 404 })
     }
 
+    // Check if wholesale tables exist
+    const tablesExist = await db.query(`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_name = 'market_invoices'
+      ) as invoices_exist,
+      EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_name = 'market_wholesale_customers'
+      ) as customers_exist
+    `)
+
+    const hasInvoices = tablesExist.rows[0]?.invoices_exist === true
+    const hasCustomers = tablesExist.rows[0]?.customers_exist === true
+
     // Get pending wholesale deliveries where this warehouse is the source
-    const deliveriesResult = await db.query(`
-      SELECT
-        o.id,
-        o.operation_number,
-        COALESCE(i.invoice_number, o.reference_id::text) as invoice_number,
-        o.reference_id as invoice_id,
-        o.status,
-        o.validation_status,
-        o.notes,
-        o.created_at,
-        o.created_by,
-        COALESCE(CONCAT(NULLIF(TRIM(u.firstname), ''), ' ', NULLIF(TRIM(u.lastname), '')), u.email, 'Sistema') as created_by_name,
-        i.customer_id,
-        c.business_name as customer_name,
-        c.code as customer_code,
-        (SELECT COUNT(*) FROM market_warehouse_operation_lines WHERE operation_id = o.id) as total_products,
-        (SELECT COALESCE(SUM(quantity_planned), 0) FROM market_warehouse_operation_lines WHERE operation_id = o.id) as total_units
-      FROM market_warehouse_operations o
-      LEFT JOIN users u ON u.id = o.created_by
-      LEFT JOIN market_invoices i ON i.id = o.reference_id AND o.reference_type = 'wholesale_invoice'
-      LEFT JOIN market_wholesale_customers c ON c.id = i.customer_id
-      WHERE o.source_warehouse_id = $1
-        AND o.company_id = $2
-        AND o.operation_type = 'wholesale_delivery'
-        AND o.status = 'pending'
-        AND (o.validation_status = 'pending_validation' OR o.validation_status IS NULL)
-      ORDER BY o.created_at DESC
-    `, [warehouseId, payload.companyId])
+    // Use a simpler query if wholesale tables don't exist
+    let deliveriesResult
+
+    if (hasInvoices && hasCustomers) {
+      deliveriesResult = await db.query(`
+        SELECT
+          o.id,
+          o.operation_number,
+          COALESCE(i.invoice_number, o.reference_id::text) as invoice_number,
+          o.reference_id as invoice_id,
+          o.status,
+          o.validation_status,
+          o.notes,
+          o.created_at,
+          o.created_by,
+          COALESCE(CONCAT(NULLIF(TRIM(u.firstname), ''), ' ', NULLIF(TRIM(u.lastname), '')), u.email, 'Sistema') as created_by_name,
+          i.customer_id,
+          c.business_name as customer_name,
+          c.code as customer_code,
+          (SELECT COUNT(*) FROM market_warehouse_operation_lines WHERE operation_id = o.id) as total_products,
+          (SELECT COALESCE(SUM(quantity_planned), 0) FROM market_warehouse_operation_lines WHERE operation_id = o.id) as total_units
+        FROM market_warehouse_operations o
+        LEFT JOIN users u ON u.id = o.created_by
+        LEFT JOIN market_invoices i ON i.id = o.reference_id AND o.reference_type = 'wholesale_invoice'
+        LEFT JOIN market_wholesale_customers c ON c.id = i.customer_id
+        WHERE o.source_warehouse_id = $1
+          AND o.company_id = $2
+          AND o.operation_type = 'wholesale_delivery'
+          AND o.status = 'pending'
+          AND (o.validation_status = 'pending_validation' OR o.validation_status IS NULL)
+        ORDER BY o.created_at DESC
+      `, [warehouseId, payload.companyId])
+    } else {
+      // Fallback query without wholesale tables
+      deliveriesResult = await db.query(`
+        SELECT
+          o.id,
+          o.operation_number,
+          o.reference_id::text as invoice_number,
+          o.reference_id as invoice_id,
+          o.status,
+          o.validation_status,
+          o.notes,
+          o.created_at,
+          o.created_by,
+          COALESCE(CONCAT(NULLIF(TRIM(u.firstname), ''), ' ', NULLIF(TRIM(u.lastname), '')), u.email, 'Sistema') as created_by_name,
+          NULL::integer as customer_id,
+          NULL::text as customer_name,
+          NULL::text as customer_code,
+          (SELECT COUNT(*) FROM market_warehouse_operation_lines WHERE operation_id = o.id) as total_products,
+          (SELECT COALESCE(SUM(quantity_planned), 0) FROM market_warehouse_operation_lines WHERE operation_id = o.id) as total_units
+        FROM market_warehouse_operations o
+        LEFT JOIN users u ON u.id = o.created_by
+        WHERE o.source_warehouse_id = $1
+          AND o.company_id = $2
+          AND o.operation_type = 'wholesale_delivery'
+          AND o.status = 'pending'
+          AND (o.validation_status = 'pending_validation' OR o.validation_status IS NULL)
+        ORDER BY o.created_at DESC
+      `, [warehouseId, payload.companyId])
+    }
 
     // Get lines for each delivery
     const deliveries = await Promise.all(
