@@ -52,7 +52,8 @@ import {
   Calendar,
   Fingerprint,
   Briefcase,
-  Factory
+  Factory,
+  Scale
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -560,6 +561,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       submenuItems: [
         { icon: ClipboardList, label: "Órdenes", href: "/dashboard/market/production" },
         { icon: BookOpen, label: "Recetas (BOM)", href: "/dashboard/market/production/bom" },
+        { icon: Scale, label: "Etiquetas Peso", href: "/dashboard/market/production/weight-labels" },
       ]
     },
     {

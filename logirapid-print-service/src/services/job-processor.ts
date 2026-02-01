@@ -34,6 +34,7 @@ import { generateUnifiedReception, UnifiedReceptionData } from '../documents/uni
 import { generateUnifiedReceptionEscpos } from '../documents/unified-reception-escpos'
 import { generateTransferReceipt, TransferReceiptData } from '../documents/transfer-receipt'
 import { generateAuditCountReport, AuditCountReportData } from '../documents/audit-count-report'
+import { generateWeightLabelZpl, WeightLabelData } from '../documents/weight-label-zpl'
 
 const execAsync = promisify(exec)
 
@@ -254,6 +255,7 @@ class JobProcessor {
       case 'shipping_label':
       case 'product_label':
       case 'lot_label':
+      case 'weight_label':
         // Prefer label printers (Zebra) for labels
         return printerService.getLabelPrinters()[0] || printerService.getDefaultPrinter()
 
@@ -348,6 +350,26 @@ class JobProcessor {
           sku: (data as LotLabelData).lotNumber,
           barcode: (data as LotLabelData).lotNumber,
           description: `Lote: ${(data as LotLabelData).lotNumber}\nProveedor: ${(data as LotLabelData).supplierName}`
+        } as ProductLabelData)
+
+      case 'weight_label':
+        // Weight labels are ZPL for Zebra printers (3x2 inch format)
+        if (useZpl) {
+          console.log(`[Job Processor] Generating weight label as ZPL for Zebra printer`)
+          return generateWeightLabelZpl(data as unknown as WeightLabelData)
+        }
+        // Fallback to product label format for non-Zebra printers
+        console.log(`[Job Processor] Generating weight label as product label PDF (fallback)`)
+        const weightData = data as unknown as WeightLabelData
+        return generateProductLabel({
+          productName: weightData.productName,
+          sku: weightData.productSku || '',
+          barcode: weightData.barcode,
+          barcodeType: 'ean13',
+          priceCUP: weightData.priceCUP,
+          description: `Peso: ${weightData.weight}`,
+          labelWidth: 76, // 3 inches
+          labelHeight: 51 // 2 inches
         } as ProductLabelData)
 
       case 'purchase_invoice':
@@ -455,7 +477,7 @@ class JobProcessor {
     // - On macOS: use Python USB script (bypasses CUPS)
     // - On Linux: use RAW queue if available
     const isLabelPrinter = printer.printerType === 'label_barcode' || printer.isZebra
-    const isLabelJob = ['product_label', 'shipping_label', 'lot_label'].includes(job.documentType)
+    const isLabelJob = ['product_label', 'shipping_label', 'lot_label', 'weight_label'].includes(job.documentType)
     const canUseRaw = process.platform === 'win32' || process.platform === 'darwin' || hasRawQueue
     const useRawLabelPrint = isLabelPrinter && canUseRaw && isLabelJob
     const useEscPos = printer.supportsEscpos &&

@@ -1095,6 +1095,59 @@ export async function POST() {
       }
     }
 
+    // 32. Add weight product fields to market_products
+    const weightProductColumns = [
+      { name: 'weight_barcode_prefix', type: 'VARCHAR(10)' },
+      { name: 'is_weight_product', type: 'BOOLEAN DEFAULT false' }
+    ]
+
+    for (const col of weightProductColumns) {
+      try {
+        await db.query(`
+          ALTER TABLE market_products
+          ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}
+        `)
+        console.log(`[Migration] Added column ${col.name} to market_products`)
+      } catch (e: any) {
+        if (!e.message.includes('already exists')) {
+          console.log(`[Migration] Note: ${col.name} - ${e.message}`)
+        }
+      }
+    }
+
+    // Index for weight barcode prefix
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_market_products_weight_prefix
+      ON market_products(weight_barcode_prefix) WHERE weight_barcode_prefix IS NOT NULL
+    `)
+    console.log('[Migration] Created index for weight_barcode_prefix')
+
+    // 33. Create market_weight_labels_log table for label printing history
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_weight_labels_log (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        product_id INTEGER NOT NULL REFERENCES market_products(id) ON DELETE CASCADE,
+        variant_id INTEGER REFERENCES market_product_variants(id) ON DELETE SET NULL,
+        weight_kg DECIMAL(10,4) NOT NULL,
+        price_cup DECIMAL(12,2) NOT NULL,
+        barcode_generated VARCHAR(20) NOT NULL,
+        printed_by INTEGER REFERENCES users(id),
+        printed_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_weight_labels_log table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_weight_labels_company ON market_weight_labels_log(company_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_weight_labels_product ON market_weight_labels_log(product_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_weight_labels_date ON market_weight_labels_log(printed_at DESC)
+    `)
+
     // Get table stats
     const tables = [
       'market_products',
@@ -1122,7 +1175,8 @@ export async function POST() {
       'market_pos_orders',
       'market_pos_order_lines',
       'market_pos_payments',
-      'market_promotions'
+      'market_promotions',
+      'market_weight_labels_log'
     ]
     const tableStats = []
 
