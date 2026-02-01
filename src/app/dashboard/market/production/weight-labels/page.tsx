@@ -67,6 +67,10 @@ export default function WeightLabelsPage() {
   const [error, setError] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(true) // Start fullscreen by default
   const [mounted, setMounted] = useState(false)
+  const [showPrintModal, setShowPrintModal] = useState(false)
+  const [printServices, setPrintServices] = useState<Array<{ id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; printerType: string }> }>>([])
+  const [selectedPrinter, setSelectedPrinter] = useState<{ serviceId: number; printerId: number } | null>(null)
+  const [printingToService, setPrintingToService] = useState(false)
 
   // Client-side mount
   useEffect(() => {
@@ -172,8 +176,8 @@ export default function WeightLabelsPage() {
 
       if (data.success) {
         setLastLabel(data.data)
-        setShowSuccess(true)
-        setTimeout(() => setShowSuccess(false), 3000)
+        // Show print options
+        await showPrintOptions()
         // Reset for next label
         setWeight('')
       } else {
@@ -216,6 +220,203 @@ export default function WeightLabelsPage() {
       }
     } catch (err) {
       setError('Error de conexión')
+    }
+  }
+
+  // Fetch print services for label printing
+  const fetchPrintServices = async () => {
+    try {
+      const response = await fetch('/api/print/services')
+      const data = await response.json()
+
+      if (data.success && data.data?.services) {
+        const activeServices = data.data.services.filter(
+          (s: { status: string; printers?: unknown[] }) =>
+            (s.status === 'active' || s.status === 'pending' || s.status === 'offline') &&
+            s.printers && s.printers.length > 0
+        )
+
+        // Filter for label printers (thermal or standard)
+        const servicesWithPrinters = activeServices.map((service: { id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; printerType: string; supportedDocumentTypes?: string[] }> }) => ({
+          ...service,
+          printers: service.printers.filter((p: { supportedDocumentTypes?: string[]; printerType: string }) => {
+            if (p.supportedDocumentTypes && p.supportedDocumentTypes.length > 0) {
+              return p.supportedDocumentTypes.includes('weight_label') || p.supportedDocumentTypes.includes('label')
+            }
+            // Accept thermal printers for labels
+            const type = (p.printerType || '').toLowerCase()
+            return type.includes('thermal') || type.includes('label') || type.includes('58') || type.includes('80')
+          })
+        })).filter((s: { printers: unknown[] }) => s.printers.length > 0)
+
+        setPrintServices(servicesWithPrinters)
+
+        // Auto-select first printer
+        if (servicesWithPrinters.length > 0 && servicesWithPrinters[0].printers.length > 0) {
+          setSelectedPrinter({
+            serviceId: servicesWithPrinters[0].id,
+            printerId: servicesWithPrinters[0].printers[0].id
+          })
+        }
+
+        return servicesWithPrinters
+      }
+      return []
+    } catch (err) {
+      console.error('Error fetching print services:', err)
+      return []
+    }
+  }
+
+  // Print label with service
+  const printWithService = async () => {
+    if (!lastLabel || !selectedPrinter) return
+
+    setPrintingToService(true)
+    try {
+      const response = await fetch('/api/print/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentType: 'weight_label',
+          documentData: {
+            productName: lastLabel.productName,
+            barcode: lastLabel.barcode,
+            barcodeType: 'ean13',
+            weight: lastLabel.weight,
+            priceCUP: lastLabel.priceCUP,
+            pricePerUnit: selectedProduct ? Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP) : 0,
+            unitOfMeasure: selectedProduct?.unitOfMeasure || 'kg'
+          },
+          copies,
+          printServiceId: selectedPrinter.serviceId,
+          printerId: selectedPrinter.printerId,
+          sourceType: 'weight_label'
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setShowPrintModal(false)
+        setShowSuccess(true)
+        setTimeout(() => setShowSuccess(false), 3000)
+      } else {
+        setError(data.error || 'Error al enviar a imprimir')
+      }
+    } catch (err) {
+      setError('Error de conexión al imprimir')
+    } finally {
+      setPrintingToService(false)
+    }
+  }
+
+  // Print label via browser (PDF download)
+  const printViaBrowser = () => {
+    if (!lastLabel || !selectedProduct) return
+
+    const pricePerUnit = Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP)
+
+    // Create a print window with the label
+    const printWindow = window.open('', '_blank')
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Etiqueta - ${lastLabel.productName}</title>
+            <style>
+              @page { size: 3in 2in; margin: 0; }
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body {
+                font-family: Arial, sans-serif;
+                width: 3in;
+                height: 2in;
+                padding: 4mm;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+              }
+              .name {
+                font-size: 12pt;
+                font-weight: bold;
+                text-align: center;
+                border-bottom: 1px solid #ccc;
+                padding-bottom: 2mm;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+              }
+              .barcode-section {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+              }
+              .barcode-number {
+                font-family: monospace;
+                font-size: 10pt;
+                letter-spacing: 2px;
+              }
+              .bottom {
+                border-top: 1px solid #ccc;
+                padding-top: 2mm;
+              }
+              .info-row {
+                display: flex;
+                justify-content: space-between;
+                font-size: 8pt;
+                color: #666;
+              }
+              .total {
+                text-align: center;
+                font-size: 14pt;
+                font-weight: bold;
+                margin-top: 1mm;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="name">${lastLabel.productName}</div>
+            <div class="barcode-section">
+              <svg id="barcode"></svg>
+              <div class="barcode-number">${lastLabel.barcode}</div>
+            </div>
+            <div class="bottom">
+              <div class="info-row">
+                <span>${pricePerUnit.toLocaleString()} CUP/${selectedProduct.unitOfMeasure || 'kg'}</span>
+                <span>${lastLabel.weight}</span>
+              </div>
+              <div class="total">${lastLabel.priceCUP.toLocaleString()} CUP</div>
+            </div>
+            <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+            <script>
+              JsBarcode("#barcode", "${lastLabel.barcode}", {
+                format: "EAN13",
+                width: 1.5,
+                height: 40,
+                displayValue: false
+              });
+              window.onload = function() {
+                window.print();
+              }
+            </script>
+          </body>
+        </html>
+      `)
+      printWindow.document.close()
+    }
+    setShowPrintModal(false)
+  }
+
+  // Show print options after generating
+  const showPrintOptions = async () => {
+    const services = await fetchPrintServices()
+    if (services.length > 0) {
+      setShowPrintModal(true)
+    } else {
+      // No print services, use browser directly
+      printViaBrowser()
     }
   }
 
@@ -713,6 +914,142 @@ export default function WeightLabelsPage() {
                   >
                     Guardar
                   </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Print Options Modal */}
+        <AnimatePresence>
+          {showPrintModal && lastLabel && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+              onClick={() => setShowPrintModal(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-md p-6 rounded-2xl shadow-2xl bg-gray-800 border border-gray-700"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-purple-900/30">
+                      <Printer className="w-6 h-6 text-purple-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white">Imprimir Etiqueta</h3>
+                      <p className="text-sm text-gray-400">{lastLabel.productName}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowPrintModal(false)}
+                    className="p-2 rounded-lg hover:bg-gray-700"
+                  >
+                    <X className="w-5 h-5 text-gray-400" />
+                  </button>
+                </div>
+
+                {/* Label Preview */}
+                <div className="bg-white rounded-lg p-3 mb-6" style={{ aspectRatio: '3/2' }}>
+                  <p className="font-bold text-black text-sm text-center truncate border-b border-gray-300 pb-1 mb-2">
+                    {lastLabel.productName}
+                  </p>
+                  <div className="flex flex-col items-center justify-center py-2">
+                    <div className="flex justify-center gap-0.5 mb-1">
+                      {Array.from({ length: 35 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="bg-black"
+                          style={{ width: i % 3 === 0 ? '2px' : '1px', height: '28px' }}
+                        />
+                      ))}
+                    </div>
+                    <p className="font-mono text-xs text-black tracking-wider">{lastLabel.barcode}</p>
+                  </div>
+                  <div className="border-t border-gray-300 pt-1">
+                    <div className="flex justify-between text-[10px] text-gray-500">
+                      <span>{selectedProduct ? Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP).toLocaleString() : 0} CUP/{selectedProduct?.unitOfMeasure || 'kg'}</span>
+                      <span>{lastLabel.weight}</span>
+                    </div>
+                    <p className="font-black text-black text-center text-lg mt-1">{lastLabel.priceCUP.toLocaleString()} CUP</p>
+                  </div>
+                </div>
+
+                {/* Print Services */}
+                {printServices.length > 0 ? (
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-400 mb-2">Seleccionar Impresora</label>
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {printServices.map(service => (
+                        service.printers.map(printer => (
+                          <button
+                            key={`${service.id}-${printer.id}`}
+                            onClick={() => setSelectedPrinter({ serviceId: service.id, printerId: printer.id })}
+                            className={cn(
+                              "w-full p-3 rounded-xl border-2 transition-all text-left flex items-center justify-between",
+                              selectedPrinter?.printerId === printer.id
+                                ? 'border-purple-500 bg-purple-900/20'
+                                : 'border-gray-600 hover:border-gray-500 bg-gray-700/50'
+                            )}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Printer className="w-5 h-5 text-gray-400" />
+                              <div>
+                                <p className="font-medium text-white">{printer.printerName}</p>
+                                <p className="text-xs text-gray-400">{service.serviceName}</p>
+                              </div>
+                            </div>
+                            {printer.isOnline ? (
+                              <span className="text-xs text-green-400">Online</span>
+                            ) : (
+                              <span className="text-xs text-gray-500">Offline</span>
+                            )}
+                          </button>
+                        ))
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-6 p-4 rounded-xl bg-gray-700/50 text-center">
+                    <p className="text-gray-400 text-sm">No hay servicios de impresión disponibles</p>
+                    <p className="text-gray-500 text-xs mt-1">Se usará impresión del navegador</p>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={printViaBrowser}
+                    className="flex-1 py-3 rounded-xl bg-gray-700 hover:bg-gray-600 text-white transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Package className="w-5 h-5" />
+                    Descargar PDF
+                  </button>
+                  {printServices.length > 0 && (
+                    <button
+                      onClick={printWithService}
+                      disabled={printingToService || !selectedPrinter}
+                      className={cn(
+                        "flex-1 py-3 rounded-xl transition-all font-bold flex items-center justify-center gap-2",
+                        printingToService || !selectedPrinter
+                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                          : 'bg-purple-600 hover:bg-purple-500 text-white'
+                      )}
+                    >
+                      {printingToService ? (
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Printer className="w-5 h-5" />
+                      )}
+                      Imprimir
+                    </button>
+                  )}
                 </div>
               </motion.div>
             </motion.div>
