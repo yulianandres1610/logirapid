@@ -37,9 +37,9 @@ function fallbackCategorization(productName: string): ProductSuggestion {
     'Electrodomésticos': ['nevera', 'refrigerador', 'lavadora', 'microondas', 'licuadora', 'batidora', 'televisor', 'television', 'televisión', 'tv', 'aire', 'acondicionado', 'ventilador', 'plancha', 'tostadora', 'cafetera', 'freidora', 'samsung', 'lg', 'sony', 'panasonic'],
     'Electrónica': ['celular', 'teléfono', 'telefono', 'móvil', 'movil', 'tablet', 'laptop', 'computadora', 'computador', 'auricular', 'audífono', 'cargador', 'cable', 'usb', 'mouse', 'teclado', 'memoria', 'pendrive', 'iphone', 'android', 'xiaomi', 'huawei'],
     'Limpieza': ['detergente', 'jabón', 'jabon', 'cloro', 'desinfectante', 'fabuloso', 'escoba', 'trapeador', 'limpiador', 'suavizante', 'lejía', 'lejia', 'roma', 'ace', 'ariel', 'tide'],
-    'Carnes y Embutidos': ['carne', 'pollo', 'cerdo', 'res', 'jamón', 'jamon', 'salchicha', 'chorizo', 'bacon', 'tocino', 'mortadela', 'pechuga', 'muslo', 'chuleta', 'bistec', 'pescado', 'embutido'],
+    'Carnes y Embutidos': ['carne', 'pollo', 'cerdo', 'res', 'jamón', 'jamon', 'salchicha', 'chorizo', 'bacon', 'tocino', 'mortadela', 'pechuga', 'muslo', 'chuleta', 'bistec', 'pescado', 'embutido', 'salmon', 'salmón', 'trucha', 'tilapia', 'camarón', 'camaron', 'langosta', 'mariscos', 'atún', 'atun', 'sardina', 'filete', 'lomo', 'costilla', 'picadillo', 'croqueta', 'bandeja'],
     'Lácteos': ['leche', 'queso', 'yogurt', 'yogur', 'mantequilla', 'crema', 'helado', 'natilla', 'flan', 'evaporada', 'condensada'],
-    'Alimentos': ['arroz', 'pasta', 'frijol', 'frijoles', 'harina', 'azúcar', 'azucar', 'aceite', 'sopa', 'cereales', 'galleta', 'galleticas', 'chocolate', 'caramelo', 'dulce', 'conserva', 'atún', 'atun', 'sardina', 'mayonesa', 'ketchup', 'mostaza', 'salsa', 'espagueti', 'macarrones', 'premium', 'grano'],
+    'Alimentos': ['arroz', 'pasta', 'frijol', 'frijoles', 'harina', 'azúcar', 'azucar', 'aceite', 'sopa', 'cereales', 'galleta', 'galleticas', 'chocolate', 'caramelo', 'dulce', 'conserva', 'mayonesa', 'ketchup', 'mostaza', 'salsa', 'espagueti', 'macarrones', 'premium', 'grano', 'sal', 'pimienta', 'condimento', 'sazon', 'sazón', 'comino', 'oregano', 'orégano'],
     'Bebidas': ['agua', 'refresco', 'jugo', 'cerveza', 'vino', 'whisky', 'vodka', 'pepsi', 'fanta', 'sprite', 'malta', 'café', 'cafe', 'limonada', 'naranjada', 'coca', 'gaseosa', 'bebida'],
     'Frutas y Verduras': ['manzana', 'naranja', 'plátano', 'platano', 'banana', 'piña', 'pina', 'mango', 'papaya', 'guayaba', 'fruta', 'tomate', 'cebolla', 'ajo', 'lechuga', 'zanahoria', 'papa', 'yuca', 'boniato', 'calabaza', 'pepino', 'pimiento', 'verdura', 'vegetal', 'aguacate'],
     'Panadería': ['pan', 'panetela', 'cake', 'torta', 'pastel', 'bizcocho', 'rosquita', 'tostada', 'croissant', 'panaderia'],
@@ -57,18 +57,18 @@ function fallbackCategorization(productName: string): ProductSuggestion {
       )
       if (hasMatch) {
         const descriptions: Record<string, string> = {
-          'Alimentos': 'Producto alimenticio de calidad',
-          'Bebidas': 'Bebida refrescante',
-          'Carnes y Embutidos': 'Producto cárnico fresco',
-          'Lácteos': 'Producto lácteo nutritivo',
-          'Frutas y Verduras': 'Producto fresco natural',
-          'Panadería': 'Producto de panadería',
-          'Limpieza': 'Producto de limpieza para el hogar',
-          'Higiene Personal': 'Producto de higiene personal',
-          'Electrodomésticos': 'Electrodoméstico de alta calidad',
-          'Electrónica': 'Dispositivo electrónico',
-          'Ropa': 'Prenda de vestir',
-          'Hogar': 'Artículo para el hogar'
+          'Alimentos': 'Producto alimenticio de primera calidad, ideal para tu despensa. Seleccionado cuidadosamente para garantizar frescura y sabor en cada preparación.',
+          'Bebidas': 'Bebida refrescante perfecta para cualquier ocasión. Disfruta de su sabor único y calidad premium que satisface tu sed.',
+          'Carnes y Embutidos': 'Producto cárnico fresco de excelente calidad. Seleccionado y procesado bajo estrictos estándares de higiene para tu mesa.',
+          'Lácteos': 'Producto lácteo nutritivo y delicioso. Fuente natural de calcio y proteínas, perfecto para una alimentación balanceada.',
+          'Frutas y Verduras': 'Producto fresco y natural, cultivado con los mejores estándares de calidad. Rico en vitaminas y nutrientes esenciales.',
+          'Panadería': 'Producto de panadería elaborado con ingredientes selectos. Textura y sabor artesanal que deleitará tu paladar.',
+          'Limpieza': 'Producto de limpieza eficaz para mantener tu hogar impecable. Fórmula poderosa que elimina suciedad y gérmenes.',
+          'Higiene Personal': 'Producto de higiene personal de alta calidad. Cuida tu piel y bienestar con ingredientes suaves y efectivos.',
+          'Electrodomésticos': 'Electrodoméstico de alta calidad y tecnología avanzada. Diseñado para facilitar tu vida diaria con máximo rendimiento.',
+          'Electrónica': 'Dispositivo electrónico con tecnología de punta. Rendimiento superior y durabilidad garantizada para tu satisfacción.',
+          'Ropa': 'Prenda de vestir cómoda y moderna. Confeccionada con materiales de calidad para un estilo único y duradero.',
+          'Hogar': 'Artículo para el hogar funcional y elegante. Diseñado para complementar tus espacios con estilo y practicidad.'
         }
         const unitOfMeasures: Record<string, string> = {
           'Alimentos': 'unidad',
@@ -143,26 +143,31 @@ export async function POST(request: NextRequest) {
       const genAI = new GoogleGenerativeAI(GOOGLE_AI_API_KEY)
       const model = genAI.getGenerativeModel({ model: GEMINI_MODEL })
 
-      const prompt = `Analiza este producto y genera una ficha para inventario:
+      const prompt = `Eres un experto en productos de tienda/mercado. Analiza este producto y genera su ficha para una tienda en línea.
 
-Producto: "${productName.trim()}"
+PRODUCTO: "${productName.trim()}"
 
-CATEGORÍAS (usa exactamente una):
-${CATEGORIES.join(', ')}
+INSTRUCCIONES:
+1. CATEGORÍA - Elige UNA de estas exactamente: ${CATEGORIES.join(', ')}
+2. DESCRIPCIÓN - Escribe una descripción COMERCIAL para página web (mínimo 120 caracteres, máximo 250). Debe:
+   - Destacar cualidades y beneficios del producto
+   - Ser atractiva para el comprador
+   - Mencionar características relevantes (frescura, calidad, uso, etc.)
+   - NO incluir precios ni ofertas
+3. UNIDAD - Elige la más apropiada: unidad, lb, kg, g, litro, ml, paquete, caja, docena, par, metro, galón
 
-UNIDADES DE MEDIDA:
-unidad, lb, kg, litro, ml, paquete, caja, docena, par, metro, galón
+EJEMPLOS DE BUENAS DESCRIPCIONES:
+- "Salmón fresco en bandeja" → "Salmón fresco de primera calidad, rico en Omega-3 y proteínas. Ideal para preparaciones saludables como al horno, a la plancha o en sushi. Presentación en bandeja lista para cocinar."
+- "Arroz Premium" → "Arroz de grano largo premium, seleccionado para garantizar textura suelta y sabor excepcional. Perfecto para acompañar tus platos favoritos o como base de recetas tradicionales."
 
-Escribe una descripción comercial (100-200 caracteres) que incluya características y beneficios.
-
-Responde SOLO con JSON válido:
-{"category": "Categoría", "description": "Descripción...", "unitOfMeasure": "unidad"}`
+Responde ÚNICAMENTE con JSON válido (sin explicaciones adicionales):
+{"category": "Categoría", "description": "Descripción comercial completa...", "unitOfMeasure": "unidad"}`
 
       const result = await model.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 500, // Aumentado para modelos con thinking tokens
+          temperature: 0.5, // Un poco más creativo para mejores descripciones
+          maxOutputTokens: 1000, // Aumentado para descripciones más completas
         }
       })
 
@@ -215,6 +220,14 @@ Responde SOLO con JSON válido:
       if (!CATEGORIES.includes(suggestion.category)) {
         console.log('[AI Suggest] Invalid category:', suggestion.category)
         suggestion.category = 'Otros'
+      }
+
+      // Ensure description is adequate length
+      if (!suggestion.description || suggestion.description.length < 80) {
+        // Use fallback description if AI gave a short one
+        const fallback = fallbackCategorization(productName.trim())
+        suggestion.description = fallback.description
+        console.log('[AI Suggest] Description too short, using fallback')
       }
 
       // Truncate description if too long
