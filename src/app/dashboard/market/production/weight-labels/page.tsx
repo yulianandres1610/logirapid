@@ -428,7 +428,7 @@ export default function WeightLabelsPage() {
                   <div className="lg:w-1/2 p-4 flex flex-col">
                     {/* Weight Display */}
                     <div className="bg-gray-800 rounded-2xl p-6 mb-4 text-center border border-gray-700">
-                      <p className="text-gray-400 text-sm mb-2 uppercase tracking-wider">Peso (kg)</p>
+                      <p className="text-gray-400 text-sm mb-2 uppercase tracking-wider">Peso ({selectedProduct?.unitOfMeasure || 'kg'})</p>
                       <div className="text-6xl font-bold text-white tracking-wider font-mono">
                         {weight || '0.000'}
                       </div>

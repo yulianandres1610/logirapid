@@ -92,7 +92,9 @@ export async function GET(request: NextRequest) {
           p.is_active,
           true as track_inventory,
           COALESCE(ws.quantity_on_hand, 0) as stock,
-          p.quantity_on_hand as total_stock
+          p.quantity_on_hand as total_stock,
+          p.is_weight_product,
+          p.weight_barcode_prefix
         FROM market_products p
         LEFT JOIN market_warehouse_stock ws ON p.id = ws.product_id AND ws.warehouse_id = $2 AND ws.variant_id IS NULL
         LEFT JOIN LATERAL (
@@ -119,7 +121,9 @@ export async function GET(request: NextRequest) {
           COALESCE(p.image_url, pi.image_url) as image_url,
           p.is_active,
           true as track_inventory,
-          p.quantity_on_hand as stock
+          p.quantity_on_hand as stock,
+          p.is_weight_product,
+          p.weight_barcode_prefix
         FROM market_products p
         LEFT JOIN LATERAL (
           SELECT image_url FROM product_images
@@ -336,7 +340,9 @@ export async function GET(request: NextRequest) {
         totalStockAllWarehouses,
         trackInventory: p.track_inventory,
         hasVariants,
-        variants: hasVariants ? variants : undefined
+        variants: hasVariants ? variants : undefined,
+        isWeightProduct: p.is_weight_product || false,
+        weightBarcodePrefix: p.weight_barcode_prefix || null
       }
     })
 

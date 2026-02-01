@@ -102,6 +102,8 @@ interface Product {
   hasVariants: boolean
   variants?: ProductVariant[]
   priceTiers?: PriceTier[]
+  isWeightProduct?: boolean
+  weightBarcodePrefix?: string | null
 }
 
 interface Category {
@@ -819,7 +821,7 @@ export default function POSTerminalPage() {
   }, [])
 
   // Add product to cart (with optional variant)
-  const addToCart = useCallback((product: Product, variant: ProductVariant | null = null) => {
+  const addToCart = useCallback((product: Product, variant: ProductVariant | null = null, initialQuantity: number = 1) => {
     // Get price and stock from variant if provided, otherwise from product
     const price = variant?.price ?? product.price
     const stock = variant?.stock ?? product.stock
@@ -846,7 +848,7 @@ export default function POSTerminalPage() {
       if (existingIndex >= 0) {
         const updated = [...prev]
         const item = { ...updated[existingIndex] }
-        const newQuantity = item.quantity + 1
+        const newQuantity = item.quantity + initialQuantity
 
         // Validate stock for quantity increase
         if (product.trackInventory && newQuantity > stock) {
@@ -873,8 +875,8 @@ export default function POSTerminalPage() {
         setSelectedCartIndex(existingIndex)
         return updated
       } else {
-        // Evaluate tier for initial quantity of 1
-        const tierResult = applyPricelistTier(product, 1, variant?.price)
+        // Evaluate tier for initial quantity
+        const tierResult = applyPricelistTier(product, initialQuantity, variant?.price)
 
         const newItem: CartItem = {
           product,
@@ -882,14 +884,14 @@ export default function POSTerminalPage() {
           variantName: variant?.name ?? null,
           variantSku: variant?.sku ?? null,
           variantBarcode: variant?.barcode ?? null,
-          quantity: 1,
+          quantity: initialQuantity,
           unitPrice: tierResult.unitPrice,
           originalPrice: variant?.price ?? product.basePrice,
           pricelistApplied: tierResult.applied,
           pricelistTierLabel: tierResult.tierLabel,
           discountPercent: 0,
           discountAmount: 0,
-          total: tierResult.unitPrice
+          total: tierResult.unitPrice * initialQuantity
         }
         setSelectedCartIndex(prev.length)
         return [...prev, newItem]
@@ -902,6 +904,30 @@ export default function POSTerminalPage() {
   // Handle barcode scan - auto add to cart (like Odoo)
   const handleBarcodeScan = useCallback((barcode: string) => {
     const barcodeLower = barcode.toLowerCase()
+
+    // 0. Check for weight barcode (EAN-13 starting with "2")
+    // Format: 2PPPPPWWWWWC (2=weight prefix, PPPPP=product code, WWWWW=weight in grams, C=check digit)
+    if (barcode.length === 13 && barcode.startsWith('2') && /^\d{13}$/.test(barcode)) {
+      const productPrefix = barcode.substring(1, 6) // Positions 1-5 (5 digits)
+      const weightDigits = barcode.substring(6, 11) // Positions 6-10 (5 digits)
+      const weightValue = parseInt(weightDigits, 10) / 1000 // Convert to kg/lb (e.g., 01250 = 1.250)
+
+      // Find product by weight barcode prefix
+      const weightProduct = products.find(p =>
+        p.isWeightProduct &&
+        p.weightBarcodePrefix?.padStart(5, '0') === productPrefix
+      )
+
+      if (weightProduct && weightValue > 0) {
+        // Add product with extracted weight as quantity
+        addToCart(weightProduct, null, weightValue)
+        setSearch('')
+        setStockNotification(`${weightProduct.name}: ${weightValue.toFixed(3)} ${weightProduct.unit || 'kg'}`)
+        setTimeout(() => setStockNotification(null), 2000)
+        return
+      }
+      // If not found as weight product, continue with normal search
+    }
 
     // 1. First search in product variants
     for (const product of products) {
