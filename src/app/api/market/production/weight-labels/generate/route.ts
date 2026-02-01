@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
         p.unit_of_measure as "unitOfMeasure",
         p.weight_barcode_prefix as "weightBarcodePrefix",
         p.image_url as "imageUrl",
-        c.name as "companyName"
+        c.legalname as "companyName"
       FROM market_products p
       LEFT JOIN companies c ON c.id = p.company_id
       WHERE p.id = $1 AND p.company_id = $2
