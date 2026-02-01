@@ -508,14 +508,18 @@ export default function WeightLabelsPage() {
                           </div>
 
                           {/* Price & Weight - Bottom */}
-                          <div className="flex justify-between items-end border-t border-gray-300 pt-1 mt-1">
-                            <div className="text-left">
-                              <p className="text-[10px] text-gray-500 uppercase">Precio/{selectedProduct.unitOfMeasure || 'kg'}</p>
-                              <p className="font-bold text-black text-sm">{priceCUP > 0 ? Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP).toLocaleString() : '---'} CUP</p>
+                          <div className="border-t border-gray-300 pt-1 mt-1">
+                            <div className="flex justify-between items-center text-[10px]">
+                              <div className="text-left">
+                                <span className="text-gray-500">{Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP).toLocaleString()} CUP/{selectedProduct.unitOfMeasure || 'kg'}</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-gray-500">{weight || '0.000'} {selectedProduct.unitOfMeasure || 'kg'}</span>
+                              </div>
                             </div>
-                            <div className="text-right">
-                              <p className="text-[10px] text-gray-500 uppercase">Peso</p>
-                              <p className="font-bold text-black text-sm">{weight || '0.000'} {selectedProduct.unitOfMeasure || 'kg'}</p>
+                            {/* Total Price - Prominent */}
+                            <div className="text-center mt-1 pt-1 border-t border-gray-200">
+                              <p className="font-black text-black text-lg">{priceCUP.toLocaleString()} CUP</p>
                             </div>
                           </div>
                         </div>
