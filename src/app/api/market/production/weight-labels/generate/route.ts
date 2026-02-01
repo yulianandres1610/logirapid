@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { productId, variantId, weightKg, copies = 1, printerName } = body
+    const { productId, variantId, weightKg, copies = 1 } = body
 
     // Validaciones
     if (!productId) {
@@ -155,46 +155,16 @@ export async function POST(request: NextRequest) {
       VALUES ($1, $2, $3, $4, $5, $6, $7)
     `, [companyId, productId, variantId || null, weightKg, priceCUP, barcode, userId || null])
 
-    // Ensure print_jobs table exists with all columns
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS print_jobs (
-        id SERIAL PRIMARY KEY,
-        company_id INTEGER,
-        job_number VARCHAR(50),
-        document_type VARCHAR(50),
-        document_data JSONB,
-        status VARCHAR(20) DEFAULT 'pending',
-        priority VARCHAR(20) DEFAULT 'normal',
-        copies INTEGER DEFAULT 1,
-        printer_name VARCHAR(100),
-        created_by INTEGER,
-        created_at TIMESTAMP DEFAULT NOW(),
-        printed_at TIMESTAMP
-      )
-    `)
-    // Add ALL potentially missing columns to existing table
-    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS company_id INTEGER`)
-    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS job_number VARCHAR(50)`)
-    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS document_type VARCHAR(50)`)
-    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS document_data JSONB`)
-    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending'`)
-    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS priority VARCHAR(20) DEFAULT 'normal'`)
-    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS copies INTEGER DEFAULT 1`)
-    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS printer_name VARCHAR(100)`)
-    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS created_by INTEGER`)
-    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`)
-    await db.query(`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS printed_at TIMESTAMP`)
-
-    // Crear trabajo de impresión
+    // Crear trabajo de impresión usando el schema existente de print_jobs
     const printJobResult = await db.query(`
       INSERT INTO print_jobs
-        (company_id, job_number, document_type, document_data, status, priority, copies, printer_name, created_by)
+        (job_number, company_id, document_type, source_type, document_data, copies, priority, status, requested_by, created_at)
       VALUES
-        ($1, $2, 'weight_label', $3, 'pending', 'normal', $4, $5, $6)
+        ($1, $2, 'weight_label', 'weight_label', $3, $4, 0, 'pending', $5, NOW())
       RETURNING id
     `, [
-      companyId,
       `WL-${Date.now()}`,
+      companyId,
       JSON.stringify({
         productName: product.name,
         productSku: product.sku,
@@ -211,7 +181,6 @@ export async function POST(request: NextRequest) {
         exchangeRate: exchangeRate
       }),
       copies,
-      printerName || null,
       userId || null
     ])
 
