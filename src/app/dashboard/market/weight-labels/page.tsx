@@ -69,6 +69,7 @@ export default function WeightLabelsPage() {
   const [printServices, setPrintServices] = useState<Array<{ id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; printerType: string }> }>>([])
   const [selectedPrinter, setSelectedPrinter] = useState<{ serviceId: number; printerId: number } | null>(null)
   const [printingToService, setPrintingToService] = useState(false)
+  const [labelSize, setLabelSize] = useState<'3x2' | '2x1'>('3x2') // Label size selector
 
   // Client-side mount
   useEffect(() => {
@@ -333,7 +334,8 @@ export default function WeightLabelsPage() {
             pricePerUnit: Math.round(pricePerKgValue * USD_CUP),
             unitOfMeasure: selectedProduct?.unitOfMeasure || 'kg',
             exchangeRate: USD_CUP,
-            printDate: new Date().toLocaleDateString('es-ES')
+            printDate: new Date().toLocaleDateString('es-ES'),
+            labelSize: labelSize // '3x2' or '2x1'
           },
           copies,
           printServiceId: selectedPrinter.serviceId,
@@ -357,7 +359,7 @@ export default function WeightLabelsPage() {
     }
   }
 
-  // Print label via browser (PDF download) - PUBLIX STYLE
+  // Print label via browser (PDF download) - Supports 3x2 and 2x1 sizes
   const printViaBrowser = () => {
     if (!lastLabel || !selectedProduct) return
 
@@ -365,99 +367,84 @@ export default function WeightLabelsPage() {
     const pricePerUnitCUP = Math.round(pricePerKgValue * USD_CUP)
     const unit = selectedProduct.unitOfMeasure || 'kg'
 
-    // Create a print window with Publix-style label
     const printWindow = window.open('', '_blank')
-    if (printWindow) {
+    if (!printWindow) return
+
+    // Generate HTML based on label size
+    const is2x1 = labelSize === '2x1'
+    const pageSize = is2x1 ? '2in 1in' : '3in 2in'
+    const bodySize = is2x1 ? 'width: 2in; height: 1in; padding: 2mm;' : 'width: 3in; height: 2in; padding: 3mm;'
+
+    if (is2x1) {
+      // Compact 2x1 inch label
       printWindow.document.write(`
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Etiqueta - ${lastLabel.productName}</title>
+            <title>Etiqueta 2x1 - ${lastLabel.productName}</title>
             <style>
-              @page { size: 3in 2in; margin: 0; }
+              @page { size: ${pageSize}; margin: 0; }
               * { margin: 0; padding: 0; box-sizing: border-box; }
-              body {
-                font-family: Arial, sans-serif;
-                width: 3in;
-                height: 2in;
-                padding: 3mm;
-                display: flex;
-                flex-direction: column;
-              }
-              .header-row {
-                display: flex;
-                justify-content: space-between;
-                font-size: 7pt;
-                color: #666;
-                text-transform: uppercase;
-              }
-              .prices-row {
-                display: flex;
-                justify-content: space-between;
-                align-items: flex-start;
-                margin-bottom: 2mm;
-              }
-              .unit-price {
-                text-align: left;
-              }
-              .unit-price-value {
-                font-size: 14pt;
-                font-weight: 900;
-              }
-              .unit-price-label {
-                font-size: 7pt;
-                color: #666;
-              }
-              .total-price {
-                text-align: right;
-              }
-              .total-price-value {
-                font-size: 24pt;
-                font-weight: 900;
-                line-height: 1;
-              }
-              .total-price-label {
-                font-size: 8pt;
-                color: #666;
-              }
-              .divider {
-                border-top: 1px solid #ccc;
-                margin: 2mm 0;
-              }
-              .product-name {
-                font-size: 11pt;
-                font-weight: 900;
-                text-transform: uppercase;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-                margin-bottom: 1mm;
-              }
-              .weight-date {
-                display: flex;
-                justify-content: space-between;
-                font-size: 10pt;
-                margin-bottom: 3mm;
-              }
-              .weight {
-                font-weight: bold;
-              }
-              .date {
-                color: #666;
-              }
-              .barcode-section {
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-              }
-              .barcode-number {
-                font-family: monospace;
-                font-size: 8pt;
-                letter-spacing: 1px;
-                margin-top: 1mm;
-              }
+              body { font-family: Arial, sans-serif; ${bodySize} display: flex; flex-direction: column; }
+              .row1 { display: flex; justify-content: space-between; align-items: flex-start; }
+              .product-name { font-size: 8pt; font-weight: 900; text-transform: uppercase; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+              .total-price { font-size: 14pt; font-weight: 900; text-align: right; }
+              .row2 { display: flex; justify-content: space-between; font-size: 7pt; margin-bottom: 1mm; }
+              .weight { font-weight: bold; }
+              .cup-label { color: #666; }
+              .divider { border-top: 1px solid #ccc; margin: 1mm 0; }
+              .barcode-section { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+              .barcode-number { font-family: monospace; font-size: 6pt; letter-spacing: 0.5px; }
+            </style>
+          </head>
+          <body>
+            <div class="row1">
+              <div class="product-name">${lastLabel.productName}</div>
+              <div class="total-price">${lastLabel.priceCUP.toLocaleString()}</div>
+            </div>
+            <div class="row2">
+              <span class="weight">${lastLabel.weight}</span>
+              <span class="cup-label">CUP</span>
+            </div>
+            <div class="divider"></div>
+            <div class="barcode-section">
+              <svg id="barcode"></svg>
+              <div class="barcode-number">${lastLabel.barcode}</div>
+            </div>
+            <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+            <script>
+              JsBarcode("#barcode", "${lastLabel.barcode}", { format: "EAN13", width: 1, height: 25, displayValue: false });
+              window.onload = function() { window.print(); }
+            </script>
+          </body>
+        </html>
+      `)
+    } else {
+      // Standard 3x2 inch label
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Etiqueta 3x2 - ${lastLabel.productName}</title>
+            <style>
+              @page { size: ${pageSize}; margin: 0; }
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { font-family: Arial, sans-serif; ${bodySize} display: flex; flex-direction: column; }
+              .header-row { display: flex; justify-content: space-between; font-size: 7pt; color: #666; text-transform: uppercase; }
+              .prices-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2mm; }
+              .unit-price { text-align: left; }
+              .unit-price-value { font-size: 14pt; font-weight: 900; }
+              .unit-price-label { font-size: 7pt; color: #666; }
+              .total-price { text-align: right; }
+              .total-price-value { font-size: 24pt; font-weight: 900; line-height: 1; }
+              .total-price-label { font-size: 8pt; color: #666; }
+              .divider { border-top: 1px solid #ccc; margin: 2mm 0; }
+              .product-name { font-size: 11pt; font-weight: 900; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 1mm; }
+              .weight-date { display: flex; justify-content: space-between; font-size: 10pt; margin-bottom: 3mm; }
+              .weight { font-weight: bold; }
+              .date { color: #666; }
+              .barcode-section { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+              .barcode-number { font-family: monospace; font-size: 8pt; letter-spacing: 1px; margin-top: 1mm; }
             </style>
           </head>
           <body>
@@ -487,21 +474,14 @@ export default function WeightLabelsPage() {
             </div>
             <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
             <script>
-              JsBarcode("#barcode", "${lastLabel.barcode}", {
-                format: "EAN13",
-                width: 1.5,
-                height: 40,
-                displayValue: false
-              });
-              window.onload = function() {
-                window.print();
-              }
+              JsBarcode("#barcode", "${lastLabel.barcode}", { format: "EAN13", width: 1.5, height: 40, displayValue: false });
+              window.onload = function() { window.print(); }
             </script>
           </body>
         </html>
       `)
-      printWindow.document.close()
     }
+    printWindow.document.close()
     setShowPrintModal(false)
   }
 
@@ -758,59 +738,100 @@ export default function WeightLabelsPage() {
                       <div className="text-green-300/70 text-lg mt-1">CUP</div>
                     </div>
 
-                    {/* Label Preview (3x2 inches = 76mm x 51mm) - Publix style */}
+                    {/* Label Size Selector */}
+                    <div className="mb-4">
+                      <label className="block text-gray-400 text-xs mb-2 uppercase text-center">Tamaño de Etiqueta</label>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setLabelSize('3x2')}
+                          className={cn(
+                            "flex-1 py-2 px-3 rounded-lg border transition-all text-sm",
+                            labelSize === '3x2'
+                              ? 'border-purple-500 bg-purple-900/30 text-purple-300'
+                              : 'border-gray-600 bg-gray-700/50 text-gray-400 hover:border-gray-500'
+                          )}
+                        >
+                          3x2" (76x51mm)
+                        </button>
+                        <button
+                          onClick={() => setLabelSize('2x1')}
+                          className={cn(
+                            "flex-1 py-2 px-3 rounded-lg border transition-all text-sm",
+                            labelSize === '2x1'
+                              ? 'border-purple-500 bg-purple-900/30 text-purple-300'
+                              : 'border-gray-600 bg-gray-700/50 text-gray-400 hover:border-gray-500'
+                          )}
+                        >
+                          2x1" (51x25mm)
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Label Preview - Dynamic based on size */}
                     {barcodePreview ? (
                       <div className="bg-gray-800 rounded-xl p-3 mb-4 border border-gray-700">
-                        <p className="text-gray-400 text-xs mb-2 uppercase text-center">Vista Previa Etiqueta (3x2")</p>
-                        {/* Label simulation - 3:2 aspect ratio - PUBLIX STYLE */}
-                        <div className="bg-white rounded-lg p-3 mx-auto" style={{ maxWidth: '260px', aspectRatio: '3/2' }}>
-                          {/* Row 1: Price headers */}
-                          <div className="flex justify-between text-[8px] text-gray-500 uppercase mb-0.5">
-                            <span>PRECIO/{selectedProduct.unitOfMeasure || 'kg'}</span>
-                            <span>PRECIO</span>
-                          </div>
-
-                          {/* Row 2: Prices - Unit left, Total right (LARGE) */}
-                          <div className="flex justify-between items-start mb-1">
-                            <div className="text-left">
-                              <p className="font-black text-black text-sm">{Math.round(pricePerKg * USD_CUP).toLocaleString()}</p>
-                              <p className="text-[9px] text-gray-600">CUP</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-black text-black text-2xl leading-none">{priceCUP.toLocaleString()}</p>
-                              <p className="text-[10px] text-gray-600">CUP</p>
-                            </div>
-                          </div>
-
-                          {/* Divider */}
-                          <div className="border-t border-gray-300 my-1"></div>
-
-                          {/* Product Name (BOLD) */}
-                          <p className="font-black text-black text-xs uppercase truncate mb-0.5">
-                            {selectedProduct.name}
-                          </p>
-
-                          {/* Weight and Date */}
-                          <div className="flex justify-between text-[10px] mb-2">
-                            <span className="font-bold text-black">{weight || '0.000'} {selectedProduct.unitOfMeasure || 'kg'}</span>
-                            <span className="text-gray-500">{new Date().toLocaleDateString('es-ES')}</span>
-                          </div>
-
-                          {/* Barcode */}
-                          <div className="flex flex-col items-center">
-                            <div className="flex justify-center gap-0.5">
-                              {Array.from({ length: 35 }).map((_, i) => (
-                                <div
-                                  key={i}
-                                  className="bg-black"
-                                  style={{ width: i % 4 === 0 ? '2px' : '1px', height: '28px' }}
-                                />
-                              ))}
-                            </div>
-                            <p className="font-mono text-[9px] text-black tracking-wider mt-0.5">
-                              {barcodePreview}
-                            </p>
-                          </div>
+                        <p className="text-gray-400 text-xs mb-2 uppercase text-center">Vista Previa ({labelSize}")</p>
+                        <div
+                          className="bg-white rounded-lg p-2 mx-auto"
+                          style={{
+                            maxWidth: labelSize === '3x2' ? '260px' : '200px',
+                            aspectRatio: labelSize === '3x2' ? '3/2' : '2/1'
+                          }}
+                        >
+                          {labelSize === '3x2' ? (
+                            // 3x2 Preview
+                            <>
+                              <div className="flex justify-between text-[8px] text-gray-500 uppercase mb-0.5">
+                                <span>PRECIO/{selectedProduct.unitOfMeasure || 'kg'}</span>
+                                <span>PRECIO</span>
+                              </div>
+                              <div className="flex justify-between items-start mb-1">
+                                <div className="text-left">
+                                  <p className="font-black text-black text-sm">{Math.round(pricePerKg * USD_CUP).toLocaleString()}</p>
+                                  <p className="text-[9px] text-gray-600">CUP</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-black text-black text-2xl leading-none">{priceCUP.toLocaleString()}</p>
+                                  <p className="text-[10px] text-gray-600">CUP</p>
+                                </div>
+                              </div>
+                              <div className="border-t border-gray-300 my-1"></div>
+                              <p className="font-black text-black text-xs uppercase truncate mb-0.5">{selectedProduct.name}</p>
+                              <div className="flex justify-between text-[10px] mb-2">
+                                <span className="font-bold text-black">{weight || '0.000'} {selectedProduct.unitOfMeasure || 'kg'}</span>
+                                <span className="text-gray-500">{new Date().toLocaleDateString('es-ES')}</span>
+                              </div>
+                              <div className="flex flex-col items-center">
+                                <div className="flex justify-center gap-0.5">
+                                  {Array.from({ length: 35 }).map((_, i) => (
+                                    <div key={i} className="bg-black" style={{ width: i % 4 === 0 ? '2px' : '1px', height: '28px' }} />
+                                  ))}
+                                </div>
+                                <p className="font-mono text-[9px] text-black tracking-wider mt-0.5">{barcodePreview}</p>
+                              </div>
+                            </>
+                          ) : (
+                            // 2x1 Compact Preview
+                            <>
+                              <div className="flex justify-between items-start mb-0.5">
+                                <p className="font-black text-black text-[9px] uppercase truncate max-w-[55%]">{selectedProduct.name}</p>
+                                <p className="font-black text-black text-sm">{priceCUP.toLocaleString()}</p>
+                              </div>
+                              <div className="flex justify-between text-[8px] mb-1">
+                                <span className="font-bold text-black">{weight || '0.000'} {selectedProduct.unitOfMeasure || 'kg'}</span>
+                                <span className="text-gray-500">CUP</span>
+                              </div>
+                              <div className="border-t border-gray-300 my-0.5"></div>
+                              <div className="flex flex-col items-center">
+                                <div className="flex justify-center gap-0.5">
+                                  {Array.from({ length: 28 }).map((_, i) => (
+                                    <div key={i} className="bg-black" style={{ width: i % 4 === 0 ? '1.5px' : '0.8px', height: '16px' }} />
+                                  ))}
+                                </div>
+                                <p className="font-mono text-[7px] text-black tracking-wider">{barcodePreview}</p>
+                              </div>
+                            </>
+                          )}
                         </div>
                         <p className="text-gray-500 text-xs mt-2 text-center">EAN-13 con peso embebido</p>
                       </div>
@@ -1048,53 +1069,96 @@ export default function WeightLabelsPage() {
                   </button>
                 </div>
 
-                {/* Label Preview - PUBLIX STYLE */}
-                <div className="bg-white rounded-lg p-3 mb-6" style={{ aspectRatio: '3/2' }}>
-                  {/* Row 1: Price headers */}
-                  <div className="flex justify-between text-[8px] text-gray-500 uppercase mb-0.5">
-                    <span>PRECIO/{selectedProduct?.unitOfMeasure || 'kg'}</span>
-                    <span>PRECIO</span>
+                {/* Label Size Selector */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-400 mb-2">Tamaño de Etiqueta</label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setLabelSize('3x2')}
+                      className={cn(
+                        "flex-1 py-3 px-4 rounded-xl border-2 transition-all font-medium",
+                        labelSize === '3x2'
+                          ? 'border-purple-500 bg-purple-900/30 text-purple-300'
+                          : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
+                      )}
+                    >
+                      <div className="text-lg">3" x 2"</div>
+                      <div className="text-xs opacity-70">76 x 51 mm</div>
+                    </button>
+                    <button
+                      onClick={() => setLabelSize('2x1')}
+                      className={cn(
+                        "flex-1 py-3 px-4 rounded-xl border-2 transition-all font-medium",
+                        labelSize === '2x1'
+                          ? 'border-purple-500 bg-purple-900/30 text-purple-300'
+                          : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
+                      )}
+                    >
+                      <div className="text-lg">2" x 1"</div>
+                      <div className="text-xs opacity-70">51 x 25 mm</div>
+                    </button>
                   </div>
+                </div>
 
-                  {/* Row 2: Prices */}
-                  <div className="flex justify-between items-start mb-1">
-                    <div className="text-left">
-                      <p className="font-black text-black text-sm">{selectedProduct ? Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP).toLocaleString() : 0}</p>
-                      <p className="text-[9px] text-gray-600">CUP</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-black text-black text-2xl leading-none">{lastLabel.priceCUP.toLocaleString()}</p>
-                      <p className="text-[10px] text-gray-600">CUP</p>
-                    </div>
-                  </div>
-
-                  {/* Divider */}
-                  <div className="border-t border-gray-300 my-1"></div>
-
-                  {/* Product Name */}
-                  <p className="font-black text-black text-xs uppercase truncate mb-0.5">
-                    {lastLabel.productName}
-                  </p>
-
-                  {/* Weight and Date */}
-                  <div className="flex justify-between text-[10px] mb-2">
-                    <span className="font-bold text-black">{lastLabel.weight}</span>
-                    <span className="text-gray-500">{new Date().toLocaleDateString('es-ES')}</span>
-                  </div>
-
-                  {/* Barcode */}
-                  <div className="flex flex-col items-center">
-                    <div className="flex justify-center gap-0.5">
-                      {Array.from({ length: 35 }).map((_, i) => (
-                        <div
-                          key={i}
-                          className="bg-black"
-                          style={{ width: i % 4 === 0 ? '2px' : '1px', height: '28px' }}
-                        />
-                      ))}
-                    </div>
-                    <p className="font-mono text-[9px] text-black tracking-wider mt-0.5">{lastLabel.barcode}</p>
-                  </div>
+                {/* Label Preview - Dynamic based on size */}
+                <div
+                  className="bg-white rounded-lg p-2 mb-6 mx-auto"
+                  style={{ aspectRatio: labelSize === '3x2' ? '3/2' : '2/1', maxWidth: labelSize === '3x2' ? '280px' : '220px' }}
+                >
+                  {labelSize === '3x2' ? (
+                    // 3x2 Preview
+                    <>
+                      <div className="flex justify-between text-[8px] text-gray-500 uppercase mb-0.5">
+                        <span>PRECIO/{selectedProduct?.unitOfMeasure || 'kg'}</span>
+                        <span>PRECIO</span>
+                      </div>
+                      <div className="flex justify-between items-start mb-1">
+                        <div className="text-left">
+                          <p className="font-black text-black text-sm">{selectedProduct ? Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP).toLocaleString() : 0}</p>
+                          <p className="text-[9px] text-gray-600">CUP</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-black text-black text-2xl leading-none">{lastLabel.priceCUP.toLocaleString()}</p>
+                          <p className="text-[10px] text-gray-600">CUP</p>
+                        </div>
+                      </div>
+                      <div className="border-t border-gray-300 my-1"></div>
+                      <p className="font-black text-black text-xs uppercase truncate mb-0.5">{lastLabel.productName}</p>
+                      <div className="flex justify-between text-[10px] mb-2">
+                        <span className="font-bold text-black">{lastLabel.weight}</span>
+                        <span className="text-gray-500">{new Date().toLocaleDateString('es-ES')}</span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <div className="flex justify-center gap-0.5">
+                          {Array.from({ length: 35 }).map((_, i) => (
+                            <div key={i} className="bg-black" style={{ width: i % 4 === 0 ? '2px' : '1px', height: '28px' }} />
+                          ))}
+                        </div>
+                        <p className="font-mono text-[9px] text-black tracking-wider mt-0.5">{lastLabel.barcode}</p>
+                      </div>
+                    </>
+                  ) : (
+                    // 2x1 Compact Preview
+                    <>
+                      <div className="flex justify-between items-start mb-0.5">
+                        <p className="font-black text-black text-[10px] uppercase truncate max-w-[60%]">{lastLabel.productName}</p>
+                        <p className="font-black text-black text-base">{lastLabel.priceCUP.toLocaleString()}</p>
+                      </div>
+                      <div className="flex justify-between text-[8px] mb-1">
+                        <span className="font-bold text-black">{lastLabel.weight}</span>
+                        <span className="text-gray-500">CUP</span>
+                      </div>
+                      <div className="border-t border-gray-300 my-0.5"></div>
+                      <div className="flex flex-col items-center">
+                        <div className="flex justify-center gap-0.5">
+                          {Array.from({ length: 30 }).map((_, i) => (
+                            <div key={i} className="bg-black" style={{ width: i % 4 === 0 ? '1.5px' : '0.8px', height: '18px' }} />
+                          ))}
+                        </div>
+                        <p className="font-mono text-[7px] text-black tracking-wider">{lastLabel.barcode}</p>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Print Services */}
