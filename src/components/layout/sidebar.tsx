@@ -730,8 +730,8 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     if (user?.role === 'MARKET_VENDEDOR') return marketVendedorMenuItems
     if (user?.role === 'MARKET_MANAGER_TIENDA') return marketManagerTiendaMenuItems
     // Filtrar items que requieren rol específico
-    // ADMIN y SUPER_ADMIN pueden ver todos los items incluyendo los que requieren MARKET_MANAGER
-    const higherRoles = ['ADMIN', 'SUPER_ADMIN', 'MARKET_MANAGER']
+    // ADMIN, SUPER_ADMIN y MANAGER pueden ver todos los items incluyendo los que requieren MARKET_MANAGER
+    const higherRoles = ['ADMIN', 'SUPER_ADMIN', 'MARKET_MANAGER', 'MANAGER']
     return marketMenuItems.filter(item => {
       if (item.requiredRole) {
         // Si el usuario tiene un rol superior o igual, puede ver el item
