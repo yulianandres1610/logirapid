@@ -52,7 +52,6 @@ import {
   Calendar,
   Fingerprint,
   Briefcase,
-  Factory,
   Scale
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -323,13 +322,6 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         'Mayoreo': true
       }))
     }
-    // Auto-expand Production submenu
-    if (pathname.includes('/market/production')) {
-      setOpenSubmenus(prev => ({
-        ...prev,
-        'Producción': true
-      }))
-    }
   }, [pathname])
 
   // Fetch branding data for company logo
@@ -553,17 +545,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       ]
     },
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
-    {
-      icon: Factory,
-      label: "Producción",
-      href: "/dashboard/market/production",
-      hasSubmenu: true,
-      submenuItems: [
-        { icon: ClipboardList, label: "Órdenes", href: "/dashboard/market/production" },
-        { icon: BookOpen, label: "Recetas (BOM)", href: "/dashboard/market/production/bom" },
-        { icon: Scale, label: "Etiquetas Peso", href: "/dashboard/market/production/weight-labels" },
-      ]
-    },
+    { icon: Scale, label: "Etiquetas de Peso", href: "/dashboard/market/weight-labels" },
     {
       icon: Briefcase,
       label: "Mayoreo",

@@ -13,12 +13,10 @@ import {
   Delete,
   CheckCircle,
   AlertCircle,
-  Settings,
   X,
   Maximize,
   Minimize,
-  ArrowLeft,
-  Home
+  ArrowLeft
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -459,18 +457,11 @@ export default function WeightLabelsPage() {
           {/* Left - Navigation */}
           <div className="flex items-center gap-3">
             <button
-              onClick={() => router.push('/dashboard/market/production')}
-              className="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
-              title="Volver a Producción"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <button
               onClick={() => router.push('/dashboard/market')}
               className="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
-              title="Ir al Dashboard"
+              title="Volver al Dashboard"
             >
-              <Home className="w-5 h-5" />
+              <ArrowLeft className="w-5 h-5" />
             </button>
             <div className="h-6 w-px bg-gray-600" />
             <div className="flex items-center gap-2">
