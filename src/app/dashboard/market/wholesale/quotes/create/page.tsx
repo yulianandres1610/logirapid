@@ -15,7 +15,6 @@ import {
   Trash2,
   Loader2,
   X,
-  Building2,
   Tag,
   Percent,
   Calendar,
@@ -80,10 +79,6 @@ interface PricelistItem {
   minQuantity: number
 }
 
-interface Warehouse {
-  id: number
-  name: string
-}
 
 type Step = 'customer' | 'products' | 'conditions' | 'review'
 
@@ -143,8 +138,6 @@ export default function CreateQuotePage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [customerSearch, setCustomerSearch] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([])
-  const [selectedWarehouse, setSelectedWarehouse] = useState<number | null>(null)
 
   // Step 2: Products
   const [products, setProducts] = useState<Product[]>([])
@@ -183,7 +176,6 @@ export default function CreateQuotePage() {
     if (isRestoring) return
     const state = {
       customerId: selectedCustomer?.id || null,
-      warehouseId: selectedWarehouse,
       lines: serializeLines(lines),
       validUntil,
       discountPercent,
@@ -192,7 +184,7 @@ export default function CreateQuotePage() {
       timestamp: Date.now()
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-  }, [selectedCustomer, selectedWarehouse, lines, validUntil, discountPercent, notes, internalNotes, isRestoring])
+  }, [selectedCustomer, lines, validUntil, discountPercent, notes, internalNotes, isRestoring])
 
   // Clear storage after successful save
   const clearStorage = useCallback(() => {
@@ -207,7 +199,6 @@ export default function CreateQuotePage() {
         const state = JSON.parse(savedState)
         // Check if saved state is less than 24 hours old
         if (state.timestamp && Date.now() - state.timestamp < 24 * 60 * 60 * 1000) {
-          if (state.warehouseId) setSelectedWarehouse(state.warehouseId)
           if (state.validUntil) setValidUntil(state.validUntil)
           if (state.discountPercent) setDiscountPercent(state.discountPercent)
           if (state.notes) setNotes(state.notes)
@@ -276,7 +267,6 @@ export default function CreateQuotePage() {
 
   useEffect(() => {
     fetchCustomers()
-    fetchWarehouses()
     fetchProducts()
     fetchExchangeRates()
   }, [])
@@ -315,20 +305,6 @@ export default function CreateQuotePage() {
       }
     } catch (error) {
       console.error('Error fetching customers:', error)
-    }
-  }
-
-  const fetchWarehouses = async () => {
-    try {
-      const response = await fetch('/api/market/warehouses')
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success) {
-          setWarehouses(result.data.warehouses || result.data)
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching warehouses:', error)
     }
   }
 
@@ -519,7 +495,6 @@ export default function CreateQuotePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerId: selectedCustomer.id,
-          warehouseId: selectedWarehouse,
           pricelistId: selectedCustomer.pricelistId,
           validUntil: validUntil || null,
           discountPercent,
@@ -839,32 +814,6 @@ export default function CreateQuotePage() {
                       ))}
                     </div>
 
-                    {selectedCustomer && (
-                      <div className={cn(
-                        'p-4 rounded-xl border',
-                        theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
-                      )}>
-                        <div className="flex items-center gap-3 mb-3">
-                          <Building2 className="w-5 h-5 text-gray-400" />
-                          <h3 className="font-medium">Almacén de Origen (opcional)</h3>
-                        </div>
-                        <select
-                          value={selectedWarehouse || ''}
-                          onChange={(e) => setSelectedWarehouse(e.target.value ? parseInt(e.target.value) : null)}
-                          className={cn(
-                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
-                            theme === 'dark'
-                              ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                              : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
-                          )}
-                        >
-                          <option value="">Sin especificar</option>
-                          {warehouses.map(w => (
-                            <option key={w.id} value={w.id}>{w.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
                   </motion.div>
                 )}
 
