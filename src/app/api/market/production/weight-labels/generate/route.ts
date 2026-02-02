@@ -168,16 +168,47 @@ export async function POST(request: NextRequest) {
       console.log(`[Weight Labels API] Auto-generated prefix ${newPrefix} for product ${productId}`)
     }
 
-    // Obtener tasa de cambio vigente (CUP)
-    const rateResult = await db.query(`
-      SELECT baserate
-      FROM agency_rates_history
-      WHERE currency = 'CUP'
-      ORDER BY timestamp DESC
-      LIMIT 1
-    `)
+    // Obtener tasa de cambio configurada en el sistema
+    // Prioridad: 1) Tasa manual configurada, 2) ElToque/fallback
+    let exchangeRate = 440 // Fallback default
 
-    const exchangeRate = rateResult.rows[0]?.baserate || 380
+    // 1. Verificar si hay tasa manual configurada para la empresa
+    const manualRateResult = await db.query(
+      `SELECT manual_rate FROM market_exchange_rate_config WHERE company_id = $1`,
+      [companyId]
+    )
+
+    if (manualRateResult.rows[0]?.manual_rate) {
+      const manualRate = parseFloat(manualRateResult.rows[0].manual_rate)
+      if (manualRate > 0) {
+        exchangeRate = manualRate
+        console.log(`[Weight Labels API] Using manual rate: ${exchangeRate}`)
+      }
+    }
+
+    // 2. Si no hay tasa manual, intentar obtener de ElToque
+    if (!manualRateResult.rows[0]?.manual_rate) {
+      try {
+        const elToqueResponse = await fetch('http://173.249.39.167:8000/tasas', {
+          method: 'GET',
+          headers: { 'access_token': 'tu_clave_secreta_aqui' },
+          signal: AbortSignal.timeout(5000)
+        })
+
+        if (elToqueResponse.ok) {
+          const data = await elToqueResponse.json()
+          if (data.monedas && Array.isArray(data.monedas)) {
+            const usdRate = data.monedas.find((m: { moneda: string; precio_cup: number }) => m.moneda === 'USD')
+            if (usdRate?.precio_cup) {
+              exchangeRate = usdRate.precio_cup
+              console.log(`[Weight Labels API] Using ElToque rate: ${exchangeRate}`)
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('[Weight Labels API] ElToque API error, using fallback:', error)
+      }
+    }
 
     // Calcular precios
     const pricePerKg = parseFloat(product.sellingPrice) || 0
