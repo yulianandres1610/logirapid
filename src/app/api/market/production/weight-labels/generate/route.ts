@@ -3,6 +3,57 @@ import { cookies } from 'next/headers'
 import { db } from '@/lib/database'
 
 /**
+ * Genera un prefijo único de 5 dígitos para código de barra de peso
+ */
+async function generateWeightBarcodePrefix(companyId: number): Promise<string> {
+  try {
+    // Obtener el prefijo más alto existente para esta empresa
+    const result = await db.query(`
+      SELECT weight_barcode_prefix
+      FROM market_products
+      WHERE company_id = $1
+        AND weight_barcode_prefix IS NOT NULL
+        AND weight_barcode_prefix ~ '^[0-9]+$'
+      ORDER BY weight_barcode_prefix::INTEGER DESC
+      LIMIT 1
+    `, [companyId])
+
+    let nextPrefix: number
+
+    if (result.rows.length > 0 && result.rows[0].weight_barcode_prefix) {
+      nextPrefix = parseInt(result.rows[0].weight_barcode_prefix) + 1
+    } else {
+      nextPrefix = 1
+    }
+
+    // Asegurar que no exceda 5 dígitos (máx 99999)
+    if (nextPrefix > 99999) {
+      const allPrefixes = await db.query(`
+        SELECT weight_barcode_prefix::INTEGER as prefix
+        FROM market_products
+        WHERE company_id = $1
+          AND weight_barcode_prefix IS NOT NULL
+          AND weight_barcode_prefix ~ '^[0-9]+$'
+        ORDER BY prefix ASC
+      `, [companyId])
+
+      const usedPrefixes = new Set(allPrefixes.rows.map(r => r.prefix))
+      for (let i = 1; i <= 99999; i++) {
+        if (!usedPrefixes.has(i)) {
+          nextPrefix = i
+          break
+        }
+      }
+    }
+
+    return nextPrefix.toString().padStart(5, '0')
+  } catch (error) {
+    console.error('[Weight Labels API] Error generating prefix:', error)
+    return Date.now().toString().slice(-5)
+  }
+}
+
+/**
  * Calcula el dígito verificador EAN-13
  */
 function calculateEAN13CheckDigit(code12: string): string {
@@ -102,12 +153,19 @@ export async function POST(request: NextRequest) {
 
     const product = productResult.rows[0]
 
-    // Verificar que tenga prefijo de código de barra
+    // Si no tiene prefijo de código de barra, generarlo automáticamente
     if (!product.weightBarcodePrefix) {
-      return NextResponse.json({
-        success: false,
-        error: 'Este producto no tiene configurado un prefijo de código de barra para peso. Configure uno primero.'
-      }, { status: 400 })
+      const newPrefix = await generateWeightBarcodePrefix(parseInt(companyId))
+
+      // Actualizar el producto con el nuevo prefijo
+      await db.query(`
+        UPDATE market_products
+        SET weight_barcode_prefix = $1, is_weight_product = true, updated_at = NOW()
+        WHERE id = $2 AND company_id = $3
+      `, [newPrefix, productId, companyId])
+
+      product.weightBarcodePrefix = newPrefix
+      console.log(`[Weight Labels API] Auto-generated prefix ${newPrefix} for product ${productId}`)
     }
 
     // Obtener tasa de cambio vigente (CUP)
