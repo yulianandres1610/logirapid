@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft,
@@ -28,6 +28,19 @@ import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+
+// Wrapper component to handle Suspense for useSearchParams
+export default function CreateQuotePageWrapper() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    }>
+      <CreateQuotePage />
+    </Suspense>
+  )
+}
 
 interface Customer {
   id: number
@@ -88,7 +101,7 @@ const STEPS = [
 
 const STORAGE_KEY = 'wholesale_quote_draft'
 
-export default function CreateQuotePage() {
+function CreateQuotePage() {
   const { theme } = useTheme()
   const router = useRouter()
   const pathname = usePathname()
