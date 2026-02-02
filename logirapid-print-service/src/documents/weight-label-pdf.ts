@@ -64,9 +64,9 @@ async function generateWeightLabel3x2Pdf(data: WeightLabelPdfData): Promise<Buff
   const unit = data.unitOfMeasure || 'kg'
   const pricePerUnit = data.pricePerUnit || 0
 
-  // Format prices (no decimals for CUP)
-  const formattedPricePerUnit = Math.round(pricePerUnit).toLocaleString('es-ES')
-  const formattedTotalPrice = Math.round(data.priceCUP).toLocaleString('es-ES')
+  // Format prices with $ symbol (no decimals for CUP)
+  const formattedPricePerUnit = '$' + Math.round(pricePerUnit).toLocaleString('es-ES')
+  const formattedTotalPrice = '$' + Math.round(data.priceCUP).toLocaleString('es-ES')
 
   // ========== ROW 1: Headers ==========
   const headerY = height - margin - 8
@@ -80,8 +80,8 @@ async function generateWeightLabel3x2Pdf(data: WeightLabelPdfData): Promise<Buff
     color: rgb(0.3, 0.3, 0.3)
   })
 
-  // PRECIO (center)
-  page.drawText('PRECIO', {
+  // TOTAL (center)
+  page.drawText('TOTAL', {
     x: 70,
     y: headerY,
     size: 7,
@@ -236,8 +236,8 @@ async function generateWeightLabel2x1Pdf(data: WeightLabelPdfData): Promise<Buff
 
   const margin = 3
 
-  // Format price
-  const formattedTotalPrice = Math.round(data.priceCUP).toLocaleString('es-ES')
+  // Format price with $ symbol
+  const formattedTotalPrice = '$' + Math.round(data.priceCUP).toLocaleString('es-ES')
 
   // ========== ROW 1: Product Name (left) + Price (right) ==========
   const productName = truncateText(data.productName.toUpperCase(), 14)
@@ -248,7 +248,7 @@ async function generateWeightLabel2x1Pdf(data: WeightLabelPdfData): Promise<Buff
     font: boldFont
   })
 
-  // Price (right aligned)
+  // Price (right aligned) with $ symbol
   const priceWidth = boldFont.widthOfTextAtSize(formattedTotalPrice, 12)
   page.drawText(formattedTotalPrice, {
     x: width - margin - priceWidth,

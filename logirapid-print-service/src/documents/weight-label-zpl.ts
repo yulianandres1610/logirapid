@@ -75,22 +75,22 @@ export function generateWeightLabel3x2(data: WeightLabelData): Buffer {
 
   // ========== ROW 1: Headers ==========
   zpl.push(`^FO15,8^A0N,22,22^FDPRECIO/${unit}^FS`)
-  zpl.push(`^FO200,8^A0N,22,22^FDPRECIO^FS`)
+  zpl.push(`^FO200,8^A0N,22,22^FDTOTAL^FS`)
 
   // ========== Date (top right corner) ==========
   const dateText = data.printDate || new Date().toLocaleDateString('es-ES')
   zpl.push(`^FO${labelWidth - 85},8^A0N,18,18^FD${dateText}^FS`)
 
-  // ========== ROW 2: Price Values (BELOW headers, no CUP label) ==========
-  // Left: Price per unit
-  zpl.push(`^FO15,35^A0N,55,55^FD${formattedPricePerUnit}^FS`)
-  zpl.push(`^FO16,35^A0N,55,55^FD${formattedPricePerUnit}^FS`) // Bold
+  // ========== ROW 2: Price Values (BELOW headers, with $ symbol) ==========
+  // Left: Price per unit with $
+  zpl.push(`^FO15,35^A0N,55,55^FD$${formattedPricePerUnit}^FS`)
+  zpl.push(`^FO16,35^A0N,55,55^FD$${formattedPricePerUnit}^FS`) // Bold
 
-  // Center: Total price (LARGE) - positioned below "PRECIO" header
+  // Center: Total price (LARGE) with $ - positioned below "TOTAL" header
   const priceBlockWidth = 280
   const priceBlockX = 170
-  zpl.push(`^FO${priceBlockX},32^FB${priceBlockWidth},1,0,R,0^A0N,70,70^FD${formattedTotalPrice}^FS`)
-  zpl.push(`^FO${priceBlockX + 1},32^FB${priceBlockWidth},1,0,R,0^A0N,70,70^FD${formattedTotalPrice}^FS`) // Bold
+  zpl.push(`^FO${priceBlockX},32^FB${priceBlockWidth},1,0,R,0^A0N,70,70^FD$${formattedTotalPrice}^FS`)
+  zpl.push(`^FO${priceBlockX + 1},32^FB${priceBlockWidth},1,0,R,0^A0N,70,70^FD$${formattedTotalPrice}^FS`) // Bold
 
   // ========== Divider line ==========
   zpl.push(`^FO15,115^GB${labelWidth - 30},3,3^FS`)
@@ -152,16 +152,16 @@ export function generateWeightLabel2x1(data: WeightLabelData): Buffer {
   zpl.push('^LH0,0')
   zpl.push('^CI28') // UTF-8
 
-  // Format total price
-  const formattedTotalPrice = data.priceCUP.toLocaleString('es-ES')
+  // Format total price with $ symbol
+  const formattedTotalPrice = '$' + data.priceCUP.toLocaleString('es-ES')
 
   // ========== ROW 1: Product Name (left) + Price (right) ==========
   const productName = truncate(data.productName.toUpperCase(), 14)
   zpl.push(`^FO8,8^A0N,28,28^FD${escapeZpl(productName)}^FS`)
   zpl.push(`^FO9,8^A0N,28,28^FD${escapeZpl(productName)}^FS`) // Bold
 
-  // Price - right aligned using field block to prevent overflow
-  const priceBlockWidth = 130
+  // Price - right aligned using field block to prevent overflow (with $ symbol)
+  const priceBlockWidth = 140
   zpl.push(`^FO${labelWidth - priceBlockWidth - 5},5^FB${priceBlockWidth},1,0,R,0^A0N,42,42^FD${formattedTotalPrice}^FS`)
   zpl.push(`^FO${labelWidth - priceBlockWidth - 4},5^FB${priceBlockWidth},1,0,R,0^A0N,42,42^FD${formattedTotalPrice}^FS`) // Bold
 
