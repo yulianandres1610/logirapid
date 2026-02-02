@@ -229,6 +229,7 @@ export async function POST(request: NextRequest) {
         weight: weightDisplay,
         weightKg: weightKg,
         priceCUP: priceCUP,
+        priceUSD: Math.round(priceUSD * 100) / 100,
         pricePerKg: pricePerKg,
         pricePerUnit: Math.round(pricePerKg * exchangeRate),
         unitOfMeasure: unit,

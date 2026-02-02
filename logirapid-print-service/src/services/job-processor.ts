@@ -51,6 +51,7 @@ class JobProcessor {
   private isRunning = false
   private pollIntervalMs = 5000
   private heartbeatIntervalMs = 30000
+  private lastKnownPrinterNames: Set<string> = new Set()
 
   async start(): Promise<void> {
     if (this.isRunning) return
@@ -105,6 +106,9 @@ class JobProcessor {
       console.log(`[Job Processor]       - RAW Queue: ${p.rawQueueName || 'none'}`)
     })
 
+    // Store printer names for change detection
+    this.lastKnownPrinterNames = new Set(printers.map(p => p.printerName))
+
     // Register with server
     const result = await apiClient.register(printers)
 
@@ -124,6 +128,30 @@ class JobProcessor {
   }
 
   private async sendHeartbeat(): Promise<void> {
+    // Check if printers have changed and re-register if needed
+    const currentPrinters = await printerService.detectPrinters()
+    const currentNames = new Set(currentPrinters.map(p => p.printerName))
+
+    // Check if printers have changed
+    const printersChanged = currentNames.size !== this.lastKnownPrinterNames.size ||
+      [...currentNames].some(name => !this.lastKnownPrinterNames.has(name))
+
+    if (printersChanged) {
+      console.log('[Job Processor] Printer change detected, re-registering...')
+      console.log('[Job Processor] Previous printers:', [...this.lastKnownPrinterNames])
+      console.log('[Job Processor] Current printers:', [...currentNames])
+
+      this.lastKnownPrinterNames = currentNames
+
+      // Re-register with updated printer list
+      const registerResult = await apiClient.register(currentPrinters)
+      if (registerResult.success) {
+        console.log('[Job Processor] Printers synced with server')
+      } else {
+        console.error('[Job Processor] Failed to sync printers:', registerResult.error)
+      }
+    }
+
     const result = await apiClient.heartbeat()
 
     if (result.success && result.data) {

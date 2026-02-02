@@ -181,7 +181,17 @@ function updateTrayMenu(): void {
     {
       label: 'Actualizar Impresoras',
       click: async () => {
-        await printerService.detectPrinters()
+        const printers = await printerService.detectPrinters()
+        // Re-register with server to sync new printers
+        if (apiClient.isInitialized()) {
+          console.log('[Tray] Re-registering printers with server...')
+          const result = await apiClient.register(printers)
+          if (result.success) {
+            console.log('[Tray] Printers synced with server successfully')
+          } else {
+            console.error('[Tray] Failed to sync printers:', result.error)
+          }
+        }
         mainWindow?.webContents.send('printers-updated')
       }
     },
@@ -405,6 +415,18 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle('refresh-printers', async () => {
     const printers = await printerService.detectPrinters()
+
+    // Re-register with server to sync new printers
+    if (apiClient.isInitialized()) {
+      console.log('[IPC] Re-registering printers with server...')
+      const result = await apiClient.register(printers)
+      if (result.success) {
+        console.log('[IPC] Printers synced with server successfully')
+      } else {
+        console.error('[IPC] Failed to sync printers with server:', result.error)
+      }
+    }
+
     return printers
   })
 

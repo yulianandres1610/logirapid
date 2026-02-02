@@ -93,9 +93,9 @@ export async function GET(
     printersResult.rows.forEach((p, i) => console.log(`  [${i + 1}] "${p.printer_name}" (id: ${p.id}, type: ${p.printer_type})`))
 
     const ALL_DOCUMENT_TYPES = [
-      'pos_receipt', 'product_label', 'invoice', 'purchase_invoice',
+      'pos_receipt', 'product_label', 'weight_label', 'lot_label', 'invoice', 'purchase_invoice',
       'sales_report', 'inventory_count_report', 'cash_register_report', 'shipping_label',
-      'warehouse_operation', 'consignment_receipt', 'unified_reception'
+      'warehouse_operation', 'consignment_receipt', 'unified_reception', 'transfer_receipt', 'audit_count_report'
     ]
 
     // Get recent jobs for this service

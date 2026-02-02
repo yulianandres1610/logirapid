@@ -9,8 +9,11 @@ export interface WeightLabelData {
   productSku?: string
   weight: string           // "1.250 kg"
   weightKg: number         // 1.250
-  priceCUP: number         // Precio en CUP
-  pricePerKg?: number      // Precio USD por kg (opcional para referencia)
+  priceCUP: number         // Precio total en CUP
+  priceUSD?: number        // Precio total en USD
+  pricePerKg?: number      // Precio USD por kg
+  pricePerUnit?: number    // Precio CUP por unidad (kg/lb)
+  unitOfMeasure?: string   // kg, lb, g
   barcode: string          // EAN-13 con peso embebido
   barcodeType?: 'ean13' | 'code128'
   printDate: string        // Fecha de impresión
@@ -22,16 +25,16 @@ export interface WeightLabelData {
  * Generate ZPL code for a weight label
  * 3x2 inch (76x51mm) label at 203 DPI
  * Diseño optimizado para visibilidad de peso y precio
+ * Muestra: Peso (bold), Precio USD, Precio CUP (bold)
  */
 export function generateWeightLabelZpl(data: WeightLabelData): Buffer {
   // 3x2 inch label at 203 DPI
   // 3 inches = 609 dots, 2 inches = 406 dots
-  const dpi = 203
   const labelWidth = 609  // 3 inches
   const labelHeight = 406 // 2 inches
 
   const zpl: string[] = []
-  let y = 15
+  let y = 10
 
   // Start label
   zpl.push('^XA')
@@ -42,82 +45,106 @@ export function generateWeightLabelZpl(data: WeightLabelData): Buffer {
   zpl.push('^CI28') // UTF-8 character set
 
   // ============================================
-  // PRODUCT NAME (top, centered, larger font)
+  // PRODUCT NAME (top, centered)
   // ============================================
-  const productName = truncate(data.productName, 26)
-  zpl.push(`^FO0,${y}^FB${labelWidth},1,0,C,0^A0N,32,32^FD${escapeZpl(productName)}^FS`)
-  y += 42
-
-  // SKU line (smaller, centered)
-  if (data.productSku) {
-    zpl.push(`^FO0,${y}^FB${labelWidth},1,0,C,0^A0N,20,20^FDSKU: ${escapeZpl(data.productSku)}^FS`)
-    y += 25
-  }
+  const productName = truncate(data.productName, 28)
+  zpl.push(`^FO0,${y}^FB${labelWidth},1,0,C,0^A0N,28,28^FD${escapeZpl(productName)}^FS`)
+  y += 32
 
   // ============================================
   // DIVIDER LINE
   // ============================================
-  y += 5
-  const lineWidth = 550
+  const lineWidth = 580
   const lineX = (labelWidth - lineWidth) / 2
   zpl.push(`^FO${lineX},${y}^GB${lineWidth},2,2^FS`)
-  y += 15
+  y += 10
 
   // ============================================
-  // WEIGHT - VERY LARGE AND PROMINENT (centered)
+  // WEIGHT - VERY LARGE AND BOLD (centered)
+  // Using double-print technique for bold effect
   // ============================================
-  // Box around weight
-  const weightBoxWidth = 400
+  const weightBoxWidth = 380
   const weightBoxX = (labelWidth - weightBoxWidth) / 2
-  zpl.push(`^FO${weightBoxX},${y}^GB${weightBoxWidth},70,3^FS`)
+  zpl.push(`^FO${weightBoxX},${y}^GB${weightBoxWidth},55,3^FS`)
 
-  // Weight value - HUGE font (centered)
-  zpl.push(`^FO0,${y + 8}^FB${labelWidth},1,0,C,0^A0N,55,55^FD${escapeZpl(data.weight)}^FS`)
-  y += 85
+  // Weight value - BOLD (print twice with offset for bold effect)
+  const weightText = escapeZpl(data.weight)
+  zpl.push(`^FO0,${y + 5}^FB${labelWidth},1,0,C,0^A0N,45,45^FD${weightText}^FS`)
+  zpl.push(`^FO1,${y + 5}^FB${labelWidth},1,0,C,0^A0N,45,45^FD${weightText}^FS`) // Bold offset
+  y += 65
 
   // ============================================
-  // PRICE IN CUP - LARGE AND BOLD (centered)
+  // PRICES SECTION - Two columns
+  // Left: USD | Right: CUP
   // ============================================
-  // Format price with thousand separators
-  const formattedPrice = data.priceCUP.toLocaleString('es-CU')
+  const colWidth = labelWidth / 2
 
-  // Price box
-  const priceBoxWidth = 350
-  const priceBoxX = (labelWidth - priceBoxWidth) / 2
-  zpl.push(`^FO${priceBoxX},${y}^GB${priceBoxWidth},75,3^FS`)
-  // Filled background for price area
-  zpl.push(`^FO${priceBoxX + 2},${y + 2}^GB${priceBoxWidth - 4},71,71,B^FS`)
+  // Calculate USD price
+  const priceUSD = data.priceUSD || (data.pricePerKg ? data.pricePerKg * data.weightKg : 0)
+  const formattedUSD = priceUSD.toFixed(2)
 
-  // Price value - WHITE on black background, large font
-  zpl.push(`^FO0,${y + 8}^FB${labelWidth},1,0,C,0^A0N,50,50^FR^FD${formattedPrice}^FS`)
-  // CUP label
-  zpl.push(`^FO0,${y + 50}^FB${labelWidth},1,0,C,0^A0N,22,22^FR^FDCUP^FS`)
+  // Calculate price per unit in USD
+  const pricePerUnit = data.pricePerKg || 0
+  const unit = data.unitOfMeasure || 'kg'
+
+  // Format CUP price with thousand separators
+  const formattedCUP = data.priceCUP.toLocaleString('es-CU')
+
+  // ---- USD PRICE (left side) ----
+  // Header
+  zpl.push(`^FO10,${y}^A0N,18,18^FDPRECIO USD^FS`)
+
+  // USD Total - BOLD
+  zpl.push(`^FO10,${y + 22}^A0N,38,38^FD$${formattedUSD}^FS`)
+  zpl.push(`^FO11,${y + 22}^A0N,38,38^FD$${formattedUSD}^FS`) // Bold offset
+
+  // Price per kg (base price)
+  zpl.push(`^FO10,${y + 62}^A0N,16,16^FD$${pricePerUnit.toFixed(2)}/${unit}^FS`)
+
+  // ---- CUP PRICE (right side, with black background) ----
+  const cupBoxX = colWidth + 10
+  const cupBoxWidth = colWidth - 25
+  const cupBoxHeight = 80
+
+  // Black box background
+  zpl.push(`^FO${cupBoxX},${y}^GB${cupBoxWidth},${cupBoxHeight},${cupBoxHeight},B^FS`)
+
+  // CUP Header - WHITE text
+  zpl.push(`^FO${cupBoxX},${y + 5}^FB${cupBoxWidth},1,0,C,0^A0N,16,16^FR^FDPRECIO CUP^FS`)
+
+  // CUP Total - WHITE, BOLD (double print)
+  zpl.push(`^FO${cupBoxX},${y + 25}^FB${cupBoxWidth},1,0,C,0^A0N,42,42^FR^FD${formattedCUP}^FS`)
+  zpl.push(`^FO${cupBoxX + 1},${y + 25}^FB${cupBoxWidth},1,0,C,0^A0N,42,42^FR^FD${formattedCUP}^FS`) // Bold
+
+  // Price per unit in CUP
+  const pricePerUnitCUP = data.pricePerUnit || Math.round(pricePerUnit * (data.exchangeRate || 1))
+  zpl.push(`^FO${cupBoxX},${y + 62}^FB${cupBoxWidth},1,0,C,0^A0N,14,14^FR^FD${pricePerUnitCUP.toLocaleString('es-CU')} CUP/${unit}^FS`)
+
   y += 90
 
   // ============================================
   // BARCODE - EAN-13 (centered at bottom)
   // ============================================
-  const barcodeHeight = 60
+  const barcodeHeight = 50
 
   // Calculate barcode position for centering
-  // EAN-13 barcode width: approximately 200-250 dots with BY2
   const estimatedBarcodeWidth = 200
   const barcodeX = Math.max(20, Math.floor((labelWidth - estimatedBarcodeWidth) / 2))
 
   zpl.push(`^FO${barcodeX},${y}^BY2`)
   zpl.push(`^BEN,${barcodeHeight},Y,N^FD${data.barcode}^FS`)
-  y += barcodeHeight + 25
+  y += barcodeHeight + 20
 
   // ============================================
   // DATE (bottom right, small)
   // ============================================
   const dateText = data.printDate || new Date().toLocaleDateString('es-ES')
-  zpl.push(`^FO${labelWidth - 130},${labelHeight - 25}^A0N,18,18^FD${dateText}^FS`)
+  zpl.push(`^FO${labelWidth - 120},${labelHeight - 22}^A0N,16,16^FD${dateText}^FS`)
 
   // Company name (bottom left, small) - optional
   if (data.companyName) {
-    const companyShort = truncate(data.companyName, 15)
-    zpl.push(`^FO15,${labelHeight - 25}^A0N,16,16^FD${escapeZpl(companyShort)}^FS`)
+    const companyShort = truncate(data.companyName, 18)
+    zpl.push(`^FO10,${labelHeight - 22}^A0N,14,14^FD${escapeZpl(companyShort)}^FS`)
   }
 
   // End label
@@ -132,13 +159,14 @@ export function generateWeightLabelZpl(data: WeightLabelData): Buffer {
 /**
  * Generate a simple weight label without the inverted price box
  * Alternative design for printers that don't support reverse printing well
+ * Muestra: Peso (bold), USD, CUP (bold)
  */
 export function generateWeightLabelZplSimple(data: WeightLabelData): Buffer {
   const labelWidth = 609
   const labelHeight = 406
 
   const zpl: string[] = []
-  let y = 20
+  let y = 15
 
   zpl.push('^XA')
   zpl.push(`^PW${labelWidth}`)
@@ -149,26 +177,43 @@ export function generateWeightLabelZplSimple(data: WeightLabelData): Buffer {
 
   // Product name (centered)
   const productName = truncate(data.productName, 28)
-  zpl.push(`^FO0,${y}^FB${labelWidth},1,0,C,0^A0N,30,30^FD${escapeZpl(productName)}^FS`)
-  y += 40
+  zpl.push(`^FO0,${y}^FB${labelWidth},1,0,C,0^A0N,26,26^FD${escapeZpl(productName)}^FS`)
+  y += 32
 
   // Divider
   zpl.push(`^FO30,${y}^GB${labelWidth - 60},2,2^FS`)
-  y += 15
+  y += 12
 
-  // Weight - large (centered)
-  zpl.push(`^FO0,${y}^FB${labelWidth},1,0,C,0^A0N,50,50^FD${escapeZpl(data.weight)}^FS`)
-  y += 65
+  // Weight - BOLD (double print)
+  const weightText = escapeZpl(data.weight)
+  zpl.push(`^FO0,${y}^FB${labelWidth},1,0,C,0^A0N,48,48^FD${weightText}^FS`)
+  zpl.push(`^FO1,${y}^FB${labelWidth},1,0,C,0^A0N,48,48^FD${weightText}^FS`) // Bold
+  y += 55
 
-  // Price in CUP - large (centered)
+  // Calculate USD price
+  const priceUSD = data.priceUSD || (data.pricePerKg ? data.pricePerKg * data.weightKg : 0)
+  const pricePerUnit = data.pricePerKg || 0
+  const unit = data.unitOfMeasure || 'kg'
+
+  // Price USD line
+  zpl.push(`^FO0,${y}^FB${labelWidth},1,0,C,0^A0N,32,32^FD$${priceUSD.toFixed(2)} USD^FS`)
+  zpl.push(`^FO1,${y}^FB${labelWidth},1,0,C,0^A0N,32,32^FD$${priceUSD.toFixed(2)} USD^FS`) // Bold
+  y += 38
+
+  // Base price per unit
+  zpl.push(`^FO0,${y}^FB${labelWidth},1,0,C,0^A0N,18,18^FD($${pricePerUnit.toFixed(2)}/${unit})^FS`)
+  y += 25
+
+  // Price in CUP - BOLD (double print)
   const formattedPrice = data.priceCUP.toLocaleString('es-CU')
-  zpl.push(`^FO0,${y}^FB${labelWidth},1,0,C,0^A0N,55,55^FD${formattedPrice} CUP^FS`)
-  y += 75
+  zpl.push(`^FO0,${y}^FB${labelWidth},1,0,C,0^A0N,45,45^FD${formattedPrice} CUP^FS`)
+  zpl.push(`^FO1,${y}^FB${labelWidth},1,0,C,0^A0N,45,45^FD${formattedPrice} CUP^FS`) // Bold
+  y += 55
 
   // Barcode EAN-13 (centered)
   const barcodeX = Math.floor((labelWidth - 200) / 2)
   zpl.push(`^FO${barcodeX},${y}^BY2`)
-  zpl.push(`^BEN,55,Y,N^FD${data.barcode}^FS`)
+  zpl.push(`^BEN,50,Y,N^FD${data.barcode}^FS`)
 
   // Date (bottom right)
   zpl.push(`^FO${labelWidth - 120},${labelHeight - 22}^A0N,16,16^FD${data.printDate}^FS`)

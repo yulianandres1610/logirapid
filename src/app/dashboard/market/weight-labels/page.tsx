@@ -299,6 +299,8 @@ export default function WeightLabelsPage() {
   const printWithService = async () => {
     if (!lastLabel || !selectedPrinter) return
 
+    const pricePerKgValue = selectedProduct ? parseFloat(String(selectedProduct.sellingPrice)) || 0 : 0
+
     setPrintingToService(true)
     try {
       const response = await fetch('/api/print/jobs', {
@@ -311,9 +313,14 @@ export default function WeightLabelsPage() {
             barcode: lastLabel.barcode,
             barcodeType: 'ean13',
             weight: lastLabel.weight,
+            weightKg: lastLabel.weight ? parseFloat(lastLabel.weight) : 0,
             priceCUP: lastLabel.priceCUP,
-            pricePerUnit: selectedProduct ? Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP) : 0,
-            unitOfMeasure: selectedProduct?.unitOfMeasure || 'kg'
+            priceUSD: lastLabel.priceUSD,
+            pricePerKg: pricePerKgValue,
+            pricePerUnit: Math.round(pricePerKgValue * USD_CUP),
+            unitOfMeasure: selectedProduct?.unitOfMeasure || 'kg',
+            exchangeRate: USD_CUP,
+            printDate: new Date().toLocaleDateString('es-ES')
           },
           copies,
           printServiceId: selectedPrinter.serviceId,
@@ -341,9 +348,11 @@ export default function WeightLabelsPage() {
   const printViaBrowser = () => {
     if (!lastLabel || !selectedProduct) return
 
-    const pricePerUnit = Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP)
+    const pricePerKgValue = parseFloat(String(selectedProduct.sellingPrice)) || 0
+    const pricePerUnitCUP = Math.round(pricePerKgValue * USD_CUP)
+    const priceUSDValue = lastLabel.priceUSD || 0
 
-    // Create a print window with the label
+    // Create a print window with the label - NEW DESIGN
     const printWindow = window.open('', '_blank')
     if (printWindow) {
       printWindow.document.write(`
@@ -358,20 +367,73 @@ export default function WeightLabelsPage() {
                 font-family: Arial, sans-serif;
                 width: 3in;
                 height: 2in;
-                padding: 4mm;
+                padding: 3mm;
                 display: flex;
                 flex-direction: column;
-                justify-content: space-between;
               }
               .name {
-                font-size: 12pt;
+                font-size: 10pt;
                 font-weight: bold;
                 text-align: center;
                 border-bottom: 1px solid #ccc;
-                padding-bottom: 2mm;
+                padding-bottom: 1mm;
+                margin-bottom: 2mm;
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
+              }
+              .weight-box {
+                border: 2px solid #333;
+                border-radius: 3px;
+                padding: 2mm;
+                text-align: center;
+                margin-bottom: 2mm;
+              }
+              .weight {
+                font-size: 16pt;
+                font-weight: 900;
+              }
+              .prices {
+                display: flex;
+                gap: 2mm;
+                margin-bottom: 2mm;
+              }
+              .price-usd {
+                flex: 1;
+                text-align: left;
+              }
+              .price-usd-label {
+                font-size: 6pt;
+                color: #666;
+                text-transform: uppercase;
+              }
+              .price-usd-value {
+                font-size: 12pt;
+                font-weight: 900;
+              }
+              .price-usd-per {
+                font-size: 6pt;
+                color: #888;
+              }
+              .price-cup {
+                flex: 1;
+                background: #000;
+                color: #fff;
+                border-radius: 3px;
+                padding: 1mm;
+                text-align: center;
+              }
+              .price-cup-label {
+                font-size: 6pt;
+                text-transform: uppercase;
+              }
+              .price-cup-value {
+                font-size: 12pt;
+                font-weight: 900;
+              }
+              .price-cup-per {
+                font-size: 5pt;
+                opacity: 0.8;
               }
               .barcode-section {
                 flex: 1;
@@ -379,49 +441,43 @@ export default function WeightLabelsPage() {
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
+                border-top: 1px solid #ccc;
+                padding-top: 1mm;
               }
               .barcode-number {
                 font-family: monospace;
-                font-size: 10pt;
-                letter-spacing: 2px;
-              }
-              .bottom {
-                border-top: 1px solid #ccc;
-                padding-top: 2mm;
-              }
-              .info-row {
-                display: flex;
-                justify-content: space-between;
                 font-size: 8pt;
-                color: #666;
-              }
-              .total {
-                text-align: center;
-                font-size: 14pt;
-                font-weight: bold;
-                margin-top: 1mm;
+                letter-spacing: 1px;
               }
             </style>
           </head>
           <body>
             <div class="name">${lastLabel.productName}</div>
+            <div class="weight-box">
+              <div class="weight">${lastLabel.weight}</div>
+            </div>
+            <div class="prices">
+              <div class="price-usd">
+                <div class="price-usd-label">Precio USD</div>
+                <div class="price-usd-value">$${priceUSDValue.toFixed(2)}</div>
+                <div class="price-usd-per">$${pricePerKgValue.toFixed(2)}/${selectedProduct.unitOfMeasure || 'kg'}</div>
+              </div>
+              <div class="price-cup">
+                <div class="price-cup-label">Precio CUP</div>
+                <div class="price-cup-value">${lastLabel.priceCUP.toLocaleString()}</div>
+                <div class="price-cup-per">${pricePerUnitCUP.toLocaleString()} CUP/${selectedProduct.unitOfMeasure || 'kg'}</div>
+              </div>
+            </div>
             <div class="barcode-section">
               <svg id="barcode"></svg>
               <div class="barcode-number">${lastLabel.barcode}</div>
-            </div>
-            <div class="bottom">
-              <div class="info-row">
-                <span>${pricePerUnit.toLocaleString()} CUP/${selectedProduct.unitOfMeasure || 'kg'}</span>
-                <span>${lastLabel.weight}</span>
-              </div>
-              <div class="total">${lastLabel.priceCUP.toLocaleString()} CUP</div>
             </div>
             <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
             <script>
               JsBarcode("#barcode", "${lastLabel.barcode}", {
                 format: "EAN13",
-                width: 1.5,
-                height: 40,
+                width: 1.2,
+                height: 30,
                 displayValue: false
               });
               window.onload = function() {
@@ -693,46 +749,51 @@ export default function WeightLabelsPage() {
                     {barcodePreview ? (
                       <div className="bg-gray-800 rounded-xl p-3 mb-4 border border-gray-700">
                         <p className="text-gray-400 text-xs mb-2 uppercase text-center">Vista Previa Etiqueta (3x2")</p>
-                        {/* Label simulation - 3:2 aspect ratio */}
-                        <div className="bg-white rounded-lg p-3 mx-auto" style={{ maxWidth: '240px', aspectRatio: '3/2' }}>
+                        {/* Label simulation - 3:2 aspect ratio - NEW DESIGN */}
+                        <div className="bg-white rounded-lg p-2 mx-auto" style={{ maxWidth: '260px', aspectRatio: '3/2' }}>
                           {/* Product Name - Top */}
-                          <p className="font-bold text-black text-sm text-center truncate border-b border-gray-300 pb-1 mb-2">
+                          <p className="font-bold text-black text-xs text-center truncate border-b border-gray-300 pb-1 mb-1">
                             {selectedProduct.name}
                           </p>
 
-                          {/* Barcode - Center */}
-                          <div className="flex flex-col items-center justify-center flex-1 py-1">
-                            <div className="flex justify-center gap-0.5 mb-1">
-                              {Array.from({ length: 35 }).map((_, i) => (
+                          {/* Weight - BOLD */}
+                          <div className="text-center border border-gray-400 rounded py-1 mb-1">
+                            <p className="font-black text-black text-lg">{weight || '0.000'} {selectedProduct.unitOfMeasure || 'kg'}</p>
+                          </div>
+
+                          {/* Prices - Two columns: USD left, CUP right */}
+                          <div className="flex gap-1 mb-1">
+                            {/* USD Price - Left */}
+                            <div className="flex-1 text-left">
+                              <p className="text-[8px] text-gray-500 uppercase">Precio USD</p>
+                              <p className="font-black text-black text-sm">${priceUSD.toFixed(2)}</p>
+                              <p className="text-[8px] text-gray-400">${pricePerKg.toFixed(2)}/{selectedProduct.unitOfMeasure || 'kg'}</p>
+                            </div>
+                            {/* CUP Price - Right (black bg) */}
+                            <div className="flex-1 bg-black text-white rounded p-1 text-center">
+                              <p className="text-[8px] uppercase">Precio CUP</p>
+                              <p className="font-black text-sm">{priceCUP.toLocaleString()}</p>
+                              <p className="text-[7px] opacity-70">{Math.round(pricePerKg * USD_CUP).toLocaleString()} CUP/{selectedProduct.unitOfMeasure || 'kg'}</p>
+                            </div>
+                          </div>
+
+                          {/* Barcode - Bottom */}
+                          <div className="flex flex-col items-center pt-1 border-t border-gray-300">
+                            <div className="flex justify-center gap-0.5">
+                              {Array.from({ length: 30 }).map((_, i) => (
                                 <div
                                   key={i}
                                   className="bg-black"
                                   style={{
-                                    width: i % 3 === 0 ? '2px' : '1px',
-                                    height: '32px'
+                                    width: i % 3 === 0 ? '1.5px' : '1px',
+                                    height: '20px'
                                   }}
                                 />
                               ))}
                             </div>
-                            <p className="font-mono text-xs text-black tracking-wider">
+                            <p className="font-mono text-[9px] text-black tracking-wider">
                               {barcodePreview}
                             </p>
-                          </div>
-
-                          {/* Price & Weight - Bottom */}
-                          <div className="border-t border-gray-300 pt-1 mt-1">
-                            <div className="flex justify-between items-center text-[10px]">
-                              <div className="text-left">
-                                <span className="text-gray-500">{Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP).toLocaleString()} CUP/{selectedProduct.unitOfMeasure || 'kg'}</span>
-                              </div>
-                              <div className="text-right">
-                                <span className="text-gray-500">{weight || '0.000'} {selectedProduct.unitOfMeasure || 'kg'}</span>
-                              </div>
-                            </div>
-                            {/* Total Price - Prominent */}
-                            <div className="text-center mt-1 pt-1 border-t border-gray-200">
-                              <p className="font-black text-black text-lg">{priceCUP.toLocaleString()} CUP</p>
-                            </div>
                           </div>
                         </div>
                         <p className="text-gray-500 text-xs mt-2 text-center">EAN-13 con peso embebido</p>
@@ -971,29 +1032,46 @@ export default function WeightLabelsPage() {
                   </button>
                 </div>
 
-                {/* Label Preview */}
-                <div className="bg-white rounded-lg p-3 mb-6" style={{ aspectRatio: '3/2' }}>
-                  <p className="font-bold text-black text-sm text-center truncate border-b border-gray-300 pb-1 mb-2">
+                {/* Label Preview - NEW DESIGN */}
+                <div className="bg-white rounded-lg p-2 mb-6" style={{ aspectRatio: '3/2' }}>
+                  {/* Product Name */}
+                  <p className="font-bold text-black text-xs text-center truncate border-b border-gray-300 pb-1 mb-1">
                     {lastLabel.productName}
                   </p>
-                  <div className="flex flex-col items-center justify-center py-2">
-                    <div className="flex justify-center gap-0.5 mb-1">
-                      {Array.from({ length: 35 }).map((_, i) => (
+
+                  {/* Weight - BOLD */}
+                  <div className="text-center border border-gray-400 rounded py-1 mb-1">
+                    <p className="font-black text-black text-base">{lastLabel.weight}</p>
+                  </div>
+
+                  {/* Prices - Two columns */}
+                  <div className="flex gap-1 mb-1">
+                    {/* USD Price */}
+                    <div className="flex-1 text-left">
+                      <p className="text-[8px] text-gray-500 uppercase">Precio USD</p>
+                      <p className="font-black text-black text-sm">${lastLabel.priceUSD?.toFixed(2) || '0.00'}</p>
+                      <p className="text-[8px] text-gray-400">${selectedProduct ? (parseFloat(String(selectedProduct.sellingPrice)) || 0).toFixed(2) : '0.00'}/{selectedProduct?.unitOfMeasure || 'kg'}</p>
+                    </div>
+                    {/* CUP Price */}
+                    <div className="flex-1 bg-black text-white rounded p-1 text-center">
+                      <p className="text-[8px] uppercase">Precio CUP</p>
+                      <p className="font-black text-sm">{lastLabel.priceCUP.toLocaleString()}</p>
+                      <p className="text-[7px] opacity-70">{selectedProduct ? Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP).toLocaleString() : 0} CUP/{selectedProduct?.unitOfMeasure || 'kg'}</p>
+                    </div>
+                  </div>
+
+                  {/* Barcode */}
+                  <div className="flex flex-col items-center pt-1 border-t border-gray-300">
+                    <div className="flex justify-center gap-0.5">
+                      {Array.from({ length: 30 }).map((_, i) => (
                         <div
                           key={i}
                           className="bg-black"
-                          style={{ width: i % 3 === 0 ? '2px' : '1px', height: '28px' }}
+                          style={{ width: i % 3 === 0 ? '1.5px' : '1px', height: '18px' }}
                         />
                       ))}
                     </div>
-                    <p className="font-mono text-xs text-black tracking-wider">{lastLabel.barcode}</p>
-                  </div>
-                  <div className="border-t border-gray-300 pt-1">
-                    <div className="flex justify-between text-[10px] text-gray-500">
-                      <span>{selectedProduct ? Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP).toLocaleString() : 0} CUP/{selectedProduct?.unitOfMeasure || 'kg'}</span>
-                      <span>{lastLabel.weight}</span>
-                    </div>
-                    <p className="font-black text-black text-center text-lg mt-1">{lastLabel.priceCUP.toLocaleString()} CUP</p>
+                    <p className="font-mono text-[9px] text-black tracking-wider">{lastLabel.barcode}</p>
                   </div>
                 </div>
 

@@ -146,7 +146,7 @@ export async function GET(request: NextRequest) {
         }
         // Default to all types if not set
         if (supportedTypes.length === 0) {
-          supportedTypes = ['pos_receipt', 'product_label', 'invoice', 'purchase_invoice', 'sales_report', 'inventory_count_report', 'cash_register_report', 'shipping_label']
+          supportedTypes = ['pos_receipt', 'product_label', 'weight_label', 'lot_label', 'invoice', 'purchase_invoice', 'sales_report', 'inventory_count_report', 'cash_register_report', 'shipping_label', 'warehouse_operation', 'consignment_receipt', 'unified_reception', 'transfer_receipt', 'audit_count_report']
         }
 
         printersMap[serviceId].push({
