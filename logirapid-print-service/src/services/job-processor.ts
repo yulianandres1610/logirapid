@@ -513,50 +513,57 @@ class JobProcessor {
     console.log(`[Job Processor]   - isReceiptOrReport: ${isReceiptOrReport}`)
     console.log(`[Job Processor]   - isPdfOnly: ${isPdfOnly}`)
 
-    for (let i = 0; i < copies; i++) {
-      console.log(`[Job Processor] Printing copy ${i + 1} of ${copies}...`)
-
-      if (useRawLabelPrint) {
-        // Raw printing for label printers (ZPL for Zebra, TSPL for others)
-        const format = printer.isZebra ? 'ZPL' : 'TSPL'
-        console.log(`[Job Processor] Using ${format}/RAW method for ${printer.printerName}`)
-        console.log(`[Job Processor] RAW queue: ${printer.rawQueueName || '(direct)'}`)
-        await this.printRawLabel(printer, documentBuffer)
-      } else if (isPdfOnly) {
-        // PDF printing for PDF-only documents
-        console.log(`[Job Processor] Using PDF method for ${printer.printerName}`)
-        await this.printPdf(printer, documentBuffer)
-      } else if (useEscPos || (isReceiptOrReport && printer.supportsEscpos && printer.printerType !== 'standard')) {
-        // Direct ESC/POS printing for thermal printers
-        console.log(`[Job Processor] Using ESC/POS method for ${printer.printerName}`)
-        await this.printEscPos(printer, documentBuffer)
-      } else {
-        // PDF printing through system for standard/network printers
-        console.log(`[Job Processor] Using PDF method (fallback) for ${printer.printerName}`)
-        await this.printPdf(printer, documentBuffer)
-      }
-
-      console.log(`[Job Processor] Copy ${i + 1} sent to print queue`)
-
-      // Small delay between copies
-      if (i < copies - 1) {
-        console.log(`[Job Processor] Waiting 500ms before next copy...`)
-        await new Promise(resolve => setTimeout(resolve, 500))
-      }
+    // Print all copies in a single job for better performance
+    if (useRawLabelPrint) {
+      // Raw printing for label printers (ZPL for Zebra, TSPL for others)
+      const format = printer.isZebra ? 'ZPL' : 'TSPL'
+      console.log(`[Job Processor] Using ${format}/RAW method for ${printer.printerName} (${copies} copies)`)
+      console.log(`[Job Processor] RAW queue: ${printer.rawQueueName || '(direct)'}`)
+      await this.printRawLabel(printer, documentBuffer, copies)
+    } else if (isPdfOnly) {
+      // PDF printing for PDF-only documents
+      console.log(`[Job Processor] Using PDF method for ${printer.printerName} (${copies} copies)`)
+      await this.printPdf(printer, documentBuffer, undefined, copies)
+    } else if (useEscPos || (isReceiptOrReport && printer.supportsEscpos && printer.printerType !== 'standard')) {
+      // Direct ESC/POS printing for thermal printers
+      console.log(`[Job Processor] Using ESC/POS method for ${printer.printerName} (${copies} copies)`)
+      await this.printEscPos(printer, documentBuffer, copies)
+    } else {
+      // PDF printing through system for standard/network printers
+      console.log(`[Job Processor] Using PDF method (fallback) for ${printer.printerName} (${copies} copies)`)
+      await this.printPdf(printer, documentBuffer, undefined, copies)
     }
 
-    console.log(`[Job Processor] All ${copies} copies sent to printer`)
+    console.log(`[Job Processor] All ${copies} copies sent to printer in single job`)
   }
 
-  private async printRawLabel(printer: DetectedPrinter, data: Buffer): Promise<void> {
+  private async printRawLabel(printer: DetectedPrinter, data: Buffer, copies: number = 1): Promise<void> {
     // Raw label data (ZPL for Zebra, TSPL for others) is sent directly to printer
     const ext = printer.isZebra ? 'zpl' : 'tspl'
     const tempFile = join(tmpdir(), `print-${uuidv4()}.${ext}`)
-    await writeFile(tempFile, data)
+
+    // For ZPL, add ^PQ (Print Quantity) command for multiple copies
+    // This is much faster than sending the same data multiple times
+    let printData = data
+    if (printer.isZebra && copies > 1) {
+      const zplContent = data.toString('utf8')
+      // Insert ^PQ{copies},0,1,Y before ^XZ (print quantity, pause, replicates, override)
+      // ^PQ{q},{p},{r},{o} - q=quantity, p=pause(0=no), r=replicates(1=each), o=override(Y=yes)
+      const modifiedZpl = zplContent.replace(/\^XZ/g, `^PQ${copies},0,1,Y\n^XZ`)
+      printData = Buffer.from(modifiedZpl, 'utf8')
+      console.log(`[Job Processor] ZPL modified with ^PQ${copies} for ${copies} copies`)
+    } else if (!printer.isZebra && copies > 1) {
+      // For TSPL, concatenate the data multiple times
+      const tsplContent = data.toString('utf8')
+      printData = Buffer.from(tsplContent.repeat(copies), 'utf8')
+      console.log(`[Job Processor] TSPL duplicated ${copies} times`)
+    }
+
+    await writeFile(tempFile, printData)
 
     const format = printer.isZebra ? 'ZPL' : 'TSPL'
-    console.log(`[Job Processor] ${format} file created: ${tempFile} (${data.length} bytes)`)
-    console.log(`[Job Processor] ${format} content preview: ${data.toString('utf8').substring(0, 300)}...`)
+    console.log(`[Job Processor] ${format} file created: ${tempFile} (${printData.length} bytes, ${copies} copies)`)
+    console.log(`[Job Processor] ${format} content preview: ${printData.toString('utf8').substring(0, 300)}...`)
 
     try {
       if (process.platform === 'win32') {
@@ -755,12 +762,23 @@ if ($result) {
     }
   }
 
-  private async printEscPos(printer: DetectedPrinter, data: Buffer): Promise<void> {
+  private async printEscPos(printer: DetectedPrinter, data: Buffer, copies: number = 1): Promise<void> {
     // For USB thermal printers, send raw ESC/POS data
-    const tempFile = join(tmpdir(), `print-${uuidv4()}.bin`)
-    await writeFile(tempFile, data)
+    // For multiple copies, concatenate the data (ESC/POS doesn't have native copies command)
+    let printData = data
+    if (copies > 1) {
+      const chunks: Buffer[] = []
+      for (let i = 0; i < copies; i++) {
+        chunks.push(data)
+      }
+      printData = Buffer.concat(chunks)
+      console.log(`[Job Processor] ESC/POS data concatenated for ${copies} copies`)
+    }
 
-    console.log(`[Job Processor] ESC/POS temp file: ${tempFile} (${data.length} bytes)`)
+    const tempFile = join(tmpdir(), `print-${uuidv4()}.bin`)
+    await writeFile(tempFile, printData)
+
+    console.log(`[Job Processor] ESC/POS temp file: ${tempFile} (${printData.length} bytes, ${copies} copies)`)
 
     try {
       if (process.platform === 'win32') {
@@ -896,12 +914,13 @@ try {
     }
   }
 
-  private async printPdf(printer: DetectedPrinter, data: Buffer, mediaSize?: string): Promise<void> {
+  private async printPdf(printer: DetectedPrinter, data: Buffer, mediaSize?: string, copies: number = 1): Promise<void> {
     const tempFile = join(tmpdir(), `print-${uuidv4()}.pdf`)
     await writeFile(tempFile, data)
 
     console.log(`[Job Processor] PDF file created: ${tempFile} (${data.length} bytes)`)
     console.log(`[Job Processor] Sending to printer: ${printer.systemName} (${printer.printerType})`)
+    console.log(`[Job Processor] Copies: ${copies}`)
     if (mediaSize) {
       console.log(`[Job Processor] Using media size: ${mediaSize}`)
     }
@@ -921,7 +940,8 @@ try {
         const psScript = [
           "param(",
           `    [string]$PrinterName = '${printerName.replace(/'/g, "''")}',`,
-          `    [string]$PdfPath = '${pdfPath.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`,
+          `    [string]$PdfPath = '${pdfPath.replace(/\\/g, '\\\\').replace(/'/g, "''")}',`,
+          `    [int]$Copies = ${copies}`,
           ")",
           "",
           "$ErrorActionPreference = 'Stop'",
@@ -929,6 +949,7 @@ try {
           "",
           "Write-Host \"Attempting to print: $PdfPath\"",
           "Write-Host \"To printer: $PrinterName\"",
+          "Write-Host \"Copies: $Copies\"",
           "",
           "# Check if file exists",
           "if (-not (Test-Path $PdfPath)) {",
@@ -963,29 +984,38 @@ try {
           "    Write-Host \"Set $PrinterName as default printer\"",
           "    Start-Sleep -Milliseconds 500",
           "    ",
-          "    # Use PrintTo verb which prints to default printer",
-          "    $psi = New-Object System.Diagnostics.ProcessStartInfo",
-          "    $psi.FileName = $PdfPath",
-          "    $psi.Verb = 'PrintTo'",
-          "    $psi.Arguments = $PrinterName",
-          "    $psi.CreateNoWindow = $true",
-          "    $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden",
-          "    $psi.UseShellExecute = $true",
-          "    ",
-          "    $proc = [System.Diagnostics.Process]::Start($psi)",
-          "    Write-Host \"Started print process, waiting...\"",
-          "    ",
-          "    # Wait for process to complete or timeout",
-          "    $timeout = 30",
-          "    $waited = 0",
-          "    while (-not $proc.HasExited -and $waited -lt $timeout) {",
-          "        Start-Sleep -Seconds 1",
-          "        $waited++",
-          "    }",
-          "    ",
-          "    if (-not $proc.HasExited) {",
-          "        Write-Host \"Process still running after $timeout seconds, killing...\"",
-          "        $proc.Kill()",
+          "    # Print each copy",
+          "    for ($copy = 1; $copy -le $Copies; $copy++) {",
+          "        Write-Host \"Printing copy $copy of $Copies...\"",
+          "        ",
+          "        # Use PrintTo verb which prints to default printer",
+          "        $psi = New-Object System.Diagnostics.ProcessStartInfo",
+          "        $psi.FileName = $PdfPath",
+          "        $psi.Verb = 'PrintTo'",
+          "        $psi.Arguments = $PrinterName",
+          "        $psi.CreateNoWindow = $true",
+          "        $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden",
+          "        $psi.UseShellExecute = $true",
+          "        ",
+          "        $proc = [System.Diagnostics.Process]::Start($psi)",
+          "        ",
+          "        # Wait for process to complete or timeout",
+          "        $timeout = 30",
+          "        $waited = 0",
+          "        while (-not $proc.HasExited -and $waited -lt $timeout) {",
+          "            Start-Sleep -Seconds 1",
+          "            $waited++",
+          "        }",
+          "        ",
+          "        if (-not $proc.HasExited) {",
+          "            Write-Host \"Process still running after $timeout seconds, killing...\"",
+          "            $proc.Kill()",
+          "        }",
+          "        ",
+          "        # Small delay between copies",
+          "        if ($copy -lt $Copies) {",
+          "            Start-Sleep -Milliseconds 200",
+          "        }",
           "    }",
           "    ",
           "    # Restore original default printer",
@@ -1012,9 +1042,11 @@ try {
           ")",
           "foreach ($sumatra in $sumatraPaths) {",
           "    if (Test-Path $sumatra) {",
-          "        Write-Host \"Method 2: Using SumatraPDF: $sumatra\"",
+          "        Write-Host \"Method 2: Using SumatraPDF: $sumatra ($Copies copies)\"",
           "        try {",
-          "            $proc = Start-Process -FilePath $sumatra -ArgumentList \"-print-to\", \"`\"$PrinterName`\"\", \"-silent\", \"`\"$PdfPath`\"\" -PassThru -Wait -NoNewWindow",
+          "            # SumatraPDF supports -print-settings for copies",
+          "            $printSettings = \"$Copies" + "x\"",
+          "            $proc = Start-Process -FilePath $sumatra -ArgumentList \"-print-to\", \"`\"$PrinterName`\"\", \"-print-settings\", $printSettings, \"-silent\", \"`\"$PdfPath`\"\" -PassThru -Wait -NoNewWindow",
           "            if ($proc.ExitCode -eq 0) {",
           "                $success = $true",
           "                Write-Host \"SUCCESS:SUMATRA\"",
@@ -1037,11 +1069,14 @@ try {
           ")",
           "foreach ($adobe in $adobePaths) {",
           "    if (Test-Path $adobe) {",
-          "        Write-Host \"Method 3: Using Adobe: $adobe\"",
+          "        Write-Host \"Method 3: Using Adobe: $adobe ($Copies copies)\"",
           "        try {",
-          "            $proc = Start-Process -FilePath $adobe -ArgumentList '/t', \"`\"$PdfPath`\"\", \"`\"$PrinterName`\"\" -PassThru",
-          "            Start-Sleep -Seconds 8",
-          "            Get-Process -Name 'AcroRd32', 'Acrobat' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue",
+          "            for ($copy = 1; $copy -le $Copies; $copy++) {",
+          "                Write-Host \"  Printing copy $copy of $Copies...\"",
+          "                $proc = Start-Process -FilePath $adobe -ArgumentList '/t', \"`\"$PdfPath`\"\", \"`\"$PrinterName`\"\" -PassThru",
+          "                Start-Sleep -Seconds 5",
+          "                Get-Process -Name 'AcroRd32', 'Acrobat' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue",
+          "            }",
           "            $success = $true",
           "            Write-Host \"SUCCESS:ADOBE\"",
           "            exit 0",
@@ -1060,11 +1095,14 @@ try {
           ")",
           "foreach ($foxit in $foxitPaths) {",
           "    if (Test-Path $foxit) {",
-          "        Write-Host \"Method 4: Using Foxit: $foxit\"",
+          "        Write-Host \"Method 4: Using Foxit: $foxit ($Copies copies)\"",
           "        try {",
-          "            $proc = Start-Process -FilePath $foxit -ArgumentList '/t', \"`\"$PdfPath`\"\", \"`\"$PrinterName`\"\" -PassThru",
-          "            Start-Sleep -Seconds 8",
-          "            Get-Process -Name 'FoxitReader', 'FoxitPDFReader' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue",
+          "            for ($copy = 1; $copy -le $Copies; $copy++) {",
+          "                Write-Host \"  Printing copy $copy of $Copies...\"",
+          "                $proc = Start-Process -FilePath $foxit -ArgumentList '/t', \"`\"$PdfPath`\"\", \"`\"$PrinterName`\"\" -PassThru",
+          "                Start-Sleep -Seconds 5",
+          "                Get-Process -Name 'FoxitReader', 'FoxitPDFReader' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue",
+          "            }",
           "            $success = $true",
           "            Write-Host \"SUCCESS:FOXIT\"",
           "            exit 0",
@@ -1106,6 +1144,10 @@ try {
 
         // Build options string
         const options: string[] = []
+        // Add copies option (-n)
+        if (copies > 1) {
+          options.push(`-n ${copies}`)
+        }
         if (mediaSize) {
           options.push(`-o media=${mediaSize}`)
         }
@@ -1146,8 +1188,9 @@ try {
           // lpstat check is optional
         }
       } else {
-        // Linux: use lp command
-        const { stdout, stderr } = await execAsync(`lp -d "${printer.systemName}" "${tempFile}"`, {
+        // Linux: use lp command with -n for copies
+        const copiesOption = copies > 1 ? `-n ${copies} ` : ''
+        const { stdout, stderr } = await execAsync(`lp -d "${printer.systemName}" ${copiesOption}"${tempFile}"`, {
           encoding: 'utf8'
         })
         if (stderr) {
@@ -1157,7 +1200,7 @@ try {
         console.log(`[Job Processor] lp stdout: ${stdout || '(empty)'}`)
       }
 
-      console.log(`[Job Processor] Print job sent successfully to ${printer.printerName}`)
+      console.log(`[Job Processor] Print job sent successfully to ${printer.printerName} (${copies} copies)`)
     } catch (error) {
       console.error(`[Job Processor] Print failed:`, error)
       throw error
