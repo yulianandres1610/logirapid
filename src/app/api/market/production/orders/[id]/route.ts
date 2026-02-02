@@ -292,25 +292,25 @@ export async function PATCH(
 
     // Build update query
     const updates: string[] = []
-    const params: any[] = []
+    const queryParams: any[] = []
     let paramIndex = 1
 
     if (status) {
       updates.push(`status = $${paramIndex++}`)
-      params.push(status)
+      queryParams.push(status)
 
       if (status === 'in_progress') {
         updates.push(`started_at = NOW()`)
       } else if (status === 'completed') {
         updates.push(`completed_at = NOW()`)
         updates.push(`completed_by = $${paramIndex++}`)
-        params.push(userId)
+        queryParams.push(userId)
       }
     }
 
     if (laborCost !== undefined) {
       updates.push(`labor_cost = $${paramIndex++}`)
-      params.push(laborCost)
+      queryParams.push(laborCost)
 
       // Recalculate total_cost and cost_per_unit
       const orderData = await db.query(`
@@ -324,14 +324,14 @@ export async function PATCH(
       const costPerUnit = od.target_quantity > 0 ? totalCost / od.target_quantity : 0
 
       updates.push(`total_cost = $${paramIndex++}`)
-      params.push(totalCost)
+      queryParams.push(totalCost)
       updates.push(`cost_per_unit = $${paramIndex++}`)
-      params.push(costPerUnit)
+      queryParams.push(costPerUnit)
     }
 
     if (notes !== undefined) {
       updates.push(`notes = $${paramIndex++}`)
-      params.push(notes)
+      queryParams.push(notes)
     }
 
     if (updates.length === 0) {
@@ -341,13 +341,13 @@ export async function PATCH(
       }, { status: 400 })
     }
 
-    params.push(orderId, companyId)
+    queryParams.push(orderId, companyId)
 
     await db.query(`
       UPDATE market_production_orders
       SET ${updates.join(', ')}
       WHERE id = $${paramIndex++} AND company_id = $${paramIndex++}
-    `, params)
+    `, queryParams)
 
     // Log the update
     await db.query(`
