@@ -175,10 +175,13 @@ export default function WeightLabelsPage() {
       const data = await response.json()
 
       if (data.success) {
+        console.log('[WeightLabels] Label generated:', data.data)
         setLastLabel(data.data)
-        // Show print options
-        await showPrintOptions()
-        // Reset for next label
+        // Fetch print services and show modal
+        await fetchPrintServices()
+        console.log('[WeightLabels] Showing print modal')
+        setShowPrintModal(true)
+        // Reset weight for next label
         setWeight('')
       } else {
         setError(data.error || 'Error al imprimir')
@@ -226,35 +229,47 @@ export default function WeightLabelsPage() {
   // Fetch print services for label printing
   const fetchPrintServices = async () => {
     try {
+      console.log('[WeightLabels] Fetching print services...')
       const response = await fetch('/api/print/services')
       const data = await response.json()
+      console.log('[WeightLabels] Print services response:', data)
 
       if (data.success && data.data?.services) {
-        const activeServices = data.data.services.filter(
+        const allServices = data.data.services
+        console.log('[WeightLabels] Total services:', allServices.length)
+
+        const activeServices = allServices.filter(
           (s: { status: string; printers?: unknown[] }) =>
             (s.status === 'active' || s.status === 'pending' || s.status === 'offline') &&
             s.printers && s.printers.length > 0
         )
+        console.log('[WeightLabels] Active services:', activeServices.length)
 
         // Filter for LABEL printers only (label_4x6, label_barcode)
-        const servicesWithPrinters = activeServices.map((service: { id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; printerType: string; supportedDocumentTypes?: string[] }> }) => ({
-          ...service,
-          printers: service.printers.filter((p: { supportedDocumentTypes?: string[]; printerType: string; printerName: string }) => {
+        const servicesWithPrinters = activeServices.map((service: { id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; printerType: string; supportedDocumentTypes?: string[] }> }) => {
+          const labelPrinters = service.printers.filter((p: { supportedDocumentTypes?: string[]; printerType: string; printerName: string }) => {
             // Check if supportedDocumentTypes explicitly includes weight_label
             if (p.supportedDocumentTypes && p.supportedDocumentTypes.length > 0) {
-              return p.supportedDocumentTypes.includes('weight_label')
+              const hasWeightLabel = p.supportedDocumentTypes.includes('weight_label')
+              console.log(`[WeightLabels] Printer ${p.printerName} supportedDocumentTypes:`, p.supportedDocumentTypes, 'hasWeightLabel:', hasWeightLabel)
+              return hasWeightLabel
             }
             // Check if printerType is a label type
             const type = (p.printerType || '').toLowerCase()
             if (type === 'label_4x6' || type === 'label_barcode') {
+              console.log(`[WeightLabels] Printer ${p.printerName} is label type: ${type}`)
               return true
             }
             // Check printer name for label indicators
             const name = (p.printerName || '').toLowerCase()
-            return name.includes('label') || name.includes('etiqueta') || name.includes('zebra') || name.includes('dymo') || name.includes('brother')
+            const isLabelPrinter = name.includes('label') || name.includes('etiqueta') || name.includes('zebra') || name.includes('dymo') || name.includes('brother')
+            console.log(`[WeightLabels] Printer ${p.printerName} type: ${type}, isLabelPrinter by name: ${isLabelPrinter}`)
+            return isLabelPrinter
           })
-        })).filter((s: { printers: unknown[] }) => s.printers.length > 0)
+          return { ...service, printers: labelPrinters }
+        }).filter((s: { printers: unknown[] }) => s.printers.length > 0)
 
+        console.log('[WeightLabels] Services with label printers:', servicesWithPrinters.length)
         setPrintServices(servicesWithPrinters)
 
         // Auto-select first printer
@@ -263,13 +278,15 @@ export default function WeightLabelsPage() {
             serviceId: servicesWithPrinters[0].id,
             printerId: servicesWithPrinters[0].printers[0].id
           })
+          console.log('[WeightLabels] Auto-selected printer:', servicesWithPrinters[0].printers[0].printerName)
         }
 
         return servicesWithPrinters
       }
+      console.log('[WeightLabels] No services found in response')
       return []
     } catch (err) {
-      console.error('Error fetching print services:', err)
+      console.error('[WeightLabels] Error fetching print services:', err)
       return []
     }
   }
@@ -413,17 +430,6 @@ export default function WeightLabelsPage() {
       printWindow.document.close()
     }
     setShowPrintModal(false)
-  }
-
-  // Show print options after generating
-  const showPrintOptions = async () => {
-    const services = await fetchPrintServices()
-    if (services.length > 0) {
-      setShowPrintModal(true)
-    } else {
-      // No print services, use browser directly
-      printViaBrowser()
-    }
   }
 
   const barcodePreview = generateBarcodePreview()
