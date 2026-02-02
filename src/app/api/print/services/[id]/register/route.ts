@@ -15,6 +15,48 @@ interface PrinterInfo {
   dpi?: number
 }
 
+/**
+ * Get supported document types based on printer type
+ */
+function getSupportedDocumentTypes(printerType: string, printerName: string): string[] {
+  // All document types that exist in the system
+  const ALL_TYPES = [
+    'pos_receipt', 'product_label', 'weight_label', 'lot_label', 'invoice',
+    'purchase_invoice', 'sales_report', 'inventory_count_report', 'cash_register_report',
+    'shipping_label', 'warehouse_operation', 'consignment_receipt', 'unified_reception',
+    'transfer_receipt', 'audit_count_report'
+  ]
+
+  // Label printers (Zebra, Dymo, etc.) - for labels and barcodes
+  if (printerType === 'label_barcode' || printerType === 'label_4x6') {
+    return ['product_label', 'weight_label', 'lot_label', 'shipping_label']
+  }
+
+  // Check by printer name for label printers
+  const nameLower = printerName.toLowerCase()
+  if (nameLower.includes('zebra') || nameLower.includes('dymo') ||
+      nameLower.includes('brother') || nameLower.includes('label') ||
+      nameLower.includes('etiqueta') || nameLower.includes('zd') ||
+      nameLower.includes('ztc') || nameLower.includes('tsc') ||
+      nameLower.includes('godex') || nameLower.includes('honeywell') ||
+      nameLower.includes('sato') || nameLower.includes('citizen') ||
+      nameLower.includes('postek')) {
+    return ['product_label', 'weight_label', 'lot_label', 'shipping_label']
+  }
+
+  // Thermal receipt printers (80mm) - for receipts and reports
+  if (printerType === 'thermal_80mm') {
+    return [
+      'pos_receipt', 'invoice', 'purchase_invoice', 'sales_report',
+      'inventory_count_report', 'cash_register_report', 'consignment_receipt',
+      'unified_reception', 'transfer_receipt', 'audit_count_report'
+    ]
+  }
+
+  // Standard printers support everything
+  return ALL_TYPES
+}
+
 interface RegisterRequest {
   platform: 'windows' | 'macos' | 'linux'
   hostname: string
@@ -161,9 +203,16 @@ export async function POST(
 
       // Add or update printers
       for (const printer of printers) {
+        // Determine supported document types based on printer type and name
+        const supportedTypes = getSupportedDocumentTypes(
+          printer.printerType || 'standard',
+          printer.printerName
+        )
+        const supportedTypesJson = JSON.stringify(supportedTypes)
+
         if (existingNames.has(printer.printerName)) {
-          console.log(`[Print Service Register] Updating printer: "${printer.printerName}"`)
-          // Update existing printer
+          console.log(`[Print Service Register] Updating printer: "${printer.printerName}" with types: ${supportedTypes.join(', ')}`)
+          // Update existing printer including supported_document_types
           await db.query(`
             UPDATE print_service_printers SET
               printer_id = $1,
@@ -177,8 +226,9 @@ export async function POST(
               supports_raw = $7,
               paper_width_mm = $8,
               dpi = $9,
+              supported_document_types = $10,
               updated_at = NOW()
-            WHERE print_service_id = $10 AND printer_name = $11
+            WHERE print_service_id = $11 AND printer_name = $12
           `, [
             printer.printerId || null,
             printer.driverName || null,
@@ -189,12 +239,13 @@ export async function POST(
             printer.supportsRaw || false,
             printer.paperWidthMm || null,
             printer.dpi || null,
+            supportedTypesJson,
             serviceId,
             printer.printerName
           ])
         } else {
-          console.log(`[Print Service Register] Inserting NEW printer: "${printer.printerName}"`)
-          // Insert new printer
+          console.log(`[Print Service Register] Inserting NEW printer: "${printer.printerName}" with types: ${supportedTypes.join(', ')}`)
+          // Insert new printer with supported_document_types
           await db.query(`
             INSERT INTO print_service_printers (
               print_service_id,
@@ -210,9 +261,10 @@ export async function POST(
               supports_raw,
               paper_width_mm,
               dpi,
+              supported_document_types,
               created_at,
               updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW(), $8, $9, $10, $11, NOW(), NOW())
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW(), $8, $9, $10, $11, $12, NOW(), NOW())
           `, [
             serviceId,
             printer.printerName,
@@ -224,7 +276,8 @@ export async function POST(
             printer.supportsEscpos || false,
             printer.supportsRaw || false,
             printer.paperWidthMm || null,
-            printer.dpi || null
+            printer.dpi || null,
+            supportedTypesJson
           ])
         }
       }
