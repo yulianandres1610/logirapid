@@ -42,14 +42,14 @@ export function generateWeightLabelZpl(data: WeightLabelData): Buffer {
  * Layout:
  * ┌───────────────────────────────────────────────────────┐
  * │ PRECIO/lb              PRECIO              2/2/2026   │
- * │ 1,230                  95,937                         │
- * │ CUP                    CUP                            │
+ * │ 1,230                  104,547                        │
  * │───────────────────────────────────────────────────────│
  * │ LOMO DE CERDO                            ┌──────────┐ │
- * │ 78.000 lb                                │ QR CODE  │ │
+ * │ 85.000 lb                                │    QR    │ │
+ * │                                          │   CODE   │ │
  * │                                          └──────────┘ │
  * │  ||||||||||||||||||||||||||||||||||||||||||||||||     │
- * │          2 0 2 2 2 0 2  7 8 0 0 0 7                   │
+ * │          2 0 2 2 2 0 2  8 5 0 0 0 7                   │
  * └───────────────────────────────────────────────────────┘
  */
 export function generateWeightLabel3x2(data: WeightLabelData): Buffer {
@@ -74,51 +74,47 @@ export function generateWeightLabel3x2(data: WeightLabelData): Buffer {
   const formattedTotalPrice = data.priceCUP.toLocaleString('es-ES')
 
   // ========== ROW 1: Headers ==========
-  zpl.push(`^FO15,10^A0N,24,24^FDPRECIO/${unit}^FS`)
-  // Center the PRECIO header (between left section and QR area)
-  zpl.push(`^FO200,10^A0N,24,24^FDPRECIO^FS`)
+  zpl.push(`^FO15,8^A0N,22,22^FDPRECIO/${unit}^FS`)
+  zpl.push(`^FO200,8^A0N,22,22^FDPRECIO^FS`)
 
   // ========== Date (top right corner) ==========
   const dateText = data.printDate || new Date().toLocaleDateString('es-ES')
-  zpl.push(`^FO${labelWidth - 85},10^A0N,20,20^FD${dateText}^FS`)
+  zpl.push(`^FO${labelWidth - 85},8^A0N,18,18^FD${dateText}^FS`)
 
-  // ========== ROW 2: Price Values ==========
-  // Left: Price per unit (bigger)
-  zpl.push(`^FO15,38^A0N,50,50^FD${formattedPricePerUnit}^FS`)
-  zpl.push(`^FO16,38^A0N,50,50^FD${formattedPricePerUnit}^FS`) // Bold
-  zpl.push(`^FO15,92^A0N,24,24^FDCUP^FS`)
+  // ========== ROW 2: Price Values (BELOW headers, no CUP label) ==========
+  // Left: Price per unit
+  zpl.push(`^FO15,35^A0N,55,55^FD${formattedPricePerUnit}^FS`)
+  zpl.push(`^FO16,35^A0N,55,55^FD${formattedPricePerUnit}^FS`) // Bold
 
-  // Center: Total price (VERY LARGE) - Using field block with right alignment to prevent overflow
-  // Position from x=180 to x=420 (240 pixels wide) - plenty of room
-  const priceBlockWidth = 260
-  const priceBlockX = 180
-  zpl.push(`^FO${priceBlockX},25^FB${priceBlockWidth},1,0,R,0^A0N,85,85^FD${formattedTotalPrice}^FS`)
-  zpl.push(`^FO${priceBlockX + 1},25^FB${priceBlockWidth},1,0,R,0^A0N,85,85^FD${formattedTotalPrice}^FS`) // Bold
-  zpl.push(`^FO${priceBlockX},115^FB${priceBlockWidth},1,0,R,0^A0N,24,24^FDCUP^FS`)
+  // Center: Total price (LARGE) - positioned below "PRECIO" header
+  const priceBlockWidth = 280
+  const priceBlockX = 170
+  zpl.push(`^FO${priceBlockX},32^FB${priceBlockWidth},1,0,R,0^A0N,70,70^FD${formattedTotalPrice}^FS`)
+  zpl.push(`^FO${priceBlockX + 1},32^FB${priceBlockWidth},1,0,R,0^A0N,70,70^FD${formattedTotalPrice}^FS`) // Bold
 
   // ========== Divider line ==========
-  zpl.push(`^FO15,150^GB${labelWidth - 30},3,3^FS`)
+  zpl.push(`^FO15,115^GB${labelWidth - 30},3,3^FS`)
 
   // ========== ROW 3: Product Name (LEFT aligned, LARGE, bold) ==========
-  const productName = truncate(data.productName.toUpperCase(), 18)
-  zpl.push(`^FO15,165^A0N,46,46^FD${escapeZpl(productName)}^FS`)
-  zpl.push(`^FO16,165^A0N,46,46^FD${escapeZpl(productName)}^FS`) // Bold
+  const productName = truncate(data.productName.toUpperCase(), 16)
+  zpl.push(`^FO15,130^A0N,48,48^FD${escapeZpl(productName)}^FS`)
+  zpl.push(`^FO16,130^A0N,48,48^FD${escapeZpl(productName)}^FS`) // Bold
 
   // ========== ROW 4: Weight (LEFT aligned, LARGE) ==========
-  zpl.push(`^FO15,218^A0N,40,40^FD${escapeZpl(data.weight)}^FS`)
-  zpl.push(`^FO16,218^A0N,40,40^FD${escapeZpl(data.weight)}^FS`) // Bold
+  zpl.push(`^FO15,185^A0N,42,42^FD${escapeZpl(data.weight)}^FS`)
+  zpl.push(`^FO16,185^A0N,42,42^FD${escapeZpl(data.weight)}^FS`) // Bold
 
-  // ========== QR Code (right side, contains product SKU/barcode) ==========
-  // QR code positioned in the right area, next to product name/weight
+  // ========== QR Code (right side, BIGGER - magnification 5) ==========
+  // QR positioned in the right area, fills empty space
   const qrContent = data.productSku || data.barcode
-  const qrX = labelWidth - 115
-  const qrY = 165
-  // ^BQN,2,3 = QR code, Normal orientation, magnification 3
-  zpl.push(`^FO${qrX},${qrY}^BQN,2,3^FDQA,${qrContent}^FS`)
+  const qrX = labelWidth - 140
+  const qrY = 125
+  // ^BQN,2,5 = QR code, Normal orientation, magnification 5 (bigger)
+  zpl.push(`^FO${qrX},${qrY}^BQN,2,5^FDQA,${qrContent}^FS`)
 
   // ========== ROW 5: Barcode at BOTTOM (horizontal, wide) ==========
   const barcodeX = 50
-  zpl.push(`^FO${barcodeX},275^BY3`) // BY3 = wider barcode
+  zpl.push(`^FO${barcodeX},280^BY3`) // BY3 = wider barcode
   zpl.push(`^BEN,80,Y,N^FD${data.barcode}^FS`)
 
   // End label
@@ -137,7 +133,7 @@ export function generateWeightLabel3x2(data: WeightLabelData): Buffer {
  * Layout:
  * ┌───────────────────────────────┐
  * │ LOMO DE CERDO        1,230   │
- * │ 1.000 kg               CUP   │
+ * │ 1.000 kg                     │
  * │   |||||||||||||||||||||||    │
  * │     2000010100X              │
  * └───────────────────────────────┘
@@ -160,17 +156,17 @@ export function generateWeightLabel2x1(data: WeightLabelData): Buffer {
   const formattedTotalPrice = data.priceCUP.toLocaleString('es-ES')
 
   // ========== ROW 1: Product Name (left) + Price (right) ==========
-  const productName = truncate(data.productName.toUpperCase(), 16)
+  const productName = truncate(data.productName.toUpperCase(), 14)
   zpl.push(`^FO8,8^A0N,28,28^FD${escapeZpl(productName)}^FS`)
   zpl.push(`^FO9,8^A0N,28,28^FD${escapeZpl(productName)}^FS`) // Bold
 
-  // Price - right aligned, large
-  zpl.push(`^FO${labelWidth - 110},5^A0N,42,42^FD${formattedTotalPrice}^FS`)
-  zpl.push(`^FO${labelWidth - 109},5^A0N,42,42^FD${formattedTotalPrice}^FS`) // Bold
+  // Price - right aligned using field block to prevent overflow
+  const priceBlockWidth = 130
+  zpl.push(`^FO${labelWidth - priceBlockWidth - 5},5^FB${priceBlockWidth},1,0,R,0^A0N,42,42^FD${formattedTotalPrice}^FS`)
+  zpl.push(`^FO${labelWidth - priceBlockWidth - 4},5^FB${priceBlockWidth},1,0,R,0^A0N,42,42^FD${formattedTotalPrice}^FS`) // Bold
 
-  // ========== ROW 2: Weight (left) + CUP label (right) ==========
+  // ========== ROW 2: Weight (left) ==========
   zpl.push(`^FO8,45^A0N,26,26^FD${escapeZpl(data.weight)}^FS`)
-  zpl.push(`^FO${labelWidth - 50},48^A0N,20,20^FDCUP^FS`)
 
   // ========== Divider line ==========
   zpl.push(`^FO8,75^GB${labelWidth - 16},2,2^FS`)

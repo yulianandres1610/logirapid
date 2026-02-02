@@ -35,6 +35,7 @@ import { generateUnifiedReceptionEscpos } from '../documents/unified-reception-e
 import { generateTransferReceipt, TransferReceiptData } from '../documents/transfer-receipt'
 import { generateAuditCountReport, AuditCountReportData } from '../documents/audit-count-report'
 import { generateWeightLabelZpl, WeightLabelData } from '../documents/weight-label-zpl'
+import { generateWeightLabelPdf, WeightLabelPdfData } from '../documents/weight-label-pdf'
 
 const execAsync = promisify(exec)
 
@@ -381,24 +382,14 @@ class JobProcessor {
         } as ProductLabelData)
 
       case 'weight_label':
-        // Weight labels are ZPL for Zebra printers (3x2 inch format)
+        // Weight labels are ZPL for Zebra printers (3x2 or 2x1 inch format)
         if (useZpl) {
           console.log(`[Job Processor] Generating weight label as ZPL for Zebra printer`)
           return generateWeightLabelZpl(data as unknown as WeightLabelData)
         }
-        // Fallback to product label format for non-Zebra printers
-        console.log(`[Job Processor] Generating weight label as product label PDF (fallback)`)
-        const weightData = data as unknown as WeightLabelData
-        return generateProductLabel({
-          productName: weightData.productName,
-          sku: weightData.productSku || '',
-          barcode: weightData.barcode,
-          barcodeType: 'ean13',
-          priceCUP: weightData.priceCUP,
-          description: `Peso: ${weightData.weight}`,
-          labelWidth: 76, // 3 inches
-          labelHeight: 51 // 2 inches
-        } as ProductLabelData)
+        // For non-Zebra printers, use dedicated PDF generator
+        console.log(`[Job Processor] Generating weight label as PDF for standard printer`)
+        return generateWeightLabelPdf(data as unknown as WeightLabelPdfData)
 
       case 'purchase_invoice':
       case 'invoice':
