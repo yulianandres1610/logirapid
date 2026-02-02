@@ -190,6 +190,7 @@ export async function POST(request: NextRequest) {
       'pos_receipt',           // Recibo de venta POS
       'shipping_label',        // Etiqueta de envío
       'product_label',         // Etiqueta de producto
+      'weight_label',          // Etiqueta de peso (balanza)
       'lot_label',             // Etiqueta de lote 4x6 (recepción consignación/compra)
       'invoice',               // Factura general
       'purchase_invoice',      // Factura de compra
@@ -199,7 +200,8 @@ export async function POST(request: NextRequest) {
       'cash_register_report',  // Reporte de caja/arqueo
       'warehouse_operation',   // Operación de almacén (recepción, transferencia, scrap, ajuste)
       'consignment_receipt',   // Recibo de orden de consignación para almacén
-      'unified_reception'      // Recibo de recepción unificada (consignación/compra)
+      'unified_reception',     // Recibo de recepción unificada (consignación/compra)
+      'transfer_receipt'       // Recibo de transferencia
     ]
     if (!validDocTypes.includes(documentType)) {
       return NextResponse.json({

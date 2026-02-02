@@ -37,17 +37,18 @@ export function generateWeightLabelZpl(data: WeightLabelData): Buffer {
 /**
  * Generate ZPL code for a 3x2 inch weight label - Publix style
  * 3x2 inch (76x51mm) label at 203 DPI
+ * Barcode at BOTTOM, horizontal, full width
  *
  * Layout:
  * ┌─────────────────────────────────────────┐
- * │ PRECIO/kg              PRECIO           │
- * │ 1,230                    1,230          │
- * │ CUP                       CUP           │
+ * │ PRECIO/lb                      PRECIO   │
+ * │ 1,230 CUP                       9,840   │
+ * │                                   CUP   │
  * │─────────────────────────────────────────│
- * │ LOMO DE CERDO                           │
- * │ 1.000 kg                     02/02/2026 │
- * │       |||||||||||||||||||||||           │
- * │         2000010100X                     │
+ * │           LOMO DE CERDO                 │
+ * │             8.000 lb                    │
+ * │  ||||||||||||||||||||||||||||||||||||   │
+ * │          2022021088008                  │
  * └─────────────────────────────────────────┘
  */
 export function generateWeightLabel3x2(data: WeightLabelData): Buffer {
@@ -72,44 +73,43 @@ export function generateWeightLabel3x2(data: WeightLabelData): Buffer {
   const formattedTotalPrice = data.priceCUP.toLocaleString('es-ES')
 
   // ========== ROW 1: Headers ==========
-  zpl.push(`^FO20,15^A0N,22,22^FDPRECIO/${unit}^FS`)
-  zpl.push(`^FO${labelWidth - 180},15^A0N,22,22^FDPRECIO^FS`)
+  zpl.push(`^FO15,10^A0N,24,24^FDPRECIO/${unit}^FS`)
+  zpl.push(`^FO${labelWidth - 140},10^A0N,24,24^FDPRECIO^FS`)
 
   // ========== ROW 2: Price Values ==========
-  // Left: Price per unit
-  zpl.push(`^FO20,42^A0N,40,40^FD${formattedPricePerUnit}^FS`)
-  zpl.push(`^FO21,42^A0N,40,40^FD${formattedPricePerUnit}^FS`) // Bold
-  zpl.push(`^FO20,85^A0N,20,20^FDCUP^FS`)
+  // Left: Price per unit (bigger)
+  zpl.push(`^FO15,38^A0N,50,50^FD${formattedPricePerUnit}^FS`)
+  zpl.push(`^FO16,38^A0N,50,50^FD${formattedPricePerUnit}^FS`) // Bold
+  zpl.push(`^FO15,92^A0N,24,24^FDCUP^FS`)
 
-  // Right: Total price (LARGE)
-  zpl.push(`^FO${labelWidth - 180},38^A0N,70,70^FD${formattedTotalPrice}^FS`)
-  zpl.push(`^FO${labelWidth - 179},38^A0N,70,70^FD${formattedTotalPrice}^FS`) // Bold
-  zpl.push(`^FO${labelWidth - 178},38^A0N,70,70^FD${formattedTotalPrice}^FS`) // Extra bold
-  zpl.push(`^FO${labelWidth - 70},108^A0N,24,24^FDCUP^FS`)
+  // Right: Total price (VERY LARGE)
+  zpl.push(`^FO${labelWidth - 220},30^A0N,90,90^FD${formattedTotalPrice}^FS`)
+  zpl.push(`^FO${labelWidth - 219},30^A0N,90,90^FD${formattedTotalPrice}^FS`) // Bold
+  zpl.push(`^FO${labelWidth - 218},30^A0N,90,90^FD${formattedTotalPrice}^FS`) // Extra bold
+  zpl.push(`^FO${labelWidth - 60},120^A0N,28,28^FDCUP^FS`)
 
   // ========== Divider line ==========
-  zpl.push(`^FO20,140^GB${labelWidth - 40},2,2^FS`)
+  zpl.push(`^FO15,155^GB${labelWidth - 30},3,3^FS`)
 
-  // ========== ROW 3: Product Name (bold) ==========
-  const productName = truncate(data.productName.toUpperCase(), 30)
-  zpl.push(`^FO20,155^A0N,36,36^FD${escapeZpl(productName)}^FS`)
-  zpl.push(`^FO21,155^A0N,36,36^FD${escapeZpl(productName)}^FS`) // Bold
+  // ========== ROW 3: Product Name (centered, LARGE, bold) ==========
+  const productName = truncate(data.productName.toUpperCase(), 24)
+  zpl.push(`^FO0,170^FB${labelWidth},1,0,C,0^A0N,48,48^FD${escapeZpl(productName)}^FS`)
+  zpl.push(`^FO1,170^FB${labelWidth},1,0,C,0^A0N,48,48^FD${escapeZpl(productName)}^FS`) // Bold
+  zpl.push(`^FO2,170^FB${labelWidth},1,0,C,0^A0N,48,48^FD${escapeZpl(productName)}^FS`) // Extra bold
 
-  // ========== ROW 4: Weight and Date ==========
-  zpl.push(`^FO20,200^A0N,30,30^FD${escapeZpl(data.weight)}^FS`)
+  // ========== ROW 4: Weight (centered, LARGE) ==========
+  zpl.push(`^FO0,225^FB${labelWidth},1,0,C,0^A0N,42,42^FD${escapeZpl(data.weight)}^FS`)
+  zpl.push(`^FO1,225^FB${labelWidth},1,0,C,0^A0N,42,42^FD${escapeZpl(data.weight)}^FS`) // Bold
 
+  // ========== ROW 5: Barcode at BOTTOM (horizontal, wide) ==========
+  // Barcode spans almost full width, centered
+  const barcodeX = 50
+  zpl.push(`^FO${barcodeX},280^BY3`) // BY3 = wider barcode
+  zpl.push(`^BEN,80,Y,N^FD${data.barcode}^FS`)
+
+  // ========== Date (small, top right corner) ==========
   const dateText = data.printDate || new Date().toLocaleDateString('es-ES')
-  zpl.push(`^FO${labelWidth - 130},205^A0N,24,24^FD${dateText}^FS`)
-
-  // ========== ROW 5: Barcode (centered) ==========
-  const barcodeX = Math.floor((labelWidth - 220) / 2)
-  zpl.push(`^FO${barcodeX},250^BY2`)
-  zpl.push(`^BEN,70,Y,N^FD${data.barcode}^FS`)
-
-  // ========== SKU (optional, bottom left) ==========
-  if (data.productSku) {
-    zpl.push(`^FO20,${labelHeight - 25}^A0N,18,18^FD${escapeZpl(data.productSku)}^FS`)
-  }
+  zpl.push(`^FO${labelWidth - 100},${labelHeight - 22}^A0N,18,18^FD${dateText}^FS`)
 
   // End label
   zpl.push('^XZ')
@@ -150,25 +150,25 @@ export function generateWeightLabel2x1(data: WeightLabelData): Buffer {
   const formattedTotalPrice = data.priceCUP.toLocaleString('es-ES')
 
   // ========== ROW 1: Product Name (left) + Price (right) ==========
-  const productName = truncate(data.productName.toUpperCase(), 18)
-  zpl.push(`^FO10,8^A0N,24,24^FD${escapeZpl(productName)}^FS`)
-  zpl.push(`^FO11,8^A0N,24,24^FD${escapeZpl(productName)}^FS`) // Bold
+  const productName = truncate(data.productName.toUpperCase(), 16)
+  zpl.push(`^FO8,8^A0N,28,28^FD${escapeZpl(productName)}^FS`)
+  zpl.push(`^FO9,8^A0N,28,28^FD${escapeZpl(productName)}^FS`) // Bold
 
   // Price - right aligned, large
-  zpl.push(`^FO${labelWidth - 100},5^A0N,36,36^FD${formattedTotalPrice}^FS`)
-  zpl.push(`^FO${labelWidth - 99},5^A0N,36,36^FD${formattedTotalPrice}^FS`) // Bold
+  zpl.push(`^FO${labelWidth - 110},5^A0N,42,42^FD${formattedTotalPrice}^FS`)
+  zpl.push(`^FO${labelWidth - 109},5^A0N,42,42^FD${formattedTotalPrice}^FS`) // Bold
 
   // ========== ROW 2: Weight (left) + CUP label (right) ==========
-  zpl.push(`^FO10,40^A0N,22,22^FD${escapeZpl(data.weight)}^FS`)
-  zpl.push(`^FO${labelWidth - 45},42^A0N,18,18^FDCUP^FS`)
+  zpl.push(`^FO8,45^A0N,26,26^FD${escapeZpl(data.weight)}^FS`)
+  zpl.push(`^FO${labelWidth - 50},48^A0N,20,20^FDCUP^FS`)
 
   // ========== Divider line ==========
-  zpl.push(`^FO10,65^GB${labelWidth - 20},1,1^FS`)
+  zpl.push(`^FO8,75^GB${labelWidth - 16},2,2^FS`)
 
-  // ========== ROW 3: Barcode (centered) ==========
-  const barcodeX = Math.floor((labelWidth - 180) / 2)
-  zpl.push(`^FO${barcodeX},75^BY1.5`)
-  zpl.push(`^BEN,50,Y,N^FD${data.barcode}^FS`)
+  // ========== ROW 3: Barcode (centered, full width) ==========
+  const barcodeX = 30
+  zpl.push(`^FO${barcodeX},90^BY2`)
+  zpl.push(`^BEN,55,Y,N^FD${data.barcode}^FS`)
 
   // ========== Date (bottom right, tiny) ==========
   const dateText = data.printDate || new Date().toLocaleDateString('es-ES')

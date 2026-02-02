@@ -177,7 +177,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate document type
-    const validDocTypes = ['pos_receipt', 'shipping_label', 'product_label', 'invoice']
+    const validDocTypes = [
+      'pos_receipt', 'shipping_label', 'product_label', 'weight_label', 'lot_label',
+      'invoice', 'purchase_invoice', 'sales_report', 'inventory_count_report',
+      'audit_count_report', 'cash_register_report', 'warehouse_operation',
+      'consignment_receipt', 'unified_reception', 'transfer_receipt'
+    ]
     if (!validDocTypes.includes(documentType)) {
       return NextResponse.json({
         success: false,
