@@ -1148,6 +1148,118 @@ export async function POST() {
       CREATE INDEX IF NOT EXISTS idx_weight_labels_date ON market_weight_labels_log(printed_at DESC)
     `)
 
+    // ========================================
+    // PRODUCTION/DOSIFICATION TABLES
+    // ========================================
+
+    // 34. Create market_production_orders table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_production_orders (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+
+        -- Identificación
+        order_number VARCHAR(20) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+
+        -- Producto fuente (materia prima)
+        source_product_id INTEGER NOT NULL REFERENCES market_products(id),
+        source_variant_id INTEGER REFERENCES market_product_variants(id),
+        source_warehouse_id INTEGER NOT NULL REFERENCES market_warehouses(id),
+        source_weight_kg DECIMAL(10,4) NOT NULL,
+        source_cost_per_kg DECIMAL(12,4),
+
+        -- Producto final (manufacturado)
+        target_product_id INTEGER NOT NULL REFERENCES market_products(id),
+        target_variant_id INTEGER REFERENCES market_product_variants(id),
+        target_warehouse_id INTEGER NOT NULL REFERENCES market_warehouses(id),
+        target_portion_weight_kg DECIMAL(10,4) NOT NULL,
+        target_quantity INTEGER NOT NULL,
+
+        -- Cálculos
+        expected_total_weight_kg DECIMAL(10,4),
+        waste_surplus_kg DECIMAL(10,4),
+        waste_surplus_type VARCHAR(10),
+
+        -- Cantidad real recibida
+        actual_quantity INTEGER,
+        actual_waste_surplus_kg DECIMAL(10,4),
+
+        -- Costos
+        materials_cost DECIMAL(12,2) DEFAULT 0,
+        labor_cost DECIMAL(12,2) DEFAULT 0,
+        total_cost DECIMAL(12,2) DEFAULT 0,
+        cost_per_unit DECIMAL(12,4),
+
+        -- Documentos
+        production_doc_printed BOOLEAN DEFAULT false,
+        reception_doc_printed BOOLEAN DEFAULT false,
+
+        -- Auditoría
+        created_by INTEGER REFERENCES users(id),
+        completed_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT NOW(),
+        started_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        notes TEXT,
+
+        UNIQUE(company_id, order_number)
+      )
+    `)
+    console.log('[Migration] Created market_production_orders table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_production_orders_company ON market_production_orders(company_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_production_orders_status ON market_production_orders(status)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_production_orders_date ON market_production_orders(created_at DESC)
+    `)
+
+    // 35. Create market_production_materials table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_production_materials (
+        id SERIAL PRIMARY KEY,
+        production_order_id INTEGER NOT NULL REFERENCES market_production_orders(id) ON DELETE CASCADE,
+
+        -- Material usado (bolsas, etiquetas, etc.)
+        product_id INTEGER NOT NULL REFERENCES market_products(id),
+        variant_id INTEGER REFERENCES market_product_variants(id),
+        warehouse_id INTEGER NOT NULL REFERENCES market_warehouses(id),
+
+        quantity DECIMAL(15,3) NOT NULL,
+        unit_cost DECIMAL(12,4),
+        total_cost DECIMAL(12,2),
+
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_production_materials table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_production_materials_order ON market_production_materials(production_order_id)
+    `)
+
+    // 36. Create market_production_log table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_production_log (
+        id SERIAL PRIMARY KEY,
+        production_order_id INTEGER NOT NULL REFERENCES market_production_orders(id) ON DELETE CASCADE,
+
+        action VARCHAR(50) NOT NULL,
+        details JSONB,
+        performed_by INTEGER REFERENCES users(id),
+        performed_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_production_log table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_production_log_order ON market_production_log(production_order_id)
+    `)
+
     // Get table stats
     const tables = [
       'market_products',
@@ -1176,7 +1288,10 @@ export async function POST() {
       'market_pos_order_lines',
       'market_pos_payments',
       'market_promotions',
-      'market_weight_labels_log'
+      'market_weight_labels_log',
+      'market_production_orders',
+      'market_production_materials',
+      'market_production_log'
     ]
     const tableStats = []
 
@@ -1235,7 +1350,10 @@ export async function GET() {
       'market_pos_orders',
       'market_pos_order_lines',
       'market_pos_payments',
-      'market_promotions'
+      'market_promotions',
+      'market_production_orders',
+      'market_production_materials',
+      'market_production_log'
     ]
     const tableStatus = []
 

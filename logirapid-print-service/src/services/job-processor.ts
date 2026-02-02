@@ -36,6 +36,8 @@ import { generateTransferReceipt, TransferReceiptData } from '../documents/trans
 import { generateAuditCountReport, AuditCountReportData } from '../documents/audit-count-report'
 import { generateWeightLabelZpl, WeightLabelData } from '../documents/weight-label-zpl'
 import { generateWeightLabelPdf, WeightLabelPdfData } from '../documents/weight-label-pdf'
+import { generateProductionOrder, ProductionOrderData } from '../documents/production-order'
+import { generateProductionOrderPdf, ProductionOrderPdfData } from '../documents/production-order-pdf'
 
 const execAsync = promisify(exec)
 
@@ -296,6 +298,7 @@ class JobProcessor {
 
       case 'warehouse_operation':
       case 'transfer_receipt':
+      case 'production_order':
         // These documents should print on STANDARD printer (not Zebra label printer)
         return printerService.getStandardPrinters()[0] || printerService.getDefaultPrinter()
 
@@ -462,6 +465,15 @@ class JobProcessor {
       case 'transfer_receipt':
         // Always PDF for transfer receipts (has barcodes)
         return generateTransferReceipt(data as unknown as TransferReceiptData)
+
+      case 'production_order':
+        // Use PDF for standard printers, ESC/POS for thermal
+        if (usePdf) {
+          console.log(`[Job Processor] Generating production order as PDF`)
+          return generateProductionOrderPdf(data as unknown as ProductionOrderPdfData)
+        }
+        console.log(`[Job Processor] Generating production order as ESC/POS`)
+        return generateProductionOrder(data as unknown as ProductionOrderData)
 
       default:
         console.error(`[Job Processor] Unknown document type: ${job.documentType}`)
