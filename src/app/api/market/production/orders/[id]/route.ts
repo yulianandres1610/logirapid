@@ -42,8 +42,8 @@ export async function GET(
     }
 
     const companyId = payload.companyId
-    const { id } = await params
-    const orderId = parseInt(id)
+    const resolvedParams = await params
+    const orderId = parseInt(resolvedParams.id)
 
     if (isNaN(orderId)) {
       return NextResponse.json({
@@ -248,8 +248,8 @@ export async function PATCH(
 
     const companyId = payload.companyId
     const userId = payload.userId
-    const { id } = await params
-    const orderId = parseInt(id)
+    const resolvedParams = await params
+    const orderId = parseInt(resolvedParams.id)
 
     if (isNaN(orderId)) {
       return NextResponse.json({
@@ -407,8 +407,8 @@ export async function DELETE(
 
     const companyId = payload.companyId
     const userId = payload.userId
-    const { id } = await params
-    const orderId = parseInt(id)
+    const resolvedParams = await params
+    const orderId = parseInt(resolvedParams.id)
 
     if (isNaN(orderId)) {
       return NextResponse.json({
