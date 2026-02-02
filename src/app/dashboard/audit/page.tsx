@@ -12,7 +12,8 @@ import {
   AlertCircle,
   CheckCircle2,
   History,
-  MapPin
+  MapPin,
+  PlayCircle
 } from 'lucide-react'
 
 interface WarehouseData {
@@ -32,11 +33,13 @@ interface WarehouseData {
 interface CountHistory {
   id: number
   countNumber: string
+  warehouseId: number
   warehouseName: string
-  status: string
+  status: 'in_progress' | 'completed'
   totalProducts: number
   productsWithDifferences: number
-  completedAt: string
+  startedAt: string
+  completedAt: string | null
 }
 
 export default function AuditDashboardPage() {
@@ -60,12 +63,19 @@ export default function AuditDashboardPage() {
 
       setWarehouses(data.data.warehouses)
 
-      // Fetch recent counts
-      const countsResponse = await fetch('/api/audit/counts?status=completed&limit=5')
+      // Fetch recent counts (both in_progress and completed)
+      const countsResponse = await fetch('/api/audit/counts?limit=10')
       const countsData = await countsResponse.json()
 
       if (countsData.success) {
-        setRecentCounts(countsData.data.counts || [])
+        // Sort: in_progress first, then by date
+        const counts = countsData.data.counts || []
+        counts.sort((a: CountHistory, b: CountHistory) => {
+          if (a.status === 'in_progress' && b.status !== 'in_progress') return -1
+          if (a.status !== 'in_progress' && b.status === 'in_progress') return 1
+          return new Date(b.startedAt || b.completedAt || 0).getTime() - new Date(a.startedAt || a.completedAt || 0).getTime()
+        })
+        setRecentCounts(counts.slice(0, 8))
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido')
@@ -79,6 +89,12 @@ export default function AuditDashboardPage() {
   }, [])
 
   const handleStartCount = (warehouseId: number) => {
+    // Always start a new count (clear old data)
+    router.push(`/dashboard/audit/count?warehouseId=${warehouseId}&new=true`)
+  }
+
+  const handleContinueCount = (warehouseId: number) => {
+    // Continue existing in-progress count
     router.push(`/dashboard/audit/count?warehouseId=${warehouseId}`)
   }
 
@@ -221,27 +237,51 @@ export default function AuditDashboardPage() {
                 {recentCounts.map((count) => (
                   <div
                     key={count.id}
-                    className="flex items-center justify-between p-4 hover:bg-gray-700/50 transition-colors"
+                    className={`p-4 hover:bg-gray-700/50 transition-colors ${count.status === 'in_progress' ? 'bg-amber-900/10 border-l-4 border-amber-500' : ''}`}
                   >
-                    <div className="flex items-center space-x-3 min-w-0">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                        count.productsWithDifferences > 0 ? 'bg-red-500/20' : 'bg-green-500/20'
-                      }`}>
-                        {count.productsWithDifferences > 0 ? (
-                          <AlertCircle className="w-5 h-5 text-red-400" />
-                        ) : (
-                          <CheckCircle2 className="w-5 h-5 text-green-400" />
-                        )}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3 min-w-0">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                          count.status === 'in_progress'
+                            ? 'bg-amber-500/20'
+                            : count.productsWithDifferences > 0
+                              ? 'bg-red-500/20'
+                              : 'bg-green-500/20'
+                        }`}>
+                          {count.status === 'in_progress' ? (
+                            <Clock className="w-5 h-5 text-amber-400" />
+                          ) : count.productsWithDifferences > 0 ? (
+                            <AlertCircle className="w-5 h-5 text-red-400" />
+                          ) : (
+                            <CheckCircle2 className="w-5 h-5 text-green-400" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-white truncate">{count.countNumber}</p>
+                            {count.status === 'in_progress' && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-amber-500/20 text-amber-400 rounded-full">
+                                En progreso
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-400 truncate">{count.warehouseName}</p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="font-medium text-white truncate">{count.countNumber}</p>
-                        <p className="text-sm text-gray-400 truncate">{count.warehouseName}</p>
+                      <div className="text-right flex-shrink-0 ml-3">
+                        <p className="text-sm text-white">{count.totalProducts} prod.</p>
+                        <p className="text-xs text-gray-500">{formatDate(count.completedAt || count.startedAt)}</p>
                       </div>
                     </div>
-                    <div className="text-right flex-shrink-0 ml-3">
-                      <p className="text-sm text-white">{count.totalProducts} prod.</p>
-                      <p className="text-xs text-gray-500">{formatDate(count.completedAt)}</p>
-                    </div>
+                    {count.status === 'in_progress' && (
+                      <button
+                        onClick={() => handleContinueCount(count.warehouseId)}
+                        className="mt-3 w-full flex items-center justify-center space-x-2 py-2.5 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white rounded-xl font-semibold transition-colors shadow-lg shadow-amber-500/20 touch-manipulation active:scale-[0.98]"
+                      >
+                        <PlayCircle className="w-5 h-5" />
+                        <span>Continuar Conteo</span>
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -258,19 +298,26 @@ export default function AuditDashboardPage() {
                     <th className="text-center px-6 py-4 text-sm font-semibold text-gray-400 uppercase tracking-wider">Productos</th>
                     <th className="text-center px-6 py-4 text-sm font-semibold text-gray-400 uppercase tracking-wider">Diferencias</th>
                     <th className="text-right px-6 py-4 text-sm font-semibold text-gray-400 uppercase tracking-wider">Fecha</th>
+                    <th className="text-center px-6 py-4 text-sm font-semibold text-gray-400 uppercase tracking-wider">Acción</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-700">
                   {recentCounts.map((count) => (
                     <tr
                       key={count.id}
-                      className="hover:bg-gray-700/30 transition-colors"
+                      className={`hover:bg-gray-700/30 transition-colors ${count.status === 'in_progress' ? 'bg-amber-900/10' : ''}`}
                     >
                       <td className="px-6 py-4">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          count.productsWithDifferences > 0 ? 'bg-red-500/20' : 'bg-green-500/20'
+                          count.status === 'in_progress'
+                            ? 'bg-amber-500/20'
+                            : count.productsWithDifferences > 0
+                              ? 'bg-red-500/20'
+                              : 'bg-green-500/20'
                         }`}>
-                          {count.productsWithDifferences > 0 ? (
+                          {count.status === 'in_progress' ? (
+                            <Clock className="w-5 h-5 text-amber-400" />
+                          ) : count.productsWithDifferences > 0 ? (
                             <AlertCircle className="w-5 h-5 text-red-400" />
                           ) : (
                             <CheckCircle2 className="w-5 h-5 text-green-400" />
@@ -278,7 +325,14 @@ export default function AuditDashboardPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="font-medium text-white">{count.countNumber}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-white">{count.countNumber}</p>
+                          {count.status === 'in_progress' && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-amber-500/20 text-amber-400 rounded-full">
+                              En progreso
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <p className="text-gray-300">{count.warehouseName}</p>
@@ -298,7 +352,18 @@ export default function AuditDashboardPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <p className="text-gray-400">{formatDate(count.completedAt)}</p>
+                        <p className="text-gray-400">{formatDate(count.completedAt || count.startedAt)}</p>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        {count.status === 'in_progress' && (
+                          <button
+                            onClick={() => handleContinueCount(count.warehouseId)}
+                            className="inline-flex items-center space-x-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition-colors"
+                          >
+                            <PlayCircle className="w-4 h-4" />
+                            <span>Continuar</span>
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

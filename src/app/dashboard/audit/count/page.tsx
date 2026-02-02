@@ -112,6 +112,7 @@ export default function AuditCountPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const warehouseId = searchParams.get('warehouseId')
+  const isNewCount = searchParams.get('new') === 'true' // Force new count, don't load old data
   const searchInputRef = useRef<HTMLInputElement>(null)
   const mobileSearchRef = useRef<HTMLInputElement>(null)
 
@@ -354,6 +355,15 @@ export default function AuditCountPage() {
           }))
         })))
 
+        // If starting a new count, clear old data and start fresh
+        if (isNewCount) {
+          console.log('[Load] Starting NEW count - clearing old data')
+          clearLocalStorage()
+          setCountId(null)
+          setCountedProducts([])
+          lastSavedRef.current = ''
+          // Skip loading old data, but continue to finally block
+        } else {
         // First check localStorage for any unsaved progress
         const localData = loadFromLocalStorage()
         let serverProducts: CountedProduct[] = []
@@ -439,6 +449,7 @@ export default function AuditCountPage() {
           // Save to localStorage for backup
           saveToLocalStorage(serverProducts)
         }
+        } // End of else block (skip when isNewCount)
 
       } catch (err) {
         console.error('Error loading data:', err)
@@ -457,7 +468,7 @@ export default function AuditCountPage() {
     }
 
     loadData()
-  }, [warehouseId, loadFromLocalStorage, saveToLocalStorage, saveToServer])
+  }, [warehouseId, isNewCount, loadFromLocalStorage, saveToLocalStorage, saveToServer, clearLocalStorage])
 
   // Auto-focus search input (desktop only - don't open keyboard on mobile)
   useEffect(() => {
