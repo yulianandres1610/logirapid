@@ -68,8 +68,8 @@ export async function POST(
     const orderResult = await db.query(`
       SELECT
         po.*,
-        c.name as company_name,
-        c.logo_url as company_logo,
+        c.legalname as company_name,
+        c.logo as company_logo,
         sp.name as source_product_name,
         sp.sku as source_product_sku,
         sp.barcode as source_product_barcode,
@@ -363,8 +363,8 @@ export async function GET(
     const orderResult = await db.query(`
       SELECT
         po.*,
-        c.name as company_name,
-        c.logo_url as company_logo,
+        c.legalname as company_name,
+        c.logo as company_logo,
         sp.name as source_product_name,
         sp.sku as source_product_sku,
         sp.barcode as source_product_barcode,
