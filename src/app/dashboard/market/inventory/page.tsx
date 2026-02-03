@@ -28,6 +28,7 @@ import { useTheme } from '@/contexts/theme-context'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import { PrintLabelModal } from '@/components/print/PrintLabelModal'
+import { BulkPrintLabelsModal } from '@/components/print/BulkPrintLabelsModal'
 import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
 import { ProductImage } from '@/components/market/ProductImage'
 
@@ -101,6 +102,7 @@ export default function MarketInventoryPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [printProduct, setPrintProduct] = useState<Product | null>(null)
+  const [showBulkPrint, setShowBulkPrint] = useState(false)
 
   // Check if user is admin
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
@@ -576,6 +578,22 @@ export default function MarketInventoryPage() {
                     <RefreshCw className={cn('w-4 h-4', (loading || isRefreshing) && 'animate-spin')} />
                   </motion.button>
                 </div>
+
+                {/* Imprimir Etiquetas */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowBulkPrint(true)}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all font-medium',
+                    theme === 'dark'
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-blue-500 text-white hover:bg-blue-600'
+                  )}
+                >
+                  <Printer className="w-5 h-5" />
+                  Imprimir Etiquetas
+                </motion.button>
 
                 {/* Nuevo Producto */}
                 <Link href="/dashboard/market/inventory/create">
@@ -1141,6 +1159,15 @@ export default function MarketInventoryPage() {
             }}
           />
         )}
+
+        {/* Bulk Print Labels Modal */}
+        <BulkPrintLabelsModal
+          isOpen={showBulkPrint}
+          onClose={() => setShowBulkPrint(false)}
+          onPrintSuccess={(totalJobs) => {
+            console.log('Bulk print completed:', totalJobs, 'jobs')
+          }}
+        />
       </DashboardLayout>
     </ProtectedRoute>
   )
