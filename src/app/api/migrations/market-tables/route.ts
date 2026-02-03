@@ -1260,6 +1260,37 @@ export async function POST() {
       CREATE INDEX IF NOT EXISTS idx_production_log_order ON market_production_log(production_order_id)
     `)
 
+    // ========================================
+    // CONSIGNMENT DATA SYNC
+    // ========================================
+    // Sync consignment_orders.total_sold from line items (fix for historical data)
+    console.log('[Migration] Syncing consignment_orders.total_sold from line items...')
+
+    try {
+      const consignmentSyncResult = await db.query(`
+        UPDATE consignment_orders o
+        SET
+          total_sold = COALESCE((
+            SELECT SUM(ol.quantity_sold * ol.unit_price)
+            FROM consignment_order_lines ol
+            WHERE ol.order_id = o.id
+          ), 0),
+          updated_at = NOW()
+        RETURNING id, order_number, total_sold
+      `)
+
+      const syncedOrders = consignmentSyncResult.rows.length
+      const totalSynced = consignmentSyncResult.rows.reduce((sum: number, r: any) => sum + parseFloat(r.total_sold || 0), 0)
+
+      console.log('[Migration] Consignment sync completed:', {
+        ordersUpdated: syncedOrders,
+        totalSoldSynced: totalSynced
+      })
+    } catch (e: any) {
+      // Table might not exist in some environments
+      console.log('[Migration] Note: consignment sync - ', e.message)
+    }
+
     // Get table stats
     const tables = [
       'market_products',
