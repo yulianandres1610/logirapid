@@ -621,11 +621,32 @@ export async function POST(request: NextRequest) {
 
           // Update consignment order line sold quantity
           if (lot.order_line_id) {
+            // Get the order line details to update the master order
+            const orderLineResult = await db.query(`
+              SELECT order_id, unit_price FROM consignment_order_lines WHERE id = $1
+            `, [lot.order_line_id])
+
             await db.query(`
               UPDATE consignment_order_lines
               SET quantity_sold = quantity_sold + $1
               WHERE id = $2
             `, [toDeduct, lot.order_line_id])
+
+            // Update consignment_orders.total_sold (aggregate)
+            if (orderLineResult.rows.length > 0) {
+              const orderId = orderLineResult.rows[0].order_id
+              const unitPrice = parseFloat(orderLineResult.rows[0].unit_price) || 0
+              const saleAmount = toDeduct * unitPrice
+
+              await db.query(`
+                UPDATE consignment_orders
+                SET total_sold = COALESCE(total_sold, 0) + $1,
+                    updated_at = NOW()
+                WHERE id = $2
+              `, [saleAmount, orderId])
+
+              console.log('[POS Orders] Consignment order total_sold updated:', { orderId, saleAmount })
+            }
           }
 
           // Update supplier wallet with earnings (at cost price)

@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
 
     const pendingPayments = parseFloat(pendingPaymentsResult.rows[0].pending_to_pay) || 0
 
-    // Get order stats
+    // Get order stats (calculate total_sold from line items for accuracy)
     const orderStatsResult = await db.query(`
       SELECT
         COUNT(*) FILTER (WHERE o.status = 'pending') as pending_orders,
@@ -64,7 +64,13 @@ export async function GET(request: NextRequest) {
         COUNT(*) FILTER (WHERE o.status = 'selling') as selling_orders,
         COUNT(*) as total_orders,
         COALESCE(SUM(o.total_cost), 0) as total_consigned,
-        COALESCE(SUM(o.total_sold), 0) as total_sold,
+        COALESCE((
+          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          FROM consignment_order_lines ol
+          JOIN consignment_orders o2 ON o2.id = ol.order_id
+          JOIN consignment_suppliers s2 ON s2.id = o2.supplier_id
+          WHERE s2.company_id = $1
+        ), 0) as total_sold,
         COALESCE(SUM(o.total_paid), 0) as total_paid
       FROM consignment_orders o
       JOIN consignment_suppliers s ON s.id = o.supplier_id
@@ -93,13 +99,18 @@ export async function GET(request: NextRequest) {
       amount: parseFloat(r.daily_sales)
     }))
 
-    // Get top suppliers by sales
+    // Get top suppliers by sales (calculate from line items for accuracy)
     const topSuppliersResult = await db.query(`
       SELECT
         s.id,
         s.code,
         s.name,
-        COALESCE(SUM(o.total_sold), 0) as total_sold,
+        COALESCE((
+          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          FROM consignment_order_lines ol
+          JOIN consignment_orders o2 ON o2.id = ol.order_id
+          WHERE o2.supplier_id = s.id
+        ), 0) as total_sold,
         COALESCE(SUM(o.total_cost), 0) as total_consigned,
         COUNT(o.id) as order_count
       FROM consignment_suppliers s

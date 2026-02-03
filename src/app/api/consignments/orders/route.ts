@@ -119,7 +119,12 @@ export async function GET(request: NextRequest) {
         w.code as warehouse_code,
         u.firstname || ' ' || u.lastname as created_by_name,
         uv.firstname || ' ' || uv.lastname as validated_by_name,
-        (SELECT COUNT(*) FROM consignment_order_lines WHERE order_id = o.id) as line_count
+        (SELECT COUNT(*) FROM consignment_order_lines WHERE order_id = o.id) as line_count,
+        COALESCE((
+          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          FROM consignment_order_lines ol
+          WHERE ol.order_id = o.id
+        ), 0) as calculated_total_sold
       FROM consignment_orders o
       JOIN market_suppliers s ON s.id = o.supplier_id
       JOIN market_warehouses w ON w.id = o.warehouse_id
@@ -194,17 +199,21 @@ export async function GET(request: NextRequest) {
     const countResult = await db.query(countQuery, countParams)
     const total = parseInt(countResult.rows[0]?.total || '0')
 
-    // Get stats by status
+    // Get stats by status (calculate total_sold from line items for accuracy)
     const statsResult = await db.query(`
       SELECT
-        status,
+        o.status,
         COUNT(*) as count,
-        COALESCE(SUM(total_cost), 0) as total_cost,
-        COALESCE(SUM(total_sold), 0) as total_sold,
-        COALESCE(SUM(total_paid), 0) as total_paid
-      FROM consignment_orders
-      WHERE company_id = $1
-      GROUP BY status
+        COALESCE(SUM(o.total_cost), 0) as total_cost,
+        COALESCE(SUM((
+          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          FROM consignment_order_lines ol
+          WHERE ol.order_id = o.id
+        )), 0) as total_sold,
+        COALESCE(SUM(o.total_paid), 0) as total_paid
+      FROM consignment_orders o
+      WHERE o.company_id = $1
+      GROUP BY o.status
     `, [payload.companyId])
 
     // Get validation stats
@@ -280,7 +289,7 @@ export async function GET(request: NextRequest) {
       totalItems: parseInt(o.line_count) || 0,
       totalUnits: parseInt(o.total_units) || 0,
       totalCost: parseFloat(o.total_cost) || 0,
-      totalSold: parseFloat(o.total_sold) || 0,
+      totalSold: parseFloat(o.calculated_total_sold) || parseFloat(o.total_sold) || 0,
       totalPaid: parseFloat(o.total_paid) || 0,
       totalReturned: parseFloat(o.total_returned) || 0,
       consignmentDate: o.consignment_date,
