@@ -18,7 +18,7 @@ interface LotData {
   supplierName: string | null
   warehouseName: string | null
   unitCost: number
-  source: 'consignment' | 'purchase' | 'manual'
+  source: 'consignment' | 'purchase' | 'production' | 'manual'
 }
 
 /**
@@ -159,7 +159,56 @@ export async function GET(
       console.log('purchase_lot_inventory table may not exist:', err)
     }
 
-    // 3. Get lots from market_product_lots (manual lots) if exists
+    // 3. Get lots from production_lot_inventory (production FIFO)
+    try {
+      const productionLots = await db.query(`
+        SELECT
+          pli.id,
+          pli.lot_number,
+          pli.expiration_date,
+          pli.manufacturing_date,
+          pli.quantity_initial as quantity,
+          pli.quantity_available,
+          NULL as notes,
+          (pli.quantity_available > 0) as is_active,
+          pli.received_at as created_at,
+          mpo.id as order_id,
+          mpo.order_number,
+          mpo.created_at as order_date,
+          mw.name as warehouse_name,
+          pli.unit_cost
+        FROM production_lot_inventory pli
+        LEFT JOIN market_production_orders mpo ON mpo.id = pli.production_order_id
+        LEFT JOIN market_warehouses mw ON mw.id = pli.warehouse_id
+        WHERE pli.product_id = $1 AND pli.company_id = $2
+        ORDER BY pli.received_at DESC
+      `, [productId, parseInt(companyId)])
+
+      for (const lot of productionLots.rows) {
+        allLots.push({
+          id: lot.id + 3000000, // Offset to avoid ID collision
+          lotNumber: lot.lot_number,
+          expirationDate: lot.expiration_date,
+          manufacturingDate: lot.manufacturing_date,
+          quantity: parseFloat(lot.quantity) || 0,
+          quantityAvailable: parseFloat(lot.quantity_available) || 0,
+          notes: lot.notes,
+          isActive: lot.is_active,
+          createdAt: lot.created_at,
+          purchaseId: lot.order_id ? parseInt(lot.order_id) : null,
+          purchaseNumber: lot.order_number,
+          purchaseDate: lot.order_date,
+          supplierName: 'Producción',
+          warehouseName: lot.warehouse_name,
+          unitCost: parseFloat(lot.unit_cost) || 0,
+          source: 'production'
+        })
+      }
+    } catch (err) {
+      console.log('production_lot_inventory table may not exist:', err)
+    }
+
+    // 4. Get lots from market_product_lots (manual lots) if exists
     try {
       const manualLots = await db.query(`
         SELECT
@@ -186,7 +235,7 @@ export async function GET(
 
       for (const lot of manualLots.rows) {
         allLots.push({
-          id: lot.id + 2000000, // Offset to avoid ID collision
+          id: lot.id + 4000000, // Offset to avoid ID collision
           lotNumber: lot.lot_number,
           expirationDate: lot.expiration_date,
           manufacturingDate: lot.manufacturing_date,
@@ -231,7 +280,8 @@ export async function GET(
       criticalLots: 0,
       warningLots: 0,
       consignmentLots: allLots.filter(l => l.source === 'consignment').length,
-      purchaseLots: allLots.filter(l => l.source === 'purchase').length
+      purchaseLots: allLots.filter(l => l.source === 'purchase').length,
+      productionLots: allLots.filter(l => l.source === 'production').length
     }
 
     for (const lot of allLots) {

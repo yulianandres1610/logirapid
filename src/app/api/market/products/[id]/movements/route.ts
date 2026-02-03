@@ -464,6 +464,132 @@ export async function GET(
       console.error('[Product Movements] Error fetching scrap:', error)
     }
 
+    // 7. Get production out movements (materials delivered to production)
+    try {
+      const productionOutResult = await db.query(`
+        SELECT
+          mwo.id,
+          mwo.operation_number,
+          mwo.operation_type,
+          mwo.status,
+          mwo.created_at,
+          mwo.completed_at,
+          mwol.quantity_planned,
+          mwol.quantity_done,
+          mwol.variant_id,
+          mpv.variant_name,
+          sw.id as source_warehouse_id,
+          sw.name as source_warehouse,
+          dw.id as dest_warehouse_id,
+          dw.name as dest_warehouse,
+          mpo.order_number as production_order_number,
+          COALESCE(u.firstname || ' ' || u.lastname, u.email) as user_name,
+          mwo.notes
+        FROM market_warehouse_operation_lines mwol
+        JOIN market_warehouse_operations mwo ON mwo.id = mwol.operation_id
+        LEFT JOIN market_product_variants mpv ON mpv.id = mwol.variant_id
+        LEFT JOIN market_warehouses sw ON sw.id = mwo.source_warehouse_id
+        LEFT JOIN market_warehouses dw ON dw.id = mwo.destination_warehouse_id
+        LEFT JOIN market_production_orders mpo ON mpo.id = mwo.production_order_id
+        LEFT JOIN users u ON u.id = mwo.created_by
+        WHERE mwol.product_id = $1 AND mwo.company_id = $2
+          AND mwo.operation_type = 'production_out'
+          AND mwo.status IN ('done', 'completed', 'confirmed', 'validated')
+        ORDER BY COALESCE(mwo.completed_at, mwo.created_at) DESC
+        LIMIT $3
+      `, [productId, payload.companyId, limit])
+
+      for (const row of productionOutResult.rows) {
+        const qty = parseFloat(row.quantity_done) || parseFloat(row.quantity_planned) || 0
+        if (qty > 0) {
+          const variantLabel = row.variant_name ? ` (${row.variant_name})` : ''
+          movements.push({
+            id: `production-out-${row.id}`,
+            type: 'production_out',
+            typeLabel: `Salida Producción${variantLabel}`,
+            date: row.completed_at || row.created_at || new Date().toISOString(),
+            quantity: qty,
+            direction: 'out',
+            reference: row.production_order_number || row.operation_number || `PROD-OUT-${row.id}`,
+            referenceId: row.id,
+            warehouseName: row.source_warehouse || 'N/A',
+            sourceWarehouse: row.source_warehouse || 'N/A',
+            destWarehouse: row.dest_warehouse || 'Producción',
+            userName: row.user_name,
+            status: row.status,
+            notes: row.notes || (row.variant_name ? `Variante: ${row.variant_name}` : null),
+            stockAfter: null
+          })
+        }
+      }
+    } catch (error) {
+      console.error('[Product Movements] Error fetching production out:', error)
+    }
+
+    // 8. Get production in movements (finished products received from production)
+    try {
+      const productionInResult = await db.query(`
+        SELECT
+          mwo.id,
+          mwo.operation_number,
+          mwo.operation_type,
+          mwo.status,
+          mwo.created_at,
+          mwo.completed_at,
+          mwol.quantity_planned,
+          mwol.quantity_done,
+          mwol.variant_id,
+          mpv.variant_name,
+          sw.id as source_warehouse_id,
+          sw.name as source_warehouse,
+          dw.id as dest_warehouse_id,
+          dw.name as dest_warehouse,
+          mpo.order_number as production_order_number,
+          mpo.lot_number,
+          COALESCE(u.firstname || ' ' || u.lastname, u.email) as user_name,
+          mwo.notes
+        FROM market_warehouse_operation_lines mwol
+        JOIN market_warehouse_operations mwo ON mwo.id = mwol.operation_id
+        LEFT JOIN market_product_variants mpv ON mpv.id = mwol.variant_id
+        LEFT JOIN market_warehouses sw ON sw.id = mwo.source_warehouse_id
+        LEFT JOIN market_warehouses dw ON dw.id = mwo.destination_warehouse_id
+        LEFT JOIN market_production_orders mpo ON mpo.id = mwo.production_order_id
+        LEFT JOIN users u ON u.id = mwo.created_by
+        WHERE mwol.product_id = $1 AND mwo.company_id = $2
+          AND mwo.operation_type = 'production_in'
+          AND mwo.status IN ('done', 'completed', 'confirmed', 'validated')
+        ORDER BY COALESCE(mwo.completed_at, mwo.created_at) DESC
+        LIMIT $3
+      `, [productId, payload.companyId, limit])
+
+      for (const row of productionInResult.rows) {
+        const qty = parseFloat(row.quantity_done) || parseFloat(row.quantity_planned) || 0
+        if (qty > 0) {
+          const variantLabel = row.variant_name ? ` (${row.variant_name})` : ''
+          const lotNote = row.lot_number ? `Lote: ${row.lot_number}` : null
+          movements.push({
+            id: `production-in-${row.id}`,
+            type: 'production_in',
+            typeLabel: `Entrada Producción${variantLabel}`,
+            date: row.completed_at || row.created_at || new Date().toISOString(),
+            quantity: qty,
+            direction: 'in',
+            reference: row.production_order_number || row.operation_number || `PROD-IN-${row.id}`,
+            referenceId: row.id,
+            warehouseName: row.dest_warehouse || 'N/A',
+            sourceWarehouse: row.source_warehouse || 'Producción',
+            destWarehouse: row.dest_warehouse || 'N/A',
+            userName: row.user_name,
+            status: row.status,
+            notes: lotNote || row.notes || (row.variant_name ? `Variante: ${row.variant_name}` : null),
+            stockAfter: null
+          })
+        }
+      }
+    } catch (error) {
+      console.error('[Product Movements] Error fetching production in:', error)
+    }
+
     // Sort all movements by date descending (handle null/invalid dates)
     movements.sort((a, b) => {
       let dateA = 0
@@ -535,7 +661,9 @@ export async function GET(
           transferCount: movements.filter(m => m.type.startsWith('transfer')).length / 2,
           auditCount: movements.filter(m => m.type === 'audit').length,
           adjustmentCount: movements.filter(m => m.type === 'adjustment').length,
-          scrapCount: movements.filter(m => m.type === 'scrap').length
+          scrapCount: movements.filter(m => m.type === 'scrap').length,
+          productionInCount: movements.filter(m => m.type === 'production_in').length,
+          productionOutCount: movements.filter(m => m.type === 'production_out').length
         }
       }
     })

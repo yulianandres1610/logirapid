@@ -896,11 +896,11 @@ export default function UnifiedReceptionView({
                   <p className="text-xs text-gray-500">Estado</p>
                   <span className={cn(
                     'inline-block px-2 py-1 rounded-full text-xs font-medium',
-                    selectedOrder.order.status === 'received' || selectedOrder.order.status === 'recibido'
+                    selectedOrder.order.status === 'received' || selectedOrder.order.status === 'recibido' || selectedOrder.order.status === 'completed'
                       ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
                       : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
                   )}>
-                    {selectedOrder.order.status === 'received' || selectedOrder.order.status === 'recibido' ? 'Completo' : 'Parcial'}
+                    {selectedOrder.order.status === 'received' || selectedOrder.order.status === 'recibido' || selectedOrder.order.status === 'completed' ? 'Completo' : 'Parcial'}
                   </span>
                 </div>
                 <div>
@@ -1024,11 +1024,11 @@ export default function UnifiedReceptionView({
                         </p>
                         <span className={cn(
                           'px-2 py-0.5 rounded-full text-xs',
-                          item.status === 'received' || item.status === 'recibido'
+                          item.status === 'received' || item.status === 'recibido' || item.status === 'completed'
                             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
                             : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
                         )}>
-                          {item.status === 'received' || item.status === 'recibido' ? 'Completo' : 'Parcial'}
+                          {item.status === 'received' || item.status === 'recibido' || item.status === 'completed' ? 'Completo' : 'Parcial'}
                         </span>
                       </div>
                       <p className="text-sm text-gray-500 truncate">
