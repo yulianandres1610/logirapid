@@ -398,31 +398,75 @@ class PrinterService {
     let supportsEscpos = false
 
     // Thermal receipt printers (80mm)
-    // Be specific about thermal printers - not all Epson printers are thermal!
+    // Expanded detection for thermal printers - includes many brands and models
     const isThermalPrinter =
+      // Generic thermal indicators
       name.includes('thermal') ||
-      name.includes('tm-t') || // Epson TM-T series (thermal)
-      name.includes('tm-m') || // Epson TM-M series (thermal)
-      name.includes('tm-u') || // Epson TM-U series (thermal)
-      name.includes('tm-p') || // Epson TM-P series (portable thermal)
-      name.includes('tsp') || // Star TSP series
-      name.includes('sp700') || // Star SP700
-      name.includes('rongta') || // RONGTA thermal printers
-      name.includes('xprinter') || // XPrinter thermal printers
-      name.includes('munbyn') || // MUNBYN thermal printers
-      name.includes('80mm') || // Generic 80mm thermal printers
-      name.includes('58mm') || // Generic 58mm thermal printers
       name.includes('receipt') ||
       name.includes('ticket') ||
       name.includes('termica') ||
+      name.includes('pos') ||
+      name.includes('80mm') ||
+      name.includes('58mm') ||
+      // Epson thermal series
+      name.includes('tm-t') || // Epson TM-T series (TM-T20, TM-T88, etc.)
+      name.includes('tm-m') || // Epson TM-M series
+      name.includes('tm-u') || // Epson TM-U series
+      name.includes('tm-p') || // Epson TM-P series (portable)
+      name.includes('tm-l') || // Epson TM-L series (label/receipt)
+      name.includes('tm-h') || // Epson TM-H series
+      name.includes('tmt20') ||
+      name.includes('tmt88') ||
+      name.includes('tm20') ||
+      name.includes('tm88') ||
+      // Star Micronics
+      name.includes('tsp') || // Star TSP series (TSP100, TSP650, TSP700, TSP800)
+      name.includes('sp700') ||
+      name.includes('star') ||
+      name.includes('mcp') || // Star mC-Print series
+      // Bixolon
+      name.includes('bixolon') ||
+      name.includes('srp-') || // Bixolon SRP series
+      // Citizen
+      name.includes('citizen') ||
+      name.includes('ct-s') || // Citizen CT-S series
+      // Samsung/Bixolon
+      name.includes('samsung') ||
+      // Generic/Chinese brands
+      name.includes('rongta') ||
+      name.includes('xprinter') ||
+      name.includes('munbyn') ||
+      name.includes('hoin') ||
+      name.includes('zjiang') ||
+      name.includes('goojprt') ||
+      name.includes('netum') ||
+      name.includes('issyzonepos') ||
+      name.includes('terow') ||
+      name.includes('gainscha') ||
+      name.includes('ocpp') || // Generic OCPP thermal
+      name.includes('prp-') || // PRP series
+      name.includes('rp-') || // RP series thermal
+      // USB thermal printers often appear as these
+      name.includes('usb printing') ||
+      name.includes('pos-') ||
+      name.includes('pos58') ||
+      name.includes('pos80') ||
+      // Check description/display name too
       desc.includes('thermal') ||
       desc.includes('receipt') ||
+      desc.includes('pos printer') ||
+      desc.includes('ticket') ||
       displayName.includes('thermal') ||
       displayName.includes('tm-t') ||
       displayName.includes('tm-m') ||
       displayName.includes('tsp') ||
       displayName.includes('rongta') ||
-      displayName.includes('80mm')
+      displayName.includes('xprinter') ||
+      displayName.includes('bixolon') ||
+      displayName.includes('star') ||
+      displayName.includes('citizen') ||
+      displayName.includes('80mm') ||
+      displayName.includes('pos')
 
     // Exclude regular inkjet/laser printers that might match other patterns
     const isRegularPrinter =

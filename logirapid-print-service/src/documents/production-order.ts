@@ -72,22 +72,38 @@ const GS = '\x1d'
 const LF = '\x0a'
 
 const Commands = {
+  // Initialize printer - resets to default settings
   INIT: `${ESC}@`,
-  CUT: `${GS}V\x00`,
 
+  // Paper cut commands - try multiple for better compatibility
+  // GS V m - where m=0 is full cut, m=1 is partial cut, m=65 (0x41) is feed and cut
+  CUT: `${GS}V\x41\x00`, // Feed and full cut (most compatible)
+  CUT_PARTIAL: `${GS}V\x42\x00`, // Feed and partial cut
+
+  // Text alignment
   ALIGN_LEFT: `${ESC}a\x00`,
   ALIGN_CENTER: `${ESC}a\x01`,
   ALIGN_RIGHT: `${ESC}a\x02`,
 
+  // Text formatting
   BOLD_ON: `${ESC}E\x01`,
   BOLD_OFF: `${ESC}E\x00`,
-  DOUBLE_HEIGHT_ON: `${GS}!\x10`,
-  DOUBLE_WIDTH_ON: `${GS}!\x20`,
-  DOUBLE_SIZE_ON: `${GS}!\x30`,
-  NORMAL_SIZE: `${GS}!\x00`,
+  UNDERLINE_ON: `${ESC}-\x01`,
+  UNDERLINE_OFF: `${ESC}-\x00`,
 
+  // Text size - GS ! n where n is bit flags
+  DOUBLE_HEIGHT_ON: `${GS}!\x10`, // bit 4 = double height
+  DOUBLE_WIDTH_ON: `${GS}!\x20`,  // bit 5 = double width
+  DOUBLE_SIZE_ON: `${GS}!\x30`,   // bits 4+5 = double height + width
+  NORMAL_SIZE: `${GS}!\x00`,      // normal size
+
+  // Line feed
   FEED_LINE: LF,
-  FEED_LINES: (n: number) => `${ESC}d${String.fromCharCode(n)}`
+  FEED_LINES: (n: number) => `${ESC}d${String.fromCharCode(n)}`,
+
+  // Character code table (for Spanish characters)
+  CODE_PAGE_PC850: `${ESC}t\x02`, // Code page 850 (Latin-1)
+  CODE_PAGE_WPC1252: `${ESC}t\x10` // Windows-1252 (Western European)
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -101,8 +117,9 @@ export function generateProductionOrder(data: ProductionOrderData): Buffer {
   const lines: string[] = []
   const width = 42 // 80mm thermal printer width
 
-  // Initialize
+  // Initialize printer and set code page for Spanish characters
   lines.push(Commands.INIT)
+  lines.push(Commands.CODE_PAGE_PC850)
 
   // Determine document type
   const isReception = data.documentType === 'reception'
@@ -370,7 +387,8 @@ export function generateProductionOrder(data: ProductionOrderData): Buffer {
   lines.push(Commands.FEED_LINES(4))
   lines.push(Commands.CUT)
 
-  return Buffer.from(lines.join(''), 'binary')
+  // Use latin1 encoding for better ESC/POS compatibility
+  return Buffer.from(lines.join(''), 'latin1')
 }
 
 function formatDateShort(dateStr: string): string {

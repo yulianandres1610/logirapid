@@ -517,9 +517,15 @@ class JobProcessor {
     const isLabelJob = ['product_label', 'shipping_label', 'lot_label', 'weight_label'].includes(job.documentType)
     const canUseRaw = process.platform === 'win32' || process.platform === 'darwin' || hasRawQueue
     const useRawLabelPrint = isLabelPrinter && canUseRaw && isLabelJob
+    // ESC/POS documents that should always use raw printing on thermal printers
+    const escposDocuments = [
+      'pos_receipt', 'unified_reception', 'purchase_invoice', 'invoice',
+      'consignment_receipt', 'production_order', 'production_materials_receipt',
+      'production_reception_receipt'
+    ]
     const useEscPos = printer.supportsEscpos &&
                       printer.printerType !== 'standard' &&
-                      ['pos_receipt', 'unified_reception'].includes(job.documentType)
+                      escposDocuments.includes(job.documentType)
     const isReceiptOrReport = ['purchase_invoice', 'invoice', 'sales_report',
                                'inventory_count_report', 'audit_count_report', 'cash_register_report',
                                'warehouse_operation', 'unified_reception', 'consignment_receipt',
@@ -531,6 +537,9 @@ class JobProcessor {
     console.log(`[Job Processor]   - useEscPos: ${useEscPos}`)
     console.log(`[Job Processor]   - isReceiptOrReport: ${isReceiptOrReport}`)
     console.log(`[Job Processor]   - isPdfOnly: ${isPdfOnly}`)
+    console.log(`[Job Processor]   - printer.supportsEscpos: ${printer.supportsEscpos}`)
+    console.log(`[Job Processor]   - printer.printerType: ${printer.printerType}`)
+    console.log(`[Job Processor]   - Document in ESC/POS list: ${escposDocuments.includes(job.documentType)}`)
 
     // Print all copies in a single job for better performance
     if (useRawLabelPrint) {
@@ -798,6 +807,7 @@ if ($result) {
     await writeFile(tempFile, printData)
 
     console.log(`[Job Processor] ESC/POS temp file: ${tempFile} (${printData.length} bytes, ${copies} copies)`)
+    console.log(`[Job Processor] ESC/POS data preview (first 100 bytes hex): ${printData.slice(0, 100).toString('hex')}`)
 
     try {
       if (process.platform === 'win32') {
