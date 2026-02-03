@@ -1209,8 +1209,9 @@ export async function POST() {
     `)
     console.log('[Migration] Created market_production_orders table')
 
-    // 34.1 Add source_quantity and source_unit_cost columns (for existing tables)
+    // 34.1 Add essential columns for existing tables
     const productionOrderColumns = [
+      { name: 'order_number', type: "VARCHAR(20)" },
       { name: 'source_quantity', type: 'DECIMAL(15,3) DEFAULT 1' },
       { name: 'source_unit_cost', type: 'DECIMAL(12,4)' }
     ]
@@ -1240,6 +1241,29 @@ export async function POST() {
       console.log('[Migration] Migrated existing source_cost_per_kg to source_unit_cost')
     } catch (e: any) {
       console.log(`[Migration] Note: migration of cost columns - ${e.message}`)
+    }
+
+    // Generate order_number for any rows that don't have one
+    try {
+      await db.query(`
+        UPDATE market_production_orders
+        SET order_number = 'PRD-' || EXTRACT(YEAR FROM created_at)::TEXT || '-' || LPAD(id::TEXT, 4, '0')
+        WHERE order_number IS NULL OR order_number = ''
+      `)
+      console.log('[Migration] Generated order_numbers for existing production orders')
+    } catch (e: any) {
+      console.log(`[Migration] Note: order_number generation - ${e.message}`)
+    }
+
+    // Add unique constraint if not exists
+    try {
+      await db.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_production_orders_order_number
+        ON market_production_orders(company_id, order_number)
+      `)
+      console.log('[Migration] Added unique index for order_number')
+    } catch (e: any) {
+      console.log(`[Migration] Note: unique index - ${e.message}`)
     }
 
     await db.query(`

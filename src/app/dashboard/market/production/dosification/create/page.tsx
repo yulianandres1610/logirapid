@@ -20,13 +20,15 @@ import {
   Warehouse,
   Calculator,
   Check,
-  X
+  X,
+  Printer,
+  ExternalLink
 } from 'lucide-react'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 
-type Step = 'source' | 'materials' | 'target' | 'summary'
+type Step = 'source' | 'materials' | 'target' | 'summary' | 'confirm'
 
 interface WizardStep {
   id: Step
@@ -41,6 +43,9 @@ const STEPS: WizardStep[] = [
   { id: 'target', title: 'Producto', description: 'Producto final', icon: Scale },
   { id: 'summary', title: 'Resumen', description: 'Confirmar orden', icon: ClipboardCheck }
 ]
+
+// Steps shown in progress indicator (without confirm step)
+const PROGRESS_STEPS = STEPS
 
 interface Product {
   id: number
@@ -108,8 +113,10 @@ export default function CreateProductionOrderPage() {
   const [currentStep, setCurrentStep] = useState<Step>('source')
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [printing, setPrinting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [showCancelModal, setShowCancelModal] = useState(false)
+  const [createdOrder, setCreatedOrder] = useState<{ id: number; orderNumber: string } | null>(null)
 
   // Data for selectors
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([])
@@ -338,7 +345,11 @@ export default function CreateProductionOrderPage() {
       const data = await response.json()
 
       if (data.success) {
-        router.push(`/dashboard/market/production/dosification/${data.data.orderId}`)
+        setCreatedOrder({
+          id: data.data.orderId,
+          orderNumber: data.data.orderNumber
+        })
+        setCurrentStep('confirm')
       } else {
         setErrors({ submit: data.error || 'Error al crear la orden' })
       }
@@ -347,6 +358,35 @@ export default function CreateProductionOrderPage() {
       setErrors({ submit: 'Error al crear la orden de producción' })
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handlePrintMaterials = async () => {
+    if (!createdOrder) return
+
+    setPrinting(true)
+    try {
+      const response = await fetch(`/api/market/production/orders/${createdOrder.id}/print`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentType: 'materials'
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Show success message or notification
+        console.log('Print job created:', data.data.jobNumber)
+      } else {
+        setErrors({ print: data.error || 'Error al imprimir' })
+      }
+    } catch (error) {
+      console.error('Error printing:', error)
+      setErrors({ print: 'Error al enviar a impresora' })
+    } finally {
+      setPrinting(false)
     }
   }
 
@@ -367,7 +407,8 @@ export default function CreateProductionOrderPage() {
     ? Math.floor(formData.sourceWeightKg / formData.targetPortionWeightKg)
     : 0
 
-  const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
+  const currentStepIndex = PROGRESS_STEPS.findIndex(s => s.id === currentStep)
+  const isConfirmStep = currentStep === 'confirm'
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-US', { style: 'currency', currency: 'USD' }).format(value)
@@ -397,10 +438,11 @@ export default function CreateProductionOrderPage() {
             <X className="w-4 h-4" />
           </motion.button>
 
-          {/* Progress Indicator */}
+          {/* Progress Indicator - Hidden on confirm step */}
+          {!isConfirmStep && (
           <div className="mb-8 sm:mb-12">
             <div className="flex items-center justify-between">
-              {STEPS.map((step, index) => (
+              {PROGRESS_STEPS.map((step, index) => (
                 <React.Fragment key={step.id}>
                   <div className="flex flex-col items-center">
                     <div className="relative w-14 h-14">
@@ -515,6 +557,7 @@ export default function CreateProductionOrderPage() {
               ))}
             </div>
           </div>
+          )}
 
           {/* Step Content */}
           <motion.div
@@ -1518,10 +1561,219 @@ export default function CreateProductionOrderPage() {
                   )}
                 </motion.div>
               )}
+
+              {/* Step 5: Confirmation */}
+              {currentStep === 'confirm' && createdOrder && (
+                <motion.div
+                  key="confirm"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.5 }}
+                  className="space-y-6 text-center"
+                >
+                  {/* Success Icon */}
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.2 }}
+                    className="mx-auto w-24 h-24 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/30"
+                  >
+                    <CheckCircle className="w-12 h-12 text-white" />
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    <h2 className={cn(
+                      "text-2xl font-bold mb-2",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      Orden Creada Exitosamente
+                    </h2>
+                    <p className={cn(
+                      "text-lg font-semibold",
+                      theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
+                    )}>
+                      {createdOrder.orderNumber}
+                    </p>
+                  </motion.div>
+
+                  {/* Order Summary Card */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 }}
+                    className={cn(
+                      'p-6 rounded-2xl border text-left',
+                      theme === 'dark'
+                        ? 'bg-gray-700/50 border-gray-600'
+                        : 'bg-gray-50 border-gray-200'
+                    )}
+                  >
+                    <h3 className={cn(
+                      "font-semibold mb-4",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      Resumen de la Orden
+                    </h3>
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between">
+                        <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+                          Producto Fuente:
+                        </span>
+                        <span className={cn(
+                          'font-medium',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>
+                          {formData.sourceProduct?.name}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+                          Producto Final:
+                        </span>
+                        <span className={cn(
+                          'font-medium',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>
+                          {formData.targetProduct?.name}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+                          Cantidad a Producir:
+                        </span>
+                        <span className={cn(
+                          'font-medium',
+                          theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
+                        )}>
+                          {formData.targetQuantity} unidades
+                        </span>
+                      </div>
+                      {formData.materials.length > 0 && (
+                        <div className="flex justify-between">
+                          <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+                            Materiales:
+                          </span>
+                          <span className={cn(
+                            'font-medium',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            {formData.materials.length} items
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+
+                  {/* Print Section */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                    className={cn(
+                      'p-6 rounded-2xl border',
+                      theme === 'dark'
+                        ? 'bg-amber-900/20 border-amber-800'
+                        : 'bg-amber-50 border-amber-200'
+                    )}
+                  >
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
+                        <Printer className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="text-left">
+                        <h3 className={cn(
+                          "font-semibold",
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>
+                          Imprimir Documento de Materiales
+                        </h3>
+                        <p className={cn(
+                          'text-sm',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>
+                          Imprime la orden para entregar los materiales al area de produccion
+                        </p>
+                      </div>
+                    </div>
+
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handlePrintMaterials}
+                      disabled={printing}
+                      className={cn(
+                        "w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
+                        "disabled:opacity-50 disabled:cursor-not-allowed",
+                        theme === 'dark'
+                          ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                          : 'bg-amber-500 hover:bg-amber-600 text-white'
+                      )}
+                    >
+                      {printing ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Enviando a impresora...
+                        </>
+                      ) : (
+                        <>
+                          <Printer className="w-5 h-5" />
+                          Imprimir Orden de Materiales
+                        </>
+                      )}
+                    </motion.button>
+
+                    {errors.print && (
+                      <p className="text-red-500 text-sm mt-2">{errors.print}</p>
+                    )}
+                  </motion.div>
+
+                  {/* Action Buttons */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6 }}
+                    className="flex flex-col sm:flex-row gap-3"
+                  >
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => router.push(`/dashboard/market/production/dosification/${createdOrder.id}`)}
+                      className={cn(
+                        "flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
+                        theme === 'dark'
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/30'
+                          : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-400/30'
+                      )}
+                    >
+                      <ExternalLink className="w-5 h-5" />
+                      Ver Detalle de Orden
+                    </motion.button>
+
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => router.push('/dashboard/market/production/dosification')}
+                      className={cn(
+                        "flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
+                        theme === 'dark'
+                          ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                          : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                      )}
+                    >
+                      Volver a Lista
+                    </motion.button>
+                  </motion.div>
+                </motion.div>
+              )}
             </AnimatePresence>
           </motion.div>
 
-          {/* Navigation Buttons */}
+          {/* Navigation Buttons - Hidden on confirm step */}
+          {!isConfirmStep && (
           <div className="flex justify-between items-center gap-4">
             <motion.button
               whileHover={{ scale: 1.02 }}
@@ -1585,6 +1837,7 @@ export default function CreateProductionOrderPage() {
               </motion.button>
             )}
           </div>
+          )}
         </div>
 
         {/* Cancel Modal */}
