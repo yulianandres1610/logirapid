@@ -136,87 +136,73 @@ export async function POST(
       ORDER BY pm.id
     `, [orderId])
 
-    // Build document data based on type
-    let documentData: any
+    // Build document data in the format expected by the print service generator
+    // Using ProductionOrderData interface format
+    const documentData = {
+      // Order identification
+      orderNumber: order.order_number,
+      status: order.status || 'pending',
+      documentType: documentType, // 'materials' or 'reception'
 
-    if (documentType === 'materials') {
-      // Document: Orden de Entrega de Materiales
-      documentData = {
-        title: 'ORDEN DE ENTREGA DE MATERIALES',
-        orderNumber: order.order_number,
-        companyName: order.company_name,
-        companyLogo: order.company_logo,
-        date: new Date().toISOString(),
-        sourceWarehouse: {
-          name: order.source_warehouse_name,
-          code: order.source_warehouse_code
-        },
-        targetWarehouse: {
-          name: order.target_warehouse_name,
-          code: order.target_warehouse_code
-        },
-        sourceProduct: {
-          name: order.source_product_name + (order.source_variant_name ? ` - ${order.source_variant_name}` : ''),
-          sku: order.source_product_sku,
-          barcode: order.source_product_barcode,
-          quantity: parseFloat(order.source_quantity) || 1,
-          weightKg: parseFloat(order.source_weight_kg)
-        },
-        materials: materialsResult.rows.map(m => ({
-          name: m.product_name + (m.variant_name ? ` - ${m.variant_name}` : ''),
-          sku: m.product_sku,
-          barcode: m.product_barcode,
-          quantity: parseFloat(m.quantity),
-          warehouseName: m.warehouse_name
-        })),
-        targetProduct: {
-          name: order.target_product_name + (order.target_variant_name ? ` - ${order.target_variant_name}` : ''),
-          expectedQuantity: order.target_quantity,
-          portionWeightKg: parseFloat(order.target_portion_weight_kg)
-        },
-        qrCode: order.order_number,
-        createdBy: order.created_by_name,
-        notes: order.notes
-      }
-    } else {
-      // Document: Recepción de Productos Terminados
-      documentData = {
-        title: 'RECEPCIÓN DE PRODUCTOS TERMINADOS',
-        orderNumber: order.order_number,
-        companyName: order.company_name,
-        companyLogo: order.company_logo,
-        productionDate: order.completed_at || new Date().toISOString(),
-        lotNumber: order.lot_number,
-        expirationDate: order.expiration_date,
-        targetWarehouse: {
-          name: order.target_warehouse_name,
-          code: order.target_warehouse_code
-        },
-        product: {
-          name: order.target_product_name + (order.target_variant_name ? ` - ${order.target_variant_name}` : ''),
-          sku: order.target_product_sku,
-          barcode: order.target_product_barcode,
-          quantity: order.actual_quantity || order.target_quantity,
-          expectedQuantity: order.target_quantity,
-          portionWeightKg: parseFloat(order.target_portion_weight_kg)
-        },
-        costs: {
-          total: parseFloat(order.total_cost) || 0,
-          perUnit: parseFloat(order.cost_per_unit) || 0
-        },
-        wasteSurplus: {
-          expected: {
-            kg: parseFloat(order.waste_surplus_kg) || 0,
-            type: order.waste_surplus_type
-          },
-          actual: {
-            kg: parseFloat(order.actual_waste_surplus_kg) || 0
-          }
-        },
-        qrCode: order.lot_number || order.order_number,
-        createdBy: order.created_by_name,
-        notes: order.notes
-      }
+      // Source product (raw material)
+      sourceProduct: {
+        id: order.source_product_id,
+        name: order.source_product_name + (order.source_variant_name ? ` - ${order.source_variant_name}` : ''),
+        sku: order.source_product_sku || ''
+      },
+      sourceWarehouse: {
+        id: order.source_warehouse_id,
+        name: order.source_warehouse_name || '',
+        code: order.source_warehouse_code || ''
+      },
+      sourceWeightKg: parseFloat(order.source_weight_kg) || 0,
+      sourceCostPerKg: parseFloat(order.source_unit_cost) || 0,
+
+      // Materials
+      materials: materialsResult.rows.map(m => ({
+        productId: m.product_id,
+        name: m.product_name + (m.variant_name ? ` - ${m.variant_name}` : ''),
+        sku: m.product_sku || '',
+        quantity: parseFloat(m.quantity) || 0,
+        warehouseName: m.warehouse_name || ''
+      })),
+
+      // Target product (manufactured)
+      targetProduct: {
+        id: order.target_product_id,
+        name: order.target_product_name + (order.target_variant_name ? ` - ${order.target_variant_name}` : ''),
+        sku: order.target_product_sku || ''
+      },
+      targetWarehouse: {
+        id: order.target_warehouse_id,
+        name: order.target_warehouse_name || '',
+        code: order.target_warehouse_code || ''
+      },
+      targetPortionWeightKg: parseFloat(order.target_portion_weight_kg) || 0,
+      targetQuantity: parseInt(order.target_quantity) || 0,
+
+      // Calculations
+      expectedTotalWeightKg: parseFloat(order.expected_total_weight_kg) || 0,
+      wasteSurplusKg: Math.abs(parseFloat(order.waste_surplus_kg) || 0),
+      wasteSurplusType: order.waste_surplus_type || 'exact',
+
+      // Costs
+      materialsCost: parseFloat(order.materials_cost) || 0,
+      laborCost: parseFloat(order.labor_cost) || 0,
+      totalCost: parseFloat(order.total_cost) || 0,
+      costPerUnit: parseFloat(order.cost_per_unit) || 0,
+
+      // Lot info (for reception document)
+      lotNumber: order.lot_number,
+      expirationDate: order.expiration_date,
+
+      // Metadata
+      notes: order.notes,
+      createdAt: order.created_at,
+      createdBy: order.created_by_name,
+
+      // Company info
+      companyName: order.company_name
     }
 
     // Generate job number

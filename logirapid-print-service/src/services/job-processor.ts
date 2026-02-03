@@ -293,7 +293,9 @@ class JobProcessor {
       case 'purchase_invoice':
       case 'invoice':
       case 'consignment_receipt':
-        // For invoices and consignments, prefer thermal printers (ESC/POS format)
+      case 'production_materials_receipt':
+      case 'production_reception_receipt':
+        // For invoices, consignments, and production receipts, prefer thermal printers (ESC/POS format)
         return printerService.getThermalPrinters()[0] || printerService.getDefaultPrinter()
 
       case 'warehouse_operation':
@@ -467,13 +469,17 @@ class JobProcessor {
         return generateTransferReceipt(data as unknown as TransferReceiptData)
 
       case 'production_order':
-        // Use PDF for standard printers, ESC/POS for thermal
-        if (usePdf) {
-          console.log(`[Job Processor] Generating production order as PDF`)
-          return generateProductionOrderPdf(data as unknown as ProductionOrderPdfData)
+      case 'production_materials_receipt':
+      case 'production_reception_receipt':
+        // Production documents - use thermal format similar to purchase invoice
+        // For thermal printers use ESC/POS, for standard use PDF
+        if (printer.printerType === 'thermal_80mm' || printer.supportsEscpos) {
+          console.log(`[Job Processor] Generating ${job.documentType} as ESC/POS for thermal printer`)
+          return generateProductionOrder(data as unknown as ProductionOrderData)
         }
-        console.log(`[Job Processor] Generating production order as ESC/POS`)
-        return generateProductionOrder(data as unknown as ProductionOrderData)
+        // Fallback to PDF for standard printers
+        console.log(`[Job Processor] Generating ${job.documentType} as PDF`)
+        return generateProductionOrderPdf(data as unknown as ProductionOrderPdfData)
 
       default:
         console.error(`[Job Processor] Unknown document type: ${job.documentType}`)
@@ -516,7 +522,8 @@ class JobProcessor {
                       ['pos_receipt', 'unified_reception'].includes(job.documentType)
     const isReceiptOrReport = ['purchase_invoice', 'invoice', 'sales_report',
                                'inventory_count_report', 'audit_count_report', 'cash_register_report',
-                               'warehouse_operation', 'unified_reception', 'consignment_receipt'].includes(job.documentType)
+                               'warehouse_operation', 'unified_reception', 'consignment_receipt',
+                               'production_order', 'production_materials_receipt', 'production_reception_receipt'].includes(job.documentType)
     const isPdfOnly = ['transfer_receipt'].includes(job.documentType)
 
     console.log(`[Job Processor] Print method selection:`)
