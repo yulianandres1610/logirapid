@@ -5,17 +5,17 @@ import { db } from '@/lib/database'
  * GET /api/migrations/fix-production-stock
  * Fix production stock duplication issues for product 150 and similar cases
  * This migration:
- * 1. Finds production orders with duplicate lot entries
- * 2. Keeps only one lot per production order
- * 3. Recalculates warehouse stock based on actual lot quantities
- * @version 1.0
+ * 1. Finds production lots with incorrect quantities (different from order actual_quantity)
+ * 2. Fixes lot quantities to match production order actual_quantity
+ * 3. Recalculates warehouse stock based on corrected lot quantities
+ * @version 2.0
  */
 export async function GET() {
   const results: string[] = []
 
   try {
-    // 1. Get all production orders and their lots
-    results.push('=== ANALYZING PRODUCTION LOTS ===')
+    // 1. Get all production lots with their order quantities
+    results.push('=== ANALYZING PRODUCTION LOTS VS ORDER QUANTITIES ===')
 
     const productionLots = await db.query(`
       SELECT
@@ -28,18 +28,53 @@ export async function GET() {
         pli.quantity_available,
         pli.company_id,
         mpo.order_number,
-        mpo.target_quantity as expected_qty,
+        mpo.target_quantity,
         mpo.actual_quantity,
         mp.name as product_name
       FROM production_lot_inventory pli
       LEFT JOIN market_production_orders mpo ON mpo.id = pli.production_order_id
       LEFT JOIN market_products mp ON mp.id = pli.product_id
-      ORDER BY pli.production_order_id, pli.id
+      ORDER BY pli.id
     `)
 
     results.push(`Found ${productionLots.rows.length} production lot entries`)
 
-    // Group by production_order_id to find duplicates
+    // 2. Check for quantity mismatches
+    results.push('\n=== CHECKING LOT QUANTITIES VS ORDER ACTUAL QUANTITIES ===')
+
+    for (const lot of productionLots.rows) {
+      const lotQty = parseFloat(lot.quantity_initial) || 0
+      const orderQty = parseFloat(lot.actual_quantity) || parseFloat(lot.target_quantity) || 0
+
+      results.push(`\nLot ${lot.lot_number} (Order: ${lot.order_number}):`)
+      results.push(`  Product: ${lot.product_id} - ${lot.product_name}`)
+      results.push(`  Lot quantity_initial: ${lotQty}`)
+      results.push(`  Order target_quantity: ${lot.target_quantity}`)
+      results.push(`  Order actual_quantity: ${lot.actual_quantity}`)
+
+      // If lot quantity doesn't match order's actual_quantity, fix it
+      if (Math.abs(lotQty - orderQty) > 0.001) {
+        results.push(`  ** MISMATCH! Fixing lot: ${lotQty} -> ${orderQty} **`)
+
+        // Calculate how much was already sold
+        const soldQty = parseFloat(lot.quantity_initial) - parseFloat(lot.quantity_available)
+        const newAvailable = Math.max(0, orderQty - soldQty)
+
+        await db.query(`
+          UPDATE production_lot_inventory
+          SET quantity_initial = $1, quantity_available = $2
+          WHERE id = $3
+        `, [orderQty, newAvailable, lot.id])
+
+        results.push(`  Fixed: quantity_initial=${orderQty}, quantity_available=${newAvailable}`)
+      } else {
+        results.push(`  OK - quantities match`)
+      }
+    }
+
+    // 3. Check for duplicate lots per order and remove extras
+    results.push('\n=== CHECKING FOR DUPLICATE LOTS ===')
+
     const lotsByOrder: Record<number, typeof productionLots.rows> = {}
     for (const lot of productionLots.rows) {
       const orderId = lot.production_order_id
@@ -48,9 +83,6 @@ export async function GET() {
       }
       lotsByOrder[orderId].push(lot)
     }
-
-    // 2. Find and fix duplicates
-    results.push('\n=== CHECKING FOR DUPLICATES ===')
 
     const duplicateOrders = Object.entries(lotsByOrder).filter(([_, lots]) => lots.length > 1)
     results.push(`Found ${duplicateOrders.length} orders with duplicate lots`)
@@ -70,7 +102,7 @@ export async function GET() {
       }
     }
 
-    // 3. Recalculate warehouse stock for affected products
+    // 4. Recalculate warehouse stock for affected products
     results.push('\n=== RECALCULATING WAREHOUSE STOCK ===')
 
     // Get unique product/warehouse combinations from production lots
@@ -130,7 +162,7 @@ export async function GET() {
       results.push(`  Current stock: ${currentQty}`)
 
       if (Math.abs(currentQty - correctTotal) > 0.001) {
-        results.push(`  ** FIXING: ${currentQty} -> ${correctTotal} **`)
+        results.push(`  ** FIXING STOCK: ${currentQty} -> ${correctTotal} **`)
 
         await db.query(`
           UPDATE market_warehouse_stock
@@ -143,10 +175,10 @@ export async function GET() {
       }
     }
 
-    // 4. Specifically check product 150
-    results.push('\n=== SPECIFIC CHECK FOR PRODUCT 150 ===')
+    // 5. Final verification for product 150
+    results.push('\n=== FINAL VERIFICATION FOR PRODUCT 150 ===')
 
-    const product150 = await db.query(`
+    const product150Stock = await db.query(`
       SELECT
         mws.warehouse_id,
         mws.quantity_on_hand,
@@ -156,7 +188,7 @@ export async function GET() {
       WHERE mws.product_id = 150
     `)
 
-    for (const stock of product150.rows) {
+    for (const stock of product150Stock.rows) {
       results.push(`Warehouse ${stock.warehouse_name}: ${stock.quantity_on_hand} units`)
     }
 
