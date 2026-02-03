@@ -546,13 +546,13 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       ]
     },
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
-    { icon: Scale, label: "Etiquetas de Peso", href: "/dashboard/market/weight-labels" },
     {
       icon: Factory,
       label: "Producción",
       href: "/dashboard/market/production",
       hasSubmenu: true,
       submenuItems: [
+        { icon: Scale, label: "Etiquetas de Peso", href: "/dashboard/market/weight-labels" },
         { icon: Scale, label: "Dosificación", href: "/dashboard/market/production/dosification" },
       ]
     },
