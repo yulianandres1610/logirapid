@@ -684,6 +684,20 @@ export async function POST(
         }, { status: 400 })
       }
 
+      // Check if production lot already exists (to prevent double processing)
+      const existingLot = await db.query(`
+        SELECT id, lot_number FROM production_lot_inventory
+        WHERE production_order_id = $1 AND company_id = $2
+        LIMIT 1
+      `, [orderId, payload.companyId])
+
+      if (existingLot.rows.length > 0) {
+        return NextResponse.json({
+          success: false,
+          error: `Esta orden de producción ya tiene un lote registrado (${existingLot.rows[0].lot_number}). No se puede procesar nuevamente.`
+        }, { status: 400 })
+      }
+
       orderNumber = production.order_number
       supplierCode = 'PROD'
       supplierName = 'Producción Interna'
@@ -714,15 +728,14 @@ export async function POST(
       }
 
       // Create FIFO entry in production_lot_inventory
+      // Note: We already checked for existing lot above, so this should be a clean insert
       await db.query(`
         INSERT INTO production_lot_inventory (
           company_id, warehouse_id, product_id, variant_id, production_order_id,
           lot_number, expiration_date, manufacturing_date,
           quantity_initial, quantity_available, unit_cost
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_DATE, $8, $9, $10)
-        ON CONFLICT (company_id, lot_number) DO UPDATE SET
-          quantity_initial = production_lot_inventory.quantity_initial + EXCLUDED.quantity_initial,
-          quantity_available = production_lot_inventory.quantity_available + EXCLUDED.quantity_available
+        ON CONFLICT (company_id, lot_number) DO NOTHING
       `, [
         payload.companyId,
         warehouseId,

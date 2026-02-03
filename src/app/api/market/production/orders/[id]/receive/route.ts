@@ -133,6 +133,20 @@ export async function POST(
       }, { status: 400 })
     }
 
+    // Check if production lot already exists (to prevent double processing)
+    const existingLot = await db.query(`
+      SELECT id, lot_number FROM production_lot_inventory
+      WHERE production_order_id = $1 AND company_id = $2
+      LIMIT 1
+    `, [orderId, companyId])
+
+    if (existingLot.rows.length > 0) {
+      return NextResponse.json({
+        success: false,
+        error: `Esta orden de producción ya tiene un lote registrado (${existingLot.rows[0].lot_number}). No se puede procesar nuevamente.`
+      }, { status: 400 })
+    }
+
     const body = await request.json()
     const {
       targetWarehouseId,
