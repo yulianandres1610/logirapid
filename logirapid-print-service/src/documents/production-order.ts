@@ -1,6 +1,7 @@
 /**
- * Production Order Generator - Generates ESC/POS commands for thermal printers (80mm)
+ * Production Order ESC/POS Generator - Generates ESC/POS commands for thermal printers (80mm)
  * For printing production/dosification orders for workers
+ * Based on the working purchase-invoice-escpos.ts format
  */
 
 interface ProductInfo {
@@ -66,19 +67,15 @@ export interface ProductionOrderData {
   companyName?: string
 }
 
-// ESC/POS Commands
+// ESC/POS Commands - EXACTLY like purchase-invoice-escpos.ts
 const ESC = '\x1b'
 const GS = '\x1d'
 const LF = '\x0a'
 
 const Commands = {
-  // Initialize printer - resets to default settings
   INIT: `${ESC}@`,
-
-  // Paper cut commands - try multiple for better compatibility
-  // GS V m - where m=0 is full cut, m=1 is partial cut, m=65 (0x41) is feed and cut
-  CUT: `${GS}V\x41\x00`, // Feed and full cut (most compatible)
-  CUT_PARTIAL: `${GS}V\x42\x00`, // Feed and partial cut
+  CUT: `${GS}V\x00`,
+  PARTIAL_CUT: `${GS}V\x01`,
 
   // Text alignment
   ALIGN_LEFT: `${ESC}a\x00`,
@@ -88,22 +85,16 @@ const Commands = {
   // Text formatting
   BOLD_ON: `${ESC}E\x01`,
   BOLD_OFF: `${ESC}E\x00`,
+  DOUBLE_HEIGHT_ON: `${GS}!\x10`,
+  DOUBLE_WIDTH_ON: `${GS}!\x20`,
+  DOUBLE_SIZE_ON: `${GS}!\x30`,
+  NORMAL_SIZE: `${GS}!\x00`,
   UNDERLINE_ON: `${ESC}-\x01`,
   UNDERLINE_OFF: `${ESC}-\x00`,
 
-  // Text size - GS ! n where n is bit flags
-  DOUBLE_HEIGHT_ON: `${GS}!\x10`, // bit 4 = double height
-  DOUBLE_WIDTH_ON: `${GS}!\x20`,  // bit 5 = double width
-  DOUBLE_SIZE_ON: `${GS}!\x30`,   // bits 4+5 = double height + width
-  NORMAL_SIZE: `${GS}!\x00`,      // normal size
-
-  // Line feed
+  // Feed
   FEED_LINE: LF,
-  FEED_LINES: (n: number) => `${ESC}d${String.fromCharCode(n)}`,
-
-  // Character code table (for Spanish characters)
-  CODE_PAGE_PC850: `${ESC}t\x02`, // Code page 850 (Latin-1)
-  CODE_PAGE_WPC1252: `${ESC}t\x10` // Windows-1252 (Western European)
+  FEED_LINES: (n: number) => `${ESC}d${String.fromCharCode(n)}`
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -115,25 +106,30 @@ const STATUS_LABELS: Record<string, string> = {
 
 export function generateProductionOrder(data: ProductionOrderData): Buffer {
   const lines: string[] = []
-  const width = 42 // 80mm thermal printer width
 
-  // Initialize printer and set code page for Spanish characters
-  lines.push(Commands.INIT)
-  lines.push(Commands.CODE_PAGE_PC850)
+  // Paper width for 80mm thermal printer (42 chars with Font A)
+  const PAPER_WIDTH = 42
+  const SEPARATOR = '='.repeat(PAPER_WIDTH)
+  const THIN_SEPARATOR = '-'.repeat(PAPER_WIDTH)
 
   // Determine document type
   const isReception = data.documentType === 'reception'
 
-  // Header
+  // Initialize printer
+  lines.push(Commands.INIT)
+
+  // Set left margin (same as purchase invoice)
+  lines.push(`${GS}L\x30\x00`)
+
+  // === HEADER ===
   lines.push(Commands.ALIGN_CENTER)
-  lines.push(Commands.DOUBLE_SIZE_ON)
   lines.push(Commands.BOLD_ON)
+  lines.push(Commands.DOUBLE_HEIGHT_ON)
   if (isReception) {
-    lines.push('RECEPCION DE PRODUCCION')
+    lines.push('RECEPCION PRODUCCION')
   } else {
     lines.push('ENTREGA DE MATERIALES')
   }
-  lines.push(Commands.FEED_LINE)
   lines.push(Commands.NORMAL_SIZE)
   lines.push(Commands.BOLD_OFF)
   lines.push(Commands.FEED_LINE)
@@ -144,33 +140,45 @@ export function generateProductionOrder(data: ProductionOrderData): Buffer {
     lines.push(Commands.FEED_LINE)
   }
 
-  // Order number with barcode
-  lines.push(Commands.BOLD_ON)
-  lines.push(Commands.DOUBLE_HEIGHT_ON)
-  lines.push(data.orderNumber)
-  lines.push(Commands.NORMAL_SIZE)
-  lines.push(Commands.BOLD_OFF)
-  lines.push(Commands.FEED_LINE)
+  // === SCANNABLE BARCODE AT TOP FOR EASY SCANNING ===
+  const barcodeData = data.orderNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase()
+  if (barcodeData.length > 0 && barcodeData.length <= 20) {
+    lines.push(Commands.ALIGN_CENTER)
 
-  // Generate CODE39 barcode for order number
-  const barcodeDataOrder = data.orderNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase()
-  if (barcodeDataOrder.length > 0 && barcodeDataOrder.length <= 20) {
+    // Print order number first as large text
+    lines.push(Commands.BOLD_ON)
+    lines.push(Commands.DOUBLE_SIZE_ON)
+    lines.push(data.orderNumber)
+    lines.push(Commands.NORMAL_SIZE)
+    lines.push(Commands.BOLD_OFF)
+    lines.push(Commands.FEED_LINE)
+
+    // ESC/POS Barcode settings (same as purchase invoice)
     lines.push(`${GS}h\x50`) // height = 80 dots
     lines.push(`${GS}w\x02`) // width = 2
-    lines.push(`${GS}H\x00`) // HRI none
-    lines.push(`${GS}k\x04${barcodeDataOrder}\x00`)
+    lines.push(`${GS}H\x00`) // HRI position: none
+    lines.push(`${GS}f\x00`) // Font A for HRI
+
+    // Print CODE39 barcode
+    lines.push(`${GS}k\x04${barcodeData}\x00`)
+    lines.push(Commands.FEED_LINE)
+  } else {
+    // Fallback: just print the number
+    lines.push(Commands.ALIGN_CENTER)
+    lines.push(Commands.BOLD_ON)
+    lines.push(Commands.DOUBLE_SIZE_ON)
+    lines.push(data.orderNumber)
+    lines.push(Commands.NORMAL_SIZE)
+    lines.push(Commands.BOLD_OFF)
     lines.push(Commands.FEED_LINE)
   }
 
-  lines.push('==========================================')
+  lines.push(SEPARATOR)
   lines.push(Commands.FEED_LINE)
 
-  // Operation details
+  // === ORDER INFO ===
   lines.push(Commands.ALIGN_LEFT)
-
-  // Date/Time
-  const dateStr = formatDate(data.createdAt)
-  lines.push(`Fecha: ${dateStr}`)
+  lines.push(`Fecha: ${formatDate(data.createdAt)}`)
   lines.push(Commands.FEED_LINE)
 
   if (data.createdBy) {
@@ -178,17 +186,16 @@ export function generateProductionOrder(data: ProductionOrderData): Buffer {
     lines.push(Commands.FEED_LINE)
   }
 
-  // Status
   lines.push(`Estado: ${STATUS_LABELS[data.status] || data.status}`)
   lines.push(Commands.FEED_LINE)
 
-  lines.push('------------------------------------------')
+  lines.push(THIN_SEPARATOR)
   lines.push(Commands.FEED_LINE)
 
   if (isReception) {
     // === RECEPTION DOCUMENT ===
 
-    // Lot information (important for reception)
+    // Lot information
     if (data.lotNumber) {
       lines.push(Commands.BOLD_ON)
       lines.push('LOTE:')
@@ -219,13 +226,13 @@ export function generateProductionOrder(data: ProductionOrderData): Buffer {
         lines.push(Commands.FEED_LINE)
       }
 
-      lines.push('------------------------------------------')
+      lines.push(THIN_SEPARATOR)
       lines.push(Commands.FEED_LINE)
     }
 
     // Product received
     lines.push(Commands.BOLD_ON)
-    lines.push('PRODUCTO RECIBIDO:')
+    lines.push('PRODUCTO RECIBIDO')
     lines.push(Commands.BOLD_OFF)
     lines.push(Commands.FEED_LINE)
 
@@ -247,23 +254,34 @@ export function generateProductionOrder(data: ProductionOrderData): Buffer {
     lines.push(`Almacen: ${truncate(data.targetWarehouse.name, 30)}`)
     lines.push(Commands.FEED_LINE)
 
-    lines.push('------------------------------------------')
+    lines.push(THIN_SEPARATOR)
     lines.push(Commands.FEED_LINE)
 
     // Costs
     lines.push(Commands.BOLD_ON)
-    lines.push('COSTOS:')
+    lines.push('COSTOS')
     lines.push(Commands.BOLD_OFF)
     lines.push(Commands.FEED_LINE)
 
-    lines.push(formatLine('Total:', `$${data.totalCost.toFixed(2)}`, width))
+    lines.push(formatLine('Total:', `$${data.totalCost.toFixed(2)}`, PAPER_WIDTH))
     lines.push(Commands.FEED_LINE)
 
+    lines.push(SEPARATOR)
+    lines.push(Commands.FEED_LINE)
     lines.push(Commands.BOLD_ON)
     lines.push(Commands.DOUBLE_HEIGHT_ON)
-    lines.push(formatLine('Costo/Unidad:', `$${data.costPerUnit.toFixed(2)}`, Math.floor(width / 2)))
+    lines.push(formatLine('Costo/Unidad:', `$${data.costPerUnit.toFixed(2)}`, Math.floor(PAPER_WIDTH / 2)))
     lines.push(Commands.NORMAL_SIZE)
     lines.push(Commands.BOLD_OFF)
+    lines.push(Commands.FEED_LINE)
+
+    // Signature line
+    lines.push(Commands.FEED_LINE)
+    lines.push(Commands.ALIGN_CENTER)
+    lines.push('Firma Almacenero:')
+    lines.push(Commands.FEED_LINE)
+    lines.push(Commands.FEED_LINES(3))
+    lines.push('____________________________')
     lines.push(Commands.FEED_LINE)
 
   } else {
@@ -271,7 +289,7 @@ export function generateProductionOrder(data: ProductionOrderData): Buffer {
 
     // Source Product Section
     lines.push(Commands.BOLD_ON)
-    lines.push('PRODUCTO A DOSIFICAR:')
+    lines.push('PRODUCTO A DOSIFICAR')
     lines.push(Commands.BOLD_OFF)
     lines.push(Commands.FEED_LINE)
 
@@ -293,32 +311,41 @@ export function generateProductionOrder(data: ProductionOrderData): Buffer {
     lines.push(`Almacen: ${truncate(data.sourceWarehouse.name, 30)}`)
     lines.push(Commands.FEED_LINE)
 
-    lines.push('------------------------------------------')
+    lines.push(THIN_SEPARATOR)
     lines.push(Commands.FEED_LINE)
 
     // Materials Section with checkboxes
-    if (data.materials.length > 0) {
+    if (data.materials && data.materials.length > 0) {
       lines.push(Commands.BOLD_ON)
-      lines.push('MATERIALES A ENTREGAR:')
+      lines.push('MATERIALES A ENTREGAR')
       lines.push(Commands.BOLD_OFF)
+      lines.push(Commands.FEED_LINE)
+      lines.push(THIN_SEPARATOR)
       lines.push(Commands.FEED_LINE)
 
       for (const material of data.materials) {
-        lines.push(`[ ] ${material.quantity} x ${truncate(material.name, 26)}`)
+        const qtyStr = formatQty(material.quantity).padStart(5)
+        lines.push(`[ ] ${qtyStr} x ${truncate(material.name, 26)}`)
         lines.push(Commands.FEED_LINE)
+
+        if (material.sku) {
+          lines.push(`      SKU: ${material.sku}`)
+          lines.push(Commands.FEED_LINE)
+        }
+
         if (material.warehouseName) {
-          lines.push(`    Almacen: ${material.warehouseName}`)
+          lines.push(`      Almacen: ${material.warehouseName}`)
           lines.push(Commands.FEED_LINE)
         }
       }
 
-      lines.push('------------------------------------------')
+      lines.push(THIN_SEPARATOR)
       lines.push(Commands.FEED_LINE)
     }
 
     // Target Product Section
     lines.push(Commands.BOLD_ON)
-    lines.push('PRODUCCION ESPERADA:')
+    lines.push('PRODUCCION ESPERADA')
     lines.push(Commands.BOLD_OFF)
     lines.push(Commands.FEED_LINE)
 
@@ -330,13 +357,13 @@ export function generateProductionOrder(data: ProductionOrderData): Buffer {
     lines.push(Commands.NORMAL_SIZE)
     lines.push(Commands.FEED_LINE)
 
-    lines.push(`Total esperado: ${data.expectedTotalWeightKg.toFixed(3)} kg`)
+    lines.push(formatLine('Total esperado:', `${data.expectedTotalWeightKg.toFixed(3)} kg`, PAPER_WIDTH))
     lines.push(Commands.FEED_LINE)
 
-    lines.push(`Almacen destino: ${truncate(data.targetWarehouse.name, 26)}`)
+    lines.push(`Almacen destino: ${truncate(data.targetWarehouse.name, 24)}`)
     lines.push(Commands.FEED_LINE)
 
-    lines.push('------------------------------------------')
+    lines.push(THIN_SEPARATOR)
     lines.push(Commands.FEED_LINE)
 
     // Waste/Surplus info
@@ -356,44 +383,33 @@ export function generateProductionOrder(data: ProductionOrderData): Buffer {
 
   // Notes
   if (data.notes) {
-    lines.push('------------------------------------------')
+    lines.push(THIN_SEPARATOR)
     lines.push(Commands.FEED_LINE)
-    lines.push('NOTAS:')
+    lines.push('Notas:')
     lines.push(Commands.FEED_LINE)
-    const noteLines = wordWrap(data.notes, width - 2)
+    const noteLines = wordWrap(data.notes, PAPER_WIDTH)
     for (const line of noteLines) {
       lines.push(line)
       lines.push(Commands.FEED_LINE)
     }
   }
 
-  // Footer
-  lines.push('==========================================')
+  // === FOOTER ===
   lines.push(Commands.FEED_LINE)
   lines.push(Commands.ALIGN_CENTER)
-
-  if (isReception) {
-    lines.push('Firma Almacenero:')
-    lines.push(Commands.FEED_LINE)
-    lines.push(Commands.FEED_LINES(3))
-    lines.push('____________________________')
-    lines.push(Commands.FEED_LINE)
-  }
-
-  lines.push(Commands.FEED_LINE)
-  lines.push('--- LogiRapid ---')
+  lines.push('--- Documento generado por LogiRapid ---')
   lines.push(Commands.FEED_LINE)
 
+  // Feed and cut (same as purchase invoice)
   lines.push(Commands.FEED_LINES(4))
   lines.push(Commands.CUT)
 
-  // Use latin1 encoding for better ESC/POS compatibility
-  return Buffer.from(lines.join(''), 'latin1')
+  // Use binary encoding - SAME as purchase-invoice-escpos.ts
+  return Buffer.from(lines.join(''), 'binary')
 }
 
 function formatDateShort(dateStr: string): string {
   try {
-    // Handle date-only strings (YYYY-MM-DD) without timezone conversion
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
       const [year, month, day] = dateStr.split('-').map(Number)
       return `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`
@@ -407,7 +423,9 @@ function formatDateShort(dateStr: string): string {
 
 function formatLine(left: string, right: string, width: number): string {
   const spaces = width - left.length - right.length
-  if (spaces < 1) return left + ' ' + right
+  if (spaces < 1) {
+    return left + ' ' + right
+  }
   return left + ' '.repeat(spaces) + right
 }
 
@@ -426,9 +444,15 @@ function formatDate(isoString: string): string {
   }
 }
 
+function formatQty(value: number): string {
+  if (Number.isInteger(value)) return value.toString()
+  return value.toFixed(2)
+}
+
 function truncate(text: string, maxLength: number): string {
+  if (!text) return ''
   if (text.length <= maxLength) return text
-  return text.substring(0, maxLength - 3) + '...'
+  return text.substring(0, maxLength - 2) + '..'
 }
 
 function wordWrap(text: string, maxWidth: number): string[] {
@@ -441,7 +465,7 @@ function wordWrap(text: string, maxWidth: number): string[] {
       currentLine += (currentLine ? ' ' : '') + word
     } else {
       if (currentLine) lines.push(currentLine)
-      currentLine = word.substring(0, maxWidth)
+      currentLine = word
     }
   }
   if (currentLine) lines.push(currentLine)
