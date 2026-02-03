@@ -1291,6 +1291,22 @@ export async function POST() {
       console.log('[Migration] Note: consignment sync - ', e.message)
     }
 
+    // PRINT QUEUE CLEANUP - Clear pending/queued print jobs
+    console.log('[Migration] Clearing pending print jobs queue...')
+    try {
+      const clearQueueResult = await db.query(`
+        UPDATE print_jobs
+        SET status = 'cancelled',
+            error_message = 'Cancelled by system cleanup',
+            updated_at = NOW()
+        WHERE status IN ('pending', 'queued', 'sent')
+        RETURNING id, job_number
+      `)
+      console.log('[Migration] Print queue cleared:', clearQueueResult.rows.length, 'jobs cancelled')
+    } catch (e: any) {
+      console.log('[Migration] Note: print queue cleanup - ', e.message)
+    }
+
     // Get table stats
     const tables = [
       'market_products',
