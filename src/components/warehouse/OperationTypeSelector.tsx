@@ -84,8 +84,8 @@ const operationTypes = [
   },
   {
     id: 'order_reception' as OperationType,
-    name: 'Recibir Orden',
-    description: 'Consignaciones y compras',
+    name: 'Ordenes',
+    description: 'Recibir o entregar ordenes',
     icon: Package,
     gradient: 'from-teal-500 to-cyan-600',
     hoverGradient: 'from-teal-600 to-cyan-700',

@@ -1438,7 +1438,7 @@ export default function UnifiedReceptionView({
             Escanear o Buscar Orden
           </h3>
           <p className="text-sm text-gray-500">
-            Escanee el codigo de barras de la orden o ingrese el numero manualmente
+            Consignaciones, compras y producción. Escanee el código o ingrese el número.
           </p>
         </div>
 
