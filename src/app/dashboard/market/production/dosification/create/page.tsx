@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -18,9 +18,10 @@ import {
   CheckCircle,
   Loader2,
   Warehouse,
-  Calculator
+  Calculator,
+  Check,
+  X
 } from 'lucide-react'
-import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
@@ -31,7 +32,7 @@ interface WizardStep {
   id: Step
   title: string
   description: string
-  icon: any
+  icon: React.ComponentType<{ className?: string }>
 }
 
 const STEPS: WizardStep[] = [
@@ -107,6 +108,7 @@ export default function CreateProductionOrderPage() {
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [showCancelModal, setShowCancelModal] = useState(false)
 
   // Data for selectors
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([])
@@ -359,104 +361,159 @@ export default function CreateProductionOrderPage() {
 
   return (
     <ProtectedRoute>
-      <DashboardLayout>
-        <div className="min-h-screen">
-          {/* Header */}
-          <div className={cn(
-            'sticky top-0 z-10 border-b backdrop-blur-lg',
-            theme === 'dark'
-              ? 'bg-gray-900/80 border-gray-800'
-              : 'bg-white/80 border-gray-200'
-          )}>
-            <div className="max-w-6xl mx-auto px-6 py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => router.back()}
-                    className={cn(
-                      'p-2 rounded-lg transition-colors',
-                      theme === 'dark'
-                        ? 'hover:bg-gray-800 text-gray-400'
-                        : 'hover:bg-gray-100 text-gray-600'
-                    )}
-                  >
-                    <ArrowLeft className="w-5 h-5" />
-                  </button>
-                  <div>
-                    <h1 className={cn(
-                      'text-xl font-bold',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      Nueva Orden de Producción
-                    </h1>
-                    <p className={cn(
-                      'text-sm',
-                      theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                    )}>
-                      Paso {currentStepIndex + 1} de {STEPS.length}
-                    </p>
-                  </div>
-                </div>
-              </div>
+      <div className={cn(
+        "min-h-screen pt-12 sm:pt-16 lg:pt-20 pb-20 px-4 sm:px-6 lg:px-8",
+        theme === 'dark' ? 'bg-[#1a2332]' : 'bg-gray-50'
+      )}>
+        <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-6 sm:space-y-8 relative">
 
-              {/* Step indicators */}
-              <div className="flex items-center justify-center mt-6 gap-2">
-                {STEPS.map((step, index) => {
-                  const StepIcon = step.icon
-                  const isActive = step.id === currentStep
-                  const isCompleted = index < currentStepIndex
+          {/* Close Button */}
+          <motion.button
+            onClick={() => setShowCancelModal(true)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className={cn(
+              "absolute -top-14 -right-2 sm:-top-12 sm:right-0 z-10 w-8 h-8 rounded-full flex items-center justify-center",
+              "transition-colors duration-200",
+              theme === 'dark'
+                ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+            )}
+          >
+            <X className="w-4 h-4" />
+          </motion.button>
 
-                  return (
-                    <div key={step.id} className="flex items-center">
-                      <motion.div
-                        className={cn(
-                          'flex items-center gap-2 px-4 py-2 rounded-xl transition-all',
-                          isActive
-                            ? theme === 'dark'
-                              ? 'bg-emerald-900/50 border border-emerald-700'
-                              : 'bg-emerald-100 border border-emerald-300'
-                            : isCompleted
-                              ? theme === 'dark'
-                                ? 'bg-emerald-900/30'
-                                : 'bg-emerald-50'
-                              : theme === 'dark'
-                                ? 'bg-gray-800'
-                                : 'bg-gray-100'
-                        )}
-                        animate={{ scale: isActive ? 1.05 : 1 }}
-                      >
-                        <StepIcon className={cn(
-                          'w-5 h-5',
-                          isActive || isCompleted
-                            ? 'text-emerald-600'
-                            : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
-                        )} />
-                        <span className={cn(
-                          'text-sm font-medium hidden sm:inline',
-                          isActive || isCompleted
-                            ? 'text-emerald-600'
-                            : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
-                        )}>
-                          {step.title}
-                        </span>
-                      </motion.div>
-                      {index < STEPS.length - 1 && (
-                        <div className={cn(
-                          'w-8 h-0.5 mx-1',
-                          index < currentStepIndex
-                            ? 'bg-emerald-500'
-                            : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                        )} />
+          {/* Progress Indicator */}
+          <div className="mb-8 sm:mb-12">
+            <div className="flex items-center justify-between">
+              {STEPS.map((step, index) => (
+                <React.Fragment key={step.id}>
+                  <div className="flex flex-col items-center">
+                    <div className="relative w-14 h-14">
+                      {/* Pulsing ring for active step */}
+                      {currentStep === step.id && (
+                        <motion.div
+                          className="absolute inset-0 rounded-full"
+                          animate={{
+                            scale: [1, 1.2, 1],
+                            opacity: [0.5, 0, 0.5]
+                          }}
+                          transition={{
+                            duration: 2,
+                            repeat: Infinity,
+                            ease: "easeInOut"
+                          }}
+                          style={{
+                            background: theme === 'dark'
+                              ? 'rgba(16, 185, 129, 0.5)'
+                              : 'rgba(5, 150, 105, 0.5)'
+                          }}
+                        />
                       )}
+
+                      <motion.div
+                        initial={false}
+                        animate={{
+                          scale: currentStep === step.id ? 1.1 : 1,
+                          backgroundColor: currentStep === step.id
+                            ? theme === 'dark' ? '#10B981' : '#059669'
+                            : currentStepIndex > index
+                              ? theme === 'dark' ? '#10B981' : '#059669'
+                              : theme === 'dark' ? '#374151' : '#E5E7EB'
+                        }}
+                        transition={{
+                          scale: { duration: 0.3 },
+                          backgroundColor: { duration: 0.3 }
+                        }}
+                        whileHover={{ scale: currentStepIndex >= index ? 1.15 : 1.05 }}
+                        className={cn(
+                          "w-14 h-14 rounded-full flex items-center justify-center relative z-10",
+                          "transition-shadow duration-300",
+                          currentStep === step.id && (
+                            theme === 'dark'
+                              ? 'shadow-lg shadow-emerald-500/50'
+                              : 'shadow-lg shadow-emerald-400/50'
+                          ),
+                          currentStepIndex > index && (
+                            theme === 'dark'
+                              ? 'shadow-md shadow-emerald-500/30'
+                              : 'shadow-md shadow-emerald-400/30'
+                          )
+                        )}
+                      >
+                        {currentStepIndex > index ? (
+                          <motion.div
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                          >
+                            <Check className="w-7 h-7 text-white" />
+                          </motion.div>
+                        ) : (
+                          <step.icon className={cn(
+                            "w-7 h-7",
+                            currentStep === step.id ? 'text-white' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                          )} />
+                        )}
+                      </motion.div>
                     </div>
-                  )
-                })}
-              </div>
+
+                    <div className="mt-3 text-center">
+                      <p className={cn(
+                        "text-xs sm:text-sm font-semibold",
+                        currentStep === step.id
+                          ? theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
+                          : currentStepIndex > index
+                            ? theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
+                            : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                      )}>
+                        {step.title}
+                      </p>
+                      <p className={cn(
+                        "text-xs hidden sm:block mt-0.5",
+                        theme === 'dark' ? 'text-gray-600' : 'text-gray-500'
+                      )}>
+                        {step.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  {index < STEPS.length - 1 && (
+                    <div className="flex-1 h-0.5 mx-2 sm:mx-3 mb-8 sm:mb-10 relative">
+                      <div className={cn(
+                        "absolute inset-0 rounded-full",
+                        theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                      )} />
+                      <motion.div
+                        initial={false}
+                        animate={{
+                          scaleX: currentStepIndex > index ? 1 : 0
+                        }}
+                        transition={{ duration: 0.5, ease: "easeInOut" }}
+                        className={cn(
+                          "h-full origin-left rounded-full",
+                          theme === 'dark' ? 'bg-emerald-500' : 'bg-emerald-600'
+                        )}
+                      />
+                    </div>
+                  )}
+                </React.Fragment>
+              ))}
             </div>
           </div>
 
-          {/* Content */}
-          <div className="max-w-4xl mx-auto px-6 py-8">
+          {/* Step Content */}
+          <motion.div
+            className={cn(
+              "rounded-2xl p-6 sm:p-8",
+              theme === 'dark'
+                ? 'bg-[#1a2332]'
+                : 'bg-white border border-gray-200 shadow-lg'
+            )}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
             <AnimatePresence mode="wait">
               {/* Step 1: Source Product */}
               {currentStep === 'source' && (
@@ -465,218 +522,215 @@ export default function CreateProductionOrderPage() {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
                   className="space-y-6"
                 >
-                  <div className={cn(
-                    'p-6 rounded-2xl border',
-                    theme === 'dark'
-                      ? 'bg-gray-800/50 border-gray-700'
-                      : 'bg-white border-gray-200'
+                  <h2 className={cn(
+                    "text-xl font-bold flex items-center gap-3",
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
                   )}>
-                    <h2 className={cn(
-                      'text-lg font-semibold mb-4',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      Seleccionar Producto Fuente (Materia Prima)
-                    </h2>
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
+                      <Package className="w-5 h-5 text-white" />
+                    </div>
+                    Seleccionar Producto Fuente (Materia Prima)
+                  </h2>
 
-                    {/* Warehouse Selection */}
-                    <div className="mb-6">
-                      <label className={cn(
-                        'block text-sm font-medium mb-2',
-                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                      )}>
-                        Almacén de Origen
-                      </label>
-                      <select
-                        value={formData.sourceWarehouseId || ''}
-                        onChange={(e) => {
-                          const warehouse = warehouses.find(w => w.id === parseInt(e.target.value))
-                          setFormData(prev => ({
-                            ...prev,
-                            sourceWarehouseId: warehouse?.id || null,
-                            sourceWarehouseName: warehouse?.name || ''
-                          }))
-                        }}
+                  {/* Warehouse Selection */}
+                  <div>
+                    <label className={cn(
+                      'block text-sm font-medium mb-2',
+                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                    )}>
+                      Almacén de Origen
+                    </label>
+                    <select
+                      value={formData.sourceWarehouseId || ''}
+                      onChange={(e) => {
+                        const warehouse = warehouses.find(w => w.id === parseInt(e.target.value))
+                        setFormData(prev => ({
+                          ...prev,
+                          sourceWarehouseId: warehouse?.id || null,
+                          sourceWarehouseName: warehouse?.name || ''
+                        }))
+                      }}
+                      className={cn(
+                        'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
+                        theme === 'dark'
+                          ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
+                          : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20',
+                        errors.sourceWarehouse && 'border-red-500'
+                      )}
+                    >
+                      <option value="">Seleccionar almacén...</option>
+                      {warehouses.map(w => (
+                        <option key={w.id} value={w.id}>{w.name} ({w.code})</option>
+                      ))}
+                    </select>
+                    {errors.sourceWarehouse && (
+                      <p className="text-red-500 text-sm mt-1">{errors.sourceWarehouse}</p>
+                    )}
+                  </div>
+
+                  {/* Product Search */}
+                  <div>
+                    <label className={cn(
+                      'block text-sm font-medium mb-2',
+                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                    )}>
+                      Buscar Producto
+                    </label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Buscar por nombre o SKU..."
+                        value={productSearch}
+                        onChange={(e) => setProductSearch(e.target.value)}
                         className={cn(
-                          'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
+                          'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
+                          theme === 'dark'
+                            ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
+                            : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20'
+                        )}
+                      />
+                    </div>
+
+                    {/* Search Results */}
+                    {filteredProducts.length > 0 && (
+                      <div className={cn(
+                        'mt-2 rounded-xl border max-h-60 overflow-y-auto',
+                        theme === 'dark'
+                          ? 'bg-gray-800 border-gray-700'
+                          : 'bg-white border-gray-200'
+                      )}>
+                        {filteredProducts.map(product => (
+                          <button
+                            key={product.id}
+                            onClick={() => selectSourceProduct(product)}
+                            className={cn(
+                              'w-full flex items-center gap-3 p-3 transition-colors text-left',
+                              theme === 'dark'
+                                ? 'hover:bg-gray-700'
+                                : 'hover:bg-gray-50'
+                            )}
+                          >
+                            {product.imageUrl ? (
+                              <img
+                                src={product.imageUrl}
+                                alt={product.name}
+                                className="w-10 h-10 rounded-lg object-cover"
+                              />
+                            ) : (
+                              <div className={cn(
+                                'w-10 h-10 rounded-lg flex items-center justify-center',
+                                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                              )}>
+                                <Package className="w-5 h-5 text-gray-400" />
+                              </div>
+                            )}
+                            <div className="flex-1">
+                              <p className={cn(
+                                'font-medium',
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>{product.name}</p>
+                              <p className="text-sm text-gray-500">
+                                {product.sku} | {formatCurrency(product.costPrice)}/kg
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Selected Product */}
+                  {formData.sourceProduct && (
+                    <div className={cn(
+                      'p-4 rounded-xl border',
+                      theme === 'dark'
+                        ? 'bg-emerald-900/20 border-emerald-800'
+                        : 'bg-emerald-50 border-emerald-200'
+                    )}>
+                      <div className="flex items-center gap-4">
+                        {formData.sourceProduct.imageUrl ? (
+                          <img
+                            src={formData.sourceProduct.imageUrl}
+                            alt={formData.sourceProduct.name}
+                            className="w-16 h-16 rounded-xl object-cover"
+                          />
+                        ) : (
+                          <div className={cn(
+                            'w-16 h-16 rounded-xl flex items-center justify-center',
+                            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                          )}>
+                            <Package className="w-8 h-8 text-gray-400" />
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <p className={cn(
+                            'font-semibold text-lg',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            {formData.sourceProduct.name}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            SKU: {formData.sourceProduct.sku || 'N/A'} | Costo: {formatCurrency(formData.sourceProduct.costPrice)}/kg
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setFormData(prev => ({ ...prev, sourceProductId: null, sourceProduct: null }))}
+                          className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {errors.sourceProduct && (
+                    <p className="text-red-500 text-sm">{errors.sourceProduct}</p>
+                  )}
+
+                  {/* Weight Input */}
+                  <div>
+                    <label className={cn(
+                      'block text-sm font-medium mb-2',
+                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                    )}>
+                      Peso del Producto (kg)
+                    </label>
+                    <div className="relative">
+                      <Scale className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0"
+                        placeholder="Ej: 40.320"
+                        value={formData.sourceWeightKg || ''}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          sourceWeightKg: parseFloat(e.target.value) || 0
+                        }))}
+                        className={cn(
+                          'w-full pl-10 pr-16 py-4 rounded-xl border text-2xl font-bold focus:outline-none focus:ring-2',
                           theme === 'dark'
                             ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
                             : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20',
-                          errors.sourceWarehouse && 'border-red-500'
+                          errors.sourceWeight && 'border-red-500'
                         )}
-                      >
-                        <option value="">Seleccionar almacén...</option>
-                        {warehouses.map(w => (
-                          <option key={w.id} value={w.id}>{w.name} ({w.code})</option>
-                        ))}
-                      </select>
-                      {errors.sourceWarehouse && (
-                        <p className="text-red-500 text-sm mt-1">{errors.sourceWarehouse}</p>
-                      )}
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">
+                        kg
+                      </span>
                     </div>
-
-                    {/* Product Search */}
-                    <div className="mb-6">
-                      <label className={cn(
-                        'block text-sm font-medium mb-2',
-                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                      )}>
-                        Buscar Producto
-                      </label>
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <input
-                          type="text"
-                          placeholder="Buscar por nombre o SKU..."
-                          value={productSearch}
-                          onChange={(e) => setProductSearch(e.target.value)}
-                          className={cn(
-                            'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
-                            theme === 'dark'
-                              ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
-                              : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20'
-                          )}
-                        />
-                      </div>
-
-                      {/* Search Results */}
-                      {filteredProducts.length > 0 && (
-                        <div className={cn(
-                          'mt-2 rounded-xl border max-h-60 overflow-y-auto',
-                          theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700'
-                            : 'bg-white border-gray-200'
-                        )}>
-                          {filteredProducts.map(product => (
-                            <button
-                              key={product.id}
-                              onClick={() => selectSourceProduct(product)}
-                              className={cn(
-                                'w-full flex items-center gap-3 p-3 transition-colors text-left',
-                                theme === 'dark'
-                                  ? 'hover:bg-gray-700'
-                                  : 'hover:bg-gray-50'
-                              )}
-                            >
-                              {product.imageUrl ? (
-                                <img
-                                  src={product.imageUrl}
-                                  alt={product.name}
-                                  className="w-10 h-10 rounded-lg object-cover"
-                                />
-                              ) : (
-                                <div className={cn(
-                                  'w-10 h-10 rounded-lg flex items-center justify-center',
-                                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                                )}>
-                                  <Package className="w-5 h-5 text-gray-400" />
-                                </div>
-                              )}
-                              <div className="flex-1">
-                                <p className={cn(
-                                  'font-medium',
-                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                )}>{product.name}</p>
-                                <p className="text-sm text-gray-500">
-                                  {product.sku} | {formatCurrency(product.costPrice)}/kg
-                                </p>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Selected Product */}
-                    {formData.sourceProduct && (
-                      <div className={cn(
-                        'p-4 rounded-xl border mb-6',
-                        theme === 'dark'
-                          ? 'bg-emerald-900/20 border-emerald-800'
-                          : 'bg-emerald-50 border-emerald-200'
-                      )}>
-                        <div className="flex items-center gap-4">
-                          {formData.sourceProduct.imageUrl ? (
-                            <img
-                              src={formData.sourceProduct.imageUrl}
-                              alt={formData.sourceProduct.name}
-                              className="w-16 h-16 rounded-xl object-cover"
-                            />
-                          ) : (
-                            <div className={cn(
-                              'w-16 h-16 rounded-xl flex items-center justify-center',
-                              theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                            )}>
-                              <Package className="w-8 h-8 text-gray-400" />
-                            </div>
-                          )}
-                          <div className="flex-1">
-                            <p className={cn(
-                              'font-semibold text-lg',
-                              theme === 'dark' ? 'text-white' : 'text-gray-900'
-                            )}>
-                              {formData.sourceProduct.name}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              SKU: {formData.sourceProduct.sku || 'N/A'} | Costo: {formatCurrency(formData.sourceProduct.costPrice)}/kg
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => setFormData(prev => ({ ...prev, sourceProductId: null, sourceProduct: null }))}
-                            className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        </div>
-                      </div>
+                    {errors.sourceWeight && (
+                      <p className="text-red-500 text-sm mt-1">{errors.sourceWeight}</p>
                     )}
-
-                    {errors.sourceProduct && (
-                      <p className="text-red-500 text-sm mb-4">{errors.sourceProduct}</p>
+                    {formData.sourceWeightKg > 0 && formData.sourceCostPerKg > 0 && (
+                      <p className="text-sm text-gray-500 mt-2">
+                        Costo estimado: {formatCurrency(formData.sourceWeightKg * formData.sourceCostPerKg)}
+                      </p>
                     )}
-
-                    {/* Weight Input */}
-                    <div>
-                      <label className={cn(
-                        'block text-sm font-medium mb-2',
-                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                      )}>
-                        Peso del Producto (kg)
-                      </label>
-                      <div className="relative">
-                        <Scale className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <input
-                          type="number"
-                          step="0.001"
-                          min="0"
-                          placeholder="Ej: 40.320"
-                          value={formData.sourceWeightKg || ''}
-                          onChange={(e) => setFormData(prev => ({
-                            ...prev,
-                            sourceWeightKg: parseFloat(e.target.value) || 0
-                          }))}
-                          className={cn(
-                            'w-full pl-10 pr-4 py-4 rounded-xl border text-2xl font-bold focus:outline-none focus:ring-2',
-                            theme === 'dark'
-                              ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
-                              : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20',
-                            errors.sourceWeight && 'border-red-500'
-                          )}
-                        />
-                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">
-                          kg
-                        </span>
-                      </div>
-                      {errors.sourceWeight && (
-                        <p className="text-red-500 text-sm mt-1">{errors.sourceWeight}</p>
-                      )}
-                      {formData.sourceWeightKg > 0 && formData.sourceCostPerKg > 0 && (
-                        <p className="text-sm text-gray-500 mt-2">
-                          Costo estimado: {formatCurrency(formData.sourceWeightKg * formData.sourceCostPerKg)}
-                        </p>
-                      )}
-                    </div>
                   </div>
                 </motion.div>
               )}
@@ -688,177 +742,193 @@ export default function CreateProductionOrderPage() {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
                   className="space-y-6"
                 >
-                  <div className={cn(
-                    'p-6 rounded-2xl border',
-                    theme === 'dark'
-                      ? 'bg-gray-800/50 border-gray-700'
-                      : 'bg-white border-gray-200'
+                  <h2 className={cn(
+                    "text-xl font-bold flex items-center gap-3",
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
                   )}>
-                    <h2 className={cn(
-                      'text-lg font-semibold mb-4',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      Materiales (Bolsas, Etiquetas, etc.)
-                    </h2>
-                    <p className={cn(
-                      'text-sm mb-6',
-                      theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                    )}>
-                      Opcional: agregue los materiales necesarios para el empaque.
-                    </p>
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                      <Boxes className="w-5 h-5 text-white" />
+                    </div>
+                    Materiales a Usar (Opcional)
+                  </h2>
 
-                    {/* Material Search */}
-                    <div className="mb-6">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <input
-                          type="text"
-                          placeholder="Buscar materiales (bolsas, etiquetas...)..."
-                          value={materialSearch}
-                          onChange={(e) => setMaterialSearch(e.target.value)}
+                  <p className={cn(
+                    'text-sm',
+                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                  )}>
+                    Agregue bolsas, etiquetas u otros materiales necesarios para la producción.
+                  </p>
+
+                  {/* Material Search */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar material por nombre o SKU..."
+                      value={materialSearch}
+                      onChange={(e) => setMaterialSearch(e.target.value)}
+                      className={cn(
+                        'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
+                        theme === 'dark'
+                          ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
+                          : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20'
+                      )}
+                    />
+                  </div>
+
+                  {/* Material Search Results */}
+                  {materialProducts.length > 0 && (
+                    <div className={cn(
+                      'rounded-xl border max-h-48 overflow-y-auto',
+                      theme === 'dark'
+                        ? 'bg-gray-800 border-gray-700'
+                        : 'bg-white border-gray-200'
+                    )}>
+                      {materialProducts.map(product => (
+                        <button
+                          key={product.id}
+                          onClick={() => addMaterial(product)}
                           className={cn(
-                            'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
+                            'w-full flex items-center gap-3 p-3 transition-colors text-left',
                             theme === 'dark'
-                              ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
-                              : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20'
+                              ? 'hover:bg-gray-700'
+                              : 'hover:bg-gray-50'
                           )}
-                        />
-                      </div>
+                        >
+                          <Plus className="w-5 h-5 text-emerald-500" />
+                          <div className="flex-1">
+                            <p className={cn(
+                              'font-medium',
+                              theme === 'dark' ? 'text-white' : 'text-gray-900'
+                            )}>{product.name}</p>
+                            <p className="text-sm text-gray-500">
+                              {product.sku} | {formatCurrency(product.costPrice)}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
-                      {/* Search Results */}
-                      {materialProducts.length > 0 && (
-                        <div className={cn(
-                          'mt-2 rounded-xl border max-h-48 overflow-y-auto',
-                          theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700'
-                            : 'bg-white border-gray-200'
-                        )}>
-                          {materialProducts.map(product => (
+                  {/* Selected Materials */}
+                  {formData.materials.length > 0 && (
+                    <div className="space-y-3">
+                      {formData.materials.map((material, index) => (
+                        <div
+                          key={material.productId}
+                          className={cn(
+                            'p-4 rounded-xl border flex items-center gap-4',
+                            theme === 'dark'
+                              ? 'bg-gray-800/50 border-gray-700'
+                              : 'bg-gray-50 border-gray-200'
+                          )}
+                        >
+                          {material.productImage ? (
+                            <img
+                              src={material.productImage}
+                              alt={material.productName}
+                              className="w-12 h-12 rounded-lg object-cover"
+                            />
+                          ) : (
+                            <div className={cn(
+                              'w-12 h-12 rounded-lg flex items-center justify-center',
+                              theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                            )}>
+                              <Package className="w-6 h-6 text-gray-400" />
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <p className={cn(
+                              'font-medium',
+                              theme === 'dark' ? 'text-white' : 'text-gray-900'
+                            )}>{material.productName}</p>
+                            <p className="text-sm text-gray-500">
+                              {formatCurrency(material.unitCost)} c/u
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
                             <button
-                              key={product.id}
-                              onClick={() => addMaterial(product)}
+                              onClick={() => updateMaterialQuantity(index, -1)}
                               className={cn(
-                                'w-full flex items-center gap-3 p-3 transition-colors text-left',
+                                'w-8 h-8 rounded-lg flex items-center justify-center',
                                 theme === 'dark'
-                                  ? 'hover:bg-gray-700'
-                                  : 'hover:bg-gray-50'
+                                  ? 'bg-gray-700 hover:bg-gray-600'
+                                  : 'bg-gray-200 hover:bg-gray-300'
                               )}
                             >
-                              <Plus className="w-5 h-5 text-emerald-500" />
-                              <div className="flex-1">
-                                <p className={cn(
-                                  'font-medium',
-                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                )}>{product.name}</p>
-                                <p className="text-sm text-gray-500">
-                                  {formatCurrency(product.costPrice)} / {product.unitOfMeasure}
-                                </p>
-                              </div>
+                              <Minus className="w-4 h-4" />
                             </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Materials List */}
-                    {formData.materials.length > 0 ? (
-                      <div className="space-y-3">
-                        {formData.materials.map((material, index) => (
-                          <div
-                            key={index}
-                            className={cn(
-                              'flex items-center gap-4 p-4 rounded-xl border',
-                              theme === 'dark'
-                                ? 'bg-gray-700/50 border-gray-600'
-                                : 'bg-gray-50 border-gray-200'
-                            )}
-                          >
-                            <div className="flex-1">
-                              <p className={cn(
-                                'font-medium',
-                                theme === 'dark' ? 'text-white' : 'text-gray-900'
-                              )}>{material.productName}</p>
-                              <p className="text-sm text-gray-500">
-                                {formatCurrency(material.unitCost)} c/u
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => updateMaterialQuantity(index, -1)}
-                                className={cn(
-                                  'p-2 rounded-lg transition-colors',
-                                  theme === 'dark'
-                                    ? 'hover:bg-gray-600'
-                                    : 'hover:bg-gray-200'
-                                )}
-                              >
-                                <Minus className="w-4 h-4" />
-                              </button>
-                              <span className={cn(
-                                'w-12 text-center font-bold',
-                                theme === 'dark' ? 'text-white' : 'text-gray-900'
-                              )}>
-                                {material.quantity}
-                              </span>
-                              <button
-                                onClick={() => updateMaterialQuantity(index, 1)}
-                                className={cn(
-                                  'p-2 rounded-lg transition-colors',
-                                  theme === 'dark'
-                                    ? 'hover:bg-gray-600'
-                                    : 'hover:bg-gray-200'
-                                )}
-                              >
-                                <Plus className="w-4 h-4" />
-                              </button>
-                            </div>
-                            <p className={cn(
-                              'font-bold w-24 text-right',
-                              theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
+                            <span className={cn(
+                              'w-12 text-center font-bold',
+                              theme === 'dark' ? 'text-white' : 'text-gray-900'
                             )}>
-                              {formatCurrency(material.totalCost)}
-                            </p>
+                              {material.quantity}
+                            </span>
                             <button
-                              onClick={() => removeMaterial(index)}
-                              className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg"
+                              onClick={() => updateMaterialQuantity(index, 1)}
+                              className={cn(
+                                'w-8 h-8 rounded-lg flex items-center justify-center',
+                                theme === 'dark'
+                                  ? 'bg-gray-700 hover:bg-gray-600'
+                                  : 'bg-gray-200 hover:bg-gray-300'
+                              )}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Plus className="w-4 h-4" />
                             </button>
                           </div>
-                        ))}
-
-                        {/* Total Materials Cost */}
-                        <div className={cn(
-                          'flex items-center justify-between p-4 rounded-xl',
-                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                        )}>
-                          <span className={cn(
-                            'font-medium',
-                            theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                          <p className={cn(
+                            'w-20 text-right font-semibold',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
                           )}>
-                            Total Materiales:
-                          </span>
-                          <span className={cn(
-                            'text-xl font-bold',
-                            theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
-                          )}>
-                            {formatCurrency(materialsCost)}
-                          </span>
+                            {formatCurrency(material.totalCost)}
+                          </p>
+                          <button
+                            onClick={() => removeMaterial(index)}
+                            className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
-                      </div>
-                    ) : (
+                      ))}
+
+                      {/* Total Materials Cost */}
                       <div className={cn(
-                        'text-center py-8 rounded-xl border-2 border-dashed',
-                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                        'p-4 rounded-xl border flex justify-between items-center',
+                        theme === 'dark'
+                          ? 'bg-emerald-900/20 border-emerald-800'
+                          : 'bg-emerald-50 border-emerald-200'
                       )}>
-                        <Boxes className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                        <p className="text-gray-500">No se han agregado materiales</p>
-                        <p className="text-sm text-gray-400">Busque y agregue bolsas, etiquetas u otros materiales</p>
+                        <span className={cn(
+                          'font-medium',
+                          theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'
+                        )}>
+                          Total Materiales
+                        </span>
+                        <span className={cn(
+                          'text-xl font-bold',
+                          theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'
+                        )}>
+                          {formatCurrency(materialsCost)}
+                        </span>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
+
+                  {formData.materials.length === 0 && (
+                    <div className={cn(
+                      'p-8 rounded-xl border-2 border-dashed text-center',
+                      theme === 'dark'
+                        ? 'border-gray-700 text-gray-500'
+                        : 'border-gray-300 text-gray-400'
+                    )}>
+                      <Boxes className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p>No hay materiales agregados</p>
+                      <p className="text-sm">Busca y agrega materiales usando el campo de arriba</p>
+                    </div>
+                  )}
                 </motion.div>
               )}
 
@@ -869,299 +939,297 @@ export default function CreateProductionOrderPage() {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
                   className="space-y-6"
                 >
-                  <div className={cn(
-                    'p-6 rounded-2xl border',
-                    theme === 'dark'
-                      ? 'bg-gray-800/50 border-gray-700'
-                      : 'bg-white border-gray-200'
+                  <h2 className={cn(
+                    "text-xl font-bold flex items-center gap-3",
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
                   )}>
-                    <h2 className={cn(
-                      'text-lg font-semibold mb-4',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      Producto Final a Manufacturar
-                    </h2>
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                      <Scale className="w-5 h-5 text-white" />
+                    </div>
+                    Producto Final (A Manufacturar)
+                  </h2>
 
-                    {/* Warehouse Selection */}
-                    <div className="mb-6">
+                  {/* Target Warehouse Selection */}
+                  <div>
+                    <label className={cn(
+                      'block text-sm font-medium mb-2',
+                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                    )}>
+                      Almacén Destino
+                    </label>
+                    <select
+                      value={formData.targetWarehouseId || ''}
+                      onChange={(e) => {
+                        const warehouse = warehouses.find(w => w.id === parseInt(e.target.value))
+                        setFormData(prev => ({
+                          ...prev,
+                          targetWarehouseId: warehouse?.id || null,
+                          targetWarehouseName: warehouse?.name || ''
+                        }))
+                      }}
+                      className={cn(
+                        'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
+                        theme === 'dark'
+                          ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
+                          : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20',
+                        errors.targetWarehouse && 'border-red-500'
+                      )}
+                    >
+                      <option value="">Seleccionar almacén...</option>
+                      {warehouses.map(w => (
+                        <option key={w.id} value={w.id}>{w.name} ({w.code})</option>
+                      ))}
+                    </select>
+                    {errors.targetWarehouse && (
+                      <p className="text-red-500 text-sm mt-1">{errors.targetWarehouse}</p>
+                    )}
+                  </div>
+
+                  {/* Product Search */}
+                  <div>
+                    <label className={cn(
+                      'block text-sm font-medium mb-2',
+                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                    )}>
+                      Buscar Producto Final
+                    </label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Buscar por nombre o SKU..."
+                        value={productSearch}
+                        onChange={(e) => setProductSearch(e.target.value)}
+                        className={cn(
+                          'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
+                          theme === 'dark'
+                            ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
+                            : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20'
+                        )}
+                      />
+                    </div>
+
+                    {/* Search Results */}
+                    {filteredProducts.length > 0 && (
+                      <div className={cn(
+                        'mt-2 rounded-xl border max-h-60 overflow-y-auto',
+                        theme === 'dark'
+                          ? 'bg-gray-800 border-gray-700'
+                          : 'bg-white border-gray-200'
+                      )}>
+                        {filteredProducts.map(product => (
+                          <button
+                            key={product.id}
+                            onClick={() => selectTargetProduct(product)}
+                            className={cn(
+                              'w-full flex items-center gap-3 p-3 transition-colors text-left',
+                              theme === 'dark'
+                                ? 'hover:bg-gray-700'
+                                : 'hover:bg-gray-50'
+                            )}
+                          >
+                            {product.imageUrl ? (
+                              <img
+                                src={product.imageUrl}
+                                alt={product.name}
+                                className="w-10 h-10 rounded-lg object-cover"
+                              />
+                            ) : (
+                              <div className={cn(
+                                'w-10 h-10 rounded-lg flex items-center justify-center',
+                                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                              )}>
+                                <Package className="w-5 h-5 text-gray-400" />
+                              </div>
+                            )}
+                            <div className="flex-1">
+                              <p className={cn(
+                                'font-medium',
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>{product.name}</p>
+                              <p className="text-sm text-gray-500">{product.sku}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Selected Target Product */}
+                  {formData.targetProduct && (
+                    <div className={cn(
+                      'p-4 rounded-xl border',
+                      theme === 'dark'
+                        ? 'bg-purple-900/20 border-purple-800'
+                        : 'bg-purple-50 border-purple-200'
+                    )}>
+                      <div className="flex items-center gap-4">
+                        {formData.targetProduct.imageUrl ? (
+                          <img
+                            src={formData.targetProduct.imageUrl}
+                            alt={formData.targetProduct.name}
+                            className="w-16 h-16 rounded-xl object-cover"
+                          />
+                        ) : (
+                          <div className={cn(
+                            'w-16 h-16 rounded-xl flex items-center justify-center',
+                            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                          )}>
+                            <Package className="w-8 h-8 text-gray-400" />
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <p className={cn(
+                            'font-semibold text-lg',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            {formData.targetProduct.name}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            SKU: {formData.targetProduct.sku || 'N/A'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setFormData(prev => ({ ...prev, targetProductId: null, targetProduct: null }))}
+                          className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {errors.targetProduct && (
+                    <p className="text-red-500 text-sm">{errors.targetProduct}</p>
+                  )}
+
+                  {/* Portion Weight & Quantity */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
                       <label className={cn(
                         'block text-sm font-medium mb-2',
                         theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                       )}>
-                        Almacén Destino
+                        Peso por Porción (kg)
                       </label>
-                      <select
-                        value={formData.targetWarehouseId || ''}
-                        onChange={(e) => {
-                          const warehouse = warehouses.find(w => w.id === parseInt(e.target.value))
-                          setFormData(prev => ({
-                            ...prev,
-                            targetWarehouseId: warehouse?.id || null,
-                            targetWarehouseName: warehouse?.name || ''
-                          }))
-                        }}
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0"
+                        placeholder="Ej: 2.000"
+                        value={formData.targetPortionWeightKg || ''}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          targetPortionWeightKg: parseFloat(e.target.value) || 0
+                        }))}
                         className={cn(
                           'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
                           theme === 'dark'
                             ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
                             : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20',
-                          errors.targetWarehouse && 'border-red-500'
+                          errors.targetPortionWeight && 'border-red-500'
                         )}
-                      >
-                        <option value="">Seleccionar almacén...</option>
-                        {warehouses.map(w => (
-                          <option key={w.id} value={w.id}>{w.name} ({w.code})</option>
-                        ))}
-                      </select>
-                      {errors.targetWarehouse && (
-                        <p className="text-red-500 text-sm mt-1">{errors.targetWarehouse}</p>
+                      />
+                      {errors.targetPortionWeight && (
+                        <p className="text-red-500 text-sm mt-1">{errors.targetPortionWeight}</p>
                       )}
                     </div>
-
-                    {/* Product Search */}
-                    <div className="mb-6">
+                    <div>
                       <label className={cn(
                         'block text-sm font-medium mb-2',
                         theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                       )}>
-                        Buscar Producto Final
+                        Cantidad de Porciones
                       </label>
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <input
-                          type="text"
-                          placeholder="Buscar por nombre o SKU..."
-                          value={productSearch}
-                          onChange={(e) => setProductSearch(e.target.value)}
-                          className={cn(
-                            'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
-                            theme === 'dark'
-                              ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
-                              : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20'
-                          )}
-                        />
-                      </div>
-
-                      {filteredProducts.length > 0 && (
-                        <div className={cn(
-                          'mt-2 rounded-xl border max-h-48 overflow-y-auto',
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Ej: 20"
+                        value={formData.targetQuantity || ''}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          targetQuantity: parseInt(e.target.value) || 0
+                        }))}
+                        className={cn(
+                          'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
                           theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700'
-                            : 'bg-white border-gray-200'
-                        )}>
-                          {filteredProducts.map(product => (
-                            <button
-                              key={product.id}
-                              onClick={() => selectTargetProduct(product)}
-                              className={cn(
-                                'w-full flex items-center gap-3 p-3 transition-colors text-left',
-                                theme === 'dark'
-                                  ? 'hover:bg-gray-700'
-                                  : 'hover:bg-gray-50'
-                              )}
-                            >
-                              {product.imageUrl ? (
-                                <img
-                                  src={product.imageUrl}
-                                  alt={product.name}
-                                  className="w-10 h-10 rounded-lg object-cover"
-                                />
-                              ) : (
-                                <div className={cn(
-                                  'w-10 h-10 rounded-lg flex items-center justify-center',
-                                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                                )}>
-                                  <Package className="w-5 h-5 text-gray-400" />
-                                </div>
-                              )}
-                              <div className="flex-1">
-                                <p className={cn(
-                                  'font-medium',
-                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                )}>{product.name}</p>
-                                <p className="text-sm text-gray-500">{product.sku}</p>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
+                            ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
+                            : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20',
+                          errors.targetQuantity && 'border-red-500'
+                        )}
+                      />
+                      {errors.targetQuantity && (
+                        <p className="text-red-500 text-sm mt-1">{errors.targetQuantity}</p>
                       )}
                     </div>
+                  </div>
 
-                    {/* Selected Target Product */}
-                    {formData.targetProduct && (
-                      <div className={cn(
-                        'p-4 rounded-xl border mb-6',
-                        theme === 'dark'
-                          ? 'bg-emerald-900/20 border-emerald-800'
-                          : 'bg-emerald-50 border-emerald-200'
+                  {/* Calculation Preview */}
+                  {formData.sourceWeightKg > 0 && formData.targetPortionWeightKg > 0 && formData.targetQuantity > 0 && (
+                    <div className={cn(
+                      'p-4 rounded-xl border',
+                      wasteSurplusType === 'waste'
+                        ? theme === 'dark'
+                          ? 'bg-red-900/20 border-red-800'
+                          : 'bg-red-50 border-red-200'
+                        : wasteSurplusType === 'surplus'
+                          ? theme === 'dark'
+                            ? 'bg-green-900/20 border-green-800'
+                            : 'bg-green-50 border-green-200'
+                          : theme === 'dark'
+                            ? 'bg-gray-700 border-gray-600'
+                            : 'bg-gray-50 border-gray-200'
+                    )}>
+                      <h3 className={cn(
+                        'font-semibold mb-3 flex items-center gap-2',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
                       )}>
-                        <div className="flex items-center gap-4">
-                          {formData.targetProduct.imageUrl ? (
-                            <img
-                              src={formData.targetProduct.imageUrl}
-                              alt={formData.targetProduct.name}
-                              className="w-16 h-16 rounded-xl object-cover"
-                            />
-                          ) : (
-                            <div className={cn(
-                              'w-16 h-16 rounded-xl flex items-center justify-center',
-                              theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                            )}>
-                              <Package className="w-8 h-8 text-gray-400" />
-                            </div>
-                          )}
-                          <div className="flex-1">
-                            <p className={cn(
-                              'font-semibold text-lg',
-                              theme === 'dark' ? 'text-white' : 'text-gray-900'
-                            )}>
-                              {formData.targetProduct.name}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              SKU: {formData.targetProduct.sku || 'N/A'}
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => setFormData(prev => ({ ...prev, targetProductId: null, targetProduct: null }))}
-                            className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
+                        <Calculator className="w-5 h-5" />
+                        Cálculo de Producción
+                      </h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Peso fuente:</span>
+                          <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
+                            {formData.sourceWeightKg.toFixed(3)} kg
+                          </span>
                         </div>
-                      </div>
-                    )}
-
-                    {errors.targetProduct && (
-                      <p className="text-red-500 text-sm mb-4">{errors.targetProduct}</p>
-                    )}
-
-                    {/* Portion Weight & Quantity */}
-                    <div className="grid grid-cols-2 gap-4 mb-6">
-                      <div>
-                        <label className={cn(
-                          'block text-sm font-medium mb-2',
-                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Porciones:</span>
+                          <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
+                            {formData.targetQuantity} × {formData.targetPortionWeightKg.toFixed(3)} kg = {expectedTotalWeight.toFixed(3)} kg
+                          </span>
+                        </div>
+                        <div className={cn(
+                          'flex justify-between pt-2 border-t font-bold',
+                          theme === 'dark' ? 'border-gray-600' : 'border-gray-300'
                         )}>
-                          Peso por Porción (kg)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.001"
-                          min="0"
-                          placeholder="Ej: 2.000"
-                          value={formData.targetPortionWeightKg || ''}
-                          onChange={(e) => setFormData(prev => ({
-                            ...prev,
-                            targetPortionWeightKg: parseFloat(e.target.value) || 0
-                          }))}
-                          className={cn(
-                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
-                            theme === 'dark'
-                              ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
-                              : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20',
-                            errors.targetPortionWeight && 'border-red-500'
-                          )}
-                        />
-                        {errors.targetPortionWeight && (
-                          <p className="text-red-500 text-sm mt-1">{errors.targetPortionWeight}</p>
-                        )}
-                      </div>
-                      <div>
-                        <label className={cn(
-                          'block text-sm font-medium mb-2',
-                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                        )}>
-                          Cantidad de Porciones
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          placeholder="Ej: 20"
-                          value={formData.targetQuantity || ''}
-                          onChange={(e) => setFormData(prev => ({
-                            ...prev,
-                            targetQuantity: parseInt(e.target.value) || 0
-                          }))}
-                          className={cn(
-                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
-                            theme === 'dark'
-                              ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
-                              : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20',
-                            errors.targetQuantity && 'border-red-500'
-                          )}
-                        />
-                        {errors.targetQuantity && (
-                          <p className="text-red-500 text-sm mt-1">{errors.targetQuantity}</p>
-                        )}
+                          <span className={
+                            wasteSurplusType === 'waste' ? 'text-red-600' :
+                            wasteSurplusType === 'surplus' ? 'text-green-600' :
+                            'text-gray-600'
+                          }>
+                            {wasteSurplusType === 'waste' ? 'MERMA:' :
+                             wasteSurplusType === 'surplus' ? 'SOBRANTE:' : 'EXACTO:'}
+                          </span>
+                          <span className={cn(
+                            'flex items-center gap-2',
+                            wasteSurplusType === 'waste' ? 'text-red-600' :
+                            wasteSurplusType === 'surplus' ? 'text-green-600' :
+                            'text-gray-600'
+                          )}>
+                            {wasteSurplusType === 'waste' && <AlertTriangle className="w-4 h-4" />}
+                            {wasteSurplusType === 'surplus' && <CheckCircle className="w-4 h-4" />}
+                            {wasteSurplusType === 'waste' ? '-' : wasteSurplusType === 'surplus' ? '+' : ''}
+                            {Math.abs(wasteSurplusKg).toFixed(3)} kg ({wasteSurplusPercent.toFixed(1)}%)
+                          </span>
+                        </div>
                       </div>
                     </div>
-
-                    {/* Calculation Preview */}
-                    {formData.sourceWeightKg > 0 && formData.targetPortionWeightKg > 0 && formData.targetQuantity > 0 && (
-                      <div className={cn(
-                        'p-4 rounded-xl border',
-                        wasteSurplusType === 'waste'
-                          ? theme === 'dark'
-                            ? 'bg-red-900/20 border-red-800'
-                            : 'bg-red-50 border-red-200'
-                          : wasteSurplusType === 'surplus'
-                            ? theme === 'dark'
-                              ? 'bg-green-900/20 border-green-800'
-                              : 'bg-green-50 border-green-200'
-                            : theme === 'dark'
-                              ? 'bg-gray-700 border-gray-600'
-                              : 'bg-gray-50 border-gray-200'
-                      )}>
-                        <h3 className={cn(
-                          'font-semibold mb-3',
-                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                        )}>
-                          <Calculator className="w-5 h-5 inline mr-2" />
-                          Cálculo de Producción
-                        </h3>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">Peso fuente:</span>
-                            <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
-                              {formData.sourceWeightKg.toFixed(3)} kg
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">Porciones:</span>
-                            <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
-                              {formData.targetQuantity} × {formData.targetPortionWeightKg.toFixed(3)} kg = {expectedTotalWeight.toFixed(3)} kg
-                            </span>
-                          </div>
-                          <div className={cn(
-                            'flex justify-between pt-2 border-t font-bold',
-                            theme === 'dark' ? 'border-gray-600' : 'border-gray-300'
-                          )}>
-                            <span className={
-                              wasteSurplusType === 'waste' ? 'text-red-600' :
-                              wasteSurplusType === 'surplus' ? 'text-green-600' :
-                              'text-gray-600'
-                            }>
-                              {wasteSurplusType === 'waste' ? 'MERMA:' :
-                               wasteSurplusType === 'surplus' ? 'SOBRANTE:' : 'EXACTO:'}
-                            </span>
-                            <span className={cn(
-                              'flex items-center gap-2',
-                              wasteSurplusType === 'waste' ? 'text-red-600' :
-                              wasteSurplusType === 'surplus' ? 'text-green-600' :
-                              'text-gray-600'
-                            )}>
-                              {wasteSurplusType === 'waste' && <AlertTriangle className="w-4 h-4" />}
-                              {wasteSurplusType === 'surplus' && <CheckCircle className="w-4 h-4" />}
-                              {wasteSurplusType === 'waste' ? '-' : wasteSurplusType === 'surplus' ? '+' : ''}
-                              {Math.abs(wasteSurplusKg).toFixed(3)} kg ({wasteSurplusPercent.toFixed(1)}%)
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </motion.div>
               )}
 
@@ -1172,224 +1240,197 @@ export default function CreateProductionOrderPage() {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
                   className="space-y-6"
                 >
-                  {/* Order Summary */}
-                  <div className={cn(
-                    'p-6 rounded-2xl border',
-                    theme === 'dark'
-                      ? 'bg-gray-800/50 border-gray-700'
-                      : 'bg-white border-gray-200'
+                  <h2 className={cn(
+                    "text-xl font-bold flex items-center gap-3",
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
                   )}>
-                    <h2 className={cn(
-                      'text-lg font-semibold mb-6',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      Resumen de la Orden
-                    </h2>
-
-                    {/* Source → Target */}
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className={cn(
-                        'flex-1 p-4 rounded-xl border',
-                        theme === 'dark'
-                          ? 'bg-gray-700/50 border-gray-600'
-                          : 'bg-gray-50 border-gray-200'
-                      )}>
-                        <p className="text-xs text-gray-500 mb-1">PRODUCTO FUENTE</p>
-                        <p className={cn(
-                          'font-semibold',
-                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                        )}>
-                          {formData.sourceProduct?.name}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {formData.sourceWeightKg.toFixed(3)} kg
-                        </p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          <Warehouse className="w-3 h-3 inline mr-1" />
-                          {formData.sourceWarehouseName}
-                        </p>
-                      </div>
-                      <ArrowRight className="w-6 h-6 text-gray-400" />
-                      <div className={cn(
-                        'flex-1 p-4 rounded-xl border',
-                        theme === 'dark'
-                          ? 'bg-emerald-900/20 border-emerald-800'
-                          : 'bg-emerald-50 border-emerald-200'
-                      )}>
-                        <p className="text-xs text-emerald-600 mb-1">PRODUCTO FINAL</p>
-                        <p className={cn(
-                          'font-semibold',
-                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                        )}>
-                          {formData.targetProduct?.name}
-                        </p>
-                        <p className="text-sm text-emerald-600">
-                          {formData.targetQuantity} × {formData.targetPortionWeightKg.toFixed(3)} kg
-                        </p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          <Warehouse className="w-3 h-3 inline mr-1" />
-                          {formData.targetWarehouseName}
-                        </p>
-                      </div>
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
+                      <ClipboardCheck className="w-5 h-5 text-white" />
                     </div>
+                    Resumen de la Orden
+                  </h2>
 
-                    {/* Waste/Surplus indicator */}
+                  {/* Source → Target */}
+                  <div className="flex items-center gap-4">
                     <div className={cn(
-                      'p-4 rounded-xl mb-6',
-                      wasteSurplusType === 'waste'
-                        ? theme === 'dark'
-                          ? 'bg-red-900/20 border border-red-800'
-                          : 'bg-red-50 border border-red-200'
-                        : wasteSurplusType === 'surplus'
-                          ? theme === 'dark'
-                            ? 'bg-green-900/20 border border-green-800'
-                            : 'bg-green-50 border border-green-200'
-                          : theme === 'dark'
-                            ? 'bg-gray-700 border border-gray-600'
-                            : 'bg-gray-50 border border-gray-200'
-                    )}>
-                      <div className="flex items-center justify-between">
-                        <span className={cn(
-                          'font-medium',
-                          wasteSurplusType === 'waste' ? 'text-red-600' :
-                          wasteSurplusType === 'surplus' ? 'text-green-600' :
-                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                        )}>
-                          {wasteSurplusType === 'waste' ? 'Merma esperada' :
-                           wasteSurplusType === 'surplus' ? 'Sobrante esperado' : 'Sin diferencia'}
-                        </span>
-                        <span className={cn(
-                          'text-xl font-bold flex items-center gap-2',
-                          wasteSurplusType === 'waste' ? 'text-red-600' :
-                          wasteSurplusType === 'surplus' ? 'text-green-600' :
-                          'text-gray-600'
-                        )}>
-                          {wasteSurplusType === 'waste' && <AlertTriangle className="w-5 h-5" />}
-                          {wasteSurplusType === 'surplus' && <CheckCircle className="w-5 h-5" />}
-                          {wasteSurplusType !== 'exact' && (
-                            <>
-                              {wasteSurplusType === 'waste' ? '-' : '+'}
-                              {Math.abs(wasteSurplusKg).toFixed(3)} kg
-                            </>
-                          )}
-                          {wasteSurplusType === 'exact' && '0.000 kg'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Materials */}
-                    {formData.materials.length > 0 && (
-                      <div className="mb-6">
-                        <p className="text-xs text-gray-500 mb-2">MATERIALES</p>
-                        <div className="space-y-2">
-                          {formData.materials.map((m, i) => (
-                            <div key={i} className="flex justify-between text-sm">
-                              <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-                                {m.quantity} × {m.productName}
-                              </span>
-                              <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
-                                {formatCurrency(m.totalCost)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Cost Breakdown */}
-                    <div className={cn(
-                      'p-4 rounded-xl border',
+                      'flex-1 p-4 rounded-xl border',
                       theme === 'dark'
                         ? 'bg-gray-700/50 border-gray-600'
                         : 'bg-gray-50 border-gray-200'
                     )}>
-                      <p className="text-xs text-gray-500 mb-3">DESGLOSE DE COSTOS</p>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
-                            Materia prima ({formData.sourceWeightKg.toFixed(3)} kg × {formatCurrency(formData.sourceCostPerKg)})
-                          </span>
-                          <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
-                            {formatCurrency(rawMaterialCost)}
-                          </span>
-                        </div>
-                        {materialsCost > 0 && (
-                          <div className="flex justify-between">
-                            <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
-                              Materiales
-                            </span>
-                            <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
-                              {formatCurrency(materialsCost)}
-                            </span>
-                          </div>
-                        )}
-                        <div className="flex justify-between">
-                          <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
-                            Mano de obra
-                          </span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={formData.laborCost || ''}
-                            onChange={(e) => setFormData(prev => ({
-                              ...prev,
-                              laborCost: parseFloat(e.target.value) || 0
-                            }))}
-                            placeholder="0.00"
-                            className={cn(
-                              'w-24 px-2 py-1 text-right rounded border focus:outline-none focus:ring-1',
-                              theme === 'dark'
-                                ? 'bg-gray-800 border-gray-600 text-white'
-                                : 'bg-white border-gray-200 text-gray-900'
-                            )}
-                          />
-                        </div>
-                        <div className={cn(
-                          'flex justify-between pt-2 border-t font-bold text-base',
-                          theme === 'dark' ? 'border-gray-600' : 'border-gray-300'
-                        )}>
-                          <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
-                            COSTO TOTAL
-                          </span>
-                          <span className="text-emerald-600">
-                            {formatCurrency(totalCost)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-lg font-bold">
-                          <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-                            COSTO POR UNIDAD
-                          </span>
-                          <span className="text-emerald-600">
-                            {formatCurrency(costPerUnit)}
-                          </span>
-                        </div>
-                      </div>
+                      <p className="text-xs text-gray-500 mb-1">PRODUCTO FUENTE</p>
+                      <p className={cn(
+                        'font-semibold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        {formData.sourceProduct?.name}
+                      </p>
+                      <p className={cn(
+                        'text-lg font-bold',
+                        theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
+                      )}>
+                        {formData.sourceWeightKg.toFixed(3)} kg
+                      </p>
                     </div>
 
-                    {/* Notes */}
-                    <div className="mt-6">
-                      <label className={cn(
-                        'block text-sm font-medium mb-2',
-                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                    <ArrowRight className={cn(
+                      'w-8 h-8',
+                      theme === 'dark' ? 'text-gray-600' : 'text-gray-400'
+                    )} />
+
+                    <div className={cn(
+                      'flex-1 p-4 rounded-xl border',
+                      theme === 'dark'
+                        ? 'bg-gray-700/50 border-gray-600'
+                        : 'bg-gray-50 border-gray-200'
+                    )}>
+                      <p className="text-xs text-gray-500 mb-1">PRODUCTO FINAL</p>
+                      <p className={cn(
+                        'font-semibold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
                       )}>
-                        Notas (opcional)
-                      </label>
-                      <textarea
-                        value={formData.notes}
-                        onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                        placeholder="Notas adicionales para la orden..."
-                        rows={3}
-                        className={cn(
-                          'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 resize-none',
-                          theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
-                            : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20'
-                        )}
-                      />
+                        {formData.targetProduct?.name}
+                      </p>
+                      <p className={cn(
+                        'text-lg font-bold',
+                        theme === 'dark' ? 'text-purple-400' : 'text-purple-600'
+                      )}>
+                        {formData.targetQuantity} × {formData.targetPortionWeightKg.toFixed(3)} kg
+                      </p>
                     </div>
+                  </div>
+
+                  {/* Waste/Surplus Indicator */}
+                  <div className={cn(
+                    'p-4 rounded-xl border text-center',
+                    wasteSurplusType === 'waste'
+                      ? theme === 'dark'
+                        ? 'bg-red-900/30 border-red-800'
+                        : 'bg-red-100 border-red-300'
+                      : wasteSurplusType === 'surplus'
+                        ? theme === 'dark'
+                          ? 'bg-green-900/30 border-green-800'
+                          : 'bg-green-100 border-green-300'
+                        : theme === 'dark'
+                          ? 'bg-gray-700 border-gray-600'
+                          : 'bg-gray-100 border-gray-300'
+                  )}>
+                    <p className={cn(
+                      'text-sm font-medium mb-1',
+                      wasteSurplusType === 'waste' ? 'text-red-600' :
+                      wasteSurplusType === 'surplus' ? 'text-green-600' :
+                      'text-gray-600'
+                    )}>
+                      {wasteSurplusType === 'waste' ? 'MERMA ESPERADA' :
+                       wasteSurplusType === 'surplus' ? 'SOBRANTE ESPERADO' : 'PESO EXACTO'}
+                    </p>
+                    <p className={cn(
+                      'text-2xl font-bold flex items-center justify-center gap-2',
+                      wasteSurplusType === 'waste' ? 'text-red-600' :
+                      wasteSurplusType === 'surplus' ? 'text-green-600' :
+                      'text-gray-600'
+                    )}>
+                      {wasteSurplusType === 'waste' && <AlertTriangle className="w-6 h-6" />}
+                      {wasteSurplusType === 'surplus' && <CheckCircle className="w-6 h-6" />}
+                      {wasteSurplusType === 'waste' ? '-' : wasteSurplusType === 'surplus' ? '+' : ''}
+                      {Math.abs(wasteSurplusKg).toFixed(3)} kg
+                    </p>
+                  </div>
+
+                  {/* Cost Breakdown */}
+                  <div className={cn(
+                    'p-4 rounded-xl border',
+                    theme === 'dark'
+                      ? 'bg-gray-700/50 border-gray-600'
+                      : 'bg-gray-50 border-gray-200'
+                  )}>
+                    <p className="text-xs text-gray-500 mb-3">DESGLOSE DE COSTOS</p>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+                          Materia prima ({formData.sourceWeightKg.toFixed(3)} kg × {formatCurrency(formData.sourceCostPerKg)})
+                        </span>
+                        <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
+                          {formatCurrency(rawMaterialCost)}
+                        </span>
+                      </div>
+                      {materialsCost > 0 && (
+                        <div className="flex justify-between">
+                          <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+                            Materiales
+                          </span>
+                          <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
+                            {formatCurrency(materialsCost)}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center">
+                        <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+                          Mano de obra
+                        </span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={formData.laborCost || ''}
+                          onChange={(e) => setFormData(prev => ({
+                            ...prev,
+                            laborCost: parseFloat(e.target.value) || 0
+                          }))}
+                          placeholder="0.00"
+                          className={cn(
+                            'w-24 px-2 py-1 text-right rounded border focus:outline-none focus:ring-1',
+                            theme === 'dark'
+                              ? 'bg-gray-800 border-gray-600 text-white'
+                              : 'bg-white border-gray-200 text-gray-900'
+                          )}
+                        />
+                      </div>
+                      <div className={cn(
+                        'flex justify-between pt-2 border-t font-bold text-base',
+                        theme === 'dark' ? 'border-gray-600' : 'border-gray-300'
+                      )}>
+                        <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
+                          COSTO TOTAL
+                        </span>
+                        <span className="text-emerald-600">
+                          {formatCurrency(totalCost)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-lg font-bold">
+                        <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
+                          COSTO POR UNIDAD
+                        </span>
+                        <span className="text-emerald-600">
+                          {formatCurrency(costPerUnit)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <label className={cn(
+                      'block text-sm font-medium mb-2',
+                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                    )}>
+                      Notas (opcional)
+                    </label>
+                    <textarea
+                      value={formData.notes}
+                      onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                      placeholder="Notas adicionales para la orden..."
+                      rows={3}
+                      className={cn(
+                        'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 resize-none',
+                        theme === 'dark'
+                          ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
+                          : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20'
+                      )}
+                    />
                   </div>
 
                   {errors.submit && (
@@ -1400,70 +1441,167 @@ export default function CreateProductionOrderPage() {
                 </motion.div>
               )}
             </AnimatePresence>
+          </motion.div>
 
-            {/* Navigation */}
-            <div className="flex items-center justify-between mt-8">
-              <button
-                onClick={goToPrevStep}
-                disabled={currentStepIndex === 0}
+          {/* Navigation Buttons */}
+          <div className="flex justify-between items-center gap-4">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={goToPrevStep}
+              disabled={currentStepIndex === 0}
+              className={cn(
+                "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
+                "disabled:opacity-50 disabled:cursor-not-allowed",
+                theme === 'dark'
+                  ? 'bg-gray-700 hover:bg-gray-600 text-white shadow-lg'
+                  : 'bg-gray-200 hover:bg-gray-300 text-gray-900 shadow-md'
+              )}
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Anterior
+            </motion.button>
+
+            {currentStep === 'summary' ? (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleSubmit}
+                disabled={submitting}
                 className={cn(
-                  'flex items-center gap-2 px-6 py-3 rounded-xl transition-all',
-                  currentStepIndex === 0
-                    ? 'opacity-50 cursor-not-allowed'
-                    : theme === 'dark'
-                      ? 'hover:bg-gray-800 text-gray-300'
-                      : 'hover:bg-gray-100 text-gray-600'
+                  "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
+                  "disabled:opacity-50 disabled:cursor-not-allowed",
+                  theme === 'dark'
+                    ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 shadow-lg shadow-emerald-500/30'
+                    : 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-400/30',
+                  'text-white'
                 )}
               >
-                <ArrowLeft className="w-5 h-5" />
-                Anterior
-              </button>
-
-              {currentStep === 'summary' ? (
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  className={cn(
-                    'flex items-center gap-2 px-8 py-3 rounded-xl font-semibold transition-all',
-                    'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white',
-                    'hover:from-emerald-600 hover:to-emerald-700',
-                    'shadow-lg shadow-emerald-500/25',
-                    submitting && 'opacity-75 cursor-not-allowed'
-                  )}
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Creando...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="w-5 h-5" />
-                      Crear Orden de Producción
-                    </>
-                  )}
-                </motion.button>
-              ) : (
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={goToNextStep}
-                  className={cn(
-                    'flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all',
-                    'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white',
-                    'hover:from-emerald-600 hover:to-emerald-700'
-                  )}
-                >
-                  Siguiente
-                  <ArrowRight className="w-5 h-5" />
-                </motion.button>
-              )}
-            </div>
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Creando...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-5 h-5" />
+                    Crear Orden
+                  </>
+                )}
+              </motion.button>
+            ) : (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={goToNextStep}
+                className={cn(
+                  "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
+                  theme === 'dark'
+                    ? 'bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/30'
+                    : 'bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-400/30',
+                  'text-white'
+                )}
+              >
+                Siguiente
+                <ArrowRight className="w-5 h-5" />
+              </motion.button>
+            )}
           </div>
         </div>
-      </DashboardLayout>
+
+        {/* Cancel Modal */}
+        <AnimatePresence>
+          {showCancelModal && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowCancelModal(false)}
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+              />
+
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: "spring", duration: 0.3 }}
+                className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              >
+                <div
+                  className={cn(
+                    "w-full max-w-md rounded-2xl shadow-2xl border",
+                    theme === 'dark'
+                      ? 'bg-gray-800 border-gray-700'
+                      : 'bg-white border-gray-200'
+                  )}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="p-6 pb-4">
+                    <div className="flex items-start gap-4">
+                      <div className={cn(
+                        "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0",
+                        theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
+                      )}>
+                        <X className={cn(
+                          "w-6 h-6",
+                          theme === 'dark' ? 'text-red-400' : 'text-red-600'
+                        )} />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className={cn(
+                          "text-xl font-bold mb-2",
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>
+                          ¿Cancelar orden?
+                        </h3>
+                        <p className={cn(
+                          "text-sm",
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>
+                          Se perdera toda la informacion ingresada y no podras recuperarla.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={cn(
+                    "flex gap-3 p-6 pt-4 border-t",
+                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                  )}>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setShowCancelModal(false)}
+                      className={cn(
+                        "flex-1 px-4 py-3 rounded-xl font-medium transition-all",
+                        theme === 'dark'
+                          ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                          : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
+                      )}
+                    >
+                      Continuar editando
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => router.push('/dashboard/market/production/dosification')}
+                      className={cn(
+                        "flex-1 px-4 py-3 rounded-xl font-medium transition-all text-white",
+                        theme === 'dark'
+                          ? 'bg-red-600 hover:bg-red-700'
+                          : 'bg-red-500 hover:bg-red-600'
+                      )}
+                    >
+                      Si, cancelar
+                    </motion.button>
+                  </div>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+      </div>
     </ProtectedRoute>
   )
 }
