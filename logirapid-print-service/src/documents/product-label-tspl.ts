@@ -3,6 +3,17 @@
  * TSPL (TSC Printer Language) is widely supported by non-Zebra label printers
  */
 
+interface ProductLabelItem {
+  productName: string
+  sku?: string
+  barcode: string
+  barcodeType?: 'code128' | 'ean13' | 'upc' | 'qrcode'
+  price?: number
+  priceCUP?: number
+  currency?: string
+  copies?: number
+}
+
 interface ProductLabelData {
   productName: string
   sku: string
@@ -20,88 +31,56 @@ interface ProductLabelData {
   labelWidth?: number // in mm
   labelHeight?: number // in mm
   companyName?: string
+  // Support for bulk printing
+  items?: ProductLabelItem[]
 }
 
 /**
- * Generate TSPL code for a product label
- * Default size: 2" wide x 1" tall (51mm x 25mm)
- *
- * TSPL coordinate system: 8 dots per mm (203 DPI)
- * For 51mm x 25mm label: 408 x 200 dots
+ * Generate TSPL for a single label (returns commands without PRINT)
  */
-export function generateProductLabelTspl(data: ProductLabelData): Buffer {
-  // Default label size: 2" x 1" (51mm x 25mm)
-  const labelWidthMm = data.labelWidth || 51
-  const labelHeightMm = data.labelHeight || 25
-
-  // Convert to dots (8 dots per mm at 203 DPI)
-  const labelWidthDots = Math.round(labelWidthMm * 8)
-  const labelHeightDots = Math.round(labelHeightMm * 8)
-
-  // Gap between labels (typically 2-3mm)
-  const gapMm = 3
-
+function generateSingleLabelTspl(
+  item: ProductLabelItem,
+  includePrice: boolean,
+  labelWidthDots: number
+): string[] {
   const tspl: string[] = []
-
-  // Setup commands
-  tspl.push(`SIZE ${labelWidthMm} mm, ${labelHeightMm} mm`)
-  tspl.push(`GAP ${gapMm} mm, 0 mm`)
-  tspl.push('DIRECTION 1')
-  tspl.push('DENSITY 8') // Print darkness (0-15)
   tspl.push('CLS') // Clear buffer
 
-  // Check if we should include price
-  const shouldIncludePrice = data.includePrice !== false && (data.priceCUP !== undefined || data.price !== undefined)
+  const shouldIncludePrice = includePrice && (item.priceCUP !== undefined || item.price !== undefined)
 
   if (!shouldIncludePrice) {
-    // === LABEL WITHOUT PRICE ===
-    // Centered name at top, barcode centered and full width
-
     const maxNameLength = 28
-    const productName = data.productName.length > maxNameLength
-      ? data.productName.substring(0, maxNameLength - 2) + '..'
-      : data.productName
+    const productName = item.productName.length > maxNameLength
+      ? item.productName.substring(0, maxNameLength - 2) + '..'
+      : item.productName
 
-    // Row 1: Product name (bigger font "3", centered)
-    const nameWidth = productName.length * 16 // Approx width per char with font 3
+    const nameWidth = productName.length * 16
     const nameX = Math.max(10, Math.round((labelWidthDots - nameWidth) / 2))
     tspl.push(`TEXT ${nameX},5,"3",0,1,1,"${escapeTspl(productName)}"`)
 
-    // Barcode - centered, full width
     const barcodeY = 50
-    const barcodeHeight = 100 // Taller barcode
-    const barcodeType = getTsplBarcodeType(data.barcode, data.barcodeType)
-
-    // Center barcode
-    const barcodeX = Math.round((labelWidthDots - 300) / 2) // Approx barcode width 300 dots
-    // BARCODE X,Y,"type",height,human_readable,rotation,narrow,wide,"content"
-    tspl.push(`BARCODE ${barcodeX},${barcodeY},"${barcodeType}",${barcodeHeight},1,0,2,4,"${data.barcode}"`)
-
+    const barcodeHeight = 100
+    const barcodeType = getTsplBarcodeType(item.barcode, item.barcodeType)
+    const barcodeX = Math.round((labelWidthDots - 300) / 2)
+    tspl.push(`BARCODE ${barcodeX},${barcodeY},"${barcodeType}",${barcodeHeight},1,0,2,4,"${item.barcode}"`)
   } else {
-    // === LABEL WITH PRICE ===
-    const maxNameLength = 24 // Allow more chars for name
-    const productName = data.productName.length > maxNameLength
-      ? data.productName.substring(0, maxNameLength - 2) + '..'
-      : data.productName
+    const maxNameLength = 24
+    const productName = item.productName.length > maxNameLength
+      ? item.productName.substring(0, maxNameLength - 2) + '..'
+      : item.productName
 
-    // Row 1: Product name (full width at top)
     tspl.push(`TEXT 10,8,"2",0,1,1,"${escapeTspl(productName)}"`)
 
-    // Row 2: Barcode - centered
     const barcodeY = 50
     const barcodeHeight = 75
-    const barcodeType = getTsplBarcodeType(data.barcode, data.barcodeType)
-    const barcodeX = 25 // Slightly more margin from edge
+    const barcodeType = getTsplBarcodeType(item.barcode, item.barcodeType)
+    tspl.push(`BARCODE 25,${barcodeY},"${barcodeType}",${barcodeHeight},1,0,2,3,"${item.barcode}"`)
 
-    tspl.push(`BARCODE ${barcodeX},${barcodeY},"${barcodeType}",${barcodeHeight},1,0,2,3,"${data.barcode}"`)
-
-    // Price - format with price on top, CUP below
-    const priceValue = data.priceCUP !== undefined ? data.priceCUP : data.price!
-    const isCUP = data.priceCUP !== undefined
+    const priceValue = item.priceCUP !== undefined ? item.priceCUP : item.price!
+    const isCUP = item.priceCUP !== undefined
     const formattedPrice = isCUP ? Math.round(priceValue).toLocaleString() : priceValue.toFixed(2)
 
     if (isCUP) {
-      // Precio arriba, CUP abajo
       const priceX = 260
       const priceY = barcodeY + 10
       tspl.push(`TEXT ${priceX},${priceY},"4",0,1,1,"${formattedPrice}"`)
@@ -112,22 +91,77 @@ export function generateProductLabelTspl(data: ProductLabelData): Buffer {
         'GBP': '£', 'gbp': '£', 'MXN': '$', 'mxn': '$',
         'COP': '$', 'cop': '$', '$': '$', '€': '€', '£': '£'
       }
-      const currencySymbol = (data.currency && symbolMap[data.currency]) || '$'
+      const currencySymbol = (item.currency && symbolMap[item.currency]) || '$'
       const priceText = `${currencySymbol}${formattedPrice}`
-      const priceX = 265
-      const priceY = barcodeY + 20
-      tspl.push(`TEXT ${priceX},${priceY},"4",0,1,1,"${priceText}"`)
+      tspl.push(`TEXT 265,${barcodeY + 20},"4",0,1,1,"${priceText}"`)
     }
   }
 
-  // Print command
-  tspl.push('PRINT 1,1') // Print 1 copy
+  return tspl
+}
+
+/**
+ * Generate TSPL code for a product label
+ * Default size: 2" wide x 1" tall (51mm x 25mm)
+ *
+ * TSPL coordinate system: 8 dots per mm (203 DPI)
+ * For 51mm x 25mm label: 408 x 200 dots
+ *
+ * Supports bulk printing: if data.items is provided, generates all labels in one job
+ */
+export function generateProductLabelTspl(data: ProductLabelData): Buffer {
+  const labelWidthMm = data.labelWidth || 51
+  const labelHeightMm = data.labelHeight || 25
+  const labelWidthDots = Math.round(labelWidthMm * 8)
+  const gapMm = 3
+  const includePrice = data.includePrice !== false
+
+  const tspl: string[] = []
+
+  // Setup commands (only once at the beginning)
+  tspl.push(`SIZE ${labelWidthMm} mm, ${labelHeightMm} mm`)
+  tspl.push(`GAP ${gapMm} mm, 0 mm`)
+  tspl.push('DIRECTION 1')
+  tspl.push('DENSITY 8')
+
+  // Check if bulk mode
+  if (data.items && data.items.length > 0) {
+    console.log(`[TSPL Generator] Bulk mode: generating ${data.items.length} different labels`)
+
+    let totalLabels = 0
+    for (const item of data.items) {
+      const copies = item.copies || 1
+      const labelCommands = generateSingleLabelTspl(item, includePrice, labelWidthDots)
+
+      // Add CLS and label content, then PRINT with copies
+      tspl.push(...labelCommands)
+      tspl.push(`PRINT 1,${copies}`)
+      totalLabels += copies
+    }
+
+    console.log(`[TSPL Generator] Generated ${totalLabels} total labels for ${data.items.length} products`)
+  } else {
+    // Single label mode
+    const singleItem: ProductLabelItem = {
+      productName: data.productName,
+      sku: data.sku,
+      barcode: data.barcode,
+      barcodeType: data.barcodeType,
+      price: data.price,
+      priceCUP: data.priceCUP,
+      currency: data.currency
+    }
+
+    const labelCommands = generateSingleLabelTspl(singleItem, includePrice, labelWidthDots)
+    tspl.push(...labelCommands)
+    tspl.push('PRINT 1,1')
+
+    console.log('[TSPL Generator] Generated single TSPL label')
+  }
+
+  console.log('[TSPL Generator] Size:', labelWidthMm, 'x', labelHeightMm, 'mm')
 
   const tsplContent = tspl.join('\r\n') + '\r\n'
-  console.log('[TSPL Generator] Generated TSPL label')
-  console.log('[TSPL Generator] Size:', labelWidthMm, 'x', labelHeightMm, 'mm')
-  console.log('[TSPL Generator] Content:\n' + tsplContent)
-
   return Buffer.from(tsplContent, 'ascii')
 }
 

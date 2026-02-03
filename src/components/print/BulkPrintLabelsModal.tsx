@@ -232,86 +232,74 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
     }
 
     setPrinting(true)
-    setProgress({ current: 0, total: totalCopies })
+    setProgress({ current: 0, total: 1 }) // Single job
 
     try {
-      let successCount = 0
-      let errorCount = 0
-      let currentProgress = 0
-
-      for (const productId of selectedProducts) {
+      // Build items array for bulk printing in a single job
+      const items = Array.from(selectedProducts).map(productId => {
         const product = products.find(p => p.id === productId)
-        if (!product) continue
+        if (!product) return null
 
         const copies = productCopies[productId] || 1
-
         const priceCUP = includePrice
           ? Math.round((product.sellingPrice || 0) * USD_CUP)
           : undefined
 
-        try {
-          const response = await fetch('/api/print/jobs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-              documentType: 'product_label',
-              documentData: {
-                productName: product.name,
-                sku: product.sku || '',
-                barcode: product.barcode,
-                barcodeType: detectBarcodeType(product.barcode),
-                includePrice,
-                priceCUP,
-                currency: 'CUP',
-                unitOfMeasure: product.unitOfMeasure,
-                category: product.category,
-                labelSize: 'medium'
-              },
-              copies,
-              printServiceId: selectedService.id,
-              printerId: selectedPrinter.id,
-              sourceType: 'bulk_inventory',
-              priority: 1
-            })
-          })
-
-          const data = await response.json()
-          if (response.ok && data.success) {
-            successCount++
-          } else {
-            errorCount++
-            console.error(`Error printing ${product.name}:`, data.error)
-          }
-        } catch (err) {
-          errorCount++
-          console.error(`Error printing ${product.name}:`, err)
+        return {
+          productName: product.name,
+          sku: product.sku || '',
+          barcode: product.barcode,
+          barcodeType: detectBarcodeType(product.barcode),
+          priceCUP,
+          currency: 'CUP',
+          copies
         }
+      }).filter(Boolean)
 
-        currentProgress += copies
-        setProgress({ current: currentProgress, total: totalCopies })
-      }
+      // Send single job with all items
+      const response = await fetch('/api/print/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          documentType: 'product_label',
+          documentData: {
+            includePrice,
+            items, // All labels in one job
+            labelSize: 'medium'
+          },
+          copies: 1, // Copies per item are in the items array
+          printServiceId: selectedService.id,
+          printerId: selectedPrinter.id,
+          sourceType: 'bulk_inventory',
+          priority: 1
+        })
+      })
+
+      const data = await response.json()
+
+      setProgress({ current: 1, total: 1 })
 
       const priceInfo = includePrice ? 'con precio' : 'sin precio'
-      if (errorCount === 0) {
+      if (response.ok && data.success) {
         showNotification(
           'success',
-          'Impresión completada',
-          `${totalCopies} etiquetas ${priceInfo} enviadas a ${selectedPrinter.printerName}`
+          'Impresión enviada',
+          `${totalCopies} etiquetas ${priceInfo} enviadas a ${selectedPrinter.printerName} en un solo trabajo`
         )
+
+        if (onPrintSuccess) {
+          onPrintSuccess(totalSelectedProducts)
+        }
+
+        onClose()
       } else {
         showNotification(
-          'warning',
-          'Impresión parcial',
-          `${successCount} productos enviados, ${errorCount} con error`
+          'error',
+          'Error de impresión',
+          data.error || 'Error al enviar trabajo de impresión'
         )
       }
-
-      if (onPrintSuccess) {
-        onPrintSuccess(successCount)
-      }
-
-      onClose()
     } catch (err) {
       console.error('Bulk print error:', err)
       showNotification('error', 'Error', 'Error al imprimir etiquetas')
