@@ -200,34 +200,6 @@ export default function DosificationPage() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className={cn(
-                  'text-2xl font-bold',
-                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                )}>
-                  Dosificación de Alimentos
-                </h1>
-                <p className={cn(
-                  'text-sm mt-1',
-                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                )}>
-                  Control de producción con mermas y sobrantes
-                </p>
-              </div>
-              <Link href="/dashboard/market/production/dosification/create">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25"
-                >
-                  <Plus className="w-5 h-5" />
-                  Nueva Orden de Producción
-                </motion.button>
-              </Link>
-            </div>
-
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
               {/* Total Producido */}
@@ -542,6 +514,18 @@ export default function DosificationPage() {
                     <RefreshCw className={cn('w-4 h-4', (loading || isRefreshing) && 'animate-spin')} />
                   </motion.button>
                 </div>
+
+                {/* New Order Button */}
+                <Link href="/dashboard/market/production/dosification/create">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Nueva Orden
+                  </motion.button>
+                </Link>
               </div>
             </motion.div>
 
