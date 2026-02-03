@@ -8,6 +8,7 @@ import { db } from '@/lib/database'
  * 1. Finds production orders with duplicate lot entries
  * 2. Keeps only one lot per production order
  * 3. Recalculates warehouse stock based on actual lot quantities
+ * @version 1.0
  */
 export async function GET() {
   const results: string[] = []
