@@ -40,7 +40,8 @@ import {
   ClipboardCheck,
   ExternalLink,
   Settings,
-  Trash2
+  Trash2,
+  Factory
 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -193,7 +194,7 @@ interface ProductLot {
   supplierName: string | null
   warehouseName: string | null
   unitCost: number
-  source: 'consignment' | 'purchase' | 'manual'
+  source: 'consignment' | 'purchase' | 'production' | 'manual'
   isActive: boolean
   createdAt: string
 }
@@ -1581,16 +1582,22 @@ export default function ProductDetailPage() {
                                         <Link
                                           href={lot.source === 'consignment'
                                             ? `/dashboard/market/consignments/${lot.purchaseId}`
+                                            : lot.source === 'production'
+                                            ? `/dashboard/market/production/dosification/${lot.purchaseId}`
                                             : `/dashboard/market/purchases/${lot.purchaseId}`
                                           }
                                           className={cn(
                                             'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                                            theme === 'dark'
-                                              ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50'
-                                              : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                            lot.source === 'production'
+                                              ? theme === 'dark'
+                                                ? 'bg-purple-900/30 text-purple-400 hover:bg-purple-900/50'
+                                                : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                                              : theme === 'dark'
+                                                ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50'
+                                                : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
                                           )}
                                         >
-                                          <Receipt className="w-3.5 h-3.5" />
+                                          {lot.source === 'production' ? <Factory className="w-3.5 h-3.5" /> : <Receipt className="w-3.5 h-3.5" />}
                                           {lot.purchaseNumber || 'Ver'}
                                         </Link>
                                       ) : (
@@ -1921,6 +1928,8 @@ export default function ProductDetailPage() {
                                   case 'sale': return <Receipt className="w-3.5 h-3.5" />
                                   case 'transfer_in':
                                   case 'transfer_out': return <Repeat className="w-3.5 h-3.5" />
+                                  case 'production_in':
+                                  case 'production_out': return <Factory className="w-3.5 h-3.5" />
                                   case 'audit': return <ClipboardCheck className="w-3.5 h-3.5" />
                                   case 'adjustment': return <Settings className="w-3.5 h-3.5" />
                                   case 'scrap': return <Trash2 className="w-3.5 h-3.5" />
