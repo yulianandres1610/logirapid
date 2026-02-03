@@ -81,8 +81,9 @@ interface FormData {
   sourceVariantId: number | null
   sourceWarehouseId: number | null
   sourceWarehouseName: string
-  sourceWeightKg: number
-  sourceCostPerKg: number
+  sourceQuantity: number       // Cantidad de unidades del producto fuente (ej: 1 saco)
+  sourceUnitCost: number       // Costo por unidad del producto fuente (ej: $50 por saco)
+  sourceWeightKg: number       // Peso bruto total (solo para calcular porciones)
 
   // Step 2: Materials
   materials: Material[]
@@ -124,8 +125,9 @@ export default function CreateProductionOrderPage() {
     sourceVariantId: null,
     sourceWarehouseId: null,
     sourceWarehouseName: '',
+    sourceQuantity: 1,
+    sourceUnitCost: 0,
     sourceWeightKg: 0,
-    sourceCostPerKg: 0,
     materials: [],
     targetProductId: null,
     targetProduct: null,
@@ -203,7 +205,7 @@ export default function CreateProductionOrderPage() {
       ...prev,
       sourceProductId: product.id,
       sourceProduct: product,
-      sourceCostPerKg: product.costPrice
+      sourceUnitCost: product.costPrice  // Costo por unidad (no por kg)
     }))
     setProductSearch('')
     setFilteredProducts([])
@@ -310,6 +312,8 @@ export default function CreateProductionOrderPage() {
           sourceProductId: formData.sourceProductId,
           sourceVariantId: formData.sourceVariantId,
           sourceWarehouseId: formData.sourceWarehouseId,
+          sourceQuantity: formData.sourceQuantity,
+          sourceUnitCost: formData.sourceUnitCost,
           sourceWeightKg: formData.sourceWeightKg,
           targetProductId: formData.targetProductId,
           targetVariantId: formData.targetVariantId,
@@ -348,10 +352,16 @@ export default function CreateProductionOrderPage() {
   const wasteSurplusType = wasteSurplusKg > 0.001 ? 'surplus' : wasteSurplusKg < -0.001 ? 'waste' : 'exact'
   const wasteSurplusPercent = formData.sourceWeightKg > 0 ? (Math.abs(wasteSurplusKg) / formData.sourceWeightKg * 100) : 0
 
-  const rawMaterialCost = formData.sourceWeightKg * formData.sourceCostPerKg
+  // Costo basado en CANTIDAD (unidades), no en peso
+  const rawMaterialCost = formData.sourceQuantity * formData.sourceUnitCost
   const materialsCost = formData.materials.reduce((sum, m) => sum + m.totalCost, 0)
   const totalCost = rawMaterialCost + materialsCost + formData.laborCost
   const costPerUnit = formData.targetQuantity > 0 ? totalCost / formData.targetQuantity : 0
+
+  // Calcular porciones máximas posibles basado en peso
+  const maxPortions = formData.targetPortionWeightKg > 0
+    ? Math.floor(formData.sourceWeightKg / formData.targetPortionWeightKg)
+    : 0
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
 
@@ -634,7 +644,7 @@ export default function CreateProductionOrderPage() {
                                 theme === 'dark' ? 'text-white' : 'text-gray-900'
                               )}>{product.name}</p>
                               <p className="text-sm text-gray-500">
-                                {product.sku} | {formatCurrency(product.costPrice)}/kg
+                                {product.sku} | {formatCurrency(product.costPrice)}/{product.unitOfMeasure || 'unidad'}
                               </p>
                             </div>
                           </button>
@@ -674,7 +684,7 @@ export default function CreateProductionOrderPage() {
                             {formData.sourceProduct.name}
                           </p>
                           <p className="text-sm text-gray-500">
-                            SKU: {formData.sourceProduct.sku || 'N/A'} | Costo: {formatCurrency(formData.sourceProduct.costPrice)}/kg
+                            SKU: {formData.sourceProduct.sku || 'N/A'} | Costo: {formatCurrency(formData.sourceProduct.costPrice)}/{formData.sourceProduct.unitOfMeasure || 'unidad'}
                           </p>
                         </div>
                         <button
@@ -691,13 +701,76 @@ export default function CreateProductionOrderPage() {
                     <p className="text-red-500 text-sm">{errors.sourceProduct}</p>
                   )}
 
-                  {/* Weight Input */}
+                  {/* Quantity and Cost Inputs */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className={cn(
+                        'block text-sm font-medium mb-2',
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                      )}>
+                        Cantidad a usar
+                      </label>
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0.001"
+                        placeholder="Ej: 1"
+                        value={formData.sourceQuantity || ''}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          sourceQuantity: parseFloat(e.target.value) || 1
+                        }))}
+                        className={cn(
+                          'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
+                          theme === 'dark'
+                            ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
+                            : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20'
+                        )}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        {formData.sourceProduct?.unitOfMeasure || 'unidades'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className={cn(
+                        'block text-sm font-medium mb-2',
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                      )}>
+                        Costo unitario
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="Ej: 50.00"
+                          value={formData.sourceUnitCost || ''}
+                          onChange={(e) => setFormData(prev => ({
+                            ...prev,
+                            sourceUnitCost: parseFloat(e.target.value) || 0
+                          }))}
+                          className={cn(
+                            'w-full pl-8 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
+                            theme === 'dark'
+                              ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
+                              : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20'
+                          )}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        por {formData.sourceProduct?.unitOfMeasure || 'unidad'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Weight Input - Solo para control de porciones */}
                   <div>
                     <label className={cn(
                       'block text-sm font-medium mb-2',
                       theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                     )}>
-                      Peso del Producto (kg)
+                      Peso bruto total (kg)
                     </label>
                     <div className="relative">
                       <Scale className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -726,12 +799,38 @@ export default function CreateProductionOrderPage() {
                     {errors.sourceWeight && (
                       <p className="text-red-500 text-sm mt-1">{errors.sourceWeight}</p>
                     )}
-                    {formData.sourceWeightKg > 0 && formData.sourceCostPerKg > 0 && (
-                      <p className="text-sm text-gray-500 mt-2">
-                        Costo estimado: {formatCurrency(formData.sourceWeightKg * formData.sourceCostPerKg)}
-                      </p>
-                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      El peso se usa para calcular la cantidad de porciones posibles
+                    </p>
                   </div>
+
+                  {/* Cost Summary - basado en CANTIDAD, no peso */}
+                  {formData.sourceQuantity > 0 && formData.sourceUnitCost > 0 && (
+                    <div className={cn(
+                      'p-4 rounded-xl',
+                      theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                    )}>
+                      <div className="flex justify-between items-center">
+                        <span className={cn(
+                          'text-sm',
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                        )}>
+                          Costo materia prima ({formData.sourceQuantity} × {formatCurrency(formData.sourceUnitCost)})
+                        </span>
+                        <span className={cn(
+                          'text-lg font-bold',
+                          theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
+                        )}>
+                          {formatCurrency(rawMaterialCost)}
+                        </span>
+                      </div>
+                      {formData.sourceWeightKg > 0 && formData.targetPortionWeightKg > 0 && (
+                        <p className="text-xs text-gray-500 mt-2">
+                          Porciones máximas posibles: {maxPortions} × {formData.targetPortionWeightKg.toFixed(3)} kg
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </motion.div>
               )}
 
@@ -1351,7 +1450,7 @@ export default function CreateProductionOrderPage() {
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
-                          Materia prima ({formData.sourceWeightKg.toFixed(3)} kg × {formatCurrency(formData.sourceCostPerKg)})
+                          Materia prima ({formData.sourceQuantity} {formData.sourceProduct?.unitOfMeasure || 'unidad(es)'} × {formatCurrency(formData.sourceUnitCost)})
                         </span>
                         <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
                           {formatCurrency(rawMaterialCost)}

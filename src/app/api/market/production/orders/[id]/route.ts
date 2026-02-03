@@ -155,8 +155,9 @@ export async function GET(
           name: order.target_warehouse_name,
           code: order.target_warehouse_code
         },
+        sourceQuantity: parseFloat(order.source_quantity) || 1,
+        sourceUnitCost: parseFloat(order.source_unit_cost) || parseFloat(order.source_cost_per_kg) || 0,
         sourceWeightKg: parseFloat(order.source_weight_kg) || 0,
-        sourceCostPerKg: parseFloat(order.source_cost_per_kg) || 0,
         targetPortionWeightKg: parseFloat(order.target_portion_weight_kg) || 0,
         targetQuantity: order.target_quantity,
         expectedTotalWeightKg: parseFloat(order.expected_total_weight_kg) || 0,
@@ -167,7 +168,8 @@ export async function GET(
         actualQuantity: order.actual_quantity,
         actualWasteSurplusKg: parseFloat(order.actual_waste_surplus_kg) || 0,
         costs: {
-          rawMaterial: (parseFloat(order.source_weight_kg) || 0) * (parseFloat(order.source_cost_per_kg) || 0),
+          // Costo basado en CANTIDAD (unidades), no en peso
+          rawMaterial: (parseFloat(order.source_quantity) || 1) * (parseFloat(order.source_unit_cost) || parseFloat(order.source_cost_per_kg) || 0),
           materials: parseFloat(order.materials_cost) || 0,
           labor: parseFloat(order.labor_cost) || 0,
           total: parseFloat(order.total_cost) || 0,
@@ -312,14 +314,17 @@ export async function PATCH(
       updates.push(`labor_cost = $${paramIndex++}`)
       queryParams.push(laborCost)
 
-      // Recalculate total_cost and cost_per_unit
+      // Recalculate total_cost and cost_per_unit using QUANTITY-based costs
       const orderData = await db.query(`
-        SELECT source_weight_kg, source_cost_per_kg, materials_cost, target_quantity
+        SELECT source_quantity, source_unit_cost, source_cost_per_kg, materials_cost, target_quantity
         FROM market_production_orders WHERE id = $1
       `, [orderId])
 
       const od = orderData.rows[0]
-      const rawMaterialCost = parseFloat(od.source_weight_kg) * parseFloat(od.source_cost_per_kg)
+      // Use source_quantity × source_unit_cost (fall back to source_cost_per_kg for legacy data)
+      const sourceQty = parseFloat(od.source_quantity) || 1
+      const unitCost = parseFloat(od.source_unit_cost) || parseFloat(od.source_cost_per_kg) || 0
+      const rawMaterialCost = sourceQty * unitCost
       const totalCost = rawMaterialCost + parseFloat(od.materials_cost) + laborCost
       const costPerUnit = od.target_quantity > 0 ? totalCost / od.target_quantity : 0
 

@@ -60,8 +60,9 @@ interface ProductionOrder {
     name: string
     code: string
   }
-  sourceWeightKg: number
-  sourceCostPerKg: number
+  sourceQuantity: number         // Cantidad de unidades del producto fuente
+  sourceUnitCost: number         // Costo por unidad del producto fuente
+  sourceWeightKg: number         // Peso bruto total (solo para porcionar)
   targetPortionWeightKg: number
   targetQuantity: number
   expectedTotalWeightKg: number
@@ -335,7 +336,10 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
                             {order.sourceProduct.name}
                           </p>
                           <p className="text-sm text-gray-500">
-                            {formatWeight(order.sourceWeightKg)}
+                            {order.sourceQuantity} {order.sourceProduct.unit || 'unidad(es)'} × {formatCurrency(order.sourceUnitCost)}
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            Peso: {formatWeight(order.sourceWeightKg)}
                           </p>
                         </div>
                       </div>
@@ -545,9 +549,12 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
                   </h2>
                   <div className="space-y-3">
                     <div className="flex justify-between text-sm">
-                      <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
-                        Materia prima
-                      </span>
+                      <div className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+                        <span>Materia prima</span>
+                        <span className="block text-xs">
+                          ({order.sourceQuantity} × {formatCurrency(order.sourceUnitCost)})
+                        </span>
+                      </div>
                       <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
                         {formatCurrency(order.costs.rawMaterial)}
                       </span>

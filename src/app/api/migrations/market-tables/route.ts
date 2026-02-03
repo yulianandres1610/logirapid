@@ -1166,8 +1166,9 @@ export async function POST() {
         source_product_id INTEGER NOT NULL REFERENCES market_products(id),
         source_variant_id INTEGER REFERENCES market_product_variants(id),
         source_warehouse_id INTEGER NOT NULL REFERENCES market_warehouses(id),
+        source_quantity DECIMAL(15,3) DEFAULT 1,
+        source_unit_cost DECIMAL(12,4),
         source_weight_kg DECIMAL(10,4) NOT NULL,
-        source_cost_per_kg DECIMAL(12,4),
 
         -- Producto final (manufacturado)
         target_product_id INTEGER NOT NULL REFERENCES market_products(id),
@@ -1207,6 +1208,39 @@ export async function POST() {
       )
     `)
     console.log('[Migration] Created market_production_orders table')
+
+    // 34.1 Add source_quantity and source_unit_cost columns (for existing tables)
+    const productionOrderColumns = [
+      { name: 'source_quantity', type: 'DECIMAL(15,3) DEFAULT 1' },
+      { name: 'source_unit_cost', type: 'DECIMAL(12,4)' }
+    ]
+
+    for (const col of productionOrderColumns) {
+      try {
+        await db.query(`
+          ALTER TABLE market_production_orders
+          ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}
+        `)
+        console.log(`[Migration] Added column ${col.name} to market_production_orders`)
+      } catch (e: any) {
+        if (!e.message.includes('already exists')) {
+          console.log(`[Migration] Note: ${col.name} - ${e.message}`)
+        }
+      }
+    }
+
+    // Migrate existing data: copy source_cost_per_kg to source_unit_cost where not set
+    try {
+      await db.query(`
+        UPDATE market_production_orders
+        SET source_unit_cost = source_cost_per_kg,
+            source_quantity = 1
+        WHERE source_unit_cost IS NULL AND source_cost_per_kg IS NOT NULL
+      `)
+      console.log('[Migration] Migrated existing source_cost_per_kg to source_unit_cost')
+    } catch (e: any) {
+      console.log(`[Migration] Note: migration of cost columns - ${e.message}`)
+    }
 
     await db.query(`
       CREATE INDEX IF NOT EXISTS idx_production_orders_company ON market_production_orders(company_id)

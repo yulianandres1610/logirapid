@@ -299,6 +299,8 @@ export async function POST(request: NextRequest) {
       sourceProductId,
       sourceVariantId,
       sourceWarehouseId,
+      sourceQuantity = 1,
+      sourceUnitCost,
       sourceWeightKg,
       targetProductId,
       targetVariantId,
@@ -325,19 +327,22 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Get source product cost
-    const sourceProductResult = await db.query(`
-      SELECT cost_price FROM market_products WHERE id = $1 AND company_id = $2
-    `, [sourceProductId, companyId])
+    // Get source product cost if not provided
+    let finalSourceUnitCost = sourceUnitCost
+    if (finalSourceUnitCost === undefined || finalSourceUnitCost === null) {
+      const sourceProductResult = await db.query(`
+        SELECT cost_price FROM market_products WHERE id = $1 AND company_id = $2
+      `, [sourceProductId, companyId])
 
-    if (sourceProductResult.rows.length === 0) {
-      return NextResponse.json({
-        success: false,
-        error: 'Producto fuente no encontrado'
-      }, { status: 404 })
+      if (sourceProductResult.rows.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Producto fuente no encontrado'
+        }, { status: 404 })
+      }
+
+      finalSourceUnitCost = parseFloat(sourceProductResult.rows[0].cost_price) || 0
     }
-
-    const sourceCostPerKg = parseFloat(sourceProductResult.rows[0].cost_price) || 0
 
     // Calculate expected values
     const expectedTotalWeight = targetPortionWeightKg * targetQuantity
@@ -345,8 +350,8 @@ export async function POST(request: NextRequest) {
     const wasteSurplusType = wasteSurplusKg > 0.001 ? 'surplus' :
                             wasteSurplusKg < -0.001 ? 'waste' : 'exact'
 
-    // Calculate costs
-    const rawMaterialCost = sourceWeightKg * sourceCostPerKg
+    // Calculate costs - basado en CANTIDAD (unidades), NO en peso
+    const rawMaterialCost = sourceQuantity * finalSourceUnitCost
     let materialsCost = 0
 
     // Generate order number
@@ -363,7 +368,7 @@ export async function POST(request: NextRequest) {
         INSERT INTO market_production_orders (
           company_id, order_number, status,
           source_product_id, source_variant_id, source_warehouse_id,
-          source_weight_kg, source_cost_per_kg,
+          source_quantity, source_unit_cost, source_weight_kg,
           target_product_id, target_variant_id, target_warehouse_id,
           target_portion_weight_kg, target_quantity,
           expected_total_weight_kg, waste_surplus_kg, waste_surplus_type,
@@ -372,18 +377,18 @@ export async function POST(request: NextRequest) {
         ) VALUES (
           $1, $2, 'pending',
           $3, $4, $5,
-          $6, $7,
-          $8, $9, $10,
-          $11, $12,
-          $13, $14, $15,
-          $16, $17, $18, $19,
-          $20, NOW(), $21
+          $6, $7, $8,
+          $9, $10, $11,
+          $12, $13,
+          $14, $15, $16,
+          $17, $18, $19, $20,
+          $21, NOW(), $22
         )
         RETURNING id
       `, [
         companyId, orderNumber,
         sourceProductId, sourceVariantId || null, sourceWarehouseId,
-        sourceWeightKg, sourceCostPerKg,
+        sourceQuantity, finalSourceUnitCost, sourceWeightKg,
         targetProductId, targetVariantId || null, targetWarehouseId,
         targetPortionWeightKg, targetQuantity,
         expectedTotalWeight, wasteSurplusKg, wasteSurplusType,
@@ -448,11 +453,14 @@ export async function POST(request: NextRequest) {
         orderId,
         JSON.stringify({
           orderNumber,
+          sourceQuantity,
+          sourceUnitCost: finalSourceUnitCost,
           sourceWeightKg,
           targetQuantity,
           expectedTotalWeight,
           wasteSurplusKg,
           wasteSurplusType,
+          rawMaterialCost,
           totalCost,
           costPerUnit
         }),
