@@ -276,8 +276,12 @@ export default function CreateProductionOrderPage() {
     if (step === 'target') {
       if (!formData.targetProductId) newErrors.targetProduct = 'Seleccione un producto final'
       if (!formData.targetWarehouseId) newErrors.targetWarehouse = 'Seleccione un almacén destino'
-      if (formData.targetPortionWeightKg <= 0) newErrors.targetPortionWeight = 'Ingrese un peso por porción válido'
       if (formData.targetQuantity <= 0) newErrors.targetQuantity = 'Ingrese una cantidad válida'
+      // El peso por porción se calcula automáticamente
+      if (formData.sourceWeightKg > 0 && formData.targetQuantity > 0) {
+        const calculatedWeight = formData.sourceWeightKg / formData.targetQuantity
+        if (calculatedWeight <= 0) newErrors.targetQuantity = 'La cantidad no es válida'
+      }
     }
 
     setErrors(newErrors)
@@ -1205,127 +1209,102 @@ export default function CreateProductionOrderPage() {
                     <p className="text-red-500 text-sm">{errors.targetProduct}</p>
                   )}
 
-                  {/* Portion Weight & Quantity */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={cn(
-                        'block text-sm font-medium mb-2',
-                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                      )}>
-                        Peso por Porción (kg)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.001"
-                        min="0"
-                        placeholder="Ej: 2.000"
-                        value={formData.targetPortionWeightKg || ''}
-                        onChange={(e) => setFormData(prev => ({
+                  {/* Quantity Input - El peso se calcula automáticamente */}
+                  <div>
+                    <label className={cn(
+                      'block text-sm font-medium mb-2',
+                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                    )}>
+                      ¿Cuántos paquetes desea producir?
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Ej: 13"
+                      value={formData.targetQuantity || ''}
+                      onChange={(e) => {
+                        const qty = parseInt(e.target.value) || 0
+                        // Calcular peso por porción automáticamente
+                        const portionWeight = qty > 0 && formData.sourceWeightKg > 0
+                          ? formData.sourceWeightKg / qty
+                          : 0
+                        setFormData(prev => ({
                           ...prev,
-                          targetPortionWeightKg: parseFloat(e.target.value) || 0
-                        }))}
-                        className={cn(
-                          'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
-                          theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
-                            : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20',
-                          errors.targetPortionWeight && 'border-red-500'
-                        )}
-                      />
-                      {errors.targetPortionWeight && (
-                        <p className="text-red-500 text-sm mt-1">{errors.targetPortionWeight}</p>
+                          targetQuantity: qty,
+                          targetPortionWeightKg: portionWeight
+                        }))
+                      }}
+                      className={cn(
+                        'w-full px-4 py-4 rounded-xl border text-2xl font-bold text-center focus:outline-none focus:ring-2',
+                        theme === 'dark'
+                          ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
+                          : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20',
+                        errors.targetQuantity && 'border-red-500'
                       )}
-                    </div>
-                    <div>
-                      <label className={cn(
-                        'block text-sm font-medium mb-2',
-                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                      )}>
-                        Cantidad de Porciones
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="Ej: 20"
-                        value={formData.targetQuantity || ''}
-                        onChange={(e) => setFormData(prev => ({
-                          ...prev,
-                          targetQuantity: parseInt(e.target.value) || 0
-                        }))}
-                        className={cn(
-                          'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
-                          theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
-                            : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20',
-                          errors.targetQuantity && 'border-red-500'
-                        )}
-                      />
-                      {errors.targetQuantity && (
-                        <p className="text-red-500 text-sm mt-1">{errors.targetQuantity}</p>
-                      )}
-                    </div>
+                    />
+                    {errors.targetQuantity && (
+                      <p className="text-red-500 text-sm mt-1">{errors.targetQuantity}</p>
+                    )}
                   </div>
 
-                  {/* Calculation Preview */}
-                  {formData.sourceWeightKg > 0 && formData.targetPortionWeightKg > 0 && formData.targetQuantity > 0 && (
+                  {/* Calculation Preview - Peso calculado automáticamente */}
+                  {formData.sourceWeightKg > 0 && formData.targetQuantity > 0 && (
                     <div className={cn(
                       'p-4 rounded-xl border',
-                      wasteSurplusType === 'waste'
-                        ? theme === 'dark'
-                          ? 'bg-red-900/20 border-red-800'
-                          : 'bg-red-50 border-red-200'
-                        : wasteSurplusType === 'surplus'
-                          ? theme === 'dark'
-                            ? 'bg-green-900/20 border-green-800'
-                            : 'bg-green-50 border-green-200'
-                          : theme === 'dark'
-                            ? 'bg-gray-700 border-gray-600'
-                            : 'bg-gray-50 border-gray-200'
+                      theme === 'dark'
+                        ? 'bg-emerald-900/20 border-emerald-800'
+                        : 'bg-emerald-50 border-emerald-200'
                     )}>
                       <h3 className={cn(
                         'font-semibold mb-3 flex items-center gap-2',
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
                       )}>
                         <Calculator className="w-5 h-5" />
-                        Cálculo de Producción
+                        Cálculo Automático
                       </h3>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Peso fuente:</span>
-                          <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+                            Peso total disponible:
+                          </span>
+                          <span className={cn(
+                            'font-medium',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
                             {formData.sourceWeightKg.toFixed(3)} kg
                           </span>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Porciones:</span>
-                          <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
-                            {formData.targetQuantity} × {formData.targetPortionWeightKg.toFixed(3)} kg = {expectedTotalWeight.toFixed(3)} kg
+                        <div className="flex justify-between items-center">
+                          <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+                            Cantidad de paquetes:
+                          </span>
+                          <span className={cn(
+                            'font-medium',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            {formData.targetQuantity} paquetes
                           </span>
                         </div>
                         <div className={cn(
-                          'flex justify-between pt-2 border-t font-bold',
-                          theme === 'dark' ? 'border-gray-600' : 'border-gray-300'
+                          'flex justify-between items-center pt-3 border-t',
+                          theme === 'dark' ? 'border-emerald-700' : 'border-emerald-200'
                         )}>
-                          <span className={
-                            wasteSurplusType === 'waste' ? 'text-red-600' :
-                            wasteSurplusType === 'surplus' ? 'text-green-600' :
-                            'text-gray-600'
-                          }>
-                            {wasteSurplusType === 'waste' ? 'MERMA:' :
-                             wasteSurplusType === 'surplus' ? 'SOBRANTE:' : 'EXACTO:'}
+                          <span className={cn(
+                            'font-semibold',
+                            theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'
+                          )}>
+                            Peso por paquete:
                           </span>
                           <span className={cn(
-                            'flex items-center gap-2',
-                            wasteSurplusType === 'waste' ? 'text-red-600' :
-                            wasteSurplusType === 'surplus' ? 'text-green-600' :
-                            'text-gray-600'
+                            'text-2xl font-bold',
+                            theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
                           )}>
-                            {wasteSurplusType === 'waste' && <AlertTriangle className="w-4 h-4" />}
-                            {wasteSurplusType === 'surplus' && <CheckCircle className="w-4 h-4" />}
-                            {wasteSurplusType === 'waste' ? '-' : wasteSurplusType === 'surplus' ? '+' : ''}
-                            {Math.abs(wasteSurplusKg).toFixed(3)} kg ({wasteSurplusPercent.toFixed(1)}%)
+                            {formData.targetPortionWeightKg.toFixed(3)} kg
                           </span>
                         </div>
+                        <p className="text-xs text-gray-500">
+                          {formData.sourceWeightKg.toFixed(3)} kg ÷ {formData.targetQuantity} = {formData.targetPortionWeightKg.toFixed(3)} kg por paquete
+                        </p>
                       </div>
                     </div>
                   )}
