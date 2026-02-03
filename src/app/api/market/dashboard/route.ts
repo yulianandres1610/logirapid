@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
       WHERE company_id = $1 AND is_active = true
     `, [companyId])
 
-    // Get consignment statistics
+    // Get consignment statistics (calculate total_sold from line items for accuracy)
     const consignmentStats = await safeQuery(`
       SELECT
         COUNT(*) as total_orders,
@@ -126,7 +126,12 @@ export async function GET(request: NextRequest) {
         COUNT(*) FILTER (WHERE status = 'partial') as partial_orders,
         COUNT(*) FILTER (WHERE status = 'received') as received_orders,
         COALESCE(SUM(total_cost), 0) as total_cost,
-        COALESCE(SUM(total_sold), 0) as total_sold,
+        COALESCE((
+          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          FROM consignment_order_lines ol
+          JOIN consignment_orders o2 ON o2.id = ol.order_id
+          WHERE o2.company_id = $1
+        ), 0) as total_sold,
         COALESCE(SUM(total_returned), 0) as total_returned,
         COUNT(*) FILTER (WHERE DATE_TRUNC('month', consignment_date) = DATE_TRUNC('month', CURRENT_DATE)) as orders_this_month,
         COALESCE(SUM(total_cost) FILTER (WHERE DATE_TRUNC('month', consignment_date) = DATE_TRUNC('month', CURRENT_DATE)), 0) as cost_this_month
@@ -134,14 +139,18 @@ export async function GET(request: NextRequest) {
       WHERE company_id = $1
     `, [companyId])
 
-    // Get recent consignments
+    // Get recent consignments (calculate total_sold from line items for accuracy)
     const recentConsignments = await safeQuery(`
       SELECT
         co.id,
         co.order_number,
         co.status,
         co.total_cost,
-        co.total_sold,
+        COALESCE((
+          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          FROM consignment_order_lines ol
+          WHERE ol.order_id = co.id
+        ), 0) as total_sold,
         co.consignment_date,
         cs.name as supplier_name
       FROM consignment_orders co
@@ -207,16 +216,26 @@ export async function GET(request: NextRequest) {
       ORDER BY sales_today DESC
     `, [companyId])
 
-    // Get consignments by supplier (with pending to pay)
+    // Get consignments by supplier (with pending to pay - calculate total_sold from line items)
     const consignmentsBySupplier = await safeQuery(`
       SELECT
         cs.id as supplier_id,
         cs.name as supplier_name,
-        COUNT(co.id) as total_orders,
+        COUNT(DISTINCT co.id) as total_orders,
         COALESCE(SUM(co.total_cost), 0) as total_cost,
-        COALESCE(SUM(co.total_sold), 0) as total_sold,
+        COALESCE((
+          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          FROM consignment_order_lines ol
+          JOIN consignment_orders o2 ON o2.id = ol.order_id
+          WHERE o2.supplier_id = cs.id AND o2.status != 'cancelled'
+        ), 0) as total_sold,
         COALESCE(SUM(co.total_returned), 0) as total_returned,
-        COALESCE(SUM(co.total_cost - co.total_sold - COALESCE(co.total_returned, 0)), 0) as pending_to_pay
+        COALESCE(SUM(co.total_cost), 0) - COALESCE((
+          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          FROM consignment_order_lines ol
+          JOIN consignment_orders o2 ON o2.id = ol.order_id
+          WHERE o2.supplier_id = cs.id AND o2.status != 'cancelled'
+        ), 0) - COALESCE(SUM(co.total_returned), 0) as pending_to_pay
       FROM market_suppliers cs
       LEFT JOIN consignment_orders co ON cs.id = co.supplier_id AND co.status != 'cancelled'
       WHERE cs.company_id = $1
