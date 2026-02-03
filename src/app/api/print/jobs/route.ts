@@ -201,7 +201,9 @@ export async function POST(request: NextRequest) {
       'warehouse_operation',   // Operación de almacén (recepción, transferencia, scrap, ajuste)
       'consignment_receipt',   // Recibo de orden de consignación para almacén
       'unified_reception',     // Recibo de recepción unificada (consignación/compra)
-      'transfer_receipt'       // Recibo de transferencia
+      'transfer_receipt',      // Recibo de transferencia
+      'production_materials_receipt',  // Orden de entrega de materiales para producción
+      'production_reception_receipt'   // Recepción de productos terminados de producción
     ]
     if (!validDocTypes.includes(documentType)) {
       return NextResponse.json({

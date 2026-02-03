@@ -83,6 +83,8 @@ interface ProductionOrder {
     productionDocPrinted: boolean
     receptionDocPrinted: boolean
   }
+  lotNumber: string | null
+  expirationDate: string | null
   materials: Array<{
     id: number
     productId: number
@@ -125,6 +127,7 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
   const { theme } = useTheme()
   const [order, setOrder] = useState<ProductionOrder | null>(null)
   const [loading, setLoading] = useState(true)
+  const [printing, setPrinting] = useState(false)
 
   useEffect(() => {
     fetchOrder()
@@ -163,6 +166,37 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
 
   const formatWeight = (kg: number) => {
     return kg.toFixed(3) + ' kg'
+  }
+
+  const handlePrint = async (documentType: 'materials' | 'reception') => {
+    if (!order) return
+    setPrinting(true)
+    try {
+      const response = await fetch(`/api/market/production/orders/${order.id}/print`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentType })
+      })
+      const data = await response.json()
+      if (data.success) {
+        // Update local state to reflect document was printed
+        setOrder(prev => prev ? {
+          ...prev,
+          documents: {
+            ...prev.documents,
+            [documentType === 'materials' ? 'productionDocPrinted' : 'receptionDocPrinted']: true
+          }
+        } : null)
+        alert(`Documento enviado a imprimir: ${data.data.jobNumber}`)
+      } else {
+        alert(`Error: ${data.error}`)
+      }
+    } catch (error) {
+      console.error('Error printing:', error)
+      alert('Error al enviar a imprimir')
+    } finally {
+      setPrinting(false)
+    }
   }
 
   if (loading) {
@@ -251,6 +285,46 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
 
               {/* Action Buttons */}
               <div className="flex items-center gap-3">
+                {/* Print Materials Button - Available when pending or in_progress */}
+                {(order.status === 'pending' || order.status === 'in_progress') && (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handlePrint('materials')}
+                    disabled={printing}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all border',
+                      theme === 'dark'
+                        ? 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
+                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50',
+                      printing && 'opacity-50 cursor-not-allowed'
+                    )}
+                  >
+                    <Printer className="w-4 h-4" />
+                    Imprimir Materiales
+                  </motion.button>
+                )}
+
+                {/* Print Reception Button - Available when completed */}
+                {order.status === 'completed' && (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handlePrint('reception')}
+                    disabled={printing}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all border',
+                      theme === 'dark'
+                        ? 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
+                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50',
+                      printing && 'opacity-50 cursor-not-allowed'
+                    )}
+                  >
+                    <Printer className="w-4 h-4" />
+                    Imprimir Recepción
+                  </motion.button>
+                )}
+
                 {order.status === 'pending' && (
                   <Link href={`/dashboard/market/production/dosification/${order.id}/deliver`}>
                     <motion.button
@@ -656,6 +730,36 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
                         )}>
                           <CheckCircle className="w-4 h-4 text-green-500" />
                           {formatDate(order.completedAt)}
+                        </p>
+                      </div>
+                    )}
+                    {order.lotNumber && (
+                      <div className={cn(
+                        'p-3 rounded-lg',
+                        theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50'
+                      )}>
+                        <p className="text-xs text-emerald-600 mb-1">Número de Lote</p>
+                        <p className={cn(
+                          'font-mono font-bold',
+                          theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'
+                        )}>
+                          {order.lotNumber}
+                        </p>
+                      </div>
+                    )}
+                    {order.expirationDate && (
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Fecha de Vencimiento</p>
+                        <p className={cn(
+                          'flex items-center gap-2',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>
+                          <Calendar className="w-4 h-4 text-orange-500" />
+                          {new Date(order.expirationDate + 'T00:00:00').toLocaleDateString('es-ES', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
                         </p>
                       </div>
                     )}

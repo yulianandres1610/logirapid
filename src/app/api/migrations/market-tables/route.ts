@@ -1295,6 +1295,106 @@ export async function POST() {
     `)
 
     // ========================================
+    // PRODUCTION LOT INVENTORY (FIFO)
+    // ========================================
+
+    // 37. Create production_lot_inventory table for FIFO tracking of produced items
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS production_lot_inventory (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        warehouse_id INTEGER NOT NULL REFERENCES market_warehouses(id) ON DELETE CASCADE,
+        product_id INTEGER NOT NULL REFERENCES market_products(id) ON DELETE CASCADE,
+        variant_id INTEGER REFERENCES market_product_variants(id) ON DELETE SET NULL,
+        production_order_id INTEGER NOT NULL REFERENCES market_production_orders(id) ON DELETE CASCADE,
+
+        lot_number VARCHAR(50) NOT NULL,
+        expiration_date DATE,
+        manufacturing_date DATE DEFAULT CURRENT_DATE,
+
+        quantity_initial DECIMAL(15,3) NOT NULL,
+        quantity_available DECIMAL(15,3) NOT NULL,
+        quantity_sold DECIMAL(15,3) DEFAULT 0,
+
+        unit_cost DECIMAL(12,4),
+
+        received_at TIMESTAMP DEFAULT NOW(),
+        created_at TIMESTAMP DEFAULT NOW(),
+
+        UNIQUE(company_id, lot_number)
+      )
+    `)
+    console.log('[Migration] Created production_lot_inventory table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_production_lot_fifo
+      ON production_lot_inventory(company_id, product_id, warehouse_id, received_at ASC)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_production_lot_company
+      ON production_lot_inventory(company_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_production_lot_warehouse
+      ON production_lot_inventory(warehouse_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_production_lot_product
+      ON production_lot_inventory(product_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_production_lot_order
+      ON production_lot_inventory(production_order_id)
+    `)
+
+    // 38. Add lot tracking columns to market_production_orders
+    const lotTrackingColumns = [
+      { name: 'lot_number', type: 'VARCHAR(50)' },
+      { name: 'expiration_date', type: 'DATE' },
+      { name: 'materials_validation_status', type: "VARCHAR(20) DEFAULT NULL" },
+      { name: 'materials_validated_at', type: 'TIMESTAMP' },
+      { name: 'materials_validated_by', type: 'INTEGER REFERENCES users(id)' }
+    ]
+
+    for (const col of lotTrackingColumns) {
+      try {
+        await db.query(`
+          ALTER TABLE market_production_orders
+          ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}
+        `)
+        console.log(`[Migration] Added column ${col.name} to market_production_orders`)
+      } catch (e: any) {
+        if (!e.message.includes('already exists')) {
+          console.log(`[Migration] Note: ${col.name} - ${e.message}`)
+        }
+      }
+    }
+
+    // 39. Create material validation tracking table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_production_material_validations (
+        id SERIAL PRIMARY KEY,
+        production_order_id INTEGER NOT NULL REFERENCES market_production_orders(id) ON DELETE CASCADE,
+        product_id INTEGER NOT NULL REFERENCES market_products(id),
+        variant_id INTEGER REFERENCES market_product_variants(id),
+
+        quantity_expected DECIMAL(15,3) NOT NULL,
+        quantity_validated DECIMAL(15,3) DEFAULT 0,
+
+        scanned_at TIMESTAMP,
+        scanned_by INTEGER REFERENCES users(id),
+
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_production_material_validations table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_material_validations_order
+      ON market_production_material_validations(production_order_id)
+    `)
+
+    // ========================================
     // CONSIGNMENT DATA SYNC
     // ========================================
     // Sync consignment_orders.total_sold from line items (fix for historical data)
@@ -1372,7 +1472,9 @@ export async function POST() {
       'market_weight_labels_log',
       'market_production_orders',
       'market_production_materials',
-      'market_production_log'
+      'market_production_log',
+      'production_lot_inventory',
+      'market_production_material_validations'
     ]
     const tableStats = []
 
@@ -1434,7 +1536,9 @@ export async function GET() {
       'market_promotions',
       'market_production_orders',
       'market_production_materials',
-      'market_production_log'
+      'market_production_log',
+      'production_lot_inventory',
+      'market_production_material_validations'
     ]
     const tableStatus = []
 

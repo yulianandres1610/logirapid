@@ -14,7 +14,8 @@ import {
   Scale,
   AlertTriangle,
   Minus,
-  Plus
+  Plus,
+  Calendar
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -67,6 +68,7 @@ export default function ReceiveProductionPage({ params }: { params: Promise<{ id
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([])
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | null>(null)
   const [quantityReceived, setQuantityReceived] = useState(0)
+  const [expirationDate, setExpirationDate] = useState('')
   const [observations, setObservations] = useState('')
   const [error, setError] = useState('')
 
@@ -140,6 +142,7 @@ export default function ReceiveProductionPage({ params }: { params: Promise<{ id
         body: JSON.stringify({
           targetWarehouseId: selectedWarehouseId,
           quantityReceived,
+          expirationDate: expirationDate || undefined,
           observations
         })
       })
@@ -523,6 +526,35 @@ export default function ReceiveProductionPage({ params }: { params: Promise<{ id
                       Peso fuente: {formatWeight(order.sourceWeightKg)} | Peso producido: {formatWeight(actualTotalWeight)}
                     </p>
                   </div>
+
+                  {/* Expiration Date */}
+                  <div className="mt-6">
+                    <label className={cn(
+                      'flex items-center gap-2 text-sm font-medium mb-2',
+                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                    )}>
+                      <Calendar className="w-4 h-4" />
+                      Fecha de Vencimiento
+                    </label>
+                    <input
+                      type="date"
+                      value={expirationDate}
+                      onChange={(e) => setExpirationDate(e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
+                      className={cn(
+                        'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
+                        theme === 'dark'
+                          ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
+                          : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20'
+                      )}
+                    />
+                    <p className={cn(
+                      'text-xs mt-1',
+                      theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                    )}>
+                      Opcional. Se usará para control de lotes FIFO.
+                    </p>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -606,6 +638,20 @@ export default function ReceiveProductionPage({ params }: { params: Promise<{ id
                         {formatWeight(Math.abs(actualWasteSurplus))}
                       </span>
                     </div>
+                    {expirationDate && (
+                      <div className="flex justify-between">
+                        <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+                          Fecha de vencimiento
+                        </span>
+                        <span className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          {new Date(expirationDate + 'T00:00:00').toLocaleDateString('es-ES', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Observations */}

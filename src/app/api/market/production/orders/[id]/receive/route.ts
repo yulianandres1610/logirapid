@@ -36,6 +36,34 @@ async function generateOperationNumber(companyId: number): Promise<string> {
 }
 
 /**
+ * Generate lot number for production
+ * Format: PRD-YYMMDD-XXXX (e.g., PRD-250203-0001)
+ */
+async function generateProductionLotNumber(companyId: number): Promise<string> {
+  const now = new Date()
+  const yy = now.getFullYear().toString().slice(-2)
+  const mm = (now.getMonth() + 1).toString().padStart(2, '0')
+  const dd = now.getDate().toString().padStart(2, '0')
+  const prefix = `PRD-${yy}${mm}${dd}-`
+
+  const result = await db.query(`
+    SELECT lot_number FROM production_lot_inventory
+    WHERE company_id = $1 AND lot_number LIKE $2
+    ORDER BY lot_number DESC
+    LIMIT 1
+  `, [companyId, `${prefix}%`])
+
+  let nextNumber = 1
+  if (result.rows.length > 0) {
+    const lastNumber = result.rows[0].lot_number
+    const parts = lastNumber.split('-')
+    nextNumber = parseInt(parts[2]) + 1
+  }
+
+  return `${prefix}${nextNumber.toString().padStart(4, '0')}`
+}
+
+/**
  * POST /api/market/production/orders/[id]/receive
  * Receive finished products from production (like purchase reception)
  */
@@ -109,6 +137,7 @@ export async function POST(
     const {
       targetWarehouseId,
       quantityReceived,
+      expirationDate,
       notes,
       observations
     } = body
@@ -132,6 +161,9 @@ export async function POST(
 
     try {
       await client.query('BEGIN')
+
+      // 0. Generate lot number for FIFO tracking
+      const lotNumber = await generateProductionLotNumber(companyId)
 
       // 1. Create warehouse operation for product reception
       const opNumber = await generateOperationNumber(companyId)
@@ -227,7 +259,32 @@ export async function POST(
         userId
       ])
 
-      // 4. Update production order to completed
+      // 4. Create record in production_lot_inventory for FIFO tracking
+      await client.query(`
+        INSERT INTO production_lot_inventory (
+          company_id, warehouse_id, product_id, variant_id, production_order_id,
+          lot_number, expiration_date, manufacturing_date,
+          quantity_initial, quantity_available, quantity_sold,
+          unit_cost, received_at, created_at
+        ) VALUES (
+          $1, $2, $3, $4, $5,
+          $6, $7, CURRENT_DATE,
+          $8, $8, 0,
+          $9, NOW(), NOW()
+        )
+      `, [
+        companyId,
+        warehouseId,
+        order.target_product_id,
+        order.target_variant_id,
+        orderId,
+        lotNumber,
+        expirationDate || null,
+        actualQuantity,
+        actualCostPerUnit
+      ])
+
+      // 5. Update production order to completed with lot info
       await client.query(`
         UPDATE market_production_orders
         SET
@@ -238,19 +295,23 @@ export async function POST(
           actual_waste_surplus_kg = $3,
           waste_surplus_type = $4,
           cost_per_unit = $5,
-          notes = CASE WHEN $6 IS NOT NULL THEN COALESCE(notes || E'\n', '') || $6 ELSE notes END
-        WHERE id = $7
+          lot_number = $6,
+          expiration_date = $7,
+          notes = CASE WHEN $8 IS NOT NULL THEN COALESCE(notes || E'\n', '') || $8 ELSE notes END
+        WHERE id = $9
       `, [
         userId,
         actualQuantity,
         actualWasteSurplus,
         actualWasteSurplusType,
         actualCostPerUnit,
+        lotNumber,
+        expirationDate || null,
         observations,
         orderId
       ])
 
-      // 5. Update target product cost price (optional - average cost)
+      // 6. Update target product cost price (optional - average cost)
       // This updates the product's cost price based on production cost
       await client.query(`
         UPDATE market_products
@@ -258,7 +319,7 @@ export async function POST(
         WHERE id = $2 AND company_id = $3
       `, [actualCostPerUnit, order.target_product_id, companyId])
 
-      // 6. Log the reception
+      // 7. Log the reception
       await client.query(`
         INSERT INTO market_production_log (
           production_order_id, action, details, performed_by, performed_at
@@ -267,6 +328,8 @@ export async function POST(
         orderId,
         JSON.stringify({
           operationNumber: opNumber,
+          lotNumber,
+          expirationDate: expirationDate || null,
           expectedQuantity: order.target_quantity,
           actualQuantity,
           expectedWasteSurplus: parseFloat(order.waste_surplus_kg),
@@ -290,6 +353,8 @@ export async function POST(
         data: {
           operationNumber: opNumber,
           operationId: opId,
+          lotNumber,
+          expirationDate: expirationDate || null,
           newStatus: 'completed',
           actualQuantity,
           expectedQuantity: order.target_quantity,
@@ -309,8 +374,8 @@ export async function POST(
           newStockLevel: newStock
         },
         message: hasDiscrepancy
-          ? `Producción completada con discrepancia de ${quantityDiscrepancy > 0 ? '+' : ''}${quantityDiscrepancy} unidades`
-          : 'Producción completada exitosamente'
+          ? `Producción completada con discrepancia de ${quantityDiscrepancy > 0 ? '+' : ''}${quantityDiscrepancy} unidades. Lote: ${lotNumber}`
+          : `Producción completada exitosamente. Lote: ${lotNumber}`
       })
 
     } catch (error) {

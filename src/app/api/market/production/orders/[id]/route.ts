@@ -200,6 +200,8 @@ export async function GET(
           performedBy: l.performed_by_name,
           performedAt: l.performed_at
         })),
+        lotNumber: order.lot_number,
+        expirationDate: order.expiration_date,
         createdBy: order.created_by_name,
         completedBy: order.completed_by_name,
         createdAt: order.created_at,
