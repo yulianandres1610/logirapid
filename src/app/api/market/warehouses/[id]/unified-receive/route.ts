@@ -776,21 +776,28 @@ export async function POST(
       }
 
       // Create warehouse operation for production_in
+      // Generate operation number
+      const opYear = new Date().getFullYear()
+      const opRandom = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+      const opNumber = `PIN-${opYear}-${opRandom}`
+
       await db.query(`
         INSERT INTO market_warehouse_operations (
-          company_id, warehouse_id, operation_type, reference_type, reference_id,
-          product_id, variant_id, quantity, unit_cost, total_cost,
-          notes, performed_by, created_at
-        ) VALUES ($1, $2, 'production_in', 'production_order', $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+          company_id, operation_number, operation_type,
+          destination_warehouse_id, reference_type, reference_id,
+          status, scheduled_date, started_at, completed_at,
+          notes, created_by, created_at
+        ) VALUES (
+          $1, $2, 'production_in',
+          $3, 'production_order', $4,
+          'done', CURRENT_DATE, NOW(), NOW(),
+          $5, $6, NOW()
+        )
       `, [
         payload.companyId,
+        opNumber,
         warehouseId,
         orderId,
-        productionProductId,
-        productionVariantId,
-        productionQty,
-        unitCost,
-        productionQty * unitCost,
         `Recepción de orden de producción ${orderNumber}`,
         payload.userId
       ])
