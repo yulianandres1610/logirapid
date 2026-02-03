@@ -12,7 +12,6 @@ import {
   CheckCircle,
   Play,
   X,
-  Truck,
   PackageCheck,
   AlertTriangle,
   DollarSign,
@@ -20,12 +19,20 @@ import {
   User,
   FileText,
   ArrowRight,
-  Printer
+  Printer,
+  Loader2,
+  History,
+  Box,
+  Boxes,
+  Receipt,
+  FileDown
 } from 'lucide-react'
 import Link from 'next/link'
+import jsPDF from 'jspdf'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
+import { useNotifications } from '@/contexts/NotificationContext'
 import { cn } from '@/lib/utils'
 
 interface ProductionOrder {
@@ -60,9 +67,9 @@ interface ProductionOrder {
     name: string
     code: string
   }
-  sourceQuantity: number         // Cantidad de unidades del producto fuente
-  sourceUnitCost: number         // Costo por unidad del producto fuente
-  sourceWeightKg: number         // Peso bruto total (solo para porcionar)
+  sourceQuantity: number
+  sourceUnitCost: number
+  sourceWeightKg: number
   targetPortionWeightKg: number
   targetQuantity: number
   expectedTotalWeightKg: number
@@ -114,20 +121,58 @@ interface ProductionOrder {
   notes: string | null
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: any }> = {
-  pending: { label: 'Pendiente', color: 'text-amber-600', bgColor: 'bg-amber-100 dark:bg-amber-900/30', icon: Clock },
-  in_progress: { label: 'En Proceso', color: 'text-blue-600', bgColor: 'bg-blue-100 dark:bg-blue-900/30', icon: Play },
-  completed: { label: 'Completada', color: 'text-green-600', bgColor: 'bg-green-100 dark:bg-green-900/30', icon: CheckCircle },
-  cancelled: { label: 'Cancelada', color: 'text-red-600', bgColor: 'bg-red-100 dark:bg-red-900/30', icon: X }
+const STATUS_CONFIG: Record<string, {
+  label: string
+  color: string
+  bgGradient: string
+  icon: React.ElementType
+  step: number
+}> = {
+  pending: {
+    label: 'Pendiente',
+    color: 'amber',
+    bgGradient: 'from-amber-500 to-orange-500',
+    icon: Clock,
+    step: 0
+  },
+  in_progress: {
+    label: 'En Proceso',
+    color: 'blue',
+    bgGradient: 'from-blue-500 to-cyan-500',
+    icon: Play,
+    step: 1
+  },
+  completed: {
+    label: 'Completada',
+    color: 'emerald',
+    bgGradient: 'from-emerald-500 to-teal-500',
+    icon: CheckCircle,
+    step: 2
+  },
+  cancelled: {
+    label: 'Cancelada',
+    color: 'red',
+    bgGradient: 'from-red-500 to-rose-500',
+    icon: X,
+    step: 0
+  }
 }
+
+const LIFECYCLE_STEPS = [
+  { key: 'pending', label: 'Pendiente', icon: Clock },
+  { key: 'in_progress', label: 'En Proceso', icon: Play },
+  { key: 'completed', label: 'Completada', icon: CheckCircle }
+]
 
 export default function ProductionOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)
   const router = useRouter()
   const { theme } = useTheme()
+  const { showNotification } = useNotifications()
   const [order, setOrder] = useState<ProductionOrder | null>(null)
   const [loading, setLoading] = useState(true)
-  const [printing, setPrinting] = useState(false)
+  const [printing, setPrinting] = useState<'materials' | 'reception' | null>(null)
+  const [downloadingPdf, setDownloadingPdf] = useState<'receipt' | 'letter' | null>(null)
 
   useEffect(() => {
     fetchOrder()
@@ -157,6 +202,14 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('es-ES', {
       day: '2-digit',
+      month: 'long',
+      year: 'numeric'
+    })
+  }
+
+  const formatDateTime = (date: string) => {
+    return new Date(date).toLocaleString('es-ES', {
+      day: '2-digit',
       month: 'short',
       year: 'numeric',
       hour: '2-digit',
@@ -168,9 +221,10 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
     return kg.toFixed(3) + ' kg'
   }
 
+  // Silent print using print service
   const handlePrint = async (documentType: 'materials' | 'reception') => {
     if (!order) return
-    setPrinting(true)
+    setPrinting(documentType)
     try {
       const response = await fetch(`/api/market/production/orders/${order.id}/print`, {
         method: 'POST',
@@ -179,7 +233,6 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
       })
       const data = await response.json()
       if (data.success) {
-        // Update local state to reflect document was printed
         setOrder(prev => prev ? {
           ...prev,
           documents: {
@@ -187,15 +240,307 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
             [documentType === 'materials' ? 'productionDocPrinted' : 'receptionDocPrinted']: true
           }
         } : null)
-        alert(`Documento enviado a imprimir: ${data.data.jobNumber}`)
+        showNotification('success', 'Imprimiendo', `Documento enviado: ${data.data.jobNumber}`)
       } else {
-        alert(`Error: ${data.error}`)
+        showNotification('error', 'Error', data.error || 'Error al imprimir')
       }
     } catch (error) {
       console.error('Error printing:', error)
-      alert('Error al enviar a imprimir')
+      showNotification('error', 'Error', 'Error al enviar a imprimir')
     } finally {
-      setPrinting(false)
+      setPrinting(null)
+    }
+  }
+
+  // Generate PDF receipt (thermal ticket format)
+  const generatePdfReceipt = async () => {
+    if (!order) return
+    setDownloadingPdf('receipt')
+
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [80, 200]
+      })
+
+      const pageWidth = 80
+      const margin = 5
+      let y = 10
+
+      // Header
+      doc.setFontSize(12)
+      doc.setFont('helvetica', 'bold')
+      doc.text('ORDEN DE PRODUCCION', pageWidth / 2, y, { align: 'center' })
+      y += 6
+
+      doc.setFontSize(10)
+      doc.text(order.orderNumber, pageWidth / 2, y, { align: 'center' })
+      y += 8
+
+      // Status
+      const statusConfig = STATUS_CONFIG[order.status]
+      doc.setFontSize(8)
+      doc.text(`Estado: ${statusConfig.label}`, pageWidth / 2, y, { align: 'center' })
+      y += 6
+
+      // Line separator
+      doc.setLineWidth(0.3)
+      doc.line(margin, y, pageWidth - margin, y)
+      y += 6
+
+      // Source product
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.text('PRODUCTO FUENTE:', margin, y)
+      y += 4
+      doc.setFont('helvetica', 'normal')
+      doc.text(order.sourceProduct.name.substring(0, 30), margin, y)
+      y += 4
+      doc.text(`Cantidad: ${order.sourceQuantity} - Peso: ${formatWeight(order.sourceWeightKg)}`, margin, y)
+      y += 6
+
+      // Target product
+      doc.setFont('helvetica', 'bold')
+      doc.text('PRODUCTO FINAL:', margin, y)
+      y += 4
+      doc.setFont('helvetica', 'normal')
+      doc.text(order.targetProduct.name.substring(0, 30), margin, y)
+      y += 4
+      doc.text(`Cantidad: ${order.actualQuantity ?? order.targetQuantity} x ${formatWeight(order.targetPortionWeightKg)}`, margin, y)
+      y += 6
+
+      // Materials
+      if (order.materials.length > 0) {
+        doc.line(margin, y, pageWidth - margin, y)
+        y += 4
+        doc.setFont('helvetica', 'bold')
+        doc.text('MATERIALES:', margin, y)
+        y += 4
+        doc.setFont('helvetica', 'normal')
+        for (const m of order.materials) {
+          doc.text(`- ${m.productName.substring(0, 25)} x${m.quantity}`, margin, y)
+          y += 3.5
+        }
+        y += 2
+      }
+
+      // Lot info
+      if (order.lotNumber) {
+        doc.line(margin, y, pageWidth - margin, y)
+        y += 5
+        doc.setFont('helvetica', 'bold')
+        doc.text(`LOTE: ${order.lotNumber}`, margin, y)
+        y += 4
+        if (order.expirationDate) {
+          doc.setFont('helvetica', 'normal')
+          doc.text(`Vence: ${formatDate(order.expirationDate)}`, margin, y)
+          y += 4
+        }
+      }
+
+      // Costs
+      doc.line(margin, y, pageWidth - margin, y)
+      y += 5
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.text('COSTO TOTAL:', margin, y)
+      doc.text(formatCurrency(order.costs.total), pageWidth - margin, y, { align: 'right' })
+      y += 5
+      doc.text('COSTO/UNIDAD:', margin, y)
+      doc.text(formatCurrency(order.costs.perUnit), pageWidth - margin, y, { align: 'right' })
+      y += 8
+
+      // Footer
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6)
+      doc.text('--- Generado por LogiRapid ---', pageWidth / 2, y, { align: 'center' })
+
+      const finalHeight = y + 10
+      doc.internal.pageSize.height = finalHeight
+
+      doc.save(`${order.orderNumber}-recibo.pdf`)
+      showNotification('success', 'PDF descargado', 'Recibo de produccion descargado')
+    } catch (error) {
+      console.error('Error generating receipt PDF:', error)
+      showNotification('error', 'Error', 'No se pudo generar el PDF')
+    } finally {
+      setDownloadingPdf(null)
+    }
+  }
+
+  // Generate PDF letter format
+  const generatePdfLetter = async () => {
+    if (!order) return
+    setDownloadingPdf('letter')
+
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'letter'
+      })
+
+      const pageWidth = 215.9
+      const margin = 20
+      let y = 25
+
+      // Header
+      doc.setFontSize(24)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(26, 54, 93)
+      doc.text('ORDEN DE PRODUCCION', pageWidth / 2, y, { align: 'center' })
+      y += 12
+
+      doc.setFontSize(14)
+      doc.setTextColor(0, 0, 0)
+      doc.text(order.orderNumber, pageWidth / 2, y, { align: 'center' })
+      y += 8
+
+      const statusConfig = STATUS_CONFIG[order.status]
+      doc.setFontSize(10)
+      doc.setTextColor(100, 100, 100)
+      doc.text(`Estado: ${statusConfig.label}`, pageWidth / 2, y, { align: 'center' })
+      y += 15
+
+      doc.setDrawColor(200, 200, 200)
+      doc.setLineWidth(0.5)
+      doc.line(margin, y, pageWidth - margin, y)
+      y += 12
+
+      // Products section
+      doc.setTextColor(0, 0, 0)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(11)
+      doc.text('PRODUCTO FUENTE', margin, y)
+      doc.text('PRODUCTO FINAL', pageWidth / 2 + 10, y)
+      y += 6
+
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10)
+      doc.text(order.sourceProduct.name, margin, y)
+      doc.text(order.targetProduct.name, pageWidth / 2 + 10, y)
+      y += 5
+
+      doc.setTextColor(100, 100, 100)
+      doc.text(`${order.sourceQuantity} unidad(es) - ${formatWeight(order.sourceWeightKg)}`, margin, y)
+      doc.text(`${order.actualQuantity ?? order.targetQuantity} x ${formatWeight(order.targetPortionWeightKg)}`, pageWidth / 2 + 10, y)
+      y += 5
+
+      doc.text(`Almacen: ${order.sourceWarehouse.name}`, margin, y)
+      doc.text(`Almacen: ${order.targetWarehouse.name}`, pageWidth / 2 + 10, y)
+      y += 12
+
+      // Materials table
+      if (order.materials.length > 0) {
+        doc.setTextColor(0, 0, 0)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(11)
+        doc.text('MATERIALES', margin, y)
+        y += 8
+
+        doc.setFillColor(245, 247, 250)
+        doc.rect(margin, y - 5, pageWidth - margin * 2, 8, 'F')
+        doc.setFontSize(9)
+        doc.text('Material', margin + 5, y)
+        doc.text('Cantidad', pageWidth - margin - 50, y)
+        doc.text('Costo', pageWidth - margin - 5, y, { align: 'right' })
+        y += 6
+
+        doc.setFont('helvetica', 'normal')
+        for (const m of order.materials) {
+          doc.text(m.productName.substring(0, 40), margin + 5, y)
+          doc.text(String(m.quantity), pageWidth - margin - 50, y)
+          doc.text(formatCurrency(m.totalCost), pageWidth - margin - 5, y, { align: 'right' })
+          y += 5
+        }
+        y += 8
+      }
+
+      // Lot info
+      if (order.lotNumber) {
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(11)
+        doc.text('INFORMACION DE LOTE', margin, y)
+        y += 6
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(10)
+        doc.text(`Numero de Lote: ${order.lotNumber}`, margin, y)
+        y += 5
+        if (order.expirationDate) {
+          doc.text(`Fecha de Vencimiento: ${formatDate(order.expirationDate)}`, margin, y)
+          y += 5
+        }
+        y += 8
+      }
+
+      // Costs section
+      doc.setDrawColor(200, 200, 200)
+      doc.line(margin + 100, y, pageWidth - margin, y)
+      y += 8
+
+      doc.setFontSize(10)
+      doc.text('Materia Prima:', margin + 120, y)
+      doc.text(formatCurrency(order.costs.rawMaterial), pageWidth - margin - 5, y, { align: 'right' })
+      y += 6
+
+      if (order.costs.materials > 0) {
+        doc.text('Materiales:', margin + 120, y)
+        doc.text(formatCurrency(order.costs.materials), pageWidth - margin - 5, y, { align: 'right' })
+        y += 6
+      }
+
+      if (order.costs.labor > 0) {
+        doc.text('Mano de Obra:', margin + 120, y)
+        doc.text(formatCurrency(order.costs.labor), pageWidth - margin - 5, y, { align: 'right' })
+        y += 6
+      }
+
+      y += 3
+      doc.setFillColor(26, 54, 93)
+      doc.rect(margin + 100, y - 5, pageWidth - margin - 100 - margin, 12, 'F')
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(12)
+      doc.setTextColor(255, 255, 255)
+      doc.text('COSTO TOTAL:', margin + 120, y + 2)
+      doc.text(formatCurrency(order.costs.total), pageWidth - margin - 5, y + 2, { align: 'right' })
+      y += 15
+
+      doc.setTextColor(0, 0, 0)
+      doc.text('COSTO POR UNIDAD:', margin + 120, y)
+      doc.setTextColor(16, 185, 129)
+      doc.text(formatCurrency(order.costs.perUnit), pageWidth - margin - 5, y, { align: 'right' })
+      y += 15
+
+      // Notes
+      if (order.notes) {
+        doc.setTextColor(0, 0, 0)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(10)
+        doc.text('NOTAS:', margin, y)
+        y += 6
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        const splitNotes = doc.splitTextToSize(order.notes, pageWidth - margin * 2)
+        doc.text(splitNotes, margin, y)
+        y += splitNotes.length * 5 + 10
+      }
+
+      // Footer
+      doc.setTextColor(150, 150, 150)
+      doc.setFontSize(8)
+      doc.text('Documento generado por LogiRapid', pageWidth / 2, 270, { align: 'center' })
+      doc.text(new Date().toLocaleString('es-ES'), pageWidth / 2, 275, { align: 'center' })
+
+      doc.save(`${order.orderNumber}-orden.pdf`)
+      showNotification('success', 'PDF descargado', 'Orden de produccion descargada')
+    } catch (error) {
+      console.error('Error generating letter PDF:', error)
+      showNotification('error', 'Error', 'No se pudo generar el PDF')
+    } finally {
+      setDownloadingPdf(null)
     }
   }
 
@@ -204,7 +549,15 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
       <ProtectedRoute>
         <DashboardLayout>
           <div className="min-h-screen p-6 flex items-center justify-center">
-            <div className="animate-spin w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full" />
+            <div className="text-center">
+              <div className={cn(
+                'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4',
+                theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+              )}>
+                <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+              </div>
+              <p className="text-gray-500">Cargando detalles...</p>
+            </div>
           </div>
         </DashboardLayout>
       </ProtectedRoute>
@@ -215,14 +568,33 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
     return (
       <ProtectedRoute>
         <DashboardLayout>
-          <div className="min-h-screen p-6 flex items-center justify-center">
-            <div className="text-center">
-              <Package className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-              <p className="text-gray-500">Orden no encontrada</p>
+          <div className="min-h-screen p-6">
+            <div className={cn(
+              'max-w-xl mx-auto text-center p-8 rounded-2xl',
+              theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-lg'
+            )}>
+              <div className={cn(
+                'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4',
+                theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
+              )}>
+                <Package className="w-8 h-8 text-red-500" />
+              </div>
+              <h2 className={cn(
+                'text-xl font-bold mb-2',
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>
+                Orden no encontrada
+              </h2>
+              <p className="text-gray-500 mb-6">No pudimos cargar los detalles de esta orden.</p>
               <Link href="/dashboard/market/production/dosification">
-                <button className="mt-3 text-emerald-500 hover:text-emerald-600">
-                  Volver a órdenes
-                </button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Volver a ordenes
+                </motion.button>
               </Link>
             </div>
           </div>
@@ -238,547 +610,718 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
     <ProtectedRoute>
       <DashboardLayout>
         <div className="min-h-screen p-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="max-w-5xl mx-auto space-y-6"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => router.back()}
+          {/* Header Section */}
+          <div className="max-w-6xl mx-auto mb-8">
+            {/* Navigation */}
+            <div className="flex items-center justify-between mb-6">
+              <Link href="/dashboard/market/production/dosification">
+                <motion.button
+                  whileHover={{ scale: 1.02, x: -2 }}
+                  whileTap={{ scale: 0.98 }}
                   className={cn(
-                    'p-2 rounded-lg transition-colors',
+                    'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
                     theme === 'dark'
-                      ? 'hover:bg-gray-800 text-gray-400'
-                      : 'hover:bg-gray-100 text-gray-600'
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   )}
                 >
-                  <ArrowLeft className="w-5 h-5" />
-                </button>
-                <div>
-                  <div className="flex items-center gap-3">
-                    <h1 className={cn(
-                      'text-2xl font-bold',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      {order.orderNumber}
-                    </h1>
-                    <span className={cn(
-                      'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium',
-                      statusConfig.bgColor,
-                      statusConfig.color
-                    )}>
-                      <StatusIcon className="w-4 h-4" />
-                      {statusConfig.label}
-                    </span>
-                  </div>
-                  <p className={cn(
-                    'text-sm mt-1',
-                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                  )}>
-                    Creada el {formatDate(order.createdAt)} por {order.createdBy}
-                  </p>
-                </div>
-              </div>
+                  <ArrowLeft className="w-4 h-4" />
+                  <span className="font-medium">Volver</span>
+                </motion.button>
+              </Link>
 
-              {/* Action Buttons */}
-              <div className="flex items-center gap-3">
-                {/* Print Materials Button - Available when pending or in_progress */}
+              <div className="flex items-center gap-2">
+                {/* Silent Print Buttons */}
                 {(order.status === 'pending' || order.status === 'in_progress') && (
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => handlePrint('materials')}
-                    disabled={printing}
+                    disabled={printing !== null}
                     className={cn(
-                      'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all border',
+                      'flex items-center gap-2 px-3 py-2 rounded-xl transition-colors',
                       theme === 'dark'
-                        ? 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
-                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50',
-                      printing && 'opacity-50 cursor-not-allowed'
+                        ? 'bg-amber-900/30 text-amber-400 hover:bg-amber-900/50'
+                        : 'bg-amber-100 text-amber-700 hover:bg-amber-200',
+                      printing === 'materials' && 'opacity-50 cursor-not-allowed'
                     )}
+                    title="Imprimir recibo de materiales (ticket termico)"
                   >
-                    <Printer className="w-4 h-4" />
-                    Imprimir Materiales
+                    {printing === 'materials' ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Printer className="w-4 h-4" />
+                    )}
+                    <span className="font-medium text-sm hidden sm:inline">Materiales</span>
                   </motion.button>
                 )}
 
-                {/* Print Reception Button - Available when completed */}
                 {order.status === 'completed' && (
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => handlePrint('reception')}
-                    disabled={printing}
+                    disabled={printing !== null}
                     className={cn(
-                      'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all border',
+                      'flex items-center gap-2 px-3 py-2 rounded-xl transition-colors',
                       theme === 'dark'
-                        ? 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
-                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50',
-                      printing && 'opacity-50 cursor-not-allowed'
+                        ? 'bg-emerald-900/30 text-emerald-400 hover:bg-emerald-900/50'
+                        : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200',
+                      printing === 'reception' && 'opacity-50 cursor-not-allowed'
                     )}
+                    title="Imprimir recibo de recepcion (ticket termico)"
                   >
-                    <Printer className="w-4 h-4" />
-                    Imprimir Recepción
+                    {printing === 'reception' ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Printer className="w-4 h-4" />
+                    )}
+                    <span className="font-medium text-sm hidden sm:inline">Recepcion</span>
                   </motion.button>
                 )}
 
-                {order.status === 'pending' && (
-                  <Link href={`/dashboard/market/production/dosification/${order.id}/deliver`}>
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={cn(
-                        'flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all',
-                        'bg-gradient-to-r from-blue-500 to-blue-600 text-white',
-                        'hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25'
-                      )}
-                    >
-                      <Truck className="w-5 h-5" />
-                      Entregar Materiales
-                    </motion.button>
-                  </Link>
-                )}
-                {order.status === 'in_progress' && (
-                  <Link href={`/dashboard/market/production/dosification/${order.id}/receive`}>
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={cn(
-                        'flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all',
-                        'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white',
-                        'hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-500/25'
-                      )}
-                    >
-                      <PackageCheck className="w-5 h-5" />
-                      Recibir Producción
-                    </motion.button>
-                  </Link>
-                )}
+                {/* Download PDF Buttons */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={generatePdfReceipt}
+                  disabled={downloadingPdf !== null}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-2 rounded-xl transition-colors',
+                    theme === 'dark'
+                      ? 'bg-purple-900/30 text-purple-400 hover:bg-purple-900/50'
+                      : 'bg-purple-100 text-purple-700 hover:bg-purple-200',
+                    downloadingPdf === 'receipt' && 'opacity-50 cursor-not-allowed'
+                  )}
+                  title="Descargar PDF formato recibo"
+                >
+                  {downloadingPdf === 'receipt' ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Receipt className="w-4 h-4" />
+                  )}
+                  <span className="font-medium text-sm hidden sm:inline">Recibo</span>
+                </motion.button>
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={generatePdfLetter}
+                  disabled={downloadingPdf !== null}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-2 rounded-xl transition-colors',
+                    theme === 'dark'
+                      ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50'
+                      : 'bg-blue-100 text-blue-700 hover:bg-blue-200',
+                    downloadingPdf === 'letter' && 'opacity-50 cursor-not-allowed'
+                  )}
+                  title="Descargar PDF formato carta"
+                >
+                  {downloadingPdf === 'letter' ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FileDown className="w-4 h-4" />
+                  )}
+                  <span className="font-medium text-sm hidden sm:inline">Carta</span>
+                </motion.button>
               </div>
             </div>
 
-            {/* Main Content */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left Column - Order Details */}
-              <div className="lg:col-span-2 space-y-6">
-                {/* Products Card */}
-                <div className={cn(
-                  'p-6 rounded-2xl border',
-                  theme === 'dark'
-                    ? 'bg-gray-800/50 border-gray-700'
-                    : 'bg-white border-gray-200'
-                )}>
-                  <h2 className={cn(
-                    'text-lg font-semibold mb-4',
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>
-                    Productos
-                  </h2>
-
-                  <div className="flex items-center gap-4">
-                    {/* Source Product */}
-                    <div className={cn(
-                      'flex-1 p-4 rounded-xl border',
-                      theme === 'dark'
-                        ? 'bg-gray-700/50 border-gray-600'
-                        : 'bg-gray-50 border-gray-200'
-                    )}>
-                      <p className="text-xs text-gray-500 mb-2">PRODUCTO FUENTE</p>
-                      <div className="flex items-center gap-3">
-                        {order.sourceProduct.imageUrl ? (
-                          <img
-                            src={order.sourceProduct.imageUrl}
-                            alt={order.sourceProduct.name}
-                            className="w-14 h-14 rounded-xl object-cover"
-                          />
-                        ) : (
-                          <div className={cn(
-                            'w-14 h-14 rounded-xl flex items-center justify-center',
-                            theme === 'dark' ? 'bg-gray-600' : 'bg-gray-100'
-                          )}>
-                            <Package className="w-7 h-7 text-gray-400" />
-                          </div>
-                        )}
-                        <div>
-                          <p className={cn(
-                            'font-semibold',
-                            theme === 'dark' ? 'text-white' : 'text-gray-900'
-                          )}>
-                            {order.sourceProduct.name}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {order.sourceQuantity} {order.sourceProduct.unit || 'unidad(es)'} × {formatCurrency(order.sourceUnitCost)}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            Peso: {formatWeight(order.sourceWeightKg)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center gap-1 text-xs text-gray-500">
-                        <Warehouse className="w-3 h-3" />
-                        {order.sourceWarehouse.name}
-                      </div>
-                    </div>
-
-                    <ArrowRight className={cn(
-                      'w-6 h-6 flex-shrink-0',
-                      theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
-                    )} />
-
-                    {/* Target Product */}
-                    <div className={cn(
-                      'flex-1 p-4 rounded-xl border',
-                      theme === 'dark'
-                        ? 'bg-emerald-900/20 border-emerald-800'
-                        : 'bg-emerald-50 border-emerald-200'
-                    )}>
-                      <p className="text-xs text-emerald-600 mb-2">PRODUCTO FINAL</p>
-                      <div className="flex items-center gap-3">
-                        {order.targetProduct.imageUrl ? (
-                          <img
-                            src={order.targetProduct.imageUrl}
-                            alt={order.targetProduct.name}
-                            className="w-14 h-14 rounded-xl object-cover"
-                          />
-                        ) : (
-                          <div className={cn(
-                            'w-14 h-14 rounded-xl flex items-center justify-center',
-                            theme === 'dark' ? 'bg-gray-600' : 'bg-emerald-100'
-                          )}>
-                            <PackageCheck className="w-7 h-7 text-emerald-500" />
-                          </div>
-                        )}
-                        <div>
-                          <p className={cn(
-                            'font-semibold',
-                            theme === 'dark' ? 'text-white' : 'text-gray-900'
-                          )}>
-                            {order.targetProduct.name}
-                          </p>
-                          <p className="text-sm text-emerald-600">
-                            {order.actualQuantity ?? order.targetQuantity} × {formatWeight(order.targetPortionWeightKg)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center gap-1 text-xs text-gray-500">
-                        <Warehouse className="w-3 h-3" />
-                        {order.targetWarehouse.name}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Waste/Surplus */}
+            {/* Order Header Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                'p-6 rounded-2xl border',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                <div className="flex items-start gap-4">
                   <div className={cn(
-                    'mt-4 p-4 rounded-xl',
-                    order.wasteSurplus.type === 'waste'
-                      ? theme === 'dark'
-                        ? 'bg-red-900/20 border border-red-800'
-                        : 'bg-red-50 border border-red-200'
-                      : order.wasteSurplus.type === 'surplus'
-                        ? theme === 'dark'
-                          ? 'bg-green-900/20 border border-green-800'
-                          : 'bg-green-50 border border-green-200'
-                        : theme === 'dark'
-                          ? 'bg-gray-700 border border-gray-600'
-                          : 'bg-gray-50 border border-gray-200'
+                    'w-14 h-14 rounded-2xl flex items-center justify-center shrink-0',
+                    `bg-gradient-to-br ${statusConfig.bgGradient}`
                   )}>
-                    <div className="flex items-center justify-between">
-                      <span className={cn(
-                        'font-medium',
-                        order.wasteSurplus.type === 'waste' ? 'text-red-600' :
-                        order.wasteSurplus.type === 'surplus' ? 'text-green-600' :
-                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                    <Scale className="w-7 h-7 text-white" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-3 mb-1 flex-wrap">
+                      <h1 className={cn(
+                        'text-2xl md:text-3xl font-bold font-mono',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
                       )}>
-                        {order.wasteSurplus.type === 'waste' ? 'Merma' :
-                         order.wasteSurplus.type === 'surplus' ? 'Sobrante' : 'Sin diferencia'}
-                        {order.status === 'completed' ? ' Real' : ' Esperado'}
+                        {order.orderNumber}
+                      </h1>
+                      <span className={cn(
+                        'inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium',
+                        statusConfig.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                        statusConfig.color === 'blue' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                        statusConfig.color === 'emerald' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                        statusConfig.color === 'red' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                      )}>
+                        <StatusIcon className="w-3.5 h-3.5" />
+                        {statusConfig.label}
                       </span>
-                      <span className={cn(
-                        'text-xl font-bold flex items-center gap-2',
-                        order.wasteSurplus.type === 'waste' ? 'text-red-600' :
-                        order.wasteSurplus.type === 'surplus' ? 'text-green-600' :
-                        'text-gray-600'
-                      )}>
-                        {order.wasteSurplus.type === 'waste' && <AlertTriangle className="w-5 h-5" />}
-                        {order.wasteSurplus.type === 'surplus' && <CheckCircle className="w-5 h-5" />}
-                        {order.wasteSurplus.type !== 'exact' && (
-                          <>
-                            {order.wasteSurplus.type === 'waste' ? '-' : '+'}
-                            {formatWeight(Math.abs(order.actualWasteSurplusKg ?? order.wasteSurplus.kg))}
-                          </>
-                        )}
-                        {order.wasteSurplus.type === 'exact' && formatWeight(0)}
+                    </div>
+                    <p className="text-sm text-gray-500 mb-2">Orden de Produccion / Dosificacion</p>
+                    <div className="flex items-center gap-4 text-sm text-gray-500 flex-wrap">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4" />
+                        {formatDate(order.createdAt)}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <User className="w-4 h-4" />
+                        {order.createdBy}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Materials Card */}
-                {order.materials.length > 0 && (
+                <div className="flex items-center gap-4">
+                  {/* Receive Production Button - Only when in_progress */}
+                  {order.status === 'in_progress' && (
+                    <Link href={`/dashboard/market/production/dosification/${order.id}/receive`}>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className={cn(
+                          'flex items-center gap-2 px-5 py-3 rounded-xl font-medium transition-colors',
+                          'bg-emerald-600 hover:bg-emerald-700 text-white'
+                        )}
+                      >
+                        <PackageCheck className="w-5 h-5" />
+                        Recibir Produccion
+                      </motion.button>
+                    </Link>
+                  )}
                   <div className={cn(
-                    'p-6 rounded-2xl border',
-                    theme === 'dark'
-                      ? 'bg-gray-800/50 border-gray-700'
-                      : 'bg-white border-gray-200'
+                    'p-4 rounded-xl',
+                    theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
                   )}>
-                    <h2 className={cn(
-                      'text-lg font-semibold mb-4',
+                    <p className="text-sm text-gray-500 mb-1">Costo Total</p>
+                    <p className={cn(
+                      'text-3xl font-bold',
                       theme === 'dark' ? 'text-white' : 'text-gray-900'
                     )}>
-                      Materiales
-                    </h2>
-                    <div className="space-y-3">
-                      {order.materials.map(m => (
-                        <div
-                          key={m.id}
-                          className={cn(
-                            'flex items-center gap-4 p-3 rounded-xl',
-                            theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                          )}
-                        >
-                          <div className="flex-1">
-                            <p className={cn(
-                              'font-medium',
-                              theme === 'dark' ? 'text-white' : 'text-gray-900'
-                            )}>
-                              {m.productName}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {m.warehouseName}
-                            </p>
-                          </div>
-                          <span className={cn(
-                            'font-medium',
-                            theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                          )}>
-                            × {m.quantity}
-                          </span>
-                          <span className={cn(
-                            'font-bold w-24 text-right',
-                            theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
-                          )}>
-                            {formatCurrency(m.totalCost)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Activity Log */}
-                <div className={cn(
-                  'p-6 rounded-2xl border',
-                  theme === 'dark'
-                    ? 'bg-gray-800/50 border-gray-700'
-                    : 'bg-white border-gray-200'
-                )}>
-                  <h2 className={cn(
-                    'text-lg font-semibold mb-4',
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>
-                    Historial de Actividad
-                  </h2>
-                  <div className="space-y-4">
-                    {order.activityLog.map((log, index) => (
-                      <div key={log.id} className="flex gap-4">
-                        <div className={cn(
-                          'w-2 h-2 mt-2 rounded-full flex-shrink-0',
-                          index === 0 ? 'bg-emerald-500' : 'bg-gray-400'
-                        )} />
-                        <div className="flex-1">
-                          <p className={cn(
-                            'text-sm font-medium',
-                            theme === 'dark' ? 'text-white' : 'text-gray-900'
-                          )}>
-                            {log.action.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {log.performedBy} - {formatDate(log.performedAt)}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                      {formatCurrency(order.costs.total)}
+                    </p>
                   </div>
                 </div>
               </div>
+            </motion.div>
+          </div>
 
-              {/* Right Column - Costs & Info */}
-              <div className="space-y-6">
-                {/* Costs Card */}
-                <div className={cn(
-                  'p-6 rounded-2xl border',
-                  theme === 'dark'
-                    ? 'bg-gray-800/50 border-gray-700'
-                    : 'bg-white border-gray-200'
-                )}>
-                  <h2 className={cn(
-                    'text-lg font-semibold mb-4 flex items-center gap-2',
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>
-                    <DollarSign className="w-5 h-5" />
-                    Costos
-                  </h2>
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-sm">
-                      <div className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
-                        <span>Materia prima</span>
-                        <span className="block text-xs">
-                          ({order.sourceQuantity} × {formatCurrency(order.sourceUnitCost)})
-                        </span>
-                      </div>
-                      <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
-                        {formatCurrency(order.costs.rawMaterial)}
-                      </span>
-                    </div>
-                    {order.costs.materials > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
-                          Materiales
-                        </span>
-                        <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
-                          {formatCurrency(order.costs.materials)}
-                        </span>
-                      </div>
-                    )}
-                    {order.costs.labor > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
-                          Mano de obra
-                        </span>
-                        <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
-                          {formatCurrency(order.costs.labor)}
-                        </span>
-                      </div>
-                    )}
-                    <div className={cn(
-                      'flex justify-between pt-3 border-t font-bold',
-                      theme === 'dark' ? 'border-gray-600' : 'border-gray-200'
-                    )}>
-                      <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
-                        Total
-                      </span>
-                      <span className="text-emerald-600">
-                        {formatCurrency(order.costs.total)}
-                      </span>
-                    </div>
-                    <div className={cn(
-                      'flex justify-between text-lg font-bold pt-2',
-                      theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
-                    )}>
-                      <span>Costo/Unidad</span>
-                      <span>{formatCurrency(order.costs.perUnit)}</span>
-                    </div>
-                  </div>
-                </div>
+          {/* Activity Log */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className={cn(
+              'max-w-6xl mx-auto mb-6 p-6 rounded-2xl border',
+              theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+            )}
+          >
+            <div className="flex items-center gap-3 mb-5">
+              <div className={cn(
+                'p-2 rounded-xl',
+                theme === 'dark' ? 'bg-indigo-900/30' : 'bg-indigo-100'
+              )}>
+                <History className="w-5 h-5 text-indigo-500" />
+              </div>
+              <h3 className={cn(
+                'font-semibold',
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>Historial de Actividad</h3>
+            </div>
 
-                {/* Info Card */}
-                <div className={cn(
-                  'p-6 rounded-2xl border',
-                  theme === 'dark'
-                    ? 'bg-gray-800/50 border-gray-700'
-                    : 'bg-white border-gray-200'
-                )}>
-                  <h2 className={cn(
-                    'text-lg font-semibold mb-4 flex items-center gap-2',
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>
-                    <FileText className="w-5 h-5" />
-                    Información
-                  </h2>
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">Creado por</p>
+            <div className="relative">
+              <div className={cn(
+                'absolute left-[17px] top-2 bottom-2 w-0.5',
+                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+              )} />
+
+              <div className="space-y-4">
+                {order.activityLog.map((log, idx) => (
+                  <div key={log.id} className="flex items-start gap-4 relative">
+                    <div className={cn(
+                      'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                      idx === 0
+                        ? theme === 'dark' ? 'bg-emerald-900/50 ring-4 ring-gray-800' : 'bg-emerald-100 ring-4 ring-white'
+                        : theme === 'dark' ? 'bg-gray-700 ring-4 ring-gray-800' : 'bg-gray-100 ring-4 ring-white'
+                    )}>
+                      {log.action === 'created' && <FileText className="w-4 h-4 text-blue-500" />}
+                      {log.action === 'materials_delivered' && <Boxes className="w-4 h-4 text-amber-500" />}
+                      {log.action === 'received' && <PackageCheck className="w-4 h-4 text-emerald-500" />}
+                      {!['created', 'materials_delivered', 'received'].includes(log.action) && (
+                        <Clock className="w-4 h-4 text-gray-400" />
+                      )}
+                    </div>
+                    <div className="pt-1">
                       <p className={cn(
-                        'flex items-center gap-2',
+                        'text-sm font-medium',
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
                       )}>
-                        <User className="w-4 h-4 text-gray-400" />
-                        {order.createdBy}
+                        {log.action === 'created' && 'Orden creada'}
+                        {log.action === 'materials_delivered' && 'Materiales entregados'}
+                        {log.action === 'received' && 'Produccion recibida'}
+                        {!['created', 'materials_delivered', 'received'].includes(log.action) &&
+                          log.action.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                        }
                       </p>
+                      <p className="text-xs text-gray-500">por {log.performedBy}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(log.performedAt)}</p>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">Fecha de creación</p>
-                      <p className={cn(
-                        'flex items-center gap-2',
-                        theme === 'dark' ? 'text-white' : 'text-gray-900'
-                      )}>
-                        <Calendar className="w-4 h-4 text-gray-400" />
-                        {formatDate(order.createdAt)}
-                      </p>
-                    </div>
-                    {order.startedAt && (
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Inicio de producción</p>
-                        <p className={cn(
-                          'flex items-center gap-2',
-                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                        )}>
-                          <Play className="w-4 h-4 text-blue-500" />
-                          {formatDate(order.startedAt)}
-                        </p>
-                      </div>
-                    )}
-                    {order.completedAt && (
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Completada</p>
-                        <p className={cn(
-                          'flex items-center gap-2',
-                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                        )}>
-                          <CheckCircle className="w-4 h-4 text-green-500" />
-                          {formatDate(order.completedAt)}
-                        </p>
-                      </div>
-                    )}
-                    {order.lotNumber && (
-                      <div className={cn(
-                        'p-3 rounded-lg',
-                        theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50'
-                      )}>
-                        <p className="text-xs text-emerald-600 mb-1">Número de Lote</p>
-                        <p className={cn(
-                          'font-mono font-bold',
-                          theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'
-                        )}>
-                          {order.lotNumber}
-                        </p>
-                      </div>
-                    )}
-                    {order.expirationDate && (
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Fecha de Vencimiento</p>
-                        <p className={cn(
-                          'flex items-center gap-2',
-                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                        )}>
-                          <Calendar className="w-4 h-4 text-orange-500" />
-                          {new Date(order.expirationDate + 'T00:00:00').toLocaleDateString('es-ES', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          })}
-                        </p>
-                      </div>
-                    )}
-                    {order.notes && (
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Notas</p>
-                        <p className={cn(
-                          'text-sm',
-                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                        )}>
-                          {order.notes}
-                        </p>
-                      </div>
-                    )}
                   </div>
-                </div>
+                ))}
               </div>
             </div>
           </motion.div>
+
+          {/* Content */}
+          <div className="max-w-6xl mx-auto space-y-6">
+
+            {/* Lifecycle Progress */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                'p-6 rounded-2xl border',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <h3 className={cn(
+                'text-sm font-medium mb-6',
+                theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+              )}>
+                Ciclo de Vida
+              </h3>
+
+              <div className="relative">
+                <div className={cn(
+                  'absolute top-6 left-0 right-0 h-1 rounded-full',
+                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                )} />
+                <div
+                  className={cn('absolute top-6 left-0 h-1 rounded-full transition-all duration-500', `bg-gradient-to-r ${statusConfig.bgGradient}`)}
+                  style={{ width: `${Math.max(0, ((statusConfig.step) / (LIFECYCLE_STEPS.length - 1)) * 100)}%` }}
+                />
+
+                <div className="relative flex justify-between">
+                  {LIFECYCLE_STEPS.map((step, index) => {
+                    const isActive = statusConfig.step >= index
+                    const isCurrent = statusConfig.step === index
+                    const StepIcon = step.icon
+
+                    return (
+                      <div key={step.key} className="flex flex-col items-center">
+                        <motion.div
+                          initial={false}
+                          animate={{ scale: isCurrent ? 1.1 : 1 }}
+                          className={cn(
+                            'w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 z-10',
+                            isActive
+                              ? `bg-gradient-to-br ${statusConfig.bgGradient} text-white shadow-lg`
+                              : theme === 'dark'
+                                ? 'bg-gray-700 text-gray-500'
+                                : 'bg-gray-100 text-gray-400'
+                          )}
+                        >
+                          <StepIcon className="w-5 h-5" />
+                        </motion.div>
+                        <span className={cn(
+                          'mt-3 text-xs font-medium',
+                          isActive
+                            ? theme === 'dark' ? 'text-white' : 'text-gray-900'
+                            : 'text-gray-500'
+                        )}>
+                          {step.label}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                {
+                  label: 'Peso Fuente',
+                  value: formatWeight(order.sourceWeightKg),
+                  icon: Scale,
+                  color: 'blue'
+                },
+                {
+                  label: 'Cantidad Final',
+                  value: order.actualQuantity ?? order.targetQuantity,
+                  icon: Package,
+                  color: 'emerald',
+                  suffix: 'uds'
+                },
+                {
+                  label: 'Peso/Unidad',
+                  value: formatWeight(order.targetPortionWeightKg),
+                  icon: Box,
+                  color: 'purple'
+                },
+                {
+                  label: order.wasteSurplus.type === 'waste' ? 'Merma' : order.wasteSurplus.type === 'surplus' ? 'Sobrante' : 'Diferencia',
+                  value: formatWeight(Math.abs(order.actualWasteSurplusKg ?? order.wasteSurplus.kg)),
+                  icon: order.wasteSurplus.type === 'waste' ? AlertTriangle : CheckCircle,
+                  color: order.wasteSurplus.type === 'waste' ? 'red' : order.wasteSurplus.type === 'surplus' ? 'green' : 'gray'
+                }
+              ].map((stat, idx) => (
+                <motion.div
+                  key={stat.label}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.1 }}
+                  className={cn(
+                    'p-5 rounded-2xl border relative overflow-hidden group',
+                    theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                  )}
+                >
+                  <div className="relative">
+                    <div className={cn(
+                      'w-10 h-10 rounded-xl flex items-center justify-center mb-3',
+                      stat.color === 'blue' && (theme === 'dark' ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'),
+                      stat.color === 'purple' && (theme === 'dark' ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600'),
+                      stat.color === 'emerald' && (theme === 'dark' ? 'bg-emerald-900/50 text-emerald-400' : 'bg-emerald-100 text-emerald-600'),
+                      stat.color === 'green' && (theme === 'dark' ? 'bg-green-900/50 text-green-400' : 'bg-green-100 text-green-600'),
+                      stat.color === 'red' && (theme === 'dark' ? 'bg-red-900/50 text-red-400' : 'bg-red-100 text-red-600'),
+                      stat.color === 'gray' && (theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600')
+                    )}>
+                      <stat.icon className="w-5 h-5" />
+                    </div>
+                    <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
+                    <p className={cn(
+                      'text-2xl font-bold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      {stat.value}
+                      {stat.suffix && <span className="text-sm font-normal text-gray-500 ml-1">{stat.suffix}</span>}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Products & Warehouses Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Source Product */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={cn(
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
+                  )}>
+                    <Package className="w-5 h-5 text-blue-500" />
+                  </div>
+                  <h3 className={cn(
+                    'font-semibold',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>Producto Fuente</h3>
+                </div>
+
+                <div className="flex items-center gap-4 mb-4">
+                  {order.sourceProduct.imageUrl ? (
+                    <img
+                      src={order.sourceProduct.imageUrl}
+                      alt={order.sourceProduct.name}
+                      className="w-16 h-16 rounded-xl object-cover"
+                    />
+                  ) : (
+                    <div className={cn(
+                      'w-16 h-16 rounded-xl flex items-center justify-center',
+                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                    )}>
+                      <Package className="w-8 h-8 text-gray-400" />
+                    </div>
+                  )}
+                  <div>
+                    <p className={cn(
+                      'font-semibold text-lg',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>{order.sourceProduct.name}</p>
+                    {order.sourceProduct.sku && (
+                      <p className="text-sm text-gray-500 font-mono">SKU: {order.sourceProduct.sku}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className={cn(
+                  'pt-4 border-t space-y-2',
+                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                )}>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Cantidad:</span>
+                    <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>{order.sourceQuantity} {order.sourceProduct.unit}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Peso total:</span>
+                    <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>{formatWeight(order.sourceWeightKg)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Costo unitario:</span>
+                    <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>{formatCurrency(order.sourceUnitCost)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-500 pt-2">
+                    <Warehouse className="w-4 h-4" />
+                    {order.sourceWarehouse.name}
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Target Product */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-emerald-900/20 border-emerald-800' : 'bg-emerald-50 border-emerald-200'
+                )}
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={cn(
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-emerald-900/50' : 'bg-emerald-100'
+                  )}>
+                    <PackageCheck className="w-5 h-5 text-emerald-500" />
+                  </div>
+                  <h3 className={cn(
+                    'font-semibold',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>Producto Final</h3>
+                </div>
+
+                <div className="flex items-center gap-4 mb-4">
+                  {order.targetProduct.imageUrl ? (
+                    <img
+                      src={order.targetProduct.imageUrl}
+                      alt={order.targetProduct.name}
+                      className="w-16 h-16 rounded-xl object-cover"
+                    />
+                  ) : (
+                    <div className={cn(
+                      'w-16 h-16 rounded-xl flex items-center justify-center',
+                      theme === 'dark' ? 'bg-gray-700' : 'bg-emerald-100'
+                    )}>
+                      <PackageCheck className="w-8 h-8 text-emerald-500" />
+                    </div>
+                  )}
+                  <div>
+                    <p className={cn(
+                      'font-semibold text-lg',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>{order.targetProduct.name}</p>
+                    {order.targetProduct.sku && (
+                      <p className="text-sm text-gray-500 font-mono">SKU: {order.targetProduct.sku}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className={cn(
+                  'pt-4 border-t space-y-2',
+                  theme === 'dark' ? 'border-emerald-800' : 'border-emerald-200'
+                )}>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Cantidad:</span>
+                    <span className={cn(
+                      'font-bold',
+                      theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
+                    )}>{order.actualQuantity ?? order.targetQuantity} unidades</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Peso por unidad:</span>
+                    <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>{formatWeight(order.targetPortionWeightKg)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-500 pt-2">
+                    <Warehouse className="w-4 h-4" />
+                    {order.targetWarehouse.name}
+                  </div>
+                </div>
+
+                {/* Lot info */}
+                {order.lotNumber && (
+                  <div className={cn(
+                    'mt-4 p-3 rounded-xl',
+                    theme === 'dark' ? 'bg-emerald-900/30' : 'bg-emerald-100'
+                  )}>
+                    <p className="text-xs text-emerald-600 mb-1">Numero de Lote</p>
+                    <p className={cn(
+                      'font-mono font-bold',
+                      theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'
+                    )}>{order.lotNumber}</p>
+                    {order.expirationDate && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Vence: {formatDate(order.expirationDate)}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            </div>
+
+            {/* Materials Table */}
+            {order.materials.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className={cn(
+                  'rounded-2xl border overflow-hidden',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <div className={cn(
+                  'px-6 py-4 border-b flex items-center gap-3',
+                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                )}>
+                  <div className={cn(
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                  )}>
+                    <Boxes className="w-5 h-5 text-gray-500" />
+                  </div>
+                  <div>
+                    <h3 className={cn(
+                      'font-semibold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>Materiales</h3>
+                    <p className="text-sm text-gray-500">{order.materials.length} materiales en esta orden</p>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className={theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'}>
+                      <tr>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Material</th>
+                        <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cantidad</th>
+                        <th className="text-right py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">P.Unitario</th>
+                        <th className="text-right py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className={cn('divide-y', theme === 'dark' ? 'divide-gray-700' : 'divide-gray-100')}>
+                      {order.materials.map((m) => (
+                        <tr key={m.id} className={cn('transition-colors', theme === 'dark' ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50')}>
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-3">
+                              {m.productImage ? (
+                                <img src={m.productImage} alt={m.productName} className="w-10 h-10 rounded-lg object-cover" />
+                              ) : (
+                                <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100')}>
+                                  <Package className="w-5 h-5 text-gray-400" />
+                                </div>
+                              )}
+                              <div>
+                                <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{m.productName}</p>
+                                <p className="text-xs text-gray-500">{m.warehouseName}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <span className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{m.quantity}</span>
+                          </td>
+                          <td className="py-4 px-4 text-right text-gray-500">{formatCurrency(m.unitCost)}</td>
+                          <td className="py-4 px-4 text-right">
+                            <span className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{formatCurrency(m.totalCost)}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className={cn('border-t-2', theme === 'dark' ? 'border-gray-600 bg-gray-900/50' : 'border-gray-200 bg-gray-50')}>
+                      <tr>
+                        <td colSpan={3} className="py-4 px-6 text-right font-semibold text-gray-500">Total Materiales:</td>
+                        <td className="py-4 px-4 text-right">
+                          <span className={cn('text-lg font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{formatCurrency(order.costs.materials)}</span>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Costs Summary & Notes */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Costs */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={cn('p-2 rounded-xl', theme === 'dark' ? 'bg-emerald-900/30' : 'bg-emerald-100')}>
+                    <DollarSign className="w-5 h-5 text-emerald-500" />
+                  </div>
+                  <h3 className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Desglose de Costos</h3>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Materia prima ({order.sourceQuantity} x {formatCurrency(order.sourceUnitCost)})</span>
+                    <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>{formatCurrency(order.costs.rawMaterial)}</span>
+                  </div>
+                  {order.costs.materials > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Materiales</span>
+                      <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>{formatCurrency(order.costs.materials)}</span>
+                    </div>
+                  )}
+                  {order.costs.labor > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Mano de obra</span>
+                      <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>{formatCurrency(order.costs.labor)}</span>
+                    </div>
+                  )}
+                  <div className={cn('flex justify-between pt-3 border-t font-bold', theme === 'dark' ? 'border-gray-600' : 'border-gray-200')}>
+                    <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>TOTAL</span>
+                    <span className="text-emerald-600">{formatCurrency(order.costs.total)}</span>
+                  </div>
+                  <div className={cn('flex justify-between text-lg pt-2', theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600')}>
+                    <span className="font-bold">COSTO/UNIDAD</span>
+                    <span className="font-bold">{formatCurrency(order.costs.perUnit)}</span>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Notes */}
+              {order.notes && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6 }}
+                  className={cn(
+                    'p-6 rounded-2xl border',
+                    theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                  )}
+                >
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className={cn('p-2 rounded-xl', theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100')}>
+                      <FileText className="w-5 h-5 text-amber-500" />
+                    </div>
+                    <h3 className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Notas</h3>
+                  </div>
+                  <p className={cn('text-sm leading-relaxed', theme === 'dark' ? 'text-gray-300' : 'text-gray-600')}>{order.notes}</p>
+                </motion.div>
+              )}
+            </div>
+          </div>
         </div>
       </DashboardLayout>
     </ProtectedRoute>
