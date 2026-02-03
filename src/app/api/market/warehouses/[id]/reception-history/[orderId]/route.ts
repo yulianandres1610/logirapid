@@ -44,10 +44,10 @@ export async function GET(
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type')
 
-    if (!type || !['consignment', 'purchase'].includes(type)) {
+    if (!type || !['consignment', 'purchase', 'production'].includes(type)) {
       return NextResponse.json({
         success: false,
-        error: 'Tipo de orden requerido (consignment o purchase)'
+        error: 'Tipo de orden requerido (consignment, purchase o production)'
       }, { status: 400 })
     }
 
@@ -161,7 +161,7 @@ export async function GET(
         }
       })
 
-    } else {
+    } else if (type === 'purchase') {
       // Get purchase order details
       const purchaseResult = await db.query(`
         SELECT
@@ -267,6 +267,107 @@ export async function GET(
             totalOrdered: linesResult.rows.reduce((sum, l) => sum + (l.quantity || 0), 0),
             totalReceived: linesResult.rows.reduce((sum, l) => sum + (l.quantity_received || 0), 0),
             totalLines: linesResult.rows.length
+          }
+        }
+      })
+    } else if (type === 'production') {
+      // Get production order details
+      const productionResult = await db.query(`
+        SELECT
+          po.id,
+          po.order_number,
+          po.status,
+          po.completed_at as received_at,
+          po.created_at,
+          po.target_product_id,
+          po.target_variant_id,
+          po.target_quantity,
+          po.actual_quantity,
+          po.lot_number,
+          po.expiration_date,
+          po.cost_per_unit,
+          tp.name as target_product_name,
+          tp.sku as target_product_sku,
+          tp.barcode as target_product_barcode,
+          tv.variant_name as target_variant_name,
+          w.name as warehouse_name,
+          w.code as warehouse_code,
+          COALESCE(u.firstname || ' ' || u.lastname, u.email) as completed_by_name
+        FROM market_production_orders po
+        LEFT JOIN market_products tp ON tp.id = po.target_product_id
+        LEFT JOIN market_product_variants tv ON tv.id = po.target_variant_id
+        LEFT JOIN market_warehouses w ON w.id = po.target_warehouse_id
+        LEFT JOIN users u ON u.id = po.completed_by
+        WHERE po.id = $1 AND po.company_id = $2 AND po.target_warehouse_id = $3
+      `, [orderIdNum, payload.companyId, warehouseId])
+
+      if (productionResult.rows.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Orden de producción no encontrada'
+        }, { status: 404 })
+      }
+
+      const production = productionResult.rows[0]
+
+      // Get lot inventory entry for this production order
+      const lotInventory = await db.query(`
+        SELECT
+          pli.lot_number,
+          pli.expiration_date,
+          pli.quantity_initial,
+          pli.quantity_available,
+          pli.quantity_sold,
+          pli.received_at,
+          pli.unit_cost,
+          mp.name as product_name
+        FROM production_lot_inventory pli
+        JOIN market_products mp ON mp.id = pli.product_id
+        WHERE pli.production_order_id = $1
+        ORDER BY pli.received_at DESC
+      `, [orderIdNum])
+
+      // Create a single "line" for production
+      const lines = [{
+        lineId: production.id,
+        productId: production.target_product_id,
+        productName: production.target_product_name + (production.target_variant_name ? ` - ${production.target_variant_name}` : ''),
+        sku: production.target_product_sku,
+        barcode: production.target_product_barcode,
+        quantityOrdered: parseFloat(production.target_quantity) || 0,
+        quantityReceived: parseFloat(production.actual_quantity) || 0,
+        lotNumber: production.lot_number,
+        expirationDate: production.expiration_date,
+        unitCost: parseFloat(production.cost_per_unit) || 0
+      }]
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          orderType: 'production',
+          order: {
+            id: production.id,
+            orderNumber: production.order_number,
+            status: production.status,
+            receivedAt: production.received_at,
+            createdAt: production.created_at,
+            supplier: {
+              id: 0,
+              code: 'PROD',
+              name: 'Producción Interna'
+            },
+            warehouse: {
+              name: production.warehouse_name,
+              code: production.warehouse_code
+            },
+            receivedBy: production.completed_by_name
+          },
+          lines,
+          lotInventory: lotInventory.rows,
+          totals: {
+            totalOrdered: parseFloat(production.target_quantity) || 0,
+            totalReceived: parseFloat(production.actual_quantity) || 0,
+            totalLines: 1
           }
         }
       })

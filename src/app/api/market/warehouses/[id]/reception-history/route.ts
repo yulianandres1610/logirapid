@@ -25,7 +25,7 @@ async function getPayload(): Promise<JWTPayload | null> {
 
 /**
  * GET /api/market/warehouses/[id]/reception-history
- * Obtiene historial de recepciones (consignaciones y compras)
+ * Obtiene historial de recepciones (consignaciones, compras y producciones)
  */
 export async function GET(
   request: NextRequest,
@@ -40,7 +40,7 @@ export async function GET(
     const { id } = await params
     const warehouseId = parseInt(id)
     const { searchParams } = new URL(request.url)
-    const type = searchParams.get('type') // 'consignment', 'purchase', or null for both
+    const type = searchParams.get('type') // 'consignment', 'purchase', 'production', or null for all
     const limit = parseInt(searchParams.get('limit') || '50')
 
     console.log('[Reception History] Query params:', { companyId: payload.companyId, warehouseId, type, limit })
@@ -131,8 +131,34 @@ export async function GET(
 
     console.log('[Reception History] Purchase results:', purchaseReceptions.length)
 
+    // Get production receptions
+    const productionReceptions = (type === 'consignment' || type === 'purchase') ? [] : (await db.query(`
+      SELECT DISTINCT
+        po.id,
+        po.order_number,
+        'production' as order_type,
+        po.status,
+        po.completed_at as received_at,
+        'PROD' as supplier_code,
+        'Producción Interna' as supplier_name,
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as received_by_name,
+        COALESCE(po.actual_quantity, 0)::text as total_units,
+        '1' as total_lines
+      FROM market_production_orders po
+      LEFT JOIN users u ON u.id = po.completed_by
+      WHERE po.company_id = $1
+        AND po.status = 'completed'
+        AND po.target_warehouse_id = $2
+        AND po.actual_quantity IS NOT NULL
+        AND po.actual_quantity > 0
+      ORDER BY po.completed_at DESC
+      LIMIT $3
+    `, [payload.companyId, warehouseId, limit])).rows
+
+    console.log('[Reception History] Production results:', productionReceptions.length)
+
     // Combine and sort by date
-    const allReceptions = [...consignmentReceptions, ...purchaseReceptions]
+    const allReceptions = [...consignmentReceptions, ...purchaseReceptions, ...productionReceptions]
       .sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime())
       .slice(0, limit)
 
@@ -143,6 +169,7 @@ export async function GET(
         summary: {
           totalConsignments: consignmentReceptions.length,
           totalPurchases: purchaseReceptions.length,
+          totalProductions: productionReceptions.length,
           totalUnits: allReceptions.reduce((sum, r) => sum + parseInt(r.total_units || '0'), 0)
         }
       }

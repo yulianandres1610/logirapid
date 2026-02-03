@@ -20,7 +20,8 @@ import {
   History,
   Eye,
   ChevronRight,
-  Printer
+  Printer,
+  Factory
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
@@ -50,12 +51,16 @@ interface OrderLine {
 }
 
 interface DetectedOrder {
-  orderType: 'consignment' | 'purchase'
+  orderType: 'consignment' | 'purchase' | 'production'
   orderId: number
   orderNumber: string
   supplier: Supplier
   warehouseId: number
   lines: OrderLine[]
+  // Production-specific fields
+  lotNumber?: string
+  expirationDate?: string
+  costPerUnit?: number
 }
 
 interface ReceivedLine {
@@ -69,7 +74,7 @@ interface ReceivedLine {
 interface ReceptionHistoryItem {
   id: number
   order_number: string
-  order_type: 'consignment' | 'purchase'
+  order_type: 'consignment' | 'purchase' | 'production'
   status: string
   received_at: string
   supplier_code: string
@@ -191,7 +196,7 @@ export default function UnifiedReceptionView({
 
   // History states
   const [showHistory, setShowHistory] = useState(false)
-  const [historyType, setHistoryType] = useState<'consignment' | 'purchase' | null>(null)
+  const [historyType, setHistoryType] = useState<'consignment' | 'purchase' | 'production' | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyItems, setHistoryItems] = useState<ReceptionHistoryItem[]>([])
   const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null)
@@ -246,10 +251,14 @@ export default function UnifiedReceptionView({
   })
 
   // Generate lot number
-  const generateLotNumber = (supplierCode: string, index: number): string => {
+  const generateLotNumber = (supplierCode: string, index: number, orderType?: string): string => {
     const today = new Date()
     const dateStr = today.toISOString().split('T')[0].replace(/-/g, '').slice(2)
     const seq = (index + 1).toString().padStart(2, '0')
+    // For production orders, use PRD-YYMMDD-XXXX format
+    if (orderType === 'production') {
+      return `PRD-${dateStr}-${seq.padStart(4, '0')}`
+    }
     return `${supplierCode}${dateStr}${seq}`
   }
 
@@ -276,8 +285,8 @@ export default function UnifiedReceptionView({
             lineId: line.lineId,
             productId: line.productId,
             quantityReceived: 0,
-            lotNumber: generateLotNumber(order.supplier.code, index),
-            expirationDate: ''
+            lotNumber: order.lotNumber || generateLotNumber(order.supplier.code, index, order.orderType),
+            expirationDate: order.expirationDate || ''
           })
         })
         setReceivedLines(initialLines)
@@ -299,7 +308,7 @@ export default function UnifiedReceptionView({
   }
 
   // Fetch history
-  const fetchHistory = async (type: 'consignment' | 'purchase') => {
+  const fetchHistory = async (type: 'consignment' | 'purchase' | 'production') => {
     setHistoryType(type)
     setShowHistory(true)
     setHistoryLoading(true)
@@ -543,7 +552,8 @@ export default function UnifiedReceptionView({
             receivedAt: receptionData.receivedAt
           },
           copies: 1,
-          sourceType: receptionData.orderType === 'consignment' ? 'consignment_order' : 'purchase_order',
+          sourceType: receptionData.orderType === 'consignment' ? 'consignment_order' :
+                      receptionData.orderType === 'purchase' ? 'purchase_order' : 'production_order',
           sourceId: receptionData.orderId,
           warehouseId: receptionData.warehouse.id
         })
@@ -609,7 +619,8 @@ export default function UnifiedReceptionView({
               source: lastReceptionData.orderType
             },
             copies: 1,
-            sourceType: lastReceptionData.orderType === 'consignment' ? 'consignment_order' : 'purchase_order',
+            sourceType: lastReceptionData.orderType === 'consignment' ? 'consignment_order' :
+                        lastReceptionData.orderType === 'purchase' ? 'purchase_order' : 'production_order',
             sourceId: lastReceptionData.orderId,
             warehouseId: lastReceptionData.warehouse.id
           })
@@ -1423,7 +1434,7 @@ export default function UnifiedReceptionView({
               type="text"
               value={searchCode}
               onChange={(e) => setSearchCode(e.target.value.toUpperCase())}
-              placeholder="CONS-2025-0001 o PUR-2025-0001"
+              placeholder="CONS-2025-0001, PUR-2025-0001 o PRD-2025-0001"
               className={cn(
                 'w-full pl-12 pr-4 py-4 rounded-xl border text-lg font-mono',
                 'focus:ring-2 focus:ring-emerald-500 focus:border-transparent',
@@ -1482,7 +1493,7 @@ export default function UnifiedReceptionView({
           <p className="text-sm text-gray-500 text-center mb-4">
             Ver historial de recepciones:
           </p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -1514,6 +1525,23 @@ export default function UnifiedReceptionView({
               <ShoppingCart className="w-6 h-6 mx-auto mb-2 text-blue-600" />
               <p className="text-sm font-medium text-blue-700 dark:text-blue-400">
                 Compras
+              </p>
+              <p className="text-xs text-gray-500 mt-1">Ver recibidas</p>
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => fetchHistory('production')}
+              className={cn(
+                'p-4 rounded-xl text-center transition-colors cursor-pointer',
+                theme === 'dark'
+                  ? 'bg-purple-900/20 hover:bg-purple-900/40'
+                  : 'bg-purple-50 hover:bg-purple-100'
+              )}
+            >
+              <Factory className="w-6 h-6 mx-auto mb-2 text-purple-600" />
+              <p className="text-sm font-medium text-purple-700 dark:text-purple-400">
+                Producción
               </p>
               <p className="text-xs text-gray-500 mt-1">Ver recibidas</p>
             </motion.button>

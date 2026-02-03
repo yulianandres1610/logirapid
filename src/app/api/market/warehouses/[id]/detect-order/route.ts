@@ -40,7 +40,7 @@ interface OrderLine {
 }
 
 interface DetectedOrder {
-  orderType: 'consignment' | 'purchase'
+  orderType: 'consignment' | 'purchase' | 'production'
   orderId: number
   orderNumber: string
   supplier: {
@@ -50,6 +50,10 @@ interface DetectedOrder {
   }
   warehouseId: number
   lines: OrderLine[]
+  // Production-specific fields
+  lotNumber?: string
+  expirationDate?: string
+  costPerUnit?: number
 }
 
 /**
@@ -274,6 +278,83 @@ export async function GET(
           },
           warehouseId: purchase.warehouse_id || warehouseId,
           lines
+        }
+      }
+    }
+
+    // Try to detect production order (PRD-YYYY-XXXX)
+    if (!detectedOrder && (code.startsWith('PRD-') || code.startsWith('PROD-'))) {
+      const productionResult = await db.query(`
+        SELECT
+          po.id, po.order_number, po.status, po.target_warehouse_id,
+          po.target_product_id, po.target_variant_id, po.target_quantity,
+          po.actual_quantity, po.lot_number, po.expiration_date,
+          po.cost_per_unit,
+          tp.name as target_product_name,
+          tp.sku as target_product_sku,
+          tp.barcode as target_product_barcode,
+          tp.image_url as target_product_image,
+          tv.variant_name as target_variant_name,
+          tv.sku as target_variant_sku,
+          tv.barcode as target_variant_barcode
+        FROM market_production_orders po
+        LEFT JOIN market_products tp ON po.target_product_id = tp.id
+        LEFT JOIN market_product_variants tv ON po.target_variant_id = tv.id
+        WHERE (po.order_number = $1 OR po.order_number ILIKE $2)
+          AND po.company_id = $3
+          AND po.status = 'in_progress'
+      `, [code, `%${code}%`, payload.companyId])
+
+      if (productionResult.rows.length > 0) {
+        const order = productionResult.rows[0]
+
+        // Check if order is for this warehouse
+        if (order.target_warehouse_id && order.target_warehouse_id !== warehouseId) {
+          return NextResponse.json({
+            success: false,
+            error: `Esta orden de producción es para el almacén con ID ${order.target_warehouse_id}, no para este almacén`
+          }, { status: 400 })
+        }
+
+        // Check if already received
+        if (order.actual_quantity !== null && order.actual_quantity > 0) {
+          return NextResponse.json({
+            success: false,
+            error: 'Esta orden de producción ya fue recibida'
+          }, { status: 400 })
+        }
+
+        // For production, we have a single "line" which is the target product
+        const lines: OrderLine[] = [{
+          lineId: order.id, // Use order id as line id for production
+          productId: order.target_product_id,
+          productName: order.target_product_name,
+          sku: order.target_product_sku || '',
+          barcode: order.target_product_barcode || null,
+          variantId: order.target_variant_id || null,
+          variantName: order.target_variant_name || null,
+          variantSku: order.target_variant_sku || null,
+          variantBarcode: order.target_variant_barcode || null,
+          quantityOrdered: order.target_quantity,
+          quantityReceived: 0,
+          quantityPending: order.target_quantity,
+          unitCost: parseFloat(order.cost_per_unit) || 0
+        }]
+
+        detectedOrder = {
+          orderType: 'production',
+          orderId: order.id,
+          orderNumber: order.order_number,
+          supplier: {
+            id: 0,
+            code: 'PROD',
+            name: 'Producción Interna'
+          },
+          warehouseId: order.target_warehouse_id || warehouseId,
+          lines,
+          lotNumber: order.lot_number || undefined,
+          expirationDate: order.expiration_date || undefined,
+          costPerUnit: parseFloat(order.cost_per_unit) || 0
         }
       }
     }

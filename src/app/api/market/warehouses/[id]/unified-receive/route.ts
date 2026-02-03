@@ -114,7 +114,7 @@ interface ReceivedLine {
 }
 
 interface ReceiveRequest {
-  orderType: 'consignment' | 'purchase'
+  orderType: 'consignment' | 'purchase' | 'production'
   orderId: number
   lines: ReceivedLine[]
 }
@@ -649,6 +649,183 @@ export async function POST(
 
       // Note: Individual product inventory movements are created per line item above
       // This is just a log note - the actual stock movements happen in the line processing
+    } else if (orderType === 'production') {
+      // Process production order reception
+      const productionResult = await db.query(`
+        SELECT po.*,
+               tp.name as target_product_name,
+               tp.sku as target_product_sku,
+               tp.barcode as target_product_barcode
+        FROM market_production_orders po
+        LEFT JOIN market_products tp ON tp.id = po.target_product_id
+        WHERE po.id = $1 AND po.company_id = $2
+      `, [orderId, payload.companyId])
+
+      if (productionResult.rows.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Orden de producción no encontrada'
+        }, { status: 404 })
+      }
+
+      const production = productionResult.rows[0]
+
+      if (production.status === 'completed') {
+        return NextResponse.json({
+          success: false,
+          error: 'Esta orden de producción ya fue completada'
+        }, { status: 400 })
+      }
+
+      if (production.status !== 'in_progress') {
+        return NextResponse.json({
+          success: false,
+          error: `No se puede recibir una orden de producción con estado "${production.status}". Debe estar "in_progress".`
+        }, { status: 400 })
+      }
+
+      orderNumber = production.order_number
+      supplierCode = 'PROD'
+      supplierName = 'Producción Interna'
+
+      // For production, we expect a single line with the target product
+      const line = lines[0]
+      if (!line || line.quantityReceived <= 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Debe especificar la cantidad recibida'
+        }, { status: 400 })
+      }
+
+      const productionProductId = parseInt(production.target_product_id)
+      const productionVariantId = production.target_variant_id ? parseInt(production.target_variant_id) : null
+      const productionQty = parseFloat(String(line.quantityReceived)) || 0
+      const unitCost = parseFloat(production.cost_per_unit) || 0
+
+      // Generate lot number if not provided (PRD-YYMMDD-XXXX format)
+      let lotNumber = line.lotNumber
+      if (!lotNumber) {
+        const seqResult = await db.query(`
+          SELECT COUNT(*) as count FROM production_lot_inventory
+          WHERE lot_number LIKE $1 AND company_id = $2
+        `, [`PRD-${dateStr}%`, payload.companyId])
+        const seq = (parseInt(seqResult.rows[0]?.count || '0') + 1).toString().padStart(4, '0')
+        lotNumber = `PRD-${dateStr}-${seq}`
+      }
+
+      // Create FIFO entry in production_lot_inventory
+      await db.query(`
+        INSERT INTO production_lot_inventory (
+          company_id, warehouse_id, product_id, variant_id, production_order_id,
+          lot_number, expiration_date, manufacturing_date,
+          quantity_initial, quantity_available, unit_cost
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_DATE, $8, $9, $10)
+        ON CONFLICT (company_id, lot_number) DO UPDATE SET
+          quantity_initial = production_lot_inventory.quantity_initial + EXCLUDED.quantity_initial,
+          quantity_available = production_lot_inventory.quantity_available + EXCLUDED.quantity_available
+      `, [
+        payload.companyId,
+        warehouseId,
+        productionProductId,
+        productionVariantId,
+        orderId,
+        lotNumber,
+        line.expirationDate || null,
+        productionQty,
+        productionQty,
+        unitCost
+      ])
+
+      // Update variant quantity if exists
+      if (productionVariantId) {
+        await db.query(`
+          UPDATE market_product_variants SET
+            quantity_on_hand = COALESCE(quantity_on_hand, 0) + $1
+          WHERE id = $2
+        `, [productionQty, productionVariantId])
+      } else {
+        // Update main product inventory
+        await db.query(`
+          UPDATE market_products SET
+            quantity_on_hand = COALESCE(quantity_on_hand, 0) + $1
+          WHERE id = $2
+        `, [productionQty, productionProductId])
+      }
+
+      // Update warehouse stock
+      const stockExists = await db.query(`
+        SELECT id, quantity_on_hand FROM market_warehouse_stock
+        WHERE warehouse_id = $1 AND product_id = $2 AND (variant_id = $3 OR ($3 IS NULL AND variant_id IS NULL))
+      `, [warehouseId, productionProductId, productionVariantId])
+
+      if (stockExists.rows.length > 0) {
+        await db.query(`
+          UPDATE market_warehouse_stock SET
+            quantity_on_hand = quantity_on_hand + $1,
+            last_movement_at = NOW(),
+            updated_at = NOW()
+          WHERE warehouse_id = $2 AND product_id = $3 AND (variant_id = $4 OR ($4 IS NULL AND variant_id IS NULL))
+        `, [productionQty, warehouseId, productionProductId, productionVariantId])
+      } else {
+        await db.query(`
+          INSERT INTO market_warehouse_stock (
+            warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved,
+            last_movement_at, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, 0, NOW(), NOW(), NOW())
+        `, [warehouseId, productionProductId, productionVariantId, productionQty])
+      }
+
+      // Create warehouse operation for production_in
+      await db.query(`
+        INSERT INTO market_warehouse_operations (
+          company_id, warehouse_id, operation_type, reference_type, reference_id,
+          product_id, variant_id, quantity, unit_cost, total_cost,
+          notes, performed_by, created_at
+        ) VALUES ($1, $2, 'production_in', 'production_order', $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+      `, [
+        payload.companyId,
+        warehouseId,
+        orderId,
+        productionProductId,
+        productionVariantId,
+        productionQty,
+        unitCost,
+        productionQty * unitCost,
+        `Recepción de orden de producción ${orderNumber}`,
+        payload.userId
+      ])
+
+      // Update production order status to completed
+      await db.query(`
+        UPDATE market_production_orders SET
+          status = 'completed',
+          actual_quantity = $1,
+          lot_number = $2,
+          expiration_date = $3,
+          completed_at = NOW(),
+          completed_by = $4
+        WHERE id = $5
+      `, [productionQty, lotNumber, line.expirationDate || null, payload.userId, orderId])
+
+      // Log the completion
+      await db.query(`
+        INSERT INTO market_production_log (
+          production_order_id, action, details, performed_by, performed_at
+        ) VALUES ($1, 'received_via_unified', $2, $3, NOW())
+      `, [
+        orderId,
+        JSON.stringify({
+          quantity: productionQty,
+          lotNumber,
+          expirationDate: line.expirationDate,
+          warehouseId,
+          warehouseName: warehouse.name
+        }),
+        payload.userId
+      ])
+
+      totalUnitsReceived = productionQty
+      processedLines = 1
     }
 
     // Return success with data for printing
