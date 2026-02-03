@@ -51,7 +51,7 @@ interface OrderLine {
 }
 
 interface DetectedOrder {
-  orderType: 'consignment' | 'purchase' | 'production'
+  orderType: 'consignment' | 'purchase' | 'production' | 'production_delivery'
   orderId: number
   orderNumber: string
   supplier: Supplier
@@ -683,6 +683,9 @@ export default function UnifiedReceptionView({
     }
   }
 
+  // Determine if this is a delivery operation (outbound) vs reception (inbound)
+  const isDeliveryMode = detectedOrder?.orderType === 'production_delivery'
+
   // Calculate totals
   const totalToReceive = Array.from(receivedLines.values()).reduce(
     (sum, l) => sum + l.quantityReceived, 0
@@ -804,7 +807,7 @@ export default function UnifiedReceptionView({
             <CheckCircle className="w-10 h-10 text-emerald-600" />
           </motion.div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-            Recepcion Completada
+            {detectedOrder?.orderType === 'production_delivery' ? 'Entrega Completada' : 'Recepcion Completada'}
           </h2>
           <p className="text-gray-500 mb-4">
             {successData.orderNumber}
@@ -1077,7 +1080,7 @@ export default function UnifiedReceptionView({
         )}>
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Progreso de Recepcion
+              {isDeliveryMode ? 'Progreso de Entrega' : 'Progreso de Recepcion'}
             </span>
             <span className="text-sm font-bold text-gray-900 dark:text-white">
               {completedProducts}/{totalProducts} productos ({progressPercent}%)
@@ -1109,7 +1112,7 @@ export default function UnifiedReceptionView({
                 incrementProductByBarcode(productSearchCode)
               }
             }}
-            placeholder="Escanear codigo de producto para contar..."
+            placeholder={isDeliveryMode ? "Escanear codigo de producto para entregar..." : "Escanear codigo de producto para contar..."}
             className={cn(
               'w-full pl-12 pr-4 py-3 rounded-xl border text-sm',
               'focus:ring-2 focus:ring-emerald-500 focus:border-transparent',
@@ -1277,37 +1280,40 @@ export default function UnifiedReceptionView({
                         'px-4 pb-4 pt-2 border-t',
                         theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                       )}>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs text-gray-500 mb-1">Numero de Lote</label>
-                            <input
-                              type="text"
-                              value={receivedData?.lotNumber || ''}
-                              onChange={(e) => updateLineLot(line.lineId, e.target.value)}
-                              placeholder="Ej: ABC241227-01"
-                              className={cn(
-                                'w-full px-3 py-2 rounded-lg border font-mono text-sm',
-                                theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'
-                              )}
-                            />
+                        {/* Only show lot number and expiration for receptions, not deliveries */}
+                        {!isDeliveryMode && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                            <div>
+                              <label className="block text-xs text-gray-500 mb-1">Numero de Lote</label>
+                              <input
+                                type="text"
+                                value={receivedData?.lotNumber || ''}
+                                onChange={(e) => updateLineLot(line.lineId, e.target.value)}
+                                placeholder="Ej: ABC241227-01"
+                                className={cn(
+                                  'w-full px-3 py-2 rounded-lg border font-mono text-sm',
+                                  theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'
+                                )}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />
+                                Fecha Vencimiento <span className="text-gray-400">(opcional)</span>
+                              </label>
+                              <input
+                                type="date"
+                                value={receivedData?.expirationDate || ''}
+                                onChange={(e) => updateLineExpiration(line.lineId, e.target.value)}
+                                className={cn(
+                                  'w-full px-3 py-2 rounded-lg border',
+                                  theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'
+                                )}
+                              />
+                            </div>
                           </div>
-                          <div>
-                            <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
-                              <Calendar className="w-3 h-3" />
-                              Fecha Vencimiento <span className="text-gray-400">(opcional)</span>
-                            </label>
-                            <input
-                              type="date"
-                              value={receivedData?.expirationDate || ''}
-                              onChange={(e) => updateLineExpiration(line.lineId, e.target.value)}
-                              className={cn(
-                                'w-full px-3 py-2 rounded-lg border',
-                                theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'
-                              )}
-                            />
-                          </div>
-                        </div>
-                        <div className="mt-3">
+                        )}
+                        <div>
                           <label className="block text-xs text-gray-500 mb-1">Cantidad manual</label>
                           <input
                             type="number"
@@ -1337,7 +1343,7 @@ export default function UnifiedReceptionView({
         )}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">Total Contado</p>
+              <p className="text-sm text-gray-500">{isDeliveryMode ? 'Total a Entregar' : 'Total Contado'}</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">
                 {formatQty(totalToReceive)} <span className="text-lg text-gray-400">/ {formatQty(totalExpected)}</span> unidades
               </p>
@@ -1364,14 +1370,18 @@ export default function UnifiedReceptionView({
                 disabled={processing || totalToReceive >= totalExpected}
                 className={cn(
                   'flex items-center gap-2 px-4 py-3 rounded-xl transition-all font-medium',
-                  theme === 'dark'
-                    ? 'bg-blue-900/50 text-blue-300 hover:bg-blue-900/70'
-                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200',
+                  isDeliveryMode
+                    ? theme === 'dark'
+                      ? 'bg-orange-900/50 text-orange-300 hover:bg-orange-900/70'
+                      : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                    : theme === 'dark'
+                      ? 'bg-blue-900/50 text-blue-300 hover:bg-blue-900/70'
+                      : 'bg-blue-100 text-blue-700 hover:bg-blue-200',
                   (processing || totalToReceive >= totalExpected) && 'opacity-50 cursor-not-allowed'
                 )}
               >
                 <Package className="w-5 h-5" />
-                Recibir Todo
+                {isDeliveryMode ? 'Entregar Todo' : 'Recibir Todo'}
               </motion.button>
               <motion.button
                 whileHover={{ scale: 1.02 }}
@@ -1379,9 +1389,15 @@ export default function UnifiedReceptionView({
                 onClick={handleProcessReception}
                 disabled={processing || totalToReceive === 0}
                 className={cn(
-                  'flex items-center gap-2 px-6 py-3 rounded-xl transition-all font-medium',
-                  'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg',
-                  (processing || totalToReceive === 0) ? 'opacity-50 cursor-not-allowed' : 'hover:from-emerald-600 hover:to-emerald-700'
+                  'flex items-center gap-2 px-6 py-3 rounded-xl transition-all font-medium text-white shadow-lg',
+                  isDeliveryMode
+                    ? 'bg-gradient-to-r from-orange-500 to-orange-600'
+                    : 'bg-gradient-to-r from-emerald-500 to-emerald-600',
+                  (processing || totalToReceive === 0)
+                    ? 'opacity-50 cursor-not-allowed'
+                    : isDeliveryMode
+                      ? 'hover:from-orange-600 hover:to-orange-700'
+                      : 'hover:from-emerald-600 hover:to-emerald-700'
                 )}
               >
                 {processing ? (
@@ -1392,7 +1408,7 @@ export default function UnifiedReceptionView({
                 ) : (
                   <>
                     <Check className="w-5 h-5" />
-                    Confirmar Recepcion
+                    {isDeliveryMode ? 'Confirmar Entrega' : 'Confirmar Recepcion'}
                   </>
                 )}
               </motion.button>

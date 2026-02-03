@@ -40,7 +40,7 @@ interface OrderLine {
 }
 
 interface DetectedOrder {
-  orderType: 'consignment' | 'purchase' | 'production'
+  orderType: 'consignment' | 'purchase' | 'production' | 'production_delivery'
   orderId: number
   orderNumber: string
   supplier: {
@@ -283,13 +283,23 @@ export async function GET(
     }
 
     // Try to detect production order (PRD-YYYY-XXXX)
+    // Can be either pending (for material delivery) or in_progress (for reception)
     if (!detectedOrder && (code.startsWith('PRD-') || code.startsWith('PROD-'))) {
       const productionResult = await db.query(`
         SELECT
-          po.id, po.order_number, po.status, po.target_warehouse_id,
+          po.id, po.order_number, po.status,
+          po.source_warehouse_id, po.target_warehouse_id,
+          po.source_product_id, po.source_variant_id, po.source_quantity,
+          po.source_weight_kg, po.source_unit_cost,
           po.target_product_id, po.target_variant_id, po.target_quantity,
           po.actual_quantity, po.lot_number, po.expiration_date,
           po.cost_per_unit,
+          sp.name as source_product_name,
+          sp.sku as source_product_sku,
+          sp.barcode as source_product_barcode,
+          sv.variant_name as source_variant_name,
+          sv.sku as source_variant_sku,
+          sv.barcode as source_variant_barcode,
           tp.name as target_product_name,
           tp.sku as target_product_sku,
           tp.barcode as target_product_barcode,
@@ -298,63 +308,139 @@ export async function GET(
           tv.sku as target_variant_sku,
           tv.barcode as target_variant_barcode
         FROM market_production_orders po
+        LEFT JOIN market_products sp ON po.source_product_id = sp.id
+        LEFT JOIN market_product_variants sv ON po.source_variant_id = sv.id
         LEFT JOIN market_products tp ON po.target_product_id = tp.id
         LEFT JOIN market_product_variants tv ON po.target_variant_id = tv.id
         WHERE (po.order_number = $1 OR po.order_number ILIKE $2)
           AND po.company_id = $3
-          AND po.status = 'in_progress'
+          AND po.status IN ('pending', 'in_progress')
       `, [code, `%${code}%`, payload.companyId])
 
       if (productionResult.rows.length > 0) {
         const order = productionResult.rows[0]
 
-        // Check if order is for this warehouse
-        if (order.target_warehouse_id && order.target_warehouse_id !== warehouseId) {
-          return NextResponse.json({
-            success: false,
-            error: `Esta orden de producción es para el almacén con ID ${order.target_warehouse_id}, no para este almacén`
-          }, { status: 400 })
-        }
+        if (order.status === 'pending') {
+          // DELIVERY MODE: Validate warehouse is the source warehouse
+          if (order.source_warehouse_id && order.source_warehouse_id !== warehouseId) {
+            return NextResponse.json({
+              success: false,
+              error: `Los materiales deben entregarse desde el almacén de origen (ID ${order.source_warehouse_id})`
+            }, { status: 400 })
+          }
 
-        // Check if already received
-        if (order.actual_quantity !== null && order.actual_quantity > 0) {
-          return NextResponse.json({
-            success: false,
-            error: 'Esta orden de producción ya fue recibida'
-          }, { status: 400 })
-        }
+          // Get materials for this production order
+          const materialsResult = await db.query(`
+            SELECT
+              pm.id, pm.product_id, pm.variant_id, pm.quantity, pm.warehouse_id,
+              p.name as product_name, p.sku, p.barcode,
+              v.variant_name, v.sku as variant_sku, v.barcode as variant_barcode
+            FROM market_production_materials pm
+            LEFT JOIN market_products p ON pm.product_id = p.id
+            LEFT JOIN market_product_variants v ON pm.variant_id = v.id
+            WHERE pm.production_order_id = $1
+          `, [order.id])
 
-        // For production, we have a single "line" which is the target product
-        const lines: OrderLine[] = [{
-          lineId: order.id, // Use order id as line id for production
-          productId: order.target_product_id,
-          productName: order.target_product_name,
-          sku: order.target_product_sku || '',
-          barcode: order.target_product_barcode || null,
-          variantId: order.target_variant_id || null,
-          variantName: order.target_variant_name || null,
-          variantSku: order.target_variant_sku || null,
-          variantBarcode: order.target_variant_barcode || null,
-          quantityOrdered: order.target_quantity,
-          quantityReceived: 0,
-          quantityPending: order.target_quantity,
-          unitCost: parseFloat(order.cost_per_unit) || 0
-        }]
+          // Build lines: first the source product, then materials
+          const lines: OrderLine[] = []
 
-        detectedOrder = {
-          orderType: 'production',
-          orderId: order.id,
-          orderNumber: order.order_number,
-          supplier: {
-            id: 0,
-            code: 'PROD',
-            name: 'Producción Interna'
-          },
-          warehouseId: order.target_warehouse_id || warehouseId,
-          lines,
-          lotNumber: order.lot_number || undefined,
-          expirationDate: order.expiration_date || undefined,
-          costPerUnit: parseFloat(order.cost_per_unit) || 0
+          // Add source product (raw material)
+          lines.push({
+            lineId: -1, // Special ID for source product
+            productId: order.source_product_id,
+            productName: order.source_product_name,
+            sku: order.source_product_sku || '',
+            barcode: order.source_product_barcode || null,
+            variantId: order.source_variant_id || null,
+            variantName: order.source_variant_name || null,
+            variantSku: order.source_variant_sku || null,
+            variantBarcode: order.source_variant_barcode || null,
+            quantityOrdered: parseFloat(order.source_quantity) || 1,
+            quantityReceived: 0,
+            quantityPending: parseFloat(order.source_quantity) || 1,
+            unitCost: parseFloat(order.source_unit_cost) || 0
+          })
+
+          // Add materials
+          for (const mat of materialsResult.rows) {
+            lines.push({
+              lineId: mat.id,
+              productId: mat.product_id,
+              productName: mat.product_name,
+              sku: mat.sku || '',
+              barcode: mat.barcode || null,
+              variantId: mat.variant_id || null,
+              variantName: mat.variant_name || null,
+              variantSku: mat.variant_sku || null,
+              variantBarcode: mat.variant_barcode || null,
+              quantityOrdered: parseFloat(mat.quantity),
+              quantityReceived: 0,
+              quantityPending: parseFloat(mat.quantity),
+              unitCost: 0
+            })
+          }
+
+          detectedOrder = {
+            orderType: 'production_delivery',
+            orderId: order.id,
+            orderNumber: order.order_number,
+            supplier: {
+              id: 0,
+              code: 'PROD',
+              name: 'Producción - Entrega de Materiales'
+            },
+            warehouseId: order.source_warehouse_id || warehouseId,
+            lines
+          }
+        } else if (order.status === 'in_progress') {
+          // RECEPTION MODE: Validate warehouse is the target warehouse
+          if (order.target_warehouse_id && order.target_warehouse_id !== warehouseId) {
+            return NextResponse.json({
+              success: false,
+              error: `Esta orden de producción es para el almacén con ID ${order.target_warehouse_id}, no para este almacén`
+            }, { status: 400 })
+          }
+
+          // Check if already received
+          if (order.actual_quantity !== null && order.actual_quantity > 0) {
+            return NextResponse.json({
+              success: false,
+              error: 'Esta orden de producción ya fue recibida'
+            }, { status: 400 })
+          }
+
+          // For production reception, we have a single "line" which is the target product
+          const lines: OrderLine[] = [{
+            lineId: order.id, // Use order id as line id for production
+            productId: order.target_product_id,
+            productName: order.target_product_name,
+            sku: order.target_product_sku || '',
+            barcode: order.target_product_barcode || null,
+            variantId: order.target_variant_id || null,
+            variantName: order.target_variant_name || null,
+            variantSku: order.target_variant_sku || null,
+            variantBarcode: order.target_variant_barcode || null,
+            quantityOrdered: order.target_quantity,
+            quantityReceived: 0,
+            quantityPending: order.target_quantity,
+            unitCost: parseFloat(order.cost_per_unit) || 0
+          }]
+
+          detectedOrder = {
+            orderType: 'production',
+            orderId: order.id,
+            orderNumber: order.order_number,
+            supplier: {
+              id: 0,
+              code: 'PROD',
+              name: 'Producción Interna'
+            },
+            warehouseId: order.target_warehouse_id || warehouseId,
+            lines,
+            lotNumber: order.lot_number || undefined,
+            expirationDate: order.expiration_date || undefined,
+            costPerUnit: parseFloat(order.cost_per_unit) || 0
+          }
         }
       }
     }
