@@ -5,23 +5,23 @@ export async function GET() {
   try {
     const results: string[] = []
 
-    // All columns needed for the dosification system
+    // All columns needed for the dosification system (without REFERENCES to avoid ALTER issues)
     const allColumns = [
       // Identification
       { name: 'order_number', type: 'VARCHAR(20)' },
 
       // Source product (raw material)
-      { name: 'source_product_id', type: 'INTEGER REFERENCES market_products(id)' },
-      { name: 'source_variant_id', type: 'INTEGER REFERENCES market_product_variants(id)' },
-      { name: 'source_warehouse_id', type: 'INTEGER REFERENCES market_warehouses(id)' },
+      { name: 'source_product_id', type: 'INTEGER' },
+      { name: 'source_variant_id', type: 'INTEGER' },
+      { name: 'source_warehouse_id', type: 'INTEGER' },
       { name: 'source_quantity', type: 'DECIMAL(15,3) DEFAULT 1' },
       { name: 'source_unit_cost', type: 'DECIMAL(12,4)' },
       { name: 'source_weight_kg', type: 'DECIMAL(10,4)' },
 
       // Target product (manufactured)
-      { name: 'target_product_id', type: 'INTEGER REFERENCES market_products(id)' },
-      { name: 'target_variant_id', type: 'INTEGER REFERENCES market_product_variants(id)' },
-      { name: 'target_warehouse_id', type: 'INTEGER REFERENCES market_warehouses(id)' },
+      { name: 'target_product_id', type: 'INTEGER' },
+      { name: 'target_variant_id', type: 'INTEGER' },
+      { name: 'target_warehouse_id', type: 'INTEGER' },
       { name: 'target_portion_weight_kg', type: 'DECIMAL(10,4)' },
       { name: 'target_quantity', type: 'INTEGER' },
 
@@ -47,7 +47,7 @@ export async function GET() {
       // Lot tracking
       { name: 'lot_number', type: 'VARCHAR(50)' },
       { name: 'expiration_date', type: 'DATE' },
-      { name: 'materials_validation_status', type: "VARCHAR(20) DEFAULT NULL" },
+      { name: 'materials_validation_status', type: "VARCHAR(20)" },
       { name: 'materials_validated_at', type: 'TIMESTAMP' },
       { name: 'materials_validated_by', type: 'INTEGER' }
     ]
@@ -59,11 +59,9 @@ export async function GET() {
           ALTER TABLE market_production_orders
           ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}
         `)
-        results.push(`Added ${col.name}`)
+        results.push(`OK: ${col.name}`)
       } catch (e: any) {
-        if (!e.message.includes('already exists')) {
-          results.push(`${col.name}: ${e.message}`)
-        }
+        results.push(`ERROR ${col.name}: ${e.message}`)
       }
     }
 
