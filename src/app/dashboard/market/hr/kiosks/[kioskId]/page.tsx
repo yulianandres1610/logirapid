@@ -188,6 +188,7 @@ export default function KioskPage() {
   // Face recognition states
   const [employeeFaces, setEmployeeFaces] = useState<EmployeeFace[]>([])
   const [cameraActive, setCameraActive] = useState(false)
+  const [cameraInitializing, setCameraInitializing] = useState(false)
   const [faceDetected, setFaceDetected] = useState(false)
   const [scanStatus, setScanStatus] = useState<string>('idle')
 
@@ -371,7 +372,11 @@ export default function KioskPage() {
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      setCameraInitializing(true)
+      setCameraActive(false)
+
+      // Request camera with timeout
+      const streamPromise = navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 640 },
           height: { ideal: 480 },
@@ -379,16 +384,71 @@ export default function KioskPage() {
         }
       })
 
+      // Timeout after 10 seconds
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Camera timeout')), 10000)
+      })
+
+      const stream = await Promise.race([streamPromise, timeoutPromise])
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         streamRef.current = stream
+
+        // Wait for video to be ready to play
+        await new Promise<void>((resolve, reject) => {
+          const video = videoRef.current!
+          const timeoutId = setTimeout(() => {
+            reject(new Error('Video load timeout'))
+          }, 8000)
+
+          const onCanPlay = () => {
+            clearTimeout(timeoutId)
+            video.removeEventListener('canplay', onCanPlay)
+            video.removeEventListener('error', onError)
+            resolve()
+          }
+
+          const onError = (e: Event) => {
+            clearTimeout(timeoutId)
+            video.removeEventListener('canplay', onCanPlay)
+            video.removeEventListener('error', onError)
+            reject(new Error('Video error'))
+          }
+
+          // If already ready
+          if (video.readyState >= 3) {
+            clearTimeout(timeoutId)
+            resolve()
+            return
+          }
+
+          video.addEventListener('canplay', onCanPlay)
+          video.addEventListener('error', onError)
+        })
+
+        // Ensure video is playing
+        try {
+          await videoRef.current.play()
+        } catch (playError) {
+          console.log('Video autoplay handled:', playError)
+        }
+
         setCameraActive(true)
+        console.log('Camera started successfully')
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error accessing camera:', err)
-      showToast('error', 'No se pudo acceder a la cámara')
-      setMessage('No se pudo acceder a la cámara')
+      const errorMessage = err.message === 'Camera timeout'
+        ? 'La cámara tardó demasiado en responder'
+        : err.message === 'Video load timeout'
+          ? 'El video tardó demasiado en cargar'
+          : 'No se pudo acceder a la cámara'
+      showToast('error', errorMessage)
+      setMessage(errorMessage)
       setStep('error')
+    } finally {
+      setCameraInitializing(false)
     }
   }
 
@@ -397,7 +457,11 @@ export default function KioskPage() {
       streamRef.current.getTracks().forEach(track => track.stop())
       streamRef.current = null
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
     setCameraActive(false)
+    setCameraInitializing(false)
     setFaceDetected(false)
     setScanStatus('idle')
   }
@@ -840,16 +904,27 @@ export default function KioskPage() {
             >
               <div className="text-center mb-4">
                 <motion.div
-                  animate={{ rotate: faceDetected ? 0 : [0, 5, -5, 0] }}
-                  transition={{ duration: 0.5, repeat: faceDetected ? 0 : Infinity }}
+                  animate={{
+                    rotate: cameraInitializing ? [0, 360] : (faceDetected ? 0 : [0, 5, -5, 0])
+                  }}
+                  transition={{
+                    duration: cameraInitializing ? 2 : 0.5,
+                    repeat: (cameraInitializing || !faceDetected) ? Infinity : 0,
+                    ease: cameraInitializing ? 'linear' : 'easeInOut'
+                  }}
                 >
-                  <Camera className="w-10 h-10 text-orange-500 mx-auto mb-2" />
+                  <Camera className={`w-10 h-10 mx-auto mb-2 ${cameraInitializing ? 'text-orange-400' : 'text-orange-500'}`} />
                 </motion.div>
                 <h2 className="text-xl font-bold text-gray-900">
-                  Reconocimiento Facial
+                  {cameraInitializing ? 'Iniciando Cámara' : 'Reconocimiento Facial'}
                 </h2>
                 <p className="text-gray-500 text-sm">
-                  Mira directamente a la cámara
+                  {cameraInitializing
+                    ? 'Preparando el sistema de reconocimiento...'
+                    : cameraActive
+                      ? 'Mira directamente a la cámara'
+                      : 'Esperando cámara...'
+                  }
                 </p>
               </div>
 
@@ -860,68 +935,120 @@ export default function KioskPage() {
                   autoPlay
                   playsInline
                   muted
-                  className="w-full h-full object-cover transform -scale-x-100"
-                  onLoadedData={() => console.log('Video loaded')}
-                  onError={(e) => console.error('Video error:', e)}
+                  className={`w-full h-full object-cover transform -scale-x-100 transition-opacity duration-300 ${
+                    cameraActive ? 'opacity-100' : 'opacity-0'
+                  }`}
                 />
                 <canvas
                   ref={canvasRef}
                   className="absolute inset-0 w-full h-full"
                 />
 
-                {/* Face frame overlay */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <motion.div
-                    className={`w-48 h-56 rounded-[50%] border-4 transition-colors duration-300 ${
-                      faceDetected ? 'border-green-500' : 'border-white/50'
-                    }`}
-                    animate={faceDetected ? {
-                      borderColor: ['#22c55e', '#4ade80', '#22c55e'],
-                      boxShadow: ['0 0 0 0 rgba(34,197,94,0)', '0 0 0 10px rgba(34,197,94,0.2)', '0 0 0 0 rgba(34,197,94,0)']
-                    } : {}}
-                    transition={{ duration: 1, repeat: Infinity }}
-                  />
-                </div>
+                {/* Camera initializing overlay */}
+                <AnimatePresence>
+                  {(cameraInitializing || !cameraActive) && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute inset-0 bg-gray-900 flex flex-col items-center justify-center"
+                    >
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                        className="w-16 h-16 border-4 border-orange-500/30 border-t-orange-500 rounded-full mb-4"
+                      />
+                      <p className="text-white/80 text-sm font-medium">
+                        {cameraInitializing ? 'Iniciando cámara...' : 'Preparando...'}
+                      </p>
+                      <p className="text-white/50 text-xs mt-1">
+                        Por favor espere
+                      </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-                {/* Corner indicators */}
-                <div className="absolute top-4 left-4 w-8 h-8 border-l-4 border-t-4 border-white/70 rounded-tl-lg" />
-                <div className="absolute top-4 right-4 w-8 h-8 border-r-4 border-t-4 border-white/70 rounded-tr-lg" />
-                <div className="absolute bottom-4 left-4 w-8 h-8 border-l-4 border-b-4 border-white/70 rounded-bl-lg" />
-                <div className="absolute bottom-4 right-4 w-8 h-8 border-r-4 border-b-4 border-white/70 rounded-br-lg" />
+                {/* Face frame overlay - only show when camera is active */}
+                {cameraActive && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className={`w-48 h-56 rounded-[50%] border-4 transition-colors duration-300 ${
+                        faceDetected ? 'border-green-500' : 'border-white/50'
+                      }`}
+                      style={faceDetected ? {
+                        boxShadow: '0 0 20px rgba(34,197,94,0.4)'
+                      } : {}}
+                    />
+                  </div>
+                )}
 
-                {/* Scanning indicator */}
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`px-4 py-2 rounded-full flex items-center gap-2 backdrop-blur-sm ${
-                      scanStatus === 'processing'
-                        ? 'bg-green-500 text-white'
-                        : faceDetected
-                          ? 'bg-green-500/90 text-white'
-                          : 'bg-white/90 text-gray-700'
-                    }`}
-                  >
-                    {scanStatus === 'processing' ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span className="text-sm font-medium">Verificando...</span>
-                      </>
-                    ) : (
-                      <>
-                        <motion.div
-                          animate={!faceDetected ? { scale: [1, 1.2, 1] } : {}}
-                          transition={{ duration: 1, repeat: Infinity }}
-                        >
-                          <Scan className="w-4 h-4" />
-                        </motion.div>
-                        <span className="text-sm font-medium">
-                          {faceDetected ? 'Rostro detectado' : 'Buscando rostro...'}
-                        </span>
-                      </>
-                    )}
-                  </motion.div>
-                </div>
+                {/* Corner indicators - only show when camera is active */}
+                {cameraActive && (
+                  <>
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.2 }}
+                      className="absolute top-4 left-4 w-8 h-8 border-l-4 border-t-4 border-white/70 rounded-tl-lg"
+                    />
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.3 }}
+                      className="absolute top-4 right-4 w-8 h-8 border-r-4 border-t-4 border-white/70 rounded-tr-lg"
+                    />
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.4 }}
+                      className="absolute bottom-4 left-4 w-8 h-8 border-l-4 border-b-4 border-white/70 rounded-bl-lg"
+                    />
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.5 }}
+                      className="absolute bottom-4 right-4 w-8 h-8 border-r-4 border-b-4 border-white/70 rounded-br-lg"
+                    />
+                  </>
+                )}
+
+                {/* Scanning indicator - only show when camera is active */}
+                {cameraActive && (
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`px-4 py-2 rounded-full flex items-center gap-2 backdrop-blur-sm ${
+                        scanStatus === 'processing'
+                          ? 'bg-green-500 text-white'
+                          : faceDetected
+                            ? 'bg-green-500/90 text-white'
+                            : 'bg-white/90 text-gray-700'
+                      }`}
+                    >
+                      {scanStatus === 'processing' ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span className="text-sm font-medium">Verificando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <motion.div
+                            animate={!faceDetected ? { scale: [1, 1.2, 1] } : {}}
+                            transition={{ duration: 1, repeat: Infinity }}
+                          >
+                            <Scan className="w-4 h-4" />
+                          </motion.div>
+                          <span className="text-sm font-medium">
+                            {faceDetected ? 'Rostro detectado' : 'Buscando rostro...'}
+                          </span>
+                        </>
+                      )}
+                    </motion.div>
+                  </div>
+                )}
               </div>
 
               <motion.button
