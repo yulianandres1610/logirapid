@@ -103,19 +103,47 @@ export async function POST(request: NextRequest) {
       notes = `Entrada marcada por manager: ${approvedByName}`
     }
 
-    // Ensure all columns exist
+    // Ensure table exists with all columns
     try {
       await db.query(`
-        ALTER TABLE market_attendance
-        ADD COLUMN IF NOT EXISTS checkinphotourl TEXT,
-        ADD COLUMN IF NOT EXISTS checkoutphotourl TEXT,
-        ADD COLUMN IF NOT EXISTS workedhours DECIMAL(5,2) DEFAULT 0,
-        ADD COLUMN IF NOT EXISTS overtimehours DECIMAL(5,2) DEFAULT 0,
-        ADD COLUMN IF NOT EXISTS earlydepartureminutes INTEGER DEFAULT 0,
-        ADD COLUMN IF NOT EXISTS updatedat TIMESTAMP
+        CREATE TABLE IF NOT EXISTS market_attendance (
+          id SERIAL PRIMARY KEY,
+          companyid INTEGER NOT NULL,
+          employeeid INTEGER NOT NULL,
+          date DATE NOT NULL,
+          checkin TIMESTAMP,
+          checkout TIMESTAMP,
+          checkinmethod VARCHAR(50),
+          checkoutmethod VARCHAR(50),
+          checkinphotourl TEXT,
+          checkoutphotourl TEXT,
+          status VARCHAR(20) DEFAULT 'present',
+          lateminutes INTEGER DEFAULT 0,
+          workedhours DECIMAL(5,2) DEFAULT 0,
+          overtimehours DECIMAL(5,2) DEFAULT 0,
+          earlydepartureminutes INTEGER DEFAULT 0,
+          approvedby INTEGER,
+          notes TEXT,
+          createdat TIMESTAMP DEFAULT NOW(),
+          updatedat TIMESTAMP,
+          UNIQUE(employeeid, date)
+        )
       `)
     } catch {
-      // Columns might already exist, continue
+      // Table exists, try to add missing columns
+      try {
+        await db.query(`
+          ALTER TABLE market_attendance
+          ADD COLUMN IF NOT EXISTS checkinphotourl TEXT,
+          ADD COLUMN IF NOT EXISTS checkoutphotourl TEXT,
+          ADD COLUMN IF NOT EXISTS workedhours DECIMAL(5,2) DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS overtimehours DECIMAL(5,2) DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS earlydepartureminutes INTEGER DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS updatedat TIMESTAMP
+        `)
+      } catch {
+        // Columns exist, continue
+      }
     }
 
     // Create or update attendance record
