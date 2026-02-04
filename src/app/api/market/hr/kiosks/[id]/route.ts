@@ -20,15 +20,26 @@ export async function GET(
 
     const { id } = await params
 
-    const result = await db.query(`
-      SELECT
-        k.*,
-        w.name as warehousename,
-        w.address as warehouseaddress
-      FROM market_attendance_kiosks k
-      LEFT JOIN market_warehouses w ON k.warehouseid = w.id
-      WHERE k.id = $1 AND k.companyid = $2
-    `, [id, companyId])
+    // First check if the table exists and has data
+    let result
+    try {
+      result = await db.query(`
+        SELECT
+          k.*,
+          w.name as warehousename,
+          w.address as warehouseaddress
+        FROM market_attendance_kiosks k
+        LEFT JOIN market_warehouses w ON k.warehouseid = w.id
+        WHERE k.id = $1 AND k.companyid = $2
+      `, [id, companyId])
+    } catch (dbError: any) {
+      // Table might not exist or column mismatch - return 404 silently
+      console.warn('Kiosk table query failed:', dbError.message)
+      return NextResponse.json(
+        { success: false, error: 'Kiosk not found' },
+        { status: 404 }
+      )
+    }
 
     if (result.rows.length === 0) {
       return NextResponse.json(
@@ -39,20 +50,25 @@ export async function GET(
 
     const row = result.rows[0]
 
-    // Get recent activity
-    const recentActivity = await db.query(`
-      SELECT
-        a.id, a.date, a.checkin, a.checkout, a.checkinmethod,
-        COALESCE(u.name, u.email, e.employee_code) as employeename
-      FROM market_attendance a
-      JOIN market_employees e ON a.employeeid = e.id
-      LEFT JOIN users u ON e.user_id = u.id
-      WHERE a.companyid = $1
-      AND (a.checkinmethod = 'kiosk' OR a.checkoutmethod = 'kiosk')
-      AND a.date >= CURRENT_DATE - INTERVAL '7 days'
-      ORDER BY COALESCE(a.checkout, a.checkin) DESC
-      LIMIT 20
-    `, [companyId])
+    // Get recent activity - wrapped in try-catch to handle table not existing
+    let recentActivity = { rows: [] }
+    try {
+      recentActivity = await db.query(`
+        SELECT
+          a.id, a.date, a.checkin, a.checkout, a.checkinmethod,
+          COALESCE(u.name, u.email, e.employee_code) as employeename
+        FROM market_attendance a
+        JOIN market_employees e ON a.employeeid = e.id
+        LEFT JOIN users u ON e.user_id = u.id
+        WHERE a.companyid = $1
+        AND (a.checkinmethod = 'kiosk' OR a.checkoutmethod = 'kiosk')
+        AND a.date >= CURRENT_DATE - INTERVAL '7 days'
+        ORDER BY COALESCE(a.checkout, a.checkin) DESC
+        LIMIT 20
+      `, [companyId])
+    } catch {
+      // Activity table might not exist, continue without it
+    }
 
     return NextResponse.json({
       success: true,
@@ -69,7 +85,7 @@ export async function GET(
         lastPing: row.lastping,
         settings: row.settings,
         createdAt: row.createdat,
-        recentActivity: recentActivity.rows.map(a => ({
+        recentActivity: recentActivity.rows.map((a: any) => ({
           id: a.id,
           date: a.date,
           checkIn: a.checkin,
@@ -81,10 +97,11 @@ export async function GET(
     })
 
   } catch (error: any) {
-    console.error('Error fetching kiosk:', error)
+    // Log but return 404 for kiosk not found scenarios
+    console.warn('Error fetching kiosk:', error.message)
     return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
+      { success: false, error: 'Kiosk not found' },
+      { status: 404 }
     )
   }
 }

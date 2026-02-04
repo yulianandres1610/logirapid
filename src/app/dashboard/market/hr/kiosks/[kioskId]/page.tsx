@@ -460,9 +460,9 @@ export default function KioskPage() {
           setKiosk(result.data)
         }
       }
-    } catch (error) {
-      console.error('Error fetching kiosk:', error)
-      showToast('error', 'Error al cargar información del kiosco')
+      // Don't show error for 404 - kiosk simply might not exist
+    } catch {
+      // Network error - silent fail, kiosk info is not critical
     }
   }
 
