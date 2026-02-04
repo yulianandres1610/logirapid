@@ -238,7 +238,7 @@ export default function POSOrderDetailPage() {
 
   const formatCurrency = (amount: number, currency: string = 'USD') => {
     const symbol = currency === 'EUR' ? '€' : '$'
-    return `${symbol}${amount.toFixed(2)}`
+    return `${symbol}${amount.toFixed(2)} ${currency}`
   }
 
   if (loading) {
