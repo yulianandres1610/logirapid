@@ -21,9 +21,12 @@ import {
   ChevronLeft,
   AlertCircle,
   Sparkles,
-  Zap
+  Zap,
+  Eye,
+  EyeOff
 } from 'lucide-react'
 import { useFaceRecognition } from '@/hooks/useFaceRecognition'
+import { useAntiSpoofing, type LivenessPhase } from '@/hooks/useAntiSpoofing'
 
 interface KioskInfo {
   id: number
@@ -219,14 +222,27 @@ export default function KioskPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const pinInputRef = useRef<HTMLInputElement>(null)
+  const cameraInitRef = useRef(false)
 
   const {
     isModelLoaded,
     isLoading: modelsLoading,
     error: modelError,
     detectFace,
+    detectFaceWithLandmarks,
     findMatch
   } = useFaceRecognition()
+
+  // Anti-spoofing hook
+  const {
+    livenessState,
+    checkLiveness,
+    resetLiveness,
+    isLockedOut
+  } = useAntiSpoofing()
+
+  // Track if liveness has been verified
+  const [livenessVerified, setLivenessVerified] = useState(false)
 
   // Toast helper
   const showToast = useCallback((type: ToastMessage['type'], message: string) => {
@@ -270,15 +286,30 @@ export default function KioskPage() {
 
   // Start/stop camera when entering/leaving face-scan step
   useEffect(() => {
-    if (step === 'face-scan') {
-      startCamera()
-    } else {
-      stopCamera()
+    let isMounted = true
+
+    const initCamera = async () => {
+      if (step === 'face-scan') {
+        // First ensure any previous camera is fully stopped
+        await stopCameraAsync()
+        // Only start if still mounted and in face-scan step
+        if (isMounted && step === 'face-scan') {
+          await startCamera()
+        }
+      } else {
+        await stopCameraAsync()
+      }
     }
-    return () => stopCamera()
+
+    initCamera()
+
+    return () => {
+      isMounted = false
+      stopCameraAsync()
+    }
   }, [step])
 
-  // Face detection loop with optimized performance and security
+  // Face detection loop with anti-spoofing (liveness detection)
   useEffect(() => {
     if (!cameraActive || !isModelLoaded || step !== 'face-scan') return
 
@@ -307,31 +338,68 @@ export default function KioskPage() {
       setScanStatus('scanning')
 
       try {
-        const descriptor = await detectFace(videoRef.current, { skipCooldown: true })
+        // Use detectFaceWithLandmarks for anti-spoofing support
+        const result = await detectFaceWithLandmarks(videoRef.current, { skipCooldown: true })
 
-        if (descriptor) {
+        if (result) {
           setFaceDetected(true)
 
-          const match = findMatch(descriptor, employeeFaces, 0.5)
+          // PHASE 1: Liveness detection (anti-spoofing)
+          if (!livenessVerified) {
+            const liveness = checkLiveness(result.landmarks)
 
-          if (match) {
-            if (lastMatchId === match.employeeId) {
-              consecutiveMatches++
-            } else {
-              consecutiveMatches = 1
-              lastMatchId = match.employeeId
-            }
-
-            if (consecutiveMatches >= REQUIRED_CONSECUTIVE_MATCHES) {
-              setScanStatus('processing')
-              console.log(`Face match confirmed: ${match.fullName} (confidence: ${match.confidence}%)`)
-              await verifyEmployeeByFace(match.employeeId)
+            // Handle liveness timeout or failure
+            if (liveness.phase === 'timeout') {
+              showToast('warning', liveness.message)
+              resetLiveness(false) // Keep attempt counter, just retry blink detection
+              scanStartTime = Date.now() // Reset scan timer for retry
+              isProcessing = false
+              timeoutId = setTimeout(detectFaceLoop, 300)
               return
             }
-          } else {
-            consecutiveMatches = 0
-            lastMatchId = null
-            setFaceDetected(false)
+
+            if (liveness.phase === 'failed') {
+              showToast('error', liveness.message)
+              setStep('error')
+              setMessage(liveness.message)
+              return
+            }
+
+            // Liveness verified!
+            if (liveness.phase === 'verified') {
+              setLivenessVerified(true)
+              showToast('success', 'Verificación de vida exitosa')
+              console.log('Liveness verified, proceeding to face matching')
+            } else {
+              // Still waiting for blink
+              isProcessing = false
+              timeoutId = setTimeout(detectFaceLoop, 150) // Faster polling for blink detection
+              return
+            }
+          }
+
+          // PHASE 2: Face matching (only after liveness verified)
+          if (livenessVerified) {
+            const match = findMatch(result.descriptor, employeeFaces, 0.5)
+
+            if (match) {
+              if (lastMatchId === match.employeeId) {
+                consecutiveMatches++
+              } else {
+                consecutiveMatches = 1
+                lastMatchId = match.employeeId
+              }
+
+              if (consecutiveMatches >= REQUIRED_CONSECUTIVE_MATCHES) {
+                setScanStatus('processing')
+                console.log(`Face match confirmed: ${match.fullName} (confidence: ${match.confidence}%)`)
+                await verifyEmployeeByFace(match.employeeId)
+                return
+              }
+            } else {
+              consecutiveMatches = 0
+              lastMatchId = null
+            }
           }
         } else {
           setFaceDetected(false)
@@ -356,7 +424,7 @@ export default function KioskPage() {
       clearTimeout(timeoutId)
       clearTimeout(startTimeoutId)
     }
-  }, [cameraActive, isModelLoaded, step, employeeFaces, detectFace, findMatch, scanStatus, showToast])
+  }, [cameraActive, isModelLoaded, step, employeeFaces, detectFaceWithLandmarks, findMatch, scanStatus, showToast, livenessVerified, checkLiveness, resetLiveness])
 
   const fetchKiosk = async () => {
     try {
@@ -388,7 +456,14 @@ export default function KioskPage() {
   }
 
   const startCamera = async () => {
+    // Guard against multiple simultaneous initializations
+    if (cameraInitRef.current) {
+      console.log('Camera already initializing, skipping...')
+      return
+    }
+
     try {
+      cameraInitRef.current = true
       setCameraInitializing(true)
       setCameraActive(false)
 
@@ -465,6 +540,7 @@ export default function KioskPage() {
       setMessage(errorMessage)
       setStep('error')
     } finally {
+      cameraInitRef.current = false
       setCameraInitializing(false)
     }
   }
@@ -479,8 +555,16 @@ export default function KioskPage() {
     }
     setCameraActive(false)
     setCameraInitializing(false)
+    cameraInitRef.current = false
     setFaceDetected(false)
     setScanStatus('idle')
+  }
+
+  // Async version of stopCamera that waits a bit for cleanup
+  const stopCameraAsync = async () => {
+    stopCamera()
+    // Small delay to ensure browser releases the camera
+    await new Promise(resolve => setTimeout(resolve, 100))
   }
 
   const resetKiosk = () => {
@@ -494,6 +578,8 @@ export default function KioskPage() {
     setMessage('')
     setFaceDetected(false)
     setScanStatus('idle')
+    setLivenessVerified(false)
+    resetLiveness()
   }
 
   const handlePinChange = (digit: string) => {
@@ -935,14 +1021,25 @@ export default function KioskPage() {
                   <Camera className={`w-10 h-10 mx-auto mb-2 ${cameraInitializing ? 'text-orange-400' : 'text-orange-500'}`} />
                 </motion.div>
                 <h2 className="text-xl font-bold text-gray-900">
-                  {cameraInitializing ? 'Iniciando Cámara' : 'Reconocimiento Facial'}
+                  {cameraInitializing
+                    ? 'Iniciando Cámara'
+                    : !livenessVerified && faceDetected
+                      ? 'Verificación de Vida'
+                      : livenessVerified
+                        ? 'Identificando...'
+                        : 'Reconocimiento Facial'
+                  }
                 </h2>
                 <p className="text-gray-500 text-sm">
                   {cameraInitializing
                     ? 'Preparando el sistema de reconocimiento...'
-                    : cameraActive
-                      ? 'Mira directamente a la cámara'
-                      : 'Esperando cámara...'
+                    : !cameraActive
+                      ? 'Esperando cámara...'
+                      : !faceDetected
+                        ? 'Posiciónate frente a la cámara'
+                        : !livenessVerified
+                          ? livenessState.message
+                          : 'Verificando identidad...'
                   }
                 </p>
               </div>
@@ -994,11 +1091,19 @@ export default function KioskPage() {
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
                       className={`w-48 h-56 rounded-[50%] border-4 transition-colors duration-300 ${
-                        faceDetected ? 'border-green-500' : 'border-white/50'
+                        livenessVerified
+                          ? 'border-blue-500'
+                          : faceDetected
+                            ? 'border-orange-500'
+                            : 'border-white/50'
                       }`}
-                      style={faceDetected ? {
-                        boxShadow: '0 0 20px rgba(34,197,94,0.4)'
-                      } : {}}
+                      style={
+                        livenessVerified
+                          ? { boxShadow: '0 0 20px rgba(59,130,246,0.5)' }
+                          : faceDetected
+                            ? { boxShadow: '0 0 20px rgba(249,115,22,0.4)' }
+                            : {}
+                      }
                     />
                   </div>
                 )}
@@ -1033,6 +1138,56 @@ export default function KioskPage() {
                   </>
                 )}
 
+                {/* Liveness indicator - show when face detected but not verified */}
+                {cameraActive && faceDetected && !livenessVerified && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="absolute top-4 left-1/2 -translate-x-1/2 z-10"
+                  >
+                    <div className="px-4 py-2 rounded-full bg-orange-500 text-white flex items-center gap-2 shadow-lg">
+                      <motion.div
+                        animate={{ scale: [1, 1.2, 1] }}
+                        transition={{ duration: 0.8, repeat: Infinity }}
+                      >
+                        <Eye className="w-5 h-5" />
+                      </motion.div>
+                      <span className="font-medium">Parpadea para verificar</span>
+                      <span className="ml-1 font-bold bg-white/20 px-2 py-0.5 rounded-full text-sm">
+                        {livenessState.blinksDetected}/1
+                      </span>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Liveness progress bar */}
+                {cameraActive && faceDetected && !livenessVerified && (
+                  <div className="absolute bottom-20 left-4 right-4">
+                    <div className="h-2 bg-gray-700/50 rounded-full overflow-hidden backdrop-blur-sm">
+                      <motion.div
+                        className="h-full bg-gradient-to-r from-orange-500 to-green-500"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${livenessState.progress}%` }}
+                        transition={{ duration: 0.3 }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Liveness verified indicator */}
+                {cameraActive && livenessVerified && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="absolute top-4 left-1/2 -translate-x-1/2 z-10"
+                  >
+                    <div className="px-4 py-2 rounded-full bg-green-500 text-white flex items-center gap-2 shadow-lg">
+                      <CheckCircle className="w-5 h-5" />
+                      <span className="font-medium">Persona real verificada</span>
+                    </div>
+                  </motion.div>
+                )}
+
                 {/* Scanning indicator - only show when camera is active */}
                 {cameraActive && (
                   <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
@@ -1042,15 +1197,27 @@ export default function KioskPage() {
                       className={`px-4 py-2 rounded-full flex items-center gap-2 backdrop-blur-sm ${
                         scanStatus === 'processing'
                           ? 'bg-green-500 text-white'
-                          : faceDetected
-                            ? 'bg-green-500/90 text-white'
-                            : 'bg-white/90 text-gray-700'
+                          : livenessVerified
+                            ? 'bg-blue-500/90 text-white'
+                            : faceDetected
+                              ? 'bg-orange-500/90 text-white'
+                              : 'bg-white/90 text-gray-700'
                       }`}
                     >
                       {scanStatus === 'processing' ? (
                         <>
                           <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span className="text-sm font-medium">Verificando...</span>
+                          <span className="text-sm font-medium">Verificando identidad...</span>
+                        </>
+                      ) : livenessVerified ? (
+                        <>
+                          <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                          >
+                            <Scan className="w-4 h-4" />
+                          </motion.div>
+                          <span className="text-sm font-medium">Identificando empleado...</span>
                         </>
                       ) : (
                         <>
@@ -1058,10 +1225,10 @@ export default function KioskPage() {
                             animate={!faceDetected ? { scale: [1, 1.2, 1] } : {}}
                             transition={{ duration: 1, repeat: Infinity }}
                           >
-                            <Scan className="w-4 h-4" />
+                            {faceDetected ? <Eye className="w-4 h-4" /> : <Scan className="w-4 h-4" />}
                           </motion.div>
                           <span className="text-sm font-medium">
-                            {faceDetected ? 'Rostro detectado' : 'Buscando rostro...'}
+                            {faceDetected ? 'Esperando parpadeo...' : 'Buscando rostro...'}
                           </span>
                         </>
                       )}

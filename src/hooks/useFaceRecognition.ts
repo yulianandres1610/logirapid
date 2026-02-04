@@ -11,6 +11,14 @@ interface FaceDetection {
   descriptor: Float32Array
 }
 
+// Detection result with landmarks for anti-spoofing
+export interface FaceDetectionWithLandmarks {
+  descriptor: Float32Array
+  landmarks: any // Face landmarks object from face-api.js
+  score: number
+  box: { x: number; y: number; width: number; height: number }
+}
+
 interface EmployeeFace {
   employeeId: number
   employeeCode: string
@@ -135,6 +143,69 @@ export function useFaceRecognition() {
       return detection.descriptor
     } catch (err: any) {
       console.error('Error detecting face:', err)
+      setError('Error detecting face: ' + err.message)
+      return null
+    }
+  }, [isModelLoaded])
+
+  // Detect face with landmarks for anti-spoofing
+  const detectFaceWithLandmarks = useCallback(async (
+    videoElement: HTMLVideoElement,
+    options?: { skipCooldown?: boolean; minFaceSize?: number }
+  ): Promise<FaceDetectionWithLandmarks | null> => {
+    if (!isModelLoaded || !faceapiRef.current) {
+      setError('Models not loaded yet')
+      return null
+    }
+
+    // Performance: Apply cooldown between detections
+    const now = Date.now()
+    if (!options?.skipCooldown && now - lastDetectionTime.current < detectionCooldown) {
+      return null
+    }
+    lastDetectionTime.current = now
+
+    try {
+      const faceapi = faceapiRef.current
+
+      // Detect single face with landmarks and descriptor
+      const detection = await faceapi
+        .detectSingleFace(videoElement)
+        .withFaceLandmarks()
+        .withFaceDescriptor()
+
+      if (!detection) {
+        return null
+      }
+
+      // Security: Validate detection confidence
+      if (detection.detection.score < MIN_DETECTION_SCORE) {
+        console.log('Face detection score too low:', detection.detection.score)
+        return null
+      }
+
+      // Security: Validate face size (prevent distant/small faces)
+      const { width, height, x, y } = detection.detection.box
+      const minSize = options?.minFaceSize || MIN_FACE_SIZE
+      if (width < minSize || height < minSize) {
+        console.log('Face too small:', width, 'x', height)
+        return null
+      }
+
+      // Security: Validate descriptor integrity
+      if (!detection.descriptor || detection.descriptor.length !== FACE_DESCRIPTOR_LENGTH) {
+        console.error('Invalid face descriptor length:', detection.descriptor?.length)
+        return null
+      }
+
+      return {
+        descriptor: detection.descriptor,
+        landmarks: detection.landmarks,
+        score: detection.detection.score,
+        box: { x, y, width, height }
+      }
+    } catch (err: any) {
+      console.error('Error detecting face with landmarks:', err)
       setError('Error detecting face: ' + err.message)
       return null
     }
@@ -325,6 +396,7 @@ export function useFaceRecognition() {
     isLoading,
     error,
     detectFace,
+    detectFaceWithLandmarks,
     detectFaceFromCanvas,
     findMatch,
     descriptorToString,
