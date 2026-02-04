@@ -397,7 +397,7 @@ export default function KioskPage() {
       }
 
       if (!videoRef.current || isProcessing || scanStatus === 'processing') {
-        timeoutId = setTimeout(detectFaceLoop, 300)
+        timeoutId = setTimeout(detectFaceLoop, 100)
         return
       }
 
@@ -405,79 +405,44 @@ export default function KioskPage() {
       setScanStatus('scanning')
 
       try {
-        // Use detectFaceWithLandmarks for anti-spoofing support
+        // Fast face detection
         const result = await detectFaceWithLandmarks(videoRef.current, { skipCooldown: true })
 
         if (result) {
           setFaceDetected(true)
 
-          // PHASE 1: Liveness detection (anti-spoofing) - micro-movement analysis
-          if (!livenessVerified) {
-            const liveness = checkLiveness(result.landmarks)
+          // Direct face matching (no liveness check - use image log for audit)
+          const match = findMatch(result.descriptor, employeeFaces, 0.5)
 
-            // Handle liveness timeout or failure
-            if (liveness.phase === 'timeout') {
-              showToast('warning', liveness.message)
-              resetLiveness(false) // Keep attempt counter, just retry blink detection
-              scanStartTime = Date.now() // Reset scan timer for retry
-              isProcessing = false
-              timeoutId = setTimeout(detectFaceLoop, 300)
-              return
+          if (match) {
+            if (lastMatchId === match.employeeId) {
+              consecutiveMatches++
+            } else {
+              consecutiveMatches = 1
+              lastMatchId = match.employeeId
             }
+            noMatchAttempts = 0
 
-            if (liveness.phase === 'failed') {
-              showToast('error', liveness.message)
-              setStep('error')
-              setMessage(liveness.message)
-              return
-            }
-
-            // Liveness verified!
-            if (liveness.phase === 'verified') {
+            // Only need 1 consecutive match for speed
+            if (consecutiveMatches >= 1) {
+              setScanStatus('processing')
               setLivenessVerified(true)
-              showToast('success', 'Verificación de vida exitosa')
-              console.log('Liveness verified, proceeding to face matching')
-            } else {
-              // Still waiting for blink
-              isProcessing = false
-              timeoutId = setTimeout(detectFaceLoop, 150) // Faster polling for blink detection
+              // Capture frame for audit log
+              capturedImageRef.current = captureFrame()
+              await verifyEmployeeByFace(match.employeeId)
               return
             }
-          }
+          } else {
+            consecutiveMatches = 0
+            lastMatchId = null
+            noMatchAttempts++
 
-          // PHASE 2: Face matching (only after liveness verified)
-          if (livenessVerified) {
-            const match = findMatch(result.descriptor, employeeFaces, 0.5)
-
-            if (match) {
-              if (lastMatchId === match.employeeId) {
-                consecutiveMatches++
-              } else {
-                consecutiveMatches = 1
-                lastMatchId = match.employeeId
-              }
-              noMatchAttempts = 0 // Reset no-match counter on any match
-
-              if (consecutiveMatches >= REQUIRED_CONSECUTIVE_MATCHES) {
-                setScanStatus('processing')
-                // Capture frame for audit log
-                capturedImageRef.current = captureFrame()
-                console.log(`Face match confirmed: ${match.fullName} (confidence: ${match.confidence}%)`)
-                await verifyEmployeeByFace(match.employeeId)
-                return
-              }
-            } else {
-              consecutiveMatches = 0
-              lastMatchId = null
-              noMatchAttempts++
-
-              // After 20 frames without match, show error
-              if (noMatchAttempts >= 20) {
-                showToast('error', 'No se encontró coincidencia')
-                setMessage('Rostro no registrado en el sistema')
-                setStep('error')
-                return
-              }
+            // After 15 frames without match, show error
+            if (noMatchAttempts >= 15) {
+              showToast('error', 'No se encontró coincidencia')
+              setMessage('Rostro no registrado en el sistema')
+              setStep('error')
+              return
             }
           }
         } else {
@@ -491,19 +456,17 @@ export default function KioskPage() {
 
       isProcessing = false
       if (step === 'face-scan' && scanStatus !== 'processing') {
-        timeoutId = setTimeout(detectFaceLoop, 300)
+        timeoutId = setTimeout(detectFaceLoop, 100) // Fast loop
       }
     }
 
-    const startTimeoutId = setTimeout(() => {
-      detectFaceLoop()
-    }, 500)
+    // Start immediately
+    detectFaceLoop()
 
     return () => {
       clearTimeout(timeoutId)
-      clearTimeout(startTimeoutId)
     }
-  }, [cameraActive, isModelLoaded, step, employeeFaces, detectFaceWithLandmarks, findMatch, scanStatus, showToast, livenessVerified, checkLiveness, resetLiveness, captureFrame])
+  }, [cameraActive, isModelLoaded, step, employeeFaces, detectFaceWithLandmarks, findMatch, scanStatus, showToast, captureFrame])
 
   const fetchKiosk = async () => {
     try {
