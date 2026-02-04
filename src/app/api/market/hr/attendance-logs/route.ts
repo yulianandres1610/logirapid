@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
   try {
     const companyId = await getCompanyId()
     if (!companyId) {
+      console.log('[ATTENDANCE-LOG] No company ID')
       return NextResponse.json({ success: false, error: 'No company ID' }, { status: 401 })
     }
 
@@ -31,10 +32,17 @@ export async function POST(request: NextRequest) {
     const { employeeId, attendanceId, imageData, actionType } = body
 
     if (!employeeId || !imageData) {
+      console.log('[ATTENDANCE-LOG] Missing fields - employeeId:', employeeId, 'hasImage:', !!imageData)
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
         { status: 400 }
       )
+    }
+
+    // Check Supabase configuration
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('[ATTENDANCE-LOG] Supabase not configured')
+      return NextResponse.json({ success: true, data: { imagePath: null } })
     }
 
     // Create Supabase client
@@ -46,34 +54,42 @@ export async function POST(request: NextRequest) {
     const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '')
     const buffer = Buffer.from(base64Data, 'base64')
 
+    console.log(`[ATTENDANCE-LOG] Uploading image for employee ${employeeId}, size: ${buffer.length} bytes`)
+
     // Generate filename
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
     const fileName = `attendance-${employeeId}-${actionType}-${timestamp}.jpg`
     const storagePath = `company-${companyId}/attendance-logs/${fileName}`
 
     // Upload to Supabase Storage
-    const { error: uploadError } = await supabase.storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(storagePath, buffer, {
         contentType: 'image/jpeg',
-        upsert: false
+        upsert: true // Allow overwrite if exists
       })
 
     if (uploadError) {
-      console.error('Error uploading attendance photo:', uploadError)
-      // Don't fail the request - photo is for audit only
+      console.error('[ATTENDANCE-LOG] Upload error:', uploadError.message)
+      // Try to continue anyway - maybe bucket doesn't exist but we can still log
+    } else {
+      console.log(`[ATTENDANCE-LOG] Image uploaded successfully: ${storagePath}`)
     }
 
-    // Save log to database
+    // Save log to database (only if upload succeeded)
+    const finalPath = uploadError ? null : storagePath
+
     try {
       await db.query(`
         INSERT INTO market_attendance_logs
         (companyid, employeeid, attendanceid, actiontype, imagepath, createdat)
         VALUES ($1, $2, $3, $4, $5, NOW())
-      `, [companyId, employeeId, attendanceId || null, actionType, storagePath])
+      `, [companyId, employeeId, attendanceId || null, actionType, finalPath])
+      console.log(`[ATTENDANCE-LOG] Database record created for employee ${employeeId}`)
     } catch (dbError: any) {
       // Table might not exist, try to create it
       if (dbError.message?.includes('does not exist')) {
+        console.log('[ATTENDANCE-LOG] Creating table market_attendance_logs')
         await db.query(`
           CREATE TABLE IF NOT EXISTS market_attendance_logs (
             id SERIAL PRIMARY KEY,
@@ -95,17 +111,20 @@ export async function POST(request: NextRequest) {
           INSERT INTO market_attendance_logs
           (companyid, employeeid, attendanceid, actiontype, imagepath, createdat)
           VALUES ($1, $2, $3, $4, $5, NOW())
-        `, [companyId, employeeId, attendanceId || null, actionType, storagePath])
+        `, [companyId, employeeId, attendanceId || null, actionType, finalPath])
+        console.log(`[ATTENDANCE-LOG] Database record created after table creation`)
+      } else {
+        console.error('[ATTENDANCE-LOG] Database error:', dbError.message)
       }
     }
 
     return NextResponse.json({
       success: true,
-      data: { imagePath: storagePath }
+      data: { imagePath: finalPath }
     })
 
   } catch (error: any) {
-    console.error('Error saving attendance log:', error)
+    console.error('[ATTENDANCE-LOG] Error:', error.message)
     // Return success anyway - don't block attendance for logging failure
     return NextResponse.json({ success: true, data: { imagePath: null } })
   }

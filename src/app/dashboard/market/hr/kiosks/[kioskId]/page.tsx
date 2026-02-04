@@ -264,7 +264,12 @@ export default function KioskPage() {
     actionType: 'checkin' | 'checkout'
   ): Promise<string | null> => {
     const imageData = capturedImageRef.current
-    if (!imageData) return null
+    if (!imageData) {
+      console.log('[KIOSK] No captured image to upload')
+      return null
+    }
+
+    console.log(`[KIOSK] Uploading ${actionType} photo for employee ${employeeId}, size: ${imageData.length} chars`)
 
     try {
       const response = await fetch('/api/market/hr/attendance-logs', {
@@ -281,10 +286,13 @@ export default function KioskPage() {
       capturedImageRef.current = null
 
       if (result.success && result.data?.imagePath) {
+        console.log(`[KIOSK] Photo uploaded: ${result.data.imagePath}`)
         return result.data.imagePath
+      } else {
+        console.log('[KIOSK] Photo upload response:', result)
       }
-    } catch {
-      // Silent fail - photo is for audit only
+    } catch (error) {
+      console.error('[KIOSK] Photo upload error:', error)
     }
 
     return null

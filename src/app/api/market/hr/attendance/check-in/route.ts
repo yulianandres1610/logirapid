@@ -18,6 +18,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { employeeId, method, photoUrl, kioskId, approvedById, approvedByName } = body
 
+    console.log(`[CHECK-IN] Employee: ${employeeId}, Method: ${method}, Photo: ${photoUrl ? 'yes' : 'no'}`)
+
     if (!employeeId) {
       return NextResponse.json(
         { success: false, error: 'Employee ID is required' },
