@@ -431,12 +431,14 @@ export default function KioskPage() {
             }
             noMatchAttempts = 0
 
-            // Only need 1 consecutive match for speed
-            if (consecutiveMatches >= 1) {
+            // Need 3 consecutive matches for smoother UX
+            if (consecutiveMatches >= 3) {
               setScanStatus('processing')
               setLivenessVerified(true)
               // Capture frame for audit log
               capturedImageRef.current = captureFrame()
+              // Small delay for smoother UX
+              await new Promise(resolve => setTimeout(resolve, 800))
               await verifyEmployeeByFace(match.employeeId)
               return
             }

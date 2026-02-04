@@ -27,14 +27,14 @@ export async function GET(request: NextRequest) {
     let query = `
       SELECT
         a.*,
-        COALESCE(e.firstname || ' ' || e.lastname, u.email) as employeename,
-        e.employeecode,
-        COALESCE(approver.firstname || ' ' || approver.lastname, approver_u.email) as approvedbyname
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as employeename,
+        e.employee_code as employeecode,
+        COALESCE(approver_u.firstname || ' ' || approver_u.lastname, approver_u.email) as approvedbyname
       FROM market_attendance a
       JOIN market_employees e ON a.employeeid = e.id
-      LEFT JOIN users u ON e.userid = u.id
+      LEFT JOIN users u ON e.user_id = u.id
       LEFT JOIN market_employees approver ON a.approvedby = approver.id
-      LEFT JOIN users approver_u ON approver.userid = approver_u.id
+      LEFT JOIN users approver_u ON approver.user_id = approver_u.id
       WHERE a.companyid = $1
     `
 
