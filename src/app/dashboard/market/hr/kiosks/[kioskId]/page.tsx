@@ -334,6 +334,7 @@ export default function KioskPage() {
     let lastMatchId: number | null = null
     let scanStartTime = Date.now()
     const SCAN_TIMEOUT = 30000
+    let noMatchAttempts = 0
 
     const detectFaceLoop = async () => {
       if (Date.now() - scanStartTime > SCAN_TIMEOUT) {
@@ -403,6 +404,7 @@ export default function KioskPage() {
                 consecutiveMatches = 1
                 lastMatchId = match.employeeId
               }
+              noMatchAttempts = 0 // Reset no-match counter on any match
 
               if (consecutiveMatches >= REQUIRED_CONSECUTIVE_MATCHES) {
                 setScanStatus('processing')
@@ -413,6 +415,15 @@ export default function KioskPage() {
             } else {
               consecutiveMatches = 0
               lastMatchId = null
+              noMatchAttempts++
+
+              // After 20 frames without match, show error
+              if (noMatchAttempts >= 20) {
+                showToast('error', 'No se encontró coincidencia')
+                setMessage('Rostro no registrado en el sistema')
+                setStep('error')
+                return
+              }
             }
           }
         } else {
@@ -1026,7 +1037,7 @@ export default function KioskPage() {
                   Reconocimiento Facial
                 </h2>
                 <p className="text-gray-500 text-sm">
-                  Mira la cámara y parpadea para verificar
+                  Mira la cámara y mueve ligeramente la cabeza
                 </p>
               </div>
 
@@ -1147,13 +1158,13 @@ export default function KioskPage() {
                         </>
                       ) : livenessVerified ? (
                         <>
-                          <CheckCircle className="w-5 h-5" />
+                          <RefreshCw className="w-5 h-5 animate-spin" />
                           <span className="font-medium">Identificando...</span>
                         </>
                       ) : faceDetected ? (
                         <>
-                          <Eye className="w-5 h-5" />
-                          <span className="font-medium">Parpadea 1 vez</span>
+                          <User className="w-5 h-5" />
+                          <span className="font-medium">Mueve la cabeza</span>
                         </>
                       ) : (
                         <>
