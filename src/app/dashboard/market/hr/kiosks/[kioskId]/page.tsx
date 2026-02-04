@@ -88,12 +88,26 @@ interface ToastMessage {
 type KioskStep = 'idle' | 'identify' | 'face-scan' | 'confirm' | 'success' | 'error' | 'manager-pin' | 'manager-select'
 type IdentifyMethod = 'pin' | 'face' | 'manager_override'
 
-// Toast component
+// Toast component with stable timer
 const Toast = ({ toast, onClose }: { toast: ToastMessage; onClose: () => void }) => {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   useEffect(() => {
-    const timer = setTimeout(onClose, 4000)
-    return () => clearTimeout(timer)
-  }, [onClose])
+    // Clear any existing timer
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+    }
+    // Set new timer
+    timerRef.current = setTimeout(() => {
+      onClose()
+    }, 3000)
+
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current)
+      }
+    }
+  }, [toast.id]) // Only depend on toast.id, not onClose
 
   const colors = {
     success: 'bg-green-500',
@@ -116,10 +130,10 @@ const Toast = ({ toast, onClose }: { toast: ToastMessage; onClose: () => void })
       initial={{ opacity: 0, y: -50, scale: 0.9 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -20, scale: 0.9 }}
-      className={`${colors[toast.type]} text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 min-w-[300px]`}
+      className={`${colors[toast.type]} text-white px-5 py-3 rounded-xl shadow-lg flex items-center gap-2`}
     >
-      <Icon className="w-6 h-6 flex-shrink-0" />
-      <p className="font-medium">{toast.message}</p>
+      <Icon className="w-5 h-5 flex-shrink-0" />
+      <p className="text-sm font-medium">{toast.message}</p>
     </motion.div>
   )
 }
@@ -1008,39 +1022,11 @@ export default function KioskPage() {
               className="p-6"
             >
               <div className="text-center mb-4">
-                <motion.div
-                  animate={{
-                    rotate: cameraInitializing ? [0, 360] : (faceDetected ? 0 : [0, 5, -5, 0])
-                  }}
-                  transition={{
-                    duration: cameraInitializing ? 2 : 0.5,
-                    repeat: (cameraInitializing || !faceDetected) ? Infinity : 0,
-                    ease: cameraInitializing ? 'linear' : 'easeInOut'
-                  }}
-                >
-                  <Camera className={`w-10 h-10 mx-auto mb-2 ${cameraInitializing ? 'text-orange-400' : 'text-orange-500'}`} />
-                </motion.div>
                 <h2 className="text-xl font-bold text-gray-900">
-                  {cameraInitializing
-                    ? 'Iniciando Cámara'
-                    : !livenessVerified && faceDetected
-                      ? 'Verificación de Vida'
-                      : livenessVerified
-                        ? 'Identificando...'
-                        : 'Reconocimiento Facial'
-                  }
+                  Reconocimiento Facial
                 </h2>
                 <p className="text-gray-500 text-sm">
-                  {cameraInitializing
-                    ? 'Preparando el sistema de reconocimiento...'
-                    : !cameraActive
-                      ? 'Esperando cámara...'
-                      : !faceDetected
-                        ? 'Posiciónate frente a la cámara'
-                        : !livenessVerified
-                          ? livenessState.message
-                          : 'Verificando identidad...'
-                  }
+                  Mira la cámara y parpadea para verificar
                 </p>
               </div>
 
@@ -1138,98 +1124,41 @@ export default function KioskPage() {
                   </>
                 )}
 
-                {/* Liveness indicator - show when face detected but not verified */}
-                {cameraActive && faceDetected && !livenessVerified && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="absolute top-4 left-1/2 -translate-x-1/2 z-10"
-                  >
-                    <div className="px-4 py-2 rounded-full bg-orange-500 text-white flex items-center gap-2 shadow-lg">
-                      <motion.div
-                        animate={{ scale: [1, 1.2, 1] }}
-                        transition={{ duration: 0.8, repeat: Infinity }}
-                      >
-                        <Eye className="w-5 h-5" />
-                      </motion.div>
-                      <span className="font-medium">Parpadea para verificar</span>
-                      <span className="ml-1 font-bold bg-white/20 px-2 py-0.5 rounded-full text-sm">
-                        {livenessState.blinksDetected}/1
-                      </span>
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Liveness progress bar */}
-                {cameraActive && faceDetected && !livenessVerified && (
-                  <div className="absolute bottom-20 left-4 right-4">
-                    <div className="h-2 bg-gray-700/50 rounded-full overflow-hidden backdrop-blur-sm">
-                      <motion.div
-                        className="h-full bg-gradient-to-r from-orange-500 to-green-500"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${livenessState.progress}%` }}
-                        transition={{ duration: 0.3 }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Liveness verified indicator */}
-                {cameraActive && livenessVerified && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="absolute top-4 left-1/2 -translate-x-1/2 z-10"
-                  >
-                    <div className="px-4 py-2 rounded-full bg-green-500 text-white flex items-center gap-2 shadow-lg">
-                      <CheckCircle className="w-5 h-5" />
-                      <span className="font-medium">Persona real verificada</span>
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Scanning indicator - only show when camera is active */}
+                {/* Simple status indicator - only show when camera is active */}
                 {cameraActive && (
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+                  <div className="absolute bottom-4 left-4 right-4">
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className={`px-4 py-2 rounded-full flex items-center gap-2 backdrop-blur-sm ${
+                      className={`mx-auto w-fit px-4 py-2.5 rounded-xl flex items-center gap-3 backdrop-blur-md ${
                         scanStatus === 'processing'
                           ? 'bg-green-500 text-white'
                           : livenessVerified
-                            ? 'bg-blue-500/90 text-white'
+                            ? 'bg-green-500 text-white'
                             : faceDetected
-                              ? 'bg-orange-500/90 text-white'
-                              : 'bg-white/90 text-gray-700'
+                              ? 'bg-orange-500 text-white'
+                              : 'bg-black/60 text-white'
                       }`}
                     >
                       {scanStatus === 'processing' ? (
                         <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span className="text-sm font-medium">Verificando identidad...</span>
+                          <RefreshCw className="w-5 h-5 animate-spin" />
+                          <span className="font-medium">Verificando...</span>
                         </>
                       ) : livenessVerified ? (
                         <>
-                          <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                          >
-                            <Scan className="w-4 h-4" />
-                          </motion.div>
-                          <span className="text-sm font-medium">Identificando empleado...</span>
+                          <CheckCircle className="w-5 h-5" />
+                          <span className="font-medium">Identificando...</span>
+                        </>
+                      ) : faceDetected ? (
+                        <>
+                          <Eye className="w-5 h-5" />
+                          <span className="font-medium">Parpadea 1 vez</span>
                         </>
                       ) : (
                         <>
-                          <motion.div
-                            animate={!faceDetected ? { scale: [1, 1.2, 1] } : {}}
-                            transition={{ duration: 1, repeat: Infinity }}
-                          >
-                            {faceDetected ? <Eye className="w-4 h-4" /> : <Scan className="w-4 h-4" />}
-                          </motion.div>
-                          <span className="text-sm font-medium">
-                            {faceDetected ? 'Esperando parpadeo...' : 'Buscando rostro...'}
-                          </span>
+                          <Scan className="w-5 h-5" />
+                          <span className="font-medium">Buscando rostro...</span>
                         </>
                       )}
                     </motion.div>
