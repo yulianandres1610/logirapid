@@ -197,7 +197,7 @@ export default function KioskPage() {
   const [pin, setPin] = useState('')
   const [employee, setEmployee] = useState<EmployeeResult | null>(null)
   const [message, setMessage] = useState('')
-  const [currentTime, setCurrentTime] = useState(new Date())
+  const [currentTime, setCurrentTime] = useState<Date | null>(null) // null initially to avoid hydration mismatch
   const [loading, setLoading] = useState(false)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
 
@@ -238,8 +238,9 @@ export default function KioskPage() {
     setToasts(prev => prev.filter(t => t.id !== id))
   }, [])
 
-  // Update time every second
+  // Update time every second - set initial time on mount to avoid hydration mismatch
   useEffect(() => {
+    setCurrentTime(new Date()) // Set initial time on client only
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
@@ -741,11 +742,13 @@ export default function KioskPage() {
     }
   }
 
-  const formatTime = (date: Date) => {
+  const formatTime = (date: Date | null) => {
+    if (!date) return '--:--:--'
     return date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   }
 
-  const formatDate = (date: Date) => {
+  const formatDate = (date: Date | null) => {
+    if (!date) return 'Cargando...'
     return date.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   }
 
@@ -806,7 +809,7 @@ export default function KioskPage() {
       >
         <motion.p
           className="text-7xl font-bold text-white tracking-wider drop-shadow-lg"
-          key={formatTime(currentTime)}
+          key={currentTime?.getSeconds() ?? 'loading'}
           initial={{ opacity: 0.5 }}
           animate={{ opacity: 1 }}
         >
