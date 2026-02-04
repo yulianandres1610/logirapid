@@ -1135,42 +1135,80 @@ export default function KioskPage() {
                   </>
                 )}
 
-                {/* Simple status indicator - only show when camera is active */}
+                {/* Status indicator with challenge instructions */}
                 {cameraActive && (
                   <div className="absolute bottom-4 left-4 right-4">
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className={`mx-auto w-fit px-4 py-2.5 rounded-xl flex items-center gap-3 backdrop-blur-md ${
+                      className={`mx-auto w-fit px-5 py-3 rounded-xl flex flex-col items-center gap-2 backdrop-blur-md ${
                         scanStatus === 'processing'
                           ? 'bg-green-500 text-white'
                           : livenessVerified
                             ? 'bg-green-500 text-white'
-                            : faceDetected
+                            : livenessState.phase === 'turn_left' || livenessState.phase === 'turn_right'
                               ? 'bg-orange-500 text-white'
-                              : 'bg-black/60 text-white'
+                              : livenessState.phase === 'center'
+                                ? 'bg-blue-500 text-white'
+                                : faceDetected
+                                  ? 'bg-orange-500 text-white'
+                                  : 'bg-black/60 text-white'
                       }`}
                     >
                       {scanStatus === 'processing' ? (
-                        <>
+                        <div className="flex items-center gap-3">
                           <RefreshCw className="w-5 h-5 animate-spin" />
                           <span className="font-medium">Verificando...</span>
-                        </>
+                        </div>
                       ) : livenessVerified ? (
-                        <>
+                        <div className="flex items-center gap-3">
                           <RefreshCw className="w-5 h-5 animate-spin" />
                           <span className="font-medium">Identificando...</span>
-                        </>
+                        </div>
                       ) : faceDetected ? (
                         <>
-                          <User className="w-5 h-5" />
-                          <span className="font-medium">Mueve la cabeza</span>
+                          <div className="flex items-center gap-3">
+                            {livenessState.phase === 'turn_left' ? (
+                              <>
+                                <ChevronLeft className="w-6 h-6 animate-pulse" />
+                                <span className="font-bold text-lg">GIRA A LA IZQUIERDA</span>
+                                <ChevronLeft className="w-6 h-6 animate-pulse" />
+                              </>
+                            ) : livenessState.phase === 'turn_right' ? (
+                              <>
+                                <ChevronLeft className="w-6 h-6 rotate-180 animate-pulse" />
+                                <span className="font-bold text-lg">GIRA A LA DERECHA</span>
+                                <ChevronLeft className="w-6 h-6 rotate-180 animate-pulse" />
+                              </>
+                            ) : livenessState.phase === 'center' ? (
+                              <>
+                                <CheckCircle className="w-5 h-5" />
+                                <span className="font-bold text-lg">MIRA AL CENTRO</span>
+                              </>
+                            ) : (
+                              <>
+                                <Shield className="w-5 h-5" />
+                                <span className="font-medium">Preparando verificación...</span>
+                              </>
+                            )}
+                          </div>
+                          {/* Progress bar */}
+                          {livenessState.progress > 0 && (
+                            <div className="w-full h-2 bg-white/30 rounded-full overflow-hidden">
+                              <motion.div
+                                className="h-full bg-white rounded-full"
+                                initial={{ width: 0 }}
+                                animate={{ width: `${livenessState.progress}%` }}
+                                transition={{ duration: 0.2 }}
+                              />
+                            </div>
+                          )}
                         </>
                       ) : (
-                        <>
+                        <div className="flex items-center gap-3">
                           <Scan className="w-5 h-5" />
                           <span className="font-medium">Buscando rostro...</span>
-                        </>
+                        </div>
                       )}
                     </motion.div>
                   </div>
