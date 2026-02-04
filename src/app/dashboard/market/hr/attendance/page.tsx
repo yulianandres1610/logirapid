@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
   Calendar,
@@ -13,7 +14,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Users,
-  Timer
+  Timer,
+  Eye
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -65,6 +67,7 @@ const getStatusIcon = (status: string) => {
 
 export default function AttendancePage() {
   const { theme } = useTheme()
+  const router = useRouter()
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
@@ -537,13 +540,14 @@ export default function AttendancePage() {
                       <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Salida</th>
                       <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Horas</th>
                       <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Ver</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {loading ? (
                       [...Array(5)].map((_, i) => (
                         <tr key={i}>
-                          <td colSpan={6} className="py-4 px-4">
+                          <td colSpan={7} className="py-4 px-4">
                             <div className="animate-pulse flex items-center gap-3">
                               <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full" />
                               <div className="flex-1">
@@ -555,7 +559,7 @@ export default function AttendancePage() {
                       ))
                     ) : records.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-12 text-center">
+                        <td colSpan={7} className="py-12 text-center">
                           <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-400" />
                           <p className={cn(
                             'font-medium mb-1',
@@ -577,8 +581,9 @@ export default function AttendancePage() {
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.02 }}
+                            onClick={() => router.push(`/dashboard/market/hr/attendance/${record.id}`)}
                             className={cn(
-                              'group transition-colors',
+                              'group transition-colors cursor-pointer',
                               theme === 'dark' ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'
                             )}
                           >
@@ -660,6 +665,24 @@ export default function AttendancePage() {
                                   <span className="ml-1">({record.lateMinutes}min)</span>
                                 )}
                               </span>
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                className={cn(
+                                  'p-2 rounded-lg transition-colors',
+                                  theme === 'dark'
+                                    ? 'hover:bg-gray-700 text-gray-400 hover:text-emerald-400'
+                                    : 'hover:bg-gray-100 text-gray-500 hover:text-emerald-600'
+                                )}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  router.push(`/dashboard/market/hr/attendance/${record.id}`)
+                                }}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </motion.button>
                             </td>
                           </motion.tr>
                         )
