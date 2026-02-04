@@ -239,47 +239,55 @@ export default function KioskPage() {
   const cameraInitRef = useRef(false)
   const capturedImageRef = useRef<string | null>(null)
 
-  // Capture current video frame as base64 image
+  // Capture current video frame as small base64 image (320x240, 60% quality)
   const captureFrame = useCallback(() => {
     if (!videoRef.current) return null
 
     const video = videoRef.current
     const canvas = document.createElement('canvas')
-    canvas.width = video.videoWidth || 640
-    canvas.height = video.videoHeight || 480
+    // Small image size to save storage space
+    canvas.width = 320
+    canvas.height = 240
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return null
 
+    // Draw scaled down image
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-    return canvas.toDataURL('image/jpeg', 0.8)
+    // Low quality JPEG to reduce file size (~15-30KB)
+    return canvas.toDataURL('image/jpeg', 0.6)
   }, [])
 
-  // Save attendance image log (async, non-blocking)
-  const saveAttendanceLog = useCallback(async (
+  // Upload attendance photo and return the storage path
+  const uploadAttendancePhoto = useCallback(async (
     employeeId: number,
-    actionType: 'checkin' | 'checkout',
-    attendanceId?: number
-  ) => {
+    actionType: 'checkin' | 'checkout'
+  ): Promise<string | null> => {
     const imageData = capturedImageRef.current
-    if (!imageData) return
+    if (!imageData) return null
 
     try {
-      await fetch('/api/market/hr/attendance-logs', {
+      const response = await fetch('/api/market/hr/attendance-logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           employeeId,
-          attendanceId,
           actionType,
           imageData
         })
       })
+
+      const result = await response.json()
+      capturedImageRef.current = null
+
+      if (result.success && result.data?.imagePath) {
+        return result.data.imagePath
+      }
     } catch {
-      // Silent fail - logging should not block attendance
+      // Silent fail - photo is for audit only
     }
 
-    capturedImageRef.current = null
+    return null
   }, [])
 
   const {
@@ -813,10 +821,17 @@ export default function KioskPage() {
     try {
       setLoading(true)
 
+      // Upload photo first if using face recognition
+      let photoUrl = null
+      if (identifyMethod === 'face') {
+        photoUrl = await uploadAttendancePhoto(employee.id, 'checkin')
+      }
+
       const requestBody: any = {
         employeeId: employee.id,
         method: identifyMethod === 'face' ? 'face' : identifyMethod === 'manager_override' ? 'manager_override' : 'kiosk',
-        kioskId: parseInt(kioskId)
+        kioskId: parseInt(kioskId),
+        photoUrl
       }
 
       if (identifyMethod === 'manager_override' && managerData) {
@@ -833,11 +848,6 @@ export default function KioskPage() {
       const result = await response.json()
 
       if (result.success) {
-        // Save attendance image log (async, non-blocking)
-        if (identifyMethod === 'face' && employee) {
-          saveAttendanceLog(employee.id, 'checkin', result.data?.attendanceId)
-        }
-
         let successMessage = result.message
         if (identifyMethod === 'manager_override' && managerData) {
           successMessage += ` (Autorizado por ${managerData.fullName})`
@@ -864,10 +874,17 @@ export default function KioskPage() {
     try {
       setLoading(true)
 
+      // Upload photo first if using face recognition
+      let photoUrl = null
+      if (identifyMethod === 'face') {
+        photoUrl = await uploadAttendancePhoto(employee.id, 'checkout')
+      }
+
       const requestBody: any = {
         employeeId: employee.id,
         method: identifyMethod === 'face' ? 'face' : identifyMethod === 'manager_override' ? 'manager_override' : 'kiosk',
-        kioskId: parseInt(kioskId)
+        kioskId: parseInt(kioskId),
+        photoUrl
       }
 
       if (identifyMethod === 'manager_override' && managerData) {
@@ -884,11 +901,6 @@ export default function KioskPage() {
       const result = await response.json()
 
       if (result.success) {
-        // Save attendance image log (async, non-blocking)
-        if (identifyMethod === 'face' && employee) {
-          saveAttendanceLog(employee.id, 'checkout', result.data?.attendanceId)
-        }
-
         let successMessage = result.message
         if (identifyMethod === 'manager_override' && managerData) {
           successMessage += ` (Autorizado por ${managerData.fullName})`
