@@ -11,10 +11,22 @@ interface FaceDetection {
   descriptor: Float32Array
 }
 
+// Expression scores from face-api.js
+export interface FaceExpressions {
+  neutral: number
+  happy: number
+  sad: number
+  angry: number
+  fearful: number
+  disgusted: number
+  surprised: number
+}
+
 // Detection result with landmarks for anti-spoofing
 export interface FaceDetectionWithLandmarks {
   descriptor: Float32Array
   landmarks: any // Face landmarks object from face-api.js
+  expressions: FaceExpressions | null
   score: number
   box: { x: number; y: number; width: number; height: number }
 }
@@ -73,11 +85,12 @@ export function useFaceRecognition() {
       // Models URL - using jsdelivr CDN for vladmandic/face-api models
       const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model'
 
-      // Load required models for face recognition
+      // Load required models for face recognition and expression detection
       await Promise.all([
         faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
         faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
         faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+        faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
       ])
 
       setIsModelLoaded(true)
@@ -148,7 +161,7 @@ export function useFaceRecognition() {
     }
   }, [isModelLoaded])
 
-  // Detect face with landmarks for anti-spoofing
+  // Detect face with landmarks and expressions for anti-spoofing
   const detectFaceWithLandmarks = useCallback(async (
     videoElement: HTMLVideoElement,
     options?: { skipCooldown?: boolean; minFaceSize?: number }
@@ -168,11 +181,12 @@ export function useFaceRecognition() {
     try {
       const faceapi = faceapiRef.current
 
-      // Detect single face with landmarks and descriptor
+      // Detect single face with landmarks, descriptor, and expressions
       const detection = await faceapi
         .detectSingleFace(videoElement)
         .withFaceLandmarks()
         .withFaceDescriptor()
+        .withFaceExpressions()
 
       if (!detection) {
         return null
@@ -198,9 +212,21 @@ export function useFaceRecognition() {
         return null
       }
 
+      // Extract expressions
+      const expressions: FaceExpressions | null = detection.expressions ? {
+        neutral: detection.expressions.neutral || 0,
+        happy: detection.expressions.happy || 0,
+        sad: detection.expressions.sad || 0,
+        angry: detection.expressions.angry || 0,
+        fearful: detection.expressions.fearful || 0,
+        disgusted: detection.expressions.disgusted || 0,
+        surprised: detection.expressions.surprised || 0,
+      } : null
+
       return {
         descriptor: detection.descriptor,
         landmarks: detection.landmarks,
+        expressions,
         score: detection.detection.score,
         box: { x, y, width, height }
       }

@@ -359,9 +359,9 @@ export default function KioskPage() {
         if (result) {
           setFaceDetected(true)
 
-          // PHASE 1: Liveness detection (anti-spoofing)
+          // PHASE 1: Liveness detection (anti-spoofing) - smile detection
           if (!livenessVerified) {
-            const liveness = checkLiveness(result.landmarks)
+            const liveness = checkLiveness(result.landmarks, result.expressions)
 
             // Handle liveness timeout or failure
             if (liveness.phase === 'timeout') {
@@ -1135,7 +1135,7 @@ export default function KioskPage() {
                   </>
                 )}
 
-                {/* Status indicator with challenge instructions */}
+                {/* Status indicator with smile challenge instructions */}
                 {cameraActive && (
                   <div className="absolute bottom-4 left-4 right-4">
                     <motion.div
@@ -1146,9 +1146,9 @@ export default function KioskPage() {
                           ? 'bg-green-500 text-white'
                           : livenessVerified
                             ? 'bg-green-500 text-white'
-                            : livenessState.phase === 'turn_left' || livenessState.phase === 'turn_right'
-                              ? 'bg-orange-500 text-white'
-                              : livenessState.phase === 'center'
+                            : livenessState.phase === 'smile'
+                              ? 'bg-yellow-500 text-white'
+                              : livenessState.phase === 'neutral'
                                 ? 'bg-blue-500 text-white'
                                 : faceDetected
                                   ? 'bg-orange-500 text-white'
@@ -1168,22 +1168,17 @@ export default function KioskPage() {
                       ) : faceDetected ? (
                         <>
                           <div className="flex items-center gap-3">
-                            {livenessState.phase === 'turn_left' ? (
+                            {livenessState.phase === 'smile' ? (
                               <>
-                                <ChevronLeft className="w-6 h-6 animate-pulse" />
-                                <span className="font-bold text-lg">GIRA A LA IZQUIERDA</span>
-                                <ChevronLeft className="w-6 h-6 animate-pulse" />
+                                <span className="text-2xl">😊</span>
+                                <span className="font-bold text-lg">SONRÍE</span>
+                                <span className="text-2xl">😊</span>
                               </>
-                            ) : livenessState.phase === 'turn_right' ? (
+                            ) : livenessState.phase === 'neutral' ? (
                               <>
-                                <ChevronLeft className="w-6 h-6 rotate-180 animate-pulse" />
-                                <span className="font-bold text-lg">GIRA A LA DERECHA</span>
-                                <ChevronLeft className="w-6 h-6 rotate-180 animate-pulse" />
-                              </>
-                            ) : livenessState.phase === 'center' ? (
-                              <>
-                                <CheckCircle className="w-5 h-5" />
-                                <span className="font-bold text-lg">MIRA AL CENTRO</span>
+                                <span className="text-2xl">😐</span>
+                                <span className="font-bold text-lg">RELAJA EL ROSTRO</span>
+                                <span className="text-2xl">😐</span>
                               </>
                             ) : (
                               <>
