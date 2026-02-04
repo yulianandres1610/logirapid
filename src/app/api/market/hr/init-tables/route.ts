@@ -51,25 +51,28 @@ export async function POST(request: NextRequest) {
     await db.query(`
       CREATE TABLE IF NOT EXISTS market_contracts (
         id SERIAL PRIMARY KEY,
-        companyid INTEGER REFERENCES companies(id),
-        employeeid INTEGER REFERENCES market_employees(id) ON DELETE CASCADE,
-        contractnumber VARCHAR(50),
-        contracttype VARCHAR(50) NOT NULL,
-        startdate DATE NOT NULL,
-        enddate DATE,
-        paytype VARCHAR(20) NOT NULL,
-        payrate DECIMAL(12,4) NOT NULL,
+        company_id INTEGER REFERENCES companies(id),
+        employee_id INTEGER REFERENCES market_employees(id) ON DELETE CASCADE,
+        contract_number VARCHAR(50),
+        contract_type VARCHAR(50) NOT NULL,
+        start_date DATE NOT NULL,
+        end_date DATE,
+        pay_type VARCHAR(20) NOT NULL,
+        pay_rate DECIMAL(12,4) NOT NULL,
         currency VARCHAR(3) DEFAULT 'USD',
-        commissionrate DECIMAL(5,2) DEFAULT 0,
-        departmentid INTEGER REFERENCES market_departments(id),
-        scheduleid INTEGER REFERENCES market_schedules(id),
+        commission_rate DECIMAL(5,2) DEFAULT 0,
+        department_id INTEGER REFERENCES market_departments(id),
+        schedule_id INTEGER REFERENCES market_schedules(id),
         position VARCHAR(100),
         status VARCHAR(20) DEFAULT 'active',
-        terminationdate DATE,
-        terminationreason TEXT,
+        termination_date DATE,
+        termination_reason TEXT,
         notes TEXT,
-        createdat TIMESTAMP DEFAULT NOW(),
-        updatedat TIMESTAMP DEFAULT NOW()
+        photo_url TEXT,
+        photo_original_url TEXT,
+        photo_processed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
       )
     `)
 
