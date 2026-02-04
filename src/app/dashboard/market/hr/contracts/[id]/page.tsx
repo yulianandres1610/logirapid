@@ -504,11 +504,12 @@ export default function ContractDetailPage() {
                     {contract.photoUrl ? (
                       <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white/30 mx-auto mb-4 shadow-lg">
                         <Image
-                          src={contract.photoUrl}
+                          src={contract.photoUrl.startsWith('http') ? contract.photoUrl : `/api/employee-photos/${contract.photoUrl}`}
                           alt={contract.employeeName}
                           width={128}
                           height={128}
                           className="w-full h-full object-cover"
+                          unoptimized
                         />
                       </div>
                     ) : (
