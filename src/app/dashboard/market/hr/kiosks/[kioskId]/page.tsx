@@ -904,6 +904,18 @@ export default function KioskPage() {
     return date.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   }
 
+  // Helper to format timestamps from API (can be string or Date)
+  const formatAttendanceTime = (timestamp: string | Date | null | undefined) => {
+    if (!timestamp) return '-'
+    try {
+      const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp
+      if (isNaN(date.getTime())) return '-'
+      return date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+    } catch {
+      return '-'
+    }
+  }
+
   const hasFaceRecognition = employeeFaces.length > 0 && isModelLoaded
 
   return (
@@ -1520,17 +1532,11 @@ export default function KioskPage() {
                   <div className="flex justify-between text-sm">
                     <div className="flex items-center gap-2">
                       <LogIn className="w-4 h-4 text-green-500" />
-                      <span>Entrada: {employee.todayAttendance.checkIn
-                        ? new Date(employee.todayAttendance.checkIn).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
-                        : '-'
-                      }</span>
+                      <span>Entrada: {formatAttendanceTime(employee.todayAttendance.checkIn)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <LogOut className="w-4 h-4 text-red-500" />
-                      <span>Salida: {employee.todayAttendance.checkOut
-                        ? new Date(employee.todayAttendance.checkOut).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
-                        : '-'
-                      }</span>
+                      <span>Salida: {formatAttendanceTime(employee.todayAttendance.checkOut)}</span>
                     </div>
                   </div>
                 </motion.div>
