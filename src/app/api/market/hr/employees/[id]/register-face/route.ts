@@ -117,8 +117,9 @@ export async function POST(
       `, [employeeId, faceEncoding, photoUrl || null])
 
       // Update employee flag
+      // Note: market_employees uses updated_at (with underscore)
       await client.query(`
-        UPDATE market_employees SET hasfaceregistered = true, updatedat = NOW()
+        UPDATE market_employees SET hasfaceregistered = true, updated_at = NOW()
         WHERE id = $1
       `, [employeeId])
     })
@@ -228,8 +229,9 @@ export async function DELETE(
       `, [employeeId])
 
       // Update employee flag
+      // Note: market_employees uses updated_at (with underscore)
       await client.query(`
-        UPDATE market_employees SET hasfaceregistered = false, updatedat = NOW()
+        UPDATE market_employees SET hasfaceregistered = false, updated_at = NOW()
         WHERE id = $1 AND company_id = $2
       `, [employeeId, companyId])
     })
