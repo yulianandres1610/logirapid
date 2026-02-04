@@ -359,9 +359,9 @@ export default function KioskPage() {
         if (result) {
           setFaceDetected(true)
 
-          // PHASE 1: Liveness detection (anti-spoofing) - smile detection
+          // PHASE 1: Liveness detection (anti-spoofing) - micro-movement analysis
           if (!livenessVerified) {
-            const liveness = checkLiveness(result.landmarks, result.expressions)
+            const liveness = checkLiveness(result.landmarks)
 
             // Handle liveness timeout or failure
             if (liveness.phase === 'timeout') {
@@ -1135,7 +1135,7 @@ export default function KioskPage() {
                   </>
                 )}
 
-                {/* Status indicator with smile challenge instructions */}
+                {/* Status indicator */}
                 {cameraActive && (
                   <div className="absolute bottom-4 left-4 right-4">
                     <motion.div
@@ -1146,13 +1146,9 @@ export default function KioskPage() {
                           ? 'bg-green-500 text-white'
                           : livenessVerified
                             ? 'bg-green-500 text-white'
-                            : livenessState.phase === 'smile'
-                              ? 'bg-yellow-500 text-white'
-                              : livenessState.phase === 'neutral'
-                                ? 'bg-blue-500 text-white'
-                                : faceDetected
-                                  ? 'bg-orange-500 text-white'
-                                  : 'bg-black/60 text-white'
+                            : faceDetected
+                              ? 'bg-orange-500 text-white'
+                              : 'bg-black/60 text-white'
                       }`}
                     >
                       {scanStatus === 'processing' ? (
@@ -1168,33 +1164,17 @@ export default function KioskPage() {
                       ) : faceDetected ? (
                         <>
                           <div className="flex items-center gap-3">
-                            {livenessState.phase === 'smile' ? (
-                              <>
-                                <span className="text-2xl">😊</span>
-                                <span className="font-bold text-lg">SONRÍE</span>
-                                <span className="text-2xl">😊</span>
-                              </>
-                            ) : livenessState.phase === 'neutral' ? (
-                              <>
-                                <span className="text-2xl">😐</span>
-                                <span className="font-bold text-lg">RELAJA EL ROSTRO</span>
-                                <span className="text-2xl">😐</span>
-                              </>
-                            ) : (
-                              <>
-                                <Shield className="w-5 h-5" />
-                                <span className="font-medium">Preparando verificación...</span>
-                              </>
-                            )}
+                            <Shield className="w-5 h-5" />
+                            <span className="font-medium">Verificando rostro...</span>
                           </div>
                           {/* Progress bar */}
                           {livenessState.progress > 0 && (
-                            <div className="w-full h-2 bg-white/30 rounded-full overflow-hidden">
+                            <div className="w-40 h-2 bg-white/30 rounded-full overflow-hidden">
                               <motion.div
                                 className="h-full bg-white rounded-full"
                                 initial={{ width: 0 }}
                                 animate={{ width: `${livenessState.progress}%` }}
-                                transition={{ duration: 0.2 }}
+                                transition={{ duration: 0.15 }}
                               />
                             </div>
                           )}

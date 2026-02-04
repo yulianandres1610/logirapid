@@ -85,12 +85,11 @@ export function useFaceRecognition() {
       // Models URL - using jsdelivr CDN for vladmandic/face-api models
       const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model'
 
-      // Load required models for face recognition and expression detection
+      // Load required models for face recognition
       await Promise.all([
         faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
         faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
         faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-        faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
       ])
 
       setIsModelLoaded(true)
@@ -181,12 +180,11 @@ export function useFaceRecognition() {
     try {
       const faceapi = faceapiRef.current
 
-      // Detect single face with landmarks, descriptor, and expressions
+      // Detect single face with landmarks and descriptor (no expressions for speed)
       const detection = await faceapi
         .detectSingleFace(videoElement)
         .withFaceLandmarks()
         .withFaceDescriptor()
-        .withFaceExpressions()
 
       if (!detection) {
         return null
@@ -194,7 +192,6 @@ export function useFaceRecognition() {
 
       // Security: Validate detection confidence
       if (detection.detection.score < MIN_DETECTION_SCORE) {
-        console.log('Face detection score too low:', detection.detection.score)
         return null
       }
 
@@ -202,31 +199,18 @@ export function useFaceRecognition() {
       const { width, height, x, y } = detection.detection.box
       const minSize = options?.minFaceSize || MIN_FACE_SIZE
       if (width < minSize || height < minSize) {
-        console.log('Face too small:', width, 'x', height)
         return null
       }
 
       // Security: Validate descriptor integrity
       if (!detection.descriptor || detection.descriptor.length !== FACE_DESCRIPTOR_LENGTH) {
-        console.error('Invalid face descriptor length:', detection.descriptor?.length)
         return null
       }
-
-      // Extract expressions
-      const expressions: FaceExpressions | null = detection.expressions ? {
-        neutral: detection.expressions.neutral || 0,
-        happy: detection.expressions.happy || 0,
-        sad: detection.expressions.sad || 0,
-        angry: detection.expressions.angry || 0,
-        fearful: detection.expressions.fearful || 0,
-        disgusted: detection.expressions.disgusted || 0,
-        surprised: detection.expressions.surprised || 0,
-      } : null
 
       return {
         descriptor: detection.descriptor,
         landmarks: detection.landmarks,
-        expressions,
+        expressions: null,
         score: detection.detection.score,
         box: { x, y, width, height }
       }
