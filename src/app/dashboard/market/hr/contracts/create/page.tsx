@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -15,11 +15,15 @@ import {
   Clock,
   Loader2,
   AlertCircle,
-  X
+  X,
+  Scan,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 import { EmployeePhotoUpload } from '@/components/hr/EmployeePhotoUpload'
+import { useFaceRecognition } from '@/hooks/useFaceRecognition'
 
 interface Employee {
   id: number
@@ -47,6 +51,7 @@ const STEPS = [
   { id: 'contract', title: 'Contrato', icon: FileText },
   { id: 'compensation', title: 'Compensación', icon: DollarSign },
   { id: 'photo', title: 'Foto', icon: Camera },
+  { id: 'face-register', title: 'Kiosco', icon: Scan },
   { id: 'confirm', title: 'Confirmación', icon: CheckCircle }
 ]
 
@@ -100,8 +105,28 @@ export default function CreateContractPage() {
     // Step 4: Photo
     photoOriginalPath: '',
     photoProcessedPath: '',
-    employeeGender: null as 'M' | 'F' | null
+    employeeGender: null as 'M' | 'F' | null,
+    // Step 5: Face Registration
+    faceEncoding: null as string | null,
+    faceRegistered: false
   })
+
+  // Face registration states
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const [cameraActive, setCameraActive] = useState(false)
+  const [faceDetected, setFaceDetected] = useState(false)
+  const [capturingFace, setCapturingFace] = useState(false)
+  const [faceError, setFaceError] = useState<string | null>(null)
+  const [skippedFaceRegistration, setSkippedFaceRegistration] = useState(false)
+
+  const {
+    isModelLoaded,
+    isLoading: modelsLoading,
+    error: modelError,
+    detectFace,
+    descriptorToString
+  } = useFaceRecognition()
 
   const selectedEmployee = employees.find(e => e.id.toString() === formData.employeeId)
 
@@ -111,6 +136,117 @@ export default function CreateContractPage() {
       fetchContract(editId)
     }
   }, [editId])
+
+  // Start/stop camera when in face-register step
+  useEffect(() => {
+    if (currentStep === 'face-register' && !formData.faceRegistered && !skippedFaceRegistration) {
+      startCamera()
+    } else {
+      stopCamera()
+    }
+    return () => stopCamera()
+  }, [currentStep, formData.faceRegistered, skippedFaceRegistration])
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: 'user'
+        }
+      })
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        streamRef.current = stream
+        setCameraActive(true)
+        setFaceError(null)
+      }
+    } catch (err: any) {
+      console.error('Error accessing camera:', err)
+      setFaceError('No se pudo acceder a la cámara. Verifique los permisos.')
+    }
+  }
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+      streamRef.current = null
+    }
+    setCameraActive(false)
+    setFaceDetected(false)
+  }
+
+  const captureFace = async () => {
+    if (!videoRef.current || !isModelLoaded) return
+
+    try {
+      setCapturingFace(true)
+      setFaceError(null)
+
+      // Multiple capture attempts for better accuracy
+      let bestDescriptor: Float32Array | null = null
+      let attempts = 0
+      const MAX_ATTEMPTS = 3
+
+      while (!bestDescriptor && attempts < MAX_ATTEMPTS) {
+        attempts++
+        // Use skipCooldown and require larger face for registration
+        const descriptor = await detectFace(videoRef.current, {
+          skipCooldown: true,
+          minFaceSize: 150 // Require larger face for registration (better quality)
+        })
+
+        if (descriptor) {
+          bestDescriptor = descriptor
+        } else if (attempts < MAX_ATTEMPTS) {
+          // Wait a bit before retry
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      }
+
+      if (!bestDescriptor) {
+        setFaceError('No se detectó ningún rostro. Asegúrese de estar bien iluminado, mirando directamente a la cámara, y que su rostro esté cerca.')
+        return
+      }
+
+      // Convert descriptor to string for storage
+      const encodingString = descriptorToString(bestDescriptor)
+
+      setFormData(prev => ({
+        ...prev,
+        faceEncoding: encodingString,
+        faceRegistered: true
+      }))
+
+      setFaceDetected(true)
+      stopCamera()
+
+    } catch (err: any) {
+      console.error('Error capturing face:', err)
+      setFaceError('Error al capturar el rostro: ' + err.message)
+    } finally {
+      setCapturingFace(false)
+    }
+  }
+
+  const resetFaceRegistration = () => {
+    setFormData(prev => ({
+      ...prev,
+      faceEncoding: null,
+      faceRegistered: false
+    }))
+    setFaceDetected(false)
+    setSkippedFaceRegistration(false)
+    setFaceError(null)
+    startCamera()
+  }
+
+  const skipFaceRegistration = () => {
+    setSkippedFaceRegistration(true)
+    stopCamera()
+  }
 
   const fetchData = async () => {
     try {
@@ -175,7 +311,9 @@ export default function CreateContractPage() {
             notes: c.notes || '',
             photoOriginalPath: c.photoOriginalUrl || '',
             photoProcessedPath: c.photoUrl || '',
-            employeeGender: null
+            employeeGender: null,
+            faceEncoding: null,
+            faceRegistered: false
           })
         }
       }
@@ -222,6 +360,10 @@ export default function CreateContractPage() {
 
       case 'photo':
         // Photo is optional
+        return true
+
+      case 'face-register':
+        // Face registration is optional
         return true
 
       default:
@@ -279,6 +421,23 @@ export default function CreateContractPage() {
       const result = await response.json()
 
       if (result.success) {
+        // If face encoding was captured, register it
+        if (formData.faceEncoding && formData.employeeId) {
+          try {
+            await fetch(`/api/market/hr/employees/${formData.employeeId}/register-face`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                faceEncoding: formData.faceEncoding,
+                photoUrl: formData.photoProcessedPath || null
+              })
+            })
+          } catch (faceError) {
+            console.error('Error registering face (contract saved):', faceError)
+            // Don't fail the whole operation if face registration fails
+          }
+        }
+
         router.push('/dashboard/market/hr/contracts')
       } else {
         setError(result.error || 'Error al guardar contrato')
@@ -914,10 +1073,214 @@ export default function CreateContractPage() {
               </motion.div>
             )}
 
-            {/* Step 5: Confirmation */}
+            {/* Step 5: Face Registration for Kiosk */}
+            {currentStep === 'face-register' && (
+              <motion.div
+                key="step5-face"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-6"
+              >
+                <h2 className={cn(
+                  "text-xl font-bold mb-2",
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                )}>
+                  Registro Facial para Kiosco
+                </h2>
+                <p className={cn(
+                  "text-sm mb-6",
+                  theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                )}>
+                  Opcional: Registre el rostro del empleado para que pueda usar el kiosco de asistencia
+                </p>
+
+                {/* Already registered state */}
+                {formData.faceRegistered && (
+                  <div className={cn(
+                    "rounded-xl p-6 text-center",
+                    theme === 'dark' ? 'bg-green-900/30 border border-green-700' : 'bg-green-50 border border-green-200'
+                  )}>
+                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle className="w-8 h-8 text-green-600" />
+                    </div>
+                    <h3 className={cn(
+                      "font-bold text-lg mb-2",
+                      theme === 'dark' ? 'text-green-400' : 'text-green-700'
+                    )}>
+                      Rostro Registrado
+                    </h3>
+                    <p className={cn(
+                      "text-sm mb-4",
+                      theme === 'dark' ? 'text-green-300' : 'text-green-600'
+                    )}>
+                      El empleado podrá usar el kiosco con reconocimiento facial
+                    </p>
+                    <button
+                      onClick={resetFaceRegistration}
+                      className="text-sm text-green-600 hover:text-green-700 underline"
+                    >
+                      Volver a capturar
+                    </button>
+                  </div>
+                )}
+
+                {/* Skipped state */}
+                {skippedFaceRegistration && !formData.faceRegistered && (
+                  <div className={cn(
+                    "rounded-xl p-6 text-center",
+                    theme === 'dark' ? 'bg-amber-900/30 border border-amber-700' : 'bg-amber-50 border border-amber-200'
+                  )}>
+                    <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <AlertTriangle className="w-8 h-8 text-amber-600" />
+                    </div>
+                    <h3 className={cn(
+                      "font-bold text-lg mb-2",
+                      theme === 'dark' ? 'text-amber-400' : 'text-amber-700'
+                    )}>
+                      Registro Omitido
+                    </h3>
+                    <p className={cn(
+                      "text-sm mb-4",
+                      theme === 'dark' ? 'text-amber-300' : 'text-amber-600'
+                    )}>
+                      Sin registro facial, el empleado no podrá usar el kiosco de asistencia.
+                      Un manager deberá marcar su asistencia manualmente.
+                    </p>
+                    <button
+                      onClick={resetFaceRegistration}
+                      className="text-sm text-amber-600 hover:text-amber-700 underline"
+                    >
+                      Registrar ahora
+                    </button>
+                  </div>
+                )}
+
+                {/* Camera capture state */}
+                {!formData.faceRegistered && !skippedFaceRegistration && (
+                  <div className="space-y-4">
+                    {/* Loading models */}
+                    {modelsLoading && (
+                      <div className={cn(
+                        "rounded-xl p-6 text-center",
+                        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+                      )}>
+                        <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-amber-600" />
+                        <p className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+                          Cargando modelo de reconocimiento facial...
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Model error */}
+                    {modelError && !modelsLoading && (
+                      <div className={cn(
+                        "rounded-xl p-4 border",
+                        theme === 'dark' ? 'bg-red-900/30 border-red-700' : 'bg-red-50 border-red-200'
+                      )}>
+                        <p className={cn(
+                          "text-sm",
+                          theme === 'dark' ? 'text-red-400' : 'text-red-600'
+                        )}>
+                          {modelError}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Camera view */}
+                    {isModelLoaded && (
+                      <>
+                        <div className={cn(
+                          "relative rounded-2xl overflow-hidden aspect-[4/3]",
+                          theme === 'dark' ? 'bg-gray-900' : 'bg-black'
+                        )}>
+                          <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full h-full object-cover transform -scale-x-100"
+                          />
+
+                          {/* Camera not active overlay */}
+                          {!cameraActive && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80">
+                              <div className="text-center">
+                                <Camera className="w-12 h-12 text-gray-500 mx-auto mb-2" />
+                                <p className="text-gray-400">Iniciando cámara...</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Capture indicator */}
+                          {capturingFace && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                              <div className="text-center">
+                                <RefreshCw className="w-10 h-10 animate-spin text-white mx-auto mb-2" />
+                                <p className="text-white font-medium">Capturando rostro...</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Error message */}
+                        {faceError && (
+                          <div className={cn(
+                            "rounded-xl p-4 border",
+                            theme === 'dark' ? 'bg-red-900/30 border-red-700' : 'bg-red-50 border-red-200'
+                          )}>
+                            <p className={cn(
+                              "text-sm",
+                              theme === 'dark' ? 'text-red-400' : 'text-red-600'
+                            )}>
+                              {faceError}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Capture button */}
+                        <div className="flex gap-3">
+                          <button
+                            onClick={captureFace}
+                            disabled={!cameraActive || capturingFace}
+                            className={cn(
+                              "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-colors",
+                              "bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                            )}
+                          >
+                            <Scan className="w-5 h-5" />
+                            Capturar Rostro
+                          </button>
+                          <button
+                            onClick={skipFaceRegistration}
+                            className={cn(
+                              "px-4 py-3 rounded-xl font-medium transition-colors",
+                              theme === 'dark'
+                                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            )}
+                          >
+                            Omitir
+                          </button>
+                        </div>
+
+                        <p className={cn(
+                          "text-xs text-center",
+                          theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                        )}>
+                          Asegúrese de que el empleado esté bien iluminado y mirando directamente a la cámara
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {/* Step 6: Confirmation */}
             {currentStep === 'confirm' && (
               <motion.div
-                key="step5"
+                key="step6"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
@@ -1108,6 +1471,30 @@ export default function CreateContractPage() {
                       {formData.photoProcessedPath
                         ? 'Foto procesada con IA incluida'
                         : 'Sin foto adjunta'}
+                    </p>
+                  </div>
+
+                  {/* Face Registration Summary */}
+                  <div className={cn(
+                    "rounded-xl p-4",
+                    theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+                  )}>
+                    <h3 className={cn(
+                      "font-medium mb-3 flex items-center gap-2",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <Scan className="w-5 h-5 text-amber-600" />
+                      Registro Facial (Kiosco)
+                    </h3>
+                    <p className={cn(
+                      "text-sm",
+                      formData.faceRegistered
+                        ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                        : theme === 'dark' ? 'text-amber-400' : 'text-amber-600'
+                    )}>
+                      {formData.faceRegistered
+                        ? 'Rostro registrado - Puede usar el kiosco'
+                        : 'Sin registro facial - Solo asistencia manual por manager'}
                     </p>
                   </div>
                 </div>

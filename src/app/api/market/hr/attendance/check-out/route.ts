@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { employeeId, method, photoUrl, kioskId } = body
+    const { employeeId, method, photoUrl, kioskId, approvedById, approvedByName } = body
 
     if (!employeeId) {
       return NextResponse.json(
@@ -106,6 +106,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Determine the check-out method and notes
+    let checkOutMethod = method || 'manual'
+    let newNotes = null
+
+    if (method === 'manager_override' && approvedByName) {
+      checkOutMethod = 'manager_override'
+      newNotes = `Salida marcada por manager: ${approvedByName}`
+    }
+
     // Update attendance record
     const result = await db.query(`
       UPDATE market_attendance
@@ -116,14 +125,19 @@ export async function POST(request: NextRequest) {
         workedhours = $4,
         overtimehours = $5,
         earlydepartureminutes = $6,
+        approvedby = COALESCE($7, approvedby),
+        notes = COALESCE(notes, '') || CASE WHEN notes IS NOT NULL AND $8 IS NOT NULL THEN E'\n' ELSE '' END || COALESCE($8, ''),
         updatedat = NOW()
-      WHERE employeeid = $7 AND date = $8
+      WHERE employeeid = $9 AND date = $10
       RETURNING *
     `, [
-      now.toISOString(), method || 'manual', photoUrl || null,
+      now.toISOString(), checkOutMethod, photoUrl || null,
       Math.round(workedHours * 100) / 100,
       Math.round(overtimeHours * 100) / 100,
-      earlyDepartureMinutes, employeeId, today
+      earlyDepartureMinutes,
+      approvedById || null,
+      newNotes,
+      employeeId, today
     ])
 
     const row = result.rows[0]

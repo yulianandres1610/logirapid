@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { employeeId, method, photoUrl, kioskId } = body
+    const { employeeId, method, photoUrl, kioskId, approvedById, approvedByName } = body
 
     if (!employeeId) {
       return NextResponse.json(
@@ -94,24 +94,36 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Determine the check-in method and notes
+    let checkInMethod = method || 'manual'
+    let notes = null
+
+    if (method === 'manager_override' && approvedByName) {
+      checkInMethod = 'manager_override'
+      notes = `Entrada marcada por manager: ${approvedByName}`
+    }
+
     // Create or update attendance record
     const result = await db.query(`
       INSERT INTO market_attendance (
         companyid, employeeid, date, checkin, checkinmethod,
-        checkinphotourl, status, lateminutes
+        checkinphotourl, status, lateminutes, approvedby, notes
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       ON CONFLICT (employeeid, date) DO UPDATE SET
         checkin = $4,
         checkinmethod = $5,
         checkinphotourl = $6,
         status = $7,
         lateminutes = $8,
+        approvedby = $9,
+        notes = COALESCE(market_attendance.notes, '') || CASE WHEN market_attendance.notes IS NOT NULL AND $10 IS NOT NULL THEN E'\n' ELSE '' END || COALESCE($10, ''),
         updatedat = NOW()
       RETURNING *
     `, [
       companyId, employeeId, today, now.toISOString(),
-      method || 'manual', photoUrl || null, status, lateMinutes
+      checkInMethod, photoUrl || null, status, lateMinutes,
+      approvedById || null, notes
     ])
 
     const row = result.rows[0]

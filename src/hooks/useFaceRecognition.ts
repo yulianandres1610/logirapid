@@ -6,6 +6,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 interface FaceDetection {
   detection: {
     box: { x: number; y: number; width: number; height: number }
+    score: number
   }
   descriptor: Float32Array
 }
@@ -25,15 +26,31 @@ interface MatchResult {
   confidence: number
 }
 
+// Cache for parsed face descriptors to avoid re-parsing on every comparison
+const descriptorCache = new Map<string, Float32Array>()
+
+// Security constants
+const FACE_DESCRIPTOR_LENGTH = 128 // Standard face-api.js descriptor size
+const MIN_DETECTION_SCORE = 0.5 // Minimum confidence for face detection
+const MIN_FACE_SIZE = 100 // Minimum face bounding box size in pixels
+const DEFAULT_MATCH_THRESHOLD = 0.5 // Stricter threshold for better security (lower = stricter)
+
 export function useFaceRecognition() {
   const [isModelLoaded, setIsModelLoaded] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const faceapiRef = useRef<any>(null)
+  const lastDetectionTime = useRef<number>(0)
+  const detectionCooldown = 200 // Minimum ms between detections for performance
 
   // Load face-api.js models
   useEffect(() => {
     loadModels()
+
+    // Cleanup cache on unmount
+    return () => {
+      descriptorCache.clear()
+    }
   }, [])
 
   const loadModels = async () => {
@@ -65,14 +82,22 @@ export function useFaceRecognition() {
     }
   }
 
-  // Detect face and get descriptor from video element
+  // Detect face and get descriptor from video element with quality validation
   const detectFace = useCallback(async (
-    videoElement: HTMLVideoElement
+    videoElement: HTMLVideoElement,
+    options?: { skipCooldown?: boolean; minFaceSize?: number }
   ): Promise<Float32Array | null> => {
     if (!isModelLoaded || !faceapiRef.current) {
       setError('Models not loaded yet')
       return null
     }
+
+    // Performance: Apply cooldown between detections
+    const now = Date.now()
+    if (!options?.skipCooldown && now - lastDetectionTime.current < detectionCooldown) {
+      return null
+    }
+    lastDetectionTime.current = now
 
     try {
       const faceapi = faceapiRef.current
@@ -84,6 +109,26 @@ export function useFaceRecognition() {
         .withFaceDescriptor()
 
       if (!detection) {
+        return null
+      }
+
+      // Security: Validate detection confidence
+      if (detection.detection.score < MIN_DETECTION_SCORE) {
+        console.log('Face detection score too low:', detection.detection.score)
+        return null
+      }
+
+      // Security: Validate face size (prevent distant/small faces)
+      const { width, height } = detection.detection.box
+      const minSize = options?.minFaceSize || MIN_FACE_SIZE
+      if (width < minSize || height < minSize) {
+        console.log('Face too small:', width, 'x', height)
+        return null
+      }
+
+      // Security: Validate descriptor integrity
+      if (!detection.descriptor || detection.descriptor.length !== FACE_DESCRIPTOR_LENGTH) {
+        console.error('Invalid face descriptor length:', detection.descriptor?.length)
         return null
       }
 
@@ -141,26 +186,72 @@ export function useFaceRecognition() {
     return Math.sqrt(sum)
   }, [])
 
-  // Find best match from employee faces
+  // Get cached or parse descriptor (performance optimization)
+  const getCachedDescriptor = useCallback((employeeId: number, encodingString: string): Float32Array | null => {
+    const cacheKey = `${employeeId}-${encodingString.slice(0, 50)}`
+
+    if (descriptorCache.has(cacheKey)) {
+      return descriptorCache.get(cacheKey)!
+    }
+
+    try {
+      const parsed = JSON.parse(encodingString)
+
+      // Security: Validate the parsed array
+      if (!Array.isArray(parsed) || parsed.length !== FACE_DESCRIPTOR_LENGTH) {
+        console.error('Invalid stored face encoding for employee:', employeeId)
+        return null
+      }
+
+      // Security: Validate all values are numbers
+      if (!parsed.every((v: any) => typeof v === 'number' && !isNaN(v))) {
+        console.error('Invalid face encoding values for employee:', employeeId)
+        return null
+      }
+
+      const descriptor = new Float32Array(parsed)
+      descriptorCache.set(cacheKey, descriptor)
+      return descriptor
+    } catch (err) {
+      console.error('Error parsing face encoding for employee:', employeeId, err)
+      return null
+    }
+  }, [])
+
+  // Find best match from employee faces with enhanced security
   const findMatch = useCallback((
     faceDescriptor: Float32Array,
     employeeFaces: EmployeeFace[],
-    threshold: number = 0.6 // Lower is better, 0.6 is a good default
+    threshold: number = DEFAULT_MATCH_THRESHOLD // Stricter default (0.5)
   ): MatchResult | null => {
     if (!faceDescriptor || employeeFaces.length === 0) {
       return null
     }
 
+    // Security: Validate input descriptor
+    if (faceDescriptor.length !== FACE_DESCRIPTOR_LENGTH) {
+      console.error('Invalid input face descriptor length:', faceDescriptor.length)
+      return null
+    }
+
     let bestMatch: MatchResult | null = null
     let minDistance = Infinity
+    let secondBestDistance = Infinity
 
     for (const employee of employeeFaces) {
       try {
-        // Parse the stored face encoding
-        const storedDescriptor = new Float32Array(JSON.parse(employee.faceEncoding))
+        // Use cached descriptor for performance
+        const storedDescriptor = getCachedDescriptor(employee.employeeId, employee.faceEncoding)
+
+        if (!storedDescriptor) {
+          continue
+        }
+
         const distance = calculateDistance(faceDescriptor, storedDescriptor)
 
-        if (distance < minDistance && distance <= threshold) {
+        // Track second best for security (to detect ambiguous matches)
+        if (distance < minDistance) {
+          secondBestDistance = minDistance
           minDistance = distance
           bestMatch = {
             employeeId: employee.employeeId,
@@ -169,14 +260,29 @@ export function useFaceRecognition() {
             distance: distance,
             confidence: Math.round((1 - distance) * 100)
           }
+        } else if (distance < secondBestDistance) {
+          secondBestDistance = distance
         }
       } catch (err) {
         console.error('Error comparing face with employee:', employee.employeeId, err)
       }
     }
 
+    // Security: Reject if match is above threshold
+    if (!bestMatch || bestMatch.distance > threshold) {
+      return null
+    }
+
+    // Security: Reject ambiguous matches (second best is too close)
+    // This prevents false positives when two faces are similar
+    const ambiguityThreshold = 0.15 // Minimum difference between best and second best
+    if (secondBestDistance - minDistance < ambiguityThreshold && secondBestDistance <= threshold + 0.1) {
+      console.log('Ambiguous face match detected, rejecting for security')
+      return null
+    }
+
     return bestMatch
-  }, [calculateDistance])
+  }, [calculateDistance, getCachedDescriptor])
 
   // Convert descriptor to JSON string for storage
   const descriptorToString = useCallback((descriptor: Float32Array): string => {

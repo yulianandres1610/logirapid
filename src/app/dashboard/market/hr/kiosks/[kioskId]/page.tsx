@@ -14,7 +14,11 @@ import {
   Keyboard,
   Camera,
   RefreshCw,
-  Scan
+  Scan,
+  Shield,
+  Search,
+  Users,
+  ChevronLeft
 } from 'lucide-react'
 import { useFaceRecognition } from '@/hooks/useFaceRecognition'
 
@@ -47,8 +51,30 @@ interface EmployeeFace {
   faceEncoding: string
 }
 
-type KioskStep = 'idle' | 'identify' | 'face-scan' | 'confirm' | 'success' | 'error'
-type IdentifyMethod = 'pin' | 'face'
+interface ManagerData {
+  id: number
+  fullName: string
+  employeeCode: string
+  role: string
+}
+
+interface EmployeeListItem {
+  id: number
+  employeeCode: string
+  fullName: string
+  departmentName: string | null
+  hasFaceRegistered: boolean
+  todayAttendance: {
+    checkIn: string | null
+    checkOut: string | null
+    status: string
+  } | null
+  canCheckIn: boolean
+  canCheckOut: boolean
+}
+
+type KioskStep = 'idle' | 'identify' | 'face-scan' | 'confirm' | 'success' | 'error' | 'manager-pin' | 'manager-select'
+type IdentifyMethod = 'pin' | 'face' | 'manager_override'
 
 export default function KioskPage() {
   const params = useParams()
@@ -68,6 +94,13 @@ export default function KioskPage() {
   const [cameraActive, setCameraActive] = useState(false)
   const [faceDetected, setFaceDetected] = useState(false)
   const [scanStatus, setScanStatus] = useState<string>('idle')
+
+  // Manager override states
+  const [managerPin, setManagerPin] = useState('')
+  const [managerData, setManagerData] = useState<ManagerData | null>(null)
+  const [employeeList, setEmployeeList] = useState<EmployeeListItem[]>([])
+  const [employeeSearch, setEmployeeSearch] = useState('')
+  const [loadingEmployees, setLoadingEmployees] = useState(false)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -121,16 +154,28 @@ export default function KioskPage() {
     return () => stopCamera()
   }, [step])
 
-  // Face detection loop
+  // Face detection loop with optimized performance and security
   useEffect(() => {
     if (!cameraActive || !isModelLoaded || step !== 'face-scan') return
 
-    let animationFrameId: number
+    let timeoutId: ReturnType<typeof setTimeout>
     let isProcessing = false
+    let consecutiveMatches = 0
+    const REQUIRED_CONSECUTIVE_MATCHES = 2 // Require 2 consecutive matches for security
+    let lastMatchId: number | null = null
+    let scanStartTime = Date.now()
+    const SCAN_TIMEOUT = 30000 // 30 second timeout
 
     const detectFaceLoop = async () => {
+      // Timeout check
+      if (Date.now() - scanStartTime > SCAN_TIMEOUT) {
+        setMessage('Tiempo de escaneo agotado. Intente de nuevo.')
+        setStep('error')
+        return
+      }
+
       if (!videoRef.current || isProcessing || scanStatus === 'processing') {
-        animationFrameId = requestAnimationFrame(detectFaceLoop)
+        timeoutId = setTimeout(detectFaceLoop, 300) // 300ms interval for better performance
         return
       }
 
@@ -138,23 +183,41 @@ export default function KioskPage() {
       setScanStatus('scanning')
 
       try {
-        const descriptor = await detectFace(videoRef.current)
+        // Use skipCooldown since we control timing here
+        const descriptor = await detectFace(videoRef.current, { skipCooldown: true })
 
         if (descriptor) {
           setFaceDetected(true)
-          setScanStatus('processing')
 
-          // Try to match face
-          const match = findMatch(descriptor, employeeFaces, 0.6)
+          // Try to match face with stricter threshold (0.5)
+          const match = findMatch(descriptor, employeeFaces, 0.5)
 
           if (match) {
-            // Found a match - verify employee
-            await verifyEmployeeByFace(match.employeeId)
+            // Security: Require consecutive matches of the same person
+            if (lastMatchId === match.employeeId) {
+              consecutiveMatches++
+            } else {
+              consecutiveMatches = 1
+              lastMatchId = match.employeeId
+            }
+
+            // Only verify after required consecutive matches
+            if (consecutiveMatches >= REQUIRED_CONSECUTIVE_MATCHES) {
+              setScanStatus('processing')
+              console.log(`Face match confirmed: ${match.fullName} (confidence: ${match.confidence}%)`)
+              await verifyEmployeeByFace(match.employeeId)
+              return // Exit loop after successful match
+            }
           } else {
+            // Reset consecutive matches if no match
+            consecutiveMatches = 0
+            lastMatchId = null
             setFaceDetected(false)
           }
         } else {
           setFaceDetected(false)
+          consecutiveMatches = 0
+          lastMatchId = null
         }
       } catch (err) {
         console.error('Face detection error:', err)
@@ -162,18 +225,18 @@ export default function KioskPage() {
 
       isProcessing = false
       if (step === 'face-scan' && scanStatus !== 'processing') {
-        animationFrameId = requestAnimationFrame(detectFaceLoop)
+        timeoutId = setTimeout(detectFaceLoop, 300) // 300ms interval
       }
     }
 
-    // Start detection loop after a short delay
-    const timeoutId = setTimeout(() => {
-      animationFrameId = requestAnimationFrame(detectFaceLoop)
+    // Start detection loop after a short delay to let camera initialize
+    const startTimeoutId = setTimeout(() => {
+      detectFaceLoop()
     }, 500)
 
     return () => {
-      cancelAnimationFrame(animationFrameId)
       clearTimeout(timeoutId)
+      clearTimeout(startTimeoutId)
     }
   }, [cameraActive, isModelLoaded, step, employeeFaces, detectFace, findMatch, scanStatus])
 
@@ -240,7 +303,11 @@ export default function KioskPage() {
   const resetKiosk = () => {
     setStep('idle')
     setPin('')
+    setManagerPin('')
     setEmployee(null)
+    setManagerData(null)
+    setEmployeeList([])
+    setEmployeeSearch('')
     setMessage('')
     setFaceDetected(false)
     setScanStatus('idle')
@@ -261,6 +328,94 @@ export default function KioskPage() {
   const handlePinDelete = () => {
     setPin(pin.slice(0, -1))
   }
+
+  const handleManagerPinChange = (digit: string) => {
+    if (managerPin.length < 6) {
+      const newPin = managerPin + digit
+      setManagerPin(newPin)
+
+      // Auto-verify when PIN is 4-6 digits
+      if (newPin.length >= 4) {
+        verifyManagerAndLoadEmployees(newPin)
+      }
+    }
+  }
+
+  const handleManagerPinDelete = () => {
+    setManagerPin(managerPin.slice(0, -1))
+  }
+
+  const verifyManagerAndLoadEmployees = async (pinCode: string) => {
+    try {
+      setLoading(true)
+      setLoadingEmployees(true)
+
+      // First verify manager PIN by trying to authenticate
+      const verifyResponse = await fetch(`/api/market/hr/kiosks/${kioskId}/verify-employee`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: 'pin', pin: pinCode })
+      })
+
+      const verifyResult = await verifyResponse.json()
+
+      if (!verifyResult.success) {
+        // Check if it's because they're not a manager
+        if (verifyResult.error?.includes('Solo managers')) {
+          setMessage('Este PIN no pertenece a un manager')
+        } else {
+          setMessage(verifyResult.error || 'PIN de manager inválido')
+        }
+        setManagerPin('')
+        return
+      }
+
+      // Manager verified, store their data
+      setManagerData({
+        id: verifyResult.data.id,
+        fullName: verifyResult.data.fullName,
+        employeeCode: verifyResult.data.employeeCode,
+        role: 'MANAGER'
+      })
+
+      // Now fetch employee list
+      const listResponse = await fetch(`/api/market/hr/kiosks/${kioskId}/verify-employee`)
+      const listResult = await listResponse.json()
+
+      if (listResult.success) {
+        setEmployeeList(listResult.data)
+        setStep('manager-select')
+      } else {
+        setMessage('Error al cargar lista de empleados')
+      }
+
+    } catch (error) {
+      setMessage('Error de conexión')
+    } finally {
+      setLoading(false)
+      setLoadingEmployees(false)
+    }
+  }
+
+  const selectEmployeeForOverride = async (selectedEmployee: EmployeeListItem) => {
+    setEmployee({
+      id: selectedEmployee.id,
+      employeeCode: selectedEmployee.employeeCode,
+      fullName: selectedEmployee.fullName,
+      hasFaceRegistered: selectedEmployee.hasFaceRegistered,
+      canCheckIn: selectedEmployee.canCheckIn,
+      canCheckOut: selectedEmployee.canCheckOut,
+      todayAttendance: selectedEmployee.todayAttendance
+    })
+    setIdentifyMethod('manager_override')
+    setStep('confirm')
+  }
+
+  const filteredEmployees = employeeList.filter(emp =>
+    emp.fullName.toLowerCase().includes(employeeSearch.toLowerCase()) ||
+    emp.employeeCode.toLowerCase().includes(employeeSearch.toLowerCase()) ||
+    (emp.departmentName && emp.departmentName.toLowerCase().includes(employeeSearch.toLowerCase()))
+  )
 
   const verifyEmployee = async (pinCode: string) => {
     try {
@@ -319,20 +474,33 @@ export default function KioskPage() {
 
     try {
       setLoading(true)
+
+      const requestBody: any = {
+        employeeId: employee.id,
+        method: identifyMethod === 'face' ? 'face' : identifyMethod === 'manager_override' ? 'manager_override' : 'kiosk',
+        kioskId: parseInt(kioskId)
+      }
+
+      // Add manager data if this is a manager override
+      if (identifyMethod === 'manager_override' && managerData) {
+        requestBody.approvedById = managerData.id
+        requestBody.approvedByName = managerData.fullName
+      }
+
       const response = await fetch('/api/market/hr/attendance/check-in', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          employeeId: employee.id,
-          method: identifyMethod === 'face' ? 'face' : 'kiosk',
-          kioskId: parseInt(kioskId)
-        })
+        body: JSON.stringify(requestBody)
       })
 
       const result = await response.json()
 
       if (result.success) {
-        setMessage(result.message)
+        let successMessage = result.message
+        if (identifyMethod === 'manager_override' && managerData) {
+          successMessage += ` (Autorizado por ${managerData.fullName})`
+        }
+        setMessage(successMessage)
         setStep('success')
       } else {
         setMessage(result.error || 'Error al registrar entrada')
@@ -351,20 +519,33 @@ export default function KioskPage() {
 
     try {
       setLoading(true)
+
+      const requestBody: any = {
+        employeeId: employee.id,
+        method: identifyMethod === 'face' ? 'face' : identifyMethod === 'manager_override' ? 'manager_override' : 'kiosk',
+        kioskId: parseInt(kioskId)
+      }
+
+      // Add manager data if this is a manager override
+      if (identifyMethod === 'manager_override' && managerData) {
+        requestBody.approvedById = managerData.id
+        requestBody.approvedByName = managerData.fullName
+      }
+
       const response = await fetch('/api/market/hr/attendance/check-out', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          employeeId: employee.id,
-          method: identifyMethod === 'face' ? 'face' : 'kiosk',
-          kioskId: parseInt(kioskId)
-        })
+        body: JSON.stringify(requestBody)
       })
 
       const result = await response.json()
 
       if (result.success) {
-        setMessage(result.message)
+        let successMessage = result.message
+        if (identifyMethod === 'manager_override' && managerData) {
+          successMessage += ` (Autorizado por ${managerData.fullName})`
+        }
+        setMessage(successMessage)
         setStep('success')
       } else {
         setMessage(result.error || 'Error al registrar salida')
@@ -423,18 +604,18 @@ export default function KioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-8 text-center"
+              className="p-8 text-center relative"
             >
               <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Fingerprint className="w-12 h-12 text-indigo-600" />
+                <Camera className="w-12 h-12 text-indigo-600" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 Marcar Asistencia
               </h2>
               <p className="text-gray-500 mb-8">
                 {hasFaceRecognition
-                  ? 'Selecciona el método de identificación'
-                  : 'Toca el botón para comenzar'
+                  ? 'Acércate para el reconocimiento facial'
+                  : 'El reconocimiento facial no está disponible'
                 }
               </p>
 
@@ -448,26 +629,15 @@ export default function KioskPage() {
                     className="w-full flex items-center justify-center gap-3 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-lg transition-colors"
                   >
                     <Camera className="w-6 h-6" />
-                    Reconocimiento Facial
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIdentifyMethod('pin')
-                      setStep('identify')
-                    }}
-                    className="w-full flex items-center justify-center gap-3 py-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl font-bold text-lg transition-colors"
-                  >
-                    <Keyboard className="w-6 h-6" />
-                    Usar PIN
+                    Iniciar Reconocimiento Facial
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={() => setStep('identify')}
-                  className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-lg transition-colors"
-                >
-                  Comenzar
-                </button>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+                  <p className="text-amber-700 text-sm">
+                    No hay empleados con rostro registrado. Contacte al administrador.
+                  </p>
+                </div>
               )}
 
               {modelsLoading && (
@@ -476,6 +646,17 @@ export default function KioskPage() {
                   Cargando reconocimiento facial...
                 </p>
               )}
+
+              {/* Manager Override Button - positioned at bottom */}
+              <div className="mt-8 pt-4 border-t border-gray-100">
+                <button
+                  onClick={() => setStep('manager-pin')}
+                  className="flex items-center justify-center gap-2 mx-auto text-gray-400 hover:text-indigo-600 transition-colors text-sm"
+                >
+                  <Shield className="w-4 h-4" />
+                  Asistencia Manual (Manager)
+                </button>
+              </div>
             </motion.div>
           )}
 
@@ -549,33 +730,28 @@ export default function KioskPage() {
               >
                 Cancelar
               </button>
-
-              <button
-                onClick={() => {
-                  setIdentifyMethod('pin')
-                  setStep('identify')
-                }}
-                className="w-full py-3 text-indigo-600 hover:text-indigo-700 text-sm"
-              >
-                Usar PIN en su lugar
-              </button>
             </motion.div>
           )}
 
-          {/* Identify State (PIN) */}
-          {step === 'identify' && (
+          {/* Manager PIN State */}
+          {step === 'manager-pin' && (
             <motion.div
-              key="identify"
+              key="manager-pin"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="p-8"
             >
               <div className="text-center mb-6">
-                <Keyboard className="w-10 h-10 text-indigo-600 mx-auto mb-2" />
+                <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Shield className="w-8 h-8 text-amber-600" />
+                </div>
                 <h2 className="text-xl font-bold text-gray-900">
-                  Ingresa tu PIN
+                  Asistencia Manual
                 </h2>
+                <p className="text-gray-500 text-sm mt-1">
+                  Ingresa tu PIN de manager
+                </p>
               </div>
 
               {/* PIN Display */}
@@ -584,12 +760,12 @@ export default function KioskPage() {
                   <div
                     key={i}
                     className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-colors ${
-                      i < pin.length
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-600'
+                      i < managerPin.length
+                        ? 'border-amber-500 bg-amber-50 text-amber-600'
                         : 'border-gray-200'
                     }`}
                   >
-                    {i < pin.length ? '•' : ''}
+                    {i < managerPin.length ? '•' : ''}
                   </div>
                 ))}
               </div>
@@ -601,8 +777,8 @@ export default function KioskPage() {
                     key={i}
                     onClick={() => {
                       if (digit === null) return
-                      if (digit === 'del') handlePinDelete()
-                      else handlePinChange(digit.toString())
+                      if (digit === 'del') handleManagerPinDelete()
+                      else handleManagerPinChange(digit.toString())
                     }}
                     disabled={loading || digit === null}
                     className={`h-16 rounded-xl text-2xl font-bold transition-colors ${
@@ -610,7 +786,7 @@ export default function KioskPage() {
                         ? 'invisible'
                         : digit === 'del'
                           ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                          : 'bg-gray-100 text-gray-900 hover:bg-indigo-100'
+                          : 'bg-gray-100 text-gray-900 hover:bg-amber-100'
                     }`}
                   >
                     {digit === 'del' ? '⌫' : digit}
@@ -619,9 +795,15 @@ export default function KioskPage() {
               </div>
 
               {loading && (
-                <div className="flex items-center justify-center gap-2 text-indigo-600">
+                <div className="flex items-center justify-center gap-2 text-amber-600">
                   <RefreshCw className="w-5 h-5 animate-spin" />
-                  <span>Verificando...</span>
+                  <span>Verificando manager...</span>
+                </div>
+              )}
+
+              {message && !loading && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm text-center">
+                  {message}
                 </div>
               )}
 
@@ -631,19 +813,108 @@ export default function KioskPage() {
               >
                 Cancelar
               </button>
+            </motion.div>
+          )}
 
-              {hasFaceRecognition && (
+          {/* Manager Employee Selection State */}
+          {step === 'manager-select' && (
+            <motion.div
+              key="manager-select"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="p-6"
+            >
+              <div className="flex items-center gap-3 mb-4">
                 <button
                   onClick={() => {
-                    setIdentifyMethod('face')
-                    setPin('')
-                    setStep('face-scan')
+                    setStep('manager-pin')
+                    setManagerPin('')
+                    setManagerData(null)
                   }}
-                  className="w-full py-3 text-indigo-600 hover:text-indigo-700 text-sm"
+                  className="p-2 hover:bg-gray-100 rounded-lg"
                 >
-                  Usar reconocimiento facial
+                  <ChevronLeft className="w-5 h-5 text-gray-500" />
                 </button>
-              )}
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">
+                    Seleccionar Empleado
+                  </h2>
+                  {managerData && (
+                    <p className="text-xs text-amber-600">
+                      Manager: {managerData.fullName}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Search Input */}
+              <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar empleado..."
+                  value={employeeSearch}
+                  onChange={(e) => setEmployeeSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              {/* Employee List */}
+              <div className="max-h-80 overflow-y-auto space-y-2">
+                {loadingEmployees ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="w-6 h-6 animate-spin text-amber-600" />
+                  </div>
+                ) : filteredEmployees.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    No se encontraron empleados
+                  </div>
+                ) : (
+                  filteredEmployees.map(emp => (
+                    <button
+                      key={emp.id}
+                      onClick={() => selectEmployeeForOverride(emp)}
+                      className="w-full p-3 flex items-center gap-3 bg-gray-50 hover:bg-amber-50 rounded-xl transition-colors text-left"
+                    >
+                      <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                        <User className="w-5 h-5 text-gray-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 truncate">
+                          {emp.fullName}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {emp.employeeCode} {emp.departmentName && `• ${emp.departmentName}`}
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        {emp.todayAttendance?.checkIn ? (
+                          <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded">
+                            Entrada: {new Date(emp.todayAttendance.checkIn).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
+                            Sin entrada
+                          </span>
+                        )}
+                        {emp.todayAttendance?.checkOut && (
+                          <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded">
+                            Salida: {new Date(emp.todayAttendance.checkOut).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              <button
+                onClick={resetKiosk}
+                className="w-full py-3 mt-4 text-gray-500 hover:text-gray-700"
+              >
+                Cancelar
+              </button>
             </motion.div>
           )}
 
@@ -657,8 +928,12 @@ export default function KioskPage() {
               className="p-8"
             >
               <div className="text-center mb-6">
-                <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <User className="w-10 h-10 text-indigo-600" />
+                <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                  identifyMethod === 'manager_override' ? 'bg-amber-100' : 'bg-indigo-100'
+                }`}>
+                  <User className={`w-10 h-10 ${
+                    identifyMethod === 'manager_override' ? 'text-amber-600' : 'text-indigo-600'
+                  }`} />
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900">
                   {employee.fullName}
@@ -668,6 +943,12 @@ export default function KioskPage() {
                   <span className="inline-flex items-center gap-1 mt-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
                     <Camera className="w-4 h-4" />
                     Verificado por rostro
+                  </span>
+                )}
+                {identifyMethod === 'manager_override' && managerData && (
+                  <span className="inline-flex items-center gap-1 mt-2 px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-sm">
+                    <Shield className="w-4 h-4" />
+                    Autorizado por {managerData.fullName}
                   </span>
                 )}
               </div>
