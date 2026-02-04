@@ -237,6 +237,50 @@ export default function KioskPage() {
   const streamRef = useRef<MediaStream | null>(null)
   const pinInputRef = useRef<HTMLInputElement>(null)
   const cameraInitRef = useRef(false)
+  const capturedImageRef = useRef<string | null>(null)
+
+  // Capture current video frame as base64 image
+  const captureFrame = useCallback(() => {
+    if (!videoRef.current) return null
+
+    const video = videoRef.current
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth || 640
+    canvas.height = video.videoHeight || 480
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    return canvas.toDataURL('image/jpeg', 0.8)
+  }, [])
+
+  // Save attendance image log (async, non-blocking)
+  const saveAttendanceLog = useCallback(async (
+    employeeId: number,
+    actionType: 'checkin' | 'checkout',
+    attendanceId?: number
+  ) => {
+    const imageData = capturedImageRef.current
+    if (!imageData) return
+
+    try {
+      await fetch('/api/market/hr/attendance-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId,
+          attendanceId,
+          actionType,
+          imageData
+        })
+      })
+    } catch {
+      // Silent fail - logging should not block attendance
+    }
+
+    capturedImageRef.current = null
+  }, [])
 
   const {
     isModelLoaded,
@@ -408,6 +452,8 @@ export default function KioskPage() {
 
               if (consecutiveMatches >= REQUIRED_CONSECUTIVE_MATCHES) {
                 setScanStatus('processing')
+                // Capture frame for audit log
+                capturedImageRef.current = captureFrame()
                 console.log(`Face match confirmed: ${match.fullName} (confidence: ${match.confidence}%)`)
                 await verifyEmployeeByFace(match.employeeId)
                 return
@@ -449,7 +495,7 @@ export default function KioskPage() {
       clearTimeout(timeoutId)
       clearTimeout(startTimeoutId)
     }
-  }, [cameraActive, isModelLoaded, step, employeeFaces, detectFaceWithLandmarks, findMatch, scanStatus, showToast, livenessVerified, checkLiveness, resetLiveness])
+  }, [cameraActive, isModelLoaded, step, employeeFaces, detectFaceWithLandmarks, findMatch, scanStatus, showToast, livenessVerified, checkLiveness, resetLiveness, captureFrame])
 
   const fetchKiosk = async () => {
     try {
@@ -787,6 +833,11 @@ export default function KioskPage() {
       const result = await response.json()
 
       if (result.success) {
+        // Save attendance image log (async, non-blocking)
+        if (identifyMethod === 'face' && employee) {
+          saveAttendanceLog(employee.id, 'checkin', result.data?.attendanceId)
+        }
+
         let successMessage = result.message
         if (identifyMethod === 'manager_override' && managerData) {
           successMessage += ` (Autorizado por ${managerData.fullName})`
@@ -833,6 +884,11 @@ export default function KioskPage() {
       const result = await response.json()
 
       if (result.success) {
+        // Save attendance image log (async, non-blocking)
+        if (identifyMethod === 'face' && employee) {
+          saveAttendanceLog(employee.id, 'checkout', result.data?.attendanceId)
+        }
+
         let successMessage = result.message
         if (identifyMethod === 'manager_override' && managerData) {
           successMessage += ` (Autorizado por ${managerData.fullName})`
