@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
   FileText,
   Plus,
@@ -15,11 +15,10 @@ import {
   User,
   RefreshCw,
   X,
-  Loader2,
-  Users,
-  TrendingUp
+  Users
 } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
@@ -75,13 +74,12 @@ const statusColors: Record<string, { bg: string; text: string }> = {
 
 export default function ContractsPage() {
   const { theme } = useTheme()
+  const router = useRouter()
   const [contracts, setContracts] = useState<Contract[]>([])
   const [loading, setLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('active')
-  const [selectedContract, setSelectedContract] = useState<Contract | null>(null)
-  const [showDetails, setShowDetails] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   const [stats, setStats] = useState<Stats>({
@@ -136,19 +134,8 @@ export default function ContractsPage() {
 
   const handleManualRefresh = () => fetchContracts(true)
 
-  const viewContract = async (id: number) => {
-    try {
-      const response = await fetch(`/api/market/hr/contracts/${id}`)
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success) {
-          setSelectedContract(result.data)
-          setShowDetails(true)
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching contract:', error)
-    }
+  const viewContract = (id: number) => {
+    router.push(`/dashboard/market/hr/contracts/${id}`)
   }
 
   const filteredContracts = contracts.filter(c =>
@@ -639,141 +626,6 @@ export default function ContractsPage() {
           </motion.div>
         </div>
 
-        {/* Details Modal */}
-        <AnimatePresence>
-          {showDetails && selectedContract && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-              onClick={() => setShowDetails(false)}
-            >
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                onClick={(e) => e.stopPropagation()}
-                className={cn(
-                  'rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto',
-                  theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-                )}
-              >
-                <div className={cn(
-                  'p-6 border-b',
-                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                )}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className={cn(
-                        'text-xl font-bold',
-                        theme === 'dark' ? 'text-white' : 'text-gray-900'
-                      )}>
-                        {selectedContract.contractNumber}
-                      </h2>
-                      <p className="text-sm text-gray-500">{selectedContract.employeeName}</p>
-                    </div>
-                    <button
-                      onClick={() => setShowDetails(false)}
-                      className={cn(
-                        'p-2 rounded-lg transition-colors',
-                        theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-                      )}
-                    >
-                      <X className="w-5 h-5 text-gray-500" />
-                    </button>
-                  </div>
-                </div>
-                <div className="p-6 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Tipo de Contrato</p>
-                      <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                        {contractTypeLabels[selectedContract.contractType]}
-                      </p>
-                    </div>
-                    <div>
-                      <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Cargo</p>
-                      <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                        {selectedContract.position || '-'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Fecha de Inicio</p>
-                      <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                        {formatDate(selectedContract.startDate)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Fecha de Fin</p>
-                      <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                        {selectedContract.endDate ? formatDate(selectedContract.endDate) : 'Indefinido'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Tipo de Pago</p>
-                      <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                        {payTypeLabels[selectedContract.payType]}
-                      </p>
-                    </div>
-                    <div>
-                      <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Salario</p>
-                      <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                        {formatCurrency(selectedContract.payRate)} {selectedContract.currency}
-                      </p>
-                    </div>
-                    <div>
-                      <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Comision</p>
-                      <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                        {selectedContract.commissionRate}%
-                      </p>
-                    </div>
-                    <div>
-                      <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Estado</p>
-                      <span className={cn(
-                        'inline-flex px-2.5 py-1 rounded-lg text-xs font-medium',
-                        statusColors[selectedContract.status]?.bg || 'bg-gray-100',
-                        statusColors[selectedContract.status]?.text || 'text-gray-700'
-                      )}>
-                        {selectedContract.status === 'active' ? 'Activo' : selectedContract.status === 'terminated' ? 'Terminado' : 'Licencia'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {(selectedContract.departmentName || selectedContract.scheduleName) && (
-                    <div className={cn(
-                      'pt-4 border-t',
-                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                    )}>
-                      <div className="grid grid-cols-2 gap-4">
-                        {selectedContract.departmentName && (
-                          <div>
-                            <p className={cn('text-sm flex items-center gap-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                              <Building2 className="w-4 h-4" /> Departamento
-                            </p>
-                            <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                              {selectedContract.departmentName}
-                            </p>
-                          </div>
-                        )}
-                        {selectedContract.scheduleName && (
-                          <div>
-                            <p className={cn('text-sm flex items-center gap-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                              <Clock className="w-4 h-4" /> Horario
-                            </p>
-                            <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                              {selectedContract.scheduleName}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </DashboardLayout>
     </ProtectedRoute>
   )
