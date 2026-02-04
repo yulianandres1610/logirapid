@@ -215,6 +215,16 @@ export async function POST(
     const canCheckIn = !attendance || !attendance.checkin
     const canCheckOut = attendance && attendance.checkin && !attendance.checkout
 
+    console.log(`[VERIFY-EMPLOYEE] Employee: ${employee.id}, Date: ${today}, Attendance:`,
+      attendance ? { checkin: attendance.checkin, checkout: attendance.checkout, status: attendance.status } : null)
+
+    // Format timestamps to ISO strings for consistent client-side parsing
+    const todayAttendance = attendance ? {
+      checkIn: attendance.checkin ? new Date(attendance.checkin).toISOString() : null,
+      checkOut: attendance.checkout ? new Date(attendance.checkout).toISOString() : null,
+      status: attendance.status || 'present'
+    } : null
+
     return NextResponse.json({
       success: true,
       data: {
@@ -224,11 +234,7 @@ export async function POST(
         hasFaceRegistered: employee.hasfaceregistered,
         canCheckIn,
         canCheckOut,
-        todayAttendance: attendance ? {
-          checkIn: attendance.checkin,
-          checkOut: attendance.checkout,
-          status: attendance.status
-        } : null,
+        todayAttendance,
         // Include manager data if this was a manager override
         isManagerOverride: !!managerData,
         approvedBy: managerData
@@ -306,9 +312,9 @@ export async function GET(
         departmentName: emp.department_name,
         hasFaceRegistered: emp.hasfaceregistered,
         todayAttendance: attendance ? {
-          checkIn: attendance.checkin,
-          checkOut: attendance.checkout,
-          status: attendance.status
+          checkIn: attendance.checkin ? new Date(attendance.checkin).toISOString() : null,
+          checkOut: attendance.checkout ? new Date(attendance.checkout).toISOString() : null,
+          status: attendance.status || 'present'
         } : null,
         canCheckIn: !attendance || !attendance.checkin,
         canCheckOut: attendance && attendance.checkin && !attendance.checkout

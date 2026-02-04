@@ -67,7 +67,7 @@ export async function GET(
       FROM market_attendance a
       JOIN market_employees e ON a.employeeid = e.id
       LEFT JOIN users u ON e.user_id = u.id
-      LEFT JOIN market_departments d ON e.department_id = d.id
+      LEFT JOIN market_departments d ON e.departmentid = d.id
       LEFT JOIN market_employees approver ON a.approvedby = approver.id
       LEFT JOIN users approver_u ON approver.user_id = approver_u.id
       WHERE a.id = $1 AND a.companyid = $2
