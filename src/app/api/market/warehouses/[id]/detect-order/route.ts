@@ -410,6 +410,18 @@ export async function GET(
           }
 
           // For production reception, we have a single "line" which is the target product
+          // IMPORTANT: Use target_quantity (number of portions to produce), NOT source_weight_kg
+          const targetQty = parseInt(order.target_quantity) || 0
+
+          // Log for debugging
+          console.log('[Detect Order Production] Returning target_quantity for reception:', {
+            orderId: order.id,
+            orderNumber: order.order_number,
+            targetQuantity: targetQty,
+            sourceWeightKg: order.source_weight_kg,
+            sourceQuantity: order.source_quantity
+          })
+
           const lines: OrderLine[] = [{
             lineId: order.id, // Use order id as line id for production
             productId: order.target_product_id,
@@ -420,9 +432,9 @@ export async function GET(
             variantName: order.target_variant_name || null,
             variantSku: order.target_variant_sku || null,
             variantBarcode: order.target_variant_barcode || null,
-            quantityOrdered: order.target_quantity,
+            quantityOrdered: targetQty,
             quantityReceived: 0,
-            quantityPending: order.target_quantity,
+            quantityPending: targetQty,
             unitCost: parseFloat(order.cost_per_unit) || 0
           }]
 

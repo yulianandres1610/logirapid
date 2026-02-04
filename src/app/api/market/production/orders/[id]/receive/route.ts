@@ -156,9 +156,34 @@ export async function POST(
       observations
     } = body
 
-    // Use provided quantity or expected quantity
-    const actualQuantity = quantityReceived !== undefined ? quantityReceived : order.target_quantity
+    // IMPORTANT: Use provided quantity or fall back to target_quantity (NOT source_quantity or source_weight)
+    // target_quantity = number of portions to produce
+    // source_quantity = number of source units used (e.g., 1 saco)
+    // source_weight_kg = total weight of source material (e.g., 45kg)
+    const actualQuantity = quantityReceived !== undefined && quantityReceived !== null
+      ? parseFloat(String(quantityReceived))
+      : parseFloat(String(order.target_quantity))
     const warehouseId = targetWarehouseId || order.target_warehouse_id
+
+    // Log the values for debugging
+    console.log('[Production Receive] Processing order:', {
+      orderId,
+      orderNumber: order.order_number,
+      quantityReceivedFromBody: quantityReceived,
+      targetQuantity: order.target_quantity,
+      sourceQuantity: order.source_quantity,
+      sourceWeightKg: order.source_weight_kg,
+      calculatedActualQuantity: actualQuantity
+    })
+
+    // Validate the quantity makes sense (should be close to target_quantity, not source_weight)
+    if (actualQuantity > order.target_quantity * 2) {
+      console.warn('[Production Receive] WARNING: actualQuantity seems too high compared to target_quantity', {
+        actualQuantity,
+        targetQuantity: order.target_quantity,
+        sourceWeightKg: order.source_weight_kg
+      })
+    }
 
     // Calculate actual waste/surplus
     const expectedTotalWeight = parseFloat(order.target_portion_weight_kg) * order.target_quantity
@@ -274,6 +299,17 @@ export async function POST(
       ])
 
       // 4. Create record in production_lot_inventory for FIFO tracking
+      // Log the exact values being inserted
+      console.log('[Production Receive] Creating lot with:', {
+        lotNumber,
+        orderId,
+        productId: order.target_product_id,
+        quantityInitial: actualQuantity,
+        quantityAvailable: actualQuantity,
+        targetQuantityFromOrder: order.target_quantity,
+        sourceWeightKgFromOrder: order.source_weight_kg
+      })
+
       await client.query(`
         INSERT INTO production_lot_inventory (
           company_id, warehouse_id, product_id, variant_id, production_order_id,

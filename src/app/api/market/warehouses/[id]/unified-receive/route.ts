@@ -716,6 +716,29 @@ export async function POST(
       const productionQty = parseFloat(String(line.quantityReceived)) || 0
       const unitCost = parseFloat(production.cost_per_unit) || 0
 
+      // Log values for debugging - IMPORTANT: ensure we're using the right quantity
+      // target_quantity = number of portions to produce (e.g., 15)
+      // source_weight_kg = total weight of source material (e.g., 45kg)
+      console.log('[Unified Receive Production] Processing:', {
+        orderId,
+        orderNumber: production.order_number,
+        lineQuantityReceived: line.quantityReceived,
+        calculatedProductionQty: productionQty,
+        orderTargetQuantity: production.target_quantity,
+        orderSourceWeightKg: production.source_weight_kg,
+        orderSourceQuantity: production.source_quantity
+      })
+
+      // Validate the quantity - should be close to target_quantity, not source_weight
+      const targetQty = parseFloat(production.target_quantity) || 0
+      if (productionQty > targetQty * 2) {
+        console.warn('[Unified Receive Production] WARNING: quantity seems too high', {
+          productionQty,
+          targetQuantity: targetQty,
+          sourceWeightKg: production.source_weight_kg
+        })
+      }
+
       // Generate lot number if not provided (PRD-YYMMDD-XXXX format)
       let lotNumber = line.lotNumber
       if (!lotNumber) {
