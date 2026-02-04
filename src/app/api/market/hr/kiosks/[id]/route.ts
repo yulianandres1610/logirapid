@@ -43,10 +43,10 @@ export async function GET(
     const recentActivity = await db.query(`
       SELECT
         a.id, a.date, a.checkin, a.checkout, a.checkinmethod,
-        COALESCE(e.firstname || ' ' || e.lastname, u.email) as employeename
+        COALESCE(u.name, u.email, e.employee_code) as employeename
       FROM market_attendance a
       JOIN market_employees e ON a.employeeid = e.id
-      LEFT JOIN users u ON e.userid = u.id
+      LEFT JOIN users u ON e.user_id = u.id
       WHERE a.companyid = $1
       AND (a.checkinmethod = 'kiosk' OR a.checkoutmethod = 'kiosk')
       AND a.date >= CURRENT_DATE - INTERVAL '7 days'

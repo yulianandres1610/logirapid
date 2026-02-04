@@ -121,31 +121,47 @@ const Toast = ({ toast, onClose }: { toast: ToastMessage; onClose: () => void })
   )
 }
 
-// Animated background particles
-const FloatingParticles = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none">
-    {[...Array(20)].map((_, i) => (
-      <motion.div
-        key={i}
-        className="absolute w-2 h-2 bg-white/10 rounded-full"
-        initial={{
-          x: Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 1000),
-          y: Math.random() * (typeof window !== 'undefined' ? window.innerHeight : 800),
-        }}
-        animate={{
-          y: [null, -100],
-          opacity: [0, 0.5, 0],
-        }}
-        transition={{
-          duration: 8 + Math.random() * 4,
-          repeat: Infinity,
-          delay: Math.random() * 5,
-          ease: 'linear',
-        }}
-      />
-    ))}
-  </div>
-)
+// Animated background particles - client only to avoid hydration mismatch
+const FloatingParticles = () => {
+  const [mounted, setMounted] = useState(false)
+  const [particles, setParticles] = useState<Array<{ x: number; y: number; duration: number; delay: number }>>([])
+
+  useEffect(() => {
+    setMounted(true)
+    // Generate random values only on client
+    const newParticles = [...Array(20)].map(() => ({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      duration: 8 + Math.random() * 4,
+      delay: Math.random() * 5,
+    }))
+    setParticles(newParticles)
+  }, [])
+
+  if (!mounted) return null
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {particles.map((particle, i) => (
+        <motion.div
+          key={i}
+          className="absolute w-2 h-2 bg-white/10 rounded-full"
+          initial={{ x: particle.x, y: particle.y }}
+          animate={{
+            y: [null, -100],
+            opacity: [0, 0.5, 0],
+          }}
+          transition={{
+            duration: particle.duration,
+            repeat: Infinity,
+            delay: particle.delay,
+            ease: 'linear',
+          }}
+        />
+      ))}
+    </div>
+  )
+}
 
 // Pulsing ring animation for scanning
 const PulsingRings = () => (
