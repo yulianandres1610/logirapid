@@ -139,8 +139,11 @@ export async function POST(request: NextRequest) {
         workedhours = $4,
         overtimehours = $5,
         earlydepartureminutes = $6,
-        approvedby = COALESCE($7, approvedby),
-        notes = COALESCE(notes, '') || CASE WHEN notes IS NOT NULL AND $8 IS NOT NULL THEN E'\n' ELSE '' END || COALESCE($8, ''),
+        approvedby = COALESCE($7::INTEGER, approvedby),
+        notes = CASE
+          WHEN $8::TEXT IS NOT NULL THEN COALESCE(notes || E'\n', '') || $8::TEXT
+          ELSE notes
+        END,
         updatedat = NOW()
       WHERE employeeid = $9 AND date = $10
       RETURNING *
@@ -150,7 +153,7 @@ export async function POST(request: NextRequest) {
       Math.round(overtimeHours * 100) / 100,
       earlyDepartureMinutes,
       approvedById || null,
-      newNotes,
+      newNotes || null,
       employeeId, today
     ])
 

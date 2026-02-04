@@ -149,27 +149,34 @@ export async function POST(request: NextRequest) {
     }
 
     // Create or update attendance record
+    console.log(`[CHECK-IN] Inserting record - company: ${companyId}, employee: ${employeeId}, date: ${today}`)
+
     const result = await db.query(`
       INSERT INTO market_attendance (
         companyid, employeeid, date, checkin, checkinmethod,
         checkinphotourl, status, lateminutes, approvedby, notes
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::INTEGER, $9::INTEGER, $10::TEXT)
       ON CONFLICT (employeeid, date) DO UPDATE SET
         checkin = $4,
         checkinmethod = $5,
         checkinphotourl = $6,
         status = $7,
-        lateminutes = $8,
-        approvedby = $9,
-        notes = COALESCE(market_attendance.notes, '') || CASE WHEN market_attendance.notes IS NOT NULL AND $10 IS NOT NULL THEN E'\n' ELSE '' END || COALESCE($10, ''),
+        lateminutes = $8::INTEGER,
+        approvedby = $9::INTEGER,
+        notes = CASE
+          WHEN $10::TEXT IS NOT NULL THEN COALESCE(market_attendance.notes || E'\n', '') || $10::TEXT
+          ELSE market_attendance.notes
+        END,
         updatedat = NOW()
       RETURNING *
     `, [
       companyId, employeeId, today, now.toISOString(),
       checkInMethod, photoUrl || null, status, lateMinutes,
-      approvedById || null, notes
+      approvedById || null, notes || null
     ])
+
+    console.log(`[CHECK-IN] Record created/updated: id=${result.rows[0]?.id}`)
 
     const row = result.rows[0]
 
