@@ -28,11 +28,11 @@ export async function GET(request: NextRequest) {
         d.name as department_name,
         s.name as schedule_name
       FROM market_contracts c
-      JOIN market_employees e ON c.employee_id = e.id
+      JOIN market_employees e ON c.employeeid = e.id
       LEFT JOIN users u ON e.user_id = u.id
-      LEFT JOIN market_departments d ON c.department_id = d.id
-      LEFT JOIN market_schedules s ON c.schedule_id = s.id
-      WHERE c.company_id = $1
+      LEFT JOIN market_departments d ON c.departmentid = d.id
+      LEFT JOIN market_schedules s ON c.scheduleid = s.id
+      WHERE c.companyid = $1
     `
 
     const params: any[] = [companyId]
@@ -46,17 +46,17 @@ export async function GET(request: NextRequest) {
 
     if (employeeId) {
       paramCount++
-      query += ` AND c.employee_id = $${paramCount}`
+      query += ` AND c.employeeid = $${paramCount}`
       params.push(employeeId)
     }
 
     if (departmentId) {
       paramCount++
-      query += ` AND c.department_id = $${paramCount}`
+      query += ` AND c.departmentid = $${paramCount}`
       params.push(departmentId)
     }
 
-    query += ` ORDER BY c.created_at DESC`
+    query += ` ORDER BY c.createdat DESC`
 
     const result = await db.query(query, params)
 
@@ -64,32 +64,32 @@ export async function GET(request: NextRequest) {
       success: true,
       data: result.rows.map(row => ({
         id: row.id,
-        companyId: row.company_id,
-        employeeId: row.employee_id,
+        companyId: row.companyid,
+        employeeId: row.employeeid,
         employeeName: row.employee_name,
         employeeCode: row.employee_code,
-        contractNumber: row.contract_number,
-        contractType: row.contract_type,
-        startDate: row.start_date,
-        endDate: row.end_date,
-        payType: row.pay_type,
-        payRate: parseFloat(row.pay_rate),
+        contractNumber: row.contractnumber,
+        contractType: row.contracttype,
+        startDate: row.startdate,
+        endDate: row.enddate,
+        payType: row.paytype,
+        payRate: parseFloat(row.payrate),
         currency: row.currency,
-        commissionRate: parseFloat(row.commission_rate) || 0,
-        departmentId: row.department_id,
+        commissionRate: parseFloat(row.commissionrate) || 0,
+        departmentId: row.departmentid,
         departmentName: row.department_name,
-        scheduleId: row.schedule_id,
+        scheduleId: row.scheduleid,
         scheduleName: row.schedule_name,
         position: row.position,
         status: row.status,
-        terminationDate: row.termination_date,
-        terminationReason: row.termination_reason,
+        terminationDate: row.terminationdate,
+        terminationReason: row.terminationreason,
         notes: row.notes,
-        photoUrl: row.photo_url,
-        photoOriginalUrl: row.photo_original_url,
-        photoProcessedAt: row.photo_processed_at,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at
+        photoUrl: row.photourl,
+        photoOriginalUrl: row.photooriginalurl,
+        photoProcessedAt: row.photoprocessedat,
+        createdAt: row.createdat,
+        updatedAt: row.updatedat
       }))
     })
 
@@ -136,6 +136,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if employee exists and belongs to company
+    // Note: market_employees uses company_id (with underscore)
     const employeeCheck = await db.query(`
       SELECT id FROM market_employees WHERE id = $1 AND company_id = $2
     `, [employeeId, companyId])
@@ -152,7 +153,7 @@ export async function POST(request: NextRequest) {
     if (!finalContractNumber) {
       const year = new Date().getFullYear()
       const countResult = await db.query(`
-        SELECT COUNT(*) as count FROM market_contracts WHERE company_id = $1
+        SELECT COUNT(*) as count FROM market_contracts WHERE companyid = $1
       `, [companyId])
       const count = parseInt(countResult.rows[0].count) + 1
       finalContractNumber = `CONT-${year}-${String(count).padStart(5, '0')}`
@@ -161,17 +162,17 @@ export async function POST(request: NextRequest) {
     // Terminate any existing active contract for this employee
     await db.query(`
       UPDATE market_contracts
-      SET status = 'terminated', termination_date = $1, updated_at = NOW()
-      WHERE employee_id = $2 AND company_id = $3 AND status = 'active'
+      SET status = 'terminated', terminationdate = $1, updatedat = NOW()
+      WHERE employeeid = $2 AND companyid = $3 AND status = 'active'
     `, [startDate, employeeId, companyId])
 
     // Create new contract
     const result = await db.query(`
       INSERT INTO market_contracts (
-        company_id, employee_id, contract_number, contract_type,
-        start_date, end_date, pay_type, pay_rate, currency,
-        commission_rate, department_id, schedule_id, position, notes,
-        photo_url, photo_original_url, photo_processed_at
+        companyid, employeeid, contractnumber, contracttype,
+        startdate, enddate, paytype, payrate, currency,
+        commissionrate, departmentid, scheduleid, position, notes,
+        photourl, photooriginalurl, photoprocessedat
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING *
@@ -184,10 +185,10 @@ export async function POST(request: NextRequest) {
     ])
 
     // Update employee's department if specified
-    // Note: market_employees uses departmentid (no underscore)
+    // Note: market_employees uses departmentid (no underscore for this column) but updated_at (with underscore)
     if (departmentId) {
       await db.query(`
-        UPDATE market_employees SET departmentid = $1, updatedat = NOW()
+        UPDATE market_employees SET departmentid = $1, updated_at = NOW()
         WHERE id = $2
       `, [departmentId, employeeId])
     }
@@ -198,26 +199,26 @@ export async function POST(request: NextRequest) {
       success: true,
       data: {
         id: row.id,
-        companyId: row.company_id,
-        employeeId: row.employee_id,
-        contractNumber: row.contract_number,
-        contractType: row.contract_type,
-        startDate: row.start_date,
-        endDate: row.end_date,
-        payType: row.pay_type,
-        payRate: parseFloat(row.pay_rate),
+        companyId: row.companyid,
+        employeeId: row.employeeid,
+        contractNumber: row.contractnumber,
+        contractType: row.contracttype,
+        startDate: row.startdate,
+        endDate: row.enddate,
+        payType: row.paytype,
+        payRate: parseFloat(row.payrate),
         currency: row.currency,
-        commissionRate: parseFloat(row.commission_rate) || 0,
-        departmentId: row.department_id,
-        scheduleId: row.schedule_id,
+        commissionRate: parseFloat(row.commissionrate) || 0,
+        departmentId: row.departmentid,
+        scheduleId: row.scheduleid,
         position: row.position,
         status: row.status,
         notes: row.notes,
-        photoUrl: row.photo_url,
-        photoOriginalUrl: row.photo_original_url,
-        photoProcessedAt: row.photo_processed_at,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at
+        photoUrl: row.photourl,
+        photoOriginalUrl: row.photooriginalurl,
+        photoProcessedAt: row.photoprocessedat,
+        createdAt: row.createdat,
+        updatedAt: row.updatedat
       }
     })
 

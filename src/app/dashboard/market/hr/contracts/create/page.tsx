@@ -192,10 +192,10 @@ export default function CreateContractPage() {
 
       while (!bestDescriptor && attempts < MAX_ATTEMPTS) {
         attempts++
-        // Use skipCooldown and require larger face for registration
+        // Use skipCooldown with reduced face size for better capture experience
         const descriptor = await detectFace(videoRef.current, {
           skipCooldown: true,
-          minFaceSize: 150 // Require larger face for registration (better quality)
+          minFaceSize: 80 // Reduced from 150 to allow more flexible capture
         })
 
         if (descriptor) {
@@ -1187,11 +1187,11 @@ export default function CreateContractPage() {
                       </div>
                     )}
 
-                    {/* Camera view */}
+                    {/* Camera view - iPhone style face registration */}
                     {isModelLoaded && (
                       <>
                         <div className={cn(
-                          "relative rounded-2xl overflow-hidden aspect-[4/3]",
+                          "relative rounded-2xl overflow-hidden aspect-[3/4] max-w-sm mx-auto",
                           theme === 'dark' ? 'bg-gray-900' : 'bg-black'
                         )}>
                           <video
@@ -1201,6 +1201,52 @@ export default function CreateContractPage() {
                             muted
                             className="w-full h-full object-cover transform -scale-x-100"
                           />
+
+                          {/* iPhone-style face frame overlay */}
+                          {cameraActive && !capturingFace && (
+                            <div className="absolute inset-0 pointer-events-none">
+                              {/* Dark overlay with cutout */}
+                              <svg className="absolute inset-0 w-full h-full">
+                                <defs>
+                                  <mask id="faceMask">
+                                    <rect width="100%" height="100%" fill="white" />
+                                    <ellipse
+                                      cx="50%"
+                                      cy="42%"
+                                      rx="35%"
+                                      ry="32%"
+                                      fill="black"
+                                    />
+                                  </mask>
+                                </defs>
+                                <rect
+                                  width="100%"
+                                  height="100%"
+                                  fill="rgba(0,0,0,0.6)"
+                                  mask="url(#faceMask)"
+                                />
+                                {/* Animated border around face area */}
+                                <ellipse
+                                  cx="50%"
+                                  cy="42%"
+                                  rx="35%"
+                                  ry="32%"
+                                  fill="none"
+                                  stroke="rgba(255,255,255,0.8)"
+                                  strokeWidth="3"
+                                  strokeDasharray="8 4"
+                                  className="animate-pulse"
+                                />
+                              </svg>
+
+                              {/* Instructions */}
+                              <div className="absolute bottom-8 left-0 right-0 text-center">
+                                <p className="text-white text-sm font-medium px-4 py-2 bg-black/50 rounded-full mx-auto inline-block">
+                                  Coloque su rostro dentro del marco
+                                </p>
+                              </div>
+                            </div>
+                          )}
 
                           {/* Camera not active overlay */}
                           {!cameraActive && (
@@ -1214,10 +1260,11 @@ export default function CreateContractPage() {
 
                           {/* Capture indicator */}
                           {capturingFace && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/70">
                               <div className="text-center">
-                                <RefreshCw className="w-10 h-10 animate-spin text-white mx-auto mb-2" />
-                                <p className="text-white font-medium">Capturando rostro...</p>
+                                <div className="w-20 h-20 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                                <p className="text-white font-medium text-lg">Analizando rostro...</p>
+                                <p className="text-white/70 text-sm mt-1">No se mueva</p>
                               </div>
                             </div>
                           )}

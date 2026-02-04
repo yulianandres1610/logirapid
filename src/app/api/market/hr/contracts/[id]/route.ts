@@ -31,11 +31,11 @@ export async function GET(
         s.name as schedule_name,
         s.weeklyhours as weekly_hours
       FROM market_contracts c
-      JOIN market_employees e ON c.employee_id = e.id
+      JOIN market_employees e ON c.employeeid = e.id
       LEFT JOIN users u ON e.user_id = u.id
-      LEFT JOIN market_departments d ON c.department_id = d.id
-      LEFT JOIN market_schedules s ON c.schedule_id = s.id
-      WHERE c.id = $1 AND c.company_id = $2
+      LEFT JOIN market_departments d ON c.departmentid = d.id
+      LEFT JOIN market_schedules s ON c.scheduleid = s.id
+      WHERE c.id = $1 AND c.companyid = $2
     `, [id, companyId])
 
     if (result.rows.length === 0) {
@@ -49,12 +49,12 @@ export async function GET(
 
     // Get schedule days if schedule exists
     let scheduleDays = []
-    if (row.schedule_id) {
+    if (row.scheduleid) {
       const daysResult = await db.query(`
         SELECT * FROM market_schedule_days
         WHERE scheduleid = $1
         ORDER BY dayofweek ASC
-      `, [row.schedule_id])
+      `, [row.scheduleid])
 
       const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
       scheduleDays = daysResult.rows.map(day => ({
@@ -71,36 +71,36 @@ export async function GET(
       success: true,
       data: {
         id: row.id,
-        companyId: row.company_id,
-        employeeId: row.employee_id,
+        companyId: row.companyid,
+        employeeId: row.employeeid,
         employeeName: row.employee_name,
         employeeCode: row.employee_code,
         employeeEmail: row.employee_email,
-        contractNumber: row.contract_number,
-        contractType: row.contract_type,
-        startDate: row.start_date,
-        endDate: row.end_date,
-        payType: row.pay_type,
-        payRate: parseFloat(row.pay_rate),
+        contractNumber: row.contractnumber,
+        contractType: row.contracttype,
+        startDate: row.startdate,
+        endDate: row.enddate,
+        payType: row.paytype,
+        payRate: parseFloat(row.payrate),
         currency: row.currency,
-        commissionRate: parseFloat(row.commission_rate) || 0,
-        departmentId: row.department_id,
+        commissionRate: parseFloat(row.commissionrate) || 0,
+        departmentId: row.departmentid,
         departmentName: row.department_name,
         departmentCode: row.department_code,
-        scheduleId: row.schedule_id,
+        scheduleId: row.scheduleid,
         scheduleName: row.schedule_name,
         weeklyHours: row.weekly_hours ? parseFloat(row.weekly_hours) : null,
         scheduleDays,
         position: row.position,
         status: row.status,
-        terminationDate: row.termination_date,
-        terminationReason: row.termination_reason,
+        terminationDate: row.terminationdate,
+        terminationReason: row.terminationreason,
         notes: row.notes,
-        photoUrl: row.photo_url,
-        photoOriginalUrl: row.photo_original_url,
-        photoProcessedAt: row.photo_processed_at,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at
+        photoUrl: row.photourl,
+        photoOriginalUrl: row.photooriginalurl,
+        photoProcessedAt: row.photoprocessedat,
+        createdAt: row.createdat,
+        updatedAt: row.updatedat
       }
     })
 
@@ -146,24 +146,24 @@ export async function PUT(
     const result = await db.query(`
       UPDATE market_contracts
       SET
-        contract_type = COALESCE($1, contract_type),
-        end_date = $2,
-        pay_type = COALESCE($3, pay_type),
-        pay_rate = COALESCE($4, pay_rate),
+        contracttype = COALESCE($1, contracttype),
+        enddate = $2,
+        paytype = COALESCE($3, paytype),
+        payrate = COALESCE($4, payrate),
         currency = COALESCE($5, currency),
-        commission_rate = COALESCE($6, commission_rate),
-        department_id = $7,
-        schedule_id = $8,
+        commissionrate = COALESCE($6, commissionrate),
+        departmentid = $7,
+        scheduleid = $8,
         position = $9,
         status = COALESCE($10, status),
-        termination_date = $11,
-        termination_reason = $12,
+        terminationdate = $11,
+        terminationreason = $12,
         notes = $13,
-        photo_url = COALESCE($16, photo_url),
-        photo_original_url = COALESCE($17, photo_original_url),
-        photo_processed_at = CASE WHEN $16 IS NOT NULL THEN NOW() ELSE photo_processed_at END,
-        updated_at = NOW()
-      WHERE id = $14 AND company_id = $15
+        photourl = COALESCE($16, photourl),
+        photooriginalurl = COALESCE($17, photooriginalurl),
+        photoprocessedat = CASE WHEN $16 IS NOT NULL THEN NOW() ELSE photoprocessedat END,
+        updatedat = NOW()
+      WHERE id = $14 AND companyid = $15
       RETURNING *
     `, [
       contractType, endDate, payType, payRate, currency,
@@ -182,40 +182,40 @@ export async function PUT(
     const row = result.rows[0]
 
     // Update employee's department if specified
-    // Note: market_employees uses departmentid (no underscore)
+    // Note: market_employees uses departmentid (no underscore) but updated_at (with underscore)
     if (departmentId !== undefined) {
       await db.query(`
-        UPDATE market_employees SET departmentid = $1, updatedat = NOW()
+        UPDATE market_employees SET departmentid = $1, updated_at = NOW()
         WHERE id = $2
-      `, [departmentId || null, row.employee_id])
+      `, [departmentId || null, row.employeeid])
     }
 
     return NextResponse.json({
       success: true,
       data: {
         id: row.id,
-        companyId: row.company_id,
-        employeeId: row.employee_id,
-        contractNumber: row.contract_number,
-        contractType: row.contract_type,
-        startDate: row.start_date,
-        endDate: row.end_date,
-        payType: row.pay_type,
-        payRate: parseFloat(row.pay_rate),
+        companyId: row.companyid,
+        employeeId: row.employeeid,
+        contractNumber: row.contractnumber,
+        contractType: row.contracttype,
+        startDate: row.startdate,
+        endDate: row.enddate,
+        payType: row.paytype,
+        payRate: parseFloat(row.payrate),
         currency: row.currency,
-        commissionRate: parseFloat(row.commission_rate) || 0,
-        departmentId: row.department_id,
-        scheduleId: row.schedule_id,
+        commissionRate: parseFloat(row.commissionrate) || 0,
+        departmentId: row.departmentid,
+        scheduleId: row.scheduleid,
         position: row.position,
         status: row.status,
-        terminationDate: row.termination_date,
-        terminationReason: row.termination_reason,
+        terminationDate: row.terminationdate,
+        terminationReason: row.terminationreason,
         notes: row.notes,
-        photoUrl: row.photo_url,
-        photoOriginalUrl: row.photo_original_url,
-        photoProcessedAt: row.photo_processed_at,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at
+        photoUrl: row.photourl,
+        photoOriginalUrl: row.photooriginalurl,
+        photoProcessedAt: row.photoprocessedat,
+        createdAt: row.createdat,
+        updatedAt: row.updatedat
       }
     })
 
@@ -243,8 +243,8 @@ export async function DELETE(
     // Don't actually delete - terminate the contract
     const result = await db.query(`
       UPDATE market_contracts
-      SET status = 'terminated', termination_date = CURRENT_DATE, updated_at = NOW()
-      WHERE id = $1 AND company_id = $2
+      SET status = 'terminated', terminationdate = CURRENT_DATE, updatedat = NOW()
+      WHERE id = $1 AND companyid = $2
       RETURNING *
     `, [id, companyId])
 

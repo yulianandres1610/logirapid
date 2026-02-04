@@ -47,32 +47,32 @@ export async function POST(request: NextRequest) {
       )
     `)
 
-    // 4. Contracts table
+    // 4. Contracts table (using lowercase column names without underscores for consistency)
     await db.query(`
       CREATE TABLE IF NOT EXISTS market_contracts (
         id SERIAL PRIMARY KEY,
-        company_id INTEGER REFERENCES companies(id),
-        employee_id INTEGER REFERENCES market_employees(id) ON DELETE CASCADE,
-        contract_number VARCHAR(50),
-        contract_type VARCHAR(50) NOT NULL,
-        start_date DATE NOT NULL,
-        end_date DATE,
-        pay_type VARCHAR(20) NOT NULL,
-        pay_rate DECIMAL(12,4) NOT NULL,
+        companyid INTEGER REFERENCES companies(id),
+        employeeid INTEGER REFERENCES market_employees(id) ON DELETE CASCADE,
+        contractnumber VARCHAR(50),
+        contracttype VARCHAR(50) NOT NULL,
+        startdate DATE NOT NULL,
+        enddate DATE,
+        paytype VARCHAR(20) NOT NULL,
+        payrate DECIMAL(12,4) NOT NULL,
         currency VARCHAR(3) DEFAULT 'USD',
-        commission_rate DECIMAL(5,2) DEFAULT 0,
-        department_id INTEGER REFERENCES market_departments(id),
-        schedule_id INTEGER REFERENCES market_schedules(id),
+        commissionrate DECIMAL(5,2) DEFAULT 0,
+        departmentid INTEGER REFERENCES market_departments(id),
+        scheduleid INTEGER REFERENCES market_schedules(id),
         position VARCHAR(100),
         status VARCHAR(20) DEFAULT 'active',
-        termination_date DATE,
-        termination_reason TEXT,
+        terminationdate DATE,
+        terminationreason TEXT,
         notes TEXT,
-        photo_url TEXT,
-        photo_original_url TEXT,
-        photo_processed_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
+        photourl TEXT,
+        photooriginalurl TEXT,
+        photoprocessedat TIMESTAMP,
+        createdat TIMESTAMP DEFAULT NOW(),
+        updatedat TIMESTAMP DEFAULT NOW()
       )
     `)
 
@@ -144,31 +144,31 @@ export async function POST(request: NextRequest) {
       console.log('Column hasfaceregistered may already exist')
     }
 
-    // Add photo columns to market_contracts if not exists (using underscore naming)
+    // Add photo columns to market_contracts if not exists (using lowercase naming without underscores)
     try {
-      await db.query(`ALTER TABLE market_contracts ADD COLUMN IF NOT EXISTS photo_url TEXT`)
+      await db.query(`ALTER TABLE market_contracts ADD COLUMN IF NOT EXISTS photourl TEXT`)
     } catch (e) {
-      console.log('Column photo_url may already exist')
+      console.log('Column photourl may already exist')
     }
 
     try {
-      await db.query(`ALTER TABLE market_contracts ADD COLUMN IF NOT EXISTS photo_original_url TEXT`)
+      await db.query(`ALTER TABLE market_contracts ADD COLUMN IF NOT EXISTS photooriginalurl TEXT`)
     } catch (e) {
-      console.log('Column photo_original_url may already exist')
+      console.log('Column photooriginalurl may already exist')
     }
 
     try {
-      await db.query(`ALTER TABLE market_contracts ADD COLUMN IF NOT EXISTS photo_processed_at TIMESTAMP`)
+      await db.query(`ALTER TABLE market_contracts ADD COLUMN IF NOT EXISTS photoprocessedat TIMESTAMP`)
     } catch (e) {
-      console.log('Column photo_processed_at may already exist')
+      console.log('Column photoprocessedat may already exist')
     }
 
-    // Create indexes for better performance (using correct column names)
+    // Create indexes for better performance (using correct column names without underscores)
     try {
       await db.query(`CREATE INDEX IF NOT EXISTS idx_attendance_employee_date ON market_attendance(employeeid, date)`)
       await db.query(`CREATE INDEX IF NOT EXISTS idx_attendance_company_date ON market_attendance(companyid, date)`)
-      await db.query(`CREATE INDEX IF NOT EXISTS idx_contracts_employee ON market_contracts(employee_id)`)
-      await db.query(`CREATE INDEX IF NOT EXISTS idx_contracts_company ON market_contracts(company_id)`)
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_contracts_employee ON market_contracts(employeeid)`)
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_contracts_company ON market_contracts(companyid)`)
       await db.query(`CREATE INDEX IF NOT EXISTS idx_departments_company ON market_departments(companyid)`)
       await db.query(`CREATE INDEX IF NOT EXISTS idx_schedules_company ON market_schedules(companyid)`)
     } catch (e) {

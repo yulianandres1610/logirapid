@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 
 /**
- * Migration to fix market_contracts column naming
- * Changes columns from camelCase/no-underscore to snake_case
+ * Migration to ensure market_contracts uses correct column naming
+ * The correct convention is lowercase without underscores (companyid, employeeid, etc.)
+ * This migration will:
+ * 1. If table has underscore naming (company_id), rename to no-underscore (companyid)
+ * 2. If table already has no-underscore naming, just add missing photo columns
  */
 export async function POST(request: NextRequest) {
   const logs: string[] = []
@@ -36,23 +39,24 @@ export async function POST(request: NextRequest) {
     const existingColumns = columnsResult.rows.map(r => r.column_name)
     logs.push(`Existing columns: ${existingColumns.join(', ')}`)
 
-    // Check if we need to rename columns (old naming without underscores)
-    const hasOldNaming = existingColumns.includes('companyid') || existingColumns.includes('employeeid')
-    const hasNewNaming = existingColumns.includes('company_id') || existingColumns.includes('employee_id')
+    // Check naming conventions
+    const hasNoUnderscoreNaming = existingColumns.includes('companyid') || existingColumns.includes('employeeid')
+    const hasUnderscoreNaming = existingColumns.includes('company_id') || existingColumns.includes('employee_id')
 
-    if (hasNewNaming && !hasOldNaming) {
-      logs.push('Table already uses correct column naming with underscores')
+    // CORRECT STATE: Table uses no-underscore naming (companyid, employeeid, etc.)
+    if (hasNoUnderscoreNaming && !hasUnderscoreNaming) {
+      logs.push('Table already uses correct column naming (no underscores)')
 
-      // Still check for photo columns that might need fixing
+      // Just ensure photo columns exist with correct naming
       const photoColumnsToAdd = []
-      if (!existingColumns.includes('photo_url') && !existingColumns.includes('photourl')) {
-        photoColumnsToAdd.push('photo_url TEXT')
+      if (!existingColumns.includes('photourl')) {
+        photoColumnsToAdd.push('photourl TEXT')
       }
-      if (!existingColumns.includes('photo_original_url') && !existingColumns.includes('photooriginalurl')) {
-        photoColumnsToAdd.push('photo_original_url TEXT')
+      if (!existingColumns.includes('photooriginalurl')) {
+        photoColumnsToAdd.push('photooriginalurl TEXT')
       }
-      if (!existingColumns.includes('photo_processed_at') && !existingColumns.includes('photoprocessedat')) {
-        photoColumnsToAdd.push('photo_processed_at TIMESTAMP')
+      if (!existingColumns.includes('photoprocessedat')) {
+        photoColumnsToAdd.push('photoprocessedat TIMESTAMP')
       }
 
       for (const col of photoColumnsToAdd) {
@@ -64,20 +68,6 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Rename photo columns if they exist with old naming
-      if (existingColumns.includes('photourl')) {
-        await db.query(`ALTER TABLE market_contracts RENAME COLUMN photourl TO photo_url`)
-        logs.push('Renamed photourl to photo_url')
-      }
-      if (existingColumns.includes('photooriginalurl')) {
-        await db.query(`ALTER TABLE market_contracts RENAME COLUMN photooriginalurl TO photo_original_url`)
-        logs.push('Renamed photooriginalurl to photo_original_url')
-      }
-      if (existingColumns.includes('photoprocessedat')) {
-        await db.query(`ALTER TABLE market_contracts RENAME COLUMN photoprocessedat TO photo_processed_at`)
-        logs.push('Renamed photoprocessedat to photo_processed_at')
-      }
-
       return NextResponse.json({
         success: true,
         message: 'Column naming is correct, photo columns checked',
@@ -85,29 +75,30 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    if (hasOldNaming) {
-      logs.push('Detected old column naming, need to rename columns')
+    // NEEDS MIGRATION: Table has underscore naming, needs to be changed to no-underscore
+    if (hasUnderscoreNaming) {
+      logs.push('Detected underscore column naming, need to rename to no-underscore format')
 
-      // Define column renames: old -> new
+      // Define column renames: old (underscore) -> new (no underscore)
       const columnRenames = [
-        ['companyid', 'company_id'],
-        ['employeeid', 'employee_id'],
-        ['contractnumber', 'contract_number'],
-        ['contracttype', 'contract_type'],
-        ['startdate', 'start_date'],
-        ['enddate', 'end_date'],
-        ['paytype', 'pay_type'],
-        ['payrate', 'pay_rate'],
-        ['commissionrate', 'commission_rate'],
-        ['departmentid', 'department_id'],
-        ['scheduleid', 'schedule_id'],
-        ['terminationdate', 'termination_date'],
-        ['terminationreason', 'termination_reason'],
-        ['photourl', 'photo_url'],
-        ['photooriginalurl', 'photo_original_url'],
-        ['photoprocessedat', 'photo_processed_at'],
-        ['createdat', 'created_at'],
-        ['updatedat', 'updated_at']
+        ['company_id', 'companyid'],
+        ['employee_id', 'employeeid'],
+        ['contract_number', 'contractnumber'],
+        ['contract_type', 'contracttype'],
+        ['start_date', 'startdate'],
+        ['end_date', 'enddate'],
+        ['pay_type', 'paytype'],
+        ['pay_rate', 'payrate'],
+        ['commission_rate', 'commissionrate'],
+        ['department_id', 'departmentid'],
+        ['schedule_id', 'scheduleid'],
+        ['termination_date', 'terminationdate'],
+        ['termination_reason', 'terminationreason'],
+        ['photo_url', 'photourl'],
+        ['photo_original_url', 'photooriginalurl'],
+        ['photo_processed_at', 'photoprocessedat'],
+        ['created_at', 'createdat'],
+        ['updated_at', 'updatedat']
       ]
 
       for (const [oldName, newName] of columnRenames) {
@@ -131,8 +122,8 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        await db.query(`CREATE INDEX IF NOT EXISTS idx_contracts_employee ON market_contracts(employee_id)`)
-        await db.query(`CREATE INDEX IF NOT EXISTS idx_contracts_company ON market_contracts(company_id)`)
+        await db.query(`CREATE INDEX IF NOT EXISTS idx_contracts_employee ON market_contracts(employeeid)`)
+        await db.query(`CREATE INDEX IF NOT EXISTS idx_contracts_company ON market_contracts(companyid)`)
         logs.push('Created new indexes with correct column names')
       } catch (e: any) {
         logs.push(`Could not create indexes: ${e.message}`)
@@ -140,7 +131,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: 'Columns renamed successfully',
+        message: 'Columns renamed successfully to no-underscore format',
         logs
       })
     }
@@ -175,8 +166,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       columns: columnsResult.rows,
-      hasUnderscoreNaming: columnsResult.rows.some(r => r.column_name === 'company_id'),
-      hasOldNaming: columnsResult.rows.some(r => r.column_name === 'companyid')
+      hasNoUnderscoreNaming: columnsResult.rows.some(r => r.column_name === 'companyid'),
+      hasUnderscoreNaming: columnsResult.rows.some(r => r.column_name === 'company_id')
     })
   } catch (error: any) {
     return NextResponse.json({
