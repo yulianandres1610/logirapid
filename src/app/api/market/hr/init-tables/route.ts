@@ -144,31 +144,31 @@ export async function POST(request: NextRequest) {
       console.log('Column hasfaceregistered may already exist')
     }
 
-    // Add photo columns to market_contracts if not exists
+    // Add photo columns to market_contracts if not exists (using underscore naming)
     try {
-      await db.query(`ALTER TABLE market_contracts ADD COLUMN IF NOT EXISTS photourl TEXT`)
+      await db.query(`ALTER TABLE market_contracts ADD COLUMN IF NOT EXISTS photo_url TEXT`)
     } catch (e) {
-      console.log('Column photourl may already exist')
+      console.log('Column photo_url may already exist')
     }
 
     try {
-      await db.query(`ALTER TABLE market_contracts ADD COLUMN IF NOT EXISTS photooriginalurl TEXT`)
+      await db.query(`ALTER TABLE market_contracts ADD COLUMN IF NOT EXISTS photo_original_url TEXT`)
     } catch (e) {
-      console.log('Column photooriginalurl may already exist')
+      console.log('Column photo_original_url may already exist')
     }
 
     try {
-      await db.query(`ALTER TABLE market_contracts ADD COLUMN IF NOT EXISTS photoprocessedat TIMESTAMP`)
+      await db.query(`ALTER TABLE market_contracts ADD COLUMN IF NOT EXISTS photo_processed_at TIMESTAMP`)
     } catch (e) {
-      console.log('Column photoprocessedat may already exist')
+      console.log('Column photo_processed_at may already exist')
     }
 
-    // Create indexes for better performance
+    // Create indexes for better performance (using correct column names)
     try {
       await db.query(`CREATE INDEX IF NOT EXISTS idx_attendance_employee_date ON market_attendance(employeeid, date)`)
       await db.query(`CREATE INDEX IF NOT EXISTS idx_attendance_company_date ON market_attendance(companyid, date)`)
-      await db.query(`CREATE INDEX IF NOT EXISTS idx_contracts_employee ON market_contracts(employeeid)`)
-      await db.query(`CREATE INDEX IF NOT EXISTS idx_contracts_company ON market_contracts(companyid)`)
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_contracts_employee ON market_contracts(employee_id)`)
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_contracts_company ON market_contracts(company_id)`)
       await db.query(`CREATE INDEX IF NOT EXISTS idx_departments_company ON market_departments(companyid)`)
       await db.query(`CREATE INDEX IF NOT EXISTS idx_schedules_company ON market_schedules(companyid)`)
     } catch (e) {

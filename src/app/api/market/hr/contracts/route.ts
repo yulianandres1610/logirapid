@@ -184,9 +184,10 @@ export async function POST(request: NextRequest) {
     ])
 
     // Update employee's department if specified
+    // Note: market_employees uses departmentid (no underscore)
     if (departmentId) {
       await db.query(`
-        UPDATE market_employees SET department_id = $1, updated_at = NOW()
+        UPDATE market_employees SET departmentid = $1, updatedat = NOW()
         WHERE id = $2
       `, [departmentId, employeeId])
     }

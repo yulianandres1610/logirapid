@@ -182,9 +182,10 @@ export async function PUT(
     const row = result.rows[0]
 
     // Update employee's department if specified
+    // Note: market_employees uses departmentid (no underscore)
     if (departmentId !== undefined) {
       await db.query(`
-        UPDATE market_employees SET department_id = $1, updated_at = NOW()
+        UPDATE market_employees SET departmentid = $1, updatedat = NOW()
         WHERE id = $2
       `, [departmentId || null, row.employee_id])
     }
