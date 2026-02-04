@@ -103,6 +103,21 @@ export async function POST(request: NextRequest) {
       notes = `Entrada marcada por manager: ${approvedByName}`
     }
 
+    // Ensure all columns exist
+    try {
+      await db.query(`
+        ALTER TABLE market_attendance
+        ADD COLUMN IF NOT EXISTS checkinphotourl TEXT,
+        ADD COLUMN IF NOT EXISTS checkoutphotourl TEXT,
+        ADD COLUMN IF NOT EXISTS workedhours DECIMAL(5,2) DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS overtimehours DECIMAL(5,2) DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS earlydepartureminutes INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS updatedat TIMESTAMP
+      `)
+    } catch {
+      // Columns might already exist, continue
+    }
+
     // Create or update attendance record
     const result = await db.query(`
       INSERT INTO market_attendance (
