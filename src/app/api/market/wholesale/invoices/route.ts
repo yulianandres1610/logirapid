@@ -359,9 +359,7 @@ export async function POST(request: NextRequest) {
 
       const invoiceId = invoiceResult.rows[0].id
 
-      // Insert lines and collect line IDs with warehouse quantities
-      const insertedLines: { lineId: number; productId: number; variantId: number | null; warehouseQuantities: Record<string, number> }[] = []
-
+      // Insert lines
       for (const line of lines) {
         // Get current cost price for the product
         const costResult = await client.query(`
@@ -378,13 +376,12 @@ export async function POST(request: NextRequest) {
         const warehouseQuantities = line.warehouseQuantities || {}
         const warehouseQuantitiesJson = JSON.stringify(warehouseQuantities)
 
-        const lineResult = await client.query(`
+        await client.query(`
           INSERT INTO market_invoice_lines (
             invoice_id, product_id, variant_id, product_name, product_sku,
             quantity, unit_price, cost_price, original_price, discount_percent,
             discount_amount, subtotal, warehouse_quantities, notes
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-          RETURNING id
         `, [
           invoiceId,
           line.productId,
@@ -401,127 +398,9 @@ export async function POST(request: NextRequest) {
           warehouseQuantitiesJson,
           line.notes || null
         ])
-
-        insertedLines.push({
-          lineId: lineResult.rows[0].id,
-          productId: line.productId,
-          variantId: line.variantId || null,
-          warehouseQuantities
-        })
       }
 
-      // Create deliveries based on warehouse quantities
-      // Group lines by warehouse
-      const warehouseDeliveries = new Map<number, { lineId: number; productId: number; variantId: number | null; quantity: number }[]>()
-
-      // Get default warehouse if needed (first warehouse of the company)
-      let defaultWarehouseId: number | null = warehouseId || null
-      if (!defaultWarehouseId) {
-        const defaultWarehouseResult = await client.query(
-          'SELECT id FROM market_warehouses WHERE company_id = $1 ORDER BY id LIMIT 1',
-          [payload.companyId]
-        )
-        if (defaultWarehouseResult.rows.length > 0) {
-          defaultWarehouseId = defaultWarehouseResult.rows[0].id
-        }
-      }
-
-      for (let i = 0; i < insertedLines.length; i++) {
-        const line = insertedLines[i]
-        const originalLine = lines[i]
-
-        // Check if warehouseQuantities has any quantity > 0
-        const hasWarehouseDistribution = Object.values(line.warehouseQuantities).some(q => q > 0)
-
-        if (hasWarehouseDistribution) {
-          // User distributed quantities to warehouses
-          for (const [warehouseIdStr, qty] of Object.entries(line.warehouseQuantities)) {
-            if (qty > 0) {
-              const wId = parseInt(warehouseIdStr)
-              if (!warehouseDeliveries.has(wId)) {
-                warehouseDeliveries.set(wId, [])
-              }
-              warehouseDeliveries.get(wId)!.push({
-                lineId: line.lineId,
-                productId: line.productId,
-                variantId: line.variantId,
-                quantity: qty
-              })
-            }
-          }
-        } else if (originalLine.quantity > 0 && defaultWarehouseId) {
-          // Fallback: User has quantity but didn't distribute - assign to default warehouse
-          if (!warehouseDeliveries.has(defaultWarehouseId)) {
-            warehouseDeliveries.set(defaultWarehouseId, [])
-          }
-          warehouseDeliveries.get(defaultWarehouseId)!.push({
-            lineId: line.lineId,
-            productId: line.productId,
-            variantId: line.variantId,
-            quantity: originalLine.quantity
-          })
-        }
-      }
-
-      // Ensure delivery tables exist
-      await client.query(`ALTER TABLE market_invoice_deliveries ADD COLUMN IF NOT EXISTS operation_id INTEGER`)
-      await client.query(`ALTER TABLE market_invoice_delivery_lines ADD COLUMN IF NOT EXISTS variant_id INTEGER`)
-
-      // Create a delivery for each warehouse with products
-      const deliveryNumbers: string[] = []
-      for (const [warehouseId, deliveryLines] of warehouseDeliveries) {
-        // Generate delivery number: ENT-2025-0001
-        const deliveryNumberResult = await client.query(`
-          SELECT delivery_number FROM market_invoice_deliveries
-          WHERE delivery_number LIKE $1
-          ORDER BY id DESC
-          LIMIT 1
-        `, [`ENT-${year}-%`])
-
-        let nextDeliveryNumber = 1
-        if (deliveryNumberResult.rows.length > 0) {
-          const lastNum = deliveryNumberResult.rows[0].delivery_number
-          const match = lastNum.match(/ENT-\d{4}-(\d+)/)
-          if (match) {
-            nextDeliveryNumber = parseInt(match[1]) + 1
-          }
-        }
-        // Increment for each new delivery in this batch
-        nextDeliveryNumber += deliveryNumbers.length
-        const deliveryNumber = `ENT-${year}-${String(nextDeliveryNumber).padStart(4, '0')}`
-        deliveryNumbers.push(deliveryNumber)
-
-        // Create delivery
-        const deliveryResult = await client.query(`
-          INSERT INTO market_invoice_deliveries (
-            invoice_id, delivery_number, warehouse_id, status, created_by
-          ) VALUES ($1, $2, $3, $4, $5)
-          RETURNING id
-        `, [
-          invoiceId,
-          deliveryNumber,
-          warehouseId,
-          'pending',
-          payload.userId
-        ])
-
-        const deliveryId = deliveryResult.rows[0].id
-
-        // Create delivery lines
-        for (const dLine of deliveryLines) {
-          await client.query(`
-            INSERT INTO market_invoice_delivery_lines (
-              delivery_id, invoice_line_id, product_id, variant_id, quantity_to_deliver
-            ) VALUES ($1, $2, $3, $4, $5)
-          `, [
-            deliveryId,
-            dLine.lineId,
-            dLine.productId,
-            dLine.variantId,
-            dLine.quantity
-          ])
-        }
-      }
+      // Note: Deliveries are handled through warehouse operations, not created here
 
       // If immediate payment, record the payment
       if (hasImmediatePayment) {
