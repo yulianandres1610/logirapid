@@ -773,6 +773,8 @@ export default function KioskPage() {
       const result = await response.json()
 
       if (result.success) {
+        console.log('[KIOSK] Employee data received:', JSON.stringify(result.data, null, 2))
+        console.log('[KIOSK] todayAttendance:', result.data.todayAttendance)
         setEmployee(result.data)
         showToast('success', `Bienvenido, ${result.data.fullName}`)
         setStep('confirm')
@@ -1532,11 +1534,11 @@ export default function KioskPage() {
                   <div className="flex justify-between text-sm">
                     <div className="flex items-center gap-2">
                       <LogIn className="w-4 h-4 text-green-500" />
-                      <span>Entrada: {formatAttendanceTime(employee.todayAttendance.checkIn)}</span>
+                      <span className="text-gray-900">Entrada: {formatAttendanceTime(employee.todayAttendance.checkIn)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <LogOut className="w-4 h-4 text-red-500" />
-                      <span>Salida: {formatAttendanceTime(employee.todayAttendance.checkOut)}</span>
+                      <span className="text-gray-900">Salida: {formatAttendanceTime(employee.todayAttendance.checkOut)}</span>
                     </div>
                   </div>
                 </motion.div>
