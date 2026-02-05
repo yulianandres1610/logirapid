@@ -184,6 +184,23 @@ export async function POST(
             payload.userId
           ])
 
+          // Register inventory movement for product traceability
+          await db.query(`
+            INSERT INTO market_inventory_movements (
+              product_id, company_id, movement_type, quantity,
+              quantity_before, quantity_after, reference_type, reference_id, notes, created_at
+            )
+            SELECT $1, company_id, 'wholesale_out', $2, $3, $4, 'wholesale_invoice', $5, $6, NOW()
+            FROM market_products WHERE id = $1
+          `, [
+            line.product_id,
+            -quantityValidated,
+            previousOnHand,
+            newOnHand,
+            operation.invoice_id,
+            `Venta Mayorista: ${operation.invoice_number} - ${operation.customer_name}`
+          ])
+
           // Update variant quantity if applicable
           if (line.variant_id) {
             // Sum total across all warehouses
@@ -199,6 +216,17 @@ export async function POST(
               WHERE id = $2
             `, [totalResult.rows[0].total, line.variant_id])
           }
+
+          // Update main product quantity (sum across all warehouses)
+          await db.query(`
+            UPDATE market_products
+            SET quantity_on_hand = (
+              SELECT COALESCE(SUM(quantity_on_hand), 0)
+              FROM market_warehouse_stock
+              WHERE product_id = $1 AND variant_id IS NULL
+            ), updated_at = NOW()
+            WHERE id = $1
+          `, [line.product_id])
         }
 
         // Process FIFO from consignment lots

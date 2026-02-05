@@ -94,9 +94,9 @@ export async function GET(request: NextRequest) {
 
     console.log('[Inventory Report API] Expiring products:', expiringResult.rows.length)
 
-    // Inventory rotation (sales velocity)
+    // Inventory rotation (sales velocity) - includes both POS and wholesale
     const rotationResult = await safeQuery(`
-      WITH daily_sales AS (
+      WITH pos_sales AS (
         SELECT
           ol.product_id,
           SUM(ol.quantity) as total_sold,
@@ -107,6 +107,26 @@ export async function GET(request: NextRequest) {
           AND o.created_at >= CURRENT_DATE - INTERVAL '30 days'
           AND o.status IN ('paid', 'completed')
         GROUP BY ol.product_id
+      ),
+      wholesale_sales AS (
+        SELECT
+          il.product_id,
+          SUM(COALESCE(il.quantity_delivered, il.quantity)) as total_sold,
+          COUNT(DISTINCT DATE(COALESCE(i.delivered_at, i.created_at))) as days_with_sales
+        FROM market_invoice_lines il
+        JOIN market_invoices i ON il.invoice_id = i.id
+        WHERE i.company_id = $1
+          AND COALESCE(i.delivered_at, i.created_at) >= CURRENT_DATE - INTERVAL '30 days'
+          AND i.status IN ('delivered', 'paid', 'completed')
+        GROUP BY il.product_id
+      ),
+      combined_sales AS (
+        SELECT
+          COALESCE(ps.product_id, ws.product_id) as product_id,
+          COALESCE(ps.total_sold, 0) + COALESCE(ws.total_sold, 0) as total_sold,
+          GREATEST(COALESCE(ps.days_with_sales, 0), COALESCE(ws.days_with_sales, 0)) as days_with_sales
+        FROM pos_sales ps
+        FULL OUTER JOIN wholesale_sales ws ON ps.product_id = ws.product_id
       ),
       daily_purchases AS (
         SELECT
@@ -125,16 +145,16 @@ export async function GET(request: NextRequest) {
         p.barcode,
         p.quantity_on_hand,
         p.cost_price,
-        COALESCE(ds.total_sold, 0) as total_sold_30d,
-        COALESCE(ds.days_with_sales, 0) as days_with_sales,
+        COALESCE(cs.total_sold, 0) as total_sold_30d,
+        COALESCE(cs.days_with_sales, 0) as days_with_sales,
         CASE
-          WHEN COALESCE(ds.days_with_sales, 0) > 0
-          THEN ROUND((ds.total_sold::numeric / ds.days_with_sales), 2)
+          WHEN COALESCE(cs.days_with_sales, 0) > 0
+          THEN ROUND((cs.total_sold::numeric / cs.days_with_sales), 2)
           ELSE 0
         END as sales_velocity,
         CASE
-          WHEN COALESCE(ds.total_sold, 0) > 0 AND ds.days_with_sales > 0
-          THEN ROUND((p.quantity_on_hand::numeric / (ds.total_sold::numeric / ds.days_with_sales)), 1)
+          WHEN COALESCE(cs.total_sold, 0) > 0 AND cs.days_with_sales > 0
+          THEN ROUND((p.quantity_on_hand::numeric / (cs.total_sold::numeric / cs.days_with_sales)), 1)
           ELSE 999
         END as days_of_stock,
         COALESCE(dp.total_purchased, 0) as total_purchased_30d,
@@ -144,15 +164,15 @@ export async function GET(request: NextRequest) {
           ELSE 0
         END as purchase_velocity
       FROM market_products p
-      LEFT JOIN daily_sales ds ON p.id = ds.product_id
+      LEFT JOIN combined_sales cs ON p.id = cs.product_id
       LEFT JOIN daily_purchases dp ON p.id = dp.product_id
       WHERE p.company_id = $1
         AND p.is_active = true
         AND p.quantity_on_hand > 0
       ORDER BY
         CASE
-          WHEN COALESCE(ds.total_sold, 0) > 0 AND ds.days_with_sales > 0
-          THEN (p.quantity_on_hand::numeric / (ds.total_sold::numeric / ds.days_with_sales))
+          WHEN COALESCE(cs.total_sold, 0) > 0 AND cs.days_with_sales > 0
+          THEN (p.quantity_on_hand::numeric / (cs.total_sold::numeric / cs.days_with_sales))
           ELSE 999
         END ASC
     `, [companyId])

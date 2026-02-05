@@ -29,6 +29,50 @@ export async function GET(
     const sales: { period: string; quantity: number; revenue: number; orders: number }[] = []
 
     try {
+      // Helper to get combined sales (POS + Wholesale) for a date range
+      const getCombinedSales = async (startDate: Date, endDate: Date) => {
+        // POS sales
+        const posResult = await db.query(`
+          SELECT
+            COALESCE(SUM(pol.quantity), 0) as quantity,
+            COALESCE(SUM(pol.total), 0) as total,
+            COUNT(DISTINCT po.id) as orders
+          FROM market_pos_order_lines pol
+          JOIN market_pos_orders po ON pol.order_id = po.id
+          WHERE pol.product_id = $1 AND po.company_id = $2
+          AND po.created_at >= $3 AND po.created_at < $4
+          AND po.status NOT IN ('cancelled', 'voided', 'draft')
+        `, [productId, parseInt(companyId), startDate.toISOString(), endDate.toISOString()])
+
+        // Wholesale sales
+        const wholesaleResult = await db.query(`
+          SELECT
+            COALESCE(SUM(COALESCE(il.quantity_delivered, il.quantity)), 0) as quantity,
+            COALESCE(SUM(il.total), 0) as total,
+            COUNT(DISTINCT i.id) as orders
+          FROM market_invoice_lines il
+          JOIN market_invoices i ON il.invoice_id = i.id
+          WHERE il.product_id = $1 AND i.company_id = $2
+          AND COALESCE(i.delivered_at, i.created_at) >= $3
+          AND COALESCE(i.delivered_at, i.created_at) < $4
+          AND i.status IN ('delivered', 'paid', 'completed')
+        `, [productId, parseInt(companyId), startDate.toISOString(), endDate.toISOString()])
+
+        const posQty = parseInt(posResult.rows[0]?.quantity) || 0
+        const posTotal = parseFloat(posResult.rows[0]?.total) || 0
+        const posOrders = parseInt(posResult.rows[0]?.orders) || 0
+
+        const wholesaleQty = parseInt(wholesaleResult.rows[0]?.quantity) || 0
+        const wholesaleTotal = parseFloat(wholesaleResult.rows[0]?.total) || 0
+        const wholesaleOrders = parseInt(wholesaleResult.rows[0]?.orders) || 0
+
+        return {
+          quantity: posQty + wholesaleQty,
+          revenue: posTotal + wholesaleTotal,
+          orders: posOrders + wholesaleOrders
+        }
+      }
+
       if (period === 'week') {
         // Get daily data for the last 7 days
         for (let i = 6; i >= 0; i--) {
@@ -37,25 +81,11 @@ export async function GET(
           const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate())
           const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1)
 
-          // Query from POS order lines (main source of sales)
-          const result = await db.query(`
-            SELECT
-              COALESCE(SUM(pol.quantity), 0) as quantity,
-              COALESCE(SUM(pol.total), 0) as total,
-              COUNT(DISTINCT po.id) as orders
-            FROM market_pos_order_lines pol
-            JOIN market_pos_orders po ON pol.order_id = po.id
-            WHERE pol.product_id = $1 AND po.company_id = $2
-            AND po.created_at >= $3 AND po.created_at < $4
-            AND po.status NOT IN ('cancelled', 'voided', 'draft')
-          `, [productId, parseInt(companyId), startOfDay.toISOString(), endOfDay.toISOString()])
-
+          const result = await getCombinedSales(startOfDay, endOfDay)
           const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
           sales.push({
             period: dayNames[date.getDay()],
-            quantity: parseInt(result.rows[0]?.quantity) || 0,
-            revenue: parseFloat(result.rows[0]?.total) || 0,
-            orders: parseInt(result.rows[0]?.orders) || 0
+            ...result
           })
         }
       } else if (period === 'month') {
@@ -67,23 +97,10 @@ export async function GET(
           const weekEnd = new Date(weekStart)
           weekEnd.setDate(weekEnd.getDate() + 7)
 
-          const result = await db.query(`
-            SELECT
-              COALESCE(SUM(pol.quantity), 0) as quantity,
-              COALESCE(SUM(pol.total), 0) as total,
-              COUNT(DISTINCT po.id) as orders
-            FROM market_pos_order_lines pol
-            JOIN market_pos_orders po ON pol.order_id = po.id
-            WHERE pol.product_id = $1 AND po.company_id = $2
-            AND po.created_at >= $3 AND po.created_at < $4
-            AND po.status NOT IN ('cancelled', 'voided', 'draft')
-          `, [productId, parseInt(companyId), weekStart.toISOString(), weekEnd.toISOString()])
-
+          const result = await getCombinedSales(weekStart, weekEnd)
           sales.push({
             period: `Sem ${4 - i}`,
-            quantity: parseInt(result.rows[0]?.quantity) || 0,
-            revenue: parseFloat(result.rows[0]?.total) || 0,
-            orders: parseInt(result.rows[0]?.orders) || 0
+            ...result
           })
         }
       } else if (period === 'year') {
@@ -93,23 +110,10 @@ export async function GET(
           const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1)
           const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 1)
 
-          const result = await db.query(`
-            SELECT
-              COALESCE(SUM(pol.quantity), 0) as quantity,
-              COALESCE(SUM(pol.total), 0) as total,
-              COUNT(DISTINCT po.id) as orders
-            FROM market_pos_order_lines pol
-            JOIN market_pos_orders po ON pol.order_id = po.id
-            WHERE pol.product_id = $1 AND po.company_id = $2
-            AND po.created_at >= $3 AND po.created_at < $4
-            AND po.status NOT IN ('cancelled', 'voided', 'draft')
-          `, [productId, parseInt(companyId), monthStart.toISOString(), monthEnd.toISOString()])
-
+          const result = await getCombinedSales(monthStart, monthEnd)
           sales.push({
             period: monthNames[monthStart.getMonth()],
-            quantity: parseInt(result.rows[0]?.quantity) || 0,
-            revenue: parseFloat(result.rows[0]?.total) || 0,
-            orders: parseInt(result.rows[0]?.orders) || 0
+            ...result
           })
         }
       }

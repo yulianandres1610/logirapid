@@ -464,7 +464,64 @@ export async function GET(
       console.error('[Product Movements] Error fetching scrap:', error)
     }
 
-    // 7. Get production out movements (materials delivered to production)
+    // 7. Get wholesale sales (exits) - from invoices
+    try {
+      const wholesaleResult = await db.query(`
+        SELECT
+          mil.id as line_id,
+          mi.id as invoice_id,
+          mi.invoice_number,
+          mi.status,
+          mi.created_at,
+          mi.delivered_at,
+          mil.quantity,
+          mil.quantity_delivered,
+          mil.variant_id,
+          mpv.variant_name,
+          mw.id as warehouse_id,
+          mw.name as warehouse_name,
+          COALESCE(u.firstname || ' ' || u.lastname, u.email) as user_name,
+          mc.name as customer_name
+        FROM market_invoice_lines mil
+        JOIN market_invoices mi ON mi.id = mil.invoice_id
+        LEFT JOIN market_product_variants mpv ON mpv.id = mil.variant_id
+        LEFT JOIN market_warehouses mw ON mw.id = mi.warehouse_id
+        LEFT JOIN users u ON u.id = mi.created_by
+        LEFT JOIN market_customers mc ON mc.id = mi.customer_id
+        WHERE mil.product_id = $1 AND mi.company_id = $2
+          AND mi.status IN ('delivered', 'paid', 'completed')
+        ORDER BY COALESCE(mi.delivered_at, mi.created_at) DESC
+        LIMIT $3
+      `, [productId, payload.companyId, limit])
+
+      for (const row of wholesaleResult.rows) {
+        const qty = parseFloat(row.quantity_delivered) || parseFloat(row.quantity) || 0
+        if (qty > 0) {
+          const variantLabel = row.variant_name ? ` (${row.variant_name})` : ''
+          movements.push({
+            id: `wholesale-${row.line_id}`,
+            type: 'wholesale',
+            typeLabel: `Venta Mayorista${variantLabel}`,
+            date: row.delivered_at || row.created_at,
+            quantity: qty,
+            direction: 'out',
+            reference: row.invoice_number || `FAC-${row.invoice_id}`,
+            referenceId: row.invoice_id,
+            warehouseName: row.warehouse_name,
+            sourceWarehouse: row.warehouse_name,
+            destWarehouse: row.customer_name || 'Cliente Mayorista',
+            userName: row.user_name,
+            status: row.status,
+            notes: row.variant_name ? `Variante: ${row.variant_name}` : null,
+            stockAfter: null
+          })
+        }
+      }
+    } catch (error) {
+      console.error('[Product Movements] Error fetching wholesale sales:', error)
+    }
+
+    // 8. Get production out movements (materials delivered to production)
     try {
       const productionOutResult = await db.query(`
         SELECT
@@ -658,6 +715,7 @@ export async function GET(
           totalOut: movements.filter(m => m.direction === 'out').reduce((sum, m) => sum + m.quantity, 0),
           purchaseCount: movements.filter(m => m.type === 'purchase').length,
           saleCount: movements.filter(m => m.type === 'sale').length,
+          wholesaleCount: movements.filter(m => m.type === 'wholesale').length,
           transferCount: movements.filter(m => m.type.startsWith('transfer')).length / 2,
           auditCount: movements.filter(m => m.type === 'audit').length,
           adjustmentCount: movements.filter(m => m.type === 'adjustment').length,
