@@ -745,6 +745,19 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // 2.5 Cleanup empty lots after FIFO deductions
+        await db.query(`
+          DELETE FROM consignment_lot_inventory
+          WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3
+            AND quantity_available <= 0
+        `, [warehouseId, productId, companyId])
+
+        await db.query(`
+          DELETE FROM purchase_lot_inventory
+          WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3
+            AND quantity_available <= 0
+        `, [warehouseId, productId, companyId])
+
         // 3. Update warehouse stock (covers both consignment and purchase deductions)
         if (variantId) {
           // Update variant stock in market_product_variants

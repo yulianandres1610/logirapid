@@ -49,7 +49,7 @@ export async function POST(
       SELECT
         o.id, o.operation_number, o.status, o.validation_status,
         o.source_warehouse_id, sw.name as warehouse_name,
-        o.reference_id as invoice_id, o.reference_number as invoice_number,
+        o.reference_id as invoice_id, i.invoice_number,
         i.customer_id,
         c.business_name as customer_name
       FROM market_warehouse_operations o
@@ -161,15 +161,15 @@ export async function POST(
           // Create stock movement record
           await db.query(`
             INSERT INTO market_stock_movements (
-              company_id, warehouse_id, product_id, variant_id,
+              company_id, from_warehouse_id, product_id, variant_id,
               movement_type, quantity, quantity_before, quantity_after,
-              reference_type, reference_id, reference_number,
+              reference_type, reference_id,
               notes, created_by, created_at
             ) VALUES (
               $1, $2, $3, $4,
               'wholesale_out', $5, $6, $7,
-              'wholesale_delivery', $8, $9,
-              $10, $11, NOW()
+              'wholesale_delivery', $8,
+              $9, $10, NOW()
             )
           `, [
             payload.companyId,
@@ -180,8 +180,7 @@ export async function POST(
             previousOnHand,
             newOnHand,
             opId,
-            operation.operation_number,
-            `Entrega mayorista a ${operation.customer_name}`,
+            `Entrega mayorista ${operation.invoice_number} a ${operation.customer_name}`,
             payload.userId
           ])
 
@@ -201,6 +200,127 @@ export async function POST(
             `, [totalResult.rows[0].total, line.variant_id])
           }
         }
+
+        // Process FIFO from consignment lots
+        let remainingQty = quantityValidated
+
+        const consignmentLots = await db.query(`
+          SELECT
+            cli.id as lot_id,
+            cli.lot_number,
+            cli.quantity_available,
+            cli.unit_cost,
+            cli.supplier_id,
+            cli.order_line_id
+          FROM consignment_lot_inventory cli
+          WHERE cli.warehouse_id = $1
+            AND cli.product_id = $2
+            AND cli.company_id = $3
+            AND cli.quantity_available > 0
+            ${line.variant_id ? 'AND (cli.variant_id = $4 OR cli.variant_id IS NULL)' : 'AND cli.variant_id IS NULL'}
+          ORDER BY cli.received_at ASC
+          FOR UPDATE
+        `, line.variant_id
+          ? [warehouseId, line.product_id, payload.companyId, line.variant_id]
+          : [warehouseId, line.product_id, payload.companyId])
+
+        // Process consignment lots FIFO
+        for (const lot of consignmentLots.rows) {
+          if (remainingQty <= 0) break
+
+          const availableQty = parseFloat(lot.quantity_available) || 0
+          const toDeduct = Math.min(remainingQty, availableQty)
+          const unitCost = parseFloat(lot.unit_cost)
+
+          // Deduct from consignment lot
+          await db.query(`
+            UPDATE consignment_lot_inventory
+            SET
+              quantity_available = quantity_available - $1,
+              quantity_sold = COALESCE(quantity_sold, 0) + $1
+            WHERE id = $2
+          `, [toDeduct, lot.lot_id])
+
+          // Update consignment order line sold quantity
+          if (lot.order_line_id) {
+            const orderLineResult = await db.query(`
+              SELECT order_id, unit_price FROM consignment_order_lines WHERE id = $1
+            `, [lot.order_line_id])
+
+            await db.query(`
+              UPDATE consignment_order_lines
+              SET quantity_sold = COALESCE(quantity_sold, 0) + $1
+              WHERE id = $2
+            `, [toDeduct, lot.order_line_id])
+
+            // Update consignment_orders.total_sold
+            if (orderLineResult.rows.length > 0) {
+              const orderId = orderLineResult.rows[0].order_id
+              const lineUnitPrice = parseFloat(orderLineResult.rows[0].unit_price) || 0
+              const saleAmount = toDeduct * lineUnitPrice
+
+              await db.query(`
+                UPDATE consignment_orders
+                SET total_sold = COALESCE(total_sold, 0) + $1,
+                    updated_at = NOW()
+                WHERE id = $2
+              `, [saleAmount, orderId])
+            }
+          }
+
+          // Update supplier wallet with earnings (at cost price)
+          const walletResult = await db.query(
+            'SELECT id FROM consignment_supplier_wallets WHERE supplier_id = $1',
+            [lot.supplier_id]
+          )
+
+          if (walletResult.rows.length > 0) {
+            const walletId = walletResult.rows[0].id
+            const earnings = toDeduct * unitCost
+
+            // Update wallet balance
+            await db.query(`
+              UPDATE consignment_supplier_wallets
+              SET
+                balance_available = balance_available + $1,
+                total_earned = COALESCE(total_earned, 0) + $1,
+                updated_at = NOW()
+              WHERE id = $2
+            `, [earnings, walletId])
+
+            // Create wallet transaction
+            await db.query(`
+              INSERT INTO consignment_wallet_transactions (
+                wallet_id, transaction_type, amount,
+                product_id, quantity, unit_price,
+                notes, created_by, created_at
+              ) VALUES ($1, 'sale', $2, $3, $4, $5, $6, $7, NOW())
+            `, [
+              walletId,
+              earnings,
+              line.product_id,
+              toDeduct,
+              unitCost,
+              `Venta Mayorista: ${operation.invoice_number} - ${line.product_name}`,
+              payload.userId
+            ])
+
+            console.log('[Wholesale Delivery] Consignment wallet updated:', {
+              supplierId: lot.supplier_id,
+              earnings,
+              lotId: lot.lot_id
+            })
+          }
+
+          remainingQty -= toDeduct
+        }
+
+        // Cleanup empty lots after FIFO deductions
+        await db.query(`
+          DELETE FROM consignment_lot_inventory
+          WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3
+            AND quantity_available <= 0
+        `, [warehouseId, line.product_id, payload.companyId])
       }
 
       // 2. Update operation status
