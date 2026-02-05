@@ -63,11 +63,12 @@ export async function GET(
         d.name as departmentname,
         d.code as departmentcode,
         COALESCE(approver_u.firstname || ' ' || approver_u.lastname, approver_u.email) as approvedbyname,
-        e.photourl as employeephoto
+        c.photourl as employeephoto
       FROM market_attendance a
       JOIN market_employees e ON a.employeeid = e.id
       LEFT JOIN users u ON e.user_id = u.id
       LEFT JOIN market_departments d ON e.departmentid = d.id
+      LEFT JOIN market_contracts c ON c.employeeid = e.id AND c.status = 'active'
       LEFT JOIN market_employees approver ON a.approvedby = approver.id
       LEFT JOIN users approver_u ON approver.user_id = approver_u.id
       WHERE a.id = $1 AND a.companyid = $2
