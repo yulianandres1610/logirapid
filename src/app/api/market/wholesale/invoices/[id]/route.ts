@@ -40,6 +40,20 @@ export async function GET(
     const { id } = await params
     const invoiceId = parseInt(id)
 
+    // Ensure invoice columns exist (inline migration)
+    await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS downpayment_type VARCHAR(20)`)
+    await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS downpayment_value DECIMAL(12,2)`)
+    await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS downpayment_amount DECIMAL(12,2)`)
+    await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS wholesale_exchange_rate DECIMAL(10,2)`)
+
+    // Ensure invoice_lines columns exist (inline migration)
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS warehouse_quantities JSONB DEFAULT '{}'`)
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS original_price DECIMAL(12,2)`)
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS cost_price DECIMAL(12,2)`)
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS variant_id INTEGER`)
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS product_sku VARCHAR(100)`)
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS quantity_delivered DECIMAL(12,2) DEFAULT 0`)
+
     const result = await db.query(`
       SELECT
         i.*,
@@ -248,6 +262,13 @@ export async function PUT(
     const { id } = await params
     const invoiceId = parseInt(id)
     const body = await request.json()
+
+    // Ensure invoice_lines columns exist (inline migration)
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS warehouse_quantities JSONB DEFAULT '{}'`)
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS original_price DECIMAL(12,2)`)
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS cost_price DECIMAL(12,2)`)
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS variant_id INTEGER`)
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS product_sku VARCHAR(100)`)
 
     // Verify invoice exists and is in draft status
     const checkResult = await db.query(

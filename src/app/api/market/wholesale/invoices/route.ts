@@ -200,6 +200,14 @@ export async function POST(request: NextRequest) {
     await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS downpayment_amount DECIMAL(12,2)`)
     await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS wholesale_exchange_rate DECIMAL(10,2)`)
 
+    // Ensure invoice_lines columns exist (inline migration)
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS warehouse_quantities JSONB DEFAULT '{}'`)
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS original_price DECIMAL(12,2)`)
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS cost_price DECIMAL(12,2)`)
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS variant_id INTEGER`)
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS product_sku VARCHAR(100)`)
+    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS quantity_delivered DECIMAL(12,2) DEFAULT 0`)
+
     const body = await request.json()
     const {
       customerId,
