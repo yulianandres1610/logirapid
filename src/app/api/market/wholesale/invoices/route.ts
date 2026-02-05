@@ -414,20 +414,52 @@ export async function POST(request: NextRequest) {
       // Group lines by warehouse
       const warehouseDeliveries = new Map<number, { lineId: number; productId: number; variantId: number | null; quantity: number }[]>()
 
-      for (const line of insertedLines) {
-        for (const [warehouseIdStr, qty] of Object.entries(line.warehouseQuantities)) {
-          if (qty > 0) {
-            const warehouseId = parseInt(warehouseIdStr)
-            if (!warehouseDeliveries.has(warehouseId)) {
-              warehouseDeliveries.set(warehouseId, [])
+      // Get default warehouse if needed (first warehouse of the company)
+      let defaultWarehouseId: number | null = warehouseId || null
+      if (!defaultWarehouseId) {
+        const defaultWarehouseResult = await client.query(
+          'SELECT id FROM market_warehouses WHERE company_id = $1 ORDER BY id LIMIT 1',
+          [payload.companyId]
+        )
+        if (defaultWarehouseResult.rows.length > 0) {
+          defaultWarehouseId = defaultWarehouseResult.rows[0].id
+        }
+      }
+
+      for (let i = 0; i < insertedLines.length; i++) {
+        const line = insertedLines[i]
+        const originalLine = lines[i]
+
+        // Check if warehouseQuantities has any quantity > 0
+        const hasWarehouseDistribution = Object.values(line.warehouseQuantities).some(q => q > 0)
+
+        if (hasWarehouseDistribution) {
+          // User distributed quantities to warehouses
+          for (const [warehouseIdStr, qty] of Object.entries(line.warehouseQuantities)) {
+            if (qty > 0) {
+              const wId = parseInt(warehouseIdStr)
+              if (!warehouseDeliveries.has(wId)) {
+                warehouseDeliveries.set(wId, [])
+              }
+              warehouseDeliveries.get(wId)!.push({
+                lineId: line.lineId,
+                productId: line.productId,
+                variantId: line.variantId,
+                quantity: qty
+              })
             }
-            warehouseDeliveries.get(warehouseId)!.push({
-              lineId: line.lineId,
-              productId: line.productId,
-              variantId: line.variantId,
-              quantity: qty
-            })
           }
+        } else if (originalLine.quantity > 0 && defaultWarehouseId) {
+          // Fallback: User has quantity but didn't distribute - assign to default warehouse
+          if (!warehouseDeliveries.has(defaultWarehouseId)) {
+            warehouseDeliveries.set(defaultWarehouseId, [])
+          }
+          warehouseDeliveries.get(defaultWarehouseId)!.push({
+            lineId: line.lineId,
+            productId: line.productId,
+            variantId: line.variantId,
+            quantity: originalLine.quantity
+          })
         }
       }
 
