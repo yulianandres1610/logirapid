@@ -23,7 +23,6 @@ import {
   ImageOff
 } from 'lucide-react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { useParams } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -272,19 +271,24 @@ export default function AttendanceDetailPage() {
                 )}>
                   <div className="text-center">
                     {attendance.employeePhoto ? (
-                      <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white/30 mx-auto mb-4 shadow-lg">
-                        <Image
+                      <div className="w-40 h-40 md:w-48 md:h-48 rounded-full overflow-hidden border-4 border-white/30 mx-auto mb-4 shadow-xl bg-white/10">
+                        <img
                           src={attendance.employeePhoto}
                           alt={attendance.employeeName}
-                          width={128}
-                          height={128}
                           className="w-full h-full object-cover"
-                          unoptimized
+                          onError={(e) => {
+                            console.error('[Attendance Photo] Error loading employee photo')
+                            const parent = e.currentTarget.parentElement
+                            if (parent) {
+                              e.currentTarget.style.display = 'none'
+                              parent.innerHTML = '<div class="w-full h-full flex items-center justify-center bg-white/20"><svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white/80"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>'
+                            }
+                          }}
                         />
                       </div>
                     ) : (
-                      <div className="w-32 h-32 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4">
-                        <User className="w-16 h-16 text-white/80" />
+                      <div className="w-40 h-40 md:w-48 md:h-48 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4">
+                        <User className="w-20 h-20 text-white/80" />
                       </div>
                     )}
                     <span className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/20 text-white font-medium">
@@ -440,12 +444,10 @@ export default function AttendanceDetailPage() {
                   theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
                 )}>
                   {attendance.checkInPhoto && !imageErrors.checkIn ? (
-                    <Image
+                    <img
                       src={attendance.checkInPhoto}
                       alt="Foto de entrada"
-                      fill
-                      className="object-cover"
-                      unoptimized
+                      className="absolute inset-0 w-full h-full object-cover"
                       onError={() => setImageErrors(prev => ({ ...prev, checkIn: true }))}
                     />
                   ) : (
@@ -494,12 +496,10 @@ export default function AttendanceDetailPage() {
                   theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
                 )}>
                   {attendance.checkOutPhoto && !imageErrors.checkOut ? (
-                    <Image
+                    <img
                       src={attendance.checkOutPhoto}
                       alt="Foto de salida"
-                      fill
-                      className="object-cover"
-                      unoptimized
+                      className="absolute inset-0 w-full h-full object-cover"
                       onError={() => setImageErrors(prev => ({ ...prev, checkOut: true }))}
                     />
                   ) : (

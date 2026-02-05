@@ -111,6 +111,9 @@ export async function GET(
       checkOutPhoto = await getSignedUrl(row.checkoutphotourl)
     }
 
+    // Generate signed URL for employee profile photo from contract
+    const employeePhoto = await getSignedUrl(row.employeephoto)
+
     return NextResponse.json({
       success: true,
       data: {
@@ -119,7 +122,7 @@ export async function GET(
         employeeId: row.employeeid,
         employeeName: row.employeename,
         employeeCode: row.employeecode,
-        employeePhoto: row.employeephoto,
+        employeePhoto: employeePhoto,
         departmentName: row.departmentname,
         departmentCode: row.departmentcode,
         date: row.date,
