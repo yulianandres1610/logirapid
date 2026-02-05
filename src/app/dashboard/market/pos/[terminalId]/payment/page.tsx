@@ -218,6 +218,7 @@ interface Payment {
   currency: 'USD' | 'CUP' | 'MLC'
   amount: number
   amountInUSD: number
+  reference?: string // Transfer confirmation code
 }
 
 interface PendingOrderData {
@@ -244,7 +245,7 @@ interface PendingOrderData {
     currency: string
     amountTendered: number | null
     changeAmount: number | null
-    reference?: string
+    reference?: string | null
   }>
   total: number
   createdAt: string
@@ -379,6 +380,7 @@ function PaymentContent() {
   const [rates, setRates] = useState<ExchangeRates>(DEFAULT_RATES)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [transferReference, setTransferReference] = useState('')
   const [allowedPaymentMethods, setAllowedPaymentMethods] = useState<string[]>(['cash', 'card', 'transfer', 'credit'])
   const [allowedCurrencies, setAllowedCurrencies] = useState<string[]>(['USD', 'CUP', 'MLC'])
 
@@ -588,10 +590,24 @@ function PaymentContent() {
     }
   }
 
+  // Validate transfer reference (exactly 13 alphanumeric characters)
+  const isValidTransferReference = (ref: string): boolean => {
+    return /^[a-zA-Z0-9]{13}$/.test(ref)
+  }
+
+  // Check if transfer payment can be added
+  const canAddTransferPayment = selectedMethod !== 'transfer' || isValidTransferReference(transferReference)
+
   // Add payment
   const addPayment = () => {
     const numAmount = parseFloat(amount)
     if (isNaN(numAmount) || numAmount <= 0) return
+
+    // Validate transfer reference if method is transfer
+    if (selectedMethod === 'transfer' && !isValidTransferReference(transferReference)) {
+      setError('El código de confirmación debe tener exactamente 13 caracteres alfanuméricos')
+      return
+    }
 
     const amountInUSD = convertToUSD(numAmount, selectedCurrency)
 
@@ -600,11 +616,13 @@ function PaymentContent() {
       method: selectedMethod,
       currency: selectedCurrency,
       amount: numAmount,
-      amountInUSD
+      amountInUSD,
+      reference: selectedMethod === 'transfer' ? transferReference.toUpperCase() : undefined
     }
 
     setPayments([...payments, newPayment])
     setAmount('')
+    setTransferReference('') // Reset transfer reference after adding payment
   }
 
   // Remove payment
@@ -669,7 +687,8 @@ function PaymentContent() {
           amount: p.amount,  // Monto original en la moneda original
           currency: p.currency,
           amountTendered: p.method === 'cash' ? p.amount : null,
-          changeAmount: paymentChange
+          changeAmount: paymentChange,
+          reference: p.reference || null // Transfer confirmation code
         }
       })
 
@@ -768,7 +787,8 @@ function PaymentContent() {
                 amount: p.amount,  // Monto original en la moneda original
                 currency: p.currency,
                 amountTendered: p.method === 'cash' ? p.amount : null,
-                changeAmount: paymentChange
+                changeAmount: paymentChange,
+                reference: p.reference || null // Transfer confirmation code
               }
             }),
             total: totals.total,
@@ -963,6 +983,11 @@ function PaymentContent() {
                                 <span className="ml-1">(≈{formatCurrency(payment.amountInUSD)})</span>
                               )}
                             </p>
+                            {payment.reference && (
+                              <p className="text-xs text-blue-400 font-mono">
+                                Ref: {payment.reference}
+                              </p>
+                            )}
                           </div>
                         </div>
                         <button
@@ -1045,6 +1070,52 @@ function PaymentContent() {
                   })}
                 </div>
               </div>
+
+              {/* Transfer Reference - Only show when transfer is selected */}
+              {selectedMethod === 'transfer' && (
+                <div className="mb-4">
+                  <label className={`text-sm ${tc.textMuted} mb-2 block`}>
+                    Código de Confirmación <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={transferReference}
+                      onChange={(e) => {
+                        // Only allow alphanumeric, max 13 characters
+                        const value = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 13)
+                        setTransferReference(value)
+                      }}
+                      placeholder="Ej: ABC1234567890"
+                      maxLength={13}
+                      className={`w-full px-4 py-3 rounded-lg font-mono text-lg tracking-wider uppercase ${tc.input} ${tc.text} focus:outline-none focus:ring-2 ${
+                        transferReference.length === 13
+                          ? 'focus:ring-green-500 border-green-500'
+                          : transferReference.length > 0
+                            ? 'focus:ring-yellow-500 border-yellow-500'
+                            : 'focus:ring-blue-500'
+                      }`}
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                      <span className={`text-sm ${
+                        transferReference.length === 13
+                          ? 'text-green-500'
+                          : tc.textMuted
+                      }`}>
+                        {transferReference.length}/13
+                      </span>
+                      {transferReference.length === 13 && (
+                        <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                  </div>
+                  <p className={`text-xs mt-1 ${tc.textMuted}`}>
+                    Ingrese los 13 caracteres del código de confirmación de la transferencia
+                  </p>
+                </div>
+              )}
 
               {/* Currency */}
               <div className="mb-4">
@@ -1138,15 +1209,18 @@ function PaymentContent() {
               {/* Add Payment Button */}
               <button
                 onClick={addPayment}
-                disabled={!amount || parseFloat(amount) <= 0}
+                disabled={!amount || parseFloat(amount) <= 0 || !canAddTransferPayment}
                 className={`w-full p-4 rounded-lg flex items-center justify-center gap-2 font-semibold transition-all ${
-                  amount && parseFloat(amount) > 0
+                  amount && parseFloat(amount) > 0 && canAddTransferPayment
                     ? 'bg-blue-500 text-white hover:bg-blue-600'
                     : `${tc.button} ${tc.textMuted} cursor-not-allowed`
                 }`}
               >
                 <PlusIcon />
-                Agregar Pago
+                {selectedMethod === 'transfer' && !canAddTransferPayment
+                  ? 'Ingrese código de confirmación'
+                  : 'Agregar Pago'
+                }
               </button>
             </div>
 
