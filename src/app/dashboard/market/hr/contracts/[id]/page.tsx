@@ -26,7 +26,6 @@ import {
   ScanFace
 } from 'lucide-react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { useParams, useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -179,6 +178,13 @@ export default function ContractDetailPage() {
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
+          console.log('[Contract Detail] Loaded contract:', {
+            id: data.data.id,
+            employeeName: data.data.employeeName,
+            photoPath: data.data.photoPath,
+            hasPhotoUrl: !!data.data.photoUrl,
+            photoUrlPreview: data.data.photoUrl ? data.data.photoUrl.substring(0, 80) + '...' : null
+          })
           setContract(data.data)
         }
       }
@@ -502,14 +508,21 @@ export default function ContractDetailPage() {
                 )}>
                   <div className="text-center">
                     {contract.photoUrl ? (
-                      <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white/30 mx-auto mb-4 shadow-lg">
-                        <Image
-                          src={contract.photoUrl.startsWith('http') ? contract.photoUrl : `/api/employee-photos/${contract.photoUrl}`}
+                      <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white/30 mx-auto mb-4 shadow-lg bg-white/10">
+                        {/* Using img for signed URLs from Supabase Storage */}
+                        <img
+                          src={contract.photoUrl}
                           alt={contract.employeeName}
-                          width={128}
-                          height={128}
                           className="w-full h-full object-cover"
-                          unoptimized
+                          onError={(e) => {
+                            console.error('[Contract Photo] Error loading:', contract.photoUrl?.substring(0, 50) + '...')
+                            // Replace with placeholder on error
+                            const parent = e.currentTarget.parentElement
+                            if (parent) {
+                              e.currentTarget.style.display = 'none'
+                              parent.innerHTML = '<div class="w-full h-full flex items-center justify-center bg-white/20"><svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white/80"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>'
+                            }
+                          }}
                         />
                       </div>
                     ) : (

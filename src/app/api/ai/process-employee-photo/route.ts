@@ -149,7 +149,8 @@ export async function POST(request: NextRequest) {
     const originalFileName = `employee-${employeeId}-${timestamp}-${randomSuffix}-original.jpg`
     const originalPath = `${basePath}/${originalFileName}`
 
-    const { error: originalError } = await supabase.storage
+    console.log('[Process Employee Photo] Uploading original to:', originalPath)
+    const { data: originalData, error: originalError } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(originalPath, originalBuffer, {
         contentType: 'image/jpeg',
@@ -157,19 +158,21 @@ export async function POST(request: NextRequest) {
       })
 
     if (originalError) {
-      console.error('[Process Employee Photo] Error saving original:', originalError)
+      console.error('[Process Employee Photo] Error saving original:', originalError.message, originalError)
       return NextResponse.json({
         success: false,
-        error: 'Error al guardar imagen original'
+        error: 'Error al guardar imagen original: ' + originalError.message
       }, { status: 500 })
     }
+    console.log('[Process Employee Photo] Original uploaded successfully:', originalData?.path)
 
     // 4. Guardar imagen procesada
     const processedBuffer = Buffer.from(result.imageBase64!, 'base64')
     const processedFileName = `employee-${employeeId}-${timestamp}-${randomSuffix}-processed.jpg`
     const processedPath = `${basePath}/${processedFileName}`
 
-    const { error: processedError } = await supabase.storage
+    console.log('[Process Employee Photo] Uploading processed to:', processedPath)
+    const { data: processedData, error: processedError } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(processedPath, processedBuffer, {
         contentType: 'image/jpeg',
@@ -177,12 +180,13 @@ export async function POST(request: NextRequest) {
       })
 
     if (processedError) {
-      console.error('[Process Employee Photo] Error saving processed:', processedError)
+      console.error('[Process Employee Photo] Error saving processed:', processedError.message, processedError)
       return NextResponse.json({
         success: false,
-        error: 'Error al guardar imagen procesada'
+        error: 'Error al guardar imagen procesada: ' + processedError.message
       }, { status: 500 })
     }
+    console.log('[Process Employee Photo] Processed uploaded successfully:', processedData?.path)
 
     // 5. Generar URLs firmadas (válidas por 1 hora para preview)
     const { data: originalSignedUrl } = await supabase.storage

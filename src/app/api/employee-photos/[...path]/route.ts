@@ -92,15 +92,28 @@ export async function GET(
       }
     })
 
+    // First check if file exists
+    const { data: fileData, error: listError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .list(storagePath.split('/').slice(0, -1).join('/'), {
+        limit: 1,
+        search: storagePath.split('/').pop()
+      })
+
+    console.log(`🔍 [EMPLOYEE PHOTO] File check for: ${storagePath}`, {
+      fileData,
+      listError: listError?.message
+    })
+
     // Generate signed URL
     const { data: signedUrlData, error: signedError } = await supabase.storage
       .from(BUCKET_NAME)
       .createSignedUrl(storagePath, URL_EXPIRATION_SECONDS)
 
     if (signedError || !signedUrlData) {
-      console.error('❌ [EMPLOYEE PHOTO] Error generating signed URL:', signedError?.message)
+      console.error('❌ [EMPLOYEE PHOTO] Error generating signed URL:', signedError?.message, 'for path:', storagePath)
       return NextResponse.json(
-        { success: false, error: 'Photo not found' },
+        { success: false, error: 'Photo not found', path: storagePath },
         { status: 404 }
       )
     }

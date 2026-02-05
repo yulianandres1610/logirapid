@@ -1,11 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
 import { db } from '@/lib/database'
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const BUCKET_NAME = 'company-private-documents'
 
 async function getCompanyId() {
   const cookieStore = await cookies()
   const companyId = cookieStore.get('user-company-id')?.value
   return companyId ? parseInt(companyId) : null
+}
+
+async function getSignedUrl(path: string | null): Promise<string | null> {
+  if (!path || !supabaseUrl || !supabaseServiceKey) return null
+
+  try {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    })
+
+    const { data, error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .createSignedUrl(path, 3600) // 1 hour expiry
+
+    if (error) {
+      console.error('[Contract API] Error creating signed URL for path:', path, error)
+      return null
+    }
+
+    return data?.signedUrl || null
+  } catch (error) {
+    console.error('[Contract API] Error getting signed URL:', error)
+    return null
+  }
 }
 
 export async function GET(
@@ -67,6 +96,17 @@ export async function GET(
       }))
     }
 
+    // Generate signed URLs for photos
+    const photoUrl = await getSignedUrl(row.photourl)
+    const photoOriginalUrl = await getSignedUrl(row.photooriginalurl)
+
+    console.log('[Contract API] Photo paths:', {
+      storedPath: row.photourl,
+      storedOriginalPath: row.photooriginalurl,
+      signedUrl: photoUrl ? 'generated' : 'null',
+      signedOriginalUrl: photoOriginalUrl ? 'generated' : 'null'
+    })
+
     return NextResponse.json({
       success: true,
       data: {
@@ -96,8 +136,9 @@ export async function GET(
         terminationDate: row.terminationdate,
         terminationReason: row.terminationreason,
         notes: row.notes,
-        photoUrl: row.photourl,
-        photoOriginalUrl: row.photooriginalurl,
+        photoUrl: photoUrl,
+        photoOriginalUrl: photoOriginalUrl,
+        photoPath: row.photourl, // Keep original path for debugging
         photoProcessedAt: row.photoprocessedat,
         createdAt: row.createdat,
         updatedAt: row.updatedat
