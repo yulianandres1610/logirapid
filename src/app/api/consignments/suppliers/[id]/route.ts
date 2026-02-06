@@ -57,13 +57,13 @@ export async function GET(
     const result = await db.query(`
       SELECT
         s.*,
-        u.email as username,
+        cs.username as username,
         COALESCE((SELECT COUNT(*) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_orders,
         COALESCE((SELECT SUM(total_cost) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_consigned,
         COALESCE((SELECT SUM(total_sold) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_sold,
         COALESCE((SELECT SUM(total_paid) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_paid
       FROM market_suppliers s
-      LEFT JOIN users u ON u.id = s.user_id
+      LEFT JOIN consignment_suppliers cs ON cs.code = s.supplier_code AND cs.company_id = s.company_id
       WHERE s.id = $1 AND s.company_id = $2
     `, [supplierId, payload.companyId])
 
@@ -152,7 +152,7 @@ export async function PUT(
 
     // Verificar que el proveedor existe y pertenece a la empresa
     const existing = await db.query(
-      'SELECT id, company_id, user_id FROM market_suppliers WHERE id = $1 AND company_id = $2',
+      'SELECT id, company_id, supplier_code FROM market_suppliers WHERE id = $1 AND company_id = $2',
       [supplierId, payload.companyId]
     )
 
@@ -163,7 +163,7 @@ export async function PUT(
       }, { status: 404 })
     }
 
-    const currentUserId = existing.rows[0].user_id
+    const supplierCode = code || existing.rows[0].supplier_code
 
     // Si cambia el código, verificar que sea único en la empresa
     if (code) {
@@ -179,35 +179,44 @@ export async function PUT(
       }
     }
 
-    let newUserId = currentUserId
-
-    // Handle user creation/update for portal access
+    // Handle portal access via consignment_suppliers table
     if (username) {
       const trimmedUsername = username.trim().toLowerCase()
 
-      if (currentUserId) {
-        // Update existing user
+      // Check if entry exists in consignment_suppliers
+      const consignmentResult = await db.query(
+        'SELECT id FROM consignment_suppliers WHERE code = $1 AND company_id = $2',
+        [supplierCode, payload.companyId]
+      )
+
+      if (consignmentResult.rows.length > 0) {
+        // Update existing consignment_suppliers entry
         if (password) {
-          // Update username and password
           const hashedPassword = await bcrypt.hash(password, 10)
           await db.query(`
-            UPDATE users SET
-              email = $1,
-              password = $2,
-              firstname = $3
-            WHERE id = $4
-          `, [trimmedUsername, hashedPassword, name, currentUserId])
+            UPDATE consignment_suppliers SET
+              username = $1,
+              password_hash = $2,
+              name = $3,
+              email = $4,
+              phone = $5,
+              updated_at = NOW()
+            WHERE code = $6 AND company_id = $7
+          `, [trimmedUsername, hashedPassword, name, email || null, phone || null, supplierCode, payload.companyId])
         } else {
-          // Only update username/name
+          // Only update username (keep existing password)
           await db.query(`
-            UPDATE users SET
-              email = $1,
-              firstname = $2
-            WHERE id = $3
-          `, [trimmedUsername, name, currentUserId])
+            UPDATE consignment_suppliers SET
+              username = $1,
+              name = $2,
+              email = $3,
+              phone = $4,
+              updated_at = NOW()
+            WHERE code = $5 AND company_id = $6
+          `, [trimmedUsername, name, email || null, phone || null, supplierCode, payload.companyId])
         }
       } else {
-        // Create new user for supplier portal access
+        // Create new entry in consignment_suppliers for portal access
         if (!password) {
           return NextResponse.json({
             success: false,
@@ -215,9 +224,9 @@ export async function PUT(
           }, { status: 400 })
         }
 
-        // Check if username already exists
+        // Check if username already exists in consignment_suppliers
         const userExists = await db.query(
-          'SELECT id FROM users WHERE email = $1',
+          'SELECT id FROM consignment_suppliers WHERE LOWER(username) = LOWER($1)',
           [trimmedUsername]
         )
 
@@ -228,26 +237,29 @@ export async function PUT(
           }, { status: 400 })
         }
 
-        // Create new user with SUPPLIER role
         const hashedPassword = await bcrypt.hash(password, 10)
-        const userResult = await db.query(`
-          INSERT INTO users (email, password, firstname, lastname, role, isactive)
-          VALUES ($1, $2, $3, '', 'SUPPLIER', true)
-          RETURNING id
-        `, [trimmedUsername, hashedPassword, name])
-
-        newUserId = userResult.rows[0].id
-
-        // Link user to company
         await db.query(`
-          INSERT INTO user_companies (userid, companyid)
-          VALUES ($1, $2)
-          ON CONFLICT (userid, companyid) DO NOTHING
-        `, [newUserId, payload.companyId])
+          INSERT INTO consignment_suppliers (
+            company_id, code, name, legal_name, tax_id, contact_name,
+            email, phone, address, username, password_hash, is_active
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true)
+        `, [
+          payload.companyId,
+          supplierCode,
+          name,
+          legalName || null,
+          taxId || null,
+          contactName || null,
+          email || null,
+          phone || null,
+          address || null,
+          trimmedUsername,
+          hashedPassword
+        ])
       }
     }
 
-    // Actualizar proveedor (including user_id)
+    // Actualizar proveedor en market_suppliers
     await db.query(`
       UPDATE market_suppliers SET
         supplier_code = COALESCE($1, supplier_code),
@@ -259,9 +271,8 @@ export async function PUT(
         phone = $7,
         address = $8,
         is_active = COALESCE($9, is_active),
-        user_id = $10,
         updated_at = NOW()
-      WHERE id = $11 AND company_id = $12
+      WHERE id = $10 AND company_id = $11
     `, [
       code || null,
       name,
@@ -272,7 +283,6 @@ export async function PUT(
       phone || null,
       address || null,
       isActive,
-      newUserId,
       supplierId,
       payload.companyId
     ])
