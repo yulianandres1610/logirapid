@@ -759,6 +759,7 @@ export async function POST(request: NextRequest) {
         `, [warehouseId, productId, companyId])
 
         // 3. Update warehouse stock (covers both consignment and purchase deductions)
+        // IMPORTANT: Use UPSERT to ensure stock record exists before deducting
         if (variantId) {
           // Update variant stock in market_product_variants
           await db.query(`
@@ -770,26 +771,49 @@ export async function POST(request: NextRequest) {
           // Try to update variant-specific warehouse stock first
           const variantStockResult = await db.query(`
             UPDATE market_warehouse_stock
-            SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
+            SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW(), last_movement_at = NOW()
             WHERE product_id = $2 AND variant_id = $3 AND warehouse_id = $4
-            RETURNING id
+            RETURNING id, quantity_on_hand
           `, [quantityToReduce, productId, variantId, warehouseId])
 
           // If no variant-specific row, deduct from product-level warehouse stock
           if (variantStockResult.rows.length === 0) {
-            await db.query(`
+            // Try update first
+            const productStockResult = await db.query(`
               UPDATE market_warehouse_stock
-              SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
+              SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW(), last_movement_at = NOW()
               WHERE product_id = $2 AND warehouse_id = $3 AND variant_id IS NULL
+              RETURNING id, quantity_on_hand
             `, [quantityToReduce, productId, warehouseId])
+
+            // If no row was updated, the stock record doesn't exist - create it with 0 (already sold)
+            if (productStockResult.rows.length === 0) {
+              console.warn(`[POS Orders] WARNING: No warehouse stock record for product ${productId} in warehouse ${warehouseId}. Creating record.`)
+              await db.query(`
+                INSERT INTO market_warehouse_stock (warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved, created_at, updated_at, last_movement_at)
+                VALUES ($1, $2, NULL, 0, 0, NOW(), NOW(), NOW())
+                ON CONFLICT (warehouse_id, product_id, variant_id) DO NOTHING
+              `, [warehouseId, productId])
+            }
           }
         } else {
           // Update warehouse stock for product without variant
-          await db.query(`
+          const stockUpdateResult = await db.query(`
             UPDATE market_warehouse_stock
-            SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW()
+            SET quantity_on_hand = GREATEST(0, quantity_on_hand - $1), updated_at = NOW(), last_movement_at = NOW()
             WHERE product_id = $2 AND warehouse_id = $3 AND variant_id IS NULL
+            RETURNING id, quantity_on_hand
           `, [quantityToReduce, productId, warehouseId])
+
+          // If no row was updated, the stock record doesn't exist - this is a data integrity issue
+          if (stockUpdateResult.rows.length === 0) {
+            console.warn(`[POS Orders] WARNING: No warehouse stock record for product ${productId} in warehouse ${warehouseId}. Creating record.`)
+            await db.query(`
+              INSERT INTO market_warehouse_stock (warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved, created_at, updated_at, last_movement_at)
+              VALUES ($1, $2, NULL, 0, 0, NOW(), NOW(), NOW())
+              ON CONFLICT (warehouse_id, product_id, variant_id) DO NOTHING
+            `, [warehouseId, productId])
+          }
         }
 
         // ALWAYS update main product stock
