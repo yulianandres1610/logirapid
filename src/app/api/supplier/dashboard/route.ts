@@ -62,28 +62,51 @@ export async function GET() {
     // Get market_suppliers.id for orders queries (orders use market_suppliers.id, not consignment_suppliers.id)
     // Try with code from consignment_suppliers first
     let marketSupplierResult = await db.query(`
-      SELECT id FROM market_suppliers
+      SELECT id, supplier_code, name FROM market_suppliers
       WHERE supplier_code = $1 AND company_id = $2
     `, [actualSupplierCode, payload.companyId])
 
-    // If not found, try to find by name similarity (fallback)
+    // If not found, try to find by exact name
     if (marketSupplierResult.rows.length === 0) {
       marketSupplierResult = await db.query(`
-        SELECT id, supplier_code FROM market_suppliers
+        SELECT id, supplier_code, name FROM market_suppliers
         WHERE LOWER(name) = LOWER($1) AND company_id = $2
       `, [supplier.name, payload.companyId])
+    }
 
-      // Auto-sync: If found by name, update the code in consignment_suppliers
-      if (marketSupplierResult.rows.length > 0) {
-        const correctCode = marketSupplierResult.rows[0].supplier_code
-        await db.query(`
-          UPDATE consignment_suppliers SET code = $1 WHERE id = $2
-        `, [correctCode, consignmentSupplierId])
-        console.log('[Supplier Dashboard] Auto-synced code:', actualSupplierCode, '->', correctCode)
-      }
+    // If still not found, try partial name match (first word)
+    if (marketSupplierResult.rows.length === 0) {
+      const firstWord = supplier.name.split(' ')[0]
+      marketSupplierResult = await db.query(`
+        SELECT id, supplier_code, name FROM market_suppliers
+        WHERE LOWER(name) LIKE LOWER($1) AND company_id = $2
+        LIMIT 1
+      `, [`${firstWord}%`, payload.companyId])
+    }
+
+    // If still not found, try to find ANY supplier in this company for debugging
+    let availableSuppliers: string[] = []
+    if (marketSupplierResult.rows.length === 0) {
+      const allSuppliers = await db.query(`
+        SELECT supplier_code, name FROM market_suppliers
+        WHERE company_id = $1 AND is_active = true
+        ORDER BY name
+        LIMIT 10
+      `, [payload.companyId])
+      availableSuppliers = allSuppliers.rows.map(s => `${s.name} (${s.supplier_code})`)
+    }
+
+    // Auto-sync: If found, update the code in consignment_suppliers
+    if (marketSupplierResult.rows.length > 0 && marketSupplierResult.rows[0].supplier_code !== actualSupplierCode) {
+      const correctCode = marketSupplierResult.rows[0].supplier_code
+      await db.query(`
+        UPDATE consignment_suppliers SET code = $1 WHERE id = $2
+      `, [correctCode, consignmentSupplierId])
+      console.log('[Supplier Dashboard] Auto-synced code:', actualSupplierCode, '->', correctCode)
     }
 
     const marketSupplierId = marketSupplierResult.rows[0]?.id
+    const marketSupplierName = marketSupplierResult.rows[0]?.name
 
     // Debug log
     console.log('[Supplier Dashboard] Debug:', {
@@ -92,7 +115,9 @@ export async function GET() {
       actualSupplierCode,
       supplierName: supplier.name,
       marketSupplierId,
-      companyId: payload.companyId
+      marketSupplierName,
+      companyId: payload.companyId,
+      availableSuppliers: availableSuppliers.length > 0 ? availableSuppliers : 'found'
     })
 
     // Initialize default values
@@ -304,9 +329,12 @@ export async function GET() {
         recentTransactions,
         debug: {
           marketSupplierId,
+          marketSupplierName,
           consignmentSupplierId,
+          consignmentName: supplier.name,
           supplierCode: actualSupplierCode,
-          hasWallet: !!wallet.balance_available || wallet.balance_available === 0
+          hasWallet: !!wallet.balance_available || wallet.balance_available === 0,
+          availableSuppliers: availableSuppliers.length > 0 ? availableSuppliers : undefined
         }
       }
     })

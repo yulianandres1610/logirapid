@@ -83,27 +83,31 @@ export async function GET() {
         request_number,
         amount_requested,
         amount_approved,
+        amount_paid,
         status,
         notes,
         admin_notes,
-        created_at,
-        processed_at
+        requested_at,
+        approved_at,
+        paid_at
       FROM consignment_payment_requests
       WHERE supplier_id = $1
-      ORDER BY created_at DESC
+      ORDER BY requested_at DESC
       LIMIT 50
     `, [supplierId])
 
     const requests = result.rows.map(row => ({
       id: row.id,
       requestNumber: row.request_number,
-      amountRequested: parseFloat(row.amount_requested),
+      amountRequested: parseFloat(row.amount_requested) || 0,
       amountApproved: row.amount_approved ? parseFloat(row.amount_approved) : null,
+      amountPaid: row.amount_paid ? parseFloat(row.amount_paid) : 0,
       status: row.status,
       notes: row.notes,
       adminNotes: row.admin_notes,
-      createdAt: row.created_at,
-      processedAt: row.processed_at
+      createdAt: row.requested_at,
+      approvedAt: row.approved_at,
+      paidAt: row.paid_at
     }))
 
     return NextResponse.json({
