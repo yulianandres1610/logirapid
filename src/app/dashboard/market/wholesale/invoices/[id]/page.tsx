@@ -579,12 +579,9 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                     <div className="flex items-center justify-between">
                       <h3 className="font-medium">Entregas</h3>
                       {invoice.status === 'confirmed' && (
-                        <Link href={`/dashboard/market/wholesale/invoices/${invoice.id}/delivery`}>
-                          <button className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm">
-                            <Plus className="w-4 h-4" />
-                            Nueva Entrega
-                          </button>
-                        </Link>
+                        <p className="text-sm text-gray-500">
+                          Las entregas se gestionan desde Operaciones de Almacén (Mayoreo)
+                        </p>
                       )}
                     </div>
                     {invoice.deliveries.length === 0 ? (

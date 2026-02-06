@@ -605,18 +605,6 @@ export default function WholesaleInvoicesPage() {
                                     <Eye className="w-4 h-4 text-blue-500" />
                                   </motion.button>
                                 </Link>
-                                {invoice.status === 'confirmed' && (
-                                  <Link href={`/dashboard/market/wholesale/invoices/${invoice.id}/delivery`}>
-                                    <motion.button
-                                      whileHover={{ scale: 1.1 }}
-                                      whileTap={{ scale: 0.9 }}
-                                      className="p-2 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
-                                      title="Crear entrega"
-                                    >
-                                      <Truck className="w-4 h-4 text-green-500" />
-                                    </motion.button>
-                                  </Link>
-                                )}
                                 {invoice.paymentStatus !== 'paid' && invoice.status !== 'cancelled' && (
                                   <Link href={`/dashboard/market/wholesale/invoices/${invoice.id}?tab=payments`}>
                                     <motion.button
