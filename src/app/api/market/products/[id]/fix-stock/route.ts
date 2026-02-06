@@ -10,6 +10,147 @@ interface JWTPayload {
   companyId: number
 }
 
+interface LotAdjustment {
+  source: 'consignment' | 'purchase' | 'production'
+  lotId: number
+  lotNumber: string
+  adjustment: number
+}
+
+/**
+ * Sync lots with the new stock value
+ * If stock > lots total, create an adjustment lot
+ * If stock < lots total, reduce lots (newest first)
+ */
+async function syncLotsWithStock(
+  productId: number,
+  warehouseId: number,
+  newStock: number,
+  companyId: number,
+  userId: number
+): Promise<{ synced: boolean; adjustments: LotAdjustment[]; message: string }> {
+  const adjustments: LotAdjustment[] = []
+
+  try {
+    // Calculate current total from all lots
+    const consignmentTotal = await db.query(`
+      SELECT COALESCE(SUM(quantity_available), 0) as total
+      FROM consignment_lot_inventory
+      WHERE product_id = $1 AND warehouse_id = $2 AND company_id = $3 AND variant_id IS NULL
+    `, [productId, warehouseId, companyId])
+
+    const purchaseTotal = await db.query(`
+      SELECT COALESCE(SUM(quantity_available), 0) as total
+      FROM purchase_lot_inventory
+      WHERE product_id = $1 AND warehouse_id = $2 AND company_id = $3 AND variant_id IS NULL
+    `, [productId, warehouseId, companyId])
+
+    const productionTotal = await db.query(`
+      SELECT COALESCE(SUM(quantity_available), 0) as total
+      FROM production_lot_inventory
+      WHERE product_id = $1 AND warehouse_id = $2 AND company_id = $3 AND variant_id IS NULL
+    `, [productId, warehouseId, companyId])
+
+    const lotsTotal = (parseFloat(consignmentTotal.rows[0]?.total) || 0) +
+      (parseFloat(purchaseTotal.rows[0]?.total) || 0) +
+      (parseFloat(productionTotal.rows[0]?.total) || 0)
+
+    const discrepancy = newStock - lotsTotal
+
+    if (Math.abs(discrepancy) < 0.001) {
+      return { synced: true, adjustments: [], message: 'Lotes ya sincronizados' }
+    }
+
+    if (discrepancy > 0) {
+      // Stock > Lots: Create adjustment lot
+      const lotNumber = `ADJ-FIX-${Date.now()}`
+
+      await db.query(`
+        INSERT INTO production_lot_inventory (
+          company_id, warehouse_id, product_id, variant_id,
+          lot_number, quantity_initial, quantity_available,
+          unit_cost, production_order_id, received_at, created_at
+        ) VALUES ($1, $2, $3, NULL, $4, $5, $5, 0, NULL, NOW(), NOW())
+        RETURNING id
+      `, [companyId, warehouseId, productId, lotNumber, discrepancy])
+
+      adjustments.push({
+        source: 'production',
+        lotId: 0,
+        lotNumber,
+        adjustment: discrepancy
+      })
+
+      return {
+        synced: true,
+        adjustments,
+        message: `Creado lote de ajuste ${lotNumber}: +${discrepancy}`
+      }
+    } else {
+      // Lots > Stock: Reduce lots (newest first)
+      let remaining = Math.abs(discrepancy)
+
+      // Reduce from production first, then purchase, then consignment
+      const sources: Array<{ name: 'production' | 'purchase' | 'consignment'; table: string; orderCol: string }> = [
+        { name: 'production', table: 'production_lot_inventory', orderCol: 'received_at' },
+        { name: 'purchase', table: 'purchase_lot_inventory', orderCol: 'created_at' },
+        { name: 'consignment', table: 'consignment_lot_inventory', orderCol: 'received_at' }
+      ]
+
+      for (const source of sources) {
+        if (remaining <= 0) break
+
+        // Get lots for this source, newest first
+        const lots = await db.query(`
+          SELECT id, lot_number, quantity_available
+          FROM ${source.table}
+          WHERE product_id = $1 AND warehouse_id = $2 AND company_id = $3
+            AND variant_id IS NULL AND quantity_available > 0
+          ORDER BY ${source.orderCol} DESC
+        `, [productId, warehouseId, companyId])
+
+        for (const lot of lots.rows) {
+          if (remaining <= 0) break
+          const available = parseFloat(lot.quantity_available) || 0
+          const reduction = Math.min(remaining, available)
+
+          if (reduction > 0) {
+            await db.query(`
+              UPDATE ${source.table}
+              SET quantity_available = quantity_available - $1
+              WHERE id = $2
+            `, [reduction, lot.id])
+
+            adjustments.push({
+              source: source.name,
+              lotId: lot.id,
+              lotNumber: lot.lot_number,
+              adjustment: -reduction
+            })
+
+            remaining -= reduction
+          }
+        }
+      }
+
+      return {
+        synced: remaining <= 0,
+        adjustments,
+        message: remaining > 0
+          ? `Ajustados lotes, pero quedan ${remaining} unidades sin sincronizar`
+          : `Ajustados ${adjustments.length} lotes para coincidir con stock`
+      }
+    }
+  } catch (error) {
+    console.error('[syncLotsWithStock] Error:', error)
+    return {
+      synced: false,
+      adjustments: [],
+      message: `Error al sincronizar lotes: ${error instanceof Error ? error.message : 'Unknown'}`
+    }
+  }
+}
+
 /**
  * GET /api/market/products/[id]/fix-stock
  * Get current stock by warehouse and allow correction
@@ -72,6 +213,61 @@ export async function GET(
       ORDER BY mw.name
     `, [productId, payload.companyId])
 
+    // Get lot totals for each warehouse
+    const warehouseData = await Promise.all(
+      stockResult.rows.map(async (w) => {
+        const warehouseId = w.warehouse_id
+        const currentStock = parseFloat(w.quantity_on_hand) || 0
+
+        // Get lot totals
+        const consignmentTotal = await db.query(`
+          SELECT COALESCE(SUM(quantity_available), 0) as total, COUNT(*) as count
+          FROM consignment_lot_inventory
+          WHERE product_id = $1 AND warehouse_id = $2 AND company_id = $3 AND variant_id IS NULL
+        `, [productId, warehouseId, payload.companyId])
+
+        const purchaseTotal = await db.query(`
+          SELECT COALESCE(SUM(quantity_available), 0) as total, COUNT(*) as count
+          FROM purchase_lot_inventory
+          WHERE product_id = $1 AND warehouse_id = $2 AND company_id = $3 AND variant_id IS NULL
+        `, [productId, warehouseId, payload.companyId])
+
+        const productionTotal = await db.query(`
+          SELECT COALESCE(SUM(quantity_available), 0) as total, COUNT(*) as count
+          FROM production_lot_inventory
+          WHERE product_id = $1 AND warehouse_id = $2 AND company_id = $3 AND variant_id IS NULL
+        `, [productId, warehouseId, payload.companyId])
+
+        const consignmentQty = parseFloat(consignmentTotal.rows[0]?.total) || 0
+        const purchaseQty = parseFloat(purchaseTotal.rows[0]?.total) || 0
+        const productionQty = parseFloat(productionTotal.rows[0]?.total) || 0
+        const lotsTotal = consignmentQty + purchaseQty + productionQty
+        const discrepancy = currentStock - lotsTotal
+
+        return {
+          warehouseId,
+          warehouseName: w.warehouse_name,
+          warehouseCode: w.warehouse_code,
+          stockId: w.stock_id,
+          currentStock,
+          reserved: parseFloat(w.quantity_reserved) || 0,
+          lots: {
+            consignment: { quantity: consignmentQty, count: parseInt(consignmentTotal.rows[0]?.count) || 0 },
+            purchase: { quantity: purchaseQty, count: parseInt(purchaseTotal.rows[0]?.count) || 0 },
+            production: { quantity: productionQty, count: parseInt(productionTotal.rows[0]?.count) || 0 },
+            total: lotsTotal
+          },
+          discrepancy,
+          isSynced: Math.abs(discrepancy) < 0.001
+        }
+      })
+    )
+
+    // Calculate overall stats
+    const totalLotsQuantity = warehouseData.reduce((sum, w) => sum + w.lots.total, 0)
+    const totalDiscrepancy = warehouseData.reduce((sum, w) => sum + w.discrepancy, 0)
+    const warehousesWithDiscrepancy = warehouseData.filter(w => !w.isSynced).length
+
     return NextResponse.json({
       success: true,
       data: {
@@ -82,14 +278,13 @@ export async function GET(
           barcode: product.barcode,
           totalStock: parseFloat(product.total_stock) || 0
         },
-        warehouses: stockResult.rows.map(w => ({
-          warehouseId: w.warehouse_id,
-          warehouseName: w.warehouse_name,
-          warehouseCode: w.warehouse_code,
-          stockId: w.stock_id,
-          currentStock: parseFloat(w.quantity_on_hand) || 0,
-          reserved: parseFloat(w.quantity_reserved) || 0
-        }))
+        warehouses: warehouseData,
+        summary: {
+          totalLotsQuantity,
+          totalDiscrepancy,
+          warehousesWithDiscrepancy,
+          isSynced: warehousesWithDiscrepancy === 0
+        }
       }
     })
 
@@ -108,6 +303,7 @@ export async function GET(
  *
  * Body:
  * - corrections: Array<{ warehouseId: number, newStock: number, reason: string }>
+ * - syncLots: boolean (default: true) - whether to sync lots with new stock values
  */
 export async function POST(
   request: NextRequest,
@@ -142,8 +338,9 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { corrections } = body as {
+    const { corrections, syncLots = true } = body as {
       corrections: Array<{ warehouseId: number, newStock: number, reason?: string }>
+      syncLots?: boolean
     }
 
     if (!corrections || !Array.isArray(corrections) || corrections.length === 0) {
@@ -170,6 +367,11 @@ export async function POST(
       after: number
       difference: number
       action: string
+      lotSync?: {
+        synced: boolean
+        adjustments: LotAdjustment[]
+        message: string
+      }
     }> = []
 
     let totalNewStock = 0
@@ -253,13 +455,27 @@ export async function POST(
         `, [warehouseId, productId, newStock])
       }
 
+      // Sync lots with new stock if enabled
+      let lotSyncResult = undefined
+      if (syncLots) {
+        lotSyncResult = await syncLotsWithStock(
+          productId,
+          warehouseId,
+          newStock,
+          payload.companyId,
+          payload.userId
+        )
+        console.log(`[Fix Stock] Lot sync for ${warehouseName}:`, lotSyncResult.message)
+      }
+
       results.push({
         warehouseId,
         warehouseName,
         before: currentStock,
         after: newStock,
         difference,
-        action: difference > 0 ? `+${difference} agregadas` : `${difference} removidas`
+        action: difference > 0 ? `+${difference} agregadas` : `${difference} removidas`,
+        lotSync: lotSyncResult
       })
 
       totalNewStock += newStock
@@ -292,13 +508,20 @@ export async function POST(
       // Table might not exist
     }
 
+    // Count successful lot syncs
+    const lotSyncCount = results.filter(r => r.lotSync?.synced).length
+    const lotSyncMessage = syncLots
+      ? ` (${lotSyncCount}/${results.filter(r => r.difference !== 0).length} lotes sincronizados)`
+      : ''
+
     return NextResponse.json({
       success: true,
-      message: `Stock corregido para ${productName}`,
+      message: `Stock corregido para ${productName}${lotSyncMessage}`,
       data: {
         productId,
         productName,
         newTotalStock: totalNewStock,
+        lotsSynced: syncLots,
         corrections: results
       }
     })
