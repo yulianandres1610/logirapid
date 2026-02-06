@@ -193,8 +193,8 @@ export async function PUT(
           await db.query(`
             UPDATE users SET
               email = $1,
-              password_hash = $2,
-              name = $3,
+              password = $2,
+              firstname = $3,
               updated_at = NOW()
             WHERE id = $4
           `, [trimmedUsername, hashedPassword, name, currentUserId])
@@ -203,7 +203,7 @@ export async function PUT(
           await db.query(`
             UPDATE users SET
               email = $1,
-              name = $2,
+              firstname = $2,
               updated_at = NOW()
             WHERE id = $3
           `, [trimmedUsername, name, currentUserId])
@@ -233,7 +233,7 @@ export async function PUT(
         // Create new user with SUPPLIER role
         const hashedPassword = await bcrypt.hash(password, 10)
         const userResult = await db.query(`
-          INSERT INTO users (email, password_hash, name, role, is_active, created_at, updated_at)
+          INSERT INTO users (email, password, firstname, role, isactive, created_at, updated_at)
           VALUES ($1, $2, $3, 'SUPPLIER', true, NOW(), NOW())
           RETURNING id
         `, [trimmedUsername, hashedPassword, name])
