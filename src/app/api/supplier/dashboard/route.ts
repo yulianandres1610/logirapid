@@ -142,7 +142,7 @@ export async function GET() {
     // Only query if we found the market supplier
     if (marketSupplierId) {
       // Get wallet info (wallet uses market_suppliers.id)
-      const walletResult = await db.query(`
+      let walletResult = await db.query(`
         SELECT
           balance_available,
           balance_pending,
@@ -152,6 +152,38 @@ export async function GET() {
         FROM consignment_supplier_wallets
         WHERE supplier_id = $1
       `, [marketSupplierId])
+
+      // Auto-create wallet if it doesn't exist
+      if (walletResult.rows.length === 0) {
+        // Calculate initial balance from orders
+        const ordersTotal = await db.query(`
+          SELECT
+            COALESCE(SUM(total_sold), 0) as total_sold,
+            COALESCE(SUM(total_paid), 0) as total_paid
+          FROM consignment_orders
+          WHERE supplier_id = $1
+        `, [marketSupplierId])
+
+        const totalSold = parseFloat(ordersTotal.rows[0]?.total_sold) || 0
+        const totalPaid = parseFloat(ordersTotal.rows[0]?.total_paid) || 0
+        const balanceAvailable = totalSold - totalPaid
+
+        // Create the wallet
+        await db.query(`
+          INSERT INTO consignment_supplier_wallets (
+            supplier_id, company_id, balance_available, balance_pending,
+            total_earned, total_paid, total_returned, created_at, updated_at
+          ) VALUES ($1, $2, $3, 0, $4, $5, 0, NOW(), NOW())
+        `, [marketSupplierId, payload.companyId, balanceAvailable, totalSold, totalPaid])
+
+        console.log('[Supplier Dashboard] Auto-created wallet for supplier:', marketSupplierId, 'balance:', balanceAvailable)
+
+        // Fetch the newly created wallet
+        walletResult = await db.query(`
+          SELECT balance_available, balance_pending, total_earned, total_paid, total_returned
+          FROM consignment_supplier_wallets WHERE supplier_id = $1
+        `, [marketSupplierId])
+      }
 
       if (walletResult.rows[0]) {
         wallet = walletResult.rows[0]
