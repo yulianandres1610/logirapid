@@ -39,14 +39,14 @@ export async function GET() {
       }, { status: 401 })
     }
 
-    const supplierId = payload.supplierId
+    const supplierCode = payload.supplierCode
 
-    // Get supplier info
+    // Get supplier info from consignment_suppliers (for portal data)
     const supplierResult = await db.query(`
       SELECT id, code, name, email, phone, is_active
       FROM consignment_suppliers
-      WHERE id = $1
-    `, [supplierId])
+      WHERE code = $1 AND company_id = $2
+    `, [supplierCode, payload.companyId])
 
     if (supplierResult.rows.length === 0) {
       return NextResponse.json({
@@ -57,7 +57,15 @@ export async function GET() {
 
     const supplier = supplierResult.rows[0]
 
-    // Get wallet info
+    // Get market_suppliers.id for orders queries (orders use market_suppliers.id, not consignment_suppliers.id)
+    const marketSupplierResult = await db.query(`
+      SELECT id FROM market_suppliers
+      WHERE supplier_code = $1 AND company_id = $2
+    `, [supplierCode, payload.companyId])
+
+    const marketSupplierId = marketSupplierResult.rows[0]?.id
+
+    // Get wallet info (wallet uses market_suppliers.id)
     const walletResult = await db.query(`
       SELECT
         balance_available,
@@ -67,7 +75,7 @@ export async function GET() {
         total_returned
       FROM consignment_supplier_wallets
       WHERE supplier_id = $1
-    `, [supplierId])
+    `, [marketSupplierId])
 
     const wallet = walletResult.rows[0] || {
       balance_available: 0,
@@ -77,7 +85,7 @@ export async function GET() {
       total_returned: 0
     }
 
-    // Get order stats
+    // Get order stats (orders use market_suppliers.id)
     const ordersResult = await db.query(`
       SELECT
         COUNT(*) FILTER (WHERE status = 'pending') as pending_orders,
@@ -89,7 +97,7 @@ export async function GET() {
         COALESCE(SUM(total_sold), 0) as total_sold
       FROM consignment_orders
       WHERE supplier_id = $1
-    `, [supplierId])
+    `, [marketSupplierId])
 
     const orderStats = ordersResult.rows[0]
 
@@ -101,7 +109,7 @@ export async function GET() {
       WHERE wallet_id = (SELECT id FROM consignment_supplier_wallets WHERE supplier_id = $1)
         AND transaction_type = 'sale'
         AND created_at >= NOW() - INTERVAL '30 days'
-    `, [supplierId])
+    `, [marketSupplierId])
 
     const sales30Days = parseFloat(salesResult.rows[0]?.sales_30_days) || 0
 
@@ -113,7 +121,7 @@ export async function GET() {
         COALESCE(SUM(amount_requested) FILTER (WHERE status IN ('pending', 'approved')), 0) as amount_in_process
       FROM consignment_payment_requests
       WHERE supplier_id = $1
-    `, [supplierId])
+    `, [marketSupplierId])
 
     const paymentStats = paymentsResult.rows[0]
 
@@ -132,7 +140,7 @@ export async function GET() {
       WHERE t.wallet_id = (SELECT id FROM consignment_supplier_wallets WHERE supplier_id = $1)
       ORDER BY t.created_at DESC
       LIMIT 10
-    `, [supplierId])
+    `, [marketSupplierId])
 
     const recentTransactions = transactionsResult.rows.map(t => ({
       id: t.id,

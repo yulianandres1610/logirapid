@@ -39,15 +39,21 @@ export async function GET() {
       }, { status: 401 })
     }
 
-    const supplierId = payload.supplierId
-
-    // Get supplier info
+    // Get supplier info from consignment_suppliers using code
     const supplierResult = await db.query(`
       SELECT
         id, code, name, legal_name, email, phone, address
       FROM consignment_suppliers
-      WHERE id = $1
-    `, [supplierId])
+      WHERE code = $1 AND company_id = $2
+    `, [payload.supplierCode, payload.companyId])
+
+    // Also get market_suppliers.id for bank accounts
+    const marketSupplierResult = await db.query(`
+      SELECT id FROM market_suppliers
+      WHERE supplier_code = $1 AND company_id = $2
+    `, [payload.supplierCode, payload.companyId])
+
+    const marketSupplierId = marketSupplierResult.rows[0]?.id
 
     if (supplierResult.rows.length === 0) {
       return NextResponse.json({
@@ -58,7 +64,7 @@ export async function GET() {
 
     const supplier = supplierResult.rows[0]
 
-    // Get bank accounts
+    // Get bank accounts (uses market_suppliers.id)
     let bankAccounts: Array<{ id: number; bankName: string; accountNumber: string; accountType: string }> = []
     try {
       const bankResult = await db.query(`
@@ -66,7 +72,7 @@ export async function GET() {
         FROM consignment_supplier_bank_accounts
         WHERE supplier_id = $1
         ORDER BY id
-      `, [supplierId])
+      `, [marketSupplierId])
 
       bankAccounts = bankResult.rows.map(row => ({
         id: row.id,

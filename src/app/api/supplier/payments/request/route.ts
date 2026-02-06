@@ -39,7 +39,20 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
-    const supplierId = payload.supplierId
+    // Get market_suppliers.id using supplierCode
+    const marketSupplierResult = await db.query(`
+      SELECT id FROM market_suppliers
+      WHERE supplier_code = $1 AND company_id = $2
+    `, [payload.supplierCode, payload.companyId])
+
+    const supplierId = marketSupplierResult.rows[0]?.id
+
+    if (!supplierId) {
+      return NextResponse.json({
+        success: false,
+        error: 'Proveedor no encontrado'
+      }, { status: 404 })
+    }
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
@@ -98,7 +111,20 @@ export async function POST(request: NextRequest) {
       }, { status: 401 })
     }
 
-    const supplierId = payload.supplierId
+    // Get market_suppliers.id using supplierCode
+    const marketSupplierResult = await db.query(`
+      SELECT id FROM market_suppliers
+      WHERE supplier_code = $1 AND company_id = $2
+    `, [payload.supplierCode, payload.companyId])
+
+    const supplierId = marketSupplierResult.rows[0]?.id
+
+    if (!supplierId) {
+      return NextResponse.json({
+        success: false,
+        error: 'Proveedor no encontrado'
+      }, { status: 404 })
+    }
 
     const { amount, notes } = await request.json()
 

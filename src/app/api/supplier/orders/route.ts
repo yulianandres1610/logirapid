@@ -39,7 +39,20 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
-    const supplierId = payload.supplierId
+    // Get market_suppliers.id using supplierCode (orders use market_suppliers.id)
+    const marketSupplierResult = await db.query(`
+      SELECT id FROM market_suppliers
+      WHERE supplier_code = $1 AND company_id = $2
+    `, [payload.supplierCode, payload.companyId])
+
+    const supplierId = marketSupplierResult.rows[0]?.id
+
+    if (!supplierId) {
+      return NextResponse.json({
+        success: false,
+        error: 'Proveedor no encontrado en el sistema'
+      }, { status: 404 })
+    }
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') // all, active, completed
