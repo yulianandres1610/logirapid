@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
+import bcrypt from 'bcryptjs'
 import { db } from '@/lib/database'
 
 interface JWTPayload {
@@ -56,11 +57,13 @@ export async function GET(
     const result = await db.query(`
       SELECT
         s.*,
+        u.email as username,
         COALESCE((SELECT COUNT(*) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_orders,
         COALESCE((SELECT SUM(total_cost) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_consigned,
         COALESCE((SELECT SUM(total_sold) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_sold,
         COALESCE((SELECT SUM(total_paid) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_paid
       FROM market_suppliers s
+      LEFT JOIN users u ON u.id = s.user_id
       WHERE s.id = $1 AND s.company_id = $2
     `, [supplierId, payload.companyId])
 
@@ -93,6 +96,8 @@ export async function GET(
       notes: s.notes,
       rating: s.rating || 3,
       isActive: s.is_active,
+      userId: s.user_id,
+      username: s.username || null,
       createdAt: s.created_at,
       updatedAt: s.updated_at,
       stats: {
@@ -135,7 +140,7 @@ export async function PUT(
     const { id } = await params
     const supplierId = parseInt(id)
     const body = await request.json()
-    const { code, name, legalName, taxId, contactName, email, phone, address, isActive } = body
+    const { code, name, legalName, taxId, contactName, email, phone, address, isActive, username, password } = body
 
     // MARKET_COMERCIAL no puede editar proveedores
     if (payload.role === 'MARKET_COMERCIAL') {
@@ -147,7 +152,7 @@ export async function PUT(
 
     // Verificar que el proveedor existe y pertenece a la empresa
     const existing = await db.query(
-      'SELECT id, company_id FROM market_suppliers WHERE id = $1 AND company_id = $2',
+      'SELECT id, company_id, user_id FROM market_suppliers WHERE id = $1 AND company_id = $2',
       [supplierId, payload.companyId]
     )
 
@@ -157,6 +162,8 @@ export async function PUT(
         error: 'Proveedor no encontrado'
       }, { status: 404 })
     }
+
+    const currentUserId = existing.rows[0].user_id
 
     // Si cambia el código, verificar que sea único en la empresa
     if (code) {
@@ -172,7 +179,77 @@ export async function PUT(
       }
     }
 
-    // Actualizar proveedor
+    let newUserId = currentUserId
+
+    // Handle user creation/update for portal access
+    if (username) {
+      const trimmedUsername = username.trim().toLowerCase()
+
+      if (currentUserId) {
+        // Update existing user
+        if (password) {
+          // Update username and password
+          const hashedPassword = await bcrypt.hash(password, 10)
+          await db.query(`
+            UPDATE users SET
+              email = $1,
+              password_hash = $2,
+              name = $3,
+              updated_at = NOW()
+            WHERE id = $4
+          `, [trimmedUsername, hashedPassword, name, currentUserId])
+        } else {
+          // Only update username/name
+          await db.query(`
+            UPDATE users SET
+              email = $1,
+              name = $2,
+              updated_at = NOW()
+            WHERE id = $3
+          `, [trimmedUsername, name, currentUserId])
+        }
+      } else {
+        // Create new user for supplier portal access
+        if (!password) {
+          return NextResponse.json({
+            success: false,
+            error: 'La contraseña es requerida para crear acceso al portal'
+          }, { status: 400 })
+        }
+
+        // Check if username already exists
+        const userExists = await db.query(
+          'SELECT id FROM users WHERE email = $1',
+          [trimmedUsername]
+        )
+
+        if (userExists.rows.length > 0) {
+          return NextResponse.json({
+            success: false,
+            error: 'El nombre de usuario ya está en uso'
+          }, { status: 400 })
+        }
+
+        // Create new user with SUPPLIER role
+        const hashedPassword = await bcrypt.hash(password, 10)
+        const userResult = await db.query(`
+          INSERT INTO users (email, password_hash, name, role, is_active, created_at, updated_at)
+          VALUES ($1, $2, $3, 'SUPPLIER', true, NOW(), NOW())
+          RETURNING id
+        `, [trimmedUsername, hashedPassword, name])
+
+        newUserId = userResult.rows[0].id
+
+        // Link user to company
+        await db.query(`
+          INSERT INTO user_companies (user_id, company_id, is_primary, created_at)
+          VALUES ($1, $2, true, NOW())
+          ON CONFLICT (user_id, company_id) DO NOTHING
+        `, [newUserId, payload.companyId])
+      }
+    }
+
+    // Actualizar proveedor (including user_id)
     await db.query(`
       UPDATE market_suppliers SET
         supplier_code = COALESCE($1, supplier_code),
@@ -184,8 +261,9 @@ export async function PUT(
         phone = $7,
         address = $8,
         is_active = COALESCE($9, is_active),
+        user_id = $10,
         updated_at = NOW()
-      WHERE id = $10 AND company_id = $11
+      WHERE id = $11 AND company_id = $12
     `, [
       code || null,
       name,
@@ -196,6 +274,7 @@ export async function PUT(
       phone || null,
       address || null,
       isActive,
+      newUserId,
       supplierId,
       payload.companyId
     ])

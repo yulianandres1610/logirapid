@@ -62,11 +62,13 @@ export async function GET(request: NextRequest) {
     const query = `
       SELECT
         s.*,
+        u.email as username,
         COALESCE((SELECT COUNT(*) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_orders,
         COALESCE((SELECT SUM(total_cost) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_consigned,
         COALESCE((SELECT SUM(total_sold) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_sold,
         COALESCE((SELECT SUM(total_paid) FROM consignment_orders WHERE supplier_id = s.id), 0) as total_paid
       FROM market_suppliers s
+      LEFT JOIN users u ON u.id = s.user_id
       ${whereClause}
       ORDER BY s.name ASC
       LIMIT $${countParams.length + 1} OFFSET $${countParams.length + 2}
@@ -95,6 +97,8 @@ export async function GET(request: NextRequest) {
       notes: s.notes,
       rating: s.rating || 3,
       isActive: s.is_active,
+      userId: s.user_id,
+      username: s.username || null,
       createdAt: s.created_at,
       stats: {
         totalOrders: parseInt(s.total_orders) || 0,
