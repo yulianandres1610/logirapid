@@ -194,8 +194,7 @@ export async function PUT(
             UPDATE users SET
               email = $1,
               password = $2,
-              firstname = $3,
-              updated_at = NOW()
+              firstname = $3
             WHERE id = $4
           `, [trimmedUsername, hashedPassword, name, currentUserId])
         } else {
@@ -203,8 +202,7 @@ export async function PUT(
           await db.query(`
             UPDATE users SET
               email = $1,
-              firstname = $2,
-              updated_at = NOW()
+              firstname = $2
             WHERE id = $3
           `, [trimmedUsername, name, currentUserId])
         }
@@ -233,8 +231,8 @@ export async function PUT(
         // Create new user with SUPPLIER role
         const hashedPassword = await bcrypt.hash(password, 10)
         const userResult = await db.query(`
-          INSERT INTO users (email, password, firstname, role, isactive, created_at, updated_at)
-          VALUES ($1, $2, $3, 'SUPPLIER', true, NOW(), NOW())
+          INSERT INTO users (email, password, firstname, lastname, role, isactive)
+          VALUES ($1, $2, $3, '', 'SUPPLIER', true)
           RETURNING id
         `, [trimmedUsername, hashedPassword, name])
 
@@ -242,9 +240,9 @@ export async function PUT(
 
         // Link user to company
         await db.query(`
-          INSERT INTO user_companies (user_id, company_id, is_primary, created_at)
-          VALUES ($1, $2, true, NOW())
-          ON CONFLICT (user_id, company_id) DO NOTHING
+          INSERT INTO user_companies (userid, companyid)
+          VALUES ($1, $2)
+          ON CONFLICT (userid, companyid) DO NOTHING
         `, [newUserId, payload.companyId])
       }
     }
