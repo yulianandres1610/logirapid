@@ -212,6 +212,47 @@ export async function GET() {
       }))
     }
 
+    // Get sales rhythm data (last 7 days)
+    let salesByDay: Array<{ date: string; amount: number; count: number }> = []
+    let sales7Days = 0
+    let salesYesterday = 0
+    let salesToday = 0
+
+    if (marketSupplierId) {
+      const rhythmResult = await db.query(`
+        SELECT
+          DATE(created_at) as sale_date,
+          COALESCE(SUM(amount), 0) as total_amount,
+          COUNT(*) as sale_count
+        FROM consignment_wallet_transactions
+        WHERE wallet_id = (SELECT id FROM consignment_supplier_wallets WHERE supplier_id = $1)
+          AND transaction_type = 'sale'
+          AND created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY DATE(created_at)
+        ORDER BY sale_date DESC
+      `, [marketSupplierId])
+
+      salesByDay = rhythmResult.rows.map(r => ({
+        date: r.sale_date,
+        amount: parseFloat(r.total_amount) || 0,
+        count: parseInt(r.sale_count) || 0
+      }))
+
+      // Calculate totals
+      const today = new Date().toISOString().split('T')[0]
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+
+      for (const day of salesByDay) {
+        const dayDate = new Date(day.date).toISOString().split('T')[0]
+        sales7Days += day.amount
+        if (dayDate === today) salesToday = day.amount
+        if (dayDate === yesterday) salesYesterday = day.amount
+      }
+    }
+
+    // Calculate average daily sales
+    const avgDailySales = sales7Days / 7
+
     return NextResponse.json({
       success: true,
       data: {
@@ -244,7 +285,20 @@ export async function GET() {
           amountInProcess: parseFloat(paymentStats.amount_in_process)
         },
         sales30Days,
-        recentTransactions
+        salesRhythm: {
+          today: salesToday,
+          yesterday: salesYesterday,
+          last7Days: sales7Days,
+          avgDaily: avgDailySales,
+          byDay: salesByDay
+        },
+        recentTransactions,
+        debug: {
+          marketSupplierId,
+          consignmentSupplierId,
+          supplierCode: actualSupplierCode,
+          hasWallet: !!wallet.balance_available || wallet.balance_available === 0
+        }
       }
     })
 

@@ -49,6 +49,13 @@ interface DashboardData {
     amountInProcess: number
   }
   sales30Days: number
+  salesRhythm?: {
+    today: number
+    yesterday: number
+    last7Days: number
+    avgDaily: number
+    byDay: Array<{ date: string; amount: number; count: number }>
+  }
   recentTransactions: Array<{
     id: number
     type: string
@@ -58,6 +65,12 @@ interface DashboardData {
     notes: string | null
     createdAt: string
   }>
+  debug?: {
+    marketSupplierId: number | null
+    consignmentSupplierId: number
+    supplierCode: string
+    hasWallet: boolean
+  }
 }
 
 export default function SupplierDashboardPage() {
@@ -315,6 +328,102 @@ export default function SupplierDashboardPage() {
           </motion.div>
           </div>
         </div>
+
+        {/* Sales Rhythm Section */}
+        {data.salesRhythm && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.28 }}
+            className="bg-white dark:bg-gray-800 rounded-xl md:rounded-2xl p-4 md:p-6 lg:p-8 shadow-sm"
+          >
+            <h2 className="text-base md:text-xl font-bold text-gray-900 dark:text-white mb-4 md:mb-6">
+              📊 Ritmo de Ventas
+            </h2>
+
+            {/* Sales Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-3 md:p-4">
+                <p className="text-xs md:text-sm text-green-600 dark:text-green-400 mb-1">Hoy</p>
+                <p className="text-lg md:text-2xl font-bold text-green-700 dark:text-green-300">
+                  {formatCurrency(data.salesRhythm.today)}
+                </p>
+              </div>
+              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-xl p-3 md:p-4">
+                <p className="text-xs md:text-sm text-blue-600 dark:text-blue-400 mb-1">Ayer</p>
+                <p className="text-lg md:text-2xl font-bold text-blue-700 dark:text-blue-300">
+                  {formatCurrency(data.salesRhythm.yesterday)}
+                </p>
+              </div>
+              <div className="bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20 rounded-xl p-3 md:p-4">
+                <p className="text-xs md:text-sm text-purple-600 dark:text-purple-400 mb-1">Últimos 7 días</p>
+                <p className="text-lg md:text-2xl font-bold text-purple-700 dark:text-purple-300">
+                  {formatCurrency(data.salesRhythm.last7Days)}
+                </p>
+              </div>
+              <div className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 rounded-xl p-3 md:p-4">
+                <p className="text-xs md:text-sm text-orange-600 dark:text-orange-400 mb-1">Promedio Diario</p>
+                <p className="text-lg md:text-2xl font-bold text-orange-700 dark:text-orange-300">
+                  {formatCurrency(data.salesRhythm.avgDaily)}
+                </p>
+              </div>
+            </div>
+
+            {/* Daily Sales Chart (Simple Bar) */}
+            {data.salesRhythm.byDay.length > 0 && (
+              <div>
+                <p className="text-sm text-gray-500 mb-3">Ventas por día (últimos 7 días)</p>
+                <div className="flex items-end justify-between gap-2 h-32 md:h-40">
+                  {[...data.salesRhythm.byDay].reverse().slice(-7).map((day, idx) => {
+                    const maxAmount = Math.max(...data.salesRhythm!.byDay.map(d => d.amount), 1)
+                    const height = (day.amount / maxAmount) * 100
+                    const dayName = new Date(day.date).toLocaleDateString('es-ES', { weekday: 'short' })
+                    return (
+                      <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                        <span className="text-[10px] md:text-xs text-gray-500 font-medium">
+                          {formatCurrency(day.amount).replace('$', '')}
+                        </span>
+                        <div
+                          className="w-full bg-gradient-to-t from-teal-500 to-cyan-400 rounded-t-lg transition-all duration-500"
+                          style={{ height: `${Math.max(height, 5)}%` }}
+                        />
+                        <span className="text-[10px] md:text-xs text-gray-400 capitalize">{dayName}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {data.salesRhythm.byDay.length === 0 && (
+              <div className="text-center py-8 text-gray-400">
+                No hay ventas registradas en los últimos 7 días
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* Debug Info (only in development) */}
+        {data.debug && !data.debug.marketSupplierId && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4"
+          >
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-yellow-800 dark:text-yellow-200">Configuración pendiente</p>
+                <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                  Tu cuenta de proveedor necesita sincronización. Contacta al administrador.
+                </p>
+                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
+                  Código: {data.debug.supplierCode}
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Recent Transactions - Responsive */}
         <motion.div
