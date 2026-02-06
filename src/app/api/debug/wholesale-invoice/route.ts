@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
         il.warehouse_quantities,
         p.name as product_name,
         p.sku,
-        pv.name as variant_name
+        pv.variant_name as variant_name
       FROM market_invoice_lines il
       JOIN market_products p ON p.id = il.product_id
       LEFT JOIN market_product_variants pv ON pv.id = il.variant_id

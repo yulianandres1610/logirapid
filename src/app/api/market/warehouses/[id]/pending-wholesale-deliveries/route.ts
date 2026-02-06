@@ -152,7 +152,7 @@ export async function GET(
             p.name as product_name,
             p.sku,
             p.barcode,
-            pv.name as variant_name,
+            pv.variant_name as variant_name,
             pv.sku as variant_sku,
             pv.barcode as variant_barcode,
             l.quantity_planned as quantity_expected,
