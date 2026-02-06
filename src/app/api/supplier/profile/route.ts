@@ -39,21 +39,13 @@ export async function GET() {
       }, { status: 401 })
     }
 
-    // Get supplier info from consignment_suppliers using code
+    // Get supplier info from consignment_suppliers using ID from token
     const supplierResult = await db.query(`
       SELECT
         id, code, name, legal_name, email, phone, address
       FROM consignment_suppliers
-      WHERE code = $1 AND company_id = $2
-    `, [payload.supplierCode, payload.companyId])
-
-    // Also get market_suppliers.id for bank accounts
-    const marketSupplierResult = await db.query(`
-      SELECT id FROM market_suppliers
-      WHERE supplier_code = $1 AND company_id = $2
-    `, [payload.supplierCode, payload.companyId])
-
-    const marketSupplierId = marketSupplierResult.rows[0]?.id
+      WHERE id = $1
+    `, [payload.supplierId])
 
     if (supplierResult.rows.length === 0) {
       return NextResponse.json({
@@ -63,6 +55,21 @@ export async function GET() {
     }
 
     const supplier = supplierResult.rows[0]
+
+    // Get market_suppliers.id for bank accounts - try by code, then by name
+    let marketSupplierResult = await db.query(`
+      SELECT id FROM market_suppliers
+      WHERE supplier_code = $1 AND company_id = $2
+    `, [supplier.code, payload.companyId])
+
+    if (marketSupplierResult.rows.length === 0) {
+      marketSupplierResult = await db.query(`
+        SELECT id FROM market_suppliers
+        WHERE LOWER(name) = LOWER($1) AND company_id = $2
+      `, [supplier.name, payload.companyId])
+    }
+
+    const marketSupplierId = marketSupplierResult.rows[0]?.id
 
     // Get bank accounts (uses market_suppliers.id)
     let bankAccounts: Array<{ id: number; bankName: string; accountNumber: string; accountType: string }> = []

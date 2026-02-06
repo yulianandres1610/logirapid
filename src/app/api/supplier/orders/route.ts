@@ -39,19 +39,44 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
-    // Get market_suppliers.id using supplierCode (orders use market_suppliers.id)
-    const marketSupplierResult = await db.query(`
+    // First get supplier info from consignment_suppliers
+    const consignmentResult = await db.query(`
+      SELECT id, code, name FROM consignment_suppliers WHERE id = $1
+    `, [payload.supplierId])
+
+    if (consignmentResult.rows.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Proveedor no encontrado'
+      }, { status: 404 })
+    }
+
+    const consignmentSupplier = consignmentResult.rows[0]
+
+    // Get market_suppliers.id - try by code first, then by name
+    let marketSupplierResult = await db.query(`
       SELECT id FROM market_suppliers
       WHERE supplier_code = $1 AND company_id = $2
-    `, [payload.supplierCode, payload.companyId])
+    `, [consignmentSupplier.code, payload.companyId])
+
+    if (marketSupplierResult.rows.length === 0) {
+      marketSupplierResult = await db.query(`
+        SELECT id FROM market_suppliers
+        WHERE LOWER(name) = LOWER($1) AND company_id = $2
+      `, [consignmentSupplier.name, payload.companyId])
+    }
 
     const supplierId = marketSupplierResult.rows[0]?.id
 
+    // Return empty list if no market supplier found
     if (!supplierId) {
       return NextResponse.json({
-        success: false,
-        error: 'Proveedor no encontrado en el sistema'
-      }, { status: 404 })
+        success: true,
+        data: {
+          orders: [],
+          pagination: { page: 1, limit: 20, total: 0, totalPages: 0 }
+        }
+      })
     }
 
     const { searchParams } = new URL(request.url)

@@ -39,19 +39,41 @@ export async function GET() {
       }, { status: 401 })
     }
 
-    // Get market_suppliers.id using supplierCode
-    const marketSupplierResult = await db.query(`
-      SELECT id FROM market_suppliers
-      WHERE supplier_code = $1 AND company_id = $2
-    `, [payload.supplierCode, payload.companyId])
+    // First get supplier info from consignment_suppliers
+    const consignmentResult = await db.query(`
+      SELECT id, code, name FROM consignment_suppliers WHERE id = $1
+    `, [payload.supplierId])
 
-    const supplierId = marketSupplierResult.rows[0]?.id
-
-    if (!supplierId) {
+    if (consignmentResult.rows.length === 0) {
       return NextResponse.json({
         success: false,
         error: 'Proveedor no encontrado'
       }, { status: 404 })
+    }
+
+    const consignmentSupplier = consignmentResult.rows[0]
+
+    // Get market_suppliers.id - try by code first, then by name
+    let marketSupplierResult = await db.query(`
+      SELECT id FROM market_suppliers
+      WHERE supplier_code = $1 AND company_id = $2
+    `, [consignmentSupplier.code, payload.companyId])
+
+    if (marketSupplierResult.rows.length === 0) {
+      marketSupplierResult = await db.query(`
+        SELECT id FROM market_suppliers
+        WHERE LOWER(name) = LOWER($1) AND company_id = $2
+      `, [consignmentSupplier.name, payload.companyId])
+    }
+
+    const supplierId = marketSupplierResult.rows[0]?.id
+
+    // Return empty list if no market supplier found (instead of 404)
+    if (!supplierId) {
+      return NextResponse.json({
+        success: true,
+        data: { requests: [] }
+      })
     }
 
     // Get payment requests

@@ -25,6 +25,34 @@ async function getSupplierPayload(): Promise<SupplierJWTPayload | null> {
   }
 }
 
+// Helper function to get market_suppliers.id
+async function getMarketSupplierId(payload: SupplierJWTPayload): Promise<number | null> {
+  // First get supplier info from consignment_suppliers
+  const consignmentResult = await db.query(`
+    SELECT id, code, name FROM consignment_suppliers WHERE id = $1
+  `, [payload.supplierId])
+
+  if (consignmentResult.rows.length === 0) return null
+
+  const consignmentSupplier = consignmentResult.rows[0]
+
+  // Try by code first
+  let marketResult = await db.query(`
+    SELECT id FROM market_suppliers
+    WHERE supplier_code = $1 AND company_id = $2
+  `, [consignmentSupplier.code, payload.companyId])
+
+  // Then by name
+  if (marketResult.rows.length === 0) {
+    marketResult = await db.query(`
+      SELECT id FROM market_suppliers
+      WHERE LOWER(name) = LOWER($1) AND company_id = $2
+    `, [consignmentSupplier.name, payload.companyId])
+  }
+
+  return marketResult.rows[0]?.id || null
+}
+
 /**
  * GET /api/supplier/payments/request
  * Lista solicitudes de pago del proveedor
@@ -39,19 +67,13 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
-    // Get market_suppliers.id using supplierCode
-    const marketSupplierResult = await db.query(`
-      SELECT id FROM market_suppliers
-      WHERE supplier_code = $1 AND company_id = $2
-    `, [payload.supplierCode, payload.companyId])
-
-    const supplierId = marketSupplierResult.rows[0]?.id
+    const supplierId = await getMarketSupplierId(payload)
 
     if (!supplierId) {
       return NextResponse.json({
-        success: false,
-        error: 'Proveedor no encontrado'
-      }, { status: 404 })
+        success: true,
+        data: { requests: [] }
+      })
     }
 
     const { searchParams } = new URL(request.url)
@@ -111,18 +133,12 @@ export async function POST(request: NextRequest) {
       }, { status: 401 })
     }
 
-    // Get market_suppliers.id using supplierCode
-    const marketSupplierResult = await db.query(`
-      SELECT id FROM market_suppliers
-      WHERE supplier_code = $1 AND company_id = $2
-    `, [payload.supplierCode, payload.companyId])
-
-    const supplierId = marketSupplierResult.rows[0]?.id
+    const supplierId = await getMarketSupplierId(payload)
 
     if (!supplierId) {
       return NextResponse.json({
         success: false,
-        error: 'Proveedor no encontrado'
+        error: 'Proveedor no encontrado en el sistema'
       }, { status: 404 })
     }
 
