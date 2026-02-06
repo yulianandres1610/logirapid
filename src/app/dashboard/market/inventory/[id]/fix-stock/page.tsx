@@ -151,7 +151,7 @@ export default function FixStockPage() {
   }
 
   return (
-    <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MARKET_ADMIN']}>
+    <ProtectedRoute requiredRole={['SUPER_ADMIN', 'ADMIN', 'MARKET_ADMIN']}>
       <DashboardLayout>
         <div className="min-h-screen p-6">
           <div className="max-w-3xl mx-auto">
