@@ -69,9 +69,18 @@ export async function GET() {
     // If not found, try to find by name similarity (fallback)
     if (marketSupplierResult.rows.length === 0) {
       marketSupplierResult = await db.query(`
-        SELECT id FROM market_suppliers
+        SELECT id, supplier_code FROM market_suppliers
         WHERE LOWER(name) = LOWER($1) AND company_id = $2
       `, [supplier.name, payload.companyId])
+
+      // Auto-sync: If found by name, update the code in consignment_suppliers
+      if (marketSupplierResult.rows.length > 0) {
+        const correctCode = marketSupplierResult.rows[0].supplier_code
+        await db.query(`
+          UPDATE consignment_suppliers SET code = $1 WHERE id = $2
+        `, [correctCode, consignmentSupplierId])
+        console.log('[Supplier Dashboard] Auto-synced code:', actualSupplierCode, '->', correctCode)
+      }
     }
 
     const marketSupplierId = marketSupplierResult.rows[0]?.id
