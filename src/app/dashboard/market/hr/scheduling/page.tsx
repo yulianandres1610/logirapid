@@ -141,34 +141,28 @@ export default function SchedulingPage() {
     }
   }, [dateRange])
 
+  // Track if tables have been initialized this session
+  const [tablesInitialized, setTablesInitialized] = useState(false)
+
   // Initialize HR tables (ensures they exist before fetching)
   const initializeTables = useCallback(async () => {
-    try {
-      // Check if tables exist by calling GET first
-      const checkResponse = await fetch('/api/market/hr/init-tables')
-      const checkResult = await checkResponse.json()
+    if (tablesInitialized) return // Already initialized this session
 
-      // If tables don't exist, initialize them
-      if (checkResult.success && checkResult.tables) {
-        const tablesExist = checkResult.tables.market_shift_patterns && checkResult.tables.market_employee_shifts
-        if (!tablesExist) {
-          console.log('Initializing HR shift tables...')
-          await fetch('/api/market/hr/init-tables', { method: 'POST' })
-        }
+    try {
+      // Always call POST to ensure tables exist (CREATE IF NOT EXISTS is idempotent)
+      console.log('Ensuring HR shift tables exist...')
+      const response = await fetch('/api/market/hr/init-tables', { method: 'POST' })
+      const result = await response.json()
+      if (result.success) {
+        console.log('HR tables ready')
+        setTablesInitialized(true)
       } else {
-        // Tables info not available, try to initialize
-        await fetch('/api/market/hr/init-tables', { method: 'POST' })
+        console.error('Failed to initialize tables:', result.error)
       }
     } catch (error) {
       console.error('Error initializing HR tables:', error)
-      // Try to create tables anyway
-      try {
-        await fetch('/api/market/hr/init-tables', { method: 'POST' })
-      } catch (e) {
-        console.error('Failed to initialize tables:', e)
-      }
     }
-  }, [])
+  }, [tablesInitialized])
 
   const loadAllData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
@@ -449,6 +443,18 @@ export default function SchedulingPage() {
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  setEditingPattern(null)
+                  setShowPatternForm(true)
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl hover:from-purple-600 hover:to-purple-700 transition-all shadow-lg shadow-purple-500/25"
+              >
+                <Plus className="w-5 h-5" />
+                Nuevo Patron
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => setShowGenerateModal(true)}
                 disabled={patterns.filter(p => p.isActive).length === 0}
                 className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 transition-all shadow-lg shadow-green-500/25 disabled:opacity-50"
@@ -530,7 +536,7 @@ export default function SchedulingPage() {
                 >
                   {/* Patterns Header */}
                   <div className={cn(
-                    'p-4 border-b flex items-center justify-between',
+                    'p-4 border-b',
                     theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                   )}>
                     <h3 className={cn(
@@ -539,18 +545,6 @@ export default function SchedulingPage() {
                     )}>
                       Patrones de Rotacion
                     </h3>
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => {
-                        setEditingPattern(null)
-                        setShowPatternForm(true)
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl hover:from-purple-600 hover:to-purple-700 transition-all text-sm font-medium"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Nuevo Patron
-                    </motion.button>
                   </div>
 
                   {/* Patterns Table */}
