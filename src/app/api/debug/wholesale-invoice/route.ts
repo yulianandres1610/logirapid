@@ -150,7 +150,6 @@ export async function GET(request: NextRequest) {
         o.destination_warehouse_id,
         o.reference_type,
         o.reference_id,
-        o.reference_number,
         o.notes,
         o.created_at,
         o.completed_at,

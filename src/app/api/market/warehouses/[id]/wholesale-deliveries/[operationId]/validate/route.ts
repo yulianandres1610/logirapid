@@ -46,7 +46,7 @@ export async function GET(
       SELECT
         o.id, o.operation_number, o.operation_type, o.status, o.validation_status,
         o.source_warehouse_id, sw.name as source_warehouse_name, sw.code as source_warehouse_code,
-        o.reference_number as invoice_number, o.reference_id as invoice_id,
+        i.invoice_number, o.reference_id as invoice_id,
         o.notes, o.created_at, o.created_by,
         CONCAT(u.firstname, ' ', u.lastname) as created_by_name,
         c.id as customer_id, c.business_name as customer_name, c.code as customer_code
