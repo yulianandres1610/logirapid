@@ -50,6 +50,7 @@ import {
   History,
   Clock,
   Calendar,
+  CalendarClock,
   Fingerprint,
   Briefcase,
   Scale,
@@ -601,7 +602,8 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: Users, label: "Empleados", href: "/dashboard/market/hr/employees" },
         { icon: FileText, label: "Contratos", href: "/dashboard/market/hr/contracts" },
         { icon: Building2, label: "Departamentos", href: "/dashboard/market/hr/departments" },
-        { icon: Clock, label: "Horarios", href: "/dashboard/market/hr/schedules" },
+        { icon: Clock, label: "Horarios Fijos", href: "/dashboard/market/hr/schedules" },
+        { icon: CalendarClock, label: "Turnos Rotativos", href: "/dashboard/market/hr/scheduling" },
         { icon: Calendar, label: "Asistencia", href: "/dashboard/market/hr/attendance" },
         { icon: Fingerprint, label: "Kioscos", href: "/dashboard/market/hr/kiosks" },
       ]
