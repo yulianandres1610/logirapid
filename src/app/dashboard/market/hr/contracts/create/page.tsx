@@ -46,6 +46,18 @@ interface Schedule {
   weeklyHours: number
 }
 
+interface ShiftPattern {
+  id: number
+  name: string
+  code: string
+  workDays: number
+  restDays: number
+  startTime: string
+  endTime: string
+  patternLabel: string
+  isActive: boolean
+}
+
 const STEPS = [
   { id: 'employee', title: 'Empleado', icon: User },
   { id: 'contract', title: 'Contrato', icon: FileText },
@@ -79,6 +91,7 @@ export default function CreateContractPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [schedules, setSchedules] = useState<Schedule[]>([])
+  const [shiftPatterns, setShiftPatterns] = useState<ShiftPattern[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -95,7 +108,12 @@ export default function CreateContractPage() {
     startDate: new Date().toISOString().split('T')[0],
     endDate: '',
     departmentId: '',
-    scheduleId: '',
+    // Schedule options
+    scheduleType: 'fixed' as 'fixed' | 'rotating',
+    scheduleId: '',           // For fixed schedules
+    shiftPatternId: '',       // For rotating patterns
+    firstWorkDay: new Date().toISOString().split('T')[0],
+    generateShiftsMonths: '1', // How many months of shifts to generate
     // Step 3: Compensation
     payType: 'monthly',
     payRate: '',
@@ -283,6 +301,15 @@ export default function CreateContractPage() {
           setSchedules(data.data)
         }
       }
+
+      // Fetch shift patterns
+      const patternsRes = await fetch('/api/market/hr/shift-patterns?status=active')
+      if (patternsRes.ok) {
+        const data = await patternsRes.json()
+        if (data.success) {
+          setShiftPatterns(data.data)
+        }
+      }
     } catch (error) {
       console.error('Error fetching data:', error)
     }
@@ -303,7 +330,11 @@ export default function CreateContractPage() {
             startDate: c.startDate?.split('T')[0] || '',
             endDate: c.endDate?.split('T')[0] || '',
             departmentId: c.departmentId?.toString() || '',
+            scheduleType: c.scheduleId ? 'fixed' : 'rotating',
             scheduleId: c.scheduleId?.toString() || '',
+            shiftPatternId: '',
+            firstWorkDay: new Date().toISOString().split('T')[0],
+            generateShiftsMonths: '1',
             payType: c.payType,
             payRate: c.payRate.toString(),
             currency: c.currency,
@@ -347,6 +378,10 @@ export default function CreateContractPage() {
         }
         if (formData.contractType === 'temporal' && !formData.endDate) {
           setError('Para contratos temporales, la fecha de fin es requerida')
+          return false
+        }
+        if (formData.scheduleType === 'rotating' && !formData.shiftPatternId) {
+          setError('Selecciona un patrón de rotación')
           return false
         }
         return true
@@ -435,6 +470,33 @@ export default function CreateContractPage() {
           } catch (faceError) {
             console.error('Error registering face (contract saved):', faceError)
             // Don't fail the whole operation if face registration fails
+          }
+        }
+
+        // If rotating pattern selected, generate shifts automatically
+        if (formData.scheduleType === 'rotating' && formData.shiftPatternId) {
+          try {
+            // Calculate end date based on months selected
+            const startDate = new Date(formData.startDate)
+            const endDate = new Date(startDate)
+            endDate.setMonth(endDate.getMonth() + parseInt(formData.generateShiftsMonths))
+
+            await fetch('/api/market/hr/employee-shifts/generate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                patternId: parseInt(formData.shiftPatternId),
+                employeeIds: [parseInt(formData.employeeId)],
+                startDate: formData.startDate,
+                endDate: endDate.toISOString().split('T')[0],
+                firstWorkDay: formData.firstWorkDay,
+                overwrite: true
+              })
+            })
+            console.log('Shifts generated for employee:', formData.employeeId)
+          } catch (shiftError) {
+            console.error('Error generating shifts (contract saved):', shiftError)
+            // Don't fail the whole operation if shift generation fails
           }
         }
 
@@ -831,40 +893,99 @@ export default function CreateContractPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className={cn(
-                      "flex items-center gap-2 text-sm font-medium mb-2",
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                    )}>
-                      <Building2 className="w-4 h-4" />
-                      Departamento
-                    </label>
-                    <select
-                      value={formData.departmentId}
-                      onChange={(e) => updateFormData('departmentId', e.target.value)}
+                {/* Department */}
+                <div>
+                  <label className={cn(
+                    "flex items-center gap-2 text-sm font-medium mb-2",
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                  )}>
+                    <Building2 className="w-4 h-4" />
+                    Departamento
+                  </label>
+                  <select
+                    value={formData.departmentId}
+                    onChange={(e) => updateFormData('departmentId', e.target.value)}
+                    className={cn(
+                      "w-full px-4 py-3 border rounded-xl",
+                      theme === 'dark'
+                        ? 'border-gray-700 bg-gray-900 text-white'
+                        : 'border-gray-200 bg-white text-gray-900'
+                    )}
+                  >
+                    <option value="">Sin asignar</option>
+                    {departments.map(dept => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name} {dept.code && `(${dept.code})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Schedule Type Selection */}
+                <div>
+                  <label className={cn(
+                    "flex items-center gap-2 text-sm font-medium mb-3",
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                  )}>
+                    <Clock className="w-4 h-4" />
+                    Tipo de Horario
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div
+                      onClick={() => updateFormData('scheduleType', 'fixed')}
                       className={cn(
-                        "w-full px-4 py-3 border rounded-xl",
-                        theme === 'dark'
-                          ? 'border-gray-700 bg-gray-900 text-white'
-                          : 'border-gray-200 bg-white text-gray-900'
+                        "p-4 border-2 rounded-xl cursor-pointer transition-all",
+                        formData.scheduleType === 'fixed'
+                          ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/30'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
                       )}
                     >
-                      <option value="">Sin asignar</option>
-                      {departments.map(dept => (
-                        <option key={dept.id} value={dept.id}>
-                          {dept.name} {dept.code && `(${dept.code})`}
-                        </option>
-                      ))}
-                    </select>
+                      <h4 className={cn(
+                        "font-medium",
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        Horario Fijo
+                      </h4>
+                      <p className={cn(
+                        "text-xs mt-1",
+                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                      )}>
+                        Mismo horario cada semana (ej: Lun-Vie 9am-6pm)
+                      </p>
+                    </div>
+                    <div
+                      onClick={() => updateFormData('scheduleType', 'rotating')}
+                      className={cn(
+                        "p-4 border-2 rounded-xl cursor-pointer transition-all",
+                        formData.scheduleType === 'rotating'
+                          ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/30'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                      )}
+                    >
+                      <h4 className={cn(
+                        "font-medium",
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        Turno Rotativo
+                      </h4>
+                      <p className={cn(
+                        "text-xs mt-1",
+                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                      )}>
+                        Ciclos de trabajo/descanso (ej: 2x2, 4x2, 5x2)
+                      </p>
+                    </div>
                   </div>
+                </div>
+
+                {/* Fixed Schedule Selection */}
+                {formData.scheduleType === 'fixed' && (
                   <div>
                     <label className={cn(
-                      "flex items-center gap-2 text-sm font-medium mb-2",
+                      "block text-sm font-medium mb-2",
                       theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                     )}>
-                      <Clock className="w-4 h-4" />
-                      Horario
+                      Seleccionar Horario
                     </label>
                     <select
                       value={formData.scheduleId}
@@ -883,8 +1004,147 @@ export default function CreateContractPage() {
                         </option>
                       ))}
                     </select>
+                    {schedules.length === 0 && (
+                      <p className={cn(
+                        "text-xs mt-2",
+                        theme === 'dark' ? 'text-amber-400' : 'text-amber-600'
+                      )}>
+                        No hay horarios fijos creados. Puedes crear uno en RRHH → Horarios.
+                      </p>
+                    )}
                   </div>
-                </div>
+                )}
+
+                {/* Rotating Pattern Selection */}
+                {formData.scheduleType === 'rotating' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className={cn(
+                        "block text-sm font-medium mb-2",
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                      )}>
+                        Patrón de Rotación *
+                      </label>
+                      <select
+                        value={formData.shiftPatternId}
+                        onChange={(e) => updateFormData('shiftPatternId', e.target.value)}
+                        className={cn(
+                          "w-full px-4 py-3 border rounded-xl",
+                          theme === 'dark'
+                            ? 'border-gray-700 bg-gray-900 text-white'
+                            : 'border-gray-200 bg-white text-gray-900'
+                        )}
+                      >
+                        <option value="">Seleccionar patrón</option>
+                        {shiftPatterns.filter(p => p.isActive).map(pattern => (
+                          <option key={pattern.id} value={pattern.id}>
+                            {pattern.name} ({pattern.patternLabel}) - {pattern.startTime?.slice(0,5)} a {pattern.endTime?.slice(0,5)}
+                          </option>
+                        ))}
+                      </select>
+                      {shiftPatterns.length === 0 && (
+                        <p className={cn(
+                          "text-xs mt-2",
+                          theme === 'dark' ? 'text-amber-400' : 'text-amber-600'
+                        )}>
+                          No hay patrones creados. Crea uno en RRHH → Planificación → Patrones.
+                        </p>
+                      )}
+                    </div>
+
+                    {formData.shiftPatternId && (
+                      <>
+                        {/* Pattern Preview */}
+                        {(() => {
+                          const selectedPattern = shiftPatterns.find(p => p.id.toString() === formData.shiftPatternId)
+                          if (!selectedPattern) return null
+                          return (
+                            <div className={cn(
+                              "p-4 rounded-xl border",
+                              theme === 'dark' ? 'bg-gray-900/50 border-gray-700' : 'bg-gray-50 border-gray-200'
+                            )}>
+                              <p className={cn(
+                                "text-sm font-medium mb-2",
+                                theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                              )}>
+                                Ciclo: {selectedPattern.workDays} días trabajo + {selectedPattern.restDays} días descanso
+                              </p>
+                              <div className="flex gap-1 flex-wrap">
+                                {[...Array(selectedPattern.workDays)].map((_, i) => (
+                                  <div
+                                    key={`work-${i}`}
+                                    className="w-8 h-8 rounded-lg bg-green-500 flex items-center justify-center text-white text-xs font-medium"
+                                  >
+                                    T
+                                  </div>
+                                ))}
+                                {[...Array(selectedPattern.restDays)].map((_, i) => (
+                                  <div
+                                    key={`rest-${i}`}
+                                    className="w-8 h-8 rounded-lg bg-gray-400 flex items-center justify-center text-white text-xs font-medium"
+                                  >
+                                    D
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )
+                        })()}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className={cn(
+                              "block text-sm font-medium mb-2",
+                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                            )}>
+                              Primer día de trabajo
+                            </label>
+                            <input
+                              type="date"
+                              value={formData.firstWorkDay}
+                              onChange={(e) => updateFormData('firstWorkDay', e.target.value)}
+                              className={cn(
+                                "w-full px-4 py-3 border rounded-xl",
+                                theme === 'dark'
+                                  ? 'border-gray-700 bg-gray-900 text-white'
+                                  : 'border-gray-200 bg-white text-gray-900'
+                              )}
+                            />
+                            <p className={cn(
+                              "text-xs mt-1",
+                              theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                            )}>
+                              Desde este día se calculará el ciclo de rotación
+                            </p>
+                          </div>
+                          <div>
+                            <label className={cn(
+                              "block text-sm font-medium mb-2",
+                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                            )}>
+                              Generar turnos para
+                            </label>
+                            <select
+                              value={formData.generateShiftsMonths}
+                              onChange={(e) => updateFormData('generateShiftsMonths', e.target.value)}
+                              className={cn(
+                                "w-full px-4 py-3 border rounded-xl",
+                                theme === 'dark'
+                                  ? 'border-gray-700 bg-gray-900 text-white'
+                                  : 'border-gray-200 bg-white text-gray-900'
+                              )}
+                            >
+                              <option value="1">1 mes</option>
+                              <option value="2">2 meses</option>
+                              <option value="3">3 meses</option>
+                              <option value="6">6 meses</option>
+                            </select>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </motion.div>
             )}
 

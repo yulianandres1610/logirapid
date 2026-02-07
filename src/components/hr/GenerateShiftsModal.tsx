@@ -27,11 +27,12 @@ interface Employee {
 interface GenerateShiftsModalProps {
   patterns: ShiftPattern[]
   employees: Employee[]
+  preSelectedEmployees?: number[]
   onClose: () => void
   onGenerate: () => void
 }
 
-export function GenerateShiftsModal({ patterns, employees, onClose, onGenerate }: GenerateShiftsModalProps) {
+export function GenerateShiftsModal({ patterns, employees, preSelectedEmployees = [], onClose, onGenerate }: GenerateShiftsModalProps) {
   const { theme } = useTheme()
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
@@ -39,7 +40,7 @@ export function GenerateShiftsModal({ patterns, employees, onClose, onGenerate }
 
   const [formData, setFormData] = useState({
     patternId: patterns[0]?.id || 0,
-    employeeIds: [] as number[],
+    employeeIds: preSelectedEmployees,
     startDate: new Date().toISOString().split('T')[0],
     endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     firstWorkDay: new Date().toISOString().split('T')[0],
