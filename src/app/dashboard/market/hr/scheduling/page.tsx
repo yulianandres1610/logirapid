@@ -325,12 +325,12 @@ export default function SchedulingPage() {
       <DashboardLayout>
         <div className={cn(
           'min-h-screen',
-          theme === 'dark' ? 'bg-gray-950' : 'bg-gray-50'
+          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
         )}>
           {/* Header */}
           <div className={cn(
             'sticky top-0 z-30 border-b backdrop-blur-xl',
-            theme === 'dark' ? 'bg-gray-950/80 border-gray-800' : 'bg-white/80 border-gray-200'
+            theme === 'dark' ? 'bg-gray-900/80 border-gray-800' : 'bg-white/80 border-gray-200'
           )}>
             <div className="px-4 py-4">
               <div className="flex items-center justify-between gap-4 flex-wrap">

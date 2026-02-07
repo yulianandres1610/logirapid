@@ -61,7 +61,9 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get all active employees
+    // Get all active employees with their schedules
+    // Note: The contracts table only has scheduleid column, not schedule_type or shift_pattern_id
+    // We determine schedule type based on whether there are shifts in market_employee_shifts
     let employeesQuery = `
       SELECT
         e.id,
@@ -70,18 +72,12 @@ export async function GET(request: NextRequest) {
         COALESCE(u.firstname || ' ' || u.lastname, u.email) as fullname,
         d.name as department_name,
         c.scheduleid,
-        c.scheduletype,
-        c.shiftpatternid,
-        s.name as schedule_name,
-        sp.name as pattern_name,
-        sp.workdays,
-        sp.restdays
+        s.name as schedule_name
       FROM market_employees e
       LEFT JOIN users u ON u.id = e.user_id
       LEFT JOIN market_departments d ON d.id = e.department_id
       LEFT JOIN market_contracts c ON c.employeeid = e.id AND c.status = 'active'
       LEFT JOIN market_schedules s ON s.id = c.scheduleid
-      LEFT JOIN market_shift_patterns sp ON sp.id = c.shiftpatternid
       WHERE e.company_id = $1 AND e.status = 'active'
     `
     const employeesParams: any[] = [companyId]
@@ -112,7 +108,16 @@ export async function GET(request: NextRequest) {
     // Create shifts map for quick lookup
     const shiftsMap = new Map<string, any>()
     shiftsResult.rows.forEach(shift => {
-      const key = `${shift.employeeid}-${shift.shiftdate.toISOString().split('T')[0]}`
+      // Handle date whether it's a Date object or string
+      let dateStr: string
+      if (shift.shiftdate instanceof Date) {
+        dateStr = shift.shiftdate.toISOString().split('T')[0]
+      } else if (typeof shift.shiftdate === 'string') {
+        dateStr = shift.shiftdate.split('T')[0]
+      } else {
+        dateStr = String(shift.shiftdate).split('T')[0]
+      }
+      const key = `${shift.employeeid}-${dateStr}`
       shiftsMap.set(key, shift)
     })
 
@@ -143,13 +148,30 @@ export async function GET(request: NextRequest) {
 
     // Build calendar for each employee
     const calendars: EmployeeCalendar[] = employeesResult.rows.map(emp => {
-      const scheduleType: 'fixed' | 'rotating' | 'none' =
-        emp.shiftpatternid ? 'rotating' :
-        emp.scheduleid ? 'fixed' : 'none'
+      // Check if employee has any rotating shifts in the date range
+      const hasRotatingShifts = dates.some(date => {
+        const dateStr = date.toISOString().split('T')[0]
+        return shiftsMap.has(`${emp.id}-${dateStr}`)
+      })
 
-      const patternLabel = emp.workdays && emp.restdays
-        ? `${emp.workdays}x${emp.restdays}`
-        : null
+      // Get pattern info from the first shift if available
+      let patternName: string | null = null
+      let patternLabel: string | null = null
+      for (const date of dates) {
+        const dateStr = date.toISOString().split('T')[0]
+        const shift = shiftsMap.get(`${emp.id}-${dateStr}`)
+        if (shift && shift.patternname) {
+          patternName = shift.patternname
+          if (shift.workdays && shift.restdays) {
+            patternLabel = `${shift.workdays}x${shift.restdays}`
+          }
+          break
+        }
+      }
+
+      const scheduleType: 'fixed' | 'rotating' | 'none' =
+        hasRotatingShifts ? 'rotating' :
+        emp.scheduleid ? 'fixed' : 'none'
 
       const days: CalendarDay[] = dates.map(date => {
         const dateStr = date.toISOString().split('T')[0]
@@ -237,7 +259,7 @@ export async function GET(request: NextRequest) {
         photoUrl: emp.photo_url,
         scheduleType,
         scheduleName: emp.schedule_name,
-        patternName: emp.pattern_name,
+        patternName,
         patternLabel,
         days
       }
