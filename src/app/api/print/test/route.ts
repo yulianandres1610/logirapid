@@ -570,10 +570,161 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    if (action === 'print-session-close') {
+      // Find printer by name (optional) or get first thermal printer
+      const printerNameFilter = searchParams.get('printerName')
+
+      let printerQuery = `
+        SELECT ps.id as service_id, ps.service_code, ps.service_name, ps.status,
+               psp.id as printer_id, psp.printer_name, psp.printer_type, psp.is_online
+        FROM print_services ps
+        JOIN print_service_printers psp ON psp.print_service_id = ps.id
+        WHERE ps.company_id = $1 AND ps.status IN ('active', 'pending', 'offline')
+      `
+      const printerParams: (number | string)[] = [parseInt(companyId)]
+
+      if (printerNameFilter) {
+        printerQuery += ` AND LOWER(psp.printer_name) LIKE LOWER($2)`
+        printerParams.push(`%${printerNameFilter}%`)
+      }
+
+      printerQuery += ' ORDER BY psp.is_online DESC, psp.is_default DESC LIMIT 1'
+
+      const printerResult = await db.query(printerQuery, printerParams)
+
+      if (printerResult.rows.length === 0) {
+        // Show all available printers
+        const allPrinters = await db.query(`
+          SELECT ps.id as service_id, ps.service_code, ps.service_name, ps.status,
+                 psp.id as printer_id, psp.printer_name, psp.printer_type, psp.is_online
+          FROM print_services ps
+          JOIN print_service_printers psp ON psp.print_service_id = ps.id
+          WHERE ps.company_id = $1
+          ORDER BY ps.status, psp.printer_name
+        `, [companyId])
+
+        return NextResponse.json({
+          success: false,
+          error: printerNameFilter
+            ? `No se encontró impresora con nombre "${printerNameFilter}"`
+            : 'No hay impresoras disponibles',
+          availablePrinters: allPrinters.rows.map(p => ({
+            printerId: p.printer_id,
+            printerName: p.printer_name,
+            printerType: p.printer_type,
+            isOnline: p.is_online,
+            serviceId: p.service_id,
+            serviceCode: p.service_code,
+            serviceName: p.service_name,
+            serviceStatus: p.status
+          }))
+        }, { status: 404 })
+      }
+
+      const printer = printerResult.rows[0]
+
+      const jobNumber = `TEST-SCR-${Date.now()}`
+      const testSessionData = {
+        reportNumber: 'TEST-SESSION-001',
+        companyName: 'LogiRapid Test',
+        terminalName: 'Terminal de Prueba',
+        terminalCode: 'TEST-01',
+        warehouseName: 'Almacén Miami',
+        openedBy: 'Usuario Test',
+        closedBy: 'Usuario Test',
+        openedAt: new Date(Date.now() - 8 * 3600000).toLocaleString('es-ES'),
+        closedAt: new Date().toLocaleString('es-ES'),
+        duration: '8h 0m',
+        openingCash: { usd: 100, cup: 5000, mlc: 0 },
+        closingCash: { usd: 350, cup: 12500, mlc: 0 },
+        cashDifference: 0,
+        inventoryShortage: 0,
+        summary: {
+          paidOrders: 25,
+          voidedOrders: 1,
+          refundedOrders: 0,
+          totalSales: 250.00,
+          totalRefunds: 0,
+          totalDiscounts: 15.00,
+          totalProducts: 75
+        },
+        cashSummary: {
+          USD: { collected: 150, tendered: 180, change: 30, count: 15 },
+          CUP: { collected: 7500, tendered: 8000, change: 500, count: 10 }
+        },
+        otherPayments: [
+          { method: 'transfer', currency: 'USD', amount: 100, count: 5 }
+        ],
+        denominationsSummary: {
+          USD: [
+            { label: '$20', count: 10, total: 200 },
+            { label: '$10', count: 10, total: 100 },
+            { label: '$5', count: 10, total: 50 }
+          ],
+          CUP: [
+            { label: '500', count: 20, total: 10000 },
+            { label: '100', count: 25, total: 2500 }
+          ]
+        },
+        productsSold: [
+          { productName: 'Producto Prueba 1', quantity: 25, avgPrice: 5.00, total: 125.00 },
+          { productName: 'Producto Prueba 2', quantity: 30, avgPrice: 2.50, total: 75.00 },
+          { productName: 'Producto Prueba 3', quantity: 20, avgPrice: 2.50, total: 50.00 }
+        ],
+        closingNotes: 'Este es un reporte de cierre de prueba'
+      }
+
+      const result = await db.query(`
+        INSERT INTO print_jobs (
+          job_number, company_id, print_service_id, printer_id,
+          document_type, source_type, document_data, copies,
+          status, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', NOW())
+        RETURNING id
+      `, [
+        jobNumber,
+        companyId,
+        printer.service_id,
+        printer.printer_id,
+        'session_close_report',
+        'test',
+        JSON.stringify(testSessionData),
+        1
+      ])
+
+      await db.query(`
+        INSERT INTO print_job_history (print_job_id, event_type, event_data, created_at)
+        VALUES ($1, 'created', $2, NOW())
+      `, [result.rows[0].id, JSON.stringify({ test: true, documentType: 'session_close_report' })])
+
+      return NextResponse.json({
+        success: true,
+        message: `Reporte de cierre de prueba enviado a ${printer.printer_name}`,
+        data: {
+          jobId: result.rows[0].id,
+          jobNumber,
+          documentType: 'session_close_report',
+          printer: {
+            id: printer.printer_id,
+            name: printer.printer_name,
+            type: printer.printer_type,
+            online: printer.is_online
+          },
+          service: {
+            id: printer.service_id,
+            code: printer.service_code,
+            name: printer.service_name,
+            status: printer.status
+          }
+        },
+        nextStep: 'El servicio de impresión debería procesar este trabajo en los próximos segundos.'
+      })
+    }
+
     return NextResponse.json({
       success: false,
       error: 'Acción no válida',
-      validActions: ['status', 'print-test', 'print-label-test', 'print-sales-report', 'print-warehouse-operation', 'list-all', 'cleanup', 'diagnose']
+      validActions: ['status', 'print-test', 'print-label-test', 'print-sales-report', 'print-warehouse-operation', 'print-session-close', 'list-all', 'cleanup', 'diagnose']
     })
 
   } catch (error) {
