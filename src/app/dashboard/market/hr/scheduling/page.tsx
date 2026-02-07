@@ -323,10 +323,7 @@ export default function SchedulingPage() {
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className={cn(
-          'min-h-screen',
-          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-        )}>
+        <div className="min-h-screen">
           {/* Header */}
           <div className={cn(
             'sticky top-0 z-30 border-b backdrop-blur-xl',
