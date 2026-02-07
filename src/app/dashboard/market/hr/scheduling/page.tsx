@@ -1,33 +1,32 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Calendar,
+  ChevronLeft,
+  ChevronRight,
   Plus,
   RefreshCw,
   Clock,
   Users,
   Sparkles,
-  Trash2,
-  Edit,
-  Check,
   X,
-  AlertCircle,
-  UserCheck,
-  UserX,
-  ChevronRight,
-  CalendarDays,
-  LayoutGrid
+  Check,
+  Calendar,
+  Sun,
+  Moon,
+  Palmtree,
+  Thermometer,
+  Coffee,
+  Settings,
+  Search,
+  Filter
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
-import { ShiftCalendar } from '@/components/hr/ShiftCalendar'
 import { ShiftPatternForm } from '@/components/hr/ShiftPatternForm'
-import { GenerateShiftsModal } from '@/components/hr/GenerateShiftsModal'
-import { EmployeeShiftCard } from '@/components/hr/EmployeeShiftCard'
 
 interface ShiftPattern {
   id: number
@@ -49,10 +48,7 @@ interface Employee {
   name: string
   code: string
   department?: string
-  hasRotatingShifts?: boolean
-  hasFixedSchedule?: boolean
-  currentPattern?: string
-  shiftsCount?: number
+  photoUrl?: string
 }
 
 interface EmployeeShift {
@@ -71,7 +67,36 @@ interface EmployeeShift {
   notes?: string
 }
 
-type TabType = 'employees' | 'calendar' | 'patterns'
+interface FixedSchedule {
+  id: number
+  name: string
+  weeklyHours: number
+  days: {
+    dayOfWeek: number
+    startTime: string | null
+    endTime: string | null
+    isWorkDay: boolean
+  }[]
+}
+
+type ShiftTypeValue = 'work' | 'rest' | 'vacation' | 'sick' | 'leave'
+
+const SHIFT_TYPES: Array<{
+  value: ShiftTypeValue
+  label: string
+  icon: typeof Sun
+  color: string
+  textColor: string
+}> = [
+  { value: 'work', label: 'Trabajo', icon: Sun, color: 'bg-green-500', textColor: 'text-green-500' },
+  { value: 'rest', label: 'Descanso', icon: Moon, color: 'bg-gray-400', textColor: 'text-gray-400' },
+  { value: 'vacation', label: 'Vacaciones', icon: Palmtree, color: 'bg-blue-500', textColor: 'text-blue-500' },
+  { value: 'sick', label: 'Enfermedad', icon: Thermometer, color: 'bg-red-500', textColor: 'text-red-500' },
+  { value: 'leave', label: 'Permiso', icon: Coffee, color: 'bg-amber-500', textColor: 'text-amber-500' }
+]
+
+const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+const DAY_NAMES_FULL = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
 export default function SchedulingPage() {
   const { theme } = useTheme()
@@ -82,36 +107,67 @@ export default function SchedulingPage() {
   const [patterns, setPatterns] = useState<ShiftPattern[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [shifts, setShifts] = useState<EmployeeShift[]>([])
+  const [fixedSchedules, setFixedSchedules] = useState<FixedSchedule[]>([])
 
   // UI State
-  const [activeTab, setActiveTab] = useState<TabType>('employees')
-  const [showPatternForm, setShowPatternForm] = useState(false)
-  const [editingPattern, setEditingPattern] = useState<ShiftPattern | null>(null)
-  const [showGenerateModal, setShowGenerateModal] = useState(false)
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedShift, setSelectedShift] = useState<EmployeeShift | null>(null)
-  const [selectedEmployees, setSelectedEmployees] = useState<number[]>([])
+  const [showPatternForm, setShowPatternForm] = useState(false)
+  const [showShiftEditor, setShowShiftEditor] = useState(false)
+  const [showPatternManager, setShowPatternManager] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [tablesInitialized, setTablesInitialized] = useState(false)
 
-  // Date range for shifts
-  const [dateRange, setDateRange] = useState(() => {
-    const now = new Date()
-    const start = new Date(now)
-    start.setDate(start.getDate() - start.getDay())
-    const end = new Date(start)
-    end.setDate(end.getDate() + 30)
+  // Week dates
+  const weekDates = useMemo(() => {
+    const dates: Date[] = []
+    const startOfWeek = new Date(currentDate)
+    const day = startOfWeek.getDay()
+    startOfWeek.setDate(startOfWeek.getDate() - day)
 
-    return {
-      startDate: start.toISOString().split('T')[0],
-      endDate: end.toISOString().split('T')[0]
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(startOfWeek)
+      date.setDate(startOfWeek.getDate() + i)
+      dates.push(date)
     }
-  })
+    return dates
+  }, [currentDate])
 
+  // Date range for API calls
+  const dateRange = useMemo(() => ({
+    startDate: weekDates[0].toISOString().split('T')[0],
+    endDate: weekDates[6].toISOString().split('T')[0]
+  }), [weekDates])
+
+  // Filtered employees
+  const filteredEmployees = useMemo(() => {
+    if (!searchTerm) return employees
+    const term = searchTerm.toLowerCase()
+    return employees.filter(e =>
+      e.name.toLowerCase().includes(term) ||
+      e.code.toLowerCase().includes(term) ||
+      e.department?.toLowerCase().includes(term)
+    )
+  }, [employees, searchTerm])
+
+  // Shifts map for quick lookup
+  const shiftsMap = useMemo(() => {
+    const map = new Map<string, EmployeeShift>()
+    shifts.forEach(shift => {
+      const key = `${shift.employeeId}-${shift.shiftDate}`
+      map.set(key, shift)
+    })
+    return map
+  }, [shifts])
+
+  // API calls
   const fetchPatterns = useCallback(async () => {
     try {
       const response = await fetch('/api/market/hr/shift-patterns?status=all')
       const result = await response.json()
-      if (result.success) {
-        setPatterns(result.data)
-      }
+      if (result.success) setPatterns(result.data)
     } catch (error) {
       console.error('Error fetching patterns:', error)
     }
@@ -122,16 +178,13 @@ export default function SchedulingPage() {
       const response = await fetch('/api/market/hr/employees?status=active')
       const result = await response.json()
       if (result.success) {
-        const employeesList = result.data.employees || result.data || []
-        setEmployees(employeesList.map((e: any) => ({
+        const list = result.data.employees || result.data || []
+        setEmployees(list.map((e: any) => ({
           id: e.id,
-          name: e.fullName || e.email || `Employee ${e.id}`,
+          name: e.fullName || e.email || `Empleado ${e.id}`,
           code: e.employeeCode || `EMP-${e.id}`,
           department: e.departmentName,
-          hasRotatingShifts: false,
-          hasFixedSchedule: !!e.scheduleId,
-          currentPattern: null,
-          shiftsCount: 0
+          photoUrl: e.photoUrl
         })))
       }
     } catch (error) {
@@ -147,51 +200,29 @@ export default function SchedulingPage() {
       })
       const response = await fetch(`/api/market/hr/employee-shifts?${params}`)
       const result = await response.json()
-      if (result.success) {
-        setShifts(result.data)
-
-        // Update employees with shift info
-        const shiftsByEmployee = new Map<number, { pattern: string | null, count: number }>()
-        result.data.forEach((s: EmployeeShift) => {
-          const existing = shiftsByEmployee.get(s.employeeId) || { pattern: null, count: 0 }
-          shiftsByEmployee.set(s.employeeId, {
-            pattern: s.patternName || existing.pattern,
-            count: existing.count + 1
-          })
-        })
-
-        setEmployees(prev => prev.map(emp => {
-          const shiftInfo = shiftsByEmployee.get(emp.id)
-          return {
-            ...emp,
-            hasRotatingShifts: !!shiftInfo && shiftInfo.count > 0,
-            currentPattern: shiftInfo?.pattern || null,
-            shiftsCount: shiftInfo?.count || 0
-          }
-        }))
-      }
+      if (result.success) setShifts(result.data)
     } catch (error) {
       console.error('Error fetching shifts:', error)
     }
   }, [dateRange])
 
-  const [tablesInitialized, setTablesInitialized] = useState(false)
+  const fetchFixedSchedules = useCallback(async () => {
+    try {
+      const response = await fetch('/api/market/hr/schedules?status=active')
+      const result = await response.json()
+      if (result.success) setFixedSchedules(result.data)
+    } catch (error) {
+      console.error('Error fetching schedules:', error)
+    }
+  }, [])
 
   const initializeTables = useCallback(async () => {
     if (tablesInitialized) return
-
     try {
-      console.log('Ensuring HR shift tables exist...')
-      const response = await fetch('/api/market/hr/init-tables', { method: 'POST' })
-      const result = await response.json()
-      if (result.success) {
-        console.log('HR tables ready')
-        setTablesInitialized(true)
-      } else {
-        console.error('Failed to initialize tables:', result.error)
-      }
+      await fetch('/api/market/hr/init-tables', { method: 'POST' })
+      setTablesInitialized(true)
     } catch (error) {
-      console.error('Error initializing HR tables:', error)
+      console.error('Error initializing tables:', error)
     }
   }, [tablesInitialized])
 
@@ -200,909 +231,980 @@ export default function SchedulingPage() {
     else setRefreshing(true)
 
     await initializeTables()
-
-    await Promise.all([
-      fetchPatterns(),
-      fetchEmployees(),
-      fetchShifts()
-    ])
+    await Promise.all([fetchPatterns(), fetchEmployees(), fetchShifts(), fetchFixedSchedules()])
 
     if (!silent) setLoading(false)
     else setRefreshing(false)
-  }, [fetchPatterns, fetchEmployees, fetchShifts, initializeTables])
+  }, [fetchPatterns, fetchEmployees, fetchShifts, fetchFixedSchedules, initializeTables])
 
   useEffect(() => {
     loadAllData()
-  }, [loadAllData])
+  }, []) // eslint-disable-line
 
-  const handleDeletePattern = async (pattern: ShiftPattern) => {
-    if (!confirm(`¿Eliminar el patrón "${pattern.name}"?`)) return
+  useEffect(() => {
+    if (tablesInitialized) fetchShifts()
+  }, [dateRange, tablesInitialized]) // eslint-disable-line
+
+  // Navigation
+  const navigateWeek = (direction: number) => {
+    const newDate = new Date(currentDate)
+    newDate.setDate(newDate.getDate() + (direction * 7))
+    setCurrentDate(newDate)
+  }
+
+  const goToToday = () => setCurrentDate(new Date())
+
+  const isToday = (date: Date) => date.toDateString() === new Date().toDateString()
+
+  const formatWeekRange = () => {
+    const start = weekDates[0]
+    const end = weekDates[6]
+    const startMonth = start.toLocaleDateString('es-ES', { month: 'short' })
+    const endMonth = end.toLocaleDateString('es-ES', { month: 'short' })
+    const year = end.getFullYear()
+
+    if (startMonth === endMonth) {
+      return `${start.getDate()} - ${end.getDate()} ${startMonth} ${year}`
+    }
+    return `${start.getDate()} ${startMonth} - ${end.getDate()} ${endMonth} ${year}`
+  }
+
+  // Handle cell click
+  const handleCellClick = (employee: Employee, date: Date) => {
+    const dateStr = date.toISOString().split('T')[0]
+    const existingShift = shiftsMap.get(`${employee.id}-${dateStr}`)
+
+    setSelectedEmployee(employee)
+    setSelectedDate(dateStr)
+    setSelectedShift(existingShift || null)
+    setShowShiftEditor(true)
+  }
+
+  // Save shift
+  const saveShift = async (shiftType: string, startTime?: string, endTime?: string, notes?: string) => {
+    if (!selectedEmployee || !selectedDate) return
 
     try {
-      const response = await fetch(`/api/market/hr/shift-patterns/${pattern.id}`, {
-        method: 'DELETE'
+      const body: any = {
+        employeeId: selectedEmployee.id,
+        shiftDate: selectedDate,
+        shiftType,
+        notes: notes || null
+      }
+
+      if (shiftType === 'work' && startTime && endTime) {
+        body.startTime = startTime
+        body.endTime = endTime
+      }
+
+      const response = await fetch('/api/market/hr/employee-shifts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
       })
+
       const result = await response.json()
       if (result.success) {
-        fetchPatterns()
+        fetchShifts()
+        setShowShiftEditor(false)
       } else {
-        alert(result.error || 'Error al eliminar')
+        alert(result.error || 'Error al guardar')
       }
     } catch (error) {
-      console.error('Error deleting pattern:', error)
-      alert('Error al eliminar el patrón')
+      console.error('Error saving shift:', error)
+      alert('Error al guardar el turno')
     }
   }
 
-  const handleDeleteShift = async (shift: EmployeeShift) => {
-    if (!confirm(`¿Eliminar este turno de ${shift.employeeName}?`)) return
+  // Delete shift
+  const deleteShift = async () => {
+    if (!selectedShift) return
 
     try {
-      const response = await fetch(`/api/market/hr/employee-shifts?id=${shift.id}`, {
+      const response = await fetch(`/api/market/hr/employee-shifts?id=${selectedShift.id}`, {
         method: 'DELETE'
       })
       const result = await response.json()
       if (result.success) {
-        setSelectedShift(null)
         fetchShifts()
-      } else {
-        alert(result.error || 'Error al eliminar')
+        setShowShiftEditor(false)
       }
     } catch (error) {
       console.error('Error deleting shift:', error)
-      alert('Error al eliminar el turno')
     }
   }
 
-  const handleQuickAssign = (employeeIds: number[]) => {
-    setSelectedEmployees(employeeIds)
-    setShowGenerateModal(true)
+  // Delete pattern
+  const deletePattern = async (pattern: ShiftPattern) => {
+    if (!confirm(`¿Eliminar "${pattern.name}"?`)) return
+
+    try {
+      const response = await fetch(`/api/market/hr/shift-patterns/${pattern.id}`, { method: 'DELETE' })
+      const result = await response.json()
+      if (result.success) fetchPatterns()
+      else alert(result.error || 'Error al eliminar')
+    } catch (error) {
+      alert('Error al eliminar')
+    }
   }
-
-  // Stats
-  const employeesWithShifts = employees.filter(e => e.hasRotatingShifts).length
-  const employeesWithFixedOnly = employees.filter(e => !e.hasRotatingShifts && e.hasFixedSchedule).length
-  const employeesWithoutSchedule = employees.filter(e => !e.hasRotatingShifts && !e.hasFixedSchedule).length
-
-  const stats = {
-    totalPatterns: patterns.length,
-    activePatterns: patterns.filter(p => p.isActive).length,
-    totalEmployees: employees.length,
-    employeesWithShifts,
-    employeesWithFixedOnly,
-    employeesWithoutSchedule,
-    shiftsThisWeek: shifts.filter(s => {
-      const shiftDate = new Date(s.shiftDate)
-      const now = new Date()
-      const weekStart = new Date(now)
-      weekStart.setDate(now.getDate() - now.getDay())
-      const weekEnd = new Date(weekStart)
-      weekEnd.setDate(weekStart.getDate() + 7)
-      return shiftDate >= weekStart && shiftDate < weekEnd
-    }).length
-  }
-
-  const tabs = [
-    { id: 'employees' as TabType, label: 'Empleados', icon: Users, count: employees.length },
-    { id: 'calendar' as TabType, label: 'Calendario', icon: CalendarDays, count: null },
-    { id: 'patterns' as TabType, label: 'Patrones', icon: LayoutGrid, count: stats.activePatterns }
-  ]
 
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="min-h-screen p-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className={cn(
-                  'text-2xl font-bold',
+        <div className={cn(
+          'min-h-screen',
+          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+        )}>
+          {/* Header Bar */}
+          <div className={cn(
+            'sticky top-0 z-20 border-b px-4 py-3',
+            theme === 'dark' ? 'bg-gray-900/95 border-gray-800 backdrop-blur-sm' : 'bg-white/95 border-gray-200 backdrop-blur-sm'
+          )}>
+            <div className="flex items-center justify-between gap-4">
+              {/* Week Navigation */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => navigateWeek(-1)}
+                  className={cn(
+                    'p-2 rounded-lg transition-colors',
+                    theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
+                  )}
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={goToToday}
+                  className={cn(
+                    'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors',
+                    theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'
+                  )}
+                >
+                  Hoy
+                </button>
+                <button
+                  onClick={() => navigateWeek(1)}
+                  className={cn(
+                    'p-2 rounded-lg transition-colors',
+                    theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
+                  )}
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+                <span className={cn(
+                  'text-lg font-semibold ml-2',
                   theme === 'dark' ? 'text-white' : 'text-gray-900'
                 )}>
-                  Planificación de Horarios
-                </h1>
-                <p className={cn(
-                  'text-sm mt-1',
-                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                )}>
-                  Gestiona los turnos rotativos y horarios de tus empleados
-                </p>
+                  {formatWeekRange()}
+                </span>
               </div>
-              <div className="flex items-center gap-3">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+
+              {/* Search & Actions */}
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className={cn(
+                    'absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4',
+                    theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                  )} />
+                  <input
+                    type="text"
+                    placeholder="Buscar empleado..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className={cn(
+                      'pl-9 pr-4 py-2 w-48 text-sm rounded-lg border',
+                      theme === 'dark'
+                        ? 'bg-gray-800 border-gray-700 text-white placeholder:text-gray-500'
+                        : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-400'
+                    )}
+                  />
+                </div>
+
+                <button
                   onClick={() => loadAllData(true)}
-                  disabled={loading || refreshing}
+                  disabled={refreshing}
                   className={cn(
-                    'p-2.5 rounded-xl transition-all',
-                    theme === 'dark'
-                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    'p-2 rounded-lg transition-colors',
+                    theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
                   )}
                 >
                   <RefreshCw className={cn('w-5 h-5', refreshing && 'animate-spin')} />
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => {
-                    setEditingPattern(null)
-                    setShowPatternForm(true)
-                  }}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl hover:from-purple-600 hover:to-purple-700 transition-all shadow-lg shadow-purple-500/25"
+                </button>
+
+                <button
+                  onClick={() => setShowPatternManager(true)}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                    theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'
+                  )}
                 >
-                  <Plus className="w-5 h-5" />
-                  <span className="hidden sm:inline">Nuevo Patrón</span>
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => {
-                    setSelectedEmployees([])
-                    setShowGenerateModal(true)
-                  }}
-                  disabled={patterns.filter(p => p.isActive).length === 0}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 transition-all shadow-lg shadow-green-500/25 disabled:opacity-50"
-                >
-                  <Sparkles className="w-5 h-5" />
-                  <span className="hidden sm:inline">Generar Turnos</span>
-                </motion.button>
+                  <Settings className="w-4 h-4" />
+                  <span className="hidden sm:inline">Patrones</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Calendar Grid */}
+          <div className="p-4">
+            <div className={cn(
+              'rounded-xl border overflow-hidden',
+              theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
+            )}>
+              {/* Calendar Header */}
+              <div className={cn(
+                'grid border-b',
+                theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'
+              )} style={{ gridTemplateColumns: '180px repeat(7, 1fr)' }}>
+                <div className={cn(
+                  'p-3 border-r flex items-center gap-2',
+                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                )}>
+                  <Users className="w-4 h-4 text-gray-500" />
+                  <span className={cn(
+                    'text-sm font-medium',
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                  )}>
+                    {filteredEmployees.length} empleados
+                  </span>
+                </div>
+                {weekDates.map((date, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      'p-3 text-center border-r last:border-r-0',
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200',
+                      isToday(date) && 'bg-green-500/10'
+                    )}
+                  >
+                    <div className={cn(
+                      'text-xs font-medium uppercase',
+                      isToday(date) ? 'text-green-500' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                    )}>
+                      {DAY_NAMES[date.getDay()]}
+                    </div>
+                    <div className={cn(
+                      'text-lg font-bold mt-0.5',
+                      isToday(date) ? 'text-green-500' : theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      {date.getDate()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Employee Rows */}
+              <div className={cn(
+                'divide-y max-h-[calc(100vh-220px)] overflow-y-auto',
+                theme === 'dark' ? 'divide-gray-700' : 'divide-gray-200'
+              )}>
+                {loading ? (
+                  [...Array(8)].map((_, i) => (
+                    <div key={i} className="grid animate-pulse" style={{ gridTemplateColumns: '180px repeat(7, 1fr)' }}>
+                      <div className={cn('p-3 border-r', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                        <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded" />
+                      </div>
+                      {[...Array(7)].map((_, j) => (
+                        <div key={j} className={cn('p-2 border-r last:border-r-0', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                          <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded" />
+                        </div>
+                      ))}
+                    </div>
+                  ))
+                ) : filteredEmployees.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <Users className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                    <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                      {searchTerm ? 'No se encontraron empleados' : 'No hay empleados activos'}
+                    </p>
+                  </div>
+                ) : (
+                  filteredEmployees.map((employee) => (
+                    <div
+                      key={employee.id}
+                      className="grid"
+                      style={{ gridTemplateColumns: '180px repeat(7, 1fr)' }}
+                    >
+                      {/* Employee Info */}
+                      <div className={cn(
+                        'p-2 border-r flex items-center gap-2',
+                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                      )}>
+                        <div className={cn(
+                          'w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0',
+                          theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-700'
+                        )}>
+                          {employee.name.charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className={cn(
+                            'text-sm font-medium truncate',
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            {employee.name}
+                          </p>
+                          <p className={cn(
+                            'text-xs truncate',
+                            theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                          )}>
+                            {employee.department || employee.code}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Shift Cells */}
+                      {weekDates.map((date) => {
+                        const dateStr = date.toISOString().split('T')[0]
+                        const shift = shiftsMap.get(`${employee.id}-${dateStr}`)
+                        const shiftConfig = shift ? SHIFT_TYPES.find(t => t.value === shift.shiftType) : null
+
+                        return (
+                          <div
+                            key={dateStr}
+                            onClick={() => handleCellClick(employee, date)}
+                            className={cn(
+                              'p-1 border-r last:border-r-0 min-h-[52px] cursor-pointer transition-colors',
+                              theme === 'dark' ? 'border-gray-700 hover:bg-gray-700/50' : 'border-gray-200 hover:bg-gray-50',
+                              isToday(date) && 'bg-green-500/5'
+                            )}
+                          >
+                            {shift ? (
+                              <div className={cn(
+                                'w-full h-full rounded-lg p-1.5 text-white text-xs',
+                                shiftConfig?.color || 'bg-gray-500'
+                              )}>
+                                {shift.shiftType === 'work' && shift.startTime && shift.endTime ? (
+                                  <div>
+                                    <div className="font-medium">
+                                      {shift.startTime.slice(0, 5)}-{shift.endTime.slice(0, 5)}
+                                    </div>
+                                    {shift.patternLabel && (
+                                      <div className="opacity-75 text-[10px]">{shift.patternLabel}</div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-center h-full">
+                                    {shiftConfig && <shiftConfig.icon className="w-4 h-4" />}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className={cn(
+                                'w-full h-full rounded-lg border-2 border-dashed flex items-center justify-center',
+                                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                              )}>
+                                <Plus className={cn(
+                                  'w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity',
+                                  theme === 'dark' ? 'text-gray-600' : 'text-gray-300'
+                                )} />
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatsCard
-                theme={theme}
-                icon={<UserCheck className="w-5 h-5 text-green-500" />}
-                label="Con Turnos Rotativos"
-                value={employeesWithShifts}
-                color="green"
-                subtitle={`${shifts.length} turnos asignados`}
-              />
-              <StatsCard
-                theme={theme}
-                icon={<Clock className="w-5 h-5 text-blue-500" />}
-                label="Horario Fijo"
-                value={employeesWithFixedOnly}
-                color="blue"
-                subtitle="Solo horario semanal"
-              />
-              <StatsCard
-                theme={theme}
-                icon={<UserX className="w-5 h-5 text-amber-500" />}
-                label="Sin Horario"
-                value={employeesWithoutSchedule}
-                color="amber"
-                subtitle={employeesWithoutSchedule > 0 ? "Necesitan asignación" : "Todos asignados"}
-              />
-              <StatsCard
-                theme={theme}
-                icon={<LayoutGrid className="w-5 h-5 text-purple-500" />}
-                label="Patrones Activos"
-                value={stats.activePatterns}
-                color="purple"
-                subtitle={`${stats.totalPatterns} total`}
-              />
-            </div>
-
-            {/* Alert for employees without schedule */}
-            {employeesWithoutSchedule > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={cn(
-                  'flex items-center gap-3 p-4 rounded-xl border',
-                  theme === 'dark'
-                    ? 'bg-amber-900/20 border-amber-800/50'
-                    : 'bg-amber-50 border-amber-200'
-                )}
-              >
-                <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
-                <div className="flex-1">
-                  <p className={cn(
-                    'text-sm font-medium',
-                    theme === 'dark' ? 'text-amber-300' : 'text-amber-800'
-                  )}>
-                    {employeesWithoutSchedule} empleado{employeesWithoutSchedule > 1 ? 's' : ''} sin horario asignado
-                  </p>
-                  <p className={cn(
-                    'text-xs mt-0.5',
-                    theme === 'dark' ? 'text-amber-400/70' : 'text-amber-600'
-                  )}>
-                    El kiosco no podrá calcular tardanzas para estos empleados
-                  </p>
+            {/* Legend */}
+            <div className="flex items-center justify-center gap-4 mt-4">
+              {SHIFT_TYPES.map((type) => (
+                <div key={type.value} className="flex items-center gap-1.5">
+                  <div className={cn('w-3 h-3 rounded', type.color)} />
+                  <span className={cn('text-xs', theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
+                    {type.label}
+                  </span>
                 </div>
-                <button
-                  onClick={() => {
-                    const empIds = employees.filter(e => !e.hasRotatingShifts && !e.hasFixedSchedule).map(e => e.id)
-                    handleQuickAssign(empIds)
-                  }}
-                  className={cn(
-                    'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
-                    theme === 'dark'
-                      ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                      : 'bg-amber-500 hover:bg-amber-600 text-white'
-                  )}
-                >
-                  Asignar Turnos
-                </button>
-              </motion.div>
-            )}
-
-            {/* Tabs */}
-            <div className={cn(
-              'flex gap-1 p-1 rounded-xl w-fit',
-              theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
-            )}>
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all',
-                    activeTab === tab.id
-                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                      : theme === 'dark'
-                        ? 'text-gray-400 hover:text-white'
-                        : 'text-gray-600 hover:text-gray-900'
-                  )}
-                >
-                  <tab.icon className="w-4 h-4" />
-                  {tab.label}
-                  {tab.count !== null && (
-                    <span className={cn(
-                      'px-1.5 py-0.5 text-xs rounded-md',
-                      activeTab === tab.id
-                        ? 'bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-300'
-                        : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
-                    )}>
-                      {tab.count}
-                    </span>
-                  )}
-                </button>
               ))}
             </div>
+          </div>
 
-            {/* Tab Content */}
-            <AnimatePresence mode="wait">
-              {activeTab === 'employees' && (
-                <EmployeesTab
-                  key="employees"
-                  theme={theme}
-                  employees={employees}
-                  patterns={patterns}
-                  loading={loading}
-                  onAssignShifts={handleQuickAssign}
-                />
-              )}
+          {/* Shift Editor Modal */}
+          <AnimatePresence>
+            {showShiftEditor && selectedEmployee && selectedDate && (
+              <ShiftEditorModal
+                theme={theme}
+                employee={selectedEmployee}
+                date={selectedDate}
+                shift={selectedShift}
+                patterns={patterns.filter(p => p.isActive)}
+                onClose={() => setShowShiftEditor(false)}
+                onSave={saveShift}
+                onDelete={deleteShift}
+              />
+            )}
+          </AnimatePresence>
 
-              {activeTab === 'calendar' && (
-                <motion.div
-                  key="calendar"
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  className={cn(
-                    'rounded-2xl border shadow-xl p-6',
-                    theme === 'dark'
-                      ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                      : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-                  )}
-                >
-                  <ShiftCalendar
-                    shifts={shifts}
-                    employees={employees}
-                    onShiftClick={(shift) => setSelectedShift(shift)}
-                    loading={loading}
-                  />
-                </motion.div>
-              )}
+          {/* Pattern Manager Modal */}
+          <AnimatePresence>
+            {showPatternManager && (
+              <PatternManagerModal
+                theme={theme}
+                patterns={patterns}
+                employees={employees}
+                onClose={() => setShowPatternManager(false)}
+                onCreatePattern={() => {
+                  setShowPatternManager(false)
+                  setShowPatternForm(true)
+                }}
+                onDeletePattern={deletePattern}
+                onRefresh={() => {
+                  fetchPatterns()
+                  fetchShifts()
+                }}
+              />
+            )}
+          </AnimatePresence>
 
-              {activeTab === 'patterns' && (
-                <PatternsTab
-                  key="patterns"
-                  theme={theme}
-                  patterns={patterns}
-                  loading={loading}
-                  onEdit={(pattern) => {
-                    setEditingPattern(pattern)
-                    setShowPatternForm(true)
-                  }}
-                  onDelete={handleDeletePattern}
-                  onCreateNew={() => {
-                    setEditingPattern(null)
-                    setShowPatternForm(true)
-                  }}
-                />
-              )}
-            </AnimatePresence>
-
-            {/* Modals */}
-            <AnimatePresence>
-              {showPatternForm && (
-                <ShiftPatternForm
-                  pattern={editingPattern}
-                  onClose={() => {
-                    setShowPatternForm(false)
-                    setEditingPattern(null)
-                  }}
-                  onSave={() => {
-                    fetchPatterns()
-                    setShowPatternForm(false)
-                    setEditingPattern(null)
-                  }}
-                />
-              )}
-
-              {showGenerateModal && (
-                <GenerateShiftsModal
-                  patterns={patterns.filter(p => p.isActive)}
-                  employees={employees}
-                  preSelectedEmployees={selectedEmployees}
-                  onClose={() => {
-                    setShowGenerateModal(false)
-                    setSelectedEmployees([])
-                  }}
-                  onGenerate={() => {
-                    fetchShifts()
-                  }}
-                />
-              )}
-
-              {selectedShift && (
-                <EmployeeShiftCard
-                  shift={selectedShift}
-                  onClose={() => setSelectedShift(null)}
-                  onDelete={handleDeleteShift}
-                />
-              )}
-            </AnimatePresence>
-          </motion.div>
+          {/* Pattern Form Modal */}
+          <AnimatePresence>
+            {showPatternForm && (
+              <ShiftPatternForm
+                pattern={null}
+                onClose={() => setShowPatternForm(false)}
+                onSave={() => {
+                  fetchPatterns()
+                  setShowPatternForm(false)
+                }}
+              />
+            )}
+          </AnimatePresence>
         </div>
       </DashboardLayout>
     </ProtectedRoute>
   )
 }
 
-// Stats Card Component
-function StatsCard({
+// Shift Editor Modal Component
+function ShiftEditorModal({
   theme,
-  icon,
-  label,
-  value,
-  color,
-  subtitle
+  employee,
+  date,
+  shift,
+  patterns,
+  onClose,
+  onSave,
+  onDelete
 }: {
   theme: string
-  icon: React.ReactNode
-  label: string
-  value: number
-  color: 'green' | 'blue' | 'amber' | 'purple'
-  subtitle?: string
+  employee: Employee
+  date: string
+  shift: EmployeeShift | null
+  patterns: ShiftPattern[]
+  onClose: () => void
+  onSave: (shiftType: string, startTime?: string, endTime?: string, notes?: string) => void
+  onDelete: () => void
 }) {
-  const colors = {
-    green: 'from-green-400 to-green-600',
-    blue: 'from-blue-400 to-blue-600',
-    amber: 'from-amber-400 to-orange-500',
-    purple: 'from-purple-400 to-purple-600'
+  const [shiftType, setShiftType] = useState<ShiftTypeValue>(shift?.shiftType || 'work')
+  const [startTime, setStartTime] = useState(shift?.startTime?.slice(0, 5) || '08:00')
+  const [endTime, setEndTime] = useState(shift?.endTime?.slice(0, 5) || '16:00')
+  const [notes, setNotes] = useState(shift?.notes || '')
+  const [saving, setSaving] = useState(false)
+
+  const dateObj = new Date(date + 'T12:00:00')
+  const dayName = DAY_NAMES_FULL[dateObj.getDay()]
+  const formattedDate = dateObj.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })
+
+  const handleSave = async () => {
+    setSaving(true)
+    await onSave(
+      shiftType,
+      shiftType === 'work' ? startTime : undefined,
+      shiftType === 'work' ? endTime : undefined,
+      notes || undefined
+    )
+    setSaving(false)
+  }
+
+  const applyPattern = (pattern: ShiftPattern) => {
+    setShiftType('work')
+    setStartTime(pattern.startTime.slice(0, 5))
+    setEndTime(pattern.endTime.slice(0, 5))
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={cn(
-        'relative overflow-hidden rounded-xl border p-4',
-        theme === 'dark'
-          ? 'bg-gray-800/50 border-gray-700'
-          : 'bg-white border-gray-200'
-      )}
-    >
-      <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${colors[color]}`} />
-      <div className="flex items-center gap-3">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className={cn(
+          'rounded-2xl shadow-2xl w-full max-w-md overflow-hidden',
+          theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+        )}
+      >
+        {/* Header */}
         <div className={cn(
-          'p-2 rounded-lg',
-          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+          'p-4 border-b flex items-center justify-between',
+          theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
         )}>
-          {icon}
+          <div>
+            <h3 className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+              {employee.name}
+            </h3>
+            <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+              {dayName}, {formattedDate}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className={cn('p-2 rounded-lg', theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100')}
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
-        <div>
-          <p className={cn(
-            'text-2xl font-bold',
-            theme === 'dark' ? 'text-white' : 'text-gray-900'
-          )}>
-            {value}
-          </p>
-          <p className={cn(
-            'text-xs',
-            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-          )}>
-            {label}
-          </p>
+
+        {/* Content */}
+        <div className="p-4 space-y-4">
+          {/* Shift Type */}
+          <div>
+            <label className={cn('block text-sm font-medium mb-2', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+              Tipo de turno
+            </label>
+            <div className="grid grid-cols-5 gap-2">
+              {SHIFT_TYPES.map((type) => (
+                <button
+                  key={type.value}
+                  onClick={() => setShiftType(type.value)}
+                  className={cn(
+                    'p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all',
+                    shiftType === type.value
+                      ? `${type.color} border-transparent text-white`
+                      : theme === 'dark'
+                        ? 'border-gray-700 hover:border-gray-600'
+                        : 'border-gray-200 hover:border-gray-300'
+                  )}
+                >
+                  <type.icon className="w-4 h-4" />
+                  <span className="text-[10px] font-medium">{type.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Time inputs (only for work) */}
+          {shiftType === 'work' && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                    Entrada
+                  </label>
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className={cn(
+                      'w-full px-3 py-2 rounded-lg border',
+                      theme === 'dark'
+                        ? 'bg-gray-900 border-gray-700 text-white'
+                        : 'bg-white border-gray-200 text-gray-900'
+                    )}
+                  />
+                </div>
+                <div>
+                  <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                    Salida
+                  </label>
+                  <input
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className={cn(
+                      'w-full px-3 py-2 rounded-lg border',
+                      theme === 'dark'
+                        ? 'bg-gray-900 border-gray-700 text-white'
+                        : 'bg-white border-gray-200 text-gray-900'
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* Quick patterns */}
+              {patterns.length > 0 && (
+                <div>
+                  <label className={cn('block text-xs font-medium mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                    Aplicar patrón
+                  </label>
+                  <div className="flex flex-wrap gap-1">
+                    {patterns.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => applyPattern(p)}
+                        className={cn(
+                          'px-2 py-1 text-xs rounded-md transition-colors',
+                          theme === 'dark'
+                            ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                        )}
+                      >
+                        {p.patternLabel} ({p.startTime.slice(0, 5)}-{p.endTime.slice(0, 5)})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Notes */}
+          <div>
+            <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+              Notas
+            </label>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Opcional..."
+              className={cn(
+                'w-full px-3 py-2 rounded-lg border',
+                theme === 'dark'
+                  ? 'bg-gray-900 border-gray-700 text-white placeholder:text-gray-600'
+                  : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-400'
+              )}
+            />
+          </div>
         </div>
-      </div>
-      {subtitle && (
-        <p className={cn(
-          'text-xs mt-2',
-          theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+
+        {/* Footer */}
+        <div className={cn(
+          'p-4 border-t flex items-center gap-2',
+          theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
         )}>
-          {subtitle}
-        </p>
-      )}
-    </motion.div>
+          {shift && (
+            <button
+              onClick={onDelete}
+              className={cn(
+                'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+                theme === 'dark'
+                  ? 'text-red-400 hover:bg-red-900/30'
+                  : 'text-red-600 hover:bg-red-50'
+              )}
+            >
+              Eliminar
+            </button>
+          )}
+          <div className="flex-1" />
+          <button
+            onClick={onClose}
+            className={cn(
+              'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+              theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+            )}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors disabled:opacity-50"
+          >
+            {saving ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
+      </motion.div>
+    </div>
   )
 }
 
-// Employees Tab Component
-function EmployeesTab({
+// Pattern Manager Modal
+function PatternManagerModal({
   theme,
-  employees,
   patterns,
-  loading,
-  onAssignShifts
+  employees,
+  onClose,
+  onCreatePattern,
+  onDeletePattern,
+  onRefresh
 }: {
   theme: string
-  employees: Employee[]
   patterns: ShiftPattern[]
-  loading: boolean
-  onAssignShifts: (ids: number[]) => void
+  employees: Employee[]
+  onClose: () => void
+  onCreatePattern: () => void
+  onDeletePattern: (pattern: ShiftPattern) => void
+  onRefresh: () => void
 }) {
-  const [filter, setFilter] = useState<'all' | 'with-shifts' | 'fixed' | 'none'>('all')
-  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [selectedPattern, setSelectedPattern] = useState<ShiftPattern | null>(null)
+  const [selectedEmployees, setSelectedEmployees] = useState<number[]>([])
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
+  const [endDate, setEndDate] = useState(
+    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  )
+  const [firstWorkDay, setFirstWorkDay] = useState(new Date().toISOString().split('T')[0])
+  const [generating, setGenerating] = useState(false)
 
-  const filteredEmployees = employees.filter(e => {
-    switch (filter) {
-      case 'with-shifts': return e.hasRotatingShifts
-      case 'fixed': return !e.hasRotatingShifts && e.hasFixedSchedule
-      case 'none': return !e.hasRotatingShifts && !e.hasFixedSchedule
-      default: return true
-    }
-  })
-
-  const toggleSelect = (id: number) => {
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+  const toggleEmployee = (id: number) => {
+    setSelectedEmployees(prev =>
+      prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
     )
   }
 
-  const toggleSelectAll = () => {
-    if (selectedIds.length === filteredEmployees.length) {
-      setSelectedIds([])
-    } else {
-      setSelectedIds(filteredEmployees.map(e => e.id))
+  const generateShifts = async () => {
+    if (!selectedPattern || selectedEmployees.length === 0) return
+
+    setGenerating(true)
+    try {
+      const response = await fetch('/api/market/hr/employee-shifts/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patternId: selectedPattern.id,
+          employeeIds: selectedEmployees,
+          startDate,
+          endDate,
+          firstWorkDay,
+          overwrite: true
+        })
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        alert(`Turnos generados: ${result.data.shiftsCreated} creados, ${result.data.shiftsUpdated} actualizados`)
+        onRefresh()
+        onClose()
+      } else {
+        alert(result.error || 'Error al generar')
+      }
+    } catch (error) {
+      alert('Error al generar turnos')
+    } finally {
+      setGenerating(false)
     }
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 20 }}
-      className={cn(
-        'rounded-2xl border shadow-xl overflow-hidden',
-        theme === 'dark'
-          ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-          : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-      )}
-    >
-      {/* Header */}
-      <div className={cn(
-        'flex items-center justify-between p-4 border-b',
-        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-      )}>
-        <div className="flex items-center gap-3">
-          <h3 className={cn(
-            'font-semibold',
-            theme === 'dark' ? 'text-white' : 'text-gray-900'
-          )}>
-            Estado de Horarios por Empleado
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className={cn(
+          'rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col',
+          theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+        )}
+      >
+        {/* Header */}
+        <div className={cn(
+          'p-4 border-b flex items-center justify-between flex-shrink-0',
+          theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+        )}>
+          <h3 className={cn('font-semibold text-lg', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+            Patrones y Generación
           </h3>
-
-          {/* Filter */}
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value as any)}
-            className={cn(
-              'text-sm px-3 py-1.5 rounded-lg border',
-              theme === 'dark'
-                ? 'bg-gray-700 border-gray-600 text-gray-200'
-                : 'bg-white border-gray-300 text-gray-700'
-            )}
+          <button
+            onClick={onClose}
+            className={cn('p-2 rounded-lg', theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100')}
           >
-            <option value="all">Todos</option>
-            <option value="with-shifts">Con turnos rotativos</option>
-            <option value="fixed">Solo horario fijo</option>
-            <option value="none">Sin horario</option>
-          </select>
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        {selectedIds.length > 0 && (
-          <button
-            onClick={() => onAssignShifts(selectedIds)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm font-medium rounded-lg hover:from-green-600 hover:to-green-700 transition-all"
-          >
-            <Sparkles className="w-4 h-4" />
-            Asignar Turnos ({selectedIds.length})
-          </button>
-        )}
-      </div>
-
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className={cn(
-              'border-b',
-              theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
-            )}>
-              <th className="text-left py-3 px-4 w-10">
-                <input
-                  type="checkbox"
-                  checked={selectedIds.length === filteredEmployees.length && filteredEmployees.length > 0}
-                  onChange={toggleSelectAll}
-                  className="rounded border-gray-300"
-                />
-              </th>
-              <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Empleado</th>
-              <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Departamento</th>
-              <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase">Estado</th>
-              <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase">Patrón Actual</th>
-              <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase">Turnos</th>
-              <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className={cn(
-            'divide-y',
-            theme === 'dark' ? 'divide-gray-700' : 'divide-gray-200'
-          )}>
-            {loading ? (
-              [...Array(5)].map((_, i) => (
-                <tr key={i}>
-                  <td colSpan={7} className="py-4 px-4">
-                    <div className="animate-pulse h-10 bg-gray-200 dark:bg-gray-700 rounded" />
-                  </td>
-                </tr>
-              ))
-            ) : filteredEmployees.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="py-12 text-center">
-                  <Users className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                  <p className={cn(
-                    'text-sm',
-                    theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                  )}>
-                    No hay empleados con este filtro
-                  </p>
-                </td>
-              </tr>
-            ) : (
-              filteredEmployees.map((employee) => (
-                <tr
-                  key={employee.id}
-                  className={cn(
-                    'transition-colors',
-                    theme === 'dark' ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'
-                  )}
-                >
-                  <td className="py-3 px-4">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(employee.id)}
-                      onChange={() => toggleSelect(employee.id)}
-                      className="rounded border-gray-300"
-                    />
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        'w-9 h-9 rounded-full flex items-center justify-center text-sm font-medium',
-                        theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-700'
-                      )}>
-                        {employee.name.charAt(0)}
-                      </div>
-                      <div>
-                        <p className={cn(
-                          'font-medium',
-                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                        )}>
-                          {employee.name}
-                        </p>
-                        <p className={cn(
-                          'text-xs',
-                          theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                        )}>
-                          {employee.code}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={cn(
-                      'text-sm',
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                    )}>
-                      {employee.department || '-'}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-center">
-                    {employee.hasRotatingShifts ? (
-                      <span className={cn(
-                        'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium',
-                        theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
-                      )}>
-                        <Check className="w-3 h-3" />
-                        Rotativo
-                      </span>
-                    ) : employee.hasFixedSchedule ? (
-                      <span className={cn(
-                        'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium',
-                        theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'
-                      )}>
-                        <Clock className="w-3 h-3" />
-                        Fijo
-                      </span>
-                    ) : (
-                      <span className={cn(
-                        'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium',
-                        theme === 'dark' ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-700'
-                      )}>
-                        <AlertCircle className="w-3 h-3" />
-                        Sin Horario
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-3 px-4 text-center">
-                    <span className={cn(
-                      'text-sm',
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                    )}>
-                      {employee.currentPattern || '-'}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-center">
-                    <span className={cn(
-                      'text-sm font-medium',
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                    )}>
-                      {employee.shiftsCount || 0}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-center">
-                    <button
-                      onClick={() => onAssignShifts([employee.id])}
-                      className={cn(
-                        'inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors',
-                        theme === 'dark'
-                          ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                          : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                      )}
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      Asignar
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </motion.div>
-  )
-}
-
-// Patterns Tab Component
-function PatternsTab({
-  theme,
-  patterns,
-  loading,
-  onEdit,
-  onDelete,
-  onCreateNew
-}: {
-  theme: string
-  patterns: ShiftPattern[]
-  loading: boolean
-  onEdit: (pattern: ShiftPattern) => void
-  onDelete: (pattern: ShiftPattern) => void
-  onCreateNew: () => void
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      className={cn(
-        'rounded-2xl border shadow-xl overflow-hidden',
-        theme === 'dark'
-          ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-          : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-      )}
-    >
-      {/* Header */}
-      <div className={cn(
-        'p-4 border-b',
-        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-      )}>
-        <h3 className={cn(
-          'font-semibold',
-          theme === 'dark' ? 'text-white' : 'text-gray-900'
-        )}>
-          Patrones de Rotación
-        </h3>
-        <p className={cn(
-          'text-xs mt-1',
-          theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-        )}>
-          Define los ciclos de trabajo y descanso (ej: 2x2, 4x2, 5x2)
-        </p>
-      </div>
-
-      {/* Grid */}
-      <div className="p-4">
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="animate-pulse h-40 bg-gray-200 dark:bg-gray-700 rounded-xl" />
-            ))}
-          </div>
-        ) : patterns.length === 0 ? (
-          <div className="text-center py-12">
-            <Clock className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-            <p className={cn(
-              'text-sm mb-4',
-              theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-            )}>
-              No hay patrones de rotación creados
-            </p>
-            <button
-              onClick={onCreateNew}
-              className="px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white text-sm font-medium rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all"
-            >
-              Crear Primer Patrón
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {patterns.map((pattern) => (
-              <motion.div
-                key={pattern.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className={cn(
-                  'relative rounded-xl border p-4 transition-all',
-                  !pattern.isActive && 'opacity-60',
-                  theme === 'dark'
-                    ? 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
-                    : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'
-                )}
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+          {/* Patterns List */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                Patrones de Rotación
+              </h4>
+              <button
+                onClick={onCreatePattern}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium bg-purple-500 text-white rounded-lg hover:bg-purple-600"
               >
-                {/* Status Badge */}
-                <div className="absolute top-3 right-3">
-                  {pattern.isActive ? (
-                    <span className={cn(
-                      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
-                      theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
-                    )}>
-                      <Check className="w-3 h-3" />
-                      Activo
-                    </span>
-                  ) : (
-                    <span className={cn(
-                      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
-                      theme === 'dark' ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700'
-                    )}>
-                      <X className="w-3 h-3" />
-                      Inactivo
-                    </span>
-                  )}
-                </div>
+                <Plus className="w-4 h-4" />
+                Nuevo
+              </button>
+            </div>
 
-                {/* Pattern Info */}
-                <div className="flex items-start gap-3 mb-4">
-                  <div className={cn(
-                    'w-12 h-12 rounded-xl flex items-center justify-center',
-                    theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'
-                  )}>
-                    <span className="text-lg font-bold text-purple-600">
-                      {pattern.patternLabel}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className={cn(
-                      'font-semibold truncate',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      {pattern.name}
-                    </h4>
-                    {pattern.code && (
-                      <p className={cn(
-                        'text-xs font-mono',
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                      )}>
-                        {pattern.code}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Details */}
-                <div className="space-y-2 mb-4">
-                  <div className="flex justify-between text-sm">
-                    <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}>
-                      Horario:
-                    </span>
-                    <span className={cn(
-                      'font-medium',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      {pattern.startTime?.slice(0, 5)} - {pattern.endTime?.slice(0, 5)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}>
-                      Ciclo:
-                    </span>
-                    <span className={cn(
-                      'font-medium',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      {pattern.workDays} trabajo / {pattern.restDays} descanso
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}>
-                      En uso:
-                    </span>
-                    <span className={cn(
-                      'font-medium',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      {pattern.usageCount} turnos
-                    </span>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => onEdit(pattern)}
+            {patterns.length === 0 ? (
+              <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                No hay patrones creados
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {patterns.map((pattern) => (
+                  <div
+                    key={pattern.id}
+                    onClick={() => setSelectedPattern(pattern)}
                     className={cn(
-                      'flex-1 flex items-center justify-center gap-1 py-2 text-sm font-medium rounded-lg transition-colors',
-                      theme === 'dark'
-                        ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                      'p-3 rounded-lg border-2 cursor-pointer transition-all',
+                      selectedPattern?.id === pattern.id
+                        ? 'border-green-500 bg-green-500/10'
+                        : theme === 'dark'
+                          ? 'border-gray-700 hover:border-gray-600'
+                          : 'border-gray-200 hover:border-gray-300',
+                      !pattern.isActive && 'opacity-50'
                     )}
                   >
-                    <Edit className="w-4 h-4" />
-                    Editar
-                  </button>
-                  {pattern.usageCount === 0 && (
-                    <button
-                      onClick={() => onDelete(pattern)}
-                      className={cn(
-                        'p-2 rounded-lg transition-colors',
-                        theme === 'dark'
-                          ? 'bg-red-900/30 hover:bg-red-900/50 text-red-400'
-                          : 'bg-red-100 hover:bg-red-200 text-red-600'
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          'px-2 py-0.5 text-xs font-bold rounded',
+                          theme === 'dark' ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-700'
+                        )}>
+                          {pattern.patternLabel}
+                        </span>
+                        <span className={cn('text-sm font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          {pattern.name}
+                        </span>
+                      </div>
+                      {pattern.usageCount === 0 && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onDeletePattern(pattern) }}
+                          className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30"
+                        >
+                          <X className="w-3 h-3 text-red-500" />
+                        </button>
                       )}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+                    </div>
+                    <p className={cn('text-xs mt-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                      {pattern.startTime?.slice(0, 5)} - {pattern.endTime?.slice(0, 5)} • {pattern.usageCount} turnos
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Generate Section */}
+          {selectedPattern && (
+            <>
+              <hr className={theme === 'dark' ? 'border-gray-700' : 'border-gray-200'} />
+
+              <div>
+                <h4 className={cn('font-medium mb-3', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                  Generar turnos con: <span className="text-green-500">{selectedPattern.name}</span>
+                </h4>
+
+                {/* Dates */}
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div>
+                    <label className={cn('block text-xs mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                      Inicio
+                    </label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className={cn(
+                        'w-full px-3 py-2 text-sm rounded-lg border',
+                        theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-200'
+                      )}
+                    />
+                  </div>
+                  <div>
+                    <label className={cn('block text-xs mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                      Fin
+                    </label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className={cn(
+                        'w-full px-3 py-2 text-sm rounded-lg border',
+                        theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-200'
+                      )}
+                    />
+                  </div>
+                  <div>
+                    <label className={cn('block text-xs mb-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                      1er día trabajo
+                    </label>
+                    <input
+                      type="date"
+                      value={firstWorkDay}
+                      onChange={(e) => setFirstWorkDay(e.target.value)}
+                      className={cn(
+                        'w-full px-3 py-2 text-sm rounded-lg border',
+                        theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-200'
+                      )}
+                    />
+                  </div>
                 </div>
-              </motion.div>
-            ))}
+
+                {/* Employees */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className={cn('text-xs', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                      Empleados ({selectedEmployees.length})
+                    </label>
+                    <button
+                      onClick={() => setSelectedEmployees(
+                        selectedEmployees.length === employees.length ? [] : employees.map(e => e.id)
+                      )}
+                      className="text-xs text-green-500 hover:text-green-600"
+                    >
+                      {selectedEmployees.length === employees.length ? 'Ninguno' : 'Todos'}
+                    </button>
+                  </div>
+                  <div className={cn(
+                    'max-h-32 overflow-y-auto rounded-lg border p-1 grid grid-cols-2 gap-1',
+                    theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-200'
+                  )}>
+                    {employees.map((emp) => (
+                      <label
+                        key={emp.id}
+                        className={cn(
+                          'flex items-center gap-2 p-2 rounded cursor-pointer text-sm',
+                          selectedEmployees.includes(emp.id)
+                            ? 'bg-green-500/20'
+                            : theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedEmployees.includes(emp.id)}
+                          onChange={() => toggleEmployee(emp.id)}
+                          className="rounded border-gray-300 text-green-500"
+                        />
+                        <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>{emp.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        {selectedPattern && (
+          <div className={cn(
+            'p-4 border-t flex justify-end gap-2 flex-shrink-0',
+            theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+          )}>
+            <button
+              onClick={onClose}
+              className={cn(
+                'px-4 py-2 text-sm font-medium rounded-lg',
+                theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+              )}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={generateShifts}
+              disabled={generating || selectedEmployees.length === 0}
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 disabled:opacity-50 flex items-center gap-2"
+            >
+              {generating ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Generando...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Generar Turnos
+                </>
+              )}
+            </button>
           </div>
         )}
-      </div>
-    </motion.div>
+      </motion.div>
+    </div>
   )
 }
