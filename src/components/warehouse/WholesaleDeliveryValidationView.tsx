@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package,
@@ -11,11 +11,10 @@ import {
   X,
   Check,
   AlertTriangle,
-  ScanBarcode,
-  XCircle,
+  Barcode,
   Plus,
   Minus,
-  Tag,
+  Circle,
   Building2,
   FileText,
   MessageSquare
@@ -33,8 +32,13 @@ function areEqual(a: number, b: number, tolerance: number = 0.001): boolean {
   return Math.abs(a - b) < tolerance
 }
 
-function isQuantityComplete(validated: number, expected: number): boolean {
-  return validated >= expected - 0.001
+type ValidationStatus = 'pending' | 'partial' | 'complete' | 'excess'
+
+function getValidationStatus(validated: number, expected: number): ValidationStatus {
+  if (validated === 0) return 'pending'
+  if (validated < expected - 0.001) return 'partial'
+  if (validated >= expected - 0.001 && validated <= expected + 0.001) return 'complete'
+  return 'excess'
 }
 
 interface DeliveryLine {
@@ -47,7 +51,6 @@ interface DeliveryLine {
   barcode?: string | null
   quantityExpected: number
   quantityValidated: number
-  isComplete?: boolean
 }
 
 interface DeliveryOperation {
@@ -69,15 +72,6 @@ interface DeliveryOperation {
   createdBy?: string
 }
 
-interface Progress {
-  totalLines: number
-  completedLines: number
-  totalExpected: number
-  totalValidated: number
-  progressPercent: number
-  isAllValidated: boolean
-}
-
 interface WholesaleDeliveryValidationViewProps {
   warehouseId: number
   operationId: number
@@ -92,25 +86,22 @@ export default function WholesaleDeliveryValidationView({
   onComplete
 }: WholesaleDeliveryValidationViewProps) {
   const { theme } = useTheme()
+  const productSearchRef = useRef<HTMLInputElement>(null)
+
   const [operation, setOperation] = useState<DeliveryOperation | null>(null)
   const [lines, setLines] = useState<DeliveryLine[]>([])
-  const [progress, setProgress] = useState<Progress | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [completing, setCompleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [productSearchCode, setProductSearchCode] = useState('')
+  const [expandedLineId, setExpandedLineId] = useState<number | null>(null)
   const [showDiscrepancyModal, setShowDiscrepancyModal] = useState(false)
   const [discrepancyNotes, setDiscrepancyNotes] = useState('')
-  const [lastScannedProduct, setLastScannedProduct] = useState<string | null>(null)
-  const [scanFeedback, setScanFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const [successData, setSuccessData] = useState<{
-    operationNumber: string
     invoiceNumber: string
     customerName: string
-    warehouseName: string
-    totalProducts: number
-    totalExpected: number
     totalDelivered: number
     hasDiscrepancies: boolean
   } | null>(null)
@@ -124,12 +115,11 @@ export default function WholesaleDeliveryValidationView({
       if (data.success) {
         setOperation(data.data.operation)
         setLines(data.data.lines)
-        setProgress(data.data.progress)
       } else {
         setError(data.error)
       }
     } catch (err) {
-      setError('Error al cargar datos de validación')
+      setError('Error al cargar datos de validacion')
       console.error(err)
     } finally {
       setLoading(false)
@@ -140,60 +130,53 @@ export default function WholesaleDeliveryValidationView({
     fetchValidationData()
   }, [fetchValidationData])
 
-  // Handle barcode scan
-  const handleBarcodeScan = useCallback(async (barcode: string) => {
+  // Focus product search when loaded
+  useEffect(() => {
+    if (productSearchRef.current && !loading) {
+      productSearchRef.current.focus()
+    }
+  }, [loading])
+
+  // Increment product by barcode
+  const incrementProductByBarcode = useCallback((barcode: string) => {
     const line = lines.find(l =>
       l.barcode === barcode ||
       l.sku === barcode ||
       l.sku?.toLowerCase() === barcode.toLowerCase()
     )
 
-    if (!line) {
-      setScanFeedback({ type: 'error', message: `Producto no encontrado: ${barcode}` })
-      setTimeout(() => setScanFeedback(null), 2000)
-      return
-    }
+    if (line) {
+      const maxQty = line.quantityExpected + 5
+      const newQuantity = Math.min(line.quantityValidated + 1, maxQty)
 
-    const newQuantity = line.quantityValidated + 1
-    setLastScannedProduct(line.productName)
-
-    setLines(prev => prev.map(l =>
-      l.lineId === line.lineId
-        ? { ...l, quantityValidated: newQuantity, isComplete: newQuantity >= l.quantityExpected }
-        : l
-    ))
-
-    const displayName = line.variantName ? `${line.productName} - ${line.variantName}` : line.productName
-    if (newQuantity === line.quantityExpected) {
-      setScanFeedback({ type: 'success', message: `${displayName} - Completo!` })
-    } else if (newQuantity > line.quantityExpected) {
-      setScanFeedback({ type: 'error', message: `${displayName} - Excede cantidad esperada` })
+      setLines(prev => prev.map(l =>
+        l.lineId === line.lineId ? { ...l, quantityValidated: newQuantity } : l
+      ))
+      saveValidation([{ lineId: line.lineId, quantityValidated: newQuantity }])
+      setProductSearchCode('')
+      setError(null)
     } else {
-      setScanFeedback({ type: 'success', message: `${displayName} - ${formatQty(newQuantity)}/${formatQty(line.quantityExpected)}` })
+      setError(`Producto no encontrado: ${barcode}`)
+      setTimeout(() => setError(null), 2000)
     }
-    setTimeout(() => setScanFeedback(null), 1500)
-
-    await saveValidation([{ lineId: line.lineId, quantityValidated: newQuantity }])
   }, [lines])
 
+  // Handle barcode scan
   useBarcodeScan({
-    onScan: handleBarcodeScan,
-    enabled: !loading && !completing && !showDiscrepancyModal
+    onScan: incrementProductByBarcode,
+    minLength: 5,
+    maxTimeBetweenKeys: 50
   })
 
+  // Save validation to server
   const saveValidation = async (updates: { lineId: number; quantityValidated: number }[]) => {
     setSaving(true)
     try {
-      const response = await fetch(`/api/market/warehouses/${warehouseId}/wholesale-deliveries/${operationId}/validate`, {
+      await fetch(`/api/market/warehouses/${warehouseId}/wholesale-deliveries/${operationId}/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lines: updates })
       })
-      const data = await response.json()
-
-      if (data.success) {
-        setProgress(data.data.progress)
-      }
     } catch (err) {
       console.error('Error saving validation:', err)
     } finally {
@@ -201,7 +184,35 @@ export default function WholesaleDeliveryValidationView({
     }
   }
 
-  const updateLineQuantity = async (lineId: number, quantity: number) => {
+  // Increment line quantity
+  const incrementLineQuantity = (lineId: number) => {
+    const line = lines.find(l => l.lineId === lineId)
+    if (!line) return
+
+    const maxQty = line.quantityExpected + 5
+    const newQuantity = Math.min(line.quantityValidated + 1, maxQty)
+
+    setLines(prev => prev.map(l =>
+      l.lineId === lineId ? { ...l, quantityValidated: newQuantity } : l
+    ))
+    saveValidation([{ lineId, quantityValidated: newQuantity }])
+  }
+
+  // Decrement line quantity
+  const decrementLineQuantity = (lineId: number) => {
+    const line = lines.find(l => l.lineId === lineId)
+    if (!line || line.quantityValidated <= 0) return
+
+    const newQuantity = line.quantityValidated - 1
+
+    setLines(prev => prev.map(l =>
+      l.lineId === lineId ? { ...l, quantityValidated: newQuantity } : l
+    ))
+    saveValidation([{ lineId, quantityValidated: newQuantity }])
+  }
+
+  // Update line quantity directly
+  const updateLineQuantity = (lineId: number, quantity: number) => {
     const line = lines.find(l => l.lineId === lineId)
     if (!line) return
 
@@ -209,31 +220,24 @@ export default function WholesaleDeliveryValidationView({
     const newQuantity = Math.max(0, Math.min(quantity, maxQty))
 
     setLines(prev => prev.map(l =>
-      l.lineId === lineId
-        ? { ...l, quantityValidated: newQuantity, isComplete: isQuantityComplete(newQuantity, l.quantityExpected) }
-        : l
+      l.lineId === lineId ? { ...l, quantityValidated: newQuantity } : l
     ))
-    await saveValidation([{ lineId, quantityValidated: newQuantity }])
+    saveValidation([{ lineId, quantityValidated: newQuantity }])
   }
 
-  const handleIncrement = async (lineId: number) => {
-    const line = lines.find(l => l.lineId === lineId)
-    if (!line) return
-    await updateLineQuantity(lineId, line.quantityValidated + 1)
+  // Deliver all - set all lines to their expected quantity
+  const deliverAll = () => {
+    const updates: { lineId: number; quantityValidated: number }[] = []
+
+    setLines(prev => prev.map(l => {
+      updates.push({ lineId: l.lineId, quantityValidated: l.quantityExpected })
+      return { ...l, quantityValidated: l.quantityExpected }
+    }))
+
+    saveValidation(updates)
   }
 
-  const handleDecrement = async (lineId: number) => {
-    const line = lines.find(l => l.lineId === lineId)
-    if (!line || line.quantityValidated <= 0) return
-    await updateLineQuantity(lineId, line.quantityValidated - 1)
-  }
-
-  const handleCompleteLine = async (lineId: number) => {
-    const line = lines.find(l => l.lineId === lineId)
-    if (!line) return
-    await updateLineQuantity(lineId, line.quantityExpected)
-  }
-
+  // Handle complete click
   const handleCompleteClick = () => {
     const hasDiscrepancies = lines.some(l => !areEqual(l.quantityValidated, l.quantityExpected))
     if (hasDiscrepancies) {
@@ -243,8 +247,7 @@ export default function WholesaleDeliveryValidationView({
     }
   }
 
-  const discrepancyLines = lines.filter(l => !areEqual(l.quantityValidated, l.quantityExpected))
-
+  // Complete delivery
   const completeDelivery = async (notes?: string) => {
     setCompleting(true)
     setShowDiscrepancyModal(false)
@@ -258,12 +261,8 @@ export default function WholesaleDeliveryValidationView({
 
       if (data.success) {
         setSuccessData({
-          operationNumber: data.data.operationNumber,
           invoiceNumber: data.data.invoiceNumber,
           customerName: data.data.customerName,
-          warehouseName: data.data.warehouseName,
-          totalProducts: data.data.totalProducts,
-          totalExpected: data.data.totalExpected,
           totalDelivered: data.data.totalDelivered,
           hasDiscrepancies: data.data.hasDiscrepancies
         })
@@ -282,23 +281,38 @@ export default function WholesaleDeliveryValidationView({
     }
   }
 
+  // Handle success close
   const handleSuccessClose = () => {
     setShowSuccess(false)
     onComplete()
   }
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    })
+  // Cancel
+  const handleCancel = () => {
+    const hasValidated = lines.some(l => l.quantityValidated > 0)
+    if (hasValidated) {
+      if (confirm('Hay productos validados. Desea cancelar la entrega?')) {
+        onClose()
+      }
+    } else {
+      onClose()
+    }
   }
+
+  // Calculate totals
+  const totalToDeliver = lines.reduce((sum, l) => sum + l.quantityValidated, 0)
+  const totalExpected = lines.reduce((sum, l) => sum + l.quantityExpected, 0)
+  const completedProducts = lines.filter(l => getValidationStatus(l.quantityValidated, l.quantityExpected) === 'complete').length
+  const totalProducts = lines.length
+  const progressPercent = totalExpected > 0 ? Math.round((totalToDeliver / totalExpected) * 100) : 0
+
+  // Discrepancy lines
+  const discrepancyLines = lines.filter(l => !areEqual(l.quantityValidated, l.quantityExpected))
 
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center p-4">
+      <div className="p-4 flex items-center justify-center min-h-[400px]">
         <div className={cn(
           'text-center p-8 rounded-2xl',
           theme === 'dark' ? 'bg-gray-800' : 'bg-white'
@@ -313,7 +327,7 @@ export default function WholesaleDeliveryValidationView({
   // Success Modal
   if (showSuccess && successData) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center p-4">
+      <div className="p-4 flex items-center justify-center min-h-[400px]">
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -361,251 +375,266 @@ export default function WholesaleDeliveryValidationView({
     )
   }
 
-  // Main View
-  const totalToDeliver = lines.reduce((sum, l) => sum + l.quantityValidated, 0)
-
+  // Main Validation View
   return (
     <div className="p-4 space-y-4">
-      {/* Header Card */}
+      {/* Header Info */}
       {operation && (
         <div className={cn(
-          'p-5 rounded-2xl border',
-          theme === 'dark'
-            ? 'bg-gradient-to-r from-emerald-900/50 to-green-900/50 border-emerald-700'
-            : 'bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-200'
+          'p-4 rounded-xl',
+          theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
         )}>
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className={cn(
-                'w-12 h-12 rounded-lg flex items-center justify-center text-sm font-bold',
-                theme === 'dark' ? 'bg-emerald-900/50 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
-              )}>
-                <Package className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="font-mono font-bold text-gray-900 dark:text-white">{operation.operationNumber}</p>
-                <p className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                  <FileText className="w-3.5 h-3.5" />
-                  Factura: {operation.invoiceNumber}
-                </p>
-              </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-gray-500">Operacion</p>
+              <p className="font-mono font-bold text-gray-900 dark:text-white">{operation.operationNumber}</p>
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <User className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Cliente</p>
-                <p className="font-semibold text-gray-900 dark:text-white">{operation.customer.name}</p>
-              </div>
+            <div>
+              <p className="text-xs text-gray-500">Factura</p>
+              <p className="font-medium text-emerald-600 dark:text-emerald-400">{operation.invoiceNumber}</p>
             </div>
-            <div className="flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Almacén</p>
-                <p className="font-semibold text-gray-900 dark:text-white">{operation.sourceWarehouse.name}</p>
-              </div>
+            <div>
+              <p className="text-xs text-gray-500">Cliente</p>
+              <p className="font-medium text-gray-900 dark:text-white">{operation.customer.name}</p>
+              <p className="text-sm text-gray-500">{operation.customer.code}</p>
             </div>
-          </div>
-
-          <div className="flex items-center justify-between mt-3 pt-3 border-t border-emerald-200 dark:border-emerald-700/50">
-            <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-              <Calendar className="w-3.5 h-3.5" />
-              {formatDate(operation.createdAt)}
+            <div>
+              <p className="text-xs text-gray-500">Almacen</p>
+              <p className="font-medium text-gray-900 dark:text-white">{operation.sourceWarehouse.name}</p>
             </div>
-            <span className={cn(
-              'px-2 py-1 rounded-full text-xs font-medium',
-              'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-            )}>
-              Pendiente Validación
-            </span>
           </div>
         </div>
       )}
 
-      {/* Scan Feedback */}
-      <AnimatePresence>
-        {scanFeedback && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className={cn(
-              'p-4 rounded-xl flex items-center gap-3',
-              scanFeedback.type === 'success'
-                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300'
-                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-            )}
-          >
-            {scanFeedback.type === 'success' ? (
-              <CheckCircle className="w-5 h-5" />
-            ) : (
-              <XCircle className="w-5 h-5" />
-            )}
-            <span className="font-medium">{scanFeedback.message}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Scanner Hint */}
+      {/* Progress Bar */}
       <div className={cn(
-        'p-3 rounded-xl flex items-center gap-3',
-        theme === 'dark' ? 'bg-emerald-900/20 border border-emerald-800' : 'bg-emerald-50 border border-emerald-200'
+        'p-4 rounded-xl',
+        theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
       )}>
-        <ScanBarcode className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-        <span className="text-sm text-emerald-700 dark:text-emerald-300">
-          Escanea productos para validar automáticamente
-        </span>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Progreso de Entrega
+          </span>
+          <span className="text-sm font-bold text-gray-900 dark:text-white">
+            {completedProducts}/{totalProducts} productos ({progressPercent}%)
+          </span>
+        </div>
+        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${Math.min(100, progressPercent)}%` }}
+            className={cn(
+              'h-full rounded-full transition-all duration-300',
+              progressPercent >= 100 ? 'bg-emerald-500' :
+              progressPercent > 0 ? 'bg-blue-500' : 'bg-gray-300'
+            )}
+          />
+        </div>
+      </div>
+
+      {/* Product Search/Scan Field (Optional) */}
+      <div className="relative">
+        <Barcode className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <input
+          ref={productSearchRef}
+          type="text"
+          value={productSearchCode}
+          onChange={(e) => setProductSearchCode(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && productSearchCode) {
+              incrementProductByBarcode(productSearchCode)
+            }
+          }}
+          placeholder="Escanear codigo de producto (opcional)..."
+          className={cn(
+            'w-full pl-12 pr-4 py-3 rounded-xl border text-sm',
+            'focus:ring-2 focus:ring-emerald-500 focus:border-transparent',
+            theme === 'dark'
+              ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500'
+              : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400'
+          )}
+        />
         {saving && (
-          <span className="ml-auto text-xs text-emerald-500 dark:text-emerald-400 animate-pulse">
+          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-emerald-500 animate-pulse">
             Guardando...
           </span>
         )}
       </div>
 
-      {/* Error */}
-      {error && (
-        <div className={cn(
-          'p-4 rounded-xl flex items-center gap-3',
-          'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-        )}>
-          <AlertTriangle className="w-5 h-5" />
-          <span>{error}</span>
-          <button onClick={() => setError(null)} className="ml-auto">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+      {/* Error Message */}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg flex items-center gap-2"
+          >
+            <AlertTriangle className="w-4 h-4" />
+            {error}
+            <button onClick={() => setError(null)} className="ml-auto">
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Progress Bar */}
-      {progress && (
-        <div className={cn(
-          'p-4 rounded-xl',
-          theme === 'dark' ? 'bg-gray-800/50 border border-gray-700' : 'bg-gray-50 border border-gray-200'
-        )}>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Progreso: {progress.completedLines} de {progress.totalLines} productos
-            </span>
-            <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-              {progress.progressPercent}%
-            </span>
-          </div>
-          <div className="h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
-            <motion.div
-              className="h-full bg-gradient-to-r from-emerald-500 to-green-500"
-              initial={{ width: 0 }}
-              animate={{ width: `${progress.progressPercent}%` }}
-              transition={{ duration: 0.3 }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Products List */}
+      {/* Product Cards */}
       <div className="space-y-3">
         {lines.map(line => {
-          const isComplete = isQuantityComplete(line.quantityValidated, line.quantityExpected)
-          const hasExcess = line.quantityValidated > line.quantityExpected + 0.001
-          const hasDiscrepancy = !areEqual(line.quantityValidated, line.quantityExpected) && line.quantityValidated > 0
+          const status = getValidationStatus(line.quantityValidated, line.quantityExpected)
+          const isExpanded = expandedLineId === line.lineId
+
+          let bgColor = theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+          let borderColor = theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+          let statusIcon = <Circle className="w-5 h-5 text-gray-400" />
+
+          if (status === 'complete') {
+            bgColor = theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50'
+            borderColor = 'border-emerald-500'
+            statusIcon = <Check className="w-5 h-5 text-emerald-600" />
+          } else if (status === 'excess') {
+            bgColor = theme === 'dark' ? 'bg-amber-900/20' : 'bg-amber-50'
+            borderColor = 'border-amber-500'
+            statusIcon = <AlertTriangle className="w-5 h-5 text-amber-600" />
+          } else if (status === 'partial') {
+            bgColor = theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'
+            borderColor = 'border-blue-500'
+            statusIcon = <Circle className="w-5 h-5 text-blue-500 fill-blue-200" />
+          }
 
           return (
             <motion.div
               key={line.lineId}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
+              layout
               className={cn(
-                'p-4 rounded-xl border',
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200',
-                isComplete && !hasExcess && 'border-emerald-300 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-900/20',
-                hasExcess && 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-900/20'
+                'rounded-xl border transition-all',
+                bgColor,
+                borderColor
               )}
             >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-gray-900 dark:text-white truncate">{line.productName}</p>
-                    {isComplete && !hasExcess && (
-                      <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                    )}
-                    {hasExcess && (
-                      <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
-                    )}
+              <div
+                className="p-4 cursor-pointer"
+                onClick={() => setExpandedLineId(isExpanded ? null : line.lineId)}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex-shrink-0">
+                    {statusIcon}
                   </div>
-                  {line.variantName && (
-                    <p className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                      <Tag className="w-3 h-3" />
-                      {line.variantName}
+                  <div className="flex-grow min-w-0">
+                    <p className="font-medium text-gray-900 dark:text-white truncate">
+                      {line.productName}
                     </p>
-                  )}
-                  <p className="text-xs text-gray-500">SKU: {line.sku}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-500">Esperado:</p>
-                  <p className="font-bold text-gray-900 dark:text-white">{formatQty(line.quantityExpected)}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3">
-                {/* Quantity Controls */}
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Cantidad Validada</label>
-                  <div className="flex items-center gap-2">
+                    {line.variantName && (
+                      <p className="text-sm text-purple-600 dark:text-purple-400 font-medium">
+                        Variante: {line.variantName}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <span>SKU: {line.sku}</span>
+                      {line.barcode && (
+                        <>
+                          <span>|</span>
+                          <span className="flex items-center gap-1">
+                            <Barcode className="w-3 h-3" />
+                            {line.barcode}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                     <button
-                      onClick={() => handleDecrement(line.lineId)}
-                      disabled={line.quantityValidated <= 0}
+                      onClick={() => decrementLineQuantity(line.lineId)}
+                      disabled={line.quantityValidated === 0}
                       className={cn(
-                        'w-10 h-10 rounded-lg flex items-center justify-center transition-colors',
-                        line.quantityValidated > 0
-                          ? 'bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-600 dark:text-gray-300'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                        'w-10 h-10 rounded-full flex items-center justify-center transition-colors',
+                        line.quantityValidated === 0
+                          ? 'bg-gray-100 dark:bg-gray-800 text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                          : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                       )}
                     >
                       <Minus className="w-5 h-5" />
                     </button>
-
-                    <input
-                      type="number"
-                      value={line.quantityValidated}
-                      onChange={(e) => updateLineQuantity(line.lineId, parseFloat(e.target.value) || 0)}
-                      min={0}
-                      step="any"
-                      className={cn(
-                        'flex-1 px-3 py-2 rounded-lg border text-center font-bold text-lg',
-                        theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200',
-                        hasDiscrepancy && 'border-amber-500'
+                    <div className="text-center min-w-[90px]">
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                          {formatQty(line.quantityValidated)}
+                        </span>
+                        <span className="text-lg text-gray-400">/</span>
+                        <span className="text-lg text-gray-500">{formatQty(line.quantityExpected)}</span>
+                      </div>
+                      {!areEqual(line.quantityValidated, line.quantityExpected) && line.quantityValidated > 0 && (
+                        <span className={cn(
+                          'text-xs font-medium',
+                          line.quantityValidated > line.quantityExpected
+                            ? 'text-amber-600'
+                            : 'text-blue-600'
+                        )}>
+                          {line.quantityValidated > line.quantityExpected
+                            ? `+${formatQty(line.quantityValidated - line.quantityExpected)}`
+                            : formatQty(line.quantityValidated - line.quantityExpected)}
+                        </span>
                       )}
-                    />
-
+                    </div>
                     <button
-                      onClick={() => handleIncrement(line.lineId)}
-                      className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 hover:bg-emerald-200 dark:hover:bg-emerald-800/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400 transition-colors"
+                      onClick={() => incrementLineQuantity(line.lineId)}
+                      className={cn(
+                        'w-10 h-10 rounded-full flex items-center justify-center transition-colors',
+                        'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400',
+                        'hover:bg-emerald-200 dark:hover:bg-emerald-800/50'
+                      )}
                     >
                       <Plus className="w-5 h-5" />
                     </button>
-
-                    {!isComplete && (
-                      <button
-                        onClick={() => handleCompleteLine(line.lineId)}
-                        className="px-3 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium transition-colors flex items-center gap-1"
-                        title="Completar cantidad"
-                      >
-                        <Check className="w-4 h-4" />
-                        Completo
-                      </button>
-                    )}
                   </div>
-                  {hasDiscrepancy && (
-                    <p className={cn(
-                      'text-xs mt-1 font-medium',
-                      hasExcess ? 'text-amber-600' : 'text-blue-600'
-                    )}>
-                      Diferencia: {line.quantityValidated > line.quantityExpected ? '+' : ''}{formatQty(line.quantityValidated - line.quantityExpected)}
-                    </p>
-                  )}
+                </div>
+                <div className="mt-3">
+                  <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-all duration-300',
+                        status === 'complete' ? 'bg-emerald-500' :
+                        status === 'excess' ? 'bg-amber-500' :
+                        status === 'partial' ? 'bg-blue-500' : 'bg-gray-300'
+                      )}
+                      style={{ width: `${Math.min(100, (line.quantityValidated / line.quantityExpected) * 100)}%` }}
+                    />
+                  </div>
                 </div>
               </div>
+
+              <AnimatePresence>
+                {isExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className={cn(
+                      'px-4 pb-4 pt-2 border-t',
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <label className="block text-xs text-gray-500 mb-1">Cantidad manual</label>
+                      <input
+                        type="number"
+                        value={line.quantityValidated}
+                        onChange={(e) => updateLineQuantity(line.lineId, parseFloat(e.target.value) || 0)}
+                        min={0}
+                        step="any"
+                        className={cn(
+                          'w-full px-3 py-2 rounded-lg border text-center font-bold',
+                          theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'
+                        )}
+                      />
+                      <p className="text-xs text-gray-400 mt-1 text-center">
+                        Esperado: {formatQty(line.quantityExpected)} | Max: {formatQty(line.quantityExpected + 5)}
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           )
         })}
@@ -614,18 +643,21 @@ export default function WholesaleDeliveryValidationView({
       {/* Summary & Action */}
       <div className={cn(
         'p-4 rounded-xl sticky bottom-4',
-        theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-gray-50 border border-gray-200'
+        theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200 shadow-lg'
       )}>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-gray-500">Total a Entregar</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatQty(totalToDeliver)} unidades</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">
+              {formatQty(totalToDeliver)} <span className="text-lg text-gray-400">/ {formatQty(totalExpected)}</span> unidades
+            </p>
           </div>
           <div className="flex gap-2">
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              onClick={onClose}
+              onClick={handleCancel}
+              disabled={completing}
               className={cn(
                 'px-4 py-3 rounded-xl transition-colors font-medium',
                 theme === 'dark'
@@ -638,12 +670,30 @@ export default function WholesaleDeliveryValidationView({
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              onClick={deliverAll}
+              disabled={completing || totalToDeliver >= totalExpected}
+              className={cn(
+                'flex items-center gap-2 px-4 py-3 rounded-xl transition-all font-medium',
+                theme === 'dark'
+                  ? 'bg-blue-900/50 text-blue-300 hover:bg-blue-900/70'
+                  : 'bg-blue-100 text-blue-700 hover:bg-blue-200',
+                (completing || totalToDeliver >= totalExpected) && 'opacity-50 cursor-not-allowed'
+              )}
+            >
+              <Package className="w-5 h-5" />
+              Entregar Todo
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={handleCompleteClick}
               disabled={completing || totalToDeliver === 0}
               className={cn(
-                'flex items-center gap-2 px-6 py-3 rounded-xl transition-all font-medium',
-                'bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-lg',
-                (completing || totalToDeliver === 0) ? 'opacity-50 cursor-not-allowed' : 'hover:from-emerald-600 hover:to-green-700'
+                'flex items-center gap-2 px-6 py-3 rounded-xl transition-all font-medium text-white shadow-lg',
+                'bg-gradient-to-r from-emerald-500 to-emerald-600',
+                (completing || totalToDeliver === 0)
+                  ? 'opacity-50 cursor-not-allowed'
+                  : 'hover:from-emerald-600 hover:to-emerald-700'
               )}
             >
               {completing ? (
@@ -654,7 +704,7 @@ export default function WholesaleDeliveryValidationView({
               ) : (
                 <>
                   <Check className="w-5 h-5" />
-                  Completar Entrega
+                  Confirmar Entrega
                 </>
               )}
             </motion.button>
@@ -705,7 +755,7 @@ export default function WholesaleDeliveryValidationView({
                           {line.productName}
                         </span>
                         {line.variantName && (
-                          <span className="text-emerald-600 dark:text-emerald-400 text-xs">
+                          <span className="text-purple-600 dark:text-purple-400 text-xs">
                             {line.variantName}
                           </span>
                         )}
