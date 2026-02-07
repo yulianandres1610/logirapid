@@ -481,15 +481,15 @@ export async function GET(
           mw.id as warehouse_id,
           mw.name as warehouse_name,
           COALESCE(u.firstname || ' ' || u.lastname, u.email) as user_name,
-          mc.name as customer_name
+          mwc.business_name as customer_name
         FROM market_invoice_lines mil
         JOIN market_invoices mi ON mi.id = mil.invoice_id
         LEFT JOIN market_product_variants mpv ON mpv.id = mil.variant_id
         LEFT JOIN market_warehouses mw ON mw.id = mi.warehouse_id
         LEFT JOIN users u ON u.id = mi.created_by
-        LEFT JOIN market_customers mc ON mc.id = mi.customer_id
+        LEFT JOIN market_wholesale_customers mwc ON mwc.id = mi.customer_id
         WHERE mil.product_id = $1 AND mi.company_id = $2
-          AND mi.status IN ('delivered', 'paid', 'completed')
+          AND mi.status IN ('delivered', 'paid', 'completed', 'confirmed')
         ORDER BY COALESCE(mi.delivered_at, mi.created_at) DESC
         LIMIT $3
       `, [productId, payload.companyId, limit])
@@ -519,6 +519,68 @@ export async function GET(
       }
     } catch (error) {
       console.error('[Product Movements] Error fetching wholesale sales:', error)
+    }
+
+    // 7b. Get wholesale delivery operations (warehouse operations)
+    try {
+      const wholesaleOpsResult = await db.query(`
+        SELECT
+          mwol.id as line_id,
+          mwo.id as operation_id,
+          mwo.operation_number,
+          mwo.operation_type,
+          mwo.status,
+          mwo.created_at,
+          mwo.completed_at,
+          mwol.quantity_planned,
+          mwol.quantity_done,
+          mwol.variant_id,
+          mpv.variant_name,
+          sw.id as warehouse_id,
+          sw.name as warehouse_name,
+          COALESCE(u.firstname || ' ' || u.lastname, u.email) as user_name,
+          mi.invoice_number,
+          mwc.business_name as customer_name,
+          mwo.notes
+        FROM market_warehouse_operation_lines mwol
+        JOIN market_warehouse_operations mwo ON mwo.id = mwol.operation_id
+        LEFT JOIN market_product_variants mpv ON mpv.id = mwol.variant_id
+        LEFT JOIN market_warehouses sw ON sw.id = mwo.source_warehouse_id
+        LEFT JOIN users u ON u.id = mwo.created_by
+        LEFT JOIN market_invoices mi ON mi.id = mwo.invoice_id
+        LEFT JOIN market_wholesale_customers mwc ON mwc.id = mi.customer_id
+        WHERE mwol.product_id = $1 AND mwo.company_id = $2
+          AND mwo.operation_type IN ('wholesale_out', 'wholesale_delivery')
+          AND mwo.status IN ('done', 'completed', 'confirmed', 'validated')
+        ORDER BY COALESCE(mwo.completed_at, mwo.created_at) DESC
+        LIMIT $3
+      `, [productId, payload.companyId, limit])
+
+      for (const row of wholesaleOpsResult.rows) {
+        const qty = parseFloat(row.quantity_done) || parseFloat(row.quantity_planned) || 0
+        if (qty > 0) {
+          const variantLabel = row.variant_name ? ` (${row.variant_name})` : ''
+          movements.push({
+            id: `wholesale-op-${row.line_id}`,
+            type: 'wholesale_delivery',
+            typeLabel: `Entrega Mayorista${variantLabel}`,
+            date: row.completed_at || row.created_at || new Date().toISOString(),
+            quantity: qty,
+            direction: 'out',
+            reference: row.invoice_number || row.operation_number || `WD-${row.operation_id}`,
+            referenceId: row.operation_id,
+            warehouseName: row.warehouse_name || 'N/A',
+            sourceWarehouse: row.warehouse_name || 'N/A',
+            destWarehouse: row.customer_name || 'Cliente Mayorista',
+            userName: row.user_name,
+            status: row.status,
+            notes: row.notes || (row.variant_name ? `Variante: ${row.variant_name}` : null),
+            stockAfter: null
+          })
+        }
+      }
+    } catch (error) {
+      console.error('[Product Movements] Error fetching wholesale delivery ops:', error)
     }
 
     // 8. Get production out movements (materials delivered to production)
@@ -715,7 +777,7 @@ export async function GET(
           totalOut: movements.filter(m => m.direction === 'out').reduce((sum, m) => sum + m.quantity, 0),
           purchaseCount: movements.filter(m => m.type === 'purchase').length,
           saleCount: movements.filter(m => m.type === 'sale').length,
-          wholesaleCount: movements.filter(m => m.type === 'wholesale').length,
+          wholesaleCount: movements.filter(m => m.type === 'wholesale' || m.type === 'wholesale_delivery').length,
           transferCount: movements.filter(m => m.type.startsWith('transfer')).length / 2,
           auditCount: movements.filter(m => m.type === 'audit').length,
           adjustmentCount: movements.filter(m => m.type === 'adjustment').length,
