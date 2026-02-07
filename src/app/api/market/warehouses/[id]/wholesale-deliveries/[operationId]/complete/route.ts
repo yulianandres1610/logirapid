@@ -99,7 +99,7 @@ export async function POST(
       if (quantityValidated === 0 && quantityExpected > 0) {
         await db.query(`
           UPDATE market_warehouse_operation_lines
-          SET quantity_validated = quantity_planned, updated_at = NOW()
+          SET quantity_validated = quantity_planned
           WHERE id = $1
         `, [line.id])
 

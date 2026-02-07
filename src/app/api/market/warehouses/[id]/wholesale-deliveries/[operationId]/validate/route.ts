@@ -203,7 +203,7 @@ export async function POST(
     for (const line of lines) {
       await db.query(`
         UPDATE market_warehouse_operation_lines
-        SET quantity_validated = $1, updated_at = NOW()
+        SET quantity_validated = $1
         WHERE id = $2 AND operation_id = $3
       `, [line.quantityValidated, line.lineId, opId])
     }
