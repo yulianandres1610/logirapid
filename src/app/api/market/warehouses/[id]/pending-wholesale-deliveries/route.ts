@@ -202,7 +202,11 @@ export async function GET(
         warehouseId,
         warehouseName: warehouseCheck.rows[0].name,
         pendingCount: deliveries.length,
-        deliveries
+        deliveries,
+        _debug: {
+          userCompanyId: payload.companyId,
+          queryParams: { warehouseId, companyId: payload.companyId }
+        }
       }
     })
 

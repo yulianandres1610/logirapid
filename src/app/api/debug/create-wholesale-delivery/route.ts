@@ -57,7 +57,9 @@ export async function GET() {
             o.status,
             o.validation_status,
             o.source_warehouse_id,
-            mw.name as warehouse_name
+            o.company_id as operation_company_id,
+            mw.name as warehouse_name,
+            mw.company_id as warehouse_company_id
           FROM market_warehouse_operations o
           LEFT JOIN market_warehouses mw ON mw.id = o.source_warehouse_id
           WHERE o.reference_type = 'wholesale_invoice' AND o.reference_id = $1
@@ -89,7 +91,9 @@ export async function GET() {
             status: op.status,
             validationStatus: op.validation_status,
             warehouseId: op.source_warehouse_id,
-            warehouseName: op.warehouse_name
+            warehouseName: op.warehouse_name,
+            operationCompanyId: op.operation_company_id,
+            warehouseCompanyId: op.warehouse_company_id
           }))
         }
       })
@@ -97,7 +101,26 @@ export async function GET() {
 
     // Get warehouses
     const warehousesResult = await db.query(`
-      SELECT id, name, code FROM market_warehouses WHERE is_active = true ORDER BY name
+      SELECT id, name, code, company_id FROM market_warehouses WHERE is_active = true ORDER BY name
+    `)
+
+    // Get all pending wholesale_delivery operations (no company filter for debug)
+    const pendingOpsResult = await db.query(`
+      SELECT
+        o.id,
+        o.operation_number,
+        o.status,
+        o.validation_status,
+        o.source_warehouse_id,
+        o.company_id,
+        mw.name as warehouse_name,
+        mw.company_id as warehouse_company_id
+      FROM market_warehouse_operations o
+      LEFT JOIN market_warehouses mw ON mw.id = o.source_warehouse_id
+      WHERE o.operation_type = 'wholesale_delivery'
+        AND o.status = 'pending'
+      ORDER BY o.created_at DESC
+      LIMIT 10
     `)
 
     return NextResponse.json({
@@ -107,7 +130,18 @@ export async function GET() {
         warehouses: warehousesResult.rows.map(w => ({
           id: w.id,
           name: w.name,
-          code: w.code
+          code: w.code,
+          companyId: w.company_id
+        })),
+        pendingWholesaleOperations: pendingOpsResult.rows.map(op => ({
+          id: op.id,
+          operationNumber: op.operation_number,
+          status: op.status,
+          validationStatus: op.validation_status,
+          warehouseId: op.source_warehouse_id,
+          warehouseName: op.warehouse_name,
+          operationCompanyId: op.company_id,
+          warehouseCompanyId: op.warehouse_company_id
         }))
       }
     })
