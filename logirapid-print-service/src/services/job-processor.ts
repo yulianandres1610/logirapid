@@ -38,6 +38,7 @@ import { generateWeightLabelZpl, WeightLabelData } from '../documents/weight-lab
 import { generateWeightLabelPdf, WeightLabelPdfData } from '../documents/weight-label-pdf'
 import { generateProductionOrder, ProductionOrderData } from '../documents/production-order'
 import { generateProductionOrderPdf, ProductionOrderPdfData } from '../documents/production-order-pdf'
+import { generateSessionCloseReport, SessionCloseReportData } from '../documents/session-close-report'
 
 const execAsync = promisify(exec)
 
@@ -280,6 +281,7 @@ class JobProcessor {
       case 'inventory_count_report':
       case 'audit_count_report':
       case 'cash_register_report':
+      case 'session_close_report':
         // Prefer thermal printers for receipts and reports
         return printerService.getThermalPrinters()[0] || printerService.getDefaultPrinter()
 
@@ -437,6 +439,11 @@ class JobProcessor {
         }
         return generateCashRegisterReport(data as unknown as CashRegisterReportData)
 
+      case 'session_close_report':
+        // Session close report - ESC/POS for thermal printers
+        // Similar to cash_register_report but with different data structure
+        return generateSessionCloseReport(data as unknown as SessionCloseReportData)
+
       case 'warehouse_operation':
         // Use PDF for standard printers, ESC/POS for thermal
         if (usePdf) {
@@ -528,7 +535,7 @@ class JobProcessor {
                       escposDocuments.includes(job.documentType)
     const isReceiptOrReport = ['purchase_invoice', 'invoice', 'sales_report',
                                'inventory_count_report', 'audit_count_report', 'cash_register_report',
-                               'warehouse_operation', 'unified_reception', 'consignment_receipt',
+                               'session_close_report', 'warehouse_operation', 'unified_reception', 'consignment_receipt',
                                'production_order', 'production_materials_receipt', 'production_reception_receipt'].includes(job.documentType)
     const isPdfOnly = ['transfer_receipt'].includes(job.documentType)
 
