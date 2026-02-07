@@ -1,6 +1,6 @@
 {
   "name": "logirapid-print-service",
-  "version": "1.61.0",
+  "version": "1.61.1",
   "description": "LogiRapid Silent Print Service - Local print service for thermal printers and labels",
   "main": "out/main/index.js",
   "author": {
@@ -86,7 +86,9 @@
       "artifactName": "LogiRapid-Print-Service-${version}-${arch}.${ext}",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
-      "identity": null
+      "identity": null,
+      "signIgnore": [".*"],
+      "type": "development"
     },
     "linux": {
       "target": [
