@@ -188,6 +188,7 @@ export async function POST(request: NextRequest) {
     // Validate document type
     const validDocTypes = [
       'pos_receipt',           // Recibo de venta POS
+      'session_close_report',  // Reporte de cierre de caja POS
       'shipping_label',        // Etiqueta de envío
       'product_label',         // Etiqueta de producto
       'weight_label',          // Etiqueta de peso (balanza)
