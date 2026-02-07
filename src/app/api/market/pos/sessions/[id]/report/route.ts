@@ -53,7 +53,7 @@ export async function GET(
         t.name as terminal_name,
         t.warehouse_id,
         w.name as warehouse_name,
-        c.name as company_name,
+        c.legalname as company_name,
         COALESCE(uo.firstname || ' ' || uo.lastname, uo.email) as opened_by_name,
         COALESCE(uc.firstname || ' ' || uc.lastname, uc.email) as closed_by_name
       FROM market_pos_sessions s
