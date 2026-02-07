@@ -141,9 +141,41 @@ export default function SchedulingPage() {
     }
   }, [dateRange])
 
+  // Initialize HR tables (ensures they exist before fetching)
+  const initializeTables = useCallback(async () => {
+    try {
+      // Check if tables exist by calling GET first
+      const checkResponse = await fetch('/api/market/hr/init-tables')
+      const checkResult = await checkResponse.json()
+
+      // If tables don't exist, initialize them
+      if (checkResult.success && checkResult.tables) {
+        const tablesExist = checkResult.tables.market_shift_patterns && checkResult.tables.market_employee_shifts
+        if (!tablesExist) {
+          console.log('Initializing HR shift tables...')
+          await fetch('/api/market/hr/init-tables', { method: 'POST' })
+        }
+      } else {
+        // Tables info not available, try to initialize
+        await fetch('/api/market/hr/init-tables', { method: 'POST' })
+      }
+    } catch (error) {
+      console.error('Error initializing HR tables:', error)
+      // Try to create tables anyway
+      try {
+        await fetch('/api/market/hr/init-tables', { method: 'POST' })
+      } catch (e) {
+        console.error('Failed to initialize tables:', e)
+      }
+    }
+  }, [])
+
   const loadAllData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
     else setRefreshing(true)
+
+    // Ensure tables are initialized first
+    await initializeTables()
 
     await Promise.all([
       fetchPatterns(),
@@ -153,7 +185,7 @@ export default function SchedulingPage() {
 
     if (!silent) setLoading(false)
     else setRefreshing(false)
-  }, [fetchPatterns, fetchEmployees, fetchShifts])
+  }, [fetchPatterns, fetchEmployees, fetchShifts, initializeTables])
 
   useEffect(() => {
     loadAllData()
@@ -223,50 +255,6 @@ export default function SchedulingPage() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className={cn(
-                  'text-2xl font-bold',
-                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                )}>
-                  Planificacion de Horarios
-                </h1>
-                <p className={cn(
-                  'text-sm mt-1',
-                  theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                )}>
-                  Gestiona turnos rotativos y horarios de empleados
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => loadAllData(true)}
-                  disabled={loading || refreshing}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all',
-                    theme === 'dark'
-                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  )}
-                >
-                  <RefreshCw className={cn('w-4 h-4', refreshing && 'animate-spin')} />
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowGenerateModal(true)}
-                  disabled={patterns.filter(p => p.isActive).length === 0}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 transition-all shadow-lg shadow-green-500/25 disabled:opacity-50"
-                >
-                  <Sparkles className="w-5 h-5" />
-                  Generar Turnos
-                </motion.button>
-              </div>
-            </div>
-
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
               {/* Patterns */}
@@ -440,6 +428,34 @@ export default function SchedulingPage() {
                   </p>
                 </div>
               </motion.div>
+            </div>
+
+            {/* Action Bar */}
+            <div className="flex items-center justify-end gap-3">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => loadAllData(true)}
+                disabled={loading || refreshing}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all',
+                  theme === 'dark'
+                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                )}
+              >
+                <RefreshCw className={cn('w-4 h-4', refreshing && 'animate-spin')} />
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setShowGenerateModal(true)}
+                disabled={patterns.filter(p => p.isActive).length === 0}
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 transition-all shadow-lg shadow-green-500/25 disabled:opacity-50"
+              >
+                <Sparkles className="w-5 h-5" />
+                Generar Turnos
+              </motion.button>
             </div>
 
             {/* Tabs */}
