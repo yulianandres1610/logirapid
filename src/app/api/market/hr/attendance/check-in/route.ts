@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { db } from '@/lib/database'
+import { getEmployeeScheduleForDate, calculateLateMinutes } from '@/lib/hr/schedule-utils'
 
 async function getCompanyId() {
   const cookieStore = await cookies()
@@ -62,37 +63,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Calculate late minutes if schedule exists (from active contract)
+    // Calculate late minutes using schedule-utils (supports both rotating and fixed schedules)
     let lateMinutes = 0
     let status = 'present'
+    let scheduleSource: string | null = null
 
-    // Try to get schedule from contract
-    const contractCheck = await db.query(`
-      SELECT c.scheduleid FROM market_contracts c
-      WHERE c.employeeid = $1 AND c.status = 'active'
-      LIMIT 1
-    `, [employeeId])
+    // Get employee's schedule for today (rotating shifts take priority over fixed)
+    const schedule = await getEmployeeScheduleForDate(employeeId, now)
 
-    if (contractCheck.rows.length > 0 && contractCheck.rows[0].scheduleid) {
-      const scheduleId = contractCheck.rows[0].scheduleid
-      const dayOfWeek = now.getDay()
-      const scheduleDay = await db.query(`
-        SELECT * FROM market_schedule_days
-        WHERE scheduleid = $1 AND dayofweek = $2
-      `, [scheduleId, dayOfWeek])
+    if (schedule) {
+      scheduleSource = schedule.source
 
-      if (scheduleDay.rows.length > 0 && scheduleDay.rows[0].isworkday && scheduleDay.rows[0].starttime) {
-        const scheduledStart = scheduleDay.rows[0].starttime
-        const [scheduledHour, scheduledMinute] = scheduledStart.split(':').map(Number)
-        const scheduledTime = new Date(now)
-        scheduledTime.setHours(scheduledHour, scheduledMinute, 0, 0)
-
-        if (now > scheduledTime) {
-          lateMinutes = Math.round((now.getTime() - scheduledTime.getTime()) / (1000 * 60))
-          if (lateMinutes > 15) {
-            status = 'late'
-          }
+      // Only calculate late minutes if it's a work day and there's a start time
+      if (schedule.isWorkDay && schedule.startTime) {
+        lateMinutes = calculateLateMinutes(now, schedule.startTime)
+        if (lateMinutes > 15) {
+          status = 'late'
         }
+      } else if (!schedule.isWorkDay) {
+        // Employee is checking in on a rest day - mark as present but note it
+        console.log(`[CHECK-IN] Employee ${employeeId} checking in on rest day (${schedule.shiftType || 'rest'})`)
       }
     }
 

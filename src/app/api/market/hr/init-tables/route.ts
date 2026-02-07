@@ -175,6 +175,56 @@ export async function POST(request: NextRequest) {
       console.log('Some indexes may already exist')
     }
 
+    // 8. Shift patterns table (for rotating schedules like 2x2, 4x2, etc.)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_shift_patterns (
+        id SERIAL PRIMARY KEY,
+        companyid INTEGER REFERENCES companies(id),
+        name VARCHAR(100) NOT NULL,
+        code VARCHAR(20),
+        description TEXT,
+        workdays INTEGER NOT NULL,
+        restdays INTEGER NOT NULL,
+        starttime TIME NOT NULL,
+        endtime TIME NOT NULL,
+        breakminutes INTEGER DEFAULT 0,
+        isactive BOOLEAN DEFAULT true,
+        createdat TIMESTAMP DEFAULT NOW(),
+        updatedat TIMESTAMP DEFAULT NOW()
+      )
+    `)
+
+    // 9. Employee shifts table (specific shifts by date)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_employee_shifts (
+        id SERIAL PRIMARY KEY,
+        companyid INTEGER REFERENCES companies(id),
+        employeeid INTEGER REFERENCES market_employees(id) ON DELETE CASCADE,
+        shiftdate DATE NOT NULL,
+        patternid INTEGER REFERENCES market_shift_patterns(id),
+        scheduleid INTEGER REFERENCES market_schedules(id),
+        starttime TIME,
+        endtime TIME,
+        breakminutes INTEGER DEFAULT 0,
+        shifttype VARCHAR(20) DEFAULT 'work',
+        notes TEXT,
+        createdby INTEGER,
+        createdat TIMESTAMP DEFAULT NOW(),
+        updatedat TIMESTAMP DEFAULT NOW(),
+        UNIQUE(employeeid, shiftdate)
+      )
+    `)
+
+    // Create indexes for shift patterns and employee shifts
+    try {
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_shift_patterns_company ON market_shift_patterns(companyid)`)
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_employee_shifts_employee_date ON market_employee_shifts(employeeid, shiftdate)`)
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_employee_shifts_company_date ON market_employee_shifts(companyid, shiftdate)`)
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_employee_shifts_pattern ON market_employee_shifts(patternid)`)
+    } catch (e) {
+      console.log('Shift indexes may already exist')
+    }
+
     return NextResponse.json({
       success: true,
       message: 'HR tables created successfully'
@@ -199,7 +249,9 @@ export async function GET(request: NextRequest) {
       'market_contracts',
       'market_attendance',
       'market_attendance_kiosks',
-      'market_employee_faces'
+      'market_employee_faces',
+      'market_shift_patterns',
+      'market_employee_shifts'
     ]
 
     const results: Record<string, boolean> = {}

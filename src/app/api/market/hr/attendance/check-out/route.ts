@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { db } from '@/lib/database'
+import { getEmployeeScheduleForDate, calculateEarlyDepartureMinutes, calculateOvertimeHours } from '@/lib/hr/schedule-utils'
 
 async function getCompanyId() {
   const cookieStore = await cookies()
@@ -72,37 +73,21 @@ export async function POST(request: NextRequest) {
     const checkInTime = new Date(attendance.checkin)
     const workedHours = (now.getTime() - checkInTime.getTime()) / (1000 * 60 * 60)
 
-    // Calculate early departure and overtime if schedule exists
+    // Calculate early departure and overtime using schedule-utils (supports both rotating and fixed schedules)
     let earlyDepartureMinutes = 0
     let overtimeHours = 0
+    let scheduleSource: string | null = null
 
-    // Try to get schedule from contract
-    const contractCheck = await db.query(`
-      SELECT c.scheduleid FROM market_contracts c
-      WHERE c.employeeid = $1 AND c.status = 'active'
-      LIMIT 1
-    `, [employeeId])
+    // Get employee's schedule for today (rotating shifts take priority over fixed)
+    const schedule = await getEmployeeScheduleForDate(employeeId, now)
 
-    if (contractCheck.rows.length > 0 && contractCheck.rows[0].scheduleid) {
-      const scheduleId = contractCheck.rows[0].scheduleid
-      const dayOfWeek = now.getDay()
-      const scheduleDay = await db.query(`
-        SELECT * FROM market_schedule_days
-        WHERE scheduleid = $1 AND dayofweek = $2
-      `, [scheduleId, dayOfWeek])
+    if (schedule) {
+      scheduleSource = schedule.source
 
-      if (scheduleDay.rows.length > 0 && scheduleDay.rows[0].isworkday && scheduleDay.rows[0].endtime) {
-        const scheduledEnd = scheduleDay.rows[0].endtime
-        const [scheduledHour, scheduledMinute] = scheduledEnd.split(':').map(Number)
-        const scheduledTime = new Date(now)
-        scheduledTime.setHours(scheduledHour, scheduledMinute, 0, 0)
-
-        if (now < scheduledTime) {
-          earlyDepartureMinutes = Math.round((scheduledTime.getTime() - now.getTime()) / (1000 * 60))
-        } else if (now > scheduledTime) {
-          // Calculate overtime
-          overtimeHours = (now.getTime() - scheduledTime.getTime()) / (1000 * 60 * 60)
-        }
+      // Only calculate if it's a work day and there's an end time
+      if (schedule.isWorkDay && schedule.endTime) {
+        earlyDepartureMinutes = calculateEarlyDepartureMinutes(now, schedule.endTime)
+        overtimeHours = calculateOvertimeHours(now, schedule.endTime)
       }
     }
 
