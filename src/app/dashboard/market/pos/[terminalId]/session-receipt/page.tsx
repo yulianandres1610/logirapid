@@ -255,8 +255,8 @@ export default function SessionReceiptPage() {
     }
   }
 
-  // Print with specific printer (serviceId, printerId)
-  const printWithService = async (serviceId: number, printerId: string) => {
+  // Print with specific printer (serviceId, printerId - database ID, not string)
+  const printWithService = async (serviceId: number, printerId: number) => {
     if (!report) return
 
     setPrinting(true)
@@ -271,7 +271,7 @@ export default function SessionReceiptPage() {
         sourceId: report.session.id
       }
 
-      console.log('[Session Receipt] Sending print job to service:', serviceId, 'printer:', printerId)
+      console.log('[Session Receipt] Sending print job to service:', serviceId, 'printer ID:', printerId)
 
       const response = await fetch('/api/print/jobs', {
         method: 'POST',
@@ -315,7 +315,7 @@ export default function SessionReceiptPage() {
         // Single printer - print silently
         console.log('[Session Receipt] Single thermal printer, printing silently')
         const { serviceId, printer } = thermalPrinters[0]
-        await printWithService(serviceId, printer.printerId)
+        await printWithService(serviceId, printer.id)
       } else {
         // Multiple printers - show modal
         console.log('[Session Receipt] Multiple printers, showing modal')
@@ -1000,8 +1000,8 @@ export default function SessionReceiptPage() {
                         key={printer.id}
                         onClick={async () => {
                           setShowPrinterModal(false)
-                          // Print directly with the selected printer
-                          await printWithService(service.id, printer.printerId)
+                          // Print directly with the selected printer (use printer.id, not printer.printerId)
+                          await printWithService(service.id, printer.id)
                         }}
                         className={cn(
                           'w-full p-3 rounded-xl text-left transition-colors mb-1',
