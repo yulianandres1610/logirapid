@@ -77,6 +77,13 @@ export function GenerateShiftsModal({ patterns, employees, onClose, onGenerate }
     }
 
     try {
+      // Ensure tables exist before generating shifts
+      try {
+        await fetch('/api/market/hr/init-tables', { method: 'POST' })
+      } catch (initError) {
+        console.log('Table init check (may already exist):', initError)
+      }
+
       const response = await fetch('/api/market/hr/employee-shifts/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

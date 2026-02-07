@@ -71,6 +71,15 @@ export function ShiftPatternForm({ pattern, onClose, onSave }: ShiftPatternFormP
     setLoading(true)
 
     try {
+      // Ensure tables exist before saving (fallback initialization)
+      if (!pattern?.id) {
+        try {
+          await fetch('/api/market/hr/init-tables', { method: 'POST' })
+        } catch (initError) {
+          console.log('Table init check (may already exist):', initError)
+        }
+      }
+
       const url = pattern?.id
         ? `/api/market/hr/shift-patterns/${pattern.id}`
         : '/api/market/hr/shift-patterns'
