@@ -210,6 +210,13 @@ export default function CloseSessionPage() {
     if (!session) return
     setClosing(true)
     try {
+      // Build closing denominations object
+      const closingDenominations = {
+        usd: usdCounts,
+        cup: cupCounts,
+        mlc: mlcCounts
+      }
+
       const response = await fetch(`/api/market/pos/sessions/${session.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -218,12 +225,14 @@ export default function CloseSessionPage() {
           closingCashUsd: closingCash.usd,
           closingCashCup: closingCash.cup,
           closingCashMlc: closingCash.mlc,
+          closingDenominations,
           closingNotes
         })
       })
       const data = await response.json()
       if (data.success) {
-        router.push('/dashboard/market/pos')
+        // Redirect to session receipt page for printing
+        router.push(`/dashboard/market/pos/${terminalId}/session-receipt?sessionId=${session.id}&autoPrint=true`)
       } else {
         setError(data.error || 'Error al cerrar sesión')
       }

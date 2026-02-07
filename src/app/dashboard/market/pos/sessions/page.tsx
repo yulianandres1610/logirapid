@@ -737,12 +737,25 @@ export default function POSSessionsHistoryPage() {
                     <h2 className="text-xl font-bold">{selectedSession.sessionCode}</h2>
                     <p className="text-sm text-gray-500">{selectedSession.terminalName}</p>
                   </div>
-                  <button
-                    onClick={closePanel}
-                    className={cn('p-2 rounded-lg transition-colors', theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100')}
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {selectedSession.status === 'closed' && (
+                      <button
+                        onClick={() => {
+                          window.open(`/dashboard/market/pos/${selectedSession.terminalId}/session-receipt?sessionId=${selectedSession.id}`, '_blank')
+                        }}
+                        className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg text-sm font-medium hover:from-blue-600 hover:to-blue-700 transition-all"
+                      >
+                        <Printer className="w-4 h-4" />
+                        Imprimir Cierre
+                      </button>
+                    )}
+                    <button
+                      onClick={closePanel}
+                      className={cn('p-2 rounded-lg transition-colors', theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100')}
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Panel Content */}

@@ -347,8 +347,19 @@ export async function PUT(
         closingCashUsd,
         closingCashCup,
         closingCashMlc,
+        closingDenominations,
         closingNotes
       } = body
+
+      // Ensure closing_denominations column exists
+      try {
+        await db.query(`
+          ALTER TABLE market_pos_sessions
+          ADD COLUMN IF NOT EXISTS closing_denominations JSONB DEFAULT NULL
+        `)
+      } catch (e) {
+        // Column may already exist
+      }
 
       // Calculate totals from orders
       const totalsResult = await db.query(`
@@ -419,8 +430,9 @@ export async function PUT(
           total_refunds = $6,
           total_orders = $7,
           cash_difference = $8,
-          closing_notes = $9
-        WHERE id = $10
+          closing_notes = $9,
+          closing_denominations = $10
+        WHERE id = $11
       `, [
         userId,
         reportedUsd,
@@ -431,6 +443,7 @@ export async function PUT(
         parseInt(totals.total_orders) || 0,
         differenceUsd,
         closingNotes || null,
+        closingDenominations ? JSON.stringify(closingDenominations) : null,
         sessionId
       ])
 
