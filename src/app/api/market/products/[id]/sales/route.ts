@@ -31,40 +31,50 @@ export async function GET(
     try {
       // Helper to get combined sales (POS + Wholesale) for a date range
       const getCombinedSales = async (startDate: Date, endDate: Date) => {
+        let posQty = 0, posTotal = 0, posOrders = 0
+        let wholesaleQty = 0, wholesaleTotal = 0, wholesaleOrders = 0
+
         // POS sales
-        const posResult = await db.query(`
-          SELECT
-            COALESCE(SUM(pol.quantity), 0) as quantity,
-            COALESCE(SUM(pol.total), 0) as total,
-            COUNT(DISTINCT po.id) as orders
-          FROM market_pos_order_lines pol
-          JOIN market_pos_orders po ON pol.order_id = po.id
-          WHERE pol.product_id = $1 AND po.company_id = $2
-          AND po.created_at >= $3 AND po.created_at < $4
-          AND po.status NOT IN ('cancelled', 'voided', 'draft')
-        `, [productId, parseInt(companyId), startDate.toISOString(), endDate.toISOString()])
+        try {
+          const posResult = await db.query(`
+            SELECT
+              COALESCE(SUM(pol.quantity), 0) as quantity,
+              COALESCE(SUM(pol.subtotal), 0) as total,
+              COUNT(DISTINCT po.id) as orders
+            FROM market_pos_order_lines pol
+            JOIN market_pos_orders po ON pol.order_id = po.id
+            WHERE pol.product_id = $1 AND po.company_id = $2
+            AND po.created_at >= $3 AND po.created_at < $4
+            AND po.status NOT IN ('cancelled', 'voided', 'draft')
+          `, [productId, parseInt(companyId), startDate.toISOString(), endDate.toISOString()])
+
+          posQty = parseFloat(posResult.rows[0]?.quantity) || 0
+          posTotal = parseFloat(posResult.rows[0]?.total) || 0
+          posOrders = parseInt(posResult.rows[0]?.orders) || 0
+        } catch (err) {
+          console.error('[Product Sales] POS query error:', err)
+        }
 
         // Wholesale sales
-        const wholesaleResult = await db.query(`
-          SELECT
-            COALESCE(SUM(COALESCE(il.quantity_delivered, il.quantity)), 0) as quantity,
-            COALESCE(SUM(il.total), 0) as total,
-            COUNT(DISTINCT i.id) as orders
-          FROM market_invoice_lines il
-          JOIN market_invoices i ON il.invoice_id = i.id
-          WHERE il.product_id = $1 AND i.company_id = $2
-          AND COALESCE(i.delivered_at, i.created_at) >= $3
-          AND COALESCE(i.delivered_at, i.created_at) < $4
-          AND i.status IN ('delivered', 'paid', 'completed', 'confirmed', 'validated')
-        `, [productId, parseInt(companyId), startDate.toISOString(), endDate.toISOString()])
+        try {
+          const wholesaleResult = await db.query(`
+            SELECT
+              COALESCE(SUM(il.quantity), 0) as quantity,
+              COALESCE(SUM(il.subtotal), 0) as total,
+              COUNT(DISTINCT i.id) as orders
+            FROM market_invoice_lines il
+            JOIN market_invoices i ON il.invoice_id = i.id
+            WHERE il.product_id = $1 AND i.company_id = $2
+            AND i.created_at >= $3 AND i.created_at < $4
+            AND i.status NOT IN ('cancelled', 'draft')
+          `, [productId, parseInt(companyId), startDate.toISOString(), endDate.toISOString()])
 
-        const posQty = parseInt(posResult.rows[0]?.quantity) || 0
-        const posTotal = parseFloat(posResult.rows[0]?.total) || 0
-        const posOrders = parseInt(posResult.rows[0]?.orders) || 0
-
-        const wholesaleQty = parseInt(wholesaleResult.rows[0]?.quantity) || 0
-        const wholesaleTotal = parseFloat(wholesaleResult.rows[0]?.total) || 0
-        const wholesaleOrders = parseInt(wholesaleResult.rows[0]?.orders) || 0
+          wholesaleQty = parseFloat(wholesaleResult.rows[0]?.quantity) || 0
+          wholesaleTotal = parseFloat(wholesaleResult.rows[0]?.total) || 0
+          wholesaleOrders = parseInt(wholesaleResult.rows[0]?.orders) || 0
+        } catch (err) {
+          console.error('[Product Sales] Wholesale query error:', err)
+        }
 
         return {
           quantity: posQty + wholesaleQty,
