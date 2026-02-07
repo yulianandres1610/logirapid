@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
         JOIN market_pos_orders o ON ol.order_id = o.id
         WHERE o.company_id = $1
           AND o.created_at >= CURRENT_DATE - INTERVAL '30 days'
-          AND o.status IN ('paid', 'completed')
+          AND o.status NOT IN ('cancelled', 'voided', 'draft')
         GROUP BY ol.product_id
       ),
       wholesale_sales AS (
@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
         JOIN market_invoices i ON il.invoice_id = i.id
         WHERE i.company_id = $1
           AND COALESCE(i.delivered_at, i.created_at) >= CURRENT_DATE - INTERVAL '30 days'
-          AND i.status IN ('delivered', 'paid', 'completed')
+          AND i.status IN ('delivered', 'paid', 'completed', 'confirmed', 'validated')
         GROUP BY il.product_id
       ),
       combined_sales AS (

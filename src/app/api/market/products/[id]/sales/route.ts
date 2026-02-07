@@ -55,7 +55,7 @@ export async function GET(
           WHERE il.product_id = $1 AND i.company_id = $2
           AND COALESCE(i.delivered_at, i.created_at) >= $3
           AND COALESCE(i.delivered_at, i.created_at) < $4
-          AND i.status IN ('delivered', 'paid', 'completed')
+          AND i.status IN ('delivered', 'paid', 'completed', 'confirmed', 'validated')
         `, [productId, parseInt(companyId), startDate.toISOString(), endDate.toISOString()])
 
         const posQty = parseInt(posResult.rows[0]?.quantity) || 0
