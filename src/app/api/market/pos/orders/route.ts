@@ -85,7 +85,13 @@ async function ensureMigrations() {
       console.log('[POS Orders] Fixed consignment_wallet_transactions.quantity to DECIMAL')
     }
 
-    console.log('[POS Orders] Migrations ensured (employee_id, original_price, decimal quantities)')
+    // Add change_currency column to market_pos_payments for tracking the currency of change given
+    await db.query(`
+      ALTER TABLE market_pos_payments
+      ADD COLUMN IF NOT EXISTS change_currency VARCHAR(10) DEFAULT NULL
+    `)
+
+    console.log('[POS Orders] Migrations ensured (employee_id, original_price, decimal quantities, change_currency)')
     migrationRun = true
   } catch (error) {
     console.error('[POS Orders] Migration error (may be safe to ignore):', error)
@@ -219,12 +225,13 @@ export async function GET(request: NextRequest) {
       amount: number
       amountTendered: number | null
       changeAmount: number | null
+      changeCurrency: string | null
       currency: string
     }[]> = {}
 
     if (orderIds.length > 0) {
       const paymentsResult = await db.query(`
-        SELECT order_id, payment_method, amount, currency, amount_tendered, change_amount
+        SELECT order_id, payment_method, amount, currency, amount_tendered, change_amount, change_currency
         FROM market_pos_payments
         WHERE order_id = ANY($1)
         ORDER BY order_id, id
@@ -242,6 +249,7 @@ export async function GET(request: NextRequest) {
           amount: change ? amount - change : amount, // Actual collected after change
           amountTendered: tendered,
           changeAmount: change,
+          changeCurrency: p.change_currency || null, // Currency of the change (USD or CUP)
           currency: p.currency || 'USD'
         })
       }
@@ -888,9 +896,9 @@ export async function POST(request: NextRequest) {
         await db.query(`
           INSERT INTO market_pos_payments (
             order_id, payment_method, amount, currency,
-            amount_tendered, change_amount, reference,
+            amount_tendered, change_amount, change_currency, reference,
             created_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
         `, [
           orderId,
           payment.method || 'cash',
@@ -898,6 +906,7 @@ export async function POST(request: NextRequest) {
           payment.currency || 'USD',
           payment.amountTendered || null,
           payment.changeAmount || null,
+          payment.changeCurrency || null, // Currency of the change (USD or CUP)
           payment.reference || null
         ])
       }

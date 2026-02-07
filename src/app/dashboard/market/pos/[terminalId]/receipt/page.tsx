@@ -234,6 +234,7 @@ interface Payment {
   currency: string
   amountTendered?: number | null  // Para efectivo: cuánto entregó el cliente
   changeAmount?: number | null    // Para efectivo: cambio devuelto
+  changeCurrency?: string | null  // Para efectivo: moneda del cambio (USD o CUP)
 }
 
 interface Order {
@@ -500,16 +501,17 @@ function ReceiptContent() {
         const data = await res.json()
 
         if (data.success) {
-          // Asegurarnos de que los datos de pago incluyan amountTendered y changeAmount
+          // Asegurarnos de que los datos de pago incluyan amountTendered, changeAmount y changeCurrency
           const orderData = {
             ...data.data,
             terminalName: data.data.terminalName,
-            payments: data.data.payments.map((p: { method: string; amount: number; currency: string; amountTendered?: number | null; changeAmount?: number | null }) => ({
+            payments: data.data.payments.map((p: { method: string; amount: number; currency: string; amountTendered?: number | null; changeAmount?: number | null; changeCurrency?: string | null }) => ({
               method: p.method,
               amount: p.amount,
               currency: p.currency,
               amountTendered: p.amountTendered ?? null,
-              changeAmount: p.changeAmount ?? null
+              changeAmount: p.changeAmount ?? null,
+              changeCurrency: p.changeCurrency ?? null
             }))
           }
           setOrder(orderData)
@@ -729,7 +731,8 @@ function ReceiptContent() {
               amount: p.amount,
               currency: p.currency,
               amountTendered: p.amountTendered ?? undefined,
-              changeAmount: p.changeAmount ?? undefined
+              changeAmount: p.changeAmount ?? undefined,
+              changeCurrency: p.changeCurrency ?? undefined
             })),
             thankYouMessage: '¡Gracias por su compra!'
           },
@@ -816,7 +819,8 @@ function ReceiptContent() {
               amount: p.amount,
               currency: p.currency,
               amountTendered: p.amountTendered ?? undefined,
-              changeAmount: p.changeAmount ?? undefined
+              changeAmount: p.changeAmount ?? undefined,
+              changeCurrency: p.changeCurrency ?? undefined
             })),
             thankYouMessage: '¡Gracias por su compra!'
           },
@@ -966,7 +970,8 @@ function ReceiptContent() {
                   amount: p.amount,
                   currency: p.currency,
                   amountTendered: p.amountTendered ?? undefined,
-                  changeAmount: p.changeAmount ?? undefined
+                  changeAmount: p.changeAmount ?? undefined,
+                  changeCurrency: p.changeCurrency ?? undefined
                 })),
                 thankYouMessage: '¡Gracias por su compra!'
               },
@@ -1052,7 +1057,9 @@ ${order.payments.map(p => {
     line += `\n  Entregado: ${p.currency === 'CUP' ? `${formatCUP(p.amountTendered)} CUP` : `$${p.amountTendered.toFixed(2)} USD`}`
   }
   if (p.changeAmount && p.changeAmount > 0) {
-    line += `\n  Cambio: ${p.currency === 'CUP' ? `${formatCUP(p.changeAmount)} CUP` : `$${p.changeAmount.toFixed(2)} USD`}`
+    // Use changeCurrency (not payment currency) for the change amount
+    const chgCurrency = p.changeCurrency || p.currency
+    line += `\n  Cambio: ${chgCurrency === 'CUP' ? `${formatCUP(p.changeAmount)} CUP` : `$${p.changeAmount.toFixed(2)} USD`}`
   }
   return line
 }).join('\n')}
@@ -1249,12 +1256,12 @@ ${order.payments.map(p => {
                         </span>
                       </div>
                     )}
-                    {/* Cambio - con símbolo de moneda */}
+                    {/* Cambio - con símbolo de moneda (usa changeCurrency, no payment.currency) */}
                     {payment.changeAmount && payment.changeAmount > 0 && (
                       <div className={`flex justify-between text-sm font-medium text-green-500`}>
                         <span className="ml-4">Cambio:</span>
                         <span>
-                          {payment.currency === 'CUP'
+                          {(payment.changeCurrency || payment.currency) === 'CUP'
                             ? `${formatCUP(payment.changeAmount)} CUP`
                             : `$${payment.changeAmount.toFixed(2)} USD`}
                         </span>

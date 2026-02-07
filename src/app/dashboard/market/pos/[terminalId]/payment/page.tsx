@@ -245,6 +245,7 @@ interface PendingOrderData {
     currency: string
     amountTendered: number | null
     changeAmount: number | null
+    changeCurrency?: string | null  // NEW: Stores the currency of the change (USD or CUP)
     reference?: string | null
   }>
   total: number
@@ -668,26 +669,21 @@ function PaymentContent() {
         discountAmount: item.discountAmount
       }))
 
-      const orderPayments = payments.map(p => {
-        let paymentChange: number | null = null
-        if (p.method === 'cash' && changeAmount > 0) {
-          // Store change in payment's currency for correct receipt display
-          if (changeCurrency === p.currency) {
-            paymentChange = changeAmount
-          } else if (p.currency === 'CUP' && changeCurrency === 'USD') {
-            paymentChange = changeAmount * rates.CUP
-          } else if (p.currency === 'USD' && changeCurrency === 'CUP') {
-            paymentChange = changeAmount / rates.CUP
-          } else {
-            paymentChange = changeAmount
-          }
-        }
+      // Find the cash payment to attach the change to
+      const cashPaymentIndex = payments.findIndex(p => p.method === 'cash')
+
+      const orderPayments = payments.map((p, idx) => {
+        // Only attach change to the cash payment (or last cash payment if multiple)
+        const isChangePayment = p.method === 'cash' && changeAmount > 0 && idx === cashPaymentIndex
+
         return {
           method: p.method,
           amount: p.amount,  // Monto original en la moneda original
           currency: p.currency,
           amountTendered: p.method === 'cash' ? p.amount : null,
-          changeAmount: paymentChange,
+          // Store change amount and its currency separately
+          changeAmount: isChangePayment ? changeAmount : null,
+          changeCurrency: isChangePayment ? changeCurrency : null, // NEW: Store the actual currency of the change
           reference: p.reference || null // Transfer confirmation code
         }
       })
@@ -769,28 +765,21 @@ function PaymentContent() {
               discountPercent: item.discountPercent,
               discountAmount: item.discountAmount
             })),
-            payments: payments.map(p => {
-              let paymentChange: number | null = null
-              if (p.method === 'cash' && changeAmount > 0) {
-                if (changeCurrency === p.currency) {
-                  paymentChange = changeAmount
-                } else if (p.currency === 'CUP' && changeCurrency === 'USD') {
-                  paymentChange = changeAmount * rates.CUP
-                } else if (p.currency === 'USD' && changeCurrency === 'CUP') {
-                  paymentChange = changeAmount / rates.CUP
-                } else {
-                  paymentChange = changeAmount
+            payments: (() => {
+              const cashIdx = payments.findIndex(p => p.method === 'cash')
+              return payments.map((p, idx) => {
+                const isChangePayment = p.method === 'cash' && changeAmount > 0 && idx === cashIdx
+                return {
+                  method: p.method,
+                  amount: p.amount,
+                  currency: p.currency,
+                  amountTendered: p.method === 'cash' ? p.amount : null,
+                  changeAmount: isChangePayment ? changeAmount : null,
+                  changeCurrency: isChangePayment ? changeCurrency : null,
+                  reference: p.reference || null
                 }
-              }
-              return {
-                method: p.method,
-                amount: p.amount,  // Monto original en la moneda original
-                currency: p.currency,
-                amountTendered: p.method === 'cash' ? p.amount : null,
-                changeAmount: paymentChange,
-                reference: p.reference || null // Transfer confirmation code
-              }
-            }),
+              })
+            })(),
             total: totals.total,
             createdAt: new Date().toISOString(),
             synced: false

@@ -151,6 +151,7 @@ export async function GET(
             amount: rawAmount - change, // Actual collected after change
             amountTendered: rawAmount,  // What was given
             changeAmount: change > 0 ? change : null,
+            changeCurrency: p.change_currency || null, // Currency of the change (USD or CUP)
             currency: p.currency,
             reference: p.reference,
             createdAt: p.created_at
@@ -245,9 +246,9 @@ export async function PUT(
         await db.query(`
           INSERT INTO market_pos_payments (
             order_id, payment_method, amount, currency,
-            amount_tendered, change_amount, reference,
+            amount_tendered, change_amount, change_currency, reference,
             created_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
         `, [
           orderId,
           payment.method || 'cash',
@@ -255,6 +256,7 @@ export async function PUT(
           payment.currency || 'USD',
           payment.amountTendered || null,
           payment.changeAmount || null,
+          payment.changeCurrency || null, // Currency of the change (USD or CUP)
           payment.reference || null
         ])
       }
