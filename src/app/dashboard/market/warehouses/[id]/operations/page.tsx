@@ -1168,16 +1168,6 @@ export default function WarehouseOperationsPage() {
         />
       )}
 
-      {/* Wholesale Delivery Validation Modal */}
-      {showWholesaleValidationView && selectedWholesaleDelivery && (
-        <WholesaleDeliveryValidationView
-          warehouseId={warehouseId}
-          operationId={selectedWholesaleDelivery.id}
-          onClose={handleWholesaleDeliveryClose}
-          onComplete={handleWholesaleDeliveryComplete}
-        />
-      )}
-
       {/* Main Content */}
       <main className="max-w-7xl mx-auto p-4">
         {!operation.operationType ? (
@@ -1210,24 +1200,35 @@ export default function WarehouseOperationsPage() {
           </div>
         ) : operation.operationType === 'wholesale_delivery' ? (
           /* Wholesale Delivery View */
-          <div className="max-w-4xl mx-auto">
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-              <PendingWholesaleDeliveriesList
-                deliveries={pendingWholesaleDeliveries}
-                onSelectDelivery={handleSelectWholesaleDelivery}
-                loading={loadingWholesaleDeliveries}
-              />
+          showWholesaleValidationView && selectedWholesaleDelivery ? (
+            /* Validation View - replaces the list entirely */
+            <WholesaleDeliveryValidationView
+              warehouseId={warehouseId}
+              operationId={selectedWholesaleDelivery.id}
+              onClose={handleWholesaleDeliveryClose}
+              onComplete={handleWholesaleDeliveryComplete}
+            />
+          ) : (
+            /* Pending Deliveries List */
+            <div className="max-w-4xl mx-auto">
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+                <PendingWholesaleDeliveriesList
+                  deliveries={pendingWholesaleDeliveries}
+                  onSelectDelivery={handleSelectWholesaleDelivery}
+                  loading={loadingWholesaleDeliveries}
+                />
 
-              <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                <button
-                  onClick={handleBack}
-                  className="px-6 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors"
-                >
-                  Volver a operaciones
-                </button>
+                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                  <button
+                    onClick={handleBack}
+                    className="px-6 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors"
+                  >
+                    Volver a operaciones
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          )
         ) : operation.operationType === 'order_reception' ? (
           /* Unified Order Reception View (Consignments + Purchases) */
           <UnifiedReceptionView

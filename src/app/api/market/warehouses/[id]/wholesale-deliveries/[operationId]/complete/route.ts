@@ -89,16 +89,9 @@ export async function POST(
       WHERE l.operation_id = $1
     `, [opId])
 
-    // Check if any validation was done
+    // Calculate total validated
     const totalValidated = linesResult.rows.reduce((sum, l) =>
       sum + (parseFloat(l.quantity_validated) || 0), 0)
-
-    if (totalValidated === 0) {
-      return NextResponse.json({
-        success: false,
-        error: 'Escanee los productos antes de completar la entrega'
-      }, { status: 400 })
-    }
 
     // Check for discrepancies
     const hasDiscrepancies = linesResult.rows.some(l =>
