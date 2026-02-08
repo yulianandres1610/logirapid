@@ -512,7 +512,7 @@ export default function MarketDashboardPage() {
                     transition={{ delay: 0.65 + i * 0.05 }}
                     className="bg-gray-100 dark:bg-gray-800 rounded-xl p-4"
                   >
-                    <p className="font-semibold text-sm text-white mb-1 truncate">{supplier.supplierName}</p>
+                    <p className="font-semibold text-sm text-gray-900 dark:text-white mb-1 truncate">{supplier.supplierName}</p>
                     <p className="text-xs text-gray-400 mb-2">{supplier.totalOrders} órdenes</p>
                     <p className="text-xl font-bold text-amber-400">
                       ${supplier.pendingToPay.toLocaleString()}
@@ -551,7 +551,7 @@ export default function MarketDashboardPage() {
                     className="bg-gray-100 dark:bg-gray-800 rounded-xl p-4"
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-sm text-white">{purchase.orderNumber}</span>
+                      <span className="font-semibold text-sm text-gray-900 dark:text-white">{purchase.orderNumber}</span>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full ${
                         purchase.status === 'received'
                           ? 'bg-green-900/50 text-green-400'
@@ -603,7 +603,7 @@ export default function MarketDashboardPage() {
                     className="bg-gray-100 dark:bg-gray-800 rounded-xl p-4"
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-sm text-white">{consignment.orderNumber}</span>
+                      <span className="font-semibold text-sm text-gray-900 dark:text-white">{consignment.orderNumber}</span>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full ${
                         consignment.status === 'received'
                           ? 'bg-green-900/50 text-green-400'
