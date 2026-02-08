@@ -97,15 +97,26 @@ export async function GET(
       ORDER BY il.id
     `, [invoiceId])
 
+    // Ensure delivery columns exist
+    await db.query(`ALTER TABLE market_invoice_deliveries ADD COLUMN IF NOT EXISTS dispatched_by INTEGER REFERENCES users(id)`)
+    await db.query(`ALTER TABLE market_invoice_deliveries ADD COLUMN IF NOT EXISTS delivered_by INTEGER REFERENCES users(id)`)
+
     // Get deliveries
     const deliveriesResult = await db.query(`
       SELECT
         d.*,
         w.name as warehouse_name,
-        u.email as created_by_email
+        u.email as created_by_email,
+        CONCAT(u.firstname, ' ', u.lastname) as created_by_name,
+        u2.email as dispatched_by_email,
+        CONCAT(u2.firstname, ' ', u2.lastname) as dispatched_by_name,
+        u3.email as delivered_by_email,
+        CONCAT(u3.firstname, ' ', u3.lastname) as delivered_by_name
       FROM market_invoice_deliveries d
       LEFT JOIN market_warehouses w ON w.id = d.warehouse_id
       LEFT JOIN users u ON u.id = d.created_by
+      LEFT JOIN users u2 ON u2.id = d.dispatched_by
+      LEFT JOIN users u3 ON u3.id = d.delivered_by
       WHERE d.invoice_id = $1
       ORDER BY d.created_at DESC
     `, [invoiceId])
@@ -203,10 +214,15 @@ export async function GET(
           deliveryDate: d.delivery_date,
           deliveryAddress: d.delivery_address,
           notes: d.notes,
-          createdBy: d.created_by_email,
+          createdBy: d.created_by_name || d.created_by_email,
+          createdByEmail: d.created_by_email,
           createdAt: d.created_at,
           dispatchedAt: d.dispatched_at,
+          dispatchedBy: d.dispatched_by_name || d.dispatched_by_email,
+          dispatchedByEmail: d.dispatched_by_email,
           deliveredAt: d.delivered_at,
+          deliveredBy: d.delivered_by_name || d.delivered_by_email,
+          deliveredByEmail: d.delivered_by_email,
           lines: deliveryLinesResult.rows.map(dl => ({
             id: dl.id,
             productId: dl.product_id,

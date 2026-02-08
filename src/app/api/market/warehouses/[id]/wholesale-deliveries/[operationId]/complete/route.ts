@@ -504,6 +504,44 @@ export async function POST(
         WHERE id = $3
       `, [discrepancyNotes || null, payload.userId, opId])
 
+      // 2.5. Update delivery status and timestamp
+      // First ensure the columns exist
+      await db.query(`ALTER TABLE market_invoice_deliveries ADD COLUMN IF NOT EXISTS dispatched_by INTEGER REFERENCES users(id)`)
+      await db.query(`ALTER TABLE market_invoice_deliveries ADD COLUMN IF NOT EXISTS delivered_by INTEGER REFERENCES users(id)`)
+
+      // Get the delivery linked to this operation
+      const deliveryResult = await db.query(`
+        SELECT id FROM market_invoice_deliveries WHERE operation_id = $1
+      `, [opId])
+
+      if (deliveryResult.rows.length > 0) {
+        const deliveryId = deliveryResult.rows[0].id
+
+        // Update delivery status and timestamps
+        await db.query(`
+          UPDATE market_invoice_deliveries SET
+            status = 'delivered',
+            dispatched_at = COALESCE(dispatched_at, NOW()),
+            dispatched_by = COALESCE(dispatched_by, $1),
+            delivered_at = NOW(),
+            delivered_by = $1
+          WHERE id = $2
+        `, [payload.userId, deliveryId])
+
+        // Update delivery lines with validated quantities
+        for (const line of linesResult.rows) {
+          await db.query(`
+            UPDATE market_invoice_delivery_lines SET
+              quantity_delivered = $1
+            WHERE delivery_id = $2 AND product_id = $3
+            ${line.variant_id ? 'AND variant_id = $4' : 'AND variant_id IS NULL'}
+          `, line.variant_id
+            ? [line.quantity_validated, deliveryId, line.product_id, line.variant_id]
+            : [line.quantity_validated, deliveryId, line.product_id]
+          )
+        }
+      }
+
       // 3. Update invoice status
       const totalExpected = linesResult.rows.reduce((sum, l) =>
         sum + (parseFloat(l.quantity_expected) || 0), 0)
