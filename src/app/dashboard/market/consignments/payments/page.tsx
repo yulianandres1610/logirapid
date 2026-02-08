@@ -665,15 +665,16 @@ export default function ConsignmentPaymentsPage() {
                 </div>
 
                 {/* Nuevo Pago */}
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => openDirectPaymentModal()}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25"
-                >
-                  <Plus className="w-5 h-5" />
-                  Nuevo Pago
-                </motion.button>
+                <Link href="/dashboard/market/consignments/payments/direct">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Nuevo Pago
+                  </motion.button>
+                </Link>
               </div>
             </motion.div>
 
