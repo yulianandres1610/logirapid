@@ -78,18 +78,28 @@ export async function POST() {
       WHERE ms.is_active = true AND w.id IS NULL
     `)
 
+    // First, ensure the FK constraint is removed (inline migration)
+    try {
+      await db.query(`
+        ALTER TABLE consignment_supplier_wallets
+        DROP CONSTRAINT IF EXISTS consignment_supplier_wallets_supplier_id_fkey
+      `)
+    } catch {
+      // Constraint may not exist
+    }
+
     for (const supplier of suppliersResult.rows) {
       const totalSold = parseFloat(supplier.total_sold) || 0
       const totalPaid = parseFloat(supplier.total_paid) || 0
       const balanceAvailable = totalSold - totalPaid
 
-      // Create wallet
+      // Create wallet (without company_id - column doesn't exist in original schema)
       await db.query(`
         INSERT INTO consignment_supplier_wallets (
-          supplier_id, company_id, balance_available, balance_pending,
-          total_earned, total_paid, total_returned, created_at, updated_at
-        ) VALUES ($1, $2, $3, 0, $4, $5, 0, NOW(), NOW())
-      `, [supplier.id, supplier.company_id, balanceAvailable, totalSold, totalPaid])
+          supplier_id, balance_available, balance_pending,
+          total_earned, total_paid, total_returned, updated_at
+        ) VALUES ($1, $2, 0, $3, $4, 0, NOW())
+      `, [supplier.id, balanceAvailable, totalSold, totalPaid])
 
       results.push(`✓ ${supplier.name} (${supplier.supplier_code}): Wallet creado con saldo $${balanceAvailable.toFixed(2)}`)
       created++

@@ -153,16 +153,25 @@ export async function POST(request: NextRequest) {
     // Check if wallet exists, if not create it
     let walletId = supplier.wallet_id
     if (!walletId) {
-      // Create wallet with current orders data
+      // First, ensure the FK constraint points to market_suppliers (inline migration)
+      try {
+        await db.query(`
+          ALTER TABLE consignment_supplier_wallets
+          DROP CONSTRAINT IF EXISTS consignment_supplier_wallets_supplier_id_fkey
+        `)
+      } catch {
+        // Constraint may not exist
+      }
+
+      // Create wallet with current orders data (simple schema without company_id)
       const walletResult = await db.query(`
         INSERT INTO consignment_supplier_wallets (
-          supplier_id, company_id, balance_available, balance_pending,
-          total_earned, total_paid, total_returned, created_at, updated_at
-        ) VALUES ($1, $2, $3, 0, $4, $5, 0, NOW(), NOW())
+          supplier_id, balance_available, balance_pending,
+          total_earned, total_paid, total_returned, updated_at
+        ) VALUES ($1, $2, 0, $3, $4, 0, NOW())
         RETURNING id
       `, [
         supplierId,
-        payload.companyId,
         balanceAvailable - amount, // New balance after payment
         ordersSold,
         ordersPaid + amount
