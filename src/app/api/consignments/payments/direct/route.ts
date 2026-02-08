@@ -60,9 +60,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify supplier exists and belongs to company
+    // Using market_suppliers as the main table (unified suppliers)
     const supplierResult = await db.query(`
-      SELECT s.id, s.name, s.code, w.balance_available, w.id as wallet_id
-      FROM consignment_suppliers s
+      SELECT
+        s.id,
+        s.name,
+        s.supplier_code as code,
+        COALESCE(w.balance_available, 0) as balance_available,
+        w.id as wallet_id,
+        COALESCE((SELECT SUM(total_sold) FROM consignment_orders WHERE supplier_id = s.id), 0) as orders_sold,
+        COALESCE((SELECT SUM(total_paid) FROM consignment_orders WHERE supplier_id = s.id), 0) as orders_paid
+      FROM market_suppliers s
       LEFT JOIN consignment_supplier_wallets w ON w.supplier_id = s.id
       WHERE s.id = $1 AND s.company_id = $2
     `, [supplierId, payload.companyId])
@@ -75,7 +83,12 @@ export async function POST(request: NextRequest) {
     }
 
     const supplier = supplierResult.rows[0]
-    const balanceAvailable = parseFloat(supplier.balance_available) || 0
+
+    // Calculate balance: use wallet if exists, otherwise calculate from orders
+    const walletBalance = parseFloat(supplier.balance_available) || 0
+    const ordersSold = parseFloat(supplier.orders_sold) || 0
+    const ordersPaid = parseFloat(supplier.orders_paid) || 0
+    const balanceAvailable = walletBalance > 0 ? walletBalance : (ordersSold - ordersPaid)
 
     // Validate amount doesn't exceed available balance
     if (amount > balanceAvailable) {
@@ -137,29 +150,47 @@ export async function POST(request: NextRequest) {
 
     const paymentId = insertResult.rows[0].id
 
-    // Update wallet - decrease available, increase total paid
-    await db.query(`
-      UPDATE consignment_supplier_wallets
-      SET
-        balance_available = balance_available - $1,
-        total_paid = total_paid + $1,
-        updated_at = NOW()
-      WHERE supplier_id = $2
-    `, [amount, supplierId])
+    // Check if wallet exists, if not create it
+    let walletId = supplier.wallet_id
+    if (!walletId) {
+      // Create wallet with current orders data
+      const walletResult = await db.query(`
+        INSERT INTO consignment_supplier_wallets (
+          supplier_id, company_id, balance_available, balance_pending,
+          total_earned, total_paid, total_returned, created_at, updated_at
+        ) VALUES ($1, $2, $3, 0, $4, $5, 0, NOW(), NOW())
+        RETURNING id
+      `, [
+        supplierId,
+        payload.companyId,
+        balanceAvailable - amount, // New balance after payment
+        ordersSold,
+        ordersPaid + amount
+      ])
+      walletId = walletResult.rows[0].id
+    } else {
+      // Update existing wallet - decrease available, increase total paid
+      await db.query(`
+        UPDATE consignment_supplier_wallets
+        SET
+          balance_available = balance_available - $1,
+          total_paid = total_paid + $1,
+          updated_at = NOW()
+        WHERE supplier_id = $2
+      `, [amount, supplierId])
+    }
 
     // Create wallet transaction
-    if (supplier.wallet_id) {
-      await db.query(`
-        INSERT INTO consignment_wallet_transactions (
-          wallet_id, transaction_type, amount, notes, created_by
-        ) VALUES ($1, 'payment', $2, $3, $4)
-      `, [
-        supplier.wallet_id,
-        amount,
-        `Pago directo ${requestNumber} via ${paymentMethod}${paymentReference ? ` - Ref: ${paymentReference}` : ''}`,
-        payload.userId
-      ])
-    }
+    await db.query(`
+      INSERT INTO consignment_wallet_transactions (
+        wallet_id, transaction_type, amount, notes, created_by
+      ) VALUES ($1, 'payment', $2, $3, $4)
+    `, [
+      walletId,
+      amount,
+      `Pago directo ${requestNumber} via ${paymentMethod}${paymentReference ? ` - Ref: ${paymentReference}` : ''}`,
+      payload.userId
+    ])
 
     return NextResponse.json({
       success: true,

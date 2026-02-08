@@ -41,34 +41,59 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit
 
     let statusFilter = ''
+    const statusParams: string[] = []
     if (status !== 'all') {
-      statusFilter = `AND r.status = '${status}'`
+      // Handle multiple statuses separated by comma
+      const statuses = status.split(',').map(s => s.trim()).filter(s => s)
+      if (statuses.length === 1) {
+        statusFilter = `AND r.status = $4`
+        statusParams.push(statuses[0])
+      } else if (statuses.length > 1) {
+        const placeholders = statuses.map((_, i) => `$${i + 4}`).join(', ')
+        statusFilter = `AND r.status IN (${placeholders})`
+        statusParams.push(...statuses)
+      }
     }
 
     // Get requests for suppliers belonging to this company
+    // Using market_suppliers as the main table (unified suppliers)
     const result = await db.query(`
       SELECT
         r.*,
-        s.code as supplier_code,
+        s.supplier_code as supplier_code,
         s.name as supplier_name,
-        w.balance_available as supplier_balance
+        COALESCE(w.balance_available, 0) as supplier_balance
       FROM consignment_payment_requests r
-      JOIN consignment_suppliers s ON s.id = r.supplier_id
+      JOIN market_suppliers s ON s.id = r.supplier_id
       LEFT JOIN consignment_supplier_wallets w ON w.supplier_id = s.id
       WHERE s.company_id = $1 ${statusFilter}
       ORDER BY
         CASE r.status WHEN 'pending' THEN 1 WHEN 'approved' THEN 2 ELSE 3 END,
         r.requested_at DESC
       LIMIT $2 OFFSET $3
-    `, [payload.companyId, limit, offset])
+    `, [payload.companyId, limit, offset, ...statusParams])
 
-    // Get count
+    // Get count - build separate filter for count query
+    let countStatusFilter = ''
+    const countParams: string[] = [payload.companyId.toString()]
+    if (status !== 'all') {
+      const statuses = status.split(',').map(s => s.trim()).filter(s => s)
+      if (statuses.length === 1) {
+        countStatusFilter = `AND r.status = $2`
+        countParams.push(statuses[0])
+      } else if (statuses.length > 1) {
+        const placeholders = statuses.map((_, i) => `$${i + 2}`).join(', ')
+        countStatusFilter = `AND r.status IN (${placeholders})`
+        countParams.push(...statuses)
+      }
+    }
+
     const countResult = await db.query(`
       SELECT COUNT(*) as total
       FROM consignment_payment_requests r
-      JOIN consignment_suppliers s ON s.id = r.supplier_id
-      WHERE s.company_id = $1 ${statusFilter}
-    `, [payload.companyId])
+      JOIN market_suppliers s ON s.id = r.supplier_id
+      WHERE s.company_id = $1 ${countStatusFilter}
+    `, countParams)
 
     const total = parseInt(countResult.rows[0].total)
 
@@ -82,7 +107,7 @@ export async function GET(request: NextRequest) {
         COALESCE(SUM(r.amount_requested) FILTER (WHERE r.status = 'approved'), 0) as approved_amount,
         COALESCE(SUM(r.amount_paid) FILTER (WHERE r.status = 'paid'), 0) as paid_amount
       FROM consignment_payment_requests r
-      JOIN consignment_suppliers s ON s.id = r.supplier_id
+      JOIN market_suppliers s ON s.id = r.supplier_id
       WHERE s.company_id = $1
     `, [payload.companyId])
 

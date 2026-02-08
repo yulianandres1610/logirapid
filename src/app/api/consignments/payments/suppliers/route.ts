@@ -43,10 +43,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Get suppliers with their wallet info and pending requests
+    // Using market_suppliers as the main table (unified suppliers)
     const result = await db.query(`
       SELECT
         s.id,
-        s.code,
+        s.supplier_code as code,
         s.name,
         s.email,
         s.phone,
@@ -63,31 +64,49 @@ export async function GET(request: NextRequest) {
           SELECT COALESCE(SUM(r.amount_requested), 0)
           FROM consignment_payment_requests r
           WHERE r.supplier_id = s.id AND r.status IN ('pending', 'approved')
-        ) as pending_amount
-      FROM consignment_suppliers s
+        ) as pending_amount,
+        COALESCE((SELECT SUM(total_sold) FROM consignment_orders WHERE supplier_id = s.id), 0) as orders_total_sold,
+        COALESCE((SELECT SUM(total_paid) FROM consignment_orders WHERE supplier_id = s.id), 0) as orders_total_paid
+      FROM market_suppliers s
       LEFT JOIN consignment_supplier_wallets w ON w.supplier_id = s.id
       WHERE s.company_id = $1 AND s.is_active = true ${balanceFilter}
       ORDER BY COALESCE(w.balance_available, 0) DESC, s.name ASC
     `, [payload.companyId])
 
-    // Calculate totals
-    const totalAvailable = result.rows.reduce((sum, s) => sum + parseFloat(s.balance_available), 0)
-    const totalPending = result.rows.reduce((sum, s) => sum + parseFloat(s.balance_pending), 0)
-    const totalPaid = result.rows.reduce((sum, s) => sum + parseFloat(s.total_paid), 0)
+    // Map and calculate - if no wallet exists, calculate from orders
+    const suppliers = result.rows.map(s => {
+      const walletBalance = parseFloat(s.balance_available) || 0
+      const walletEarned = parseFloat(s.total_earned) || 0
+      const walletPaid = parseFloat(s.total_paid) || 0
 
-    const suppliers = result.rows.map(s => ({
-      id: s.id,
-      code: s.code,
-      name: s.name,
-      email: s.email,
-      phone: s.phone,
-      balanceAvailable: parseFloat(s.balance_available),
-      balancePending: parseFloat(s.balance_pending),
-      totalEarned: parseFloat(s.total_earned),
-      totalPaid: parseFloat(s.total_paid),
-      pendingRequests: parseInt(s.pending_requests),
-      pendingAmount: parseFloat(s.pending_amount)
-    }))
+      // If wallet exists, use wallet data. Otherwise calculate from orders.
+      const ordersSold = parseFloat(s.orders_total_sold) || 0
+      const ordersPaid = parseFloat(s.orders_total_paid) || 0
+
+      // Use wallet balance if available, otherwise calculate from orders
+      const balanceAvailable = walletBalance > 0 ? walletBalance : (ordersSold - ordersPaid)
+      const totalEarned = walletEarned > 0 ? walletEarned : ordersSold
+      const totalPaid = walletPaid > 0 ? walletPaid : ordersPaid
+
+      return {
+        id: s.id,
+        code: s.code,
+        name: s.name,
+        email: s.email,
+        phone: s.phone,
+        balanceAvailable,
+        balancePending: parseFloat(s.balance_pending) || 0,
+        totalEarned,
+        totalPaid,
+        pendingRequests: parseInt(s.pending_requests) || 0,
+        pendingAmount: parseFloat(s.pending_amount) || 0
+      }
+    })
+
+    // Calculate totals
+    const totalAvailable = suppliers.reduce((sum, s) => sum + s.balanceAvailable, 0)
+    const totalPending = suppliers.reduce((sum, s) => sum + s.balancePending, 0)
+    const totalPaid = suppliers.reduce((sum, s) => sum + s.totalPaid, 0)
 
     return NextResponse.json({
       success: true,
