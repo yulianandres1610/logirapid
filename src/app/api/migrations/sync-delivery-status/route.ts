@@ -1,17 +1,36 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 
 /**
  * GET /api/migrations/sync-delivery-status
  * Sync delivery status with warehouse operations that have been completed
+ * Optional: ?invoiceId=8 to sync specific invoice
+ * Optional: ?force=true to also check invoices marked as delivered
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url)
+    const invoiceId = searchParams.get('invoiceId')
+    const force = searchParams.get('force') === 'true'
+
     // Ensure columns exist
     await db.query(`ALTER TABLE market_invoice_deliveries ADD COLUMN IF NOT EXISTS dispatched_by INTEGER REFERENCES users(id)`)
     await db.query(`ALTER TABLE market_invoice_deliveries ADD COLUMN IF NOT EXISTS delivered_by INTEGER REFERENCES users(id)`)
 
-    // Find all deliveries linked to completed operations that are still pending
+    // Build query based on parameters
+    let whereClause = 'WHERE o.status = \'done\''
+    const params: (string | number)[] = []
+
+    if (!force) {
+      whereClause += ' AND d.status != \'delivered\''
+    }
+
+    if (invoiceId) {
+      params.push(parseInt(invoiceId))
+      whereClause += ` AND i.id = $${params.length}`
+    }
+
+    // Find all deliveries linked to completed operations
     const result = await db.query(`
       SELECT
         d.id as delivery_id,
@@ -28,8 +47,8 @@ export async function GET() {
       FROM market_invoice_deliveries d
       JOIN market_warehouse_operations o ON o.id = d.operation_id
       JOIN market_invoices i ON i.id = d.invoice_id
-      WHERE o.status = 'done' AND d.status != 'delivered'
-    `)
+      ${whereClause}
+    `, params)
 
     const updates: Array<{
       deliveryNumber: string
