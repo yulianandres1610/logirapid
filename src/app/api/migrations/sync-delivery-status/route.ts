@@ -30,6 +30,58 @@ export async function GET(request: NextRequest) {
       whereClause += ` AND i.id = $${params.length}`
     }
 
+    // First, check if we need to sync based on invoice status (delivered invoice but pending delivery)
+    if (invoiceId) {
+      const invoiceCheck = await db.query(`
+        SELECT
+          i.id as invoice_id,
+          i.invoice_number,
+          i.status as invoice_status,
+          i.delivered_at,
+          d.id as delivery_id,
+          d.delivery_number,
+          d.status as delivery_status,
+          d.operation_id
+        FROM market_invoices i
+        LEFT JOIN market_invoice_deliveries d ON d.invoice_id = i.id
+        WHERE i.id = $1
+      `, [parseInt(invoiceId)])
+
+      // If invoice is delivered but delivery is not, fix it directly
+      for (const row of invoiceCheck.rows) {
+        if (row.invoice_status === 'delivered' && row.delivery_id && row.delivery_status !== 'delivered') {
+          await db.query(`
+            UPDATE market_invoice_deliveries SET
+              status = 'delivered',
+              dispatched_at = COALESCE(dispatched_at, $1),
+              delivered_at = COALESCE(delivered_at, $1)
+            WHERE id = $2
+          `, [row.delivered_at || new Date(), row.delivery_id])
+
+          // Update delivery lines
+          await db.query(`
+            UPDATE market_invoice_delivery_lines SET
+              quantity_delivered = quantity_to_deliver
+            WHERE delivery_id = $1 AND quantity_delivered < quantity_to_deliver
+          `, [row.delivery_id])
+
+          return NextResponse.json({
+            success: true,
+            message: '1 entrega actualizada (basado en estado de factura)',
+            data: {
+              updates: [{
+                deliveryNumber: row.delivery_number,
+                invoiceNumber: row.invoice_number,
+                oldStatus: row.delivery_status,
+                newStatus: 'delivered',
+                reason: 'Invoice is delivered'
+              }]
+            }
+          })
+        }
+      }
+    }
+
     // Find all deliveries linked to completed operations
     const result = await db.query(`
       SELECT
