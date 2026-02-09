@@ -107,11 +107,11 @@ export async function GET(
         d.*,
         w.name as warehouse_name,
         u.email as created_by_email,
-        CONCAT(u.firstname, ' ', u.lastname) as created_by_name,
+        NULLIF(TRIM(CONCAT(COALESCE(u.firstname, ''), ' ', COALESCE(u.lastname, ''))), '') as created_by_name,
         u2.email as dispatched_by_email,
-        CONCAT(u2.firstname, ' ', u2.lastname) as dispatched_by_name,
+        NULLIF(TRIM(CONCAT(COALESCE(u2.firstname, ''), ' ', COALESCE(u2.lastname, ''))), '') as dispatched_by_name,
         u3.email as delivered_by_email,
-        CONCAT(u3.firstname, ' ', u3.lastname) as delivered_by_name
+        NULLIF(TRIM(CONCAT(COALESCE(u3.firstname, ''), ' ', COALESCE(u3.lastname, ''))), '') as delivered_by_name
       FROM market_invoice_deliveries d
       LEFT JOIN market_warehouses w ON w.id = d.warehouse_id
       LEFT JOIN users u ON u.id = d.created_by
