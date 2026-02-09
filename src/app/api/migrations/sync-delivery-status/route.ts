@@ -1,0 +1,89 @@
+import { NextResponse } from 'next/server'
+import { db } from '@/lib/database'
+
+/**
+ * GET /api/migrations/sync-delivery-status
+ * Sync delivery status with warehouse operations that have been completed
+ */
+export async function GET() {
+  try {
+    // Ensure columns exist
+    await db.query(`ALTER TABLE market_invoice_deliveries ADD COLUMN IF NOT EXISTS dispatched_by INTEGER REFERENCES users(id)`)
+    await db.query(`ALTER TABLE market_invoice_deliveries ADD COLUMN IF NOT EXISTS delivered_by INTEGER REFERENCES users(id)`)
+
+    // Find all deliveries linked to completed operations that are still pending
+    const result = await db.query(`
+      SELECT
+        d.id as delivery_id,
+        d.delivery_number,
+        d.status as delivery_status,
+        o.id as operation_id,
+        o.operation_number,
+        o.status as operation_status,
+        o.completed_at,
+        o.completed_by,
+        i.id as invoice_id,
+        i.invoice_number,
+        i.status as invoice_status
+      FROM market_invoice_deliveries d
+      JOIN market_warehouse_operations o ON o.id = d.operation_id
+      JOIN market_invoices i ON i.id = d.invoice_id
+      WHERE o.status = 'done' AND d.status != 'delivered'
+    `)
+
+    const updates: Array<{
+      deliveryNumber: string
+      operationNumber: string
+      invoiceNumber: string
+      oldStatus: string
+      newStatus: string
+    }> = []
+
+    for (const row of result.rows) {
+      // Update delivery status
+      await db.query(`
+        UPDATE market_invoice_deliveries SET
+          status = 'delivered',
+          dispatched_at = COALESCE(dispatched_at, $1),
+          dispatched_by = COALESCE(dispatched_by, $2),
+          delivered_at = COALESCE(delivered_at, $1),
+          delivered_by = COALESCE(delivered_by, $2)
+        WHERE id = $3
+      `, [row.completed_at, row.completed_by, row.delivery_id])
+
+      // Update delivery lines from operation lines
+      await db.query(`
+        UPDATE market_invoice_delivery_lines dl SET
+          quantity_delivered = (
+            SELECT COALESCE(ol.quantity_validated, ol.quantity_planned)
+            FROM market_warehouse_operation_lines ol
+            WHERE ol.operation_id = $1 AND ol.product_id = dl.product_id
+            AND (ol.variant_id = dl.variant_id OR (ol.variant_id IS NULL AND dl.variant_id IS NULL))
+            LIMIT 1
+          )
+        WHERE dl.delivery_id = $2
+      `, [row.operation_id, row.delivery_id])
+
+      updates.push({
+        deliveryNumber: row.delivery_number,
+        operationNumber: row.operation_number,
+        invoiceNumber: row.invoice_number,
+        oldStatus: row.delivery_status,
+        newStatus: 'delivered'
+      })
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `${updates.length} entregas actualizadas`,
+      data: { updates }
+    })
+
+  } catch (error) {
+    console.error('[Migration Sync Delivery Status] Error:', error)
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al sincronizar estados'
+    }, { status: 500 })
+  }
+}

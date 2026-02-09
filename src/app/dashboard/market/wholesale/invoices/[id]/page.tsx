@@ -232,6 +232,14 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'details')
 
+  // Update URL when tab changes
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab)
+    const url = new URL(window.location.href)
+    url.searchParams.set('tab', tab)
+    router.push(url.pathname + url.search, { scroll: false })
+  }
+
   // Payment modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [paymentData, setPaymentData] = useState({
@@ -660,11 +668,11 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                     key={tab.key}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => setActiveTab(tab.key)}
+                    onClick={() => handleTabChange(tab.key)}
                     className={cn(
                       'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all whitespace-nowrap',
                       activeTab === tab.key
-                        ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25'
                         : theme === 'dark'
                           ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
