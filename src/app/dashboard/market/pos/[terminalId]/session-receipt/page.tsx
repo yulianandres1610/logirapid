@@ -468,6 +468,36 @@ export default function SessionReceiptPage() {
       receipt += `DIFERENCIA (USD):     ${(cashDifference >= 0 ? '+' : '') + formatCurrency(cashDifference).padStart(14)}\n`
     }
 
+    // Closing Denominations
+    if (report.closingDenominations) {
+      receipt += `\n${line}\n`
+      receipt += `       DESGLOSE DE BILLETES (CIERRE)\n`
+      receipt += `${dash}\n`
+
+      for (const [currency, counts] of Object.entries(report.closingDenominations)) {
+        const denomList = currency === 'usd' ? USD_DENOMINATIONS :
+                          currency === 'cup' ? CUP_DENOMINATIONS : MLC_DENOMINATIONS
+        const currencyLabel = currency.toUpperCase()
+
+        // Filter denominations with count > 0
+        const activeDenoms = denomList.filter(d => counts[d.value] && counts[d.value] > 0)
+
+        if (activeDenoms.length > 0) {
+          receipt += `\n${currencyLabel}:\n`
+          let currencyTotal = 0
+          for (const d of activeDenoms) {
+            const count = counts[d.value] || 0
+            const total = count * d.value
+            currencyTotal += total
+            const denomLabel = currency === 'cup' ? `${d.label} CUP` : d.label
+            receipt += `  ${denomLabel.padEnd(10)} x ${count.toString().padStart(3)} = ${formatCurrency(total, currencyLabel).padStart(12)}\n`
+          }
+          receipt += `  ${'-'.repeat(30)}\n`
+          receipt += `  Total ${currencyLabel}:`.padEnd(20) + `${formatCurrency(currencyTotal, currencyLabel).padStart(12)}\n`
+        }
+      }
+    }
+
     // Products sold
     if (productsSold.length > 0) {
       receipt += `\n${line}\n`
@@ -878,6 +908,57 @@ export default function SessionReceiptPage() {
                   </div>
                 </div>
               </motion.div>
+
+              {/* Closing Denominations */}
+              {report.closingDenominations && Object.keys(report.closingDenominations).length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.35 }}
+                  className={cn(
+                    'rounded-2xl border overflow-hidden shadow-lg',
+                    theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                  )}
+                >
+                  <div className="bg-gradient-to-r from-cyan-500 to-teal-600 px-4 py-3">
+                    <h3 className="font-bold text-white flex items-center gap-2">
+                      <Banknote className="w-5 h-5" />
+                      Desglose de Billetes (Cierre)
+                    </h3>
+                  </div>
+                  <div className="p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {Object.entries(report.closingDenominations).map(([currency, counts]) => {
+                        const denomList = currency === 'usd' ? USD_DENOMINATIONS :
+                                          currency === 'cup' ? CUP_DENOMINATIONS : MLC_DENOMINATIONS
+                        const currencyLabel = currency.toUpperCase()
+                        const activeDenoms = denomList.filter(d => counts[d.value] && counts[d.value] > 0)
+                        const total = activeDenoms.reduce((sum, d) => sum + (counts[d.value] || 0) * d.value, 0)
+
+                        if (activeDenoms.length === 0) return null
+
+                        return (
+                          <div key={currency} className={cn('p-4 rounded-xl', theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50')}>
+                            <p className="font-bold text-sm mb-3">{currencyLabel}</p>
+                            <div className="space-y-1 text-sm">
+                              {activeDenoms.map(d => (
+                                <div key={d.value} className="flex justify-between">
+                                  <span className="text-gray-500">{d.label} x {counts[d.value]}</span>
+                                  <span className="font-mono">{formatCurrency((counts[d.value] || 0) * d.value, currencyLabel)}</span>
+                                </div>
+                              ))}
+                              <div className={cn('pt-2 mt-2 border-t flex justify-between font-bold', theme === 'dark' ? 'border-gray-700' : 'border-gray-300')}>
+                                <span>Total</span>
+                                <span className="font-mono">{formatCurrency(total, currencyLabel)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
 
               {/* Products Sold */}
               {productsSold.length > 0 && (
