@@ -95,13 +95,14 @@ export async function GET(
     `, [sessionId])
 
     // Get payment summary by method and currency
+    // IMPORTANT: Change can be in a different currency than the payment
+    // For example: Pay $20 USD, get change in CUP
     const paymentsSummaryResult = await db.query(`
       SELECT
         p.payment_method,
         p.currency,
         SUM(p.amount) as total_amount,
         SUM(COALESCE(p.amount_tendered, p.amount)) as total_tendered,
-        SUM(COALESCE(p.change_amount, 0)) as total_change,
         COUNT(*) as transaction_count
       FROM market_pos_payments p
       JOIN market_pos_orders o ON p.order_id = o.id
@@ -109,6 +110,25 @@ export async function GET(
       GROUP BY p.payment_method, p.currency
       ORDER BY p.payment_method, p.currency
     `, [sessionId])
+
+    // Get change summary by actual change currency (not payment currency)
+    const changeSummaryResult = await db.query(`
+      SELECT
+        COALESCE(p.change_currency, p.currency) as change_currency,
+        SUM(COALESCE(p.change_amount, 0)) as total_change,
+        COUNT(*) FILTER (WHERE p.change_amount > 0) as change_count
+      FROM market_pos_payments p
+      JOIN market_pos_orders o ON p.order_id = o.id
+      WHERE o.pos_session_id = $1 AND o.status = 'paid' AND p.payment_method = 'cash'
+      GROUP BY COALESCE(p.change_currency, p.currency)
+    `, [sessionId])
+
+    // Build a map of change totals by currency
+    const changeByCurrency: Record<string, number> = {}
+    for (const c of changeSummaryResult.rows) {
+      const currency = c.change_currency || 'USD'
+      changeByCurrency[currency] = parseFloat(c.total_change) || 0
+    }
 
     // Get orders summary
     const ordersSummaryResult = await db.query(`
@@ -125,22 +145,27 @@ export async function GET(
 
     const ordersSummary = ordersSummaryResult.rows[0]
 
-    // Calculate cash collected by currency (after change given)
+    // Calculate cash collected by currency
+    // Change is now tracked by its actual currency, not the payment currency
     const cashSummary: Record<string, { collected: number; tendered: number; change: number; count: number }> = {}
     const otherPayments: Array<{ method: string; currency: string; amount: number; count: number }> = []
 
     for (const p of paymentsSummaryResult.rows) {
       const amount = parseFloat(p.total_amount) || 0
       const tendered = parseFloat(p.total_tendered) || 0
-      const change = parseFloat(p.total_change) || 0
-      const collected = amount - change
       const count = parseInt(p.transaction_count) || 0
 
       if (p.payment_method === 'cash') {
+        // Get change for this specific currency (change is tracked separately now)
+        const changeForThisCurrency = changeByCurrency[p.currency] || 0
+        // Collected = what was actually kept (tendered - change in same currency)
+        // Note: If change was given in different currency, collected = tendered for this currency
+        const collected = tendered - changeForThisCurrency
+
         cashSummary[p.currency] = {
           collected: p.currency === 'CUP' ? Math.round(collected) : Math.round(collected * 100) / 100,
           tendered: p.currency === 'CUP' ? Math.round(tendered) : Math.round(tendered * 100) / 100,
-          change: p.currency === 'CUP' ? Math.round(change) : Math.round(change * 100) / 100,
+          change: p.currency === 'CUP' ? Math.round(changeForThisCurrency) : Math.round(changeForThisCurrency * 100) / 100,
           count
         }
       } else {
@@ -150,6 +175,19 @@ export async function GET(
           amount: Math.round(amount * 100) / 100,
           count
         })
+      }
+    }
+
+    // Add currencies that only have change (no payments in that currency)
+    for (const [currency, changeAmount] of Object.entries(changeByCurrency)) {
+      if (!cashSummary[currency] && changeAmount > 0) {
+        // This currency was only used for giving change, not receiving payments
+        cashSummary[currency] = {
+          collected: currency === 'CUP' ? -Math.round(changeAmount) : -Math.round(changeAmount * 100) / 100,
+          tendered: 0,
+          change: currency === 'CUP' ? Math.round(changeAmount) : Math.round(changeAmount * 100) / 100,
+          count: 0
+        }
       }
     }
 

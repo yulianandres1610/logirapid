@@ -377,7 +377,8 @@ function PaymentContent() {
   const [selectedMethod, setSelectedMethod] = useState<'cash' | 'card' | 'transfer' | 'credit'>('cash')
   const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'CUP' | 'MLC'>('USD')
   const [amount, setAmount] = useState('')
-  const [changeCurrency, setChangeCurrency] = useState<'USD' | 'CUP'>('USD')
+  // Change is ALWAYS in CUP (no matter what payment currency is used)
+  const changeCurrency = 'CUP' as const
   const [rates, setRates] = useState<ExchangeRates>(DEFAULT_RATES)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -569,18 +570,15 @@ function PaymentContent() {
   }, [payments, rates])
 
   // Calculate change - usar CUP como entero (sin decimales)
+  // Change is ALWAYS calculated and given in CUP (rounded to whole number)
   const changeAmount = useMemo(() => {
     if (remainingUSD < -0.01) {
-      if (changeCurrency === 'CUP') {
-        // Calcular cambio directamente en CUP: pagado - total (entero)
-        const changeCUP = totalPaidCUP - totals.totalCUP
-        return Math.max(0, Math.round(changeCUP))
-      }
-      // Para USD, usar el cálculo normal
-      return Math.abs(remainingUSD)
+      // Calcular cambio directamente en CUP: pagado - total (entero)
+      const changeCUP = totalPaidCUP - totals.totalCUP
+      return Math.max(0, Math.round(changeCUP))
     }
     return 0
-  }, [remainingUSD, changeCurrency, totalPaidCUP, totals.totalCUP])
+  }, [remainingUSD, totalPaidCUP, totals.totalCUP])
 
   // Convert amount to USD (usando tasa BCC para venta)
   const convertToUSD = (amount: number, currency: 'USD' | 'CUP' | 'MLC'): number => {
@@ -1213,27 +1211,14 @@ function PaymentContent() {
               </button>
             </div>
 
-            {/* Change Currency */}
-            {remainingUSD < -0.01 && (
+            {/* Change Display - Always in CUP */}
+            {remainingUSD < -0.01 && changeAmount > 0 && (
               <div className={`rounded-xl p-4 shadow-sm ${tc.bgCard}`}>
-                <h3 className="font-semibold mb-3">Devolver cambio en:</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setChangeCurrency('USD')}
-                    className={`p-3 rounded-lg font-medium ${
-                      changeCurrency === 'USD' ? 'bg-blue-500 text-white' : tc.button
-                    }`}
-                  >
-                    USD ({formatCurrency(Math.abs(remainingUSD))})
-                  </button>
-                  <button
-                    onClick={() => setChangeCurrency('CUP')}
-                    className={`p-3 rounded-lg font-medium ${
-                      changeCurrency === 'CUP' ? 'bg-blue-500 text-white' : tc.button
-                    }`}
-                  >
-                    CUP ({formatCurrency(Math.max(0, totalPaidCUP - totals.totalCUP), 'CUP')})
-                  </button>
+                <h3 className="font-semibold mb-2">Vuelto a devolver:</h3>
+                <div className="p-4 rounded-lg bg-green-500/20 border border-green-500/30">
+                  <span className="text-2xl font-bold text-green-400">
+                    {formatCurrency(changeAmount, 'CUP')}
+                  </span>
                 </div>
               </div>
             )}
