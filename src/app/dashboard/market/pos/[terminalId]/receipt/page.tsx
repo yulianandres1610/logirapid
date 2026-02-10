@@ -142,6 +142,7 @@ interface PendingOrder {
     currency: string
     amountTendered: number | null
     changeAmount: number | null
+    changeCurrency: string | null
   }>
   total: number
   createdAt: string
@@ -432,7 +433,10 @@ function ReceiptContent() {
               payments: offlineOrder.payments.map(p => ({
                 method: p.method,
                 amount: p.amount,
-                currency: p.currency
+                currency: p.currency,
+                amountTendered: p.amountTendered ?? null,
+                changeAmount: p.changeAmount ?? null,
+                changeCurrency: p.changeCurrency ?? null
               }))
             }
             setOrder(convertedOrder)
