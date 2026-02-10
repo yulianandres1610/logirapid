@@ -523,7 +523,9 @@ class JobProcessor {
     const isLabelPrinter = printer.printerType === 'label_barcode' || printer.isZebra
     const isLabelJob = ['product_label', 'shipping_label', 'lot_label', 'weight_label'].includes(job.documentType)
     const canUseRaw = process.platform === 'win32' || process.platform === 'darwin' || hasRawQueue
-    const useRawLabelPrint = isLabelPrinter && canUseRaw && isLabelJob
+    // IMPORTANT: Only use raw printing for Zebra printers (ZPL format)
+    // Non-Zebra label printers (TSC, 4BARCODE, etc.) get PDF which must be printed through system
+    const useRawLabelPrint = printer.isZebra && canUseRaw && isLabelJob
     // ESC/POS documents that should always use raw printing on thermal printers
     const escposDocuments = [
       'pos_receipt', 'unified_reception', 'purchase_invoice', 'invoice',
@@ -550,11 +552,16 @@ class JobProcessor {
 
     // Print all copies in a single job for better performance
     if (useRawLabelPrint) {
-      // Raw printing for label printers (ZPL for Zebra, TSPL for others)
-      const format = printer.isZebra ? 'ZPL' : 'TSPL'
-      console.log(`[Job Processor] Using ${format}/RAW method for ${printer.printerName} (${copies} copies)`)
+      // Raw ZPL printing for Zebra label printers only
+      console.log(`[Job Processor] Using ZPL/RAW method for Zebra ${printer.printerName} (${copies} copies)`)
       console.log(`[Job Processor] RAW queue: ${printer.rawQueueName || '(direct)'}`)
       await this.printRawLabel(printer, documentBuffer, copies)
+    } else if (isLabelPrinter && isLabelJob && !printer.isZebra) {
+      // Non-Zebra label printers (TSC, 4BARCODE, etc.) - use PDF with label size options
+      console.log(`[Job Processor] Using PDF method for non-Zebra label printer ${printer.printerName} (${copies} copies)`)
+      // Get label size from job data if available
+      const labelSize = (job.documentData as { labelSize?: string })?.labelSize || '3x2'
+      await this.printPdfLabel(printer, documentBuffer, labelSize, copies)
     } else if (isPdfOnly) {
       // PDF printing for PDF-only documents
       console.log(`[Job Processor] Using PDF method for ${printer.printerName} (${copies} copies)`)
@@ -1245,6 +1252,165 @@ try {
       setTimeout(() => {
         unlink(tempFile).catch(() => {})
       }, 10000) // Extended to 10 seconds
+    }
+  }
+
+  /**
+   * Print PDF label on non-Zebra label printers (TSC, 4BARCODE, etc.)
+   * Uses specific media sizes for 2x1 and 3x2 inch labels
+   */
+  private async printPdfLabel(printer: DetectedPrinter, data: Buffer, labelSize: string, copies: number = 1): Promise<void> {
+    const tempFile = join(tmpdir(), `print-label-${uuidv4()}.pdf`)
+    await writeFile(tempFile, data)
+
+    console.log(`[Job Processor] PDF Label file created: ${tempFile} (${data.length} bytes)`)
+    console.log(`[Job Processor] Label size: ${labelSize}`)
+    console.log(`[Job Processor] Sending to label printer: ${printer.systemName} (${printer.printerType})`)
+    console.log(`[Job Processor] Copies: ${copies}`)
+
+    // Map label sizes to media dimensions
+    // Label printers typically use custom media sizes
+    const mediaSizes: Record<string, { width: number; height: number; name: string }> = {
+      '2x1': { width: 144, height: 72, name: 'Custom.144x72pt' },   // 2x1 inches in points
+      '3x2': { width: 216, height: 144, name: 'Custom.216x144pt' }, // 3x2 inches in points
+      '4x6': { width: 288, height: 432, name: 'Custom.288x432pt' }, // 4x6 inches in points
+    }
+
+    const media = mediaSizes[labelSize] || mediaSizes['3x2']
+    console.log(`[Job Processor] Using media: ${media.name} (${media.width}x${media.height} points)`)
+
+    try {
+      if (process.platform === 'win32') {
+        // Windows: Use SumatraPDF or default PDF viewer with PrintTo
+        console.log(`[Job Processor] Windows Label PDF: Printing to "${printer.systemName}"`)
+
+        const psScriptFile = join(tmpdir(), `label-print-${uuidv4()}.ps1`)
+        const printerName = printer.systemName
+        const pdfPath = tempFile
+
+        // PowerShell script for label printing
+        const psScript = [
+          "param(",
+          `    [string]$PrinterName = '${printerName.replace(/'/g, "''")}',`,
+          `    [string]$PdfPath = '${pdfPath.replace(/\\/g, '\\\\').replace(/'/g, "''")}',`,
+          `    [int]$Copies = ${copies}`,
+          ")",
+          "",
+          "$ErrorActionPreference = 'Stop'",
+          "",
+          "Write-Host \"Printing PDF label: $PdfPath\"",
+          "Write-Host \"To printer: $PrinterName\"",
+          "Write-Host \"Copies: $Copies\"",
+          "",
+          "if (-not (Test-Path $PdfPath)) {",
+          "    Write-Host \"ERROR: PDF file not found\"",
+          "    exit 1",
+          "}",
+          "",
+          "# Set the printer as default temporarily",
+          "$printerObj = Get-WmiObject -Query \"SELECT * FROM Win32_Printer WHERE Name='$PrinterName'\" -ErrorAction SilentlyContinue",
+          "if ($printerObj) {",
+          "    $printerObj.SetDefaultPrinter() | Out-Null",
+          "    Write-Host \"Set $PrinterName as default printer\"",
+          "}",
+          "",
+          "Start-Sleep -Milliseconds 500",
+          "",
+          "for ($copy = 1; $copy -le $Copies; $copy++) {",
+          "    Write-Host \"Printing copy $copy of $Copies...\"",
+          "    $psi = New-Object System.Diagnostics.ProcessStartInfo",
+          "    $psi.FileName = $PdfPath",
+          "    $psi.Verb = 'PrintTo'",
+          "    $psi.Arguments = $PrinterName",
+          "    $psi.CreateNoWindow = $true",
+          "    $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden",
+          "    $psi.UseShellExecute = $true",
+          "    ",
+          "    $proc = [System.Diagnostics.Process]::Start($psi)",
+          "    $proc.WaitForExit(30000)",
+          "    ",
+          "    if (-not $proc.HasExited) {",
+          "        $proc.Kill()",
+          "    }",
+          "    Start-Sleep -Milliseconds 500",
+          "}",
+          "",
+          "Write-Host \"SUCCESS: Label print job sent\""
+        ].join("\n")
+
+        await writeFile(psScriptFile, psScript)
+
+        const { stdout, stderr } = await execAsync(
+          `powershell -NoProfile -ExecutionPolicy Bypass -File "${psScriptFile}"`,
+          { encoding: 'utf8', timeout: 60000 }
+        )
+
+        console.log(`[Job Processor] Windows label print output: ${stdout || '(empty)'}`)
+        if (stderr) {
+          console.log(`[Job Processor] Windows label print stderr: ${stderr}`)
+        }
+
+        // Clean up script file
+        setTimeout(() => unlink(psScriptFile).catch(() => {}), 5000)
+
+      } else if (process.platform === 'darwin') {
+        // macOS: use lp with specific media size options for label printers
+        const printerName = printer.systemName.replace(/'/g, "'\\''")
+
+        // Build options for label printing
+        const options: string[] = []
+        if (copies > 1) {
+          options.push(`-n ${copies}`)
+        }
+        // Use custom media size for the label
+        options.push(`-o media=${media.name}`)
+        // Disable fit-to-page to maintain exact size
+        options.push('-o fit-to-page=false')
+        // Print at actual size without scaling
+        options.push('-o scaling=100')
+        // Set orientation to portrait
+        options.push('-o orientation-requested=3')
+
+        const optionsStr = options.join(' ')
+        const cmd = `lp -d '${printerName}' ${optionsStr} '${tempFile}'`
+        console.log(`[Job Processor] Executing: ${cmd}`)
+
+        const { stdout, stderr } = await execAsync(cmd, { encoding: 'utf8' })
+
+        if (stderr && !stderr.includes('request id')) {
+          console.error(`[Job Processor] lp stderr: ${stderr}`)
+        }
+        console.log(`[Job Processor] lp stdout: ${stdout || '(empty)'}`)
+
+      } else {
+        // Linux: use lp with custom media size
+        const options: string[] = []
+        if (copies > 1) {
+          options.push(`-n ${copies}`)
+        }
+        options.push(`-o media=${media.name}`)
+        options.push('-o fit-to-page=false')
+
+        const optionsStr = options.join(' ')
+        const { stdout, stderr } = await execAsync(
+          `lp -d "${printer.systemName}" ${optionsStr} "${tempFile}"`,
+          { encoding: 'utf8' }
+        )
+
+        if (stderr) {
+          console.error(`[Job Processor] lp stderr: ${stderr}`)
+        }
+        console.log(`[Job Processor] lp stdout: ${stdout || '(empty)'}`)
+      }
+
+      console.log(`[Job Processor] Label print job sent successfully to ${printer.printerName} (${copies} copies)`)
+    } catch (error) {
+      console.error(`[Job Processor] Label print failed:`, error)
+      throw error
+    } finally {
+      setTimeout(() => {
+        unlink(tempFile).catch(() => {})
+      }, 10000)
     }
   }
 
