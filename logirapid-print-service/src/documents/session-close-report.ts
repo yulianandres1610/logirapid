@@ -299,6 +299,45 @@ export function generateSessionCloseReport(data: SessionCloseReportData): Buffer
   lines.push('='.repeat(width))
   lines.push(Commands.FEED_LINE)
 
+  // Denominations (Desglose de Billetes)
+  if (data.denominationsSummary && Object.keys(data.denominationsSummary).length > 0) {
+    lines.push(Commands.ALIGN_CENTER)
+    lines.push(Commands.BOLD_ON)
+    lines.push('DESGLOSE DE BILLETES')
+    lines.push(Commands.BOLD_OFF)
+    lines.push(Commands.FEED_LINE)
+    lines.push('-'.repeat(width))
+    lines.push(Commands.FEED_LINE)
+
+    lines.push(Commands.ALIGN_LEFT)
+
+    for (const [currency, denomItems] of Object.entries(data.denominationsSummary)) {
+      if (!denomItems || denomItems.length === 0) continue
+
+      lines.push(Commands.BOLD_ON)
+      lines.push(`${currency}:`)
+      lines.push(Commands.BOLD_OFF)
+      lines.push(Commands.FEED_LINE)
+
+      let currencyTotal = 0
+      for (const item of denomItems) {
+        const denomLabel = `  ${item.label} x ${item.count}`
+        const totalFormatted = formatCurrencyWithSymbol(item.total, currency)
+        lines.push(formatLine(denomLabel, totalFormatted, width))
+        lines.push(Commands.FEED_LINE)
+        currencyTotal += item.total
+      }
+
+      // Subtotal for this currency
+      lines.push(formatLine(`  Total ${currency}:`, formatCurrencyWithSymbol(currencyTotal, currency), width))
+      lines.push(Commands.FEED_LINE)
+      lines.push(Commands.FEED_LINE)
+    }
+
+    lines.push('='.repeat(width))
+    lines.push(Commands.FEED_LINE)
+  }
+
   // Products Sold (if available)
   if (data.productsSold && data.productsSold.length > 0) {
     lines.push(Commands.ALIGN_CENTER)
