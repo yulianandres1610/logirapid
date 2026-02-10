@@ -146,26 +146,24 @@ export async function GET(
     const ordersSummary = ordersSummaryResult.rows[0]
 
     // Calculate cash collected by currency
-    // Change is now tracked by its actual currency, not the payment currency
+    // IMPORTANT: Change is tracked by its actual currency (change_currency), NOT the payment currency
+    // For example: Pay $20 USD, receive change in CUP = tendered stays in USD, change goes to CUP
     const cashSummary: Record<string, { collected: number; tendered: number; change: number; count: number }> = {}
     const otherPayments: Array<{ method: string; currency: string; amount: number; count: number }> = []
 
+    // First pass: Add all cash tendered by payment currency
     for (const p of paymentsSummaryResult.rows) {
       const amount = parseFloat(p.total_amount) || 0
       const tendered = parseFloat(p.total_tendered) || 0
       const count = parseInt(p.transaction_count) || 0
 
       if (p.payment_method === 'cash') {
-        // Get change for this specific currency (change is tracked separately now)
-        const changeForThisCurrency = changeByCurrency[p.currency] || 0
-        // Collected = what was actually kept (tendered - change in same currency)
-        // Note: If change was given in different currency, collected = tendered for this currency
-        const collected = tendered - changeForThisCurrency
-
+        // Tendered is what was received in this currency
+        // Change is NOT deducted here - it's tracked separately by change_currency
         cashSummary[p.currency] = {
-          collected: p.currency === 'CUP' ? Math.round(collected) : Math.round(collected * 100) / 100,
+          collected: tendered, // Will be adjusted below for same-currency change
           tendered: p.currency === 'CUP' ? Math.round(tendered) : Math.round(tendered * 100) / 100,
-          change: p.currency === 'CUP' ? Math.round(changeForThisCurrency) : Math.round(changeForThisCurrency * 100) / 100,
+          change: 0, // Will be set in second pass
           count
         }
       } else {
@@ -178,17 +176,32 @@ export async function GET(
       }
     }
 
-    // Add currencies that only have change (no payments in that currency)
+    // Second pass: Apply change to the correct currency
+    // Change is always given in its own currency (change_currency), regardless of payment currency
     for (const [currency, changeAmount] of Object.entries(changeByCurrency)) {
-      if (!cashSummary[currency] && changeAmount > 0) {
-        // This currency was only used for giving change, not receiving payments
-        cashSummary[currency] = {
-          collected: currency === 'CUP' ? -Math.round(changeAmount) : -Math.round(changeAmount * 100) / 100,
-          tendered: 0,
-          change: currency === 'CUP' ? Math.round(changeAmount) : Math.round(changeAmount * 100) / 100,
-          count: 0
+      if (changeAmount > 0) {
+        if (cashSummary[currency]) {
+          // This currency has both payments AND change
+          cashSummary[currency].change = currency === 'CUP' ? Math.round(changeAmount) : Math.round(changeAmount * 100) / 100
+          // Collected = tendered - change given in same currency
+          cashSummary[currency].collected = cashSummary[currency].tendered - cashSummary[currency].change
+        } else {
+          // This currency was only used for giving change (e.g., CUP change from USD payment)
+          cashSummary[currency] = {
+            collected: currency === 'CUP' ? -Math.round(changeAmount) : -Math.round(changeAmount * 100) / 100,
+            tendered: 0,
+            change: currency === 'CUP' ? Math.round(changeAmount) : Math.round(changeAmount * 100) / 100,
+            count: 0
+          }
         }
       }
+    }
+
+    // Format collected values (round appropriately)
+    for (const currency of Object.keys(cashSummary)) {
+      cashSummary[currency].collected = currency === 'CUP'
+        ? Math.round(cashSummary[currency].collected)
+        : Math.round(cashSummary[currency].collected * 100) / 100
     }
 
     // Parse denominations if stored
