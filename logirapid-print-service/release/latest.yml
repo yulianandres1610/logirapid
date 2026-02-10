@@ -1,8 +1,8 @@
-version: 1.61.1
+version: 1.61.4
 files:
-  - url: LogiRapid-Print-Service-1.61.1-Setup.exe
-    sha512: zD/QoVJLKYAEo9GcJH56oBUXjLRkLcSbykeJftCaD/KTH8P0rxkHpG9Opfm090ufRSYk9c1huuTZgvVS20kY3g==
-    size: 85299446
-path: LogiRapid-Print-Service-1.61.1-Setup.exe
-sha512: zD/QoVJLKYAEo9GcJH56oBUXjLRkLcSbykeJftCaD/KTH8P0rxkHpG9Opfm090ufRSYk9c1huuTZgvVS20kY3g==
-releaseDate: '2026-02-07T18:49:52.126Z'
+  - url: LogiRapid-Print-Service-1.61.4-Setup.exe
+    sha512: OOXRMSXO/bpNHYGL4pHuwCIgwlU1d3kWHJldh8jY8dhXcGv5v49bo7ePVk7ggCVkKd/55HxzLwOLneN9h7Zcag==
+    size: 85298856
+path: LogiRapid-Print-Service-1.61.4-Setup.exe
+sha512: OOXRMSXO/bpNHYGL4pHuwCIgwlU1d3kWHJldh8jY8dhXcGv5v49bo7ePVk7ggCVkKd/55HxzLwOLneN9h7Zcag==
+releaseDate: '2026-02-10T17:46:57.859Z'

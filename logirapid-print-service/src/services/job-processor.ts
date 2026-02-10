@@ -36,6 +36,7 @@ import { generateTransferReceipt, TransferReceiptData } from '../documents/trans
 import { generateAuditCountReport, AuditCountReportData } from '../documents/audit-count-report'
 import { generateWeightLabelZpl, WeightLabelData } from '../documents/weight-label-zpl'
 import { generateWeightLabelPdf, WeightLabelPdfData } from '../documents/weight-label-pdf'
+import { generateWeightLabelTspl, WeightLabelTsplData } from '../documents/weight-label-tspl'
 import { generateProductionOrder, ProductionOrderData } from '../documents/production-order'
 import { generateProductionOrderPdf, ProductionOrderPdfData } from '../documents/production-order-pdf'
 import { generateSessionCloseReport, SessionCloseReportData } from '../documents/session-close-report'
@@ -394,7 +395,12 @@ class JobProcessor {
           console.log(`[Job Processor] Generating weight label as ZPL for Zebra printer`)
           return generateWeightLabelZpl(data as unknown as WeightLabelData)
         }
-        // For non-Zebra printers, use dedicated PDF generator
+        // For other label printers (TSC, 4BARCODE, etc.), use TSPL
+        if (useTspl) {
+          console.log(`[Job Processor] Generating weight label as TSPL for ${printer.printerName}`)
+          return generateWeightLabelTspl(data as unknown as WeightLabelTsplData)
+        }
+        // Fallback to PDF for standard printers
         console.log(`[Job Processor] Generating weight label as PDF for standard printer`)
         return generateWeightLabelPdf(data as unknown as WeightLabelPdfData)
 
@@ -523,9 +529,8 @@ class JobProcessor {
     const isLabelPrinter = printer.printerType === 'label_barcode' || printer.isZebra
     const isLabelJob = ['product_label', 'shipping_label', 'lot_label', 'weight_label'].includes(job.documentType)
     const canUseRaw = process.platform === 'win32' || process.platform === 'darwin' || hasRawQueue
-    // IMPORTANT: Only use raw printing for Zebra printers (ZPL format)
-    // Non-Zebra label printers (TSC, 4BARCODE, etc.) get PDF which must be printed through system
-    const useRawLabelPrint = printer.isZebra && canUseRaw && isLabelJob
+    // Use raw printing for BOTH Zebra (ZPL) AND other label printers (TSPL)
+    const useRawLabelPrint = isLabelPrinter && canUseRaw && isLabelJob
     // ESC/POS documents that should always use raw printing on thermal printers
     const escposDocuments = [
       'pos_receipt', 'unified_reception', 'purchase_invoice', 'invoice',
@@ -552,16 +557,11 @@ class JobProcessor {
 
     // Print all copies in a single job for better performance
     if (useRawLabelPrint) {
-      // Raw ZPL printing for Zebra label printers only
-      console.log(`[Job Processor] Using ZPL/RAW method for Zebra ${printer.printerName} (${copies} copies)`)
+      // Raw printing for label printers (ZPL for Zebra, TSPL for TSC/4BARCODE/etc.)
+      const format = printer.isZebra ? 'ZPL' : 'TSPL'
+      console.log(`[Job Processor] Using ${format}/RAW method for ${printer.printerName} (${copies} copies)`)
       console.log(`[Job Processor] RAW queue: ${printer.rawQueueName || '(direct)'}`)
       await this.printRawLabel(printer, documentBuffer, copies)
-    } else if (isLabelPrinter && isLabelJob && !printer.isZebra) {
-      // Non-Zebra label printers (TSC, 4BARCODE, etc.) - use PDF with label size options
-      console.log(`[Job Processor] Using PDF method for non-Zebra label printer ${printer.printerName} (${copies} copies)`)
-      // Get label size from job data if available
-      const labelSize = (job.documentData as { labelSize?: string })?.labelSize || '3x2'
-      await this.printPdfLabel(printer, documentBuffer, labelSize, copies)
     } else if (isPdfOnly) {
       // PDF printing for PDF-only documents
       console.log(`[Job Processor] Using PDF method for ${printer.printerName} (${copies} copies)`)
