@@ -15,6 +15,7 @@ interface ReceiptPayment {
   currency?: string          // USD, CUP, etc
   amountTendered?: number    // Para efectivo: cuánto entregó el cliente
   changeAmount?: number      // Para efectivo: cambio devuelto
+  changeCurrency?: string    // Moneda del cambio (siempre CUP normalmente)
 }
 
 interface ReceiptData {
@@ -272,9 +273,12 @@ export function generatePosReceipt(data: ReceiptData): Buffer {
       lines.push(Commands.FEED_LINE)
 
       if (payment.changeAmount !== undefined && payment.changeAmount > 0) {
-        const changeStr = currency === 'CUP' || currency === localCurrency
+        // El cambio usa su propia moneda (changeCurrency), NO la moneda del pago
+        // Por defecto, el cambio siempre es en CUP
+        const chgCurrency = payment.changeCurrency || 'CUP'
+        const changeStr = chgCurrency === 'CUP' || chgCurrency === localCurrency
           ? formatLocalCurrency(payment.changeAmount)
-          : `${formatCurrency(payment.changeAmount)} USD`
+          : `${formatCurrency(payment.changeAmount)} ${chgCurrency}`
         lines.push(Commands.BOLD_ON)
         lines.push(formatLine('  Cambio:', changeStr, PAPER_WIDTH))
         lines.push(Commands.BOLD_OFF)
