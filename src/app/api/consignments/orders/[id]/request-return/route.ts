@@ -25,6 +25,7 @@ async function getPayload(): Promise<JWTPayload | null> {
 
 interface RequestReturnLine {
   orderLineId: number
+  warehouseId: number
   quantity: number
 }
 
@@ -88,13 +89,13 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Validate each line has stock available
+    // Validate each line has stock available in the specified warehouse
     let totalUnits = 0
     let totalValue = 0
     const validatedLines: Array<{
       orderLineId: number
+      warehouseId: number
       productId: number
-      variantId: number | null
       quantity: number
       unitCost: number
       lotInventoryId: number | null
@@ -103,17 +104,13 @@ export async function POST(
     for (const line of lines) {
       if (line.quantity <= 0) continue
 
-      // Get order line with available stock info
+      // Get order line info
       const lineResult = await db.query(`
         SELECT
           ol.id,
           ol.product_id,
           ol.variant_id,
-          ol.quantity_received,
-          ol.quantity_sold,
-          ol.quantity_returned,
-          ol.unit_cost,
-          (ol.quantity_received - ol.quantity_sold - ol.quantity_returned) as available
+          ol.unit_cost
         FROM consignment_order_lines ol
         WHERE ol.id = $1 AND ol.order_id = $2
       `, [line.orderLineId, orderId])
@@ -126,29 +123,43 @@ export async function POST(
       }
 
       const orderLine = lineResult.rows[0]
-      const available = parseInt(orderLine.available) || 0
+
+      // Get warehouse ID - use provided or default to order's warehouse
+      const warehouseId = line.warehouseId || order.warehouse_id
+
+      // Find lot inventory for this product in the specified warehouse
+      const lotResult = await db.query(`
+        SELECT id, quantity_available
+        FROM consignment_lot_inventory
+        WHERE warehouse_id = $1 AND product_id = $2 AND order_line_id = $3
+          AND quantity_available > 0
+        LIMIT 1
+      `, [warehouseId, orderLine.product_id, line.orderLineId])
+
+      if (lotResult.rows.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: `No hay stock disponible en el almacén seleccionado para el producto`
+        }, { status: 400 })
+      }
+
+      const lotInventory = lotResult.rows[0]
+      const available = parseInt(lotInventory.quantity_available) || 0
 
       if (line.quantity > available) {
         return NextResponse.json({
           success: false,
-          error: `Cantidad solicitada (${line.quantity}) excede disponible (${available}) para línea ${line.orderLineId}`
+          error: `Cantidad solicitada (${line.quantity}) excede disponible (${available}) en el almacén`
         }, { status: 400 })
       }
 
-      // Find lot inventory if exists
-      const lotResult = await db.query(`
-        SELECT id FROM consignment_lot_inventory
-        WHERE warehouse_id = $1 AND product_id = $2 AND order_line_id = $3
-        LIMIT 1
-      `, [order.warehouse_id, orderLine.product_id, line.orderLineId])
-
       validatedLines.push({
         orderLineId: line.orderLineId,
+        warehouseId,
         productId: orderLine.product_id,
-        variantId: orderLine.variant_id,
         quantity: line.quantity,
         unitCost: parseFloat(orderLine.unit_cost),
-        lotInventoryId: lotResult.rows[0]?.id || null
+        lotInventoryId: lotInventory.id
       })
 
       totalUnits += line.quantity
@@ -161,6 +172,9 @@ export async function POST(
         error: 'No hay productos válidos para devolver'
       }, { status: 400 })
     }
+
+    // Get unique warehouse from lines (for now we support one warehouse per return)
+    const targetWarehouseId = validatedLines[0].warehouseId
 
     // Generate return number
     const year = new Date().getFullYear()
@@ -175,15 +189,16 @@ export async function POST(
     // Create return with status 'pending'
     const insertResult = await db.query(`
       INSERT INTO consignment_returns (
-        return_number, order_id, supplier_id, warehouse_id, status,
+        return_number, order_id, supplier_id, warehouse_id, company_id, status,
         total_items, total_units, total_value, reason, notes, created_by
-      ) VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10)
+      ) VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7, $8, $9, $10, $11)
       RETURNING id, return_number
     `, [
       returnNumber,
       orderId,
       order.supplier_id,
-      order.warehouse_id,
+      targetWarehouseId,
+      payload.companyId,
       validatedLines.length,
       totalUnits,
       totalValue,
@@ -198,15 +213,14 @@ export async function POST(
     for (const line of validatedLines) {
       await db.query(`
         INSERT INTO consignment_return_lines (
-          return_id, order_line_id, lot_inventory_id, product_id, variant_id,
+          return_id, order_line_id, lot_inventory_id, product_id,
           quantity_to_return, unit_cost
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ) VALUES ($1, $2, $3, $4, $5, $6)
       `, [
         returnId,
         line.orderLineId,
         line.lotInventoryId,
         line.productId,
-        line.variantId,
         line.quantity,
         line.unitCost
       ])
@@ -230,6 +244,140 @@ export async function POST(
     return NextResponse.json({
       success: false,
       error: 'Error al crear solicitud de devolución'
+    }, { status: 500 })
+  }
+}
+
+/**
+ * GET /api/consignments/orders/[id]/request-return
+ * Get available stock per warehouse for return request
+ * Returns products with quantity available in each warehouse
+ */
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const payload = await getPayload()
+    if (!payload) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
+    }
+
+    const { id } = await params
+    const orderId = parseInt(id)
+
+    // Verify order exists and belongs to company
+    const orderResult = await db.query(`
+      SELECT
+        o.id, o.order_number, o.warehouse_id,
+        s.id as supplier_id, s.name as supplier_name
+      FROM consignment_orders o
+      JOIN market_suppliers s ON s.id = o.supplier_id
+      WHERE o.id = $1 AND o.company_id = $2
+    `, [orderId, payload.companyId])
+
+    if (orderResult.rows.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Orden no encontrada'
+      }, { status: 404 })
+    }
+
+    const order = orderResult.rows[0]
+
+    // Get all order lines with product info
+    const linesResult = await db.query(`
+      SELECT
+        ol.id as order_line_id,
+        ol.product_id,
+        ol.variant_id,
+        ol.unit_cost,
+        p.name as product_name,
+        p.sku as product_sku,
+        p.barcode as product_barcode,
+        (SELECT url FROM market_product_images WHERE product_id = p.id AND is_primary = true LIMIT 1) as image_url,
+        pv.name as variant_name,
+        pv.sku as variant_sku
+      FROM consignment_order_lines ol
+      JOIN market_products p ON p.id = ol.product_id
+      LEFT JOIN market_product_variants pv ON pv.id = ol.variant_id
+      WHERE ol.order_id = $1
+    `, [orderId])
+
+    // Get available stock per warehouse for each order line
+    const productsWithStock: Array<{
+      orderLineId: number
+      productId: number
+      variantId: number | null
+      productName: string
+      productSku: string
+      variantName: string | null
+      variantSku: string | null
+      imageUrl: string | null
+      unitCost: number
+      warehouses: Array<{
+        warehouseId: number
+        warehouseName: string
+        warehouseCode: string
+        quantityAvailable: number
+      }>
+    }> = []
+
+    for (const line of linesResult.rows) {
+      // Get available stock in each warehouse from lot inventory
+      const stockResult = await db.query(`
+        SELECT
+          li.warehouse_id,
+          li.quantity_available,
+          w.name as warehouse_name,
+          w.code as warehouse_code
+        FROM consignment_lot_inventory li
+        JOIN market_warehouses w ON w.id = li.warehouse_id
+        WHERE li.order_line_id = $1
+          AND li.quantity_available > 0
+        ORDER BY w.name
+      `, [line.order_line_id])
+
+      // Only include products that have stock somewhere
+      if (stockResult.rows.length > 0) {
+        productsWithStock.push({
+          orderLineId: line.order_line_id,
+          productId: line.product_id,
+          variantId: line.variant_id,
+          productName: line.product_name,
+          productSku: line.product_sku,
+          variantName: line.variant_name,
+          variantSku: line.variant_sku,
+          imageUrl: line.image_url,
+          unitCost: parseFloat(line.unit_cost),
+          warehouses: stockResult.rows.map(w => ({
+            warehouseId: w.warehouse_id,
+            warehouseName: w.warehouse_name,
+            warehouseCode: w.warehouse_code,
+            quantityAvailable: parseInt(w.quantity_available)
+          }))
+        })
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        orderId: order.id,
+        orderNumber: order.order_number,
+        supplier: {
+          id: order.supplier_id,
+          name: order.supplier_name
+        },
+        products: productsWithStock
+      }
+    })
+
+  } catch (error) {
+    console.error('[Request Return GET] Error:', error)
+    return NextResponse.json({
+      success: false,
+      error: 'Error al obtener productos para devolución'
     }, { status: 500 })
   }
 }

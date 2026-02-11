@@ -41,6 +41,7 @@ import { generateProductionOrder, ProductionOrderData } from '../documents/produ
 import { generateProductionOrderPdf, ProductionOrderPdfData } from '../documents/production-order-pdf'
 import { generateSessionCloseReport, SessionCloseReportData } from '../documents/session-close-report'
 import { generateAssetLabelTspl, AssetLabelData } from '../documents/asset-label-tspl'
+import { generateAssetLabelZpl } from '../documents/asset-label-zpl'
 
 const execAsync = promisify(exec)
 
@@ -407,17 +408,17 @@ class JobProcessor {
         return generateWeightLabelPdf(data as unknown as WeightLabelPdfData)
 
       case 'asset_label':
-        // Asset labels use TSPL for label printers (2x1 inch format with Code128 barcode)
+        // Asset labels: ZPL for Zebra printers, TSPL for TSC/4BARCODE printers
+        if (useZpl) {
+          console.log(`[Job Processor] Generating asset label as ZPL for Zebra ${printer.printerName}`)
+          return generateAssetLabelZpl(data as unknown as AssetLabelData)
+        }
+        // For TSC/4BARCODE/Chinese printers, use TSPL
         if (useTspl || isLabelPrinter) {
           console.log(`[Job Processor] Generating asset label as TSPL for ${printer.printerName}`)
           return generateAssetLabelTspl(data as unknown as AssetLabelData)
         }
-        // For Zebra printers, also use TSPL (Code128 is supported)
-        if (useZpl) {
-          console.log(`[Job Processor] Generating asset label as TSPL for Zebra ${printer.printerName}`)
-          return generateAssetLabelTspl(data as unknown as AssetLabelData)
-        }
-        // Fallback to TSPL even for standard printers (we don't have PDF generator for asset labels)
+        // Fallback to TSPL for other label printers
         console.log(`[Job Processor] Generating asset label as TSPL (fallback) for ${printer.printerName}`)
         return generateAssetLabelTspl(data as unknown as AssetLabelData)
 

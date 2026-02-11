@@ -18,39 +18,29 @@ import Image from 'next/image'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 
-interface ProductInfo {
-  id: number
-  name: string
-  sku: string
-  barcode: string | null
-  imageUrl: string | null
+interface WarehouseStock {
+  warehouseId: number
+  warehouseName: string
+  warehouseCode: string
+  quantityAvailable: number
 }
 
-interface OrderLine {
-  id: number
-  product: ProductInfo
+interface ProductWithStock {
+  orderLineId: number
+  productId: number
   variantId: number | null
+  productName: string
+  productSku: string
   variantName: string | null
   variantSku: string | null
-  quantityOrdered: number
-  quantityReceived: number
-  quantitySold: number
-  quantityReturned: number
+  imageUrl: string | null
   unitCost: number
-  unitPrice: number
-  lotNumber: string | null
-  expirationDate: string | null
+  warehouses: WarehouseStock[]
 }
 
 interface SupplierInfo {
   id: number
-  code: string
-  name: string
-}
-
-interface WarehouseInfo {
-  id: number
-  code: string
+  code?: string
   name: string
 }
 
@@ -61,16 +51,14 @@ interface RequestReturnModalProps {
   orderId: number
   orderNumber: string
   supplier: SupplierInfo
-  warehouse: WarehouseInfo
-  lines: OrderLine[]
 }
 
-interface ReturnLine {
+interface ReturnLineSelection {
   orderLineId: number
+  warehouseId: number
   quantity: number
   available: number
   productName: string
-  variantName: string | null
   unitCost: number
 }
 
@@ -88,46 +76,63 @@ export default function RequestReturnModal({
   onSuccess,
   orderId,
   orderNumber,
-  supplier,
-  warehouse,
-  lines
+  supplier
 }: RequestReturnModalProps) {
   const { theme } = useTheme()
-  const [returnLines, setReturnLines] = useState<ReturnLine[]>([])
+  const [loading, setLoading] = useState(true)
+  const [products, setProducts] = useState<ProductWithStock[]>([])
+  const [returnLines, setReturnLines] = useState<ReturnLineSelection[]>([])
   const [selectedReason, setSelectedReason] = useState<string>('not_sold')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Initialize return lines from available products
+  // Fetch available stock per warehouse
   useEffect(() => {
     if (isOpen) {
-      const initialLines: ReturnLine[] = lines
-        .map(line => {
-          const available = line.quantityReceived - line.quantitySold - line.quantityReturned
-          return {
-            orderLineId: line.id,
-            quantity: 0,
-            available,
-            productName: line.variantName
-              ? `${line.product.name} - ${line.variantName}`
-              : line.product.name,
-            variantName: line.variantName,
-            unitCost: line.unitCost
-          }
-        })
-        .filter(line => line.available > 0)
-
-      setReturnLines(initialLines)
-      setSelectedReason('not_sold')
-      setNotes('')
-      setError(null)
+      fetchAvailableStock()
     }
-  }, [isOpen, lines])
+  }, [isOpen, orderId])
 
-  const updateQuantity = (orderLineId: number, delta: number) => {
+  const fetchAvailableStock = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/consignments/orders/${orderId}/request-return`)
+      const data = await response.json()
+
+      if (data.success) {
+        setProducts(data.data.products)
+        // Initialize return lines - one per product per warehouse with qty 0
+        const initialLines: ReturnLineSelection[] = []
+        for (const product of data.data.products) {
+          for (const wh of product.warehouses) {
+            initialLines.push({
+              orderLineId: product.orderLineId,
+              warehouseId: wh.warehouseId,
+              quantity: 0,
+              available: wh.quantityAvailable,
+              productName: product.variantName
+                ? `${product.productName} - ${product.variantName}`
+                : product.productName,
+              unitCost: product.unitCost
+            })
+          }
+        }
+        setReturnLines(initialLines)
+      } else {
+        setError(data.error || 'Error al cargar productos')
+      }
+    } catch {
+      setError('Error de conexión')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const updateQuantity = (orderLineId: number, warehouseId: number, delta: number) => {
     setReturnLines(prev => prev.map(line => {
-      if (line.orderLineId === orderLineId) {
+      if (line.orderLineId === orderLineId && line.warehouseId === warehouseId) {
         const newQty = Math.max(0, Math.min(line.quantity + delta, line.available))
         return { ...line, quantity: newQty }
       }
@@ -135,9 +140,9 @@ export default function RequestReturnModal({
     }))
   }
 
-  const setQuantity = (orderLineId: number, quantity: number) => {
+  const setQuantity = (orderLineId: number, warehouseId: number, quantity: number) => {
     setReturnLines(prev => prev.map(line => {
-      if (line.orderLineId === orderLineId) {
+      if (line.orderLineId === orderLineId && line.warehouseId === warehouseId) {
         const newQty = Math.max(0, Math.min(quantity, line.available))
         return { ...line, quantity: newQty }
       }
@@ -147,7 +152,7 @@ export default function RequestReturnModal({
 
   // Calculate totals
   const selectedLines = returnLines.filter(l => l.quantity > 0)
-  const totalProducts = selectedLines.length
+  const totalProducts = new Set(selectedLines.map(l => l.orderLineId)).size
   const totalUnits = selectedLines.reduce((sum, l) => sum + l.quantity, 0)
   const totalValue = selectedLines.reduce((sum, l) => sum + (l.quantity * l.unitCost), 0)
 
@@ -168,6 +173,7 @@ export default function RequestReturnModal({
           notes: notes || undefined,
           lines: selectedLines.map(l => ({
             orderLineId: l.orderLineId,
+            warehouseId: l.warehouseId,
             quantity: l.quantity
           }))
         })
@@ -193,6 +199,15 @@ export default function RequestReturnModal({
     }
   }
 
+  // Get unique warehouse from return lines for display
+  const getWarehouseName = (warehouseId: number): string => {
+    for (const product of products) {
+      const wh = product.warehouses.find(w => w.warehouseId === warehouseId)
+      if (wh) return wh.warehouseName
+    }
+    return 'Almacén'
+  }
+
   if (!isOpen) return null
 
   return (
@@ -210,7 +225,7 @@ export default function RequestReturnModal({
           exit={{ scale: 0.95, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
           className={cn(
-            'w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl shadow-xl',
+            'w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl shadow-xl',
             theme === 'dark' ? 'bg-gray-800' : 'bg-white'
           )}
         >
@@ -249,30 +264,18 @@ export default function RequestReturnModal({
 
           {/* Content */}
           <div className="overflow-y-auto max-h-[calc(90vh-180px)]">
-            {/* Supplier & Warehouse Info */}
+            {/* Supplier Info */}
             <div className={cn(
-              'px-6 py-4 border-b grid grid-cols-2 gap-4',
+              'px-6 py-4 border-b flex items-center gap-3',
               theme === 'dark' ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'
             )}>
-              <div className="flex items-center gap-3">
-                <Building2 className="w-4 h-4 text-gray-400" />
-                <div>
-                  <p className="text-xs text-gray-500">Proveedor</p>
-                  <p className={cn(
-                    'text-sm font-medium',
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>{supplier.name}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Warehouse className="w-4 h-4 text-gray-400" />
-                <div>
-                  <p className="text-xs text-gray-500">Almacén</p>
-                  <p className={cn(
-                    'text-sm font-medium',
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>{warehouse.name}</p>
-                </div>
+              <Building2 className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-xs text-gray-500">Proveedor</p>
+                <p className={cn(
+                  'text-sm font-medium',
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                )}>{supplier.name}</p>
               </div>
             </div>
 
@@ -286,217 +289,272 @@ export default function RequestReturnModal({
               </div>
             )}
 
-            {/* Products Table */}
-            <div className="px-6 py-4">
-              <h3 className={cn(
-                'text-sm font-semibold mb-3',
-                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-              )}>
-                Seleccionar productos a devolver
-              </h3>
+            {/* Loading State */}
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+              </div>
+            ) : (
+              <>
+                {/* Products Table */}
+                <div className="px-6 py-4">
+                  <h3 className={cn(
+                    'text-sm font-semibold mb-3',
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                  )}>
+                    Seleccionar productos y cantidades a devolver
+                  </h3>
 
-              {returnLines.length === 0 ? (
-                <div className="text-center py-8">
-                  <Package className="w-12 h-12 mx-auto mb-3 text-gray-400 opacity-50" />
-                  <p className="text-gray-500">No hay productos disponibles para devolver</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {returnLines.map(line => {
-                    const productLine = lines.find(l => l.id === line.orderLineId)
-                    return (
-                      <div
-                        key={line.orderLineId}
-                        className={cn(
-                          'p-3 rounded-xl border transition-colors',
-                          line.quantity > 0
-                            ? theme === 'dark'
-                              ? 'border-orange-700 bg-orange-900/10'
-                              : 'border-orange-300 bg-orange-50'
-                            : theme === 'dark'
-                              ? 'border-gray-700 bg-gray-800/50'
-                              : 'border-gray-200 bg-gray-50'
-                        )}
-                      >
-                        <div className="flex items-center gap-4">
-                          {/* Product Image */}
-                          <div className={cn(
-                            'w-12 h-12 rounded-lg overflow-hidden shrink-0',
-                            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                          )}>
-                            {productLine?.product.imageUrl ? (
-                              <Image
-                                src={productLine.product.imageUrl}
-                                alt={line.productName}
-                                width={48}
-                                height={48}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <Package className="w-5 h-5 text-gray-400" />
-                              </div>
+                  {products.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Package className="w-12 h-12 mx-auto mb-3 text-gray-400 opacity-50" />
+                      <p className="text-gray-500">No hay productos disponibles para devolver</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {products.map(product => {
+                        const productLines = returnLines.filter(l => l.orderLineId === product.orderLineId)
+                        const productTotal = productLines.reduce((sum, l) => sum + l.quantity, 0)
+
+                        return (
+                          <div
+                            key={product.orderLineId}
+                            className={cn(
+                              'rounded-xl border overflow-hidden',
+                              productTotal > 0
+                                ? theme === 'dark'
+                                  ? 'border-orange-700 bg-orange-900/10'
+                                  : 'border-orange-300 bg-orange-50'
+                                : theme === 'dark'
+                                  ? 'border-gray-700 bg-gray-800/50'
+                                  : 'border-gray-200 bg-gray-50'
                             )}
-                          </div>
+                          >
+                            {/* Product Header */}
+                            <div className="p-3 flex items-center gap-4">
+                              {/* Product Image */}
+                              <div className={cn(
+                                'w-12 h-12 rounded-lg overflow-hidden shrink-0',
+                                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                              )}>
+                                {product.imageUrl ? (
+                                  <Image
+                                    src={product.imageUrl}
+                                    alt={product.productName}
+                                    width={48}
+                                    height={48}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <Package className="w-5 h-5 text-gray-400" />
+                                  </div>
+                                )}
+                              </div>
 
-                          {/* Product Info */}
-                          <div className="flex-1 min-w-0">
-                            <p className={cn(
-                              'font-medium truncate',
-                              theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              {/* Product Info */}
+                              <div className="flex-1 min-w-0">
+                                <p className={cn(
+                                  'font-medium truncate',
+                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                )}>
+                                  {product.variantName
+                                    ? `${product.productName} - ${product.variantName}`
+                                    : product.productName}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  SKU: {product.variantSku || product.productSku}
+                                </p>
+                                <span className="text-xs text-green-600 dark:text-green-400">
+                                  ${product.unitCost.toFixed(2)}/ud
+                                </span>
+                              </div>
+
+                              {productTotal > 0 && (
+                                <div className={cn(
+                                  'px-3 py-1 rounded-full text-sm font-medium',
+                                  theme === 'dark' ? 'bg-orange-900/50 text-orange-300' : 'bg-orange-200 text-orange-700'
+                                )}>
+                                  {productTotal} uds
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Warehouses */}
+                            <div className={cn(
+                              'border-t px-3 py-2',
+                              theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                             )}>
-                              {line.productName}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              SKU: {productLine?.variantSku || productLine?.product.sku}
-                            </p>
-                            <div className="flex items-center gap-3 mt-1 text-xs">
-                              <span className="text-gray-500">
-                                Disponible: <strong>{line.available}</strong>
-                              </span>
-                              <span className="text-green-600 dark:text-green-400">
-                                ${line.unitCost.toFixed(2)}/ud
-                              </span>
+                              {product.warehouses.map(wh => {
+                                const line = returnLines.find(
+                                  l => l.orderLineId === product.orderLineId && l.warehouseId === wh.warehouseId
+                                )
+                                if (!line) return null
+
+                                return (
+                                  <div
+                                    key={`${product.orderLineId}-${wh.warehouseId}`}
+                                    className="flex items-center justify-between py-2"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <Warehouse className="w-4 h-4 text-gray-400" />
+                                      <span className={cn(
+                                        'text-sm',
+                                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                                      )}>
+                                        {wh.warehouseName}
+                                      </span>
+                                      <span className="text-xs text-gray-500">
+                                        ({wh.quantityAvailable} disponibles)
+                                      </span>
+                                    </div>
+
+                                    {/* Quantity Controls */}
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => updateQuantity(product.orderLineId, wh.warehouseId, -1)}
+                                        disabled={line.quantity <= 0}
+                                        className={cn(
+                                          'p-1.5 rounded-lg transition-colors',
+                                          line.quantity > 0
+                                            ? theme === 'dark'
+                                              ? 'bg-gray-700 hover:bg-gray-600'
+                                              : 'bg-gray-200 hover:bg-gray-300'
+                                            : 'opacity-50 cursor-not-allowed',
+                                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                        )}
+                                      >
+                                        <Minus className="w-3 h-3" />
+                                      </button>
+
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max={line.available}
+                                        value={line.quantity}
+                                        onChange={(e) => setQuantity(
+                                          product.orderLineId,
+                                          wh.warehouseId,
+                                          parseInt(e.target.value) || 0
+                                        )}
+                                        className={cn(
+                                          'w-14 text-center font-medium text-sm rounded-lg border py-1',
+                                          theme === 'dark'
+                                            ? 'bg-gray-700 border-gray-600 text-white'
+                                            : 'bg-white border-gray-300 text-gray-900'
+                                        )}
+                                      />
+
+                                      <button
+                                        onClick={() => updateQuantity(product.orderLineId, wh.warehouseId, 1)}
+                                        disabled={line.quantity >= line.available}
+                                        className={cn(
+                                          'p-1.5 rounded-lg transition-colors',
+                                          line.quantity < line.available
+                                            ? theme === 'dark'
+                                              ? 'bg-gray-700 hover:bg-gray-600'
+                                              : 'bg-gray-200 hover:bg-gray-300'
+                                            : 'opacity-50 cursor-not-allowed',
+                                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                        )}
+                                      >
+                                        <Plus className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                )
+                              })}
                             </div>
                           </div>
-
-                          {/* Quantity Controls */}
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => updateQuantity(line.orderLineId, -1)}
-                              disabled={line.quantity <= 0}
-                              className={cn(
-                                'p-2 rounded-lg transition-colors',
-                                line.quantity > 0
-                                  ? theme === 'dark'
-                                    ? 'bg-gray-700 hover:bg-gray-600'
-                                    : 'bg-gray-200 hover:bg-gray-300'
-                                  : 'opacity-50 cursor-not-allowed',
-                                theme === 'dark' ? 'text-white' : 'text-gray-900'
-                              )}
-                            >
-                              <Minus className="w-4 h-4" />
-                            </button>
-
-                            <input
-                              type="number"
-                              min="0"
-                              max={line.available}
-                              value={line.quantity}
-                              onChange={(e) => setQuantity(line.orderLineId, parseInt(e.target.value) || 0)}
-                              className={cn(
-                                'w-16 text-center font-bold text-lg rounded-lg border py-1',
-                                theme === 'dark'
-                                  ? 'bg-gray-700 border-gray-600 text-white'
-                                  : 'bg-white border-gray-300 text-gray-900'
-                              )}
-                            />
-
-                            <button
-                              onClick={() => updateQuantity(line.orderLineId, 1)}
-                              disabled={line.quantity >= line.available}
-                              className={cn(
-                                'p-2 rounded-lg transition-colors',
-                                line.quantity < line.available
-                                  ? theme === 'dark'
-                                    ? 'bg-gray-700 hover:bg-gray-600'
-                                    : 'bg-gray-200 hover:bg-gray-300'
-                                  : 'opacity-50 cursor-not-allowed',
-                                theme === 'dark' ? 'text-white' : 'text-gray-900'
-                              )}
-                            >
-                              <Plus className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* Reason Selection */}
-            <div className={cn(
-              'px-6 py-4 border-t',
-              theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-            )}>
-              <h3 className={cn(
-                'text-sm font-semibold mb-3',
-                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-              )}>
-                Motivo de devolución
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {RETURN_REASONS.map(reason => (
-                  <label
-                    key={reason.id}
-                    className={cn(
-                      'p-3 rounded-xl cursor-pointer transition-all border',
-                      selectedReason === reason.id
-                        ? theme === 'dark'
-                          ? 'border-orange-500 bg-orange-900/20'
-                          : 'border-orange-500 bg-orange-50'
-                        : theme === 'dark'
-                          ? 'border-gray-700 hover:border-gray-600'
-                          : 'border-gray-200 hover:border-gray-300'
-                    )}
-                  >
-                    <input
-                      type="radio"
-                      name="reason"
-                      value={reason.id}
-                      checked={selectedReason === reason.id}
-                      onChange={(e) => setSelectedReason(e.target.value)}
-                      className="sr-only"
-                    />
-                    <p className={cn(
-                      'text-sm font-medium',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      {reason.label}
-                    </p>
+                {/* Reason Selection */}
+                <div className={cn(
+                  'px-6 py-4 border-t',
+                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                )}>
+                  <h3 className={cn(
+                    'text-sm font-semibold mb-3',
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                  )}>
+                    Motivo de devolución
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {RETURN_REASONS.map(reason => (
+                      <label
+                        key={reason.id}
+                        className={cn(
+                          'p-3 rounded-xl cursor-pointer transition-all border',
+                          selectedReason === reason.id
+                            ? theme === 'dark'
+                              ? 'border-orange-500 bg-orange-900/20'
+                              : 'border-orange-500 bg-orange-50'
+                            : theme === 'dark'
+                              ? 'border-gray-700 hover:border-gray-600'
+                              : 'border-gray-200 hover:border-gray-300'
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="reason"
+                          value={reason.id}
+                          checked={selectedReason === reason.id}
+                          onChange={(e) => setSelectedReason(e.target.value)}
+                          className="sr-only"
+                        />
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>
+                          {reason.label}
+                        </p>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Notes */}
+                <div className={cn(
+                  'px-6 py-4 border-t',
+                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                )}>
+                  <label className={cn(
+                    'block text-sm font-semibold mb-2',
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                  )}>
+                    Notas (opcional)
                   </label>
-                ))}
-              </div>
-            </div>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Agregar observaciones sobre la devolución..."
+                    rows={2}
+                    className={cn(
+                      'w-full px-3 py-2 rounded-xl border resize-none',
+                      theme === 'dark'
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400',
+                      'focus:ring-2 focus:ring-orange-500 focus:border-transparent'
+                    )}
+                  />
+                </div>
 
-            {/* Notes */}
-            <div className={cn(
-              'px-6 py-4 border-t',
-              theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-            )}>
-              <label className={cn(
-                'block text-sm font-semibold mb-2',
-                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-              )}>
-                Notas (opcional)
-              </label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Agregar observaciones sobre la devolución..."
-                rows={2}
-                className={cn(
-                  'w-full px-3 py-2 rounded-xl border resize-none',
-                  theme === 'dark'
-                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
-                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400',
-                  'focus:ring-2 focus:ring-orange-500 focus:border-transparent'
-                )}
-              />
-            </div>
-
-            {/* Info Banner */}
-            <div className={cn(
-              'mx-6 mb-4 p-3 rounded-xl flex items-start gap-3',
-              theme === 'dark' ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200'
-            )}>
-              <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-blue-700 dark:text-blue-300">
-                La devolución quedará <strong>pendiente</strong> hasta que el almacenero la procese desde operaciones de almacén.
-              </p>
-            </div>
+                {/* Info Banner */}
+                <div className={cn(
+                  'mx-6 mb-4 p-3 rounded-xl flex items-start gap-3',
+                  theme === 'dark' ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200'
+                )}>
+                  <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    La devolución quedará <strong>pendiente</strong> hasta que el almacenero la procese desde operaciones de almacén.
+                  </p>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Footer */}

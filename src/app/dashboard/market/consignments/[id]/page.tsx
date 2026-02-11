@@ -1646,8 +1646,6 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
             orderId={order.id}
             orderNumber={order.orderNumber}
             supplier={order.supplier}
-            warehouse={order.warehouse}
-            lines={order.lines}
           />
         )}
       </DashboardLayout>
