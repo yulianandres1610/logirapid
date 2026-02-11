@@ -124,19 +124,38 @@ export async function GET(
     // ==============================================================
     // STEP 2: Now get payment totals (AFTER auto-fix)
     // ==============================================================
-    // Include change_amount to calculate actual cash collected
+    // Get payments grouped by method and currency
     const paymentsResult = await db.query(`
       SELECT
         p.payment_method,
         p.currency,
         SUM(p.amount) as total_amount,
-        SUM(COALESCE(p.change_amount, 0)) as total_change,
         COUNT(*) as count
       FROM market_pos_payments p
       JOIN market_pos_orders o ON p.order_id = o.id
       WHERE o.pos_session_id = $1 AND o.status = 'paid'
       GROUP BY p.payment_method, p.currency
     `, [sessionId])
+
+    // Get change totals by CHANGE currency (not payment currency)
+    // This is critical: change_currency can differ from payment currency
+    const changeResult = await db.query(`
+      SELECT
+        COALESCE(p.change_currency, p.currency) as change_currency,
+        SUM(COALESCE(p.change_amount, 0)) as total_change
+      FROM market_pos_payments p
+      JOIN market_pos_orders o ON p.order_id = o.id
+      WHERE o.pos_session_id = $1 AND o.status = 'paid' AND p.payment_method = 'cash'
+        AND p.change_amount > 0
+      GROUP BY COALESCE(p.change_currency, p.currency)
+    `, [sessionId])
+
+    // Build change map by currency
+    const changeByCurrencyMap: Record<string, number> = {}
+    for (const c of changeResult.rows) {
+      const currency = c.change_currency || 'CUP'
+      changeByCurrencyMap[currency] = parseFloat(c.total_change) || 0
+    }
 
     // ==============================================================
     // STEP 3: Get orders summary (AFTER auto-fix)
@@ -166,25 +185,34 @@ export async function GET(
       paymentsCount: paymentsResult.rows.length
     })
 
-    // Calculate expected cash by currency (actual collected = amount - change)
+    // Calculate expected cash by currency
+    // IMPORTANT: Change is tracked by change_currency, not payment currency
     // CUP debe ser entero, USD/MLC con 4 decimales para precision
     const cashPayments: Record<string, number> = {}
     const cashChange: Record<string, number> = {}
+
+    // First, add all cash tendered by payment currency
     for (const p of paymentsResult.rows) {
       if (p.payment_method === 'cash') {
         const amount = parseFloat(p.total_amount) || 0
-        const change = parseFloat(p.total_change) || 0
-        // Actual cash collected is amount minus change given
-        const collected = amount - change
         // CUP: redondear a entero para evitar errores de precision
         if (p.currency === 'CUP') {
-          cashPayments[p.currency] = (cashPayments[p.currency] || 0) + Math.round(collected)
-          cashChange[p.currency] = (cashChange[p.currency] || 0) + Math.round(change)
+          cashPayments[p.currency] = (cashPayments[p.currency] || 0) + Math.round(amount)
         } else {
           // USD/MLC: mantener 4 decimales de precision
-          cashPayments[p.currency] = Math.round(((cashPayments[p.currency] || 0) + collected) * 10000) / 10000
-          cashChange[p.currency] = Math.round(((cashChange[p.currency] || 0) + change) * 10000) / 10000
+          cashPayments[p.currency] = Math.round(((cashPayments[p.currency] || 0) + amount) * 10000) / 10000
         }
+      }
+    }
+
+    // Then subtract change from the correct currency (change_currency, not payment currency)
+    for (const [currency, changeAmount] of Object.entries(changeByCurrencyMap)) {
+      if (currency === 'CUP') {
+        cashPayments[currency] = (cashPayments[currency] || 0) - Math.round(changeAmount)
+        cashChange[currency] = Math.round(changeAmount)
+      } else {
+        cashPayments[currency] = (cashPayments[currency] || 0) - Math.round(changeAmount * 10000) / 10000
+        cashChange[currency] = Math.round(changeAmount * 10000) / 10000
       }
     }
 
@@ -239,13 +267,15 @@ export async function GET(
         },
         paymentsByMethod: paymentsResult.rows.map(p => {
           const amount = parseFloat(p.total_amount) || 0
-          const change = parseFloat(p.total_change) || 0
+          // For cash payments, get change from the changeByCurrencyMap
+          // Note: change is tracked by change_currency, which may differ from payment currency
+          const changeForThisCurrency = p.payment_method === 'cash' ? (changeByCurrencyMap[p.currency] || 0) : 0
           return {
             method: p.payment_method,
             currency: p.currency,
-            amount: amount - change, // Actual collected (after change given)
+            amount: amount - changeForThisCurrency, // Actual collected (after change given in same currency)
             amountTendered: amount,  // What customer gave
-            changeGiven: change,     // Change returned
+            changeGiven: changeForThisCurrency, // Change returned in this currency
             count: parseInt(p.count) || 0
           }
         }),
@@ -373,29 +403,56 @@ export async function PUT(
 
       const totals = totalsResult.rows[0]
 
-      // Get cash payments to calculate expected (subtract change given)
+      // Get cash payments to calculate expected
+      // IMPORTANT: Change is tracked by change_currency, not payment currency
+      // Example: Pay $1 USD, receive 185 CUP change = USD tendered stays, CUP goes out
       const cashPaymentsResult = await db.query(`
         SELECT
           p.currency,
-          SUM(p.amount) as total,
-          SUM(COALESCE(p.change_amount, 0)) as total_change
+          SUM(p.amount) as total
         FROM market_pos_payments p
         JOIN market_pos_orders o ON p.order_id = o.id
         WHERE o.pos_session_id = $1 AND o.status = 'paid' AND p.payment_method = 'cash'
         GROUP BY p.currency
       `, [sessionId])
 
+      // Get change totals grouped by CHANGE currency (not payment currency)
+      const changeResult = await db.query(`
+        SELECT
+          COALESCE(p.change_currency, p.currency) as change_currency,
+          SUM(COALESCE(p.change_amount, 0)) as total_change
+        FROM market_pos_payments p
+        JOIN market_pos_orders o ON p.order_id = o.id
+        WHERE o.pos_session_id = $1 AND o.status = 'paid' AND p.payment_method = 'cash'
+          AND p.change_amount > 0
+        GROUP BY COALESCE(p.change_currency, p.currency)
+      `, [sessionId])
+
+      // Build change map by currency
+      const changeByCurrency: Record<string, number> = {}
+      for (const c of changeResult.rows) {
+        const currency = c.change_currency || 'CUP'
+        changeByCurrency[currency] = parseFloat(c.total_change) || 0
+      }
+
+      // Calculate collected cash by currency
       const cashByurrency: Record<string, number> = {}
       for (const p of cashPaymentsResult.rows) {
         const amount = parseFloat(p.total) || 0
-        const change = parseFloat(p.total_change) || 0
-        // Actual cash collected is amount minus change given
-        const collected = amount - change
         // CUP: redondear a entero, USD/MLC: 4 decimales
         if (p.currency === 'CUP') {
-          cashByurrency[p.currency] = Math.round(collected)
+          cashByurrency[p.currency] = Math.round(amount)
         } else {
-          cashByurrency[p.currency] = Math.round(collected * 10000) / 10000
+          cashByurrency[p.currency] = Math.round(amount * 10000) / 10000
+        }
+      }
+
+      // Subtract change from the correct currency
+      for (const [currency, changeAmount] of Object.entries(changeByCurrency)) {
+        if (currency === 'CUP') {
+          cashByurrency[currency] = (cashByurrency[currency] || 0) - Math.round(changeAmount)
+        } else {
+          cashByurrency[currency] = (cashByurrency[currency] || 0) - Math.round(changeAmount * 10000) / 10000
         }
       }
 
