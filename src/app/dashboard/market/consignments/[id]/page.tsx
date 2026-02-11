@@ -1412,10 +1412,34 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
                                 )}
                               </div>
                               <div className="min-w-0">
-                                <p className={cn(
-                                  'font-medium truncate max-w-[200px]',
-                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                )}>{line.product.name}</p>
+                                <div className="flex items-center gap-2">
+                                  <p className={cn(
+                                    'font-medium truncate max-w-[200px]',
+                                    theme === 'dark' ? 'text-white' : 'text-gray-900',
+                                    // Dim the name if fully cleared
+                                    (line.quantityReceived - line.quantitySold - line.quantityReturned) <= 0 && 'opacity-60'
+                                  )}>{line.product.name}</p>
+                                  {/* Badge for fully returned products */}
+                                  {line.quantityReturned > 0 && (line.quantityReceived - line.quantitySold - line.quantityReturned) <= 0 && (
+                                    <span className={cn(
+                                      'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                                      theme === 'dark' ? 'bg-orange-900/50 text-orange-300' : 'bg-orange-100 text-orange-700'
+                                    )}>
+                                      <RotateCcw className="w-3 h-3 mr-1" />
+                                      Devuelto
+                                    </span>
+                                  )}
+                                  {/* Badge for fully sold products */}
+                                  {line.quantitySold > 0 && line.quantityReturned === 0 && (line.quantityReceived - line.quantitySold) <= 0 && (
+                                    <span className={cn(
+                                      'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                                      theme === 'dark' ? 'bg-emerald-900/50 text-emerald-300' : 'bg-emerald-100 text-emerald-700'
+                                    )}>
+                                      <CheckCircle className="w-3 h-3 mr-1" />
+                                      Vendido
+                                    </span>
+                                  )}
+                                </div>
                                 {line.variantName && (
                                   <p className="text-xs text-purple-500 font-medium mt-0.5">
                                     {line.variantName}
