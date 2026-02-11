@@ -905,21 +905,68 @@ export default function POSTerminalPage() {
   const handleBarcodeScan = useCallback((barcode: string) => {
     const barcodeLower = barcode.toLowerCase()
 
-    // 0. Check for weight barcode (EAN-13 starting with "20")
-    // Format: 20PPPPPWWWWWC (20=weight prefix, PPPPP=product code, WWWWW=weight in grams, C=check digit)
-    if (barcode.length === 13 && barcode.startsWith('20') && /^\d{13}$/.test(barcode)) {
-      const productPrefix = barcode.substring(2, 7) // Positions 2-6 (5 digits)
-      const weightDigits = barcode.substring(7, 12) // Positions 7-11 (5 digits)
-      const weightValue = parseInt(weightDigits, 10) / 1000 // Convert to kg/lb (e.g., 01250 = 1.250)
+    // 0. Check for weight barcode (EAN-13 starting with "2X" where X is 0-9)
+    // GS1 Standard: Prefix "2" is reserved for in-store/variable weight products
+    // Common formats:
+    //   - 2PPPPPWWWWWC (prefix "2", 5-digit product code, 5-digit weight, check digit)
+    //   - 20PPPPWWWWWC (prefix "20", 4-digit product code, 5-digit weight, check digit)
+    //   - 21PPPPWWWWWC (prefix "21", 4-digit product code, 5-digit weight, check digit)
+    // Weight: Last 5 digits before check digit, in grams (divide by 1000 for kg)
+    if (barcode.length === 13 && /^2\d{12}$/.test(barcode)) {
+      // Extract prefix (first 2 digits) to determine format
+      const prefix2 = barcode.substring(0, 2)
 
-      // Find product by weight barcode prefix
-      const weightProduct = products.find(p =>
+      let productPrefix: string
+      let weightDigits: string
+
+      // Check different weight barcode formats
+      if (prefix2 === '20' || prefix2 === '21' || prefix2 === '22' || prefix2 === '23' ||
+          prefix2 === '24' || prefix2 === '25' || prefix2 === '26' || prefix2 === '27' ||
+          prefix2 === '28' || prefix2 === '29') {
+        // Format: 2XPPPPWWWWWC (2-digit prefix, 4-digit product, 5-digit weight, 1 check)
+        // OR: 2XPPPPPWWWWC (2-digit prefix, 5-digit product, 4-digit weight, 1 check)
+        // Try 5-digit product code first (most common)
+        productPrefix = barcode.substring(2, 7) // Positions 2-6 (5 digits)
+        weightDigits = barcode.substring(7, 12) // Positions 7-11 (5 digits)
+      } else {
+        // Generic format: 2PPPPPWWWWWC (1-digit prefix, 5-digit product, 5-digit weight, 1 check)
+        productPrefix = barcode.substring(1, 6) // Positions 1-5 (5 digits)
+        weightDigits = barcode.substring(6, 11) // Positions 6-10 (5 digits)
+      }
+
+      // Convert weight: NO ROUNDING - maintain full decimal precision
+      // Weight is in grams, divide by 1000 to get kg (e.g., 01250 = 1.250 kg)
+      const weightValue = parseInt(weightDigits, 10) / 1000
+
+      // Find product by weight barcode prefix (try both formats)
+      let weightProduct = products.find(p =>
         p.isWeightProduct &&
         p.weightBarcodePrefix?.padStart(5, '0') === productPrefix
       )
 
+      // If not found with 5-digit prefix, try with 4-digit prefix (for 2X format)
+      if (!weightProduct && (prefix2.startsWith('2'))) {
+        const prefix4 = barcode.substring(2, 6) // 4-digit product code
+        const weight4Digits = barcode.substring(6, 11) // 5-digit weight
+        weightProduct = products.find(p =>
+          p.isWeightProduct &&
+          p.weightBarcodePrefix?.padStart(4, '0') === prefix4
+        )
+        if (weightProduct) {
+          // Recalculate weight with 4-digit product code format
+          const newWeightValue = parseInt(weight4Digits, 10) / 1000
+          if (newWeightValue > 0) {
+            addToCart(weightProduct, null, newWeightValue)
+            setSearch('')
+            setStockNotification(`${weightProduct.name}: ${newWeightValue.toFixed(3)} ${weightProduct.unit || 'kg'}`)
+            setTimeout(() => setStockNotification(null), 2000)
+            return
+          }
+        }
+      }
+
       if (weightProduct && weightValue > 0) {
-        // Add product with extracted weight as quantity
+        // Add product with extracted weight as quantity - NO ROUNDING
         addToCart(weightProduct, null, weightValue)
         setSearch('')
         setStockNotification(`${weightProduct.name}: ${weightValue.toFixed(3)} ${weightProduct.unit || 'kg'}`)
