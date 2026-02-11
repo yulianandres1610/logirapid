@@ -77,12 +77,12 @@ export async function GET(
         r.created_at,
         r.created_by,
         o.order_number,
-        s.name as supplier_name,
-        s.supplier_code,
+        COALESCE(s.name, 'Proveedor no encontrado') as supplier_name,
+        COALESCE(s.supplier_code, '') as supplier_code,
         COALESCE(u.firstname || ' ' || u.lastname, u.email) as created_by_name
       FROM consignment_returns r
       LEFT JOIN consignment_orders o ON o.id = r.order_id
-      JOIN market_suppliers s ON s.id = r.supplier_id
+      LEFT JOIN market_suppliers s ON s.id = r.supplier_id
       LEFT JOIN users u ON u.id = r.created_by
       WHERE r.warehouse_id = $1 AND r.status = 'pending'
       ORDER BY r.created_at DESC
@@ -152,9 +152,10 @@ export async function GET(
 
   } catch (error) {
     console.error('[Pending Returns GET] Error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
     return NextResponse.json({
       success: false,
-      error: 'Error al cargar devoluciones pendientes'
+      error: `Error al cargar devoluciones pendientes: ${errorMessage}`
     }, { status: 500 })
   }
 }
