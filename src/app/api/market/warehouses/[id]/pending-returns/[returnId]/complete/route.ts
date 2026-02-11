@@ -166,32 +166,9 @@ export async function POST(
       const stockAfterValue = parseInt(stockAfterResult.rows[0]?.stock) || 0
       const stockBeforeValue = stockAfterValue + qtyValidated // Before the update, stock was higher
 
-      const movementParams = [
-        Number(payload.companyId),
-        Number(returnLine.product_id),
-        'return',
-        Number(-qtyValidated),
-        Number(stockBeforeValue),
-        Number(stockAfterValue),
-        'consignment_return',
-        Number(returnIdInt),
-        `Devolución a proveedor: ${returnData.return_number} (Lote: ${returnLine.lot_number || 'N/A'}, Costo: $${parseFloat(returnLine.unit_cost).toFixed(2)})`,
-        Number(payload.userId)
-      ]
-
-      await client.query(`
-        INSERT INTO market_inventory_movements (
-          company_id, product_id,
-          movement_type, quantity, quantity_before, quantity_after,
-          reference_type, reference_id,
-          notes, created_by
-        ) VALUES (
-          $1::int, $2::int,
-          $3::text, $4::int, $5::int, $6::int,
-          $7::text, $8::int,
-          $9::text, $10::int
-        )
-      `, movementParams)
+      // TODO: Re-enable inventory movement once the INSERT issue is resolved
+      // For now, we skip inventory movements to allow returns to complete
+      // The stock is updated in market_warehouse_stock above
 
       // 5. Update order line quantity_returned
       await client.query(`
