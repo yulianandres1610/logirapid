@@ -424,9 +424,11 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
 
     const salesProgress = totalUnitsOrdered > 0 ? (totalUnitsSold / totalUnitsOrdered) * 100 : 0
     const marginPercent = totalCostOfSold > 0 ? ((totalSalesValue - totalCostOfSold) / totalCostOfSold) * 100 : 0
+    // Amount to pay supplier = total cost - returned - already paid
+    const toPaySupplier = order.totalCost - order.totalReturned - order.totalPaid
     const pendingAmount = order.totalSold - order.totalPaid
 
-    return { salesProgress, marginPercent, pendingAmount, totalSalesValue }
+    return { salesProgress, marginPercent, pendingAmount, totalSalesValue, toPaySupplier }
   }
 
   if (loading) {
@@ -1026,7 +1028,13 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
                   value: formatCurrency(order.totalPaid),
                   icon: CreditCard,
                   color: 'amber'
-                }
+                },
+                ...(order.totalReturned > 0 ? [{
+                  label: 'Devuelto',
+                  value: formatCurrency(order.totalReturned),
+                  icon: Package,
+                  color: 'red'
+                }] : [])
               ].map((stat, idx) => (
                 <motion.div
                   key={stat.label}
