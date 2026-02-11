@@ -109,7 +109,6 @@ export async function POST(
         SELECT
           ol.id,
           ol.product_id,
-          ol.variant_id,
           ol.unit_cost
         FROM consignment_order_lines ol
         WHERE ol.id = $1 AND ol.order_id = $2
@@ -290,17 +289,13 @@ export async function GET(
       SELECT
         ol.id as order_line_id,
         ol.product_id,
-        ol.variant_id,
         ol.unit_cost,
         p.name as product_name,
         p.sku as product_sku,
         p.barcode as product_barcode,
-        (SELECT url FROM market_product_images WHERE product_id = p.id AND is_primary = true LIMIT 1) as image_url,
-        pv.name as variant_name,
-        pv.sku as variant_sku
+        (SELECT url FROM market_product_images WHERE product_id = p.id AND is_primary = true LIMIT 1) as image_url
       FROM consignment_order_lines ol
       JOIN market_products p ON p.id = ol.product_id
-      LEFT JOIN market_product_variants pv ON pv.id = ol.variant_id
       WHERE ol.order_id = $1
     `, [orderId])
 
@@ -308,11 +303,8 @@ export async function GET(
     const productsWithStock: Array<{
       orderLineId: number
       productId: number
-      variantId: number | null
       productName: string
       productSku: string
-      variantName: string | null
-      variantSku: string | null
       imageUrl: string | null
       unitCost: number
       warehouses: Array<{
@@ -343,11 +335,8 @@ export async function GET(
         productsWithStock.push({
           orderLineId: line.order_line_id,
           productId: line.product_id,
-          variantId: line.variant_id,
           productName: line.product_name,
           productSku: line.product_sku,
-          variantName: line.variant_name,
-          variantSku: line.variant_sku,
           imageUrl: line.image_url,
           unitCost: parseFloat(line.unit_cost),
           warehouses: stockResult.rows.map(w => ({

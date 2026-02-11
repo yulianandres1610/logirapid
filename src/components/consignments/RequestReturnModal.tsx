@@ -28,11 +28,8 @@ interface WarehouseStock {
 interface ProductWithStock {
   orderLineId: number
   productId: number
-  variantId: number | null
   productName: string
   productSku: string
-  variantName: string | null
-  variantSku: string | null
   imageUrl: string | null
   unitCost: number
   warehouses: WarehouseStock[]
@@ -112,9 +109,7 @@ export default function RequestReturnModal({
               warehouseId: wh.warehouseId,
               quantity: 0,
               available: wh.quantityAvailable,
-              productName: product.variantName
-                ? `${product.productName} - ${product.variantName}`
-                : product.productName,
+              productName: product.productName,
               unitCost: product.unitCost
             })
           }
@@ -358,12 +353,10 @@ export default function RequestReturnModal({
                                   'font-medium truncate',
                                   theme === 'dark' ? 'text-white' : 'text-gray-900'
                                 )}>
-                                  {product.variantName
-                                    ? `${product.productName} - ${product.variantName}`
-                                    : product.productName}
+                                  {product.productName}
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  SKU: {product.variantSku || product.productSku}
+                                  SKU: {product.productSku}
                                 </p>
                                 <span className="text-xs text-green-600 dark:text-green-400">
                                   ${product.unitCost.toFixed(2)}/ud
