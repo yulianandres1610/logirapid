@@ -31,6 +31,7 @@ import WholesaleDeliveryValidationView from '@/components/warehouse/WholesaleDel
 import UnifiedReceptionView from '@/components/warehouse/UnifiedReceptionView'
 import ReturnTypeSelector, { type ReturnType } from '@/components/warehouse/ReturnTypeSelector'
 import SupplierReturnView from '@/components/warehouse/SupplierReturnView'
+import PendingSupplierReturnsView from '@/components/warehouse/PendingSupplierReturnsView'
 import POSReturnReceiveView from '@/components/warehouse/POSReturnReceiveView'
 import PrintLabelsView from '@/components/warehouse/PrintLabelsView'
 import StockReportView from '@/components/warehouse/StockReportView'
@@ -1250,14 +1251,14 @@ export default function WarehouseOperationsPage() {
               currentWarehouse={warehouse}
             />
           ) : returnType === 'supplier' ? (
-            <SupplierReturnView
+            <PendingSupplierReturnsView
               warehouseId={warehouseId}
               warehouseName={warehouse.name}
               onBack={handleReturnBack}
               onComplete={(data) => {
                 setReturnType(null)
                 setOperation(initialOperationState)
-                setSuccess(`Devolucion completada: ${data.totalUnits} unidades devueltas a ${data.supplierName}`)
+                setSuccess(`Devolucion completada: ${data.returnNumber} - ${data.totalUnits} unidades devueltas a ${data.supplierName}`)
                 setTimeout(() => setSuccess(null), 3000)
               }}
             />

@@ -47,6 +47,7 @@ import { useNotifications } from '@/contexts/NotificationContext'
 import { cn } from '@/lib/utils'
 import { InvoiceGrid, InvoiceData } from '@/components/orders/InvoicePreviewCard'
 import { InvoiceUploader, InvoiceFile } from '@/components/orders/InvoiceUploader'
+import RequestReturnModal from '@/components/consignments/RequestReturnModal'
 
 interface Supplier {
   id: number
@@ -191,6 +192,7 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
   const [uploadingInvoices, setUploadingInvoices] = useState(false)
   const [accepting, setAccepting] = useState(false)
   const [resubmitting, setResubmitting] = useState(false)
+  const [showReturnModal, setShowReturnModal] = useState(false)
 
   useEffect(() => {
     fetchOrder()
@@ -514,20 +516,41 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
                 </motion.button>
               </Link>
 
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => window.print()}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
-                  theme === 'dark'
-                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              <div className="flex items-center gap-2">
+                {/* Return Button - show only if order has available stock */}
+                {order && ['received', 'selling', 'paid'].includes(order.status) &&
+                  order.lines.some(l => (l.quantityReceived - l.quantitySold - l.quantityReturned) > 0) && (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowReturnModal(true)}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
+                      theme === 'dark'
+                        ? 'bg-orange-900/30 text-orange-400 hover:bg-orange-900/50'
+                        : 'bg-orange-100 text-orange-600 hover:bg-orange-200'
+                    )}
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    <span className="font-medium">Solicitar Devolución</span>
+                  </motion.button>
                 )}
-              >
-                <Printer className="w-4 h-4" />
-                <span className="font-medium">Imprimir</span>
-              </motion.button>
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => window.print()}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
+                    theme === 'dark'
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  )}
+                >
+                  <Printer className="w-4 h-4" />
+                  <span className="font-medium">Imprimir</span>
+                </motion.button>
+              </div>
             </div>
 
             {/* Order Header Card */}
@@ -1605,6 +1628,28 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
 
           </div>
         </div>
+
+        {/* Request Return Modal */}
+        {order && (
+          <RequestReturnModal
+            isOpen={showReturnModal}
+            onClose={() => setShowReturnModal(false)}
+            onSuccess={(data) => {
+              showNotification(
+                'success',
+                'Devolución solicitada',
+                `${data.returnNumber}: ${data.totalUnits} unidades por $${data.totalValue.toFixed(2)}`
+              )
+              setShowReturnModal(false)
+              fetchOrder() // Refresh order data
+            }}
+            orderId={order.id}
+            orderNumber={order.orderNumber}
+            supplier={order.supplier}
+            warehouse={order.warehouse}
+            lines={order.lines}
+          />
+        )}
       </DashboardLayout>
     </ProtectedRoute>
   )

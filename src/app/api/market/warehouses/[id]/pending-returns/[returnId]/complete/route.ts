@@ -1,0 +1,304 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import jwt from 'jsonwebtoken'
+import { db } from '@/lib/database'
+
+interface JWTPayload {
+  userId: number
+  email: string
+  role: string
+  companyId: number
+}
+
+async function getPayload(): Promise<JWTPayload | null> {
+  const cookieStore = await cookies()
+  const token = cookieStore.get('auth-token')?.value
+  if (!token) return null
+
+  try {
+    const secret = process.env.JWT_SECRET || 'fallback-secret'
+    return jwt.verify(token, secret) as JWTPayload
+  } catch {
+    return null
+  }
+}
+
+interface ValidatedLine {
+  lineId: number
+  quantityValidated: number
+}
+
+/**
+ * POST /api/market/warehouses/[id]/pending-returns/[returnId]/complete
+ * Complete a pending supplier return
+ * Updates: inventory, order lines, supplier wallet, creates movements
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string; returnId: string }> }
+) {
+  const client = await db.getClient()
+
+  try {
+    const payload = await getPayload()
+    if (!payload) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
+    }
+
+    const { id, returnId } = await params
+    const warehouseId = parseInt(id)
+    const returnIdInt = parseInt(returnId)
+
+    const { lines, notes: validationNotes } = await request.json() as {
+      lines: ValidatedLine[]
+      notes?: string
+    }
+
+    // Start transaction
+    await client.query('BEGIN')
+
+    // Verify warehouse belongs to company
+    const warehouseResult = await client.query(
+      'SELECT id, name, code, company_id FROM market_warehouses WHERE id = $1 AND company_id = $2',
+      [warehouseId, payload.companyId]
+    )
+
+    if (warehouseResult.rows.length === 0) {
+      await client.query('ROLLBACK')
+      return NextResponse.json({
+        success: false,
+        error: 'Almacén no encontrado'
+      }, { status: 404 })
+    }
+
+    // Verify return exists and is pending
+    const returnResult = await client.query(`
+      SELECT
+        r.*,
+        s.company_id,
+        o.order_number
+      FROM consignment_returns r
+      JOIN market_suppliers s ON s.id = r.supplier_id
+      JOIN consignment_orders o ON o.id = r.order_id
+      WHERE r.id = $1 AND r.warehouse_id = $2 AND s.company_id = $3
+    `, [returnIdInt, warehouseId, payload.companyId])
+
+    if (returnResult.rows.length === 0) {
+      await client.query('ROLLBACK')
+      return NextResponse.json({
+        success: false,
+        error: 'Devolución no encontrada'
+      }, { status: 404 })
+    }
+
+    const returnData = returnResult.rows[0]
+
+    if (returnData.status !== 'pending') {
+      await client.query('ROLLBACK')
+      return NextResponse.json({
+        success: false,
+        error: 'Solo se pueden completar devoluciones pendientes'
+      }, { status: 400 })
+    }
+
+    let totalValidated = 0
+    let totalValueValidated = 0
+
+    // Process each line
+    for (const line of lines) {
+      if (line.quantityValidated <= 0) continue
+
+      // Get return line details
+      const lineResult = await client.query(`
+        SELECT
+          rl.*,
+          ol.lot_number,
+          p.name as product_name
+        FROM consignment_return_lines rl
+        JOIN consignment_order_lines ol ON ol.id = rl.order_line_id
+        JOIN market_products p ON p.id = rl.product_id
+        WHERE rl.id = $1 AND rl.return_id = $2
+      `, [line.lineId, returnIdInt])
+
+      if (lineResult.rows.length === 0) continue
+
+      const returnLine = lineResult.rows[0]
+      const qtyValidated = Math.min(line.quantityValidated, parseInt(returnLine.quantity_to_return))
+
+      // 1. Update return line with validated quantity
+      await client.query(`
+        UPDATE consignment_return_lines
+        SET quantity_validated = $1
+        WHERE id = $2
+      `, [qtyValidated, line.lineId])
+
+      // 2. Update lot inventory (if exists)
+      if (returnLine.lot_inventory_id) {
+        await client.query(`
+          UPDATE consignment_lot_inventory
+          SET
+            quantity_available = quantity_available - $1,
+            quantity_returned = COALESCE(quantity_returned, 0) + $1
+          WHERE id = $2
+        `, [qtyValidated, returnLine.lot_inventory_id])
+      }
+
+      // 3. Update warehouse stock
+      await client.query(`
+        UPDATE market_warehouse_stock
+        SET
+          quantity_on_hand = quantity_on_hand - $1,
+          updated_at = NOW()
+        WHERE warehouse_id = $2 AND product_id = $3 AND (variant_id = $4 OR (variant_id IS NULL AND $4 IS NULL))
+      `, [qtyValidated, warehouseId, returnLine.product_id, returnLine.variant_id])
+
+      // 4. Create inventory movement
+      const stockAfterResult = await client.query(`
+        SELECT COALESCE(quantity_on_hand, 0) as stock
+        FROM market_warehouse_stock
+        WHERE warehouse_id = $1 AND product_id = $2 AND (variant_id = $3 OR (variant_id IS NULL AND $3 IS NULL))
+      `, [warehouseId, returnLine.product_id, returnLine.variant_id])
+
+      const stockAfter = stockAfterResult.rows[0]?.stock || 0
+
+      await client.query(`
+        INSERT INTO market_inventory_movements (
+          company_id, warehouse_id, product_id, variant_id,
+          movement_type, quantity_change, quantity_after,
+          reference_type, reference_id,
+          lot_number, unit_cost, notes, created_by
+        ) VALUES (
+          $1, $2, $3, $4,
+          'return', $5, $6,
+          'consignment_return', $7,
+          $8, $9, $10, $11
+        )
+      `, [
+        payload.companyId,
+        warehouseId,
+        returnLine.product_id,
+        returnLine.variant_id,
+        -qtyValidated,
+        stockAfter,
+        returnIdInt,
+        returnLine.lot_number,
+        parseFloat(returnLine.unit_cost),
+        `Devolución a proveedor: ${returnData.return_number}`,
+        payload.userId
+      ])
+
+      // 5. Update order line quantity_returned
+      await client.query(`
+        UPDATE consignment_order_lines
+        SET quantity_returned = COALESCE(quantity_returned, 0) + $1
+        WHERE id = $2
+      `, [qtyValidated, returnLine.order_line_id])
+
+      totalValidated += qtyValidated
+      totalValueValidated += qtyValidated * parseFloat(returnLine.unit_cost)
+    }
+
+    // 6. Update return status to completed
+    await client.query(`
+      UPDATE consignment_returns
+      SET
+        status = 'completed',
+        total_units = $1,
+        total_value = $2,
+        validated_by = $3,
+        validated_at = NOW(),
+        notes = CASE WHEN $4 IS NOT NULL THEN COALESCE(notes || E'\\n', '') || $4 ELSE notes END
+      WHERE id = $5
+    `, [totalValidated, totalValueValidated, payload.userId, validationNotes, returnIdInt])
+
+    // 7. Update order totals (total_returned)
+    await client.query(`
+      UPDATE consignment_orders
+      SET
+        total_returned = COALESCE(total_returned, 0) + $1,
+        updated_at = NOW()
+      WHERE id = $2
+    `, [totalValueValidated, returnData.order_id])
+
+    // 8. Update supplier wallet - decrease available balance
+    const walletResult = await client.query(
+      'SELECT id, balance_available FROM consignment_supplier_wallets WHERE supplier_id = $1',
+      [returnData.supplier_id]
+    )
+
+    if (walletResult.rows.length > 0) {
+      const wallet = walletResult.rows[0]
+      const newBalance = parseFloat(wallet.balance_available) - totalValueValidated
+
+      await client.query(`
+        UPDATE consignment_supplier_wallets
+        SET
+          balance_available = $1,
+          total_returned = COALESCE(total_returned, 0) + $2,
+          updated_at = NOW()
+        WHERE supplier_id = $3
+      `, [newBalance, totalValueValidated, returnData.supplier_id])
+
+      // Create wallet transaction
+      await client.query(`
+        INSERT INTO consignment_wallet_transactions (
+          wallet_id, order_id, transaction_type, amount, balance_after, notes, created_by
+        ) VALUES ($1, $2, 'return', $3, $4, $5, $6)
+      `, [
+        wallet.id,
+        returnData.order_id,
+        -totalValueValidated,
+        newBalance,
+        `Devolución ${returnData.return_number}: ${totalValidated} unidades`,
+        payload.userId
+      ])
+    }
+
+    // 9. Check if order should be liquidated (all received = sold + returned)
+    const orderCheckResult = await client.query(`
+      SELECT
+        SUM(quantity_received) as total_received,
+        SUM(quantity_sold) as total_sold,
+        SUM(quantity_returned) as total_returned
+      FROM consignment_order_lines
+      WHERE order_id = $1
+    `, [returnData.order_id])
+
+    const orderTotals = orderCheckResult.rows[0]
+    const totalReceived = parseInt(orderTotals.total_received) || 0
+    const totalSold = parseInt(orderTotals.total_sold) || 0
+    const totalReturned = parseInt(orderTotals.total_returned) || 0
+
+    if (totalReceived > 0 && (totalSold + totalReturned) >= totalReceived) {
+      await client.query(`
+        UPDATE consignment_orders
+        SET status = 'liquidated', completed_at = NOW()
+        WHERE id = $1
+      `, [returnData.order_id])
+    }
+
+    // Commit transaction
+    await client.query('COMMIT')
+
+    return NextResponse.json({
+      success: true,
+      message: 'Devolución completada exitosamente',
+      data: {
+        returnId: returnIdInt,
+        returnNumber: returnData.return_number,
+        totalUnits: totalValidated,
+        totalValue: totalValueValidated
+      }
+    })
+
+  } catch (error) {
+    await client.query('ROLLBACK')
+    console.error('[Complete Return] Error:', error)
+    return NextResponse.json({
+      success: false,
+      error: 'Error al completar devolución'
+    }, { status: 500 })
+  } finally {
+    client.release()
+  }
+}
