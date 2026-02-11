@@ -186,10 +186,10 @@ export async function POST(
           reference_type, reference_id,
           notes, created_by
         ) VALUES (
-          $1, $2,
-          $3, $4, $5, $6,
-          $7, $8,
-          $9, $10
+          $1::int, $2::int,
+          $3::text, $4::int, $5::int, $6::int,
+          $7::text, $8::int,
+          $9::text, $10::int
         )
       `, movementParams)
 
