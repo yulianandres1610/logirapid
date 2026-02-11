@@ -143,12 +143,32 @@ export async function POST(
       }
 
       const lotInventory = lotResult.rows[0]
-      const available = parseInt(lotInventory.quantity_available) || 0
+      const availableInLot = parseInt(lotInventory.quantity_available) || 0
+
+      // Check for pending returns for this same order line
+      const pendingReturnsResult = await db.query(`
+        SELECT COALESCE(SUM(rl.quantity_to_return), 0) as pending_qty
+        FROM consignment_return_lines rl
+        JOIN consignment_returns r ON r.id = rl.return_id
+        WHERE rl.order_line_id = $1
+          AND rl.lot_inventory_id = $2
+          AND r.status = 'pending'
+      `, [line.orderLineId, lotInventory.id])
+
+      const pendingQty = parseInt(pendingReturnsResult.rows[0]?.pending_qty) || 0
+      const available = availableInLot - pendingQty
+
+      if (available <= 0) {
+        return NextResponse.json({
+          success: false,
+          error: `Ya existe una devolución pendiente para este producto. Complete o cancele la devolución pendiente primero.`
+        }, { status: 400 })
+      }
 
       if (line.quantity > available) {
         return NextResponse.json({
           success: false,
-          error: `Cantidad solicitada (${line.quantity}) excede disponible (${available}) en el almacén`
+          error: `Cantidad solicitada (${line.quantity}) excede disponible (${available}) en el almacén (${pendingQty} unidades en devolución pendiente)`
         }, { status: 400 })
       }
 
@@ -317,12 +337,21 @@ export async function GET(
 
     for (const line of linesResult.rows) {
       // Get available stock in each warehouse from lot inventory
+      // Subtract any pending returns from the available quantity
       const stockResult = await db.query(`
         SELECT
+          li.id as lot_id,
           li.warehouse_id,
           li.quantity_available,
           w.name as warehouse_name,
-          w.code as warehouse_code
+          w.code as warehouse_code,
+          COALESCE((
+            SELECT SUM(rl.quantity_to_return)
+            FROM consignment_return_lines rl
+            JOIN consignment_returns r ON r.id = rl.return_id
+            WHERE rl.lot_inventory_id = li.id
+              AND r.status = 'pending'
+          ), 0) as pending_returns
         FROM consignment_lot_inventory li
         JOIN market_warehouses w ON w.id = li.warehouse_id
         WHERE li.order_line_id = $1
@@ -330,8 +359,24 @@ export async function GET(
         ORDER BY w.name
       `, [line.order_line_id])
 
+      // Filter warehouses that have available stock after subtracting pending returns
+      const warehousesWithStock = stockResult.rows
+        .map(w => {
+          const available = parseInt(w.quantity_available) || 0
+          const pending = parseInt(w.pending_returns) || 0
+          const realAvailable = available - pending
+          return {
+            warehouseId: w.warehouse_id,
+            warehouseName: w.warehouse_name,
+            warehouseCode: w.warehouse_code,
+            quantityAvailable: realAvailable,
+            pendingReturns: pending
+          }
+        })
+        .filter(w => w.quantityAvailable > 0)
+
       // Only include products that have stock somewhere
-      if (stockResult.rows.length > 0) {
+      if (warehousesWithStock.length > 0) {
         productsWithStock.push({
           orderLineId: line.order_line_id,
           productId: line.product_id,
@@ -339,12 +384,7 @@ export async function GET(
           productSku: line.product_sku,
           imageUrl: line.image_url,
           unitCost: parseFloat(line.unit_cost),
-          warehouses: stockResult.rows.map(w => ({
-            warehouseId: w.warehouse_id,
-            warehouseName: w.warehouse_name,
-            warehouseCode: w.warehouse_code,
-            quantityAvailable: parseInt(w.quantity_available)
-          }))
+          warehouses: warehousesWithStock
         })
       }
     }
