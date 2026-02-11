@@ -1362,6 +1362,7 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
                       <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ordenado</th>
                       <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Recibido</th>
                       <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Vendido</th>
+                      <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Devuelto</th>
                       <th className="text-right py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Costo</th>
                       <th className="text-right py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">P.Venta</th>
                       <th className="text-right py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Subtotal</th>
@@ -1464,6 +1465,16 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
                                 </div>
                               )}
                             </div>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <span className={cn(
+                              'inline-flex items-center justify-center w-10 h-10 rounded-xl font-semibold',
+                              line.quantityReturned > 0
+                                ? theme === 'dark' ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-100 text-orange-600'
+                                : theme === 'dark' ? 'bg-gray-700 text-gray-500' : 'bg-gray-100 text-gray-400'
+                            )}>
+                              {line.quantityReturned}
+                            </span>
                           </td>
                           <td className="py-4 px-4 text-right">
                             <span className="text-gray-500">{formatCurrency(line.unitCost)}</span>
