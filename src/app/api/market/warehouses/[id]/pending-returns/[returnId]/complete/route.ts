@@ -159,8 +159,8 @@ export async function POST(
         WHERE warehouse_id = $1 AND product_id = $2
       `, [warehouseId, returnLine.product_id])
 
-      const stockAfter = parseInt(stockAfterResult.rows[0]?.stock) || 0
-      const stockBefore = stockAfter + qtyValidated // Before the update, stock was higher
+      const stockAfterValue = parseInt(stockAfterResult.rows[0]?.stock) || 0
+      const stockBeforeValue = stockAfterValue + qtyValidated // Before the update, stock was higher
 
       await client.query(`
         INSERT INTO market_inventory_movements (
@@ -170,16 +170,18 @@ export async function POST(
           notes, created_by
         ) VALUES (
           $1, $2,
-          'return', $3, $4, $5,
-          'consignment_return', $6,
-          $7, $8
+          $3, $4, $5, $6,
+          $7, $8,
+          $9, $10
         )
       `, [
         payload.companyId,
         returnLine.product_id,
+        'return',
         -qtyValidated,
-        stockBefore,
-        stockAfter,
+        stockBeforeValue,
+        stockAfterValue,
+        'consignment_return',
         returnIdInt,
         `Devolución a proveedor: ${returnData.return_number} (Lote: ${returnLine.lot_number || 'N/A'}, Costo: $${parseFloat(returnLine.unit_cost).toFixed(2)})`,
         payload.userId
