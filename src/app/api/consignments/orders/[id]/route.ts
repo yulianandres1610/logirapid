@@ -127,12 +127,23 @@ export async function GET(
       ORDER BY ol.id
     `, [orderId])
 
-    // Debug log to check variant data
-    console.log('[Order GET] Lines data:', linesResult.rows.map(l => ({
-      id: l.id,
-      variant_id: l.variant_id,
-      variant_name: l.variant_name
-    })))
+    // Get completed returns for this order
+    const returnsResult = await db.query(`
+      SELECT
+        r.id,
+        r.return_number,
+        r.status,
+        r.total_units,
+        r.total_value,
+        r.reason,
+        r.validated_at,
+        r.created_at,
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as validated_by_name
+      FROM consignment_returns r
+      LEFT JOIN users u ON u.id = r.validated_by
+      WHERE r.order_id = $1
+      ORDER BY r.created_at DESC
+    `, [orderId])
 
     const order = {
       id: o.id,
@@ -192,6 +203,17 @@ export async function GET(
         unitPrice: parseFloat(l.unit_price) || 0,
         lotNumber: l.lot_number,
         expirationDate: l.expiration_date
+      })),
+      returns: returnsResult.rows.map(r => ({
+        id: r.id,
+        returnNumber: r.return_number,
+        status: r.status,
+        totalUnits: parseInt(r.total_units) || 0,
+        totalValue: parseFloat(r.total_value) || 0,
+        reason: r.reason,
+        validatedAt: r.validated_at,
+        validatedByName: r.validated_by_name,
+        createdAt: r.created_at
       }))
     }
 

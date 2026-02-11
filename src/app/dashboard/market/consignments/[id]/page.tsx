@@ -116,6 +116,19 @@ interface ConsignmentOrder {
   validatedAt: string | null
   createdAt: string
   lines: OrderLine[]
+  returns: OrderReturn[]
+}
+
+interface OrderReturn {
+  id: number
+  returnNumber: string
+  status: string
+  totalUnits: number
+  totalValue: number
+  reason: string
+  validatedAt: string | null
+  validatedByName: string | null
+  createdAt: string
 }
 
 const STATUS_CONFIG: Record<string, {
@@ -889,6 +902,33 @@ export default function ConsignmentOrderDetailPage({ params }: { params: Promise
                     </div>
                   </div>
                 )}
+
+                {/* Returns */}
+                {order.returns?.filter(r => r.status === 'completed').map(ret => (
+                  <div key={ret.id} className="flex items-start gap-4 relative">
+                    <div className={cn(
+                      'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                      theme === 'dark' ? 'bg-orange-900/50 ring-4 ring-gray-800' : 'bg-orange-100 ring-4 ring-white'
+                    )}>
+                      <RotateCcw className="w-4 h-4 text-orange-500" />
+                    </div>
+                    <div className="pt-1">
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>Devolución completada</p>
+                      <p className="text-xs text-gray-500">
+                        {ret.returnNumber} · {ret.totalUnits} uds · {formatCurrency(ret.totalValue)}
+                      </p>
+                      {ret.validatedByName && (
+                        <p className="text-xs text-gray-500">por {ret.validatedByName}</p>
+                      )}
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {ret.validatedAt ? formatDateTime(ret.validatedAt) : formatDateTime(ret.createdAt)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
 
                 {/* Completed */}
                 {order.completedAt && (

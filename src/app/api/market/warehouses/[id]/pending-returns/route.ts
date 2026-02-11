@@ -62,6 +62,7 @@ export async function GET(
     }
 
     // Get pending returns with lines
+    // First, just get the basic return data
     const returnsResult = await db.query(`
       SELECT
         r.id,
@@ -73,23 +74,60 @@ export async function GET(
         r.total_units,
         r.total_value,
         r.reason,
-        r.notes,
         r.created_at,
-        r.created_by,
-        o.order_number,
-        COALESCE(s.name, 'Proveedor no encontrado') as supplier_name,
-        COALESCE(s.supplier_code, '') as supplier_code,
-        COALESCE(u.firstname || ' ' || u.lastname, u.email) as created_by_name
+        r.created_by
       FROM consignment_returns r
-      LEFT JOIN consignment_orders o ON o.id = r.order_id
-      LEFT JOIN market_suppliers s ON s.id = r.supplier_id
-      LEFT JOIN users u ON u.id = r.created_by
       WHERE r.warehouse_id = $1 AND r.status = 'pending'
       ORDER BY r.created_at DESC
     `, [warehouseId])
 
+    // For each return, get additional info with separate queries to avoid JOIN issues
+    const enrichedReturns = await Promise.all(returnsResult.rows.map(async (r) => {
+      // Get order info
+      let orderNumber = null
+      if (r.order_id) {
+        const orderResult = await db.query(
+          'SELECT order_number FROM consignment_orders WHERE id = $1',
+          [r.order_id]
+        )
+        orderNumber = orderResult.rows[0]?.order_number
+      }
+
+      // Get supplier info
+      let supplierName = 'Proveedor no encontrado'
+      let supplierCode = ''
+      if (r.supplier_id) {
+        const supplierResult = await db.query(
+          'SELECT name, supplier_code FROM market_suppliers WHERE id = $1',
+          [r.supplier_id]
+        )
+        if (supplierResult.rows.length > 0) {
+          supplierName = supplierResult.rows[0].name
+          supplierCode = supplierResult.rows[0].supplier_code || ''
+        }
+      }
+
+      // Get created by name
+      let createdByName = null
+      if (r.created_by) {
+        const userResult = await db.query(
+          "SELECT COALESCE(firstname || ' ' || lastname, email) as name FROM users WHERE id = $1",
+          [r.created_by]
+        )
+        createdByName = userResult.rows[0]?.name
+      }
+
+      return {
+        ...r,
+        order_number: orderNumber,
+        supplier_name: supplierName,
+        supplier_code: supplierCode,
+        created_by_name: createdByName
+      }
+    }))
+
     // Get return lines for each return
-    const pendingReturns = await Promise.all(returnsResult.rows.map(async (r) => {
+    const pendingReturns = await Promise.all(enrichedReturns.map(async (r) => {
       const linesResult = await db.query(`
         SELECT
           rl.id,
