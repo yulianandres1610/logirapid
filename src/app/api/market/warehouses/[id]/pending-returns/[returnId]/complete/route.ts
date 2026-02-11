@@ -79,7 +79,7 @@ export async function POST(
         o.order_number
       FROM consignment_returns r
       JOIN market_suppliers s ON s.id = r.supplier_id
-      JOIN consignment_orders o ON o.id = r.order_id
+      LEFT JOIN consignment_orders o ON o.id = r.order_id
       WHERE r.id = $1 AND r.warehouse_id = $2 AND s.company_id = $3
     `, [returnIdInt, warehouseId, payload.companyId])
 
@@ -149,35 +149,34 @@ export async function POST(
         SET
           quantity_on_hand = quantity_on_hand - $1,
           updated_at = NOW()
-        WHERE warehouse_id = $2 AND product_id = $3 AND (variant_id = $4 OR (variant_id IS NULL AND $4 IS NULL))
-      `, [qtyValidated, warehouseId, returnLine.product_id, returnLine.variant_id])
+        WHERE warehouse_id = $2 AND product_id = $3
+      `, [qtyValidated, warehouseId, returnLine.product_id])
 
       // 4. Create inventory movement
       const stockAfterResult = await client.query(`
         SELECT COALESCE(quantity_on_hand, 0) as stock
         FROM market_warehouse_stock
-        WHERE warehouse_id = $1 AND product_id = $2 AND (variant_id = $3 OR (variant_id IS NULL AND $3 IS NULL))
-      `, [warehouseId, returnLine.product_id, returnLine.variant_id])
+        WHERE warehouse_id = $1 AND product_id = $2
+      `, [warehouseId, returnLine.product_id])
 
       const stockAfter = stockAfterResult.rows[0]?.stock || 0
 
       await client.query(`
         INSERT INTO market_inventory_movements (
-          company_id, warehouse_id, product_id, variant_id,
+          company_id, warehouse_id, product_id,
           movement_type, quantity_change, quantity_after,
           reference_type, reference_id,
           lot_number, unit_cost, notes, created_by
         ) VALUES (
-          $1, $2, $3, $4,
-          'return', $5, $6,
-          'consignment_return', $7,
-          $8, $9, $10, $11
+          $1, $2, $3,
+          'return', $4, $5,
+          'consignment_return', $6,
+          $7, $8, $9, $10
         )
       `, [
         payload.companyId,
         warehouseId,
         returnLine.product_id,
-        returnLine.variant_id,
         -qtyValidated,
         stockAfter,
         returnIdInt,
@@ -211,14 +210,16 @@ export async function POST(
       WHERE id = $5
     `, [totalValidated, totalValueValidated, payload.userId, validationNotes, returnIdInt])
 
-    // 7. Update order totals (total_returned)
-    await client.query(`
-      UPDATE consignment_orders
-      SET
-        total_returned = COALESCE(total_returned, 0) + $1,
-        updated_at = NOW()
-      WHERE id = $2
-    `, [totalValueValidated, returnData.order_id])
+    // 7. Update order totals (total_returned) - only if order exists
+    if (returnData.order_id) {
+      await client.query(`
+        UPDATE consignment_orders
+        SET
+          total_returned = COALESCE(total_returned, 0) + $1,
+          updated_at = NOW()
+        WHERE id = $2
+      `, [totalValueValidated, returnData.order_id])
+    }
 
     // 8. Update supplier wallet - decrease available balance
     const walletResult = await client.query(
@@ -254,27 +255,29 @@ export async function POST(
       ])
     }
 
-    // 9. Check if order should be liquidated (all received = sold + returned)
-    const orderCheckResult = await client.query(`
-      SELECT
-        SUM(quantity_received) as total_received,
-        SUM(quantity_sold) as total_sold,
-        SUM(quantity_returned) as total_returned
-      FROM consignment_order_lines
-      WHERE order_id = $1
-    `, [returnData.order_id])
-
-    const orderTotals = orderCheckResult.rows[0]
-    const totalReceived = parseInt(orderTotals.total_received) || 0
-    const totalSold = parseInt(orderTotals.total_sold) || 0
-    const totalReturned = parseInt(orderTotals.total_returned) || 0
-
-    if (totalReceived > 0 && (totalSold + totalReturned) >= totalReceived) {
-      await client.query(`
-        UPDATE consignment_orders
-        SET status = 'liquidated', completed_at = NOW()
-        WHERE id = $1
+    // 9. Check if order should be liquidated (all received = sold + returned) - only if order exists
+    if (returnData.order_id) {
+      const orderCheckResult = await client.query(`
+        SELECT
+          SUM(quantity_received) as total_received,
+          SUM(quantity_sold) as total_sold,
+          SUM(quantity_returned) as total_returned
+        FROM consignment_order_lines
+        WHERE order_id = $1
       `, [returnData.order_id])
+
+      const orderTotals = orderCheckResult.rows[0]
+      const totalReceived = parseInt(orderTotals.total_received) || 0
+      const totalSold = parseInt(orderTotals.total_sold) || 0
+      const totalReturned = parseInt(orderTotals.total_returned) || 0
+
+      if (totalReceived > 0 && (totalSold + totalReturned) >= totalReceived) {
+        await client.query(`
+          UPDATE consignment_orders
+          SET status = 'liquidated', completed_at = NOW()
+          WHERE id = $1
+        `, [returnData.order_id])
+      }
     }
 
     // Commit transaction

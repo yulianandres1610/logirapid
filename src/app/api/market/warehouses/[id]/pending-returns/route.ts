@@ -78,10 +78,10 @@ export async function GET(
         r.created_by,
         o.order_number,
         s.name as supplier_name,
-        s.supplier_code,
+        s.code as supplier_code,
         COALESCE(u.firstname || ' ' || u.lastname, u.email) as created_by_name
       FROM consignment_returns r
-      JOIN consignment_orders o ON o.id = r.order_id
+      LEFT JOIN consignment_orders o ON o.id = r.order_id
       JOIN market_suppliers s ON s.id = r.supplier_id
       LEFT JOIN users u ON u.id = r.created_by
       WHERE r.warehouse_id = $1 AND r.status = 'pending'
@@ -95,18 +95,14 @@ export async function GET(
           rl.id,
           rl.order_line_id,
           rl.product_id,
-          rl.variant_id,
           rl.quantity_to_return,
           rl.unit_cost,
           p.name as product_name,
           p.sku as product_sku,
           p.barcode as product_barcode,
-          p.image_url as product_image,
-          v.variant_name,
-          v.sku as variant_sku
+          (SELECT url FROM market_product_images WHERE product_id = p.id AND is_primary = true LIMIT 1) as product_image
         FROM consignment_return_lines rl
         JOIN market_products p ON p.id = rl.product_id
-        LEFT JOIN market_product_variants v ON v.id = rl.variant_id
         WHERE rl.return_id = $1
         ORDER BY rl.id
       `, [r.id])
@@ -140,9 +136,6 @@ export async function GET(
             barcode: l.product_barcode,
             imageUrl: l.product_image
           },
-          variantId: l.variant_id,
-          variantName: l.variant_name,
-          variantSku: l.variant_sku,
           quantityToReturn: parseInt(l.quantity_to_return) || 0,
           unitCost: parseFloat(l.unit_cost) || 0
         }))

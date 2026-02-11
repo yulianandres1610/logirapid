@@ -61,9 +61,6 @@ interface ReturnLine {
     barcode: string | null
     imageUrl: string | null
   }
-  variantId: number | null
-  variantName: string | null
-  variantSku: string | null
   quantityToReturn: number
   unitCost: number
 }
@@ -123,9 +120,7 @@ export default function PendingSupplierReturnsView({
       lineId: line.id,
       quantityToReturn: line.quantityToReturn,
       quantityValidated: line.quantityToReturn, // Default to requested quantity
-      productName: line.variantName
-        ? `${line.product.name} - ${line.variantName}`
-        : line.product.name,
+      productName: line.product.name,
       unitCost: line.unitCost
     })))
     setValidationNotes('')
@@ -322,7 +317,7 @@ export default function PendingSupplierReturnsView({
                         {line.productName}
                       </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        SKU: {originalLine?.variantSku || originalLine?.product.sku}
+                        SKU: {originalLine?.product.sku}
                       </p>
                       <div className="flex items-center gap-4 mt-2 text-sm">
                         <span className="px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded-lg flex items-center gap-1">
