@@ -546,6 +546,17 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: History, label: "Ajustes y Scrap", href: "/dashboard/market/warehouses/adjustments-history", requiredRoles: ['ADMIN', 'SUPER_ADMIN'] },
       ]
     },
+    {
+      icon: Box,
+      label: "Activos Fijos",
+      href: "/dashboard/market/fixed-assets",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: Box, label: "Inventario", href: "/dashboard/market/fixed-assets" },
+        { icon: Tag, label: "Categorías", href: "/dashboard/market/fixed-assets/categories" },
+        { icon: ClipboardCheck, label: "Auditorías", href: "/dashboard/market/fixed-assets/audits" },
+      ]
+    },
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
     {
       icon: Factory,
