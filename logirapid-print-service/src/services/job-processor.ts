@@ -40,6 +40,7 @@ import { generateWeightLabelTspl, WeightLabelTsplData } from '../documents/weigh
 import { generateProductionOrder, ProductionOrderData } from '../documents/production-order'
 import { generateProductionOrderPdf, ProductionOrderPdfData } from '../documents/production-order-pdf'
 import { generateSessionCloseReport, SessionCloseReportData } from '../documents/session-close-report'
+import { generateAssetLabelTspl, AssetLabelData } from '../documents/asset-label-tspl'
 
 const execAsync = promisify(exec)
 
@@ -290,6 +291,7 @@ class JobProcessor {
       case 'product_label':
       case 'lot_label':
       case 'weight_label':
+      case 'asset_label':
         // Prefer label printers (Zebra) for labels
         return printerService.getLabelPrinters()[0] || printerService.getDefaultPrinter()
 
@@ -403,6 +405,21 @@ class JobProcessor {
         // Fallback to PDF for standard printers
         console.log(`[Job Processor] Generating weight label as PDF for standard printer`)
         return generateWeightLabelPdf(data as unknown as WeightLabelPdfData)
+
+      case 'asset_label':
+        // Asset labels use TSPL for label printers (2x1 inch format with Code128 barcode)
+        if (useTspl || isLabelPrinter) {
+          console.log(`[Job Processor] Generating asset label as TSPL for ${printer.printerName}`)
+          return generateAssetLabelTspl(data as unknown as AssetLabelData)
+        }
+        // For Zebra printers, also use TSPL (Code128 is supported)
+        if (useZpl) {
+          console.log(`[Job Processor] Generating asset label as TSPL for Zebra ${printer.printerName}`)
+          return generateAssetLabelTspl(data as unknown as AssetLabelData)
+        }
+        // Fallback to TSPL even for standard printers (we don't have PDF generator for asset labels)
+        console.log(`[Job Processor] Generating asset label as TSPL (fallback) for ${printer.printerName}`)
+        return generateAssetLabelTspl(data as unknown as AssetLabelData)
 
       case 'purchase_invoice':
       case 'invoice':
@@ -527,7 +544,7 @@ class JobProcessor {
     // - On macOS: use Python USB script (bypasses CUPS)
     // - On Linux: use RAW queue if available
     const isLabelPrinter = printer.printerType === 'label_barcode' || printer.isZebra
-    const isLabelJob = ['product_label', 'shipping_label', 'lot_label', 'weight_label'].includes(job.documentType)
+    const isLabelJob = ['product_label', 'shipping_label', 'lot_label', 'weight_label', 'asset_label'].includes(job.documentType)
     const canUseRaw = process.platform === 'win32' || process.platform === 'darwin' || hasRawQueue
     // Use raw printing for BOTH Zebra (ZPL) AND other label printers (TSPL)
     const useRawLabelPrint = isLabelPrinter && canUseRaw && isLabelJob
