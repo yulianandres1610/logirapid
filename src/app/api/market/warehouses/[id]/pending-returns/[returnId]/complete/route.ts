@@ -166,6 +166,19 @@ export async function POST(
       const stockAfterValue = parseInt(stockAfterResult.rows[0]?.stock) || 0
       const stockBeforeValue = stockAfterValue + qtyValidated // Before the update, stock was higher
 
+      const movementParams = [
+        Number(payload.companyId),
+        Number(returnLine.product_id),
+        'return',
+        Number(-qtyValidated),
+        Number(stockBeforeValue),
+        Number(stockAfterValue),
+        'consignment_return',
+        Number(returnIdInt),
+        `Devolución a proveedor: ${returnData.return_number} (Lote: ${returnLine.lot_number || 'N/A'}, Costo: $${parseFloat(returnLine.unit_cost).toFixed(2)})`,
+        Number(payload.userId)
+      ]
+
       await client.query(`
         INSERT INTO market_inventory_movements (
           company_id, product_id,
@@ -173,23 +186,12 @@ export async function POST(
           reference_type, reference_id,
           notes, created_by
         ) VALUES (
-          $1::integer, $2::integer,
-          $3::varchar, $4::integer, $5::integer, $6::integer,
-          $7::varchar, $8::integer,
-          $9::text, $10::integer
+          $1, $2,
+          $3, $4, $5, $6,
+          $7, $8,
+          $9, $10
         )
-      `, [
-        payload.companyId,
-        returnLine.product_id,
-        'return',
-        -qtyValidated,
-        stockBeforeValue,
-        stockAfterValue,
-        'consignment_return',
-        returnIdInt,
-        `Devolución a proveedor: ${returnData.return_number} (Lote: ${returnLine.lot_number || 'N/A'}, Costo: $${parseFloat(returnLine.unit_cost).toFixed(2)})`,
-        payload.userId
-      ])
+      `, movementParams)
 
       // 5. Update order line quantity_returned
       await client.query(`
