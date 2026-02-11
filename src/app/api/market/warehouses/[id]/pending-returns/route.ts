@@ -78,7 +78,7 @@ export async function GET(
         r.created_by,
         o.order_number,
         s.name as supplier_name,
-        s.code as supplier_code,
+        s.supplier_code,
         COALESCE(u.firstname || ' ' || u.lastname, u.email) as created_by_name
       FROM consignment_returns r
       LEFT JOIN consignment_orders o ON o.id = r.order_id
