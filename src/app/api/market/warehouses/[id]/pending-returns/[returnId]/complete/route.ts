@@ -297,9 +297,10 @@ export async function POST(
   } catch (error) {
     await client.query('ROLLBACK')
     console.error('[Complete Return] Error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
     return NextResponse.json({
       success: false,
-      error: 'Error al completar devolución'
+      error: `Error al completar devolución: ${errorMessage}`
     }, { status: 500 })
   } finally {
     client.release()
