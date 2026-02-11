@@ -100,7 +100,7 @@ export async function GET(
           p.name as product_name,
           p.sku as product_sku,
           p.barcode as product_barcode,
-          (SELECT url FROM market_product_images WHERE product_id = p.id AND is_primary = true LIMIT 1) as product_image
+          p.image_url as product_image
         FROM consignment_return_lines rl
         JOIN market_products p ON p.id = rl.product_id
         WHERE rl.return_id = $1
