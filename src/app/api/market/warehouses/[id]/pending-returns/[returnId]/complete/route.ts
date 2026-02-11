@@ -182,6 +182,7 @@ export async function POST(
     }
 
     // 6. Update return status to completed
+    const notesValue = validationNotes ? String(validationNotes) : null
     await client.query(`
       UPDATE consignment_returns
       SET
@@ -190,9 +191,9 @@ export async function POST(
         total_value = $2,
         validated_by = $3,
         validated_at = NOW(),
-        notes = CASE WHEN $4 IS NOT NULL THEN COALESCE(notes || E'\\n', '') || $4 ELSE notes END
+        notes = CASE WHEN $4::text IS NOT NULL THEN COALESCE(notes || E'\\n', '') || $4::text ELSE notes END
       WHERE id = $5
-    `, [totalValidated, totalValueValidated, payload.userId, validationNotes, returnIdInt])
+    `, [totalValidated, totalValueValidated, payload.userId, notesValue, returnIdInt])
 
     // 7. Update order totals (total_returned) - only if order exists
     if (returnData.order_id) {
@@ -228,7 +229,7 @@ export async function POST(
       await client.query(`
         INSERT INTO consignment_wallet_transactions (
           wallet_id, order_id, transaction_type, amount, balance_after, notes, created_by
-        ) VALUES ($1, $2, 'return', $3, $4, $5, $6)
+        ) VALUES ($1::int, $2::int, 'return', $3::numeric, $4::numeric, $5::text, $6::int)
       `, [
         wallet.id,
         returnData.order_id,
