@@ -123,7 +123,11 @@ export async function POST(
       if (lineResult.rows.length === 0) continue
 
       const returnLine = lineResult.rows[0]
-      const qtyValidated = Math.min(line.quantityValidated, parseInt(returnLine.quantity_to_return))
+      const maxQty = parseInt(returnLine.quantity_to_return) || 0
+      const requestedQty = parseInt(String(line.quantityValidated)) || 0
+      const qtyValidated = Math.min(requestedQty, maxQty)
+
+      if (qtyValidated <= 0) continue
 
       // 1. Update return line with validated quantity
       await client.query(`
@@ -169,10 +173,10 @@ export async function POST(
           reference_type, reference_id,
           notes, created_by
         ) VALUES (
-          $1, $2,
-          $3, $4, $5, $6,
-          $7, $8,
-          $9, $10
+          $1::integer, $2::integer,
+          $3::varchar, $4::integer, $5::integer, $6::integer,
+          $7::varchar, $8::integer,
+          $9::text, $10::integer
         )
       `, [
         payload.companyId,
