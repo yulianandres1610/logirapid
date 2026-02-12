@@ -130,6 +130,23 @@ export async function GET(request: NextRequest) {
 
     const total = parseInt(countResult.rows[0].total)
 
+    // Get stats (totals by status and total value)
+    const statsConditions = payload.role !== 'SUPER_ADMIN'
+      ? 'WHERE company_id = $1'
+      : ''
+    const statsParams = payload.role !== 'SUPER_ADMIN' ? [payload.companyId] : []
+
+    const statsResult = await db.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'active') as active_count,
+        COUNT(*) FILTER (WHERE status = 'in_repair') as in_repair_count,
+        COUNT(*) FILTER (WHERE status = 'lost') as lost_count,
+        COUNT(*) FILTER (WHERE status = 'disposed') as disposed_count,
+        COALESCE(SUM(CASE WHEN status != 'disposed' THEN current_value ELSE 0 END), 0) as total_value
+      FROM market_fixed_assets
+      ${statsConditions}
+    `, statsParams)
+
     // Get assets with joins
     const assetsResult = await db.query(`
       SELECT
@@ -195,6 +212,13 @@ export async function GET(request: NextRequest) {
           limit,
           total,
           totalPages: Math.ceil(total / limit)
+        },
+        stats: {
+          active: parseInt(statsResult.rows[0].active_count) || 0,
+          inRepair: parseInt(statsResult.rows[0].in_repair_count) || 0,
+          lost: parseInt(statsResult.rows[0].lost_count) || 0,
+          disposed: parseInt(statsResult.rows[0].disposed_count) || 0,
+          totalValue: parseFloat(statsResult.rows[0].total_value) || 0
         }
       }
     })
