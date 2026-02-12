@@ -190,27 +190,70 @@ export async function GET(
       [payload.companyId]
     )
 
+    // Get product IDs for fetching stock in other warehouses
+    const productIds = productsResult.rows.map(r => r.product_id)
+    const variantIds = productsResult.rows.filter(r => r.variant_id).map(r => r.variant_id)
+
+    // Get stock from OTHER warehouses for these products
+    let otherWarehousesStock: Record<string, Array<{ warehouseId: number; warehouseName: string; quantity: number }>> = {}
+
+    if (productIds.length > 0) {
+      const otherStockQuery = `
+        SELECT
+          ws.product_id,
+          ws.variant_id,
+          ws.warehouse_id,
+          w.name as warehouse_name,
+          ws.quantity_on_hand
+        FROM market_warehouse_stock ws
+        JOIN market_warehouses w ON w.id = ws.warehouse_id
+        WHERE ws.product_id = ANY($1)
+          AND ws.warehouse_id != $2
+          AND w.company_id = $3
+          AND ws.quantity_on_hand > 0
+        ORDER BY w.name
+      `
+      const otherStockResult = await db.query(otherStockQuery, [productIds, warehouseId, payload.companyId])
+
+      // Group by product_id-variant_id
+      for (const row of otherStockResult.rows) {
+        const key = `${row.product_id}-${row.variant_id || 'null'}`
+        if (!otherWarehousesStock[key]) {
+          otherWarehousesStock[key] = []
+        }
+        otherWarehousesStock[key].push({
+          warehouseId: row.warehouse_id,
+          warehouseName: row.warehouse_name,
+          quantity: parseFloat(row.quantity_on_hand) || 0
+        })
+      }
+    }
+
     // Format products response
-    const products = productsResult.rows.map(row => ({
-      productId: row.product_id,
-      variantId: row.variant_id,
-      productName: row.product_name,
-      variantName: row.variant_name || null,
-      name: row.variant_name ? `${row.product_name} - ${row.variant_name}` : row.product_name,
-      sku: row.sku || '',
-      barcode: row.barcode || '',
-      category: row.category || 'Sin categoría',
-      imageUrl: row.variant_image_url || row.image_url,
-      unitOfMeasure: row.unit_of_measure || 'unidad',
-      quantityOnHand: parseFloat(row.quantity_on_hand) || 0,
-      quantityReserved: parseFloat(row.quantity_reserved) || 0,
-      quantityAvailable: parseFloat(row.quantity_available) || 0,
-      costPrice: parseFloat(row.cost_price) || 0,
-      sellingPrice: parseFloat(row.selling_price) || 0,
-      totalCostValue: (parseFloat(row.quantity_on_hand) || 0) * (parseFloat(row.cost_price) || 0),
-      totalSellingValue: (parseFloat(row.quantity_on_hand) || 0) * (parseFloat(row.selling_price) || 0),
-      minimumStock: parseInt(row.minimum_stock) || 0
-    }))
+    const products = productsResult.rows.map(row => {
+      const stockKey = `${row.product_id}-${row.variant_id || 'null'}`
+      return {
+        productId: row.product_id,
+        variantId: row.variant_id,
+        productName: row.product_name,
+        variantName: row.variant_name || null,
+        name: row.variant_name ? `${row.product_name} - ${row.variant_name}` : row.product_name,
+        sku: row.sku || '',
+        barcode: row.barcode || '',
+        category: row.category || 'Sin categoría',
+        imageUrl: row.variant_image_url || row.image_url,
+        unitOfMeasure: row.unit_of_measure || 'unidad',
+        quantityOnHand: parseFloat(row.quantity_on_hand) || 0,
+        quantityReserved: parseFloat(row.quantity_reserved) || 0,
+        quantityAvailable: parseFloat(row.quantity_available) || 0,
+        costPrice: parseFloat(row.cost_price) || 0,
+        sellingPrice: parseFloat(row.selling_price) || 0,
+        totalCostValue: (parseFloat(row.quantity_on_hand) || 0) * (parseFloat(row.cost_price) || 0),
+        totalSellingValue: (parseFloat(row.quantity_on_hand) || 0) * (parseFloat(row.selling_price) || 0),
+        minimumStock: parseInt(row.minimum_stock) || 0,
+        otherWarehouses: otherWarehousesStock[stockKey] || []
+      }
+    })
 
     return NextResponse.json({
       success: true,

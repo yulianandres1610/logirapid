@@ -32,6 +32,12 @@ interface StockReportViewProps {
   onBack: () => void
 }
 
+interface OtherWarehouseStock {
+  warehouseId: number
+  warehouseName: string
+  quantity: number
+}
+
 interface Product {
   productId: number
   variantId: number | null
@@ -51,6 +57,7 @@ interface Product {
   totalCostValue: number
   totalSellingValue: number
   minimumStock: number
+  otherWarehouses: OtherWarehouseStock[]
 }
 
 interface Summary {
@@ -626,6 +633,39 @@ export default function StockReportView({ warehouseId, warehouseName, onBack }: 
                     </span>
                   </div>
                 </div>
+
+                {/* Other Warehouses Stock */}
+                {product.otherWarehouses && product.otherWarehouses.length > 0 && (
+                  <div className={cn(
+                    'mt-3 pt-3 border-t',
+                    theme === 'dark' ? 'border-gray-700/50' : 'border-gray-200/50'
+                  )}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Boxes className="w-3.5 h-3.5 text-indigo-500" />
+                      <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                        Stock en otros almacenes:
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {product.otherWarehouses.map((wh) => (
+                        <div
+                          key={wh.warehouseId}
+                          className={cn(
+                            'px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5',
+                            theme === 'dark'
+                              ? 'bg-indigo-900/30 border border-indigo-700/50'
+                              : 'bg-indigo-50 border border-indigo-200'
+                          )}
+                        >
+                          <span className="text-gray-600 dark:text-gray-300">{wh.warehouseName}:</span>
+                          <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                            {formatQuantity(wh.quantity)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </motion.div>
             )
           })
