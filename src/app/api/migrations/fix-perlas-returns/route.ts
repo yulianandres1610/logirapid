@@ -60,7 +60,8 @@ export async function GET() {
         li.quantity_returned
       FROM consignment_lot_inventory li
       JOIN market_products p ON p.id = li.product_id
-      WHERE li.order_id = 7
+      JOIN consignment_order_lines ol ON ol.id = li.order_line_id
+      WHERE ol.order_id = 7
       ORDER BY li.id
     `)
     results.lots = lots.rows
