@@ -7,6 +7,34 @@ export async function middleware(request: NextRequest) {
   const host = request.headers.get('host') || ''
 
   // ============================================================
+  // MAINTENANCE MODE - All logirapid.com domains
+  // ============================================================
+  // Set MAINTENANCE_MODE=true in environment to enable
+  const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === 'true'
+
+  if (MAINTENANCE_MODE) {
+    // Check if it's a logirapid.com domain (including subdomains)
+    const isLogiRapidDomain = host.includes('logirapid.com') || host.includes('localhost')
+
+    if (isLogiRapidDomain) {
+      // Allow static resources for the maintenance page to render properly
+      if (
+        pathname.startsWith('/_next') ||
+        pathname.startsWith('/images') ||
+        pathname === '/favicon.ico' ||
+        pathname === '/maintenance.html' ||
+        pathname === '/maintenance'
+      ) {
+        return NextResponse.next()
+      }
+
+      // Redirect all other requests to maintenance page
+      console.log('[MIDDLEWARE] Maintenance mode - redirecting to maintenance.html:', pathname)
+      return NextResponse.rewrite(new URL('/maintenance.html', request.url))
+    }
+  }
+
+  // ============================================================
   // SUPPLIER SUBDOMAIN HANDLING - proveedores.logirapid.com
   // ============================================================
   const isSupplierSubdomain = host.startsWith('proveedores.') || host.includes('proveedores.logirapid')
