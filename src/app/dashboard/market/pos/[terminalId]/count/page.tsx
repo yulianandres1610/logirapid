@@ -214,33 +214,36 @@ export default function InventoryCountPage() {
 
         // Load products for the warehouse
         const warehouseId = terminalInfo.warehouseId || openSession.warehouseId
+        // Store raw products data for zero-stock pre-counting
+        let rawProductsData: Array<{
+          id: number
+          name: string
+          sku?: string
+          barcode?: string
+          price?: number
+          sellingPrice?: number
+          stock?: number
+          imageUrl?: string
+          hasVariants?: boolean
+          variants?: Array<{
+            id: number
+            name: string
+            sku: string
+            barcode: string | null
+            imageUrl: string | null
+            costPrice?: number
+            sellingPrice?: number
+            price?: number
+            stock: number
+          }>
+        }> = []
+
         if (warehouseId) {
           const productsRes = await fetch(`/api/market/pos/products?warehouseId=${warehouseId}`)
           const productsData = await productsRes.json()
           if (productsData.success && productsData.data) {
-            const productsArray = Array.isArray(productsData.data.products) ? productsData.data.products : []
-            setProducts(productsArray.map((p: {
-              id: number
-              name: string
-              sku?: string
-              barcode?: string
-              price?: number
-              sellingPrice?: number
-              stock?: number
-              imageUrl?: string
-              hasVariants?: boolean
-              variants?: Array<{
-                id: number
-                name: string
-                sku: string
-                barcode: string | null
-                imageUrl: string | null
-                costPrice?: number
-                sellingPrice?: number
-                price?: number
-                stock: number
-              }>
-            }) => ({
+            rawProductsData = Array.isArray(productsData.data.products) ? productsData.data.products : []
+            setProducts(rawProductsData.map((p) => ({
               id: p.id,
               name: p.name || 'Sin nombre',
               sku: p.sku || '',
@@ -262,11 +265,22 @@ export default function InventoryCountPage() {
           }
         }
 
-        // Load existing count if any
+        // Load existing count if any - but only if it's from today
         const countRes = await fetch(`/api/market/pos/inventory-count?sessionId=${openSession.id}`)
         const countData = await countRes.json()
-        if (countData.success && countData.data && countData.data.lines) {
-          const loadedProducts = countData.data.lines.map((l: {
+
+        // Helper to check if a date is today
+        const isToday = (dateStr: string) => {
+          if (!dateStr) return false
+          const countDate = new Date(dateStr)
+          const today = new Date()
+          return countDate.toDateString() === today.toDateString()
+        }
+
+        // Only load saved progress if the count was started today
+        let loadedCountedProducts: CountedProduct[] = []
+        if (countData.success && countData.data && countData.data.lines && isToday(countData.data.startedAt)) {
+          loadedCountedProducts = countData.data.lines.map((l: {
             productId: number
             variantId?: number | null
             productName: string
@@ -288,9 +302,67 @@ export default function InventoryCountPage() {
             countedQuantity: l.countedQuantity || 0,
             expectedQuantity: l.expectedQuantity || 0
           }))
-          setCountedProducts(loadedProducts)
-          lastSavedRef.current = JSON.stringify(loadedProducts)
         }
+
+        // Pre-count products with stock 0 (mark them as counted with 0)
+        // These don't need to be physically counted
+        const zeroStockProducts: CountedProduct[] = []
+        for (const p of rawProductsData) {
+          // Check if product has variants
+          if (p.variants && p.variants.length > 0) {
+            // For products with variants, check each variant
+            for (const v of p.variants) {
+              const variantStock = v.stock || 0
+              // Only auto-count if stock is 0 AND not already counted
+              if (variantStock === 0) {
+                const alreadyCounted = loadedCountedProducts.some(
+                  cp => cp.productId === p.id && cp.variantId === v.id
+                )
+                if (!alreadyCounted) {
+                  zeroStockProducts.push({
+                    productId: p.id,
+                    variantId: v.id,
+                    variantName: v.name,
+                    productName: `${p.name} - ${v.name}`,
+                    productSku: v.sku || p.sku || '',
+                    productBarcode: v.barcode || '',
+                    productImage: v.imageUrl || p.imageUrl || null,
+                    unitPrice: v.sellingPrice || v.price || p.sellingPrice || p.price || 0,
+                    countedQuantity: 0,
+                    expectedQuantity: 0
+                  })
+                }
+              }
+            }
+          } else {
+            // For products without variants
+            const productStock = p.stock || 0
+            if (productStock === 0) {
+              const alreadyCounted = loadedCountedProducts.some(
+                cp => cp.productId === p.id && cp.variantId === null
+              )
+              if (!alreadyCounted) {
+                zeroStockProducts.push({
+                  productId: p.id,
+                  variantId: null,
+                  variantName: null,
+                  productName: p.name || 'Sin nombre',
+                  productSku: p.sku || '',
+                  productBarcode: p.barcode || '',
+                  productImage: p.imageUrl || null,
+                  unitPrice: p.sellingPrice || p.price || 0,
+                  countedQuantity: 0,
+                  expectedQuantity: 0
+                })
+              }
+            }
+          }
+        }
+
+        // Combine loaded products with zero-stock products
+        const finalCountedProducts = [...loadedCountedProducts, ...zeroStockProducts]
+        setCountedProducts(finalCountedProducts)
+        lastSavedRef.current = JSON.stringify(finalCountedProducts)
 
       } catch (err) {
         console.error('Error loading data:', err)
