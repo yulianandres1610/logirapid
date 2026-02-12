@@ -9,8 +9,8 @@ export async function middleware(request: NextRequest) {
   // ============================================================
   // MAINTENANCE MODE - All logirapid.com domains
   // ============================================================
-  // Set MAINTENANCE_MODE=true in environment to enable
-  const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === 'true'
+  // Set to true to enable maintenance mode, false to disable
+  const MAINTENANCE_MODE = true  // ← ACTIVADO
 
   if (MAINTENANCE_MODE) {
     // Check if it's a logirapid.com domain (including subdomains)
