@@ -3,16 +3,39 @@ import { db } from '@/lib/database'
 
 /**
  * GET /api/migrations/fix-perlas-returns
- * Investigate and show the discrepancy with perlas de olor in order 7
+ * Show current state of returns for order 7
  */
 export async function GET() {
   try {
     const results: Record<string, unknown> = {}
 
-    // 1. Get all products in order 7
-    const orderProducts = await db.query(`
+    // Get all returns for order 7 with product names
+    const returns = await db.query(`
       SELECT
-        ol.id as order_line_id,
+        r.id,
+        r.return_number,
+        r.status,
+        r.total_units,
+        r.total_value,
+        r.created_at,
+        rl.id as line_id,
+        rl.product_id,
+        p.name as product_name,
+        rl.quantity_validated,
+        rl.unit_cost,
+        rl.lot_inventory_id
+      FROM consignment_returns r
+      JOIN consignment_return_lines rl ON rl.return_id = r.id
+      JOIN market_products p ON p.id = rl.product_id
+      WHERE r.order_id = 7
+      ORDER BY r.id
+    `)
+    results.returns = returns.rows
+
+    // Get order lines with returned quantities
+    const orderLines = await db.query(`
+      SELECT
+        ol.id,
         ol.product_id,
         p.name as product_name,
         ol.quantity_received,
@@ -23,100 +46,32 @@ export async function GET() {
       WHERE ol.order_id = 7
       ORDER BY ol.id
     `)
-    results.orderProducts = orderProducts.rows
+    results.orderLines = orderLines.rows
 
-    // 2. Find "perlas de olor" products
-    const perlasProducts = await db.query(`
-      SELECT id, name, sku FROM market_products
-      WHERE LOWER(name) LIKE '%perla%'
-    `)
-    results.perlasProducts = perlasProducts.rows
-
-    // 3. Check if perlas is in order 7
-    const perlasInOrder = orderProducts.rows.filter(
-      (p: { product_name: string }) => p.product_name.toLowerCase().includes('perla')
-    )
-    results.perlasInOrder = perlasInOrder
-
-    // 4. Get all returns for order 7
-    const returns = await db.query(`
+    // Get lot inventory
+    const lots = await db.query(`
       SELECT
-        r.id,
-        r.return_number,
-        r.status,
-        r.total_units,
-        r.total_value,
-        r.created_at
-      FROM consignment_returns r
-      WHERE r.order_id = 7
-      ORDER BY r.created_at
-    `)
-    results.returns = returns.rows
-
-    // 5. Get all return lines for order 7 with product names
-    const returnLines = await db.query(`
-      SELECT
-        rl.id as return_line_id,
-        rl.return_id,
-        r.return_number,
-        r.status as return_status,
-        rl.order_line_id,
-        rl.product_id,
+        li.id,
+        li.product_id,
         p.name as product_name,
-        rl.quantity_to_return,
-        rl.quantity_validated
-      FROM consignment_return_lines rl
-      JOIN consignment_returns r ON r.id = rl.return_id
-      JOIN market_products p ON p.id = rl.product_id
-      WHERE r.order_id = 7
-      ORDER BY rl.return_id, rl.id
+        li.quantity_initial,
+        li.quantity_available,
+        li.quantity_sold,
+        li.quantity_returned
+      FROM consignment_lot_inventory li
+      JOIN market_products p ON p.id = li.product_id
+      WHERE li.order_id = 7
+      ORDER BY li.id
     `)
-    results.returnLines = returnLines.rows
+    results.lots = lots.rows
 
-    // 6. Find perlas in return lines (these should NOT exist if perlas wasn't in order 7)
-    const perlasInReturnLines = returnLines.rows.filter(
-      (rl: { product_name: string }) => rl.product_name.toLowerCase().includes('perla')
-    )
-    results.perlasInReturnLines = perlasInReturnLines
-
-    // 7. Get inventory movements for products in order 7 that reference consignment_return
-    const productIds = orderProducts.rows.map((p: { product_id: number }) => p.product_id)
-    let movements: { rows: unknown[] } = { rows: [] }
-
-    if (productIds.length > 0) {
-      movements = await db.query(`
-        SELECT
-          m.id,
-          m.product_id,
-          p.name as product_name,
-          m.movement_type,
-          m.quantity,
-          m.reference_type,
-          m.reference_id,
-          m.notes,
-          m.created_at
-        FROM market_inventory_movements m
-        JOIN market_products p ON p.id = m.product_id
-        WHERE m.reference_type = 'consignment_return'
-          AND m.reference_id IN (SELECT id FROM consignment_returns WHERE order_id = 7)
-        ORDER BY m.created_at DESC
-      `)
-    }
-    results.movements = movements.rows
-
-    // 8. Analysis
-    results.analysis = {
-      productsInOrder7: orderProducts.rows.map((p: { product_id: number; product_name: string }) => ({
-        id: p.product_id,
-        name: p.product_name
-      })),
-      perlasProductIds: perlasProducts.rows.map((p: { id: number }) => p.id),
-      perlasIsInOrder7: perlasInOrder.length > 0,
-      perlasIsInReturnLines: perlasInReturnLines.length > 0,
-      discrepancy: perlasInReturnLines.length > 0 && perlasInOrder.length === 0
-        ? 'DISCREPANCY: Perlas appears in return lines but NOT in order 7'
-        : 'No discrepancy detected for perlas'
-    }
+    // Get wallet balance
+    const wallet = await db.query(`
+      SELECT balance_available, total_returned
+      FROM consignment_supplier_wallets
+      WHERE supplier_id = 13
+    `)
+    results.wallet = wallet.rows[0]
 
     return NextResponse.json({
       success: true,
@@ -134,137 +89,157 @@ export async function GET() {
 
 /**
  * POST /api/migrations/fix-perlas-returns
- * Fix the perlas de olor discrepancy by removing invalid return lines and movements
+ * Remove perlas de olor returns (keep only peine para piojos)
+ *
+ * Returns to DELETE:
+ * - DEV-SUPP-2026-0002 (id=4): Perlas de olor 345g (product 152)
+ * - DEV-SUPP-2026-0003 (id=5): Perlas de olor Spring Fresh (product 154)
+ *
+ * Return to KEEP:
+ * - DEV-SUPP-2026-0001 (id=3): Peine eléctrico para piojos (product 157)
  */
 export async function POST() {
   try {
     const results: string[] = []
 
-    // 1. Get all products in order 7
-    const orderProducts = await db.query(`
-      SELECT ol.product_id FROM consignment_order_lines ol WHERE ol.order_id = 7
-    `)
-    const validProductIds = new Set(orderProducts.rows.map((p: { product_id: number }) => p.product_id))
-    results.push(`Order 7 has ${validProductIds.size} valid products`)
+    // Returns to delete (perlas de olor)
+    const returnsToDelete = [4, 5] // DEV-SUPP-2026-0002, DEV-SUPP-2026-0003
 
-    // 2. Find invalid return lines (products not in order 7)
-    const invalidReturnLines = await db.query(`
-      SELECT
-        rl.id,
-        rl.return_id,
-        rl.product_id,
-        p.name as product_name,
-        r.return_number,
-        rl.quantity_validated
-      FROM consignment_return_lines rl
-      JOIN consignment_returns r ON r.id = rl.return_id
-      JOIN market_products p ON p.id = rl.product_id
-      WHERE r.order_id = 7
-    `)
+    // Products affected
+    const productsToRestore = [
+      { productId: 152, orderLineId: 15, lotId: 24, qty: 1 }, // Perlas de olor 345g
+      { productId: 154, orderLineId: 17, lotId: 26, qty: 1 }, // Perlas de olor Spring Fresh
+    ]
 
-    let deletedLines = 0
-    let deletedMovements = 0
-    let recalculatedOrders = 0
+    // Start transaction
+    await db.query('BEGIN')
 
-    for (const line of invalidReturnLines.rows as Array<{
-      id: number
-      return_id: number
-      product_id: number
-      product_name: string
-      return_number: string
-      quantity_validated: number
-    }>) {
-      if (!validProductIds.has(line.product_id)) {
-        // This return line is for a product not in order 7 - delete it
-        await db.query('DELETE FROM consignment_return_lines WHERE id = $1', [line.id])
-        results.push(`Deleted invalid return line for "${line.product_name}" (product ${line.product_id}) from return ${line.return_number}`)
-        deletedLines++
+    try {
+      // 1. Get return values before deleting (for wallet adjustment)
+      const returnValues = await db.query(`
+        SELECT r.id, r.total_value
+        FROM consignment_returns r
+        WHERE r.id = ANY($1)
+      `, [returnsToDelete])
 
-        // Also delete any inventory movements for this product related to this return
-        const deletedMvmts = await db.query(`
-          DELETE FROM market_inventory_movements
-          WHERE product_id = $1
-            AND reference_type = 'consignment_return'
-            AND reference_id = $2
-          RETURNING id
-        `, [line.product_id, line.return_id])
-
-        if (deletedMvmts.rows.length > 0) {
-          results.push(`Deleted ${deletedMvmts.rows.length} inventory movements for product ${line.product_id}`)
-          deletedMovements += deletedMvmts.rows.length
-        }
+      let totalValueToRestore = 0
+      for (const r of returnValues.rows as Array<{ id: number; total_value: string }>) {
+        totalValueToRestore += parseFloat(r.total_value) || 0
       }
-    }
+      results.push(`Total value to restore to wallet: $${totalValueToRestore.toFixed(2)}`)
 
-    // 3. Recalculate order totals
-    const orderTotalResult = await db.query(`
-      SELECT COALESCE(SUM(rl.quantity_validated * rl.unit_cost), 0) as total_returned_value
-      FROM consignment_return_lines rl
-      JOIN consignment_returns r ON r.id = rl.return_id
-      WHERE r.order_id = 7 AND r.status = 'completed'
-    `)
-    const newTotalReturned = parseFloat(orderTotalResult.rows[0]?.total_returned_value) || 0
+      // 2. Delete return lines
+      const deletedLines = await db.query(`
+        DELETE FROM consignment_return_lines
+        WHERE return_id = ANY($1)
+        RETURNING id, product_id
+      `, [returnsToDelete])
+      results.push(`Deleted ${deletedLines.rows.length} return lines`)
 
-    await db.query(`
-      UPDATE consignment_orders SET total_returned = $1 WHERE id = 7
-    `, [newTotalReturned])
-    results.push(`Updated order 7 total_returned to ${newTotalReturned}`)
-    recalculatedOrders++
+      // 3. Delete the returns
+      const deletedReturns = await db.query(`
+        DELETE FROM consignment_returns
+        WHERE id = ANY($1)
+        RETURNING id, return_number
+      `, [returnsToDelete])
+      for (const r of deletedReturns.rows as Array<{ return_number: string }>) {
+        results.push(`Deleted return ${r.return_number}`)
+      }
 
-    // 4. Recalculate each return's totals
-    const returnsForOrder = await db.query(`
-      SELECT r.id FROM consignment_returns r WHERE r.order_id = 7
-    `)
+      // 4. Restore lot inventory (add back quantity_available, subtract quantity_returned)
+      for (const p of productsToRestore) {
+        await db.query(`
+          UPDATE consignment_lot_inventory
+          SET quantity_available = quantity_available + $1,
+              quantity_returned = COALESCE(quantity_returned, 0) - $1
+          WHERE id = $2
+        `, [p.qty, p.lotId])
+        results.push(`Restored ${p.qty} unit to lot ${p.lotId}`)
+      }
 
-    for (const ret of returnsForOrder.rows as Array<{ id: number }>) {
-      const returnTotals = await db.query(`
-        SELECT
-          COUNT(*) as total_items,
-          COALESCE(SUM(quantity_validated), 0) as total_units,
-          COALESCE(SUM(quantity_validated * unit_cost), 0) as total_value
-        FROM consignment_return_lines
-        WHERE return_id = $1
-      `, [ret.id])
+      // 5. Reset quantity_returned on order lines
+      for (const p of productsToRestore) {
+        await db.query(`
+          UPDATE consignment_order_lines
+          SET quantity_returned = COALESCE(quantity_returned, 0) - $1
+          WHERE id = $2
+        `, [p.qty, p.orderLineId])
+        results.push(`Reset quantity_returned on order line ${p.orderLineId}`)
+      }
+
+      // 6. Update warehouse stock (add back the quantity)
+      for (const p of productsToRestore) {
+        // Get warehouse_id from the deleted returns (warehouse 3 for these)
+        await db.query(`
+          UPDATE market_warehouse_stock
+          SET quantity_on_hand = quantity_on_hand + $1,
+              updated_at = NOW()
+          WHERE warehouse_id = 3 AND product_id = $2
+        `, [p.qty, p.productId])
+        results.push(`Restored ${p.qty} unit to warehouse stock for product ${p.productId}`)
+      }
+
+      // 7. Delete inventory movements for these returns
+      const deletedMovements = await db.query(`
+        DELETE FROM market_inventory_movements
+        WHERE reference_type = 'consignment_return'
+          AND reference_id = ANY($1)
+        RETURNING id
+      `, [returnsToDelete])
+      results.push(`Deleted ${deletedMovements.rows.length} inventory movements`)
+
+      // 8. Update wallet (restore balance)
+      await db.query(`
+        UPDATE consignment_supplier_wallets
+        SET balance_available = balance_available + $1,
+            total_returned = COALESCE(total_returned, 0) - $1
+        WHERE supplier_id = 13
+      `, [totalValueToRestore])
+      results.push(`Restored $${totalValueToRestore.toFixed(2)} to supplier wallet`)
+
+      // 9. Delete wallet transactions for these returns
+      const deletedTxns = await db.query(`
+        DELETE FROM consignment_wallet_transactions
+        WHERE notes LIKE '%DEV-SUPP-2026-0002%' OR notes LIKE '%DEV-SUPP-2026-0003%'
+        RETURNING id
+      `, [])
+      results.push(`Deleted ${deletedTxns.rows.length} wallet transactions`)
+
+      // 10. Recalculate order total_returned (only from remaining returns)
+      const remainingReturned = await db.query(`
+        SELECT COALESCE(SUM(rl.quantity_validated * rl.unit_cost), 0) as total
+        FROM consignment_return_lines rl
+        JOIN consignment_returns r ON r.id = rl.return_id
+        WHERE r.order_id = 7 AND r.status = 'completed'
+      `)
+      const newTotalReturned = parseFloat(remainingReturned.rows[0]?.total) || 0
 
       await db.query(`
-        UPDATE consignment_returns
-        SET
-          total_items = $1,
-          total_units = $2,
-          total_value = $3
-        WHERE id = $4
-      `, [
-        returnTotals.rows[0].total_items,
-        returnTotals.rows[0].total_units,
-        returnTotals.rows[0].total_value,
-        ret.id
-      ])
-      results.push(`Recalculated totals for return ${ret.id}`)
+        UPDATE consignment_orders
+        SET total_returned = $1
+        WHERE id = 7
+      `, [newTotalReturned])
+      results.push(`Updated order total_returned to $${newTotalReturned.toFixed(2)}`)
+
+      await db.query('COMMIT')
+
+      return NextResponse.json({
+        success: true,
+        message: 'Perlas de olor returns removed successfully',
+        summary: {
+          deletedReturns: deletedReturns.rows.length,
+          deletedLines: deletedLines.rows.length,
+          deletedMovements: deletedMovements.rows.length,
+          valueRestoredToWallet: totalValueToRestore,
+          newOrderTotalReturned: newTotalReturned
+        },
+        results
+      })
+
+    } catch (error) {
+      await db.query('ROLLBACK')
+      throw error
     }
-
-    // 5. Delete any empty returns (no lines left)
-    const emptyReturns = await db.query(`
-      DELETE FROM consignment_returns
-      WHERE order_id = 7
-        AND NOT EXISTS (SELECT 1 FROM consignment_return_lines WHERE return_id = consignment_returns.id)
-      RETURNING id, return_number
-    `)
-
-    for (const ret of emptyReturns.rows as Array<{ id: number; return_number: string }>) {
-      results.push(`Deleted empty return ${ret.return_number}`)
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: 'Perlas discrepancy fixed',
-      summary: {
-        deletedReturnLines: deletedLines,
-        deletedMovements,
-        recalculatedOrders,
-        deletedEmptyReturns: emptyReturns.rows.length
-      },
-      results
-    })
 
   } catch (error) {
     console.error('[Migration Fix] Error:', error)
