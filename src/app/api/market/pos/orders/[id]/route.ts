@@ -148,10 +148,12 @@ export async function GET(
           return {
             id: p.id,
             method: p.payment_method,
-            amount: rawAmount - change, // Actual collected after change
-            amountTendered: rawAmount,  // What was given
+            // NOTE: amount is the payment amount in its currency (NOT minus change)
+            // Change is tracked separately and may be in a different currency (e.g., change in CUP for USD payment)
+            amount: rawAmount,
+            amountTendered: rawAmount,  // For cash: what was given (same as amount)
             changeAmount: change > 0 ? change : null,
-            changeCurrency: p.change_currency || null, // Currency of the change (USD or CUP)
+            changeCurrency: p.change_currency || null, // Currency of the change (e.g., CUP)
             currency: p.currency,
             reference: p.reference,
             createdAt: p.created_at

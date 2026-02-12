@@ -246,10 +246,12 @@ export async function GET(request: NextRequest) {
         const change = p.change_amount ? parseFloat(p.change_amount) : null
         paymentsMap[p.order_id].push({
           method: p.payment_method,
-          amount: change ? amount - change : amount, // Actual collected after change
+          // NOTE: amount is the payment amount in its currency (NOT minus change)
+          // Change is tracked separately and may be in a different currency (e.g., change in CUP for USD payment)
+          amount: amount,
           amountTendered: tendered,
           changeAmount: change,
-          changeCurrency: p.change_currency || null, // Currency of the change (USD or CUP)
+          changeCurrency: p.change_currency || null, // Currency of the change (e.g., CUP)
           currency: p.currency || 'USD'
         })
       }
