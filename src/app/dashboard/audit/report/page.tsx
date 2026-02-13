@@ -20,7 +20,9 @@ import {
   Warehouse,
   Hash,
   DollarSign,
-  ArrowRight
+  ArrowRight,
+  Briefcase,
+  XCircle
 } from 'lucide-react'
 
 interface CountLine {
@@ -39,21 +41,46 @@ interface CountLine {
   differenceValueSale: number
 }
 
+interface AssetCountLine {
+  assetId: number
+  assetCode: string
+  assetBarcode?: string
+  assetName: string
+  categoryName?: string
+  responsibleName?: string
+  currentValue: number
+  expectedCondition?: string
+  observedCondition?: string
+  scanStatus: 'found' | 'missing' | 'surplus'
+  productImage?: string
+}
+
+type AuditType = 'products' | 'fixed_assets'
+
 interface CountData {
   id: number
   countNumber: string
   status: string
+  auditType?: AuditType
   warehouseId: number
   warehouseName: string
+  // Product fields
   totalProducts: number
   productsWithDifferences: number
   totalShortageValue: number
   totalExcessValue: number
   totalStockAtCost: number
   totalStockAtSale: number
+  // Fixed asset fields
+  totalAssets?: number
+  assetsFound?: number
+  assetsMissing?: number
+  assetsSurplus?: number
+  totalValueAtRisk?: number
+  // Common
   startedAt?: string
   completedAt?: string
-  lines: CountLine[]
+  lines: (CountLine | AssetCountLine)[]
 }
 
 export default function AuditReportPage() {
@@ -111,7 +138,8 @@ export default function AuditReportPage() {
 
   const goBackToCount = useCallback(() => {
     if (countData) {
-      router.push(`/dashboard/audit/count?warehouseId=${countData.warehouseId}`)
+      const countPage = countData.auditType === 'fixed_assets' ? 'count-assets' : 'count'
+      router.push(`/dashboard/audit/${countPage}?warehouseId=${countData.warehouseId}`)
     } else {
       router.push('/dashboard/audit')
     }
@@ -121,6 +149,9 @@ export default function AuditReportPage() {
     router.push('/dashboard/audit')
   }, [router])
 
+  // Check if this is a fixed assets audit
+  const isFixedAssetsAudit = countData?.auditType === 'fixed_assets'
+
   // Complete count
   const completeCount = useCallback(async () => {
     if (!countData) return
@@ -128,26 +159,49 @@ export default function AuditReportPage() {
     try {
       setCompleting(true)
 
+      // Build request body based on audit type
+      const requestBody: Record<string, unknown> = {
+        warehouseId: countData.warehouseId,
+        countId: countData.id,
+        action: 'complete'
+      }
+
+      if (countData.auditType === 'fixed_assets') {
+        requestBody.auditType = 'fixed_assets'
+        requestBody.assetLines = countData.lines.map(l => {
+          const assetLine = l as AssetCountLine
+          return {
+            assetId: assetLine.assetId,
+            assetCode: assetLine.assetCode,
+            assetBarcode: assetLine.assetBarcode,
+            assetName: assetLine.assetName,
+            currentValue: assetLine.currentValue,
+            scanStatus: assetLine.scanStatus,
+            observedCondition: assetLine.observedCondition
+          }
+        })
+      } else {
+        requestBody.lines = countData.lines.map(l => {
+          const productLine = l as CountLine
+          return {
+            productId: productLine.productId,
+            variantId: productLine.variantId,
+            productName: productLine.productName,
+            productSku: productLine.productSku,
+            productBarcode: productLine.productBarcode,
+            productImage: productLine.productImage,
+            costPrice: productLine.costPrice,
+            sellingPrice: productLine.sellingPrice,
+            systemQuantity: productLine.systemQuantity,
+            countedQuantity: productLine.countedQuantity
+          }
+        })
+      }
+
       const response = await fetch('/api/audit/counts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          warehouseId: countData.warehouseId,
-          countId: countData.id,
-          lines: countData.lines.map(l => ({
-            productId: l.productId,
-            variantId: l.variantId,
-            productName: l.productName,
-            productSku: l.productSku,
-            productBarcode: l.productBarcode,
-            productImage: l.productImage,
-            costPrice: l.costPrice,
-            sellingPrice: l.sellingPrice,
-            systemQuantity: l.systemQuantity,
-            countedQuantity: l.countedQuantity
-          })),
-          action: 'complete'
-        })
+        body: JSON.stringify(requestBody)
       })
 
       const data = await response.json()
@@ -213,37 +267,58 @@ export default function AuditReportPage() {
 
     setPrintingWithService(true)
     try {
+      // Build document data based on audit type
+      const documentData: Record<string, unknown> = {
+        countNumber: countData.countNumber,
+        countId: countData.id,
+        warehouseName: countData.warehouseName,
+        startedAt: countData.startedAt,
+        status: countData.status,
+        auditType: countData.auditType || 'products'
+      }
+
+      if (isFixedAssetsAudit) {
+        documentData.totalAssets = assetTotals?.totalAssets
+        documentData.assetsFound = assetTotals?.assetsFound
+        documentData.assetsMissing = assetTotals?.assetsMissing
+        documentData.assetsSurplus = assetTotals?.assetsSurplus
+        documentData.totalValueAtRisk = assetTotals?.totalValueAtRisk
+        documentData.totalFoundValue = assetTotals?.totalFoundValue
+        documentData.missingAssets = missingAssets.map(a => ({
+          assetCode: a.assetCode,
+          assetName: a.assetName,
+          categoryName: a.categoryName,
+          responsibleName: a.responsibleName,
+          currentValue: a.currentValue
+        }))
+      } else {
+        documentData.totalProducts = countData.totalProducts
+        documentData.productsWithDifferences = countData.productsWithDifferences
+        documentData.totalShortageValue = countData.totalShortageValue
+        documentData.totalExcessValue = countData.totalExcessValue
+        documentData.totalStockAtCost = countData.totalStockAtCost
+        documentData.totalStockAtSale = countData.totalStockAtSale
+        documentData.lines = linesWithDifferences.map(l => ({
+          productName: l.productName,
+          productSku: l.productSku,
+          systemQuantity: l.systemQuantity,
+          countedQuantity: l.countedQuantity,
+          difference: l.difference,
+          differenceValueCost: l.differenceValueCost,
+          differenceValueSale: l.differenceValueSale
+        }))
+      }
+
       const response = await fetch('/api/print/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          documentType: 'audit_count_report',
-          documentData: {
-            countNumber: countData.countNumber,
-            countId: countData.id,
-            warehouseName: countData.warehouseName,
-            totalProducts: countData.totalProducts,
-            productsWithDifferences: countData.productsWithDifferences,
-            totalShortageValue: countData.totalShortageValue,
-            totalExcessValue: countData.totalExcessValue,
-            totalStockAtCost: countData.totalStockAtCost,
-            totalStockAtSale: countData.totalStockAtSale,
-            startedAt: countData.startedAt,
-            status: countData.status,
-            lines: linesWithDifferences.map(l => ({
-              productName: l.productName,
-              productSku: l.productSku,
-              systemQuantity: l.systemQuantity,
-              countedQuantity: l.countedQuantity,
-              difference: l.difference,
-              differenceValueCost: l.differenceValueCost,
-              differenceValueSale: l.differenceValueSale
-            }))
-          },
+          documentType: isFixedAssetsAudit ? 'fixed_asset_audit_report' : 'audit_count_report',
+          documentData,
           copies,
           printServiceId: selectedPrinter.serviceId,
           printerId: selectedPrinter.printerId,
-          sourceType: 'audit_count',
+          sourceType: isFixedAssetsAudit ? 'fixed_asset_audit' : 'audit_count',
           sourceId: countData.id,
           warehouseId: countData.warehouseId
         })
@@ -277,11 +352,18 @@ export default function AuditReportPage() {
     setShowPrintModal(true)
   }, [])
 
-  // Filter lines with differences only
-  const linesWithDifferences = countData?.lines.filter(l => l.difference !== 0) || []
+  // Filter lines with differences only (for products)
+  const productLines = countData?.lines.filter((l): l is CountLine => 'productId' in l) || []
+  const linesWithDifferences = productLines.filter(l => l.difference !== 0)
 
-  // Calculate totals
-  const totals = countData ? {
+  // Filter asset lines by status (for fixed assets)
+  const assetLines = countData?.lines.filter((l): l is AssetCountLine => 'assetId' in l) || []
+  const missingAssets = assetLines.filter(l => l.scanStatus === 'missing')
+  const foundAssets = assetLines.filter(l => l.scanStatus === 'found')
+  const surplusAssets = assetLines.filter(l => l.scanStatus === 'surplus')
+
+  // Calculate totals for products
+  const totals = countData && !isFixedAssetsAudit ? {
     totalProducts: countData.totalProducts,
     productsWithDifferences: linesWithDifferences.length,
     productsWithExcess: linesWithDifferences.filter(l => l.difference < 0).length, // Negative difference = excess (counted more)
@@ -292,6 +374,16 @@ export default function AuditReportPage() {
     totalExcessValueSale: linesWithDifferences.filter(l => l.difference < 0).reduce((sum, l) => sum + Math.abs(l.differenceValueSale), 0),
     totalStockAtCost: countData.totalStockAtCost,
     totalStockAtSale: countData.totalStockAtSale
+  } : null
+
+  // Calculate totals for fixed assets
+  const assetTotals = countData && isFixedAssetsAudit ? {
+    totalAssets: countData.totalAssets || assetLines.length,
+    assetsFound: countData.assetsFound || foundAssets.length,
+    assetsMissing: countData.assetsMissing || missingAssets.length,
+    assetsSurplus: countData.assetsSurplus || surplusAssets.length,
+    totalValueAtRisk: countData.totalValueAtRisk || missingAssets.reduce((sum, a) => sum + (a.currentValue || 0), 0),
+    totalFoundValue: foundAssets.reduce((sum, a) => sum + (a.currentValue || 0), 0)
   } : null
 
   if (loading) {
@@ -409,134 +501,355 @@ export default function AuditReportPage() {
         {/* Summary Cards */}
         <div className="px-4 py-3 lg:p-6 no-print">
           <div className="lg:max-w-7xl lg:mx-auto">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5"
-              >
-                <div className="flex items-center gap-2 text-gray-400 mb-1 lg:mb-2">
-                  <Package className="w-4 h-4 lg:w-5 lg:h-5" />
-                  <span className="text-xs lg:text-sm">Contados</span>
-                </div>
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold">{totals?.totalProducts}</p>
-              </motion.div>
+            {isFixedAssetsAudit ? (
+              /* Fixed Assets Summary Cards */
+              <>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5"
+                  >
+                    <div className="flex items-center gap-2 text-gray-400 mb-1 lg:mb-2">
+                      <Briefcase className="w-4 h-4 lg:w-5 lg:h-5" />
+                      <span className="text-xs lg:text-sm">Total Activos</span>
+                    </div>
+                    <p className="text-xl sm:text-2xl lg:text-3xl font-bold">{assetTotals?.totalAssets}</p>
+                  </motion.div>
 
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.05 }}
-                className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5"
-              >
-                <div className="flex items-center gap-2 text-gray-400 mb-1 lg:mb-2">
-                  <AlertTriangle className="w-4 h-4 lg:w-5 lg:h-5" />
-                  <span className="text-xs lg:text-sm">Diferencias</span>
-                </div>
-                <p className={`text-xl sm:text-2xl lg:text-3xl font-bold ${totals?.productsWithDifferences ? 'text-amber-400' : 'text-green-400'}`}>
-                  {totals?.productsWithDifferences}
-                </p>
-              </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.05 }}
+                    className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5"
+                  >
+                    <div className="flex items-center gap-2 text-green-400 mb-1 lg:mb-2">
+                      <CheckCircle2 className="w-4 h-4 lg:w-5 lg:h-5" />
+                      <span className="text-xs lg:text-sm">Encontrados</span>
+                    </div>
+                    <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-400">{assetTotals?.assetsFound}</p>
+                  </motion.div>
 
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.1 }}
-                className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5"
-              >
-                <div className="flex items-center gap-2 text-green-400 mb-1 lg:mb-2">
-                  <TrendingUp className="w-4 h-4 lg:w-5 lg:h-5" />
-                  <span className="text-xs lg:text-sm">Sobrantes</span>
-                </div>
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-400">{totals?.productsWithExcess || 0}</p>
-              </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.1 }}
+                    className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5"
+                  >
+                    <div className="flex items-center gap-2 text-red-400 mb-1 lg:mb-2">
+                      <XCircle className="w-4 h-4 lg:w-5 lg:h-5" />
+                      <span className="text-xs lg:text-sm">Faltantes</span>
+                    </div>
+                    <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-red-400">{assetTotals?.assetsMissing}</p>
+                  </motion.div>
 
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.15 }}
-                className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5"
-              >
-                <div className="flex items-center gap-2 text-red-400 mb-1 lg:mb-2">
-                  <TrendingDown className="w-4 h-4 lg:w-5 lg:h-5" />
-                  <span className="text-xs lg:text-sm">Faltantes</span>
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.15 }}
+                    className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5"
+                  >
+                    <div className="flex items-center gap-2 text-amber-400 mb-1 lg:mb-2">
+                      <AlertTriangle className="w-4 h-4 lg:w-5 lg:h-5" />
+                      <span className="text-xs lg:text-sm">Extras</span>
+                    </div>
+                    <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-amber-400">{assetTotals?.assetsSurplus || 0}</p>
+                  </motion.div>
                 </div>
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-red-400">{totals?.productsWithShortage || 0}</p>
-              </motion.div>
-            </div>
 
-            {/* Valuation Summary */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 lg:gap-4 mt-3 lg:mt-4">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.2 }}
-                className="bg-gradient-to-r from-amber-900/30 to-amber-800/20 border border-amber-700/30 rounded-xl p-3 sm:p-4 lg:p-5"
-              >
-                <div className="flex items-center gap-2 text-amber-400 mb-2 lg:mb-3">
-                  <DollarSign className="w-4 h-4 lg:w-5 lg:h-5" />
-                  <span className="text-xs lg:text-sm font-medium">Valoracion a Costo</span>
-                </div>
-                <div className="grid grid-cols-2 gap-3 lg:gap-4 text-sm lg:text-base">
-                  <div>
-                    <p className="text-gray-500 text-xs lg:text-sm">Stock Contado</p>
-                    <p className="font-bold text-white text-base lg:text-lg">${(totals?.totalStockAtCost || 0).toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500 text-xs lg:text-sm">Faltantes</p>
-                    <p className="font-bold text-red-400 text-base lg:text-lg">-${(totals?.totalShortageValueCost || 0).toFixed(2)}</p>
-                  </div>
-                </div>
-              </motion.div>
+                {/* Value Summary for Fixed Assets */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 lg:gap-4 mt-3 lg:mt-4">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.2 }}
+                    className="bg-gradient-to-r from-green-900/30 to-green-800/20 border border-green-700/30 rounded-xl p-3 sm:p-4 lg:p-5"
+                  >
+                    <div className="flex items-center gap-2 text-green-400 mb-2 lg:mb-3">
+                      <DollarSign className="w-4 h-4 lg:w-5 lg:h-5" />
+                      <span className="text-xs lg:text-sm font-medium">Valor Activos Encontrados</span>
+                    </div>
+                    <p className="font-bold text-green-400 text-xl lg:text-2xl">${(assetTotals?.totalFoundValue || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })}</p>
+                  </motion.div>
 
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.25 }}
-                className="bg-gradient-to-r from-blue-900/30 to-blue-800/20 border border-blue-700/30 rounded-xl p-3 sm:p-4 lg:p-5"
-              >
-                <div className="flex items-center gap-2 text-blue-400 mb-2 lg:mb-3">
-                  <DollarSign className="w-4 h-4 lg:w-5 lg:h-5" />
-                  <span className="text-xs lg:text-sm font-medium">Valoracion a Venta</span>
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.25 }}
+                    className="bg-gradient-to-r from-red-900/30 to-red-800/20 border border-red-700/30 rounded-xl p-3 sm:p-4 lg:p-5"
+                  >
+                    <div className="flex items-center gap-2 text-red-400 mb-2 lg:mb-3">
+                      <DollarSign className="w-4 h-4 lg:w-5 lg:h-5" />
+                      <span className="text-xs lg:text-sm font-medium">Valor en Riesgo (Faltantes)</span>
+                    </div>
+                    <p className="font-bold text-red-400 text-xl lg:text-2xl">${(assetTotals?.totalValueAtRisk || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })}</p>
+                  </motion.div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 lg:gap-4 text-sm lg:text-base">
-                  <div>
-                    <p className="text-gray-500 text-xs lg:text-sm">Stock Contado</p>
-                    <p className="font-bold text-white text-base lg:text-lg">${(totals?.totalStockAtSale || 0).toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500 text-xs lg:text-sm">Faltantes</p>
-                    <p className="font-bold text-red-400 text-base lg:text-lg">-${(totals?.totalShortageValueSale || 0).toFixed(2)}</p>
-                  </div>
+              </>
+            ) : (
+              /* Products Summary Cards */
+              <>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5"
+                  >
+                    <div className="flex items-center gap-2 text-gray-400 mb-1 lg:mb-2">
+                      <Package className="w-4 h-4 lg:w-5 lg:h-5" />
+                      <span className="text-xs lg:text-sm">Contados</span>
+                    </div>
+                    <p className="text-xl sm:text-2xl lg:text-3xl font-bold">{totals?.totalProducts}</p>
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.05 }}
+                    className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5"
+                  >
+                    <div className="flex items-center gap-2 text-gray-400 mb-1 lg:mb-2">
+                      <AlertTriangle className="w-4 h-4 lg:w-5 lg:h-5" />
+                      <span className="text-xs lg:text-sm">Diferencias</span>
+                    </div>
+                    <p className={`text-xl sm:text-2xl lg:text-3xl font-bold ${totals?.productsWithDifferences ? 'text-amber-400' : 'text-green-400'}`}>
+                      {totals?.productsWithDifferences}
+                    </p>
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.1 }}
+                    className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5"
+                  >
+                    <div className="flex items-center gap-2 text-green-400 mb-1 lg:mb-2">
+                      <TrendingUp className="w-4 h-4 lg:w-5 lg:h-5" />
+                      <span className="text-xs lg:text-sm">Sobrantes</span>
+                    </div>
+                    <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-400">{totals?.productsWithExcess || 0}</p>
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.15 }}
+                    className="bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-5"
+                  >
+                    <div className="flex items-center gap-2 text-red-400 mb-1 lg:mb-2">
+                      <TrendingDown className="w-4 h-4 lg:w-5 lg:h-5" />
+                      <span className="text-xs lg:text-sm">Faltantes</span>
+                    </div>
+                    <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-red-400">{totals?.productsWithShortage || 0}</p>
+                  </motion.div>
                 </div>
-              </motion.div>
-            </div>
+
+                {/* Valuation Summary */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 lg:gap-4 mt-3 lg:mt-4">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.2 }}
+                    className="bg-gradient-to-r from-amber-900/30 to-amber-800/20 border border-amber-700/30 rounded-xl p-3 sm:p-4 lg:p-5"
+                  >
+                    <div className="flex items-center gap-2 text-amber-400 mb-2 lg:mb-3">
+                      <DollarSign className="w-4 h-4 lg:w-5 lg:h-5" />
+                      <span className="text-xs lg:text-sm font-medium">Valoracion a Costo</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 lg:gap-4 text-sm lg:text-base">
+                      <div>
+                        <p className="text-gray-500 text-xs lg:text-sm">Stock Contado</p>
+                        <p className="font-bold text-white text-base lg:text-lg">${(totals?.totalStockAtCost || 0).toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500 text-xs lg:text-sm">Faltantes</p>
+                        <p className="font-bold text-red-400 text-base lg:text-lg">-${(totals?.totalShortageValueCost || 0).toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.25 }}
+                    className="bg-gradient-to-r from-blue-900/30 to-blue-800/20 border border-blue-700/30 rounded-xl p-3 sm:p-4 lg:p-5"
+                  >
+                    <div className="flex items-center gap-2 text-blue-400 mb-2 lg:mb-3">
+                      <DollarSign className="w-4 h-4 lg:w-5 lg:h-5" />
+                      <span className="text-xs lg:text-sm font-medium">Valoracion a Venta</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 lg:gap-4 text-sm lg:text-base">
+                      <div>
+                        <p className="text-gray-500 text-xs lg:text-sm">Stock Contado</p>
+                        <p className="font-bold text-white text-base lg:text-lg">${(totals?.totalStockAtSale || 0).toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500 text-xs lg:text-sm">Faltantes</p>
+                        <p className="font-bold text-red-400 text-base lg:text-lg">-${(totals?.totalShortageValueSale || 0).toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Section Header - Only Differences */}
-        {linesWithDifferences.length > 0 && (
-          <div className="px-4 lg:px-6 py-2 lg:py-3 border-y border-gray-700/50 bg-gray-800/30 no-print">
-            <div className="flex items-center gap-2 text-amber-400 lg:max-w-7xl lg:mx-auto">
-              <AlertTriangle className="w-4 h-4 lg:w-5 lg:h-5" />
-              <span className="text-sm lg:text-base font-medium">Productos con Diferencias ({linesWithDifferences.length})</span>
+        {/* Section Header */}
+        {isFixedAssetsAudit ? (
+          /* Fixed Assets Section Header */
+          missingAssets.length > 0 && (
+            <div className="px-4 lg:px-6 py-2 lg:py-3 border-y border-gray-700/50 bg-gray-800/30 no-print">
+              <div className="flex items-center gap-2 text-red-400 lg:max-w-7xl lg:mx-auto">
+                <XCircle className="w-4 h-4 lg:w-5 lg:h-5" />
+                <span className="text-sm lg:text-base font-medium">Activos Fijos Faltantes ({missingAssets.length})</span>
+              </div>
             </div>
-          </div>
+          )
+        ) : (
+          /* Products Section Header - Only Differences */
+          linesWithDifferences.length > 0 && (
+            <div className="px-4 lg:px-6 py-2 lg:py-3 border-y border-gray-700/50 bg-gray-800/30 no-print">
+              <div className="flex items-center gap-2 text-amber-400 lg:max-w-7xl lg:mx-auto">
+                <AlertTriangle className="w-4 h-4 lg:w-5 lg:h-5" />
+                <span className="text-sm lg:text-base font-medium">Productos con Diferencias ({linesWithDifferences.length})</span>
+              </div>
+            </div>
+          )
         )}
 
-        {/* Products List - Only with differences */}
+        {/* Main List - Products or Fixed Assets */}
         <div className="flex-1 overflow-auto px-4 lg:px-6 pb-[100px] sm:pb-[80px]">
           <div className="max-w-7xl mx-auto">
-            {linesWithDifferences.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-green-500/10 border border-green-500/30 rounded-xl p-6 lg:p-8 text-center mt-4"
-              >
-                <CheckCircle2 className="w-12 h-12 lg:w-16 lg:h-16 mx-auto mb-3 text-green-400" />
-                <p className="font-semibold text-green-300 text-lg lg:text-xl">Conteo sin diferencias!</p>
-                <p className="text-sm lg:text-base text-green-200/70 mt-1">Todos los productos coinciden con el sistema.</p>
-              </motion.div>
+            {isFixedAssetsAudit ? (
+              /* Fixed Assets List */
+              missingAssets.length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-green-500/10 border border-green-500/30 rounded-xl p-6 lg:p-8 text-center mt-4"
+                >
+                  <CheckCircle2 className="w-12 h-12 lg:w-16 lg:h-16 mx-auto mb-3 text-green-400" />
+                  <p className="font-semibold text-green-300 text-lg lg:text-xl">Todos los activos encontrados!</p>
+                  <p className="text-sm lg:text-base text-green-200/70 mt-1">No hay activos fijos faltantes en este conteo.</p>
+                </motion.div>
+              ) : (
+                <>
+                  {/* Mobile View - Asset Cards */}
+                  <div className="lg:hidden space-y-2 mt-2">
+                    {missingAssets.map((asset, index) => (
+                      <motion.div
+                        key={`${asset.assetId}-${index}`}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.02 }}
+                        className="bg-gray-800 rounded-xl p-3 ring-1 ring-red-500/30"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-sm truncate">{asset.assetName}</p>
+                            <p className="text-xs text-gray-500">{asset.assetCode}</p>
+                          </div>
+                          <div className="flex items-center gap-1 px-2 py-1 rounded-lg text-sm font-bold bg-red-500/20 text-red-400">
+                            <XCircle className="w-3.5 h-3.5" />
+                            Faltante
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <div className="bg-gray-700/50 rounded-lg py-1.5 px-1">
+                            <p className="text-[10px] text-gray-500 uppercase">Categoria</p>
+                            <p className="font-medium text-xs truncate">{asset.categoryName || '-'}</p>
+                          </div>
+                          <div className="bg-gray-700/50 rounded-lg py-1.5 px-1">
+                            <p className="text-[10px] text-gray-500 uppercase">Responsable</p>
+                            <p className="font-medium text-xs truncate">{asset.responsibleName || '-'}</p>
+                          </div>
+                          <div className="bg-gray-700/50 rounded-lg py-1.5 px-1">
+                            <p className="text-[10px] text-gray-500 uppercase">Valor</p>
+                            <p className="font-mono font-medium text-xs text-red-400">
+                              ${(asset.currentValue || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+
+                  {/* Desktop View - Asset Table */}
+                  <div className="hidden lg:block bg-gray-800 rounded-xl overflow-hidden mt-3">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-700/50">
+                          <tr>
+                            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Codigo</th>
+                            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Activo</th>
+                            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Categoria</th>
+                            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Responsable</th>
+                            <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Estado</th>
+                            <th className="text-right px-4 py-3 text-xs font-semibold text-red-400 uppercase tracking-wider">Valor</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-700/50">
+                          {missingAssets.map((asset, index) => (
+                            <tr
+                              key={`${asset.assetId}-${index}`}
+                              className="bg-red-900/10 hover:bg-red-900/20 transition-colors"
+                            >
+                              <td className="px-4 py-3 font-mono text-sm">{asset.assetCode}</td>
+                              <td className="px-4 py-3">
+                                <p className="font-medium">{asset.assetName}</p>
+                                {asset.assetBarcode && (
+                                  <p className="text-xs text-gray-500">{asset.assetBarcode}</p>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-gray-300">{asset.categoryName || '-'}</td>
+                              <td className="px-4 py-3 text-gray-300">{asset.responsibleName || '-'}</td>
+                              <td className="px-4 py-3 text-center">
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold bg-red-500/20 text-red-400">
+                                  <XCircle className="w-3 h-3" />
+                                  Faltante
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono text-red-400">
+                                ${(asset.currentValue || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-gray-700/50">
+                          <tr className="font-bold">
+                            <td colSpan={5} className="px-4 py-3">TOTAL VALOR EN RIESGO</td>
+                            <td className="px-4 py-3 text-right font-mono text-red-400">
+                              ${(assetTotals?.totalValueAtRisk || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Mobile Totals Summary for Assets */}
+                  <div className="lg:hidden mt-3 bg-gray-800 rounded-xl p-3">
+                    <p className="text-xs text-gray-500 text-center mb-2">TOTAL VALOR EN RIESGO</p>
+                    <p className="text-xl font-bold font-mono text-red-400 text-center">
+                      ${(assetTotals?.totalValueAtRisk || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </>
+              )
             ) : (
+              /* Products List - Only with differences */
+              linesWithDifferences.length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-green-500/10 border border-green-500/30 rounded-xl p-6 lg:p-8 text-center mt-4"
+                >
+                  <CheckCircle2 className="w-12 h-12 lg:w-16 lg:h-16 mx-auto mb-3 text-green-400" />
+                  <p className="font-semibold text-green-300 text-lg lg:text-xl">Conteo sin diferencias!</p>
+                  <p className="text-sm lg:text-base text-green-200/70 mt-1">Todos los productos coinciden con el sistema.</p>
+                </motion.div>
+              ) : (
               <>
                 {/* Mobile View - Cards */}
                 <div className="lg:hidden space-y-2 mt-2">
@@ -686,7 +999,8 @@ export default function AuditReportPage() {
                 </div>
               </div>
             </>
-          )}
+              )
+            )}
           </div>
         </div>
 
@@ -734,7 +1048,9 @@ export default function AuditReportPage() {
       <div id="print-content" className="hidden print:block" ref={printRef}>
         <div style={{ fontFamily: 'Arial, sans-serif', maxWidth: '800px', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '20px', borderBottom: '2px solid #333', paddingBottom: '15px' }}>
-            <h1 style={{ margin: '0 0 5px 0', fontSize: '24px' }}>Reporte de Auditoria de Inventario</h1>
+            <h1 style={{ margin: '0 0 5px 0', fontSize: '24px' }}>
+              {isFixedAssetsAudit ? 'Reporte de Auditoria de Activos Fijos' : 'Reporte de Auditoria de Inventario'}
+            </h1>
             <p style={{ margin: '0', color: '#666', fontSize: '14px' }}>{countData.countNumber}</p>
           </div>
 
@@ -742,6 +1058,7 @@ export default function AuditReportPage() {
             <div>
               <p><strong>Almacen:</strong> {countData.warehouseName}</p>
               <p><strong>Estado:</strong> {countData.status === 'completed' ? 'Completado' : 'En Progreso'}</p>
+              <p><strong>Tipo:</strong> {isFixedAssetsAudit ? 'Activos Fijos' : 'Productos'}</p>
             </div>
             <div style={{ textAlign: 'right' }}>
               <p><strong>Fecha:</strong> {countData.startedAt ? new Date(countData.startedAt).toLocaleDateString('es-ES') : new Date().toLocaleDateString('es-ES')}</p>
@@ -749,89 +1066,174 @@ export default function AuditReportPage() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-            <div style={{ flex: 1, padding: '10px', background: '#f5f5f5', borderRadius: '8px', textAlign: 'center' }}>
-              <div style={{ fontSize: '12px', color: '#666' }}>Productos</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold' }}>{totals?.totalProducts}</div>
-            </div>
-            <div style={{ flex: 1, padding: '10px', background: '#fff3cd', borderRadius: '8px', textAlign: 'center' }}>
-              <div style={{ fontSize: '12px', color: '#666' }}>Diferencias</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#856404' }}>{totals?.productsWithDifferences}</div>
-            </div>
-            <div style={{ flex: 1, padding: '10px', background: '#d4edda', borderRadius: '8px', textAlign: 'center' }}>
-              <div style={{ fontSize: '12px', color: '#666' }}>Sobrantes</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#155724' }}>{totals?.productsWithExcess}</div>
-            </div>
-            <div style={{ flex: 1, padding: '10px', background: '#f8d7da', borderRadius: '8px', textAlign: 'center' }}>
-              <div style={{ fontSize: '12px', color: '#666' }}>Faltantes</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#721c24' }}>{totals?.productsWithShortage}</div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-            <div style={{ flex: 1, padding: '10px', background: '#fef3cd', borderRadius: '8px' }}>
-              <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Valoracion a Costo</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Stock: <strong>${(totals?.totalStockAtCost || 0).toFixed(2)}</strong></span>
-                <span style={{ color: '#721c24' }}>Faltantes: <strong>-${(totals?.totalShortageValueCost || 0).toFixed(2)}</strong></span>
-              </div>
-            </div>
-            <div style={{ flex: 1, padding: '10px', background: '#cce5ff', borderRadius: '8px' }}>
-              <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Valoracion a Venta</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Stock: <strong>${(totals?.totalStockAtSale || 0).toFixed(2)}</strong></span>
-                <span style={{ color: '#721c24' }}>Faltantes: <strong>-${(totals?.totalShortageValueSale || 0).toFixed(2)}</strong></span>
-              </div>
-            </div>
-          </div>
-
-          {linesWithDifferences.length > 0 && (
+          {isFixedAssetsAudit ? (
+            /* Fixed Assets Print Content */
             <>
-              <h3 style={{ fontSize: '14px', marginBottom: '10px', color: '#856404' }}>Productos con Diferencias</h3>
-              <table className="print-table" style={{ fontSize: '11px' }}>
-                <thead>
-                  <tr>
-                    <th>Producto</th>
-                    <th style={{ textAlign: 'right' }}>Sistema</th>
-                    <th style={{ textAlign: 'right' }}>Contado</th>
-                    <th style={{ textAlign: 'right' }}>Diferencia</th>
-                    <th style={{ textAlign: 'right' }}>$ Costo</th>
-                    <th style={{ textAlign: 'right' }}>$ Venta</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {linesWithDifferences.map((line, index) => (
-                    <tr key={index} style={{ background: line.difference > 0 ? '#f8d7da' : '#d4edda' }}>
-                      <td>
-                        <div>{line.productName}</div>
-                        <div style={{ fontSize: '10px', color: '#666' }}>{line.productSku || line.productBarcode}</div>
-                      </td>
-                      <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{line.systemQuantity}</td>
-                      <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold' }}>{line.countedQuantity}</td>
-                      <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: line.difference > 0 ? '#721c24' : '#155724' }}>
-                        {line.difference > 0 ? '-' : '+'}{Math.abs(line.difference)}
-                      </td>
-                      <td style={{ textAlign: 'right', fontFamily: 'monospace', color: line.difference > 0 ? '#721c24' : '#155724' }}>
-                        ${Math.abs(line.differenceValueCost).toFixed(2)}
-                      </td>
-                      <td style={{ textAlign: 'right', fontFamily: 'monospace', color: line.difference > 0 ? '#721c24' : '#155724' }}>
-                        ${Math.abs(line.differenceValueSale).toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr style={{ fontWeight: 'bold', background: '#e9ecef' }}>
-                    <td colSpan={4}>TOTALES FALTANTES</td>
-                    <td style={{ textAlign: 'right', fontFamily: 'monospace', color: '#721c24' }}>
-                      -${(totals?.totalShortageValueCost || 0).toFixed(2)}
-                    </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'monospace', color: '#721c24' }}>
-                      -${(totals?.totalShortageValueSale || 0).toFixed(2)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+                <div style={{ flex: 1, padding: '10px', background: '#f5f5f5', borderRadius: '8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#666' }}>Total Activos</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold' }}>{assetTotals?.totalAssets}</div>
+                </div>
+                <div style={{ flex: 1, padding: '10px', background: '#d4edda', borderRadius: '8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#666' }}>Encontrados</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#155724' }}>{assetTotals?.assetsFound}</div>
+                </div>
+                <div style={{ flex: 1, padding: '10px', background: '#f8d7da', borderRadius: '8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#666' }}>Faltantes</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#721c24' }}>{assetTotals?.assetsMissing}</div>
+                </div>
+                <div style={{ flex: 1, padding: '10px', background: '#fff3cd', borderRadius: '8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#666' }}>Extras</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#856404' }}>{assetTotals?.assetsSurplus || 0}</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+                <div style={{ flex: 1, padding: '10px', background: '#d4edda', borderRadius: '8px' }}>
+                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Valor Activos Encontrados</div>
+                  <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#155724' }}>
+                    ${(assetTotals?.totalFoundValue || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div style={{ flex: 1, padding: '10px', background: '#f8d7da', borderRadius: '8px' }}>
+                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Valor en Riesgo (Faltantes)</div>
+                  <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#721c24' }}>
+                    ${(assetTotals?.totalValueAtRisk || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+              </div>
+
+              {missingAssets.length > 0 && (
+                <>
+                  <h3 style={{ fontSize: '14px', marginBottom: '10px', color: '#721c24' }}>Activos Fijos Faltantes</h3>
+                  <table className="print-table" style={{ fontSize: '11px' }}>
+                    <thead>
+                      <tr>
+                        <th>Codigo</th>
+                        <th>Activo</th>
+                        <th>Categoria</th>
+                        <th>Responsable</th>
+                        <th style={{ textAlign: 'right' }}>Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {missingAssets.map((asset, index) => (
+                        <tr key={index} style={{ background: '#f8d7da' }}>
+                          <td style={{ fontFamily: 'monospace' }}>{asset.assetCode}</td>
+                          <td>
+                            <div>{asset.assetName}</div>
+                            {asset.assetBarcode && (
+                              <div style={{ fontSize: '10px', color: '#666' }}>{asset.assetBarcode}</div>
+                            )}
+                          </td>
+                          <td>{asset.categoryName || '-'}</td>
+                          <td>{asset.responsibleName || '-'}</td>
+                          <td style={{ textAlign: 'right', fontFamily: 'monospace', color: '#721c24' }}>
+                            ${(asset.currentValue || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ fontWeight: 'bold', background: '#e9ecef' }}>
+                        <td colSpan={4}>TOTAL VALOR EN RIESGO</td>
+                        <td style={{ textAlign: 'right', fontFamily: 'monospace', color: '#721c24' }}>
+                          ${(assetTotals?.totalValueAtRisk || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </>
+              )}
+            </>
+          ) : (
+            /* Products Print Content */
+            <>
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+                <div style={{ flex: 1, padding: '10px', background: '#f5f5f5', borderRadius: '8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#666' }}>Productos</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold' }}>{totals?.totalProducts}</div>
+                </div>
+                <div style={{ flex: 1, padding: '10px', background: '#fff3cd', borderRadius: '8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#666' }}>Diferencias</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#856404' }}>{totals?.productsWithDifferences}</div>
+                </div>
+                <div style={{ flex: 1, padding: '10px', background: '#d4edda', borderRadius: '8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#666' }}>Sobrantes</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#155724' }}>{totals?.productsWithExcess}</div>
+                </div>
+                <div style={{ flex: 1, padding: '10px', background: '#f8d7da', borderRadius: '8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#666' }}>Faltantes</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#721c24' }}>{totals?.productsWithShortage}</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+                <div style={{ flex: 1, padding: '10px', background: '#fef3cd', borderRadius: '8px' }}>
+                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Valoracion a Costo</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Stock: <strong>${(totals?.totalStockAtCost || 0).toFixed(2)}</strong></span>
+                    <span style={{ color: '#721c24' }}>Faltantes: <strong>-${(totals?.totalShortageValueCost || 0).toFixed(2)}</strong></span>
+                  </div>
+                </div>
+                <div style={{ flex: 1, padding: '10px', background: '#cce5ff', borderRadius: '8px' }}>
+                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Valoracion a Venta</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Stock: <strong>${(totals?.totalStockAtSale || 0).toFixed(2)}</strong></span>
+                    <span style={{ color: '#721c24' }}>Faltantes: <strong>-${(totals?.totalShortageValueSale || 0).toFixed(2)}</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              {linesWithDifferences.length > 0 && (
+                <>
+                  <h3 style={{ fontSize: '14px', marginBottom: '10px', color: '#856404' }}>Productos con Diferencias</h3>
+                  <table className="print-table" style={{ fontSize: '11px' }}>
+                    <thead>
+                      <tr>
+                        <th>Producto</th>
+                        <th style={{ textAlign: 'right' }}>Sistema</th>
+                        <th style={{ textAlign: 'right' }}>Contado</th>
+                        <th style={{ textAlign: 'right' }}>Diferencia</th>
+                        <th style={{ textAlign: 'right' }}>$ Costo</th>
+                        <th style={{ textAlign: 'right' }}>$ Venta</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {linesWithDifferences.map((line, index) => (
+                        <tr key={index} style={{ background: line.difference > 0 ? '#f8d7da' : '#d4edda' }}>
+                          <td>
+                            <div>{line.productName}</div>
+                            <div style={{ fontSize: '10px', color: '#666' }}>{line.productSku || line.productBarcode}</div>
+                          </td>
+                          <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{line.systemQuantity}</td>
+                          <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold' }}>{line.countedQuantity}</td>
+                          <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: line.difference > 0 ? '#721c24' : '#155724' }}>
+                            {line.difference > 0 ? '-' : '+'}{Math.abs(line.difference)}
+                          </td>
+                          <td style={{ textAlign: 'right', fontFamily: 'monospace', color: line.difference > 0 ? '#721c24' : '#155724' }}>
+                            ${Math.abs(line.differenceValueCost).toFixed(2)}
+                          </td>
+                          <td style={{ textAlign: 'right', fontFamily: 'monospace', color: line.difference > 0 ? '#721c24' : '#155724' }}>
+                            ${Math.abs(line.differenceValueSale).toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ fontWeight: 'bold', background: '#e9ecef' }}>
+                        <td colSpan={4}>TOTALES FALTANTES</td>
+                        <td style={{ textAlign: 'right', fontFamily: 'monospace', color: '#721c24' }}>
+                          -${(totals?.totalShortageValueCost || 0).toFixed(2)}
+                        </td>
+                        <td style={{ textAlign: 'right', fontFamily: 'monospace', color: '#721c24' }}>
+                          -${(totals?.totalShortageValueSale || 0).toFixed(2)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </>
+              )}
             </>
           )}
 
@@ -866,11 +1268,17 @@ export default function AuditReportPage() {
               {/* Header */}
               <div className="px-6 py-4 border-b border-gray-700 bg-gray-800 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-amber-900/30">
-                    <Package className="w-5 h-5 text-amber-400" />
+                  <div className={`p-2 rounded-lg ${isFixedAssetsAudit ? 'bg-blue-900/30' : 'bg-amber-900/30'}`}>
+                    {isFixedAssetsAudit ? (
+                      <Briefcase className="w-5 h-5 text-blue-400" />
+                    ) : (
+                      <Package className="w-5 h-5 text-amber-400" />
+                    )}
                   </div>
                   <div>
-                    <h3 className="font-semibold text-white">Imprimir Reporte de Auditoria</h3>
+                    <h3 className="font-semibold text-white">
+                      {isFixedAssetsAudit ? 'Imprimir Reporte de Activos Fijos' : 'Imprimir Reporte de Auditoria'}
+                    </h3>
                     <p className="text-xs text-gray-400">{countData.countNumber}</p>
                   </div>
                 </div>
