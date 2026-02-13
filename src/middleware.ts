@@ -10,7 +10,7 @@ export async function middleware(request: NextRequest) {
   // MAINTENANCE MODE - All logirapid.com domains
   // ============================================================
   // Set to true to enable maintenance mode, false to disable
-  const MAINTENANCE_MODE = true  // ← ACTIVADO
+  const MAINTENANCE_MODE = false  // ← DESACTIVADO
 
   if (MAINTENANCE_MODE) {
     // Check if it's a logirapid.com domain (including subdomains)
