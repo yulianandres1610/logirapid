@@ -22,12 +22,6 @@ let replicationErrors = 0;
 let replicationSuccesses = 0;
 const MAX_REPLICATION_ERRORS = 50;
 
-// Buffer for batching writes (send every 2 seconds or when buffer is full)
-let replicationBuffer: Array<{ text: string; params?: any[] }> = [];
-let flushTimer: ReturnType<typeof setTimeout> | null = null;
-const FLUSH_INTERVAL = 2000; // 2 seconds
-const MAX_BUFFER_SIZE = 20; // flush immediately at 20 queries
-
 if (replicationProxyUrl) {
   console.log(`[REPLICATION] HTTP proxy configured: ${replicationProxyUrl}`);
 } else {
@@ -36,32 +30,26 @@ if (replicationProxyUrl) {
 
 const WRITE_PATTERNS = /^\s*(INSERT|UPDATE|DELETE|UPSERT|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|TRUNCATE)/i;
 
-async function flushReplicationBuffer(): Promise<void> {
-  if (replicationBuffer.length === 0) return;
+// Send each write immediately (no buffering - serverless functions freeze after response)
+function replicateToStandby(text: string, params?: any[]): void {
+  if (!WRITE_PATTERNS.test(text)) return;
   if (!replicationProxyUrl || !replicationApiKey) return;
   if (replicationErrors >= MAX_REPLICATION_ERRORS) return;
 
-  const queries = [...replicationBuffer];
-  replicationBuffer = [];
-
-  try {
-    const res = await fetch(`${replicationProxyUrl}/batch`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': replicationApiKey,
-      },
-      body: JSON.stringify({ queries }),
-      signal: AbortSignal.timeout(15000),
-    });
-
+  fetch(`${replicationProxyUrl}/batch`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': replicationApiKey,
+    },
+    body: JSON.stringify({ queries: [{ text, params }] }),
+    signal: AbortSignal.timeout(15000),
+  }).then(async (res) => {
     if (res.ok) {
-      const data = await res.json();
-      replicationSuccesses += data.succeeded || 0;
-      if (data.failed > 0) replicationErrors++;
-      if (replicationErrors > 0 && data.succeeded > 0) replicationErrors = Math.max(0, replicationErrors - 1);
-      if (replicationSuccesses === queries.length || replicationSuccesses % 100 < queries.length) {
-        console.log(`[REPLICATION] OK batch: ${data.succeeded}/${queries.length} (total: ${replicationSuccesses})`);
+      replicationSuccesses++;
+      if (replicationErrors > 0) replicationErrors = Math.max(0, replicationErrors - 1);
+      if (replicationSuccesses === 1 || replicationSuccesses % 100 === 0) {
+        console.log(`[REPLICATION] OK (${replicationSuccesses}) - ${text.substring(0, 60)}`);
       }
     } else {
       replicationErrors++;
@@ -70,35 +58,12 @@ async function flushReplicationBuffer(): Promise<void> {
         console.error(`[REPLICATION] HTTP ${res.status} (${replicationErrors}): ${errText.substring(0, 150)}`);
       }
     }
-  } catch (err: any) {
+  }).catch((err: any) => {
     replicationErrors++;
     if (replicationErrors <= 5 || replicationErrors % 10 === 1) {
       console.error(`[REPLICATION] Error (${replicationErrors}): ${err.message?.substring(0, 150)}`);
     }
-  }
-}
-
-function replicateToStandby(text: string, params?: any[]): void {
-  if (!WRITE_PATTERNS.test(text)) return;
-  if (!replicationProxyUrl || !replicationApiKey) return;
-  if (replicationErrors >= MAX_REPLICATION_ERRORS) return;
-
-  replicationBuffer.push({ text, params });
-
-  // Flush immediately if buffer is full
-  if (replicationBuffer.length >= MAX_BUFFER_SIZE) {
-    if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
-    flushReplicationBuffer();
-    return;
-  }
-
-  // Otherwise schedule a flush
-  if (!flushTimer) {
-    flushTimer = setTimeout(() => {
-      flushTimer = null;
-      flushReplicationBuffer();
-    }, FLUSH_INTERVAL);
-  }
+  });
 }
 
 function replicateTransactionToStandby(queries: Array<{ text: string; params?: any[] }>): void {
