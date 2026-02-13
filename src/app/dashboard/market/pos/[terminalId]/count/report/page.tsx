@@ -357,11 +357,13 @@ export default function InventoryCountReportPage() {
 
   // Calculate totals
   // difference = expected - counted: positivo = FALTANTE, negativo = SOBRANTE
+  // Use tolerance of 0.01 to avoid floating point precision issues
+  const DIFF_TOLERANCE = 0.01
   const totals = countData ? {
     totalProducts: countData.lines.length,
-    productsWithDifferences: countData.lines.filter(l => l.difference !== 0).length,
-    productsWithExcess: countData.lines.filter(l => l.difference < 0).length,    // negativo = sobrante (contó de más)
-    productsWithShortage: countData.lines.filter(l => l.difference > 0).length,  // positivo = faltante (contó de menos)
+    productsWithDifferences: countData.lines.filter(l => Math.abs(l.difference) >= DIFF_TOLERANCE).length,
+    productsWithExcess: countData.lines.filter(l => l.difference <= -DIFF_TOLERANCE).length,    // negativo = sobrante (contó de más)
+    productsWithShortage: countData.lines.filter(l => l.difference >= DIFF_TOLERANCE).length,  // positivo = faltante (contó de menos)
     totalDifferenceValue: countData.lines.reduce((sum, l) => sum + l.differenceValue, 0),
     totalExpected: countData.lines.reduce((sum, l) => sum + l.expectedQuantity, 0),
     totalCounted: countData.lines.reduce((sum, l) => sum + l.countedQuantity, 0),
@@ -543,9 +545,9 @@ export default function InventoryCountReportPage() {
           {/* Mobile View - Cards */}
           <div className="sm:hidden space-y-2">
             {countData.lines.map((line, index) => {
-              const hasDifference = line.difference !== 0
-              const isExcess = line.difference < 0   // negativo = sobrante (contó de más)
-              const isShortage = line.difference > 0  // positivo = faltante (contó de menos)
+              const hasDifference = Math.abs(line.difference) >= DIFF_TOLERANCE
+              const isExcess = line.difference <= -DIFF_TOLERANCE   // negativo = sobrante (contó de más)
+              const isShortage = line.difference >= DIFF_TOLERANCE  // positivo = faltante (contó de menos)
 
               return (
                 <motion.div
@@ -612,9 +614,9 @@ export default function InventoryCountReportPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-700/50">
                   {countData.lines.map((line, index) => {
-                    const hasDifference = line.difference !== 0
-                    const isExcess = line.difference < 0   // negativo = sobrante
-                    const isShortage = line.difference > 0  // positivo = faltante
+                    const hasDifference = Math.abs(line.difference) >= DIFF_TOLERANCE
+                    const isExcess = line.difference <= -DIFF_TOLERANCE   // negativo = sobrante
+                    const isShortage = line.difference >= DIFF_TOLERANCE  // positivo = faltante
 
                     return (
                       <tr
@@ -847,7 +849,7 @@ export default function InventoryCountReportPage() {
             </thead>
             <tbody>
               {countData.lines.map((line, index) => (
-                <tr key={index} style={{ background: line.difference !== 0 ? (line.difference > 0 ? '#f8d7da' : '#d4edda') : 'white' }}>
+                <tr key={index} style={{ background: Math.abs(line.difference) >= 0.01 ? (line.difference > 0 ? '#f8d7da' : '#d4edda') : 'white' }}>
                   <td>
                     <div>{line.productName}</div>
                     <div style={{ fontSize: '10px', color: '#666' }}>{line.productSku || line.productBarcode}</div>
