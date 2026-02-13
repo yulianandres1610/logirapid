@@ -14,70 +14,121 @@ if (connectionString) {
 let pool: Pool | null = null;
 
 // ============================================================================
-// STANDBY REPLICATION - Real-time async write replication to VPS
+// STANDBY REPLICATION - Real-time async write replication via HTTP proxy
 // ============================================================================
-const standbyUrl = process.env.DATABASE_URL_STANDBY?.trim();
-let standbyPool: Pool | null = null;
+const replicationProxyUrl = process.env.REPLICATION_PROXY_URL?.trim();
+const replicationApiKey = process.env.REPLICATION_API_KEY?.trim();
 let replicationErrors = 0;
 let replicationSuccesses = 0;
-const MAX_REPLICATION_ERRORS = 50; // pause replication after too many errors
+const MAX_REPLICATION_ERRORS = 50;
 
-if (standbyUrl) {
-  console.log('[REPLICATION] Standby URL configured, replication enabled');
+// Buffer for batching writes (send every 2 seconds or when buffer is full)
+let replicationBuffer: Array<{ text: string; params?: any[] }> = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+const FLUSH_INTERVAL = 2000; // 2 seconds
+const MAX_BUFFER_SIZE = 20; // flush immediately at 20 queries
+
+if (replicationProxyUrl) {
+  console.log(`[REPLICATION] HTTP proxy configured: ${replicationProxyUrl}`);
 } else {
-  console.log('[REPLICATION] No standby URL, replication disabled');
+  console.log('[REPLICATION] No proxy URL, replication disabled');
 }
 
 const WRITE_PATTERNS = /^\s*(INSERT|UPDATE|DELETE|UPSERT|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|TRUNCATE)/i;
 
-function getStandbyPool(): Pool | null {
-  if (!standbyUrl) return null;
-  if (replicationErrors >= MAX_REPLICATION_ERRORS) return null;
+async function flushReplicationBuffer(): Promise<void> {
+  if (replicationBuffer.length === 0) return;
+  if (!replicationProxyUrl || !replicationApiKey) return;
+  if (replicationErrors >= MAX_REPLICATION_ERRORS) return;
 
-  if (!standbyPool) {
-    standbyPool = new Pool({
-      connectionString: standbyUrl.replace(/[?&]sslmode=[^&]*/g, ''),
-      ssl: false,
-      max: 3,
-      min: 0,
-      idleTimeoutMillis: 60000,
-      connectionTimeoutMillis: 15000,
-      query_timeout: 30000,
-      statement_timeout: 30000,
-      keepAlive: true,
-      keepAliveInitialDelayMillis: 10000,
-      allowExitOnIdle: true,
+  const queries = [...replicationBuffer];
+  replicationBuffer = [];
+
+  try {
+    const res = await fetch(`${replicationProxyUrl}/batch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': replicationApiKey,
+      },
+      body: JSON.stringify({ queries }),
+      signal: AbortSignal.timeout(15000),
     });
-    standbyPool.on('error', () => {
-      // Silently handle standby pool errors - don't crash the app
-      replicationErrors++;
-      if (replicationErrors >= MAX_REPLICATION_ERRORS) {
-        console.error('[REPLICATION] Too many errors, pausing replication');
-        standbyPool = null;
+
+    if (res.ok) {
+      const data = await res.json();
+      replicationSuccesses += data.succeeded || 0;
+      if (data.failed > 0) replicationErrors++;
+      if (replicationErrors > 0 && data.succeeded > 0) replicationErrors = Math.max(0, replicationErrors - 1);
+      if (replicationSuccesses === queries.length || replicationSuccesses % 100 < queries.length) {
+        console.log(`[REPLICATION] OK batch: ${data.succeeded}/${queries.length} (total: ${replicationSuccesses})`);
       }
-    });
+    } else {
+      replicationErrors++;
+      const errText = await res.text().catch(() => 'unknown');
+      if (replicationErrors <= 5 || replicationErrors % 10 === 1) {
+        console.error(`[REPLICATION] HTTP ${res.status} (${replicationErrors}): ${errText.substring(0, 150)}`);
+      }
+    }
+  } catch (err: any) {
+    replicationErrors++;
+    if (replicationErrors <= 5 || replicationErrors % 10 === 1) {
+      console.error(`[REPLICATION] Error (${replicationErrors}): ${err.message?.substring(0, 150)}`);
+    }
   }
-  return standbyPool;
 }
 
 function replicateToStandby(text: string, params?: any[]): void {
   if (!WRITE_PATTERNS.test(text)) return;
+  if (!replicationProxyUrl || !replicationApiKey) return;
+  if (replicationErrors >= MAX_REPLICATION_ERRORS) return;
 
-  const sp = getStandbyPool();
-  if (!sp) return;
+  replicationBuffer.push({ text, params });
 
-  sp.query(text, params).then(() => {
-    if (replicationErrors > 0) replicationErrors = Math.max(0, replicationErrors - 1);
-    replicationSuccesses++;
-    // Log first success and then every 100th
-    if (replicationSuccesses === 1 || replicationSuccesses % 100 === 0) {
-      console.log(`[REPLICATION] OK (${replicationSuccesses} total) - ${text.substring(0, 60)}`);
+  // Flush immediately if buffer is full
+  if (replicationBuffer.length >= MAX_BUFFER_SIZE) {
+    if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+    flushReplicationBuffer();
+    return;
+  }
+
+  // Otherwise schedule a flush
+  if (!flushTimer) {
+    flushTimer = setTimeout(() => {
+      flushTimer = null;
+      flushReplicationBuffer();
+    }, FLUSH_INTERVAL);
+  }
+}
+
+function replicateTransactionToStandby(queries: Array<{ text: string; params?: any[] }>): void {
+  if (!replicationProxyUrl || !replicationApiKey) return;
+  if (replicationErrors >= MAX_REPLICATION_ERRORS) return;
+  if (queries.length === 0) return;
+
+  // Transactions are sent immediately (not buffered) to maintain atomicity
+  fetch(`${replicationProxyUrl}/replicate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': replicationApiKey,
+    },
+    body: JSON.stringify({ queries }),
+    signal: AbortSignal.timeout(15000),
+  }).then(async (res) => {
+    if (res.ok) {
+      replicationSuccesses += queries.length;
+      if (replicationErrors > 0) replicationErrors = Math.max(0, replicationErrors - 1);
+      console.log(`[REPLICATION] TX OK: ${queries.length} queries`);
+    } else {
+      replicationErrors++;
+      const errText = await res.text().catch(() => 'unknown');
+      console.error(`[REPLICATION TX] HTTP ${res.status}: ${errText.substring(0, 100)}`);
     }
-  }).catch((err) => {
+  }).catch((err: any) => {
     replicationErrors++;
-    // Log every error to help diagnose issues
     if (replicationErrors <= 5 || replicationErrors % 10 === 1) {
-      console.error(`[REPLICATION] Error (${replicationErrors}): ${err.message?.substring(0, 150)}`);
+      console.error(`[REPLICATION TX] Error (${replicationErrors}): ${err.message?.substring(0, 100)}`);
     }
   });
 }
@@ -285,29 +336,9 @@ class DatabaseWrapper {
       const result = await callback(client);
       await originalQuery('COMMIT');
 
-      // Replicate transaction to standby async
+      // Replicate transaction to standby via HTTP proxy (async, fire-and-forget)
       if (capturedQueries.length > 0) {
-        const sp = getStandbyPool();
-        if (sp) {
-          sp.connect().then(async (standbyClient) => {
-            try {
-              await standbyClient.query('BEGIN');
-              for (const q of capturedQueries) {
-                await standbyClient.query(q.text, q.params);
-              }
-              await standbyClient.query('COMMIT');
-              if (replicationErrors > 0) replicationErrors = Math.max(0, replicationErrors - 1);
-            } catch (err: any) {
-              try { await standbyClient.query('ROLLBACK'); } catch {}
-              replicationErrors++;
-              if (replicationErrors % 10 === 1) {
-                console.error(`[REPLICATION TX] Error (${replicationErrors}): ${err.message?.substring(0, 100)}`);
-              }
-            } finally {
-              standbyClient.release();
-            }
-          }).catch(() => { replicationErrors++; });
-        }
+        replicateTransactionToStandby(capturedQueries);
       }
 
       return result;
@@ -613,18 +644,20 @@ export async function runHealthChecks(): Promise<{
     primaryResult.error = err.message;
   }
 
-  // Check standby if configured
-  if (standbyUrl) {
+  // Check standby via HTTP proxy
+  if (replicationProxyUrl) {
     standbyResult = { healthy: false };
     try {
-      const sp = getStandbyPool();
-      if (sp) {
-        const start = Date.now();
-        await sp.query('SELECT 1');
-        standbyResult.healthy = true;
+      const start = Date.now();
+      const res = await fetch(`${replicationProxyUrl}/health`, {
+        signal: AbortSignal.timeout(10000),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        standbyResult.healthy = data.ok === true;
         standbyResult.latencyMs = Date.now() - start;
       } else {
-        standbyResult.error = 'Standby pool unavailable (paused or not configured)';
+        standbyResult.error = `HTTP ${res.status}`;
       }
     } catch (err: any) {
       standbyResult.error = err.message;
@@ -641,7 +674,7 @@ export function getCurrentDatabaseInfo(): {
 } {
   return {
     primaryConfigured: !!connectionString,
-    standbyConfigured: !!process.env.DATABASE_URL_STANDBY,
+    standbyConfigured: !!replicationProxyUrl,
     mode: 'primary',
   };
 }
