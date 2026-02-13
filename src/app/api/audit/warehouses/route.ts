@@ -14,7 +14,7 @@ interface JWTPayload {
 
 /**
  * GET /api/audit/warehouses
- * Returns all active warehouses for the user's company
+ * Returns all active warehouses for the user's company with stats for both products and fixed assets
  */
 export async function GET(request: NextRequest) {
   try {
@@ -53,20 +53,46 @@ export async function GET(request: NextRequest) {
         mw.state,
         mw.is_central,
         mw.is_active,
+        -- Product stats
         (SELECT COUNT(DISTINCT mws.product_id)
          FROM market_warehouse_stock mws
          WHERE mws.warehouse_id = mw.id AND mws.quantity_on_hand > 0) as products_with_stock,
         (SELECT COALESCE(SUM(mws.quantity_on_hand), 0)
          FROM market_warehouse_stock mws
          WHERE mws.warehouse_id = mw.id) as total_stock,
+        -- Last product audit
         (SELECT ac.created_at
          FROM audit_counts ac
-         WHERE ac.warehouse_id = mw.id AND ac.status = 'completed'
+         WHERE ac.warehouse_id = mw.id
+           AND COALESCE(ac.audit_type, 'products') = 'products'
+           AND ac.status IN ('completed', 'applied')
          ORDER BY ac.created_at DESC LIMIT 1) as last_count_date,
         (SELECT ac.count_number
          FROM audit_counts ac
-         WHERE ac.warehouse_id = mw.id AND ac.status = 'completed'
-         ORDER BY ac.created_at DESC LIMIT 1) as last_count_number
+         WHERE ac.warehouse_id = mw.id
+           AND COALESCE(ac.audit_type, 'products') = 'products'
+           AND ac.status IN ('completed', 'applied')
+         ORDER BY ac.created_at DESC LIMIT 1) as last_count_number,
+        -- Fixed assets stats
+        (SELECT COUNT(*)
+         FROM market_fixed_assets mfa
+         WHERE mfa.warehouse_id = mw.id AND mfa.status = 'active') as fixed_assets_count,
+        (SELECT COALESCE(SUM(mfa.current_value), 0)
+         FROM market_fixed_assets mfa
+         WHERE mfa.warehouse_id = mw.id AND mfa.status = 'active') as fixed_assets_value,
+        -- Last fixed assets audit
+        (SELECT ac.created_at
+         FROM audit_counts ac
+         WHERE ac.warehouse_id = mw.id
+           AND ac.audit_type = 'fixed_assets'
+           AND ac.status IN ('completed', 'applied')
+         ORDER BY ac.created_at DESC LIMIT 1) as last_fixed_asset_count_date,
+        (SELECT ac.count_number
+         FROM audit_counts ac
+         WHERE ac.warehouse_id = mw.id
+           AND ac.audit_type = 'fixed_assets'
+           AND ac.status IN ('completed', 'applied')
+         ORDER BY ac.created_at DESC LIMIT 1) as last_fixed_asset_count_number
       FROM market_warehouses mw
       WHERE mw.company_id = $1 AND mw.is_active = true
       ORDER BY mw.name ASC
@@ -83,10 +109,16 @@ export async function GET(request: NextRequest) {
           city: w.city,
           state: w.state,
           isCentral: w.is_central,
+          // Product audit info
           productsWithStock: parseInt(w.products_with_stock) || 0,
           totalStock: parseFloat(w.total_stock) || 0,
           lastCountDate: w.last_count_date,
-          lastCountNumber: w.last_count_number
+          lastCountNumber: w.last_count_number,
+          // Fixed assets audit info
+          fixedAssetsCount: parseInt(w.fixed_assets_count) || 0,
+          fixedAssetsValue: parseFloat(w.fixed_assets_value) || 0,
+          lastFixedAssetCountDate: w.last_fixed_asset_count_date,
+          lastFixedAssetCountNumber: w.last_fixed_asset_count_number
         }))
       }
     })

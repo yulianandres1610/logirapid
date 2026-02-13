@@ -554,7 +554,6 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       submenuItems: [
         { icon: Box, label: "Inventario", href: "/dashboard/market/fixed-assets" },
         { icon: Tag, label: "Categorías", href: "/dashboard/market/fixed-assets/categories" },
-        { icon: ClipboardCheck, label: "Auditorías", href: "/dashboard/market/fixed-assets/audits" },
       ]
     },
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },

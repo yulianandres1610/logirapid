@@ -47,11 +47,11 @@ export async function GET(request: NextRequest) {
     const flat = searchParams.get('flat') === 'true'
 
     // Build query
-    const conditions: string[] = ['company_id = $1']
+    const conditions: string[] = ['c.company_id = $1']
     const params: (number | boolean)[] = [payload.companyId]
 
     if (!includeInactive) {
-      conditions.push('is_active = true')
+      conditions.push('c.is_active = true')
     }
 
     const whereClause = conditions.join(' AND ')
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
       FROM market_fixed_asset_categories c
       LEFT JOIN market_fixed_asset_categories p ON c.parent_id = p.id
       LEFT JOIN market_fixed_assets a ON a.category_id = c.id AND a.status != 'disposed'
-      WHERE c.${whereClause.replace('company_id', 'company_id')}
+      WHERE ${whereClause}
       GROUP BY c.id, p.name
       ORDER BY c.name
     `, params)

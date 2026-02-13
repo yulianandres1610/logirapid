@@ -572,17 +572,6 @@ export default function FixedAssetsPage() {
                   </motion.button>
                 </Link>
 
-                <Link href="/dashboard/market/fixed-assets/audits">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl hover:from-purple-600 hover:to-purple-700 transition-all shadow-lg shadow-purple-500/25"
-                  >
-                    <Package className="w-4 h-4" />
-                    <span className="hidden sm:inline">Auditorías</span>
-                  </motion.button>
-                </Link>
-
                 <Link href="/dashboard/market/fixed-assets/new">
                   <motion.button
                     whileHover={{ scale: 1.02 }}
