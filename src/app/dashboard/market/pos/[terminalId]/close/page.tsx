@@ -180,14 +180,53 @@ export default function CloseSessionPage() {
           return
         }
 
-        // Si el conteo está completado con diferencias, verificar si son significativas
-        // Diferencias menores a $0.10 se consideran errores de redondeo y se permiten
-        const totalDiff = Math.abs(countData.data.totalDifferenceValue || 0)
-        if (countData.data.status === 'completed' && countData.data.productsWithDifferences > 0 && totalDiff >= 0.10) {
-          setCountPendingApproval(true)
-          setInventoryCount(countData.data)
-          setLoading(false)
-          return
+        // Si el conteo está completado, verificar si tiene diferencias reales
+        // El API ahora recalcula productsWithDifferences con tolerancia para excluir errores de punto flotante
+        if (countData.data.status === 'completed') {
+          // Si el API ya recalculó y no hay diferencias reales, re-evaluar para aprobar
+          if (countData.data.productsWithDifferences === 0) {
+            // Auto-aprobar el conteo ya que no tiene diferencias reales
+            try {
+              const reevalRes = await fetch('/api/market/pos/inventory-count', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  sessionId: openSession.id,
+                  action: 'reevaluate'
+                })
+              })
+              const reevalData = await reevalRes.json()
+              if (reevalData.success && reevalData.data?.status === 'approved') {
+                // Conteo aprobado, continuar con el cierre
+                countData.data.status = 'approved'
+              }
+            } catch (err) {
+              console.warn('[Close] Error al re-evaluar conteo:', err)
+            }
+          } else {
+            // Hay diferencias reales, verificar si son significativas (>= $0.10)
+            const totalDiff = Math.abs(countData.data.totalDifferenceValue || 0)
+            if (totalDiff >= 0.10) {
+              setCountPendingApproval(true)
+              setInventoryCount(countData.data)
+              setLoading(false)
+              return
+            }
+            // Si las diferencias son < $0.10, también auto-aprobar
+            try {
+              const reevalRes = await fetch('/api/market/pos/inventory-count', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  sessionId: openSession.id,
+                  action: 'reevaluate'
+                })
+              })
+              await reevalRes.json()
+            } catch (err) {
+              console.warn('[Close] Error al re-evaluar conteo:', err)
+            }
+          }
         }
 
         setInventoryCount(countData.data)
