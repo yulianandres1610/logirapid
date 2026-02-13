@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 
 interface JWTPayload {
   userId: number
@@ -13,16 +13,6 @@ interface JWTPayload {
 }
 
 const BUCKET_NAME = 'company-private-documents'
-
-// Lazy Supabase client getter
-function getSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) {
-    throw new Error('Supabase configuration missing')
-  }
-  return createClient(url, key)
-}
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const MAX_FILES = 5
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
@@ -126,15 +116,13 @@ export async function POST(
         const extension = file.type.split('/')[1] || 'jpg'
         const storagePath = `company-${payload.companyId}/remittance-proofs/order-${orderId}/photo-${i}-${timestamp}-${randomSuffix}.${extension}`
 
-        const { error } = await getSupabaseClient().storage
-          .from(BUCKET_NAME)
-          .upload(storagePath, buffer, {
-            contentType: file.type,
-            upsert: true
-          })
+        const uploadResult = await storageAdapter.upload(BUCKET_NAME, storagePath, buffer, {
+          contentType: file.type,
+          upsert: true
+        })
 
-        if (error) {
-          console.error(`[Upload Photos] Error uploading ${file.name}:`, error)
+        if (!uploadResult.success) {
+          console.error(`[Upload Photos] Error uploading ${file.name}:`, uploadResult.error)
           errors.push(`${file.name}: Error al subir`)
           continue
         }

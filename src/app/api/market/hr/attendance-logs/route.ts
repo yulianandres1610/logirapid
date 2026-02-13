@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 import { db } from '@/lib/database'
 
 export const dynamic = 'force-dynamic'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const BUCKET_NAME = 'company-private-documents'
 
@@ -39,16 +36,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check Supabase configuration
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('[ATTENDANCE-LOG] Supabase not configured')
+    // Check storage configuration
+    if (!storageAdapter.isConfigured()) {
+      console.error('[ATTENDANCE-LOG] Storage not configured')
       return NextResponse.json({ success: true, data: { imagePath: null } })
     }
-
-    // Create Supabase client
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    })
 
     // Convert base64 to buffer
     const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '')
@@ -61,23 +53,21 @@ export async function POST(request: NextRequest) {
     const fileName = `attendance-${employeeId}-${actionType}-${timestamp}.jpg`
     const storagePath = `company-${companyId}/attendance-logs/${fileName}`
 
-    // Upload to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(storagePath, buffer, {
-        contentType: 'image/jpeg',
-        upsert: true // Allow overwrite if exists
-      })
+    // Upload to Storage
+    const uploadResult = await storageAdapter.upload(BUCKET_NAME, storagePath, buffer, {
+      contentType: 'image/jpeg',
+      upsert: true // Allow overwrite if exists
+    })
 
-    if (uploadError) {
-      console.error('[ATTENDANCE-LOG] Upload error:', uploadError.message)
+    if (!uploadResult.success) {
+      console.error('[ATTENDANCE-LOG] Upload error:', uploadResult.error)
       // Try to continue anyway - maybe bucket doesn't exist but we can still log
     } else {
       console.log(`[ATTENDANCE-LOG] Image uploaded successfully: ${storagePath}`)
     }
 
     // Save log to database (only if upload succeeded)
-    const finalPath = uploadError ? null : storagePath
+    const finalPath = !uploadResult.success ? null : storagePath
 
     try {
       await db.query(`

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 
 interface JWTPayload {
   userId: number
@@ -767,17 +767,10 @@ export async function DELETE(
     const imageUrl = checkResult.rows[0].image_url
     const deletions: string[] = []
 
-    // Delete image from Supabase Storage if exists
+    // Delete image from Storage if exists
     if (imageUrl && imageUrl.includes('supabase')) {
       try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-        if (supabaseUrl && supabaseServiceKey) {
-          const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-            auth: { autoRefreshToken: false, persistSession: false }
-          })
-
+        if (storageAdapter.isConfigured()) {
           const urlParts = imageUrl.split('/storage/v1/object/public/')
           if (urlParts.length === 2) {
             const fullPath = urlParts[1]
@@ -785,7 +778,7 @@ export async function DELETE(
             const bucket = pathParts[0]
             const filePath = pathParts.slice(1).join('/')
 
-            await supabase.storage.from(bucket).remove([filePath])
+            await storageAdapter.remove(bucket, [filePath])
             deletions.push('image: deleted')
           }
         }

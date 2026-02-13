@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 import { randomBytes } from 'crypto'
 import sharp from 'sharp'
 import { processEmployeePhoto } from '@/lib/gemini'
@@ -53,9 +53,6 @@ async function compressImageIfNeeded(base64Data: string): Promise<string> {
   }
 }
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-
 const BUCKET_NAME = 'company-private-documents'
 
 async function getCompanyId() {
@@ -78,9 +75,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
     }
 
-    // Verificar configuración de Supabase
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('[Process Employee Photo] Supabase not configured')
+    // Verificar configuración de almacenamiento
+    if (!storageAdapter.isConfigured()) {
+      console.error('[Process Employee Photo] Storage not configured')
       return NextResponse.json({
         success: false,
         error: 'El almacenamiento no está configurado'
@@ -131,14 +128,6 @@ export async function POST(request: NextRequest) {
 
     console.log('[Process Employee Photo] Gemini processing successful, saving to storage...')
 
-    // 2. Crear cliente Supabase
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
-
     const timestamp = Date.now()
     const randomSuffix = randomBytes(4).toString('hex')
     const basePath = `company-${companyId}/employee-photos`
@@ -150,21 +139,19 @@ export async function POST(request: NextRequest) {
     const originalPath = `${basePath}/${originalFileName}`
 
     console.log('[Process Employee Photo] Uploading original to:', originalPath)
-    const { data: originalData, error: originalError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(originalPath, originalBuffer, {
-        contentType: 'image/jpeg',
-        upsert: true
-      })
+    const originalUpload = await storageAdapter.upload(BUCKET_NAME, originalPath, originalBuffer, {
+      contentType: 'image/jpeg',
+      upsert: true
+    })
 
-    if (originalError) {
-      console.error('[Process Employee Photo] Error saving original:', originalError.message, originalError)
+    if (!originalUpload.success) {
+      console.error('[Process Employee Photo] Error saving original:', originalUpload.error)
       return NextResponse.json({
         success: false,
-        error: 'Error al guardar imagen original: ' + originalError.message
+        error: 'Error al guardar imagen original: ' + originalUpload.error
       }, { status: 500 })
     }
-    console.log('[Process Employee Photo] Original uploaded successfully:', originalData?.path)
+    console.log('[Process Employee Photo] Original uploaded successfully:', originalUpload.path)
 
     // 4. Guardar imagen procesada
     const processedBuffer = Buffer.from(result.imageBase64!, 'base64')
@@ -172,30 +159,29 @@ export async function POST(request: NextRequest) {
     const processedPath = `${basePath}/${processedFileName}`
 
     console.log('[Process Employee Photo] Uploading processed to:', processedPath)
-    const { data: processedData, error: processedError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(processedPath, processedBuffer, {
-        contentType: 'image/jpeg',
-        upsert: true
-      })
+    const processedUpload = await storageAdapter.upload(BUCKET_NAME, processedPath, processedBuffer, {
+      contentType: 'image/jpeg',
+      upsert: true
+    })
 
-    if (processedError) {
-      console.error('[Process Employee Photo] Error saving processed:', processedError.message, processedError)
+    if (!processedUpload.success) {
+      console.error('[Process Employee Photo] Error saving processed:', processedUpload.error)
       return NextResponse.json({
         success: false,
-        error: 'Error al guardar imagen procesada: ' + processedError.message
+        error: 'Error al guardar imagen procesada: ' + processedUpload.error
       }, { status: 500 })
     }
-    console.log('[Process Employee Photo] Processed uploaded successfully:', processedData?.path)
+    console.log('[Process Employee Photo] Processed uploaded successfully:', processedUpload.path)
 
     // 5. Generar URLs firmadas (válidas por 1 hora para preview)
-    const { data: originalSignedUrl } = await supabase.storage
-      .from(BUCKET_NAME)
-      .createSignedUrl(originalPath, 3600)
-
-    const { data: processedSignedUrl } = await supabase.storage
-      .from(BUCKET_NAME)
-      .createSignedUrl(processedPath, 3600)
+    let originalSignedUrl: string | null = null
+    let processedSignedUrl: string | null = null
+    try {
+      originalSignedUrl = await storageAdapter.createSignedUrl(BUCKET_NAME, originalPath, 3600)
+    } catch { /* ignore */ }
+    try {
+      processedSignedUrl = await storageAdapter.createSignedUrl(BUCKET_NAME, processedPath, 3600)
+    } catch { /* ignore */ }
 
     console.log('[Process Employee Photo] Successfully processed and saved employee photo')
 
@@ -204,8 +190,8 @@ export async function POST(request: NextRequest) {
       data: {
         originalPath: originalPath,
         processedPath: processedPath,
-        originalSignedUrl: originalSignedUrl?.signedUrl || null,
-        processedSignedUrl: processedSignedUrl?.signedUrl || null,
+        originalSignedUrl,
+        processedSignedUrl,
         processedBase64: result.imageBase64 // Para preview inmediato
       }
     })

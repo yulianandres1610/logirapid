@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 import { db } from '@/lib/database'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const BUCKET_NAME = 'company-private-documents'
 
 async function getCompanyId() {
@@ -14,23 +12,10 @@ async function getCompanyId() {
 }
 
 async function getSignedUrl(path: string | null): Promise<string | null> {
-  if (!path || !supabaseUrl || !supabaseServiceKey) return null
+  if (!path || !storageAdapter.isConfigured()) return null
 
   try {
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    })
-
-    const { data, error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .createSignedUrl(path, 3600) // 1 hour expiry
-
-    if (error) {
-      console.error('[Contract API] Error creating signed URL for path:', path, error)
-      return null
-    }
-
-    return data?.signedUrl || null
+    return await storageAdapter.createSignedUrl(BUCKET_NAME, path, 3600)
   } catch (error) {
     console.error('[Contract API] Error getting signed URL:', error)
     return null

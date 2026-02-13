@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 
 // API Key para Gemini (misma que el resto del proyecto)
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
@@ -52,24 +52,16 @@ export async function POST(request: NextRequest) {
     // Soporte para el parámetro anterior (imageBase64) para compatibilidad
     let base64Input = fileBase64 || body.imageBase64
 
-    // If storagePath provided, fetch file from Supabase Storage
+    // If storagePath provided, fetch file from storage
     if (!base64Input && storagePath) {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-      if (!supabaseUrl || !supabaseServiceKey) {
+      if (!storageAdapter.isConfigured()) {
         return NextResponse.json({
           success: false,
           error: 'Almacenamiento no configurado'
         }, { status: 500 })
       }
 
-      const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false }
-      })
-
-      const { data: fileData, error: downloadError } = await supabase.storage
-        .from('company-private-documents')
-        .download(storagePath)
+      const { data: fileData, error: downloadError } = await storageAdapter.download('company-private-documents', storagePath)
 
       if (downloadError || !fileData) {
         console.error('[OCR] Error downloading from storage:', downloadError)

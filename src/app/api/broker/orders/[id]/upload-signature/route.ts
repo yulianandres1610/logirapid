@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 
 interface JWTPayload {
   userId: number
@@ -13,16 +13,6 @@ interface JWTPayload {
 }
 
 const BUCKET_NAME = 'company-private-documents'
-
-// Lazy Supabase client getter
-function getSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) {
-    throw new Error('Supabase configuration missing')
-  }
-  return createClient(url, key)
-}
 const MAX_SIGNATURE_SIZE = 2 * 1024 * 1024 // 2MB
 
 /**
@@ -120,16 +110,14 @@ export async function POST(
     const extension = contentType.split('/')[1] || 'png'
     const storagePath = `company-${payload.companyId}/remittance-proofs/order-${orderId}/signature-${timestamp}-${randomSuffix}.${extension}`
 
-    // Upload to Supabase Storage
-    const { data, error } = await getSupabaseClient().storage
-      .from(BUCKET_NAME)
-      .upload(storagePath, buffer, {
-        contentType,
-        upsert: true
-      })
+    // Upload to Storage
+    const uploadResult = await storageAdapter.upload(BUCKET_NAME, storagePath, buffer, {
+      contentType,
+      upsert: true
+    })
 
-    if (error) {
-      console.error('[Upload Signature] Storage error:', error)
+    if (!uploadResult.success) {
+      console.error('[Upload Signature] Storage error:', uploadResult.error)
       return NextResponse.json({
         success: false,
         error: 'Error al guardar firma'

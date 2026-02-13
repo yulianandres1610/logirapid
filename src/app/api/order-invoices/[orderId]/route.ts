@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
@@ -9,9 +9,6 @@ export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
 
-// Supabase config
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const BUCKET_NAME = 'company-private-documents'
 const URL_EXPIRATION_SECONDS = 3600 // 1 hour
 
@@ -65,14 +62,6 @@ export async function GET(
       }, { status: 401 })
     }
 
-    // Create Supabase client
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
-
     // Get invoices from database
     const columnName = orderType === 'consignment' ? 'consignment_order_id' : 'purchase_id'
     const result = await db.query(
@@ -90,18 +79,8 @@ export async function GET(
         try {
           console.log(`[ORDER INVOICES] Generating signed URL for invoice ${invoice.id}, path: ${invoice.storage_path}`)
 
-          const { data, error } = await supabase.storage
-            .from(BUCKET_NAME)
-            .createSignedUrl(invoice.storage_path, URL_EXPIRATION_SECONDS)
-
-          if (error) {
-            console.error(`[ORDER INVOICES] Supabase error for invoice ${invoice.id}:`, error.message)
-          } else if (data?.signedUrl) {
-            signedUrl = data.signedUrl
-            console.log(`[ORDER INVOICES] Signed URL generated successfully for invoice ${invoice.id}`)
-          } else {
-            console.warn(`[ORDER INVOICES] No signed URL returned for invoice ${invoice.id}`)
-          }
+          signedUrl = await storageAdapter.createSignedUrl(BUCKET_NAME, invoice.storage_path, URL_EXPIRATION_SECONDS)
+          console.log(`[ORDER INVOICES] Signed URL generated successfully for invoice ${invoice.id}`)
         } catch (error) {
           console.error(`[ORDER INVOICES] Exception generating signed URL for ${invoice.id}:`, error)
         }
@@ -179,14 +158,6 @@ export async function DELETE(
       }, { status: 401 })
     }
 
-    // Create Supabase client
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
-
     // Get invoice to delete (verify ownership)
     const invoiceResult = await db.query(
       `SELECT id, storage_path FROM order_invoices
@@ -203,16 +174,9 @@ export async function DELETE(
 
     const invoice = invoiceResult.rows[0]
 
-    // Delete from Supabase Storage
+    // Delete from Storage
     try {
-      const { error } = await supabase.storage
-        .from(BUCKET_NAME)
-        .remove([invoice.storage_path])
-
-      if (error) {
-        console.error('[ORDER INVOICES] Error deleting from storage:', error)
-        // Continue to delete from DB anyway
-      }
+      await storageAdapter.remove(BUCKET_NAME, [invoice.storage_path])
     } catch (storageError) {
       console.error('[ORDER INVOICES] Error deleting from storage:', storageError)
     }

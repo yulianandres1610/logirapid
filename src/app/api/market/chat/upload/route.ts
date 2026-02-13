@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 
 interface JWTPayload {
   userId: number
@@ -11,8 +11,6 @@ interface JWTPayload {
   companyType?: string
 }
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const BUCKET_NAME = 'company-private-documents'
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
@@ -82,11 +80,6 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Create Supabase client
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    })
-
     // Generate unique file path
     const timestamp = Date.now()
     const randomStr = Math.random().toString(36).substring(2, 8)
@@ -100,16 +93,14 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
 
-    // Upload to Supabase Storage
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(storagePath, buffer, {
-        contentType: file.type,
-        upsert: false
-      })
+    // Upload to Storage
+    const uploadResult = await storageAdapter.upload(BUCKET_NAME, storagePath, buffer, {
+      contentType: file.type,
+      upsert: false
+    })
 
-    if (uploadError) {
-      console.error('[Chat Upload] Supabase upload error:', uploadError)
+    if (!uploadResult.success) {
+      console.error('[Chat Upload] Upload error:', uploadResult.error)
       return NextResponse.json({
         success: false,
         error: 'Error al subir archivo'
@@ -117,11 +108,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate signed URL (1 hour expiry for immediate use)
-    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .createSignedUrl(storagePath, 3600)
-
-    if (signedUrlError) {
+    let signedUrl: string | null = null
+    try {
+      signedUrl = await storageAdapter.createSignedUrl(BUCKET_NAME, storagePath, 3600)
+    } catch (signedUrlError) {
       console.error('[Chat Upload] Signed URL error:', signedUrlError)
     }
 
@@ -129,7 +119,7 @@ export async function POST(request: NextRequest) {
       success: true,
       data: {
         fileUrl: storagePath,
-        signedUrl: signedUrlData?.signedUrl || null,
+        signedUrl,
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type,
@@ -183,15 +173,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 403 })
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    })
-
-    const { data, error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .createSignedUrl(fileUrl, 3600) // 1 hour
-
-    if (error) {
+    let signedUrl: string
+    try {
+      signedUrl = await storageAdapter.createSignedUrl(BUCKET_NAME, fileUrl, 3600)
+    } catch (error) {
       console.error('[Chat Upload GET] Signed URL error:', error)
       return NextResponse.json({
         success: false,
@@ -201,7 +186,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: { signedUrl: data.signedUrl }
+      data: { signedUrl }
     })
 
   } catch (error) {

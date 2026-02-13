@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 import { getCompanyFilter } from '@/lib/query-helpers'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
 
-// Configurar cliente Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const BUCKET_NAME = 'company-private-documents'
 
 // GET: Obtener comprobante de entrega por order ID
@@ -86,22 +83,12 @@ export async function GET(
       photos = []
     }
 
-    // Generar URLs firmadas para las fotos desde Supabase Storage
-    if (photos.length > 0 && supabaseUrl && supabaseServiceKey) {
-      const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false }
-      })
-
+    // Generar URLs firmadas para las fotos
+    if (photos.length > 0 && storageAdapter.isConfigured()) {
       for (const photo of photos) {
         if (photo.storagePath) {
           try {
-            const { data } = await supabase.storage
-              .from(BUCKET_NAME)
-              .createSignedUrl(photo.storagePath, 3600) // 1 hora de validez
-
-            if (data?.signedUrl) {
-              photo.signedUrl = data.signedUrl
-            }
+            photo.signedUrl = await storageAdapter.createSignedUrl(BUCKET_NAME, photo.storagePath, 3600)
           } catch (e) {
             console.error('Error generating signed URL for photo:', e)
           }

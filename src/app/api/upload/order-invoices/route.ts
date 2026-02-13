@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 import { randomBytes } from 'crypto'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
@@ -9,10 +9,6 @@ import { db } from '@/lib/database'
 export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
-
-// Supabase config
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const BUCKET_NAME = 'company-private-documents' // Private bucket
 const ALLOWED_TYPES = [
@@ -62,22 +58,14 @@ export async function POST(request: NextRequest) {
       }, { status: 401 })
     }
 
-    // Verify Supabase config
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('[ORDER INVOICES] Supabase configuration missing')
+    // Verify storage config
+    if (!storageAdapter.isConfigured()) {
+      console.error('[ORDER INVOICES] Storage configuration missing')
       return NextResponse.json({
         success: false,
         error: 'El almacenamiento de archivos no esta configurado'
       }, { status: 500 })
     }
-
-    // Create Supabase client with service role
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
 
     // Check if this is a JSON request (for registering already-uploaded files from phone)
     const contentType = request.headers.get('content-type') || ''
@@ -260,17 +248,15 @@ export async function POST(request: NextRequest) {
         // Convert File to ArrayBuffer
         const arrayBuffer = await file.arrayBuffer()
 
-        // Upload to Supabase Storage (private)
-        const { data, error } = await supabase.storage
-          .from(BUCKET_NAME)
-          .upload(storagePath, arrayBuffer, {
-            contentType: file.type,
-            upsert: false
-          })
+        // Upload to Storage (private)
+        const uploadResult = await storageAdapter.upload(BUCKET_NAME, storagePath, Buffer.from(arrayBuffer), {
+          contentType: file.type,
+          upsert: false
+        })
 
-        if (error) {
-          console.error(`[ORDER INVOICES] Error uploading file ${i + 1}:`, error)
-          errors.push(`${file.name}: ${error.message}`)
+        if (!uploadResult.success) {
+          console.error(`[ORDER INVOICES] Error uploading file ${i + 1}:`, uploadResult.error)
+          errors.push(`${file.name}: ${uploadResult.error}`)
           continue
         }
 
