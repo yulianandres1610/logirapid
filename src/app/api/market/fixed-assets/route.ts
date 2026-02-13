@@ -154,13 +154,14 @@ export async function GET(request: NextRequest) {
         c.name as category_name,
         c.code as category_code,
         w.name as warehouse_name,
-        e.first_name || ' ' || e.last_name as responsible_name,
+        COALESCE(eu.firstname || ' ' || eu.lastname, eu.email) as responsible_name,
         s.name as supplier_name,
         u.firstname || ' ' || u.lastname as created_by_name
       FROM market_fixed_assets a
       LEFT JOIN market_fixed_asset_categories c ON a.category_id = c.id
       LEFT JOIN market_warehouses w ON a.warehouse_id = w.id
       LEFT JOIN market_employees e ON a.responsible_employee_id = e.id
+      LEFT JOIN users eu ON e.user_id = eu.id
       LEFT JOIN market_suppliers s ON a.supplier_id = s.id
       LEFT JOIN users u ON a.created_by = u.id
       ${whereClause}
@@ -382,11 +383,12 @@ export async function POST(request: NextRequest) {
         a.*,
         c.name as category_name,
         w.name as warehouse_name,
-        e.first_name || ' ' || e.last_name as responsible_name
+        COALESCE(eu.firstname || ' ' || eu.lastname, eu.email) as responsible_name
       FROM market_fixed_assets a
       LEFT JOIN market_fixed_asset_categories c ON a.category_id = c.id
       LEFT JOIN market_warehouses w ON a.warehouse_id = w.id
       LEFT JOIN market_employees e ON a.responsible_employee_id = e.id
+      LEFT JOIN users eu ON e.user_id = eu.id
       WHERE a.id = $1
     `, [assetId])
 
