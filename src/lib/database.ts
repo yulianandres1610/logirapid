@@ -196,8 +196,92 @@ function getPool(): Pool {
 // Wrapper para PostgreSQL con métodos convenientes
 class DatabaseWrapper {
   // Get a dedicated client from the pool for transactions
+  // Wraps the client to intercept write queries for standby replication
   async getClient() {
-    return await getPool().connect()
+    const client = await getPool().connect()
+    const originalQuery = client.query.bind(client)
+
+    let capturedQueries: Array<{ text: string; params?: any[] }> = []
+    let inTransaction = false
+    const savepointPositions = new Map<string, number>()
+
+    ;(client as any).query = function (text: any, ...args: any[]) {
+      if (typeof text !== 'string') {
+        return originalQuery(text, ...args)
+      }
+
+      const trimmed = text.trim()
+      const upper = trimmed.toUpperCase()
+
+      if (upper === 'BEGIN') {
+        inTransaction = true
+        capturedQueries = []
+        savepointPositions.clear()
+        return originalQuery(text, ...args)
+      }
+
+      if (upper === 'COMMIT') {
+        const captured = [...capturedQueries]
+        return (originalQuery(text, ...args) as Promise<any>).then((res: any) => {
+          if (captured.length > 0) {
+            replicateTransactionToStandby(captured)
+          }
+          return res
+        }).finally(() => {
+          inTransaction = false
+          capturedQueries = []
+          savepointPositions.clear()
+        })
+      }
+
+      if (upper === 'ROLLBACK') {
+        inTransaction = false
+        capturedQueries = []
+        savepointPositions.clear()
+        return originalQuery(text, ...args)
+      }
+
+      if (upper.startsWith('SAVEPOINT ')) {
+        const name = upper.replace('SAVEPOINT ', '').trim()
+        savepointPositions.set(name, capturedQueries.length)
+        return originalQuery(text, ...args)
+      }
+
+      if (upper.startsWith('RELEASE SAVEPOINT ')) {
+        const name = upper.replace('RELEASE SAVEPOINT ', '').trim()
+        savepointPositions.delete(name)
+        return originalQuery(text, ...args)
+      }
+
+      if (upper.startsWith('ROLLBACK TO SAVEPOINT ') || upper.startsWith('ROLLBACK TO ')) {
+        const name = upper.replace(/^ROLLBACK TO (SAVEPOINT )?/i, '').trim().toUpperCase()
+        const pos = savepointPositions.get(name)
+        if (pos !== undefined) {
+          capturedQueries = capturedQueries.slice(0, pos)
+        }
+        return originalQuery(text, ...args)
+      }
+
+      // Write queries inside a transaction - capture after successful execution
+      if (inTransaction && WRITE_PATTERNS.test(trimmed)) {
+        return (originalQuery(text, ...args) as Promise<any>).then((res: any) => {
+          capturedQueries.push({ text: trimmed, params: Array.isArray(args[0]) ? args[0] : undefined })
+          return res
+        })
+      }
+
+      // Write queries outside a transaction - replicate immediately after success
+      if (!inTransaction && WRITE_PATTERNS.test(trimmed)) {
+        return (originalQuery(text, ...args) as Promise<any>).then((res: any) => {
+          replicateToStandby(trimmed, Array.isArray(args[0]) ? args[0] : undefined)
+          return res
+        })
+      }
+
+      return originalQuery(text, ...args)
+    }
+
+    return client
   }
 
   /**
