@@ -33,8 +33,12 @@ function getStandbyPool(): Pool | null {
       ssl: false,
       max: 3,
       min: 0,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+      idleTimeoutMillis: 60000,
+      connectionTimeoutMillis: 15000,
+      query_timeout: 30000,
+      statement_timeout: 30000,
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10000,
       allowExitOnIdle: true,
     });
     standbyPool.on('error', () => {
