@@ -414,7 +414,8 @@ export default function WeightLabelsPage() {
             <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
             <script>
               JsBarcode("#barcode", "${lastLabel.barcode}", { format: "EAN13", width: 1, height: 25, displayValue: false });
-              window.onload = function() { window.print(); }
+              // Wait for barcode to render, then show print dialog
+              setTimeout(function() { window.print(); }, 300);
             </script>
           </body>
         </html>
@@ -475,7 +476,8 @@ export default function WeightLabelsPage() {
             <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
             <script>
               JsBarcode("#barcode", "${lastLabel.barcode}", { format: "EAN13", width: 1.5, height: 40, displayValue: false });
-              window.onload = function() { window.print(); }
+              // Wait for barcode to render, then show print dialog
+              setTimeout(function() { window.print(); }, 300);
             </script>
           </body>
         </html>
