@@ -83,12 +83,13 @@ export async function GET(request: NextRequest) {
         mw.name as warehouse_name,
         fac.name as category_name,
         fac.id as category_id,
-        COALESCE(me.firstname || ' ' || me.lastname, 'Sin asignar') as responsible_name,
+        COALESCE(eu.firstname || ' ' || eu.lastname, eu.email, 'Sin asignar') as responsible_name,
         me.id as responsible_employee_id
       FROM market_fixed_assets fa
       LEFT JOIN market_warehouses mw ON fa.warehouse_id = mw.id
       LEFT JOIN market_fixed_asset_categories fac ON fa.category_id = fac.id
       LEFT JOIN market_employees me ON fa.responsible_employee_id = me.id
+      LEFT JOIN users eu ON me.user_id = eu.id
       WHERE fa.company_id = $1
         AND fa.warehouse_id = $2
         AND fa.status = 'active'
@@ -214,11 +215,12 @@ export async function POST(request: NextRequest) {
         fa.model,
         mw.name as warehouse_name,
         fac.name as category_name,
-        COALESCE(me.firstname || ' ' || me.lastname, 'Sin asignar') as responsible_name
+        COALESCE(eu.firstname || ' ' || eu.lastname, eu.email, 'Sin asignar') as responsible_name
       FROM market_fixed_assets fa
       LEFT JOIN market_warehouses mw ON fa.warehouse_id = mw.id
       LEFT JOIN market_fixed_asset_categories fac ON fa.category_id = fac.id
       LEFT JOIN market_employees me ON fa.responsible_employee_id = me.id
+      LEFT JOIN users eu ON me.user_id = eu.id
       WHERE fa.company_id = $1
         AND (fa.barcode = $2 OR fa.asset_code = $2)
       LIMIT 1
