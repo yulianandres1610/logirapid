@@ -145,6 +145,7 @@ export async function GET(request: NextRequest) {
 
     // Recalcular productsWithDifferences y totalDifferenceValue con tolerancia
     // para evitar problemas de punto flotante (ej: 12.06 - 12.06 = -0.01)
+    // Usamos > 0.01 (no >=) para excluir diferencias de exactamente 0.01 que son errores de redondeo
     const DIFF_TOLERANCE = 0.01
     let recalcProductsWithDifferences = 0
     let recalcTotalDifferenceValue = 0
@@ -153,8 +154,9 @@ export async function GET(request: NextRequest) {
       const difference = parseFloat(line.difference) || 0
       const differenceValue = parseFloat(line.difference_value) || 0
 
-      // Solo contar como diferencia si supera la tolerancia
-      if (Math.abs(difference) >= DIFF_TOLERANCE) {
+      // Solo contar como diferencia si supera estrictamente la tolerancia
+      // Esto excluye diferencias de 0.01, -0.01, 0.009, etc. que son errores de punto flotante
+      if (Math.abs(difference) > DIFF_TOLERANCE) {
         recalcProductsWithDifferences++
         recalcTotalDifferenceValue += differenceValue
       }
