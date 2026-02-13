@@ -143,6 +143,41 @@ export async function GET(request: NextRequest) {
       ORDER BY scanned_at DESC
     `, [count.id])
 
+    // Recalcular productsWithDifferences y totalDifferenceValue con tolerancia
+    // para evitar problemas de punto flotante (ej: 12.06 - 12.06 = -0.01)
+    const DIFF_TOLERANCE = 0.01
+    let recalcProductsWithDifferences = 0
+    let recalcTotalDifferenceValue = 0
+
+    const lines = linesResult.rows.map(line => {
+      const difference = parseFloat(line.difference) || 0
+      const differenceValue = parseFloat(line.difference_value) || 0
+
+      // Solo contar como diferencia si supera la tolerancia
+      if (Math.abs(difference) >= DIFF_TOLERANCE) {
+        recalcProductsWithDifferences++
+        recalcTotalDifferenceValue += differenceValue
+      }
+
+      return {
+        id: line.id,
+        productId: line.product_id,
+        variantId: line.variant_id,
+        productName: line.product_name,
+        productSku: line.product_sku,
+        productBarcode: line.product_barcode,
+        productImage: line.product_image || null,
+        unitPrice: parseFloat(line.unit_price) || 0,
+        expectedQuantity: parseFloat(line.expected_quantity) || 0,
+        countedQuantity: parseFloat(line.counted_quantity) || 0,
+        difference: difference,
+        differenceValue: differenceValue,
+        soldToday: parseFloat(line.sold_today) || 0,
+        scannedAt: line.scanned_at,
+        notes: line.notes
+      }
+    })
+
     return NextResponse.json({
       success: true,
       data: {
@@ -160,26 +195,11 @@ export async function GET(request: NextRequest) {
         completedAt: count.completed_at,
         adjustmentOperationId: count.adjustment_operation_id,
         totalProducts: count.total_products,
-        productsWithDifferences: count.products_with_differences,
-        totalDifferenceValue: parseFloat(count.total_difference_value) || 0,
+        // Usar valores recalculados con tolerancia
+        productsWithDifferences: recalcProductsWithDifferences,
+        totalDifferenceValue: Math.round(recalcTotalDifferenceValue * 100) / 100,
         notes: count.notes,
-        lines: linesResult.rows.map(line => ({
-          id: line.id,
-          productId: line.product_id,
-          variantId: line.variant_id,
-          productName: line.product_name,
-          productSku: line.product_sku,
-          productBarcode: line.product_barcode,
-          productImage: line.product_image || null,
-          unitPrice: parseFloat(line.unit_price) || 0,
-          expectedQuantity: parseFloat(line.expected_quantity) || 0,
-          countedQuantity: parseFloat(line.counted_quantity) || 0,
-          difference: parseFloat(line.difference) || 0,
-          differenceValue: parseFloat(line.difference_value) || 0,
-          soldToday: parseFloat(line.sold_today) || 0,
-          scannedAt: line.scanned_at,
-          notes: line.notes
-        }))
+        lines
       }
     })
 
