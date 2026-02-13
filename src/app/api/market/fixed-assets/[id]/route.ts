@@ -58,8 +58,7 @@ export async function GET(
         c.name as category_name,
         c.code as category_code,
         w.name as warehouse_name,
-        e.first_name || ' ' || e.last_name as responsible_name,
-        e.position as responsible_position,
+        COALESCE(eu.firstname || ' ' || eu.lastname, eu.email) as responsible_name,
         s.name as supplier_name,
         u.firstname || ' ' || u.lastname as created_by_name,
         au.firstname || ' ' || au.lastname as last_audit_by_name
@@ -67,6 +66,7 @@ export async function GET(
       LEFT JOIN market_fixed_asset_categories c ON a.category_id = c.id
       LEFT JOIN market_warehouses w ON a.warehouse_id = w.id
       LEFT JOIN market_employees e ON a.responsible_employee_id = e.id
+      LEFT JOIN users eu ON e.user_id = eu.id
       LEFT JOIN market_suppliers s ON a.supplier_id = s.id
       LEFT JOIN users u ON a.created_by = u.id
       LEFT JOIN users au ON a.last_audit_by = au.id
@@ -96,14 +96,16 @@ export async function GET(
         m.*,
         fw.name as from_warehouse_name,
         tw.name as to_warehouse_name,
-        fe.first_name || ' ' || fe.last_name as from_responsible_name,
-        te.first_name || ' ' || te.last_name as to_responsible_name,
+        COALESCE(feu.firstname || ' ' || feu.lastname, feu.email) as from_responsible_name,
+        COALESCE(teu.firstname || ' ' || teu.lastname, teu.email) as to_responsible_name,
         u.firstname || ' ' || u.lastname as created_by_name
       FROM market_fixed_asset_movements m
       LEFT JOIN market_warehouses fw ON m.from_warehouse_id = fw.id
       LEFT JOIN market_warehouses tw ON m.to_warehouse_id = tw.id
       LEFT JOIN market_employees fe ON m.from_responsible_id = fe.id
+      LEFT JOIN users feu ON fe.user_id = feu.id
       LEFT JOIN market_employees te ON m.to_responsible_id = te.id
+      LEFT JOIN users teu ON te.user_id = teu.id
       LEFT JOIN users u ON m.created_by = u.id
       WHERE m.asset_id = $1
       ORDER BY m.created_at DESC
@@ -149,7 +151,6 @@ export async function GET(
           locationCode: asset.location_code,
           responsibleEmployeeId: asset.responsible_employee_id,
           responsibleName: asset.responsible_name,
-          responsiblePosition: asset.responsible_position,
           responsibleUserId: asset.responsible_user_id,
           acquisitionDate: asset.acquisition_date,
           acquisitionCost: parseFloat(asset.acquisition_cost) || 0,
@@ -417,11 +418,12 @@ export async function PUT(
         a.*,
         c.name as category_name,
         w.name as warehouse_name,
-        e.first_name || ' ' || e.last_name as responsible_name
+        COALESCE(eu.firstname || ' ' || eu.lastname, eu.email) as responsible_name
       FROM market_fixed_assets a
       LEFT JOIN market_fixed_asset_categories c ON a.category_id = c.id
       LEFT JOIN market_warehouses w ON a.warehouse_id = w.id
       LEFT JOIN market_employees e ON a.responsible_employee_id = e.id
+      LEFT JOIN users eu ON e.user_id = eu.id
       WHERE a.id = $1
     `, [assetId])
 
