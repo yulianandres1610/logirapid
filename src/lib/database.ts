@@ -13,6 +13,59 @@ if (connectionString) {
 // Lazy initialization to avoid build-time errors
 let pool: Pool | null = null;
 
+// ============================================================================
+// STANDBY REPLICATION - Real-time async write replication to VPS
+// ============================================================================
+const standbyUrl = process.env.DATABASE_URL_STANDBY;
+let standbyPool: Pool | null = null;
+let replicationErrors = 0;
+const MAX_REPLICATION_ERRORS = 50; // pause replication after too many errors
+
+const WRITE_PATTERNS = /^\s*(INSERT|UPDATE|DELETE|UPSERT|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|TRUNCATE)/i;
+
+function getStandbyPool(): Pool | null {
+  if (!standbyUrl) return null;
+  if (replicationErrors >= MAX_REPLICATION_ERRORS) return null;
+
+  if (!standbyPool) {
+    standbyPool = new Pool({
+      connectionString: standbyUrl.replace(/[?&]sslmode=[^&]*/g, ''),
+      ssl: false,
+      max: 3,
+      min: 0,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
+      allowExitOnIdle: true,
+    });
+    standbyPool.on('error', () => {
+      // Silently handle standby pool errors - don't crash the app
+      replicationErrors++;
+      if (replicationErrors >= MAX_REPLICATION_ERRORS) {
+        console.error('[REPLICATION] Too many errors, pausing replication');
+        standbyPool = null;
+      }
+    });
+  }
+  return standbyPool;
+}
+
+function replicateToStandby(text: string, params?: any[]): void {
+  if (!WRITE_PATTERNS.test(text)) return;
+
+  const sp = getStandbyPool();
+  if (!sp) return;
+
+  sp.query(text, params).then(() => {
+    if (replicationErrors > 0) replicationErrors = Math.max(0, replicationErrors - 1);
+  }).catch((err) => {
+    replicationErrors++;
+    // Only log occasionally to avoid spam
+    if (replicationErrors % 10 === 1) {
+      console.error(`[REPLICATION] Error (${replicationErrors}): ${err.message?.substring(0, 100)}`);
+    }
+  });
+}
+
 // Simple in-memory cache for frequently accessed data
 const queryCache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL = 30000; // 30 seconds cache
@@ -143,6 +196,8 @@ class DatabaseWrapper {
   async query(text: string, params?: any[], retries = 3) {
     try {
       const result = await getPool().query(text, params);
+      // Async replication to standby (fire-and-forget)
+      replicateToStandby(text, params);
       return result;
     } catch (error: any) {
       // Check if it's a max clients error - these need special handling
@@ -199,15 +254,50 @@ class DatabaseWrapper {
 
   async transaction<T>(callback: (client: any) => Promise<T>): Promise<T> {
     const client = await getPool().connect();
+    // Capture queries for standby replication
+    const capturedQueries: Array<{ text: string; params?: any[] }> = [];
+    const originalQuery = client.query.bind(client);
+    (client as any).query = function(text: any, ...args: any[]) {
+      if (typeof text === 'string' && WRITE_PATTERNS.test(text)) {
+        capturedQueries.push({ text, params: Array.isArray(args[0]) ? args[0] : undefined });
+      }
+      return originalQuery(text, ...args);
+    };
 
     try {
-      await client.query('BEGIN');
+      await originalQuery('BEGIN');
       const result = await callback(client);
-      await client.query('COMMIT');
+      await originalQuery('COMMIT');
+
+      // Replicate transaction to standby async
+      if (capturedQueries.length > 0) {
+        const sp = getStandbyPool();
+        if (sp) {
+          sp.connect().then(async (standbyClient) => {
+            try {
+              await standbyClient.query('BEGIN');
+              for (const q of capturedQueries) {
+                await standbyClient.query(q.text, q.params);
+              }
+              await standbyClient.query('COMMIT');
+              if (replicationErrors > 0) replicationErrors = Math.max(0, replicationErrors - 1);
+            } catch (err: any) {
+              try { await standbyClient.query('ROLLBACK'); } catch {}
+              replicationErrors++;
+              if (replicationErrors % 10 === 1) {
+                console.error(`[REPLICATION TX] Error (${replicationErrors}): ${err.message?.substring(0, 100)}`);
+              }
+            } finally {
+              standbyClient.release();
+            }
+          }).catch(() => { replicationErrors++; });
+        }
+      }
+
       return result;
     } catch (error: any) {
       try {
-        await client.query('ROLLBACK');
+        await originalQuery('ROLLBACK');
       } catch (rollbackError: any) {
         console.error('❌ [DB] Error during ROLLBACK:', rollbackError.message);
       }
@@ -508,22 +598,18 @@ export async function runHealthChecks(): Promise<{
   }
 
   // Check standby if configured
-  const standbyUrl = process.env.DATABASE_URL_STANDBY;
   if (standbyUrl) {
     standbyResult = { healthy: false };
     try {
-      const { Pool: StandbyPool } = require('pg');
-      const tmpPool = new StandbyPool({
-        connectionString: standbyUrl.replace(/[?&]sslmode=[^&]*/g, ''),
-        ssl: false,
-        max: 1,
-        connectionTimeoutMillis: 5000,
-      });
-      const start = Date.now();
-      await tmpPool.query('SELECT 1');
-      standbyResult.healthy = true;
-      standbyResult.latencyMs = Date.now() - start;
-      await tmpPool.end();
+      const sp = getStandbyPool();
+      if (sp) {
+        const start = Date.now();
+        await sp.query('SELECT 1');
+        standbyResult.healthy = true;
+        standbyResult.latencyMs = Date.now() - start;
+      } else {
+        standbyResult.error = 'Standby pool unavailable (paused or not configured)';
+      }
     } catch (err: any) {
       standbyResult.error = err.message;
     }
