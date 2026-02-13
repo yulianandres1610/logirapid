@@ -16,10 +16,17 @@ let pool: Pool | null = null;
 // ============================================================================
 // STANDBY REPLICATION - Real-time async write replication to VPS
 // ============================================================================
-const standbyUrl = process.env.DATABASE_URL_STANDBY;
+const standbyUrl = process.env.DATABASE_URL_STANDBY?.trim();
 let standbyPool: Pool | null = null;
 let replicationErrors = 0;
+let replicationSuccesses = 0;
 const MAX_REPLICATION_ERRORS = 50; // pause replication after too many errors
+
+if (standbyUrl) {
+  console.log('[REPLICATION] Standby URL configured, replication enabled');
+} else {
+  console.log('[REPLICATION] No standby URL, replication disabled');
+}
 
 const WRITE_PATTERNS = /^\s*(INSERT|UPDATE|DELETE|UPSERT|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|TRUNCATE)/i;
 
@@ -61,11 +68,16 @@ function replicateToStandby(text: string, params?: any[]): void {
 
   sp.query(text, params).then(() => {
     if (replicationErrors > 0) replicationErrors = Math.max(0, replicationErrors - 1);
+    replicationSuccesses++;
+    // Log first success and then every 100th
+    if (replicationSuccesses === 1 || replicationSuccesses % 100 === 0) {
+      console.log(`[REPLICATION] OK (${replicationSuccesses} total) - ${text.substring(0, 60)}`);
+    }
   }).catch((err) => {
     replicationErrors++;
-    // Only log occasionally to avoid spam
-    if (replicationErrors % 10 === 1) {
-      console.error(`[REPLICATION] Error (${replicationErrors}): ${err.message?.substring(0, 100)}`);
+    // Log every error to help diagnose issues
+    if (replicationErrors <= 5 || replicationErrors % 10 === 1) {
+      console.error(`[REPLICATION] Error (${replicationErrors}): ${err.message?.substring(0, 150)}`);
     }
   });
 }
