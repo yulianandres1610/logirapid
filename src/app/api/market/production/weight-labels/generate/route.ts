@@ -238,41 +238,15 @@ export async function POST(request: NextRequest) {
     `)
 
     // Registrar en el log
-    await db.query(`
+    const logResult = await db.query(`
       INSERT INTO market_weight_labels_log
         (company_id, product_id, variant_id, weight_kg, price_cup, barcode_generated, printed_by)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id
     `, [companyId, productId, variantId || null, weightKg, priceCUP, barcode, userId || null])
 
-    // Crear trabajo de impresión usando el schema existente de print_jobs
-    const printJobResult = await db.query(`
-      INSERT INTO print_jobs
-        (job_number, company_id, document_type, source_type, document_data, copies, priority, status, requested_by, created_at)
-      VALUES
-        ($1, $2, 'weight_label', 'weight_label', $3, $4, 0, 'pending', $5, NOW())
-      RETURNING id
-    `, [
-      `WL-${Date.now()}`,
-      companyId,
-      JSON.stringify({
-        productName: product.name,
-        productSku: product.sku,
-        weight: weightDisplay,
-        weightKg: weightKg,
-        priceCUP: priceCUP,
-        priceUSD: Math.round(priceUSD * 100) / 100,
-        pricePerKg: pricePerKg,
-        pricePerUnit: Math.round(pricePerKg * exchangeRate),
-        unitOfMeasure: unit,
-        barcode: barcode,
-        barcodeType: 'ean13',
-        printDate: new Date().toLocaleDateString('es-ES'),
-        companyName: product.companyName,
-        exchangeRate: exchangeRate
-      }),
-      copies,
-      userId || null
-    ])
+    // NO crear trabajo de impresión aquí - se crea cuando el usuario
+    // selecciona una impresora y hace click en "Imprimir" en el modal
 
     return NextResponse.json({
       success: true,
@@ -286,7 +260,7 @@ export async function POST(request: NextRequest) {
         priceUSD: Math.round(priceUSD * 100) / 100,
         priceCUP,
         exchangeRate,
-        printJobId: printJobResult.rows[0].id,
+        labelLogId: logResult.rows[0].id,
         copies
       }
     })
