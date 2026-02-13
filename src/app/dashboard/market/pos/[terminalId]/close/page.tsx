@@ -180,7 +180,10 @@ export default function CloseSessionPage() {
           return
         }
 
-        if (countData.data.status === 'completed' && countData.data.productsWithDifferences > 0) {
+        // Si el conteo está completado con diferencias, verificar si son significativas
+        // Diferencias menores a $0.10 se consideran errores de redondeo y se permiten
+        const totalDiff = Math.abs(countData.data.totalDifferenceValue || 0)
+        if (countData.data.status === 'completed' && countData.data.productsWithDifferences > 0 && totalDiff >= 0.10) {
           setCountPendingApproval(true)
           setInventoryCount(countData.data)
           setLoading(false)

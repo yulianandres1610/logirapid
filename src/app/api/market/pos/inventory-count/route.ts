@@ -444,10 +444,12 @@ export async function POST(request: NextRequest) {
         const countedQuantity = line.countedQuantity || 0
         // Fórmula: (Stock inicial - Vendido) - Contado = expectedQuantity - countedQuantity
         // Positivo = FALTANTE, Negativo = SOBRANTE
-        const difference = expectedQuantity - countedQuantity
+        // Redondear a 2 decimales para evitar errores de punto flotante
+        const rawDifference = expectedQuantity - countedQuantity
+        const difference = Math.round(rawDifference * 100) / 100
         const unitPrice = line.unitPrice || 0
         // El valor de la diferencia: positivo = pérdida (faltante), negativo = ganancia (sobrante)
-        const differenceValue = difference * unitPrice
+        const differenceValue = Math.round(difference * unitPrice * 100) / 100
 
         // El nombre del producto ya viene formateado desde el cliente (incluye variante si aplica)
         const displayName = line.productName || ''
@@ -477,11 +479,12 @@ export async function POST(request: NextRequest) {
       }
 
       // Actualizar totales en el conteo
+      // Usar tolerancia de 0.001 para ignorar errores de punto flotante
       const totals = await db.query(`
         SELECT
           COUNT(*) as total_products,
-          SUM(CASE WHEN difference != 0 THEN 1 ELSE 0 END) as products_with_differences,
-          SUM(difference_value) as total_difference_value
+          SUM(CASE WHEN ABS(difference) >= 0.01 THEN 1 ELSE 0 END) as products_with_differences,
+          SUM(CASE WHEN ABS(difference) >= 0.01 THEN difference_value ELSE 0 END) as total_difference_value
         FROM market_inventory_count_lines
         WHERE count_id = $1
       `, [countId])
@@ -504,10 +507,10 @@ export async function POST(request: NextRequest) {
 
     // Si es completar, marcar como completado y crear operación de ajuste
     if (action === 'complete') {
-      // Obtener líneas con diferencias para crear ajuste
+      // Obtener líneas con diferencias significativas (>=0.01) para crear ajuste
       const diffLines = await db.query(`
         SELECT * FROM market_inventory_count_lines
-        WHERE count_id = $1 AND difference != 0
+        WHERE count_id = $1 AND ABS(difference) >= 0.01
       `, [countId])
 
       let adjustmentOperationId = null
