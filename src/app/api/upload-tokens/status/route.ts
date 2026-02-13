@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const BUCKET_NAME = 'company-private-documents'
 
 interface JWTPayload {
@@ -70,15 +68,9 @@ export async function GET(request: NextRequest) {
 
     // Generate signed URL for preview if file was uploaded
     let signedUrl = null
-    if (tokenData.status === 'uploaded' && tokenData.file_url && supabaseUrl && supabaseServiceKey) {
+    if (tokenData.status === 'uploaded' && tokenData.file_url && storageAdapter.isConfigured()) {
       try {
-        const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-          auth: { autoRefreshToken: false, persistSession: false }
-        })
-        const { data } = await supabase.storage
-          .from(BUCKET_NAME)
-          .createSignedUrl(tokenData.file_url, 3600) // 1 hour
-        signedUrl = data?.signedUrl || null
+        signedUrl = await storageAdapter.createSignedUrl(BUCKET_NAME, tokenData.file_url, 3600)
       } catch (e) {
         console.error('[Upload Token Status] Error creating signed URL:', e)
       }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 
 interface JWTPayload {
   userId: number
@@ -13,16 +13,6 @@ interface JWTPayload {
 }
 
 const BUCKET_NAME = 'company-private-documents'
-
-// Lazy Supabase client getter
-function getSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) {
-    throw new Error('Supabase configuration missing')
-  }
-  return createClient(url, key)
-}
 
 // Bill denominations by currency
 const BILL_DENOMINATIONS: Record<string, number[]> = {
@@ -557,12 +547,8 @@ async function uploadSignature(
   orderId: number
 ): Promise<string | null> {
   try {
-    // Verify Supabase credentials exist
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.log('[Upload Signature] Supabase not configured, skipping storage upload')
+    if (!storageAdapter.isConfigured()) {
+      console.log('[Upload Signature] Storage not configured, skipping upload')
       return null
     }
 
@@ -577,36 +563,14 @@ async function uploadSignature(
     const randomSuffix = Math.random().toString(36).substring(2, 10)
     const storagePath = `company-${companyId}/remittance-proofs/order-${orderId}/signature-${timestamp}-${randomSuffix}.png`
 
-    const supabase = getSupabaseClient()
-
-    // Ensure bucket exists
-    const { data: buckets } = await supabase.storage.listBuckets()
-    const bucketExists = buckets?.some(b => b.name === BUCKET_NAME)
-
-    if (!bucketExists) {
-      console.log(`[Upload Signature] Creating bucket ${BUCKET_NAME}...`)
-      const { error: createError } = await supabase.storage.createBucket(BUCKET_NAME, {
-        public: false,
-        fileSizeLimit: 52428800, // 50MB
-        allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'application/pdf']
-      })
-      if (createError && !createError.message.includes('already exists')) {
-        console.error('[Upload Signature] Error creating bucket:', createError.message)
-        return null
-      }
-      console.log(`[Upload Signature] Bucket ${BUCKET_NAME} created`)
-    }
-
     // Upload file
-    const { error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(storagePath, buffer, {
-        contentType: 'image/png',
-        upsert: true
-      })
+    const uploadResult = await storageAdapter.upload(BUCKET_NAME, storagePath, buffer, {
+      contentType: 'image/png',
+      upsert: true
+    })
 
-    if (error) {
-      console.error('[Upload Signature] Storage error:', error.message)
+    if (!uploadResult.success) {
+      console.error('[Upload Signature] Storage error:', uploadResult.error)
       return null
     }
 

@@ -1,22 +1,19 @@
 /**
  * Product Images Utilities
- * Maneja imagenes de productos en Supabase Storage usando codigo de barras
+ * Maneja imagenes de productos en Storage usando codigo de barras
  * Soporta múltiples imágenes por producto con formato: {barcode}-{index}.ext
  */
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+import * as storageAdapter from '@/lib/storage-adapter'
 
 const BUCKET = 'company-documents'
 const FOLDER = 'product-images'
 
 /**
- * Verifica si Supabase Storage está configurado
+ * Verifica si Storage está configurado
  */
 export function isStorageConfigured(): boolean {
-  return !!(supabaseUrl && supabaseServiceKey)
+  return storageAdapter.isConfigured()
 }
 
 export interface ProductImage {
@@ -45,21 +42,6 @@ export interface ProductImagesResponse {
 }
 
 /**
- * Crea cliente Supabase con service role key para bypassing RLS
- */
-function getSupabaseClient(): SupabaseClient {
-  if (!supabaseUrl || !supabaseServiceKey) {
-    throw new Error('Supabase Storage no está configurado. Verifica NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY')
-  }
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  })
-}
-
-/**
  * Genera el path de storage para un barcode (compatibilidad hacia atrás)
  */
 export function getStoragePath(barcode: string, extension: string = 'webp'): string {
@@ -82,18 +64,15 @@ export function getStoragePathWithIndex(barcode: string, index: number, extensio
  * Consulta tanto el storage como la base de datos para evitar conflictos
  */
 export async function getNextImageIndex(barcode: string): Promise<number> {
-  const supabase = getSupabaseClient()
   const safeBarcode = barcode.replace(/[^a-zA-Z0-9-_]/g, '')
 
   let maxIndexFromStorage = 0
   let maxIndexFromDB = 0
 
-  // 1. Buscar en Supabase Storage
-  const { data } = await supabase.storage
-    .from(BUCKET)
-    .list(FOLDER, {
-      search: safeBarcode
-    })
+  // 1. Buscar en Storage
+  const data = await storageAdapter.list(BUCKET, FOLDER, {
+    search: safeBarcode
+  })
 
   if (data && data.length > 0) {
     const indexPattern = new RegExp(`^${safeBarcode}-(\\d+)\\.`)
@@ -139,14 +118,11 @@ export async function getNextImageIndex(barcode: string): Promise<number> {
  * Obtiene todas las imágenes de un producto por barcode
  */
 export async function getAllProductImagesByBarcode(barcode: string): Promise<ProductImage[]> {
-  const supabase = getSupabaseClient()
   const safeBarcode = barcode.replace(/[^a-zA-Z0-9-_]/g, '')
 
-  const { data } = await supabase.storage
-    .from(BUCKET)
-    .list(FOLDER, {
-      search: safeBarcode
-    })
+  const data = await storageAdapter.list(BUCKET, FOLDER, {
+    search: safeBarcode
+  })
 
   if (!data || data.length === 0) {
     return []
@@ -177,18 +153,16 @@ export async function getAllProductImagesByBarcode(barcode: string): Promise<Pro
     }
 
     const storagePath = `${FOLDER}/${file.name}`
-    const { data: publicUrlData } = supabase.storage
-      .from(BUCKET)
-      .getPublicUrl(storagePath)
+    const publicUrl = storageAdapter.getPublicUrl(BUCKET, storagePath)
 
     images.push({
       barcode,
       imageIndex,
       storagePath,
-      imageUrl: publicUrlData.publicUrl,
+      imageUrl: publicUrl,
       isPrimary,
-      fileSize: file.metadata?.size,
-      createdAt: file.created_at
+      fileSize: file.size,
+      createdAt: file.createdAt
     })
   }
 
@@ -212,8 +186,6 @@ export async function uploadProductImageByBarcode(
   imageBuffer: Buffer,
   contentType: string = 'image/webp'
 ): Promise<{ url: string; path: string }> {
-  const supabase = getSupabaseClient()
-
   // Determinar extension basada en content type
   let extension = 'webp'
   if (contentType.includes('jpeg') || contentType.includes('jpg')) extension = 'jpg'
@@ -224,30 +196,26 @@ export async function uploadProductImageByBarcode(
 
   // Intentar eliminar si ya existe (para actualizar)
   try {
-    await supabase.storage.from(BUCKET).remove([storagePath])
+    await storageAdapter.remove(BUCKET, [storagePath])
   } catch {
     // Ignorar si no existe
   }
 
   // Subir imagen
-  const { error } = await supabase.storage
-    .from(BUCKET)
-    .upload(storagePath, imageBuffer, {
-      contentType,
-      upsert: true
-    })
+  const uploadResult = await storageAdapter.upload(BUCKET, storagePath, imageBuffer, {
+    contentType,
+    upsert: true
+  })
 
-  if (error) {
-    throw new Error(`Error uploading product image: ${error.message}`)
+  if (!uploadResult.success) {
+    throw new Error(`Error uploading product image: ${uploadResult.error}`)
   }
 
   // Obtener URL publica
-  const { data: publicUrlData } = supabase.storage
-    .from(BUCKET)
-    .getPublicUrl(storagePath)
+  const publicUrl = uploadResult.publicUrl || storageAdapter.getPublicUrl(BUCKET, storagePath)
 
   return {
-    url: publicUrlData.publicUrl,
+    url: publicUrl,
     path: storagePath
   }
 }
@@ -262,8 +230,6 @@ export async function uploadProductImageWithIndex(
   contentType: string = 'image/webp',
   index?: number
 ): Promise<{ url: string; path: string; index: number; isPrimary: boolean }> {
-  const supabase = getSupabaseClient()
-
   // Determinar extension basada en content type
   let extension = 'webp'
   if (contentType.includes('jpeg') || contentType.includes('jpg')) extension = 'jpg'
@@ -277,24 +243,20 @@ export async function uploadProductImageWithIndex(
   const storagePath = getStoragePathWithIndex(barcode, imageIndex, extension)
 
   // Subir imagen (upsert: true para permitir reemplazar imágenes existentes)
-  const { error } = await supabase.storage
-    .from(BUCKET)
-    .upload(storagePath, imageBuffer, {
-      contentType,
-      upsert: true
-    })
+  const uploadResult = await storageAdapter.upload(BUCKET, storagePath, imageBuffer, {
+    contentType,
+    upsert: true
+  })
 
-  if (error) {
-    throw new Error(`Error uploading product image: ${error.message}`)
+  if (!uploadResult.success) {
+    throw new Error(`Error uploading product image: ${uploadResult.error}`)
   }
 
   // Obtener URL publica
-  const { data: publicUrlData } = supabase.storage
-    .from(BUCKET)
-    .getPublicUrl(storagePath)
+  const publicUrl = uploadResult.publicUrl || storageAdapter.getPublicUrl(BUCKET, storagePath)
 
   return {
-    url: publicUrlData.publicUrl,
+    url: publicUrl,
     path: storagePath,
     index: imageIndex,
     isPrimary
@@ -306,7 +268,6 @@ export async function uploadProductImageWithIndex(
  * Solo devuelve la URL si el archivo existe y tiene contenido
  */
 export async function getProductImageByBarcode(barcode: string): Promise<string | null> {
-  const supabase = getSupabaseClient()
   const safeBarcode = barcode.replace(/[^a-zA-Z0-9-_]/g, '')
 
   // Buscar en diferentes extensiones
@@ -316,21 +277,15 @@ export async function getProductImageByBarcode(barcode: string): Promise<string 
     const storagePath = getStoragePath(barcode, ext)
 
     // Verificar si existe y tiene contenido
-    const { data } = await supabase.storage
-      .from(BUCKET)
-      .list(FOLDER, {
-        search: `${safeBarcode}.${ext}`
-      })
+    const data = await storageAdapter.list(BUCKET, FOLDER, {
+      search: `${safeBarcode}.${ext}`
+    })
 
     if (data && data.length > 0) {
       // Verificar que el archivo tiene tamaño > 0
       const file = data.find(f => f.name === `${safeBarcode}.${ext}`)
-      if (file && file.metadata?.size > 0) {
-        const { data: publicUrlData } = supabase.storage
-          .from(BUCKET)
-          .getPublicUrl(storagePath)
-
-        return publicUrlData.publicUrl
+      if (file && (file.size === undefined || file.size > 0)) {
+        return storageAdapter.getPublicUrl(BUCKET, storagePath)
       }
     }
   }
@@ -350,8 +305,6 @@ export async function checkProductImageExists(barcode: string): Promise<boolean>
  * Elimina la imagen de un producto por barcode
  */
 export async function deleteProductImageByBarcode(barcode: string): Promise<boolean> {
-  const supabase = getSupabaseClient()
-
   const extensions = ['webp', 'jpg', 'jpeg', 'png']
   let deleted = false
 
@@ -359,11 +312,8 @@ export async function deleteProductImageByBarcode(barcode: string): Promise<bool
     const storagePath = getStoragePath(barcode, ext)
 
     try {
-      const { error } = await supabase.storage
-        .from(BUCKET)
-        .remove([storagePath])
-
-      if (!error) {
+      const result = await storageAdapter.remove(BUCKET, [storagePath])
+      if (result.supabaseOk || result.minioOk) {
         deleted = true
       }
     } catch {
@@ -381,32 +331,21 @@ export async function listProductImages(limit: number = 100, offset: number = 0)
   images: Array<{ barcode: string; url: string; path: string }>
   total: number
 }> {
-  const supabase = getSupabaseClient()
-
-  const { data, error } = await supabase.storage
-    .from(BUCKET)
-    .list(FOLDER, {
-      limit,
-      offset,
-      sortBy: { column: 'created_at', order: 'desc' }
-    })
-
-  if (error) {
-    throw new Error(`Error listing product images: ${error.message}`)
-  }
+  const data = await storageAdapter.list(BUCKET, FOLDER, {
+    limit,
+    offset
+  })
 
   const images = (data || []).map(file => {
     // Extraer barcode del nombre del archivo
     const barcode = file.name.replace(/\.[^.]+$/, '')
     const storagePath = `${FOLDER}/${file.name}`
 
-    const { data: publicUrlData } = supabase.storage
-      .from(BUCKET)
-      .getPublicUrl(storagePath)
+    const publicUrl = storageAdapter.getPublicUrl(BUCKET, storagePath)
 
     return {
       barcode,
-      url: publicUrlData.publicUrl,
+      url: publicUrl,
       path: storagePath
     }
   })

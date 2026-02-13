@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 import { cookies } from 'next/headers'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
-
-// Supabase configuration
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const BUCKET_NAME = 'company-private-documents'
 const URL_EXPIRATION_SECONDS = 3600 // 1 hour
@@ -42,8 +38,8 @@ export async function GET(
     console.log(`🖼️ [EMPLOYEE PHOTO] Request for: ${storagePath}`)
 
     // Check configuration
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('❌ [EMPLOYEE PHOTO] Supabase configuration missing')
+    if (!storageAdapter.isConfigured()) {
+      console.error('❌ [EMPLOYEE PHOTO] Storage configuration missing')
       return NextResponse.json(
         { success: false, error: 'Storage configuration not available' },
         { status: 500 }
@@ -84,33 +80,21 @@ export async function GET(
       }
     }
 
-    // Create Supabase client
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
+    // First check if file exists
+    const fileData = await storageAdapter.list(BUCKET_NAME, storagePath.split('/').slice(0, -1).join('/'), {
+      limit: 1,
+      search: storagePath.split('/').pop()
     })
 
-    // First check if file exists
-    const { data: fileData, error: listError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .list(storagePath.split('/').slice(0, -1).join('/'), {
-        limit: 1,
-        search: storagePath.split('/').pop()
-      })
-
     console.log(`🔍 [EMPLOYEE PHOTO] File check for: ${storagePath}`, {
-      fileData,
-      listError: listError?.message
+      fileData
     })
 
     // Generate signed URL
-    const { data: signedUrlData, error: signedError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .createSignedUrl(storagePath, URL_EXPIRATION_SECONDS)
-
-    if (signedError || !signedUrlData) {
+    let signedUrl: string
+    try {
+      signedUrl = await storageAdapter.createSignedUrl(BUCKET_NAME, storagePath, URL_EXPIRATION_SECONDS)
+    } catch (signedError: any) {
       console.error('❌ [EMPLOYEE PHOTO] Error generating signed URL:', signedError?.message, 'for path:', storagePath)
       return NextResponse.json(
         { success: false, error: 'Photo not found', path: storagePath },
@@ -125,13 +109,13 @@ export async function GET(
     if (acceptHeader.includes('application/json')) {
       return NextResponse.json({
         success: true,
-        signedUrl: signedUrlData.signedUrl,
+        signedUrl,
         expiresIn: URL_EXPIRATION_SECONDS
       })
     }
 
     // Redirect to the signed URL
-    return NextResponse.redirect(signedUrlData.signedUrl)
+    return NextResponse.redirect(signedUrl)
 
   } catch (error: any) {
     console.error('❌ [EMPLOYEE PHOTO] Error:', error)

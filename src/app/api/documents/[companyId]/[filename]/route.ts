@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 import { getCompanyFilter } from '@/lib/query-helpers'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
-
-// Configurar cliente Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const BUCKET_NAME = 'company-private-documents'
 const URL_EXPIRATION_SECONDS = 3600 // 1 hora
@@ -29,8 +25,8 @@ export async function GET(
     console.log(`🔐 [SIGNED URL] Request for document: company=${companyId}, file=${filename}`)
 
     // Verificar configuración
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('❌ [SIGNED URL] Supabase configuration missing')
+    if (!storageAdapter.isConfigured()) {
+      console.error('❌ [SIGNED URL] Storage configuration missing')
       return NextResponse.json(
         {
           success: false,
@@ -74,12 +70,6 @@ export async function GET(
     console.log('✅ [SIGNED URL] Permissions verified - generating signed URL')
 
     // 2. Generar URL firmada temporal
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
 
     // Construir el path completo del archivo
     const storagePath = `company-${companyId}/documents/${filename}`
@@ -87,14 +77,12 @@ export async function GET(
     console.log(`🔑 [SIGNED URL] Storage path: ${storagePath}`)
 
     // Verificar que el archivo existe
-    const { data: fileData, error: existsError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .list(`company-${companyId}/documents`, {
-        search: filename
-      })
+    const fileData = await storageAdapter.list(BUCKET_NAME, `company-${companyId}/documents`, {
+      search: filename
+    })
 
-    if (existsError || !fileData || fileData.length === 0) {
-      console.error('❌ [SIGNED URL] File not found:', existsError?.message || 'No files matched')
+    if (!fileData || fileData.length === 0) {
+      console.error('❌ [SIGNED URL] File not found: No files matched')
       return NextResponse.json(
         {
           success: false,
@@ -105,11 +93,10 @@ export async function GET(
     }
 
     // Generar URL firmada
-    const { data: signedUrlData, error: signedError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .createSignedUrl(storagePath, URL_EXPIRATION_SECONDS)
-
-    if (signedError || !signedUrlData) {
+    let signedUrl: string
+    try {
+      signedUrl = await storageAdapter.createSignedUrl(BUCKET_NAME, storagePath, URL_EXPIRATION_SECONDS)
+    } catch (signedError: any) {
       console.error('❌ [SIGNED URL] Error generating signed URL:', signedError?.message)
       return NextResponse.json(
         {
@@ -126,7 +113,7 @@ export async function GET(
     return NextResponse.json(
       {
         success: true,
-        signedUrl: signedUrlData.signedUrl,
+        signedUrl,
         expiresIn: URL_EXPIRATION_SECONDS,
         expiresAt: new Date(Date.now() + URL_EXPIRATION_SECONDS * 1000).toISOString(),
         filename: filename,

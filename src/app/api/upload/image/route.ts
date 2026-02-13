@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 import { randomBytes } from 'crypto'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
-
-// Configurar cliente Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const BUCKET_NAME = 'company-documents'
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -32,34 +28,27 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    if (!supabaseUrl || !supabaseServiceKey) {
+    if (!storageAdapter.isConfigured()) {
       return NextResponse.json(
         { success: false, error: 'Almacenamiento no configurado' },
         { status: 500 }
       )
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    })
-
     // Generate a signed URL valid for 1 hour
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .createSignedUrl(path, 3600)
-
-    if (error || !data?.signedUrl) {
-      console.error('[GET Image] Error getting signed URL:', error)
+    try {
+      const signedUrl = await storageAdapter.createSignedUrl(bucket, path, 3600)
+      return NextResponse.json({
+        success: true,
+        url: signedUrl
+      })
+    } catch (err: any) {
+      console.error('[GET Image] Error getting signed URL:', err)
       return NextResponse.json(
         { success: false, error: 'No se pudo obtener la URL del archivo' },
         { status: 404 }
       )
     }
-
-    return NextResponse.json({
-      success: true,
-      url: data.signedUrl
-    })
   } catch (error: any) {
     console.error('[GET Image] Error:', error)
     return NextResponse.json(
@@ -77,9 +66,9 @@ export async function POST(request: NextRequest) {
   try {
     console.log('📤 [IMAGE UPLOAD] Starting image upload to Supabase Storage')
 
-    // Verificar configuración de Supabase
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('❌ [IMAGE UPLOAD] Supabase configuration missing')
+    // Verificar configuración de almacenamiento
+    if (!storageAdapter.isConfigured()) {
+      console.error('❌ [IMAGE UPLOAD] Storage configuration missing')
       return NextResponse.json(
         {
           success: false,
@@ -91,14 +80,6 @@ export async function POST(request: NextRequest) {
         }
       )
     }
-
-    // Crear cliente Supabase con service role key para bypassing RLS
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
 
     const formData = await request.formData()
     const file = formData.get('file') as File
@@ -164,24 +145,19 @@ export async function POST(request: NextRequest) {
     // Convertir File a ArrayBuffer
     const arrayBuffer = await file.arrayBuffer()
 
-    // Subir a Supabase Storage
-    const { data, error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(storagePath, arrayBuffer, {
-        contentType: file.type,
-        upsert: false
-      })
+    // Subir a Storage (dual-write: Supabase + MinIO)
+    const uploadResult = await storageAdapter.upload(BUCKET_NAME, storagePath, Buffer.from(arrayBuffer), {
+      contentType: file.type,
+      upsert: false
+    })
 
-    if (error) {
-      console.error('❌ [IMAGE UPLOAD] Supabase Storage Error:', {
-        message: error.message,
-        name: error.name
-      })
+    if (!uploadResult.success) {
+      console.error('❌ [IMAGE UPLOAD] Storage Error:', uploadResult.error)
 
       return NextResponse.json(
         {
           success: false,
-          error: `Error al subir el archivo: ${error.message}`
+          error: `Error al subir el archivo: ${uploadResult.error}`
         },
         {
           status: 500,
@@ -190,14 +166,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('✅ [IMAGE UPLOAD] File uploaded successfully to Supabase Storage')
+    console.log('✅ [IMAGE UPLOAD] File uploaded successfully')
 
     // Obtener URL pública del archivo
-    const { data: publicUrlData } = supabase.storage
-      .from(BUCKET_NAME)
-      .getPublicUrl(storagePath)
-
-    const publicUrl = publicUrlData.publicUrl
+    const publicUrl = uploadResult.publicUrl || storageAdapter.getPublicUrl(BUCKET_NAME, storagePath)
 
     console.log('🌐 [IMAGE UPLOAD] Public URL:', publicUrl)
 

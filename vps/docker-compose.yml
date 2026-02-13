@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  postgres-standby:
+    image: postgres:17-alpine
+    container_name: logirapid-postgres-standby
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: logirapid
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${STANDBY_PG_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.utf8"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=50"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=512MB"
+      - "-c"
+      - "work_mem=4MB"
+      - "-c"
+      - "maintenance_work_mem=64MB"
+      - "-c"
+      - "wal_level=logical"
+      - "-c"
+      - "max_wal_senders=5"
+      - "-c"
+      - "max_replication_slots=5"
+      - "-c"
+      - "log_timezone=America/New_York"
+      - "-c"
+      - "timezone=America/New_York"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d logirapid"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - logirapid-net
+
+  minio:
+    image: minio/minio:latest
+    container_name: logirapid-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_SERVER_URL: https://s3.servisumic.com
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - logirapid-net
+
+  # MinIO bucket initialization
+  minio-init:
+    image: minio/mc:latest
+    container_name: logirapid-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      mc mb local/company-documents --ignore-existing;
+      mc mb local/company-private-documents --ignore-existing;
+      mc anonymous set download local/company-documents;
+      echo 'MinIO buckets created successfully';
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    networks:
+      - logirapid-net
+
+volumes:
+  pgdata:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/logirapid/pgdata
+  minio-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/logirapid/minio-data
+
+networks:
+  logirapid-net:
+    driver: bridge

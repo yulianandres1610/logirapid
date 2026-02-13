@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 import { randomBytes } from 'crypto'
 import { db } from '@/lib/database'
 import { getCompanyFilter } from '@/lib/query-helpers'
@@ -8,10 +8,6 @@ import { getCompanyFilter } from '@/lib/query-helpers'
 export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
-
-// Configurar cliente Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const BUCKET_NAME = 'company-private-documents' // Bucket PRIVADO
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB por foto
@@ -34,9 +30,9 @@ export async function POST(request: NextRequest) {
 
     const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
 
-    // Verificar configuración de Supabase
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('❌ [DELIVERY PHOTOS] Supabase configuration missing')
+    // Verificar configuración de almacenamiento
+    if (!storageAdapter.isConfigured()) {
+      console.error('❌ [DELIVERY PHOTOS] Storage configuration missing')
       return NextResponse.json(
         {
           success: false,
@@ -45,14 +41,6 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       )
     }
-
-    // Crear cliente Supabase con service role key
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
 
     const formData = await request.formData()
     const files = formData.getAll('photos') as File[]
@@ -149,17 +137,15 @@ export async function POST(request: NextRequest) {
         // Convertir File a ArrayBuffer
         const arrayBuffer = await file.arrayBuffer()
 
-        // Subir a Supabase Storage PRIVADO
-        const { data, error } = await supabase.storage
-          .from(BUCKET_NAME)
-          .upload(storagePath, arrayBuffer, {
-            contentType: file.type,
-            upsert: false
-          })
+        // Subir a Storage PRIVADO
+        const uploadResult = await storageAdapter.upload(BUCKET_NAME, storagePath, Buffer.from(arrayBuffer), {
+          contentType: file.type,
+          upsert: false
+        })
 
-        if (error) {
-          console.error(`❌ [DELIVERY PHOTOS] Error uploading photo ${i + 1}:`, error)
-          errors.push(`${file.name}: ${error.message}`)
+        if (!uploadResult.success) {
+          console.error(`❌ [DELIVERY PHOTOS] Error uploading photo ${i + 1}:`, uploadResult.error)
+          errors.push(`${file.name}: ${uploadResult.error}`)
           continue
         }
 

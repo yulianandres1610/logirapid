@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 import { randomBytes } from 'crypto'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
-
-// Configurar cliente Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const BUCKET_NAME = 'company-private-documents' // Bucket PRIVADO para documentos confidenciales
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB - Suficiente para PDFs escaneados de alta calidad
@@ -29,11 +25,11 @@ const ALLOWED_TYPES = [
  */
 export async function POST(request: NextRequest) {
   try {
-    console.log('📤 [DOCUMENTS UPLOAD] Starting PRIVATE documents upload to Supabase Storage')
+    console.log('📤 [DOCUMENTS UPLOAD] Starting PRIVATE documents upload')
 
-    // Verificar configuración de Supabase
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('❌ [DOCUMENTS UPLOAD] Supabase configuration missing')
+    // Verificar configuración de almacenamiento
+    if (!storageAdapter.isConfigured()) {
+      console.error('❌ [DOCUMENTS UPLOAD] Storage configuration missing')
       return NextResponse.json(
         {
           success: false,
@@ -45,14 +41,6 @@ export async function POST(request: NextRequest) {
         }
       )
     }
-
-    // Crear cliente Supabase con service role key para bypassing RLS
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
 
     const formData = await request.formData()
     const files = formData.getAll('documents') as File[]
@@ -130,21 +118,19 @@ export async function POST(request: NextRequest) {
         // Convertir File a ArrayBuffer
         const arrayBuffer = await file.arrayBuffer()
 
-        // Subir a Supabase Storage PRIVADO
-        const { data, error } = await supabase.storage
-          .from(BUCKET_NAME)
-          .upload(storagePath, arrayBuffer, {
-            contentType: file.type,
-            upsert: false
-          })
+        // Subir a Storage PRIVADO (dual-write: Supabase + MinIO)
+        const uploadResult = await storageAdapter.upload(BUCKET_NAME, storagePath, Buffer.from(arrayBuffer), {
+          contentType: file.type,
+          upsert: false
+        })
 
-        if (error) {
-          console.error(`❌ [DOCUMENTS UPLOAD] Error uploading file ${i + 1}:`, error)
-          errors.push(`${file.name}: ${error.message}`)
+        if (!uploadResult.success) {
+          console.error(`❌ [DOCUMENTS UPLOAD] Error uploading file ${i + 1}:`, uploadResult.error)
+          errors.push(`${file.name}: ${uploadResult.error}`)
           continue
         }
 
-        console.log(`✅ [DOCUMENTS UPLOAD] File ${i + 1} uploaded successfully to PRIVATE Supabase Storage`)
+        console.log(`✅ [DOCUMENTS UPLOAD] File ${i + 1} uploaded successfully to PRIVATE Storage`)
 
         // ⚠️ NO generamos URL pública - el archivo es PRIVADO
         // En su lugar, guardamos metadatos para generar URLs firmadas posteriormente

@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 import { randomBytes } from 'crypto'
 import { db } from '@/lib/database'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const BUCKET_NAME = 'company-private-documents'
 
 const ALLOWED_TYPES = [
@@ -74,8 +72,8 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Verify Supabase config
-    if (!supabaseUrl || !supabaseServiceKey) {
+    // Verify storage config
+    if (!storageAdapter.isConfigured()) {
       return NextResponse.json({
         success: false,
         error: 'Almacenamiento no configurado'
@@ -109,11 +107,6 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Create Supabase client
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    })
-
     // Generate unique filename
     const fileExtension = file.name.split('.').pop() || 'jpg'
     const timestamp = Date.now()
@@ -127,15 +120,13 @@ export async function POST(
     // Convert to buffer and upload
     const arrayBuffer = await file.arrayBuffer()
 
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(storagePath, arrayBuffer, {
-        contentType: file.type,
-        upsert: false
-      })
+    const uploadResult = await storageAdapter.upload(BUCKET_NAME, storagePath, Buffer.from(arrayBuffer), {
+      contentType: file.type,
+      upsert: false
+    })
 
-    if (uploadError) {
-      console.error('[Upload Token] Supabase upload error:', uploadError)
+    if (!uploadResult.success) {
+      console.error('[Upload Token] Upload error:', uploadResult.error)
       return NextResponse.json({
         success: false,
         error: 'Error al subir el archivo'

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 import { randomBytes } from 'crypto'
 import { db } from '@/lib/database'
 import { getCompanyFilter } from '@/lib/query-helpers'
@@ -9,27 +9,23 @@ export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
 
-// Configurar cliente Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-
 const BUCKET_NAME = 'company-private-documents' // Bucket PRIVADO
 const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB para firmas
 
 /**
  * POST /api/upload/delivery-signature
- * Sube una firma en formato base64 a Supabase Storage (bucket privado)
+ * Sube una firma en formato base64 a Storage (bucket privado)
  * La firma se asocia a una orden específica
  */
 export async function POST(request: NextRequest) {
   try {
-    console.log('📝 [DELIVERY SIGNATURE] Starting signature upload to Supabase Storage')
+    console.log('📝 [DELIVERY SIGNATURE] Starting signature upload')
 
     const { isSuperAdmin, companyId: headerCompanyId } = getCompanyFilter(request)
 
-    // Verificar configuración de Supabase
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('❌ [DELIVERY SIGNATURE] Supabase configuration missing')
+    // Verificar configuración de almacenamiento
+    if (!storageAdapter.isConfigured()) {
+      console.error('❌ [DELIVERY SIGNATURE] Storage configuration missing')
       return NextResponse.json(
         {
           success: false,
@@ -38,14 +34,6 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       )
     }
-
-    // Crear cliente Supabase con service role key
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
 
     const body = await request.json()
     const { signatureData, orderId, companyId: bodyCompanyId } = body
@@ -128,19 +116,17 @@ export async function POST(request: NextRequest) {
 
     console.log(`🔑 [DELIVERY SIGNATURE] Generated storage path:`, storagePath)
 
-    // Subir a Supabase Storage PRIVADO
-    const { data, error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(storagePath, buffer, {
-        contentType,
-        upsert: true // Permitir reemplazar si ya existe
-      })
+    // Subir a Storage PRIVADO (dual-write: Supabase + MinIO)
+    const uploadResult = await storageAdapter.upload(BUCKET_NAME, storagePath, buffer, {
+      contentType,
+      upsert: true // Permitir reemplazar si ya existe
+    })
 
-    if (error) {
-      console.error('❌ [DELIVERY SIGNATURE] Error uploading signature:', error)
+    if (!uploadResult.success) {
+      console.error('❌ [DELIVERY SIGNATURE] Error uploading signature:', uploadResult.error)
       return NextResponse.json({
         success: false,
-        error: `Error al subir la firma: ${error.message}`
+        error: `Error al subir la firma: ${uploadResult.error}`
       }, { status: 500 })
     }
 

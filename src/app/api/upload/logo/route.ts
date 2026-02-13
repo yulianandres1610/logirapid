@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 import { randomBytes } from 'crypto'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
-
-// Configurar cliente Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const BUCKET_NAME = 'company-documents'
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
@@ -23,9 +19,9 @@ export async function POST(request: NextRequest) {
   try {
     console.log('📤 [LOGO UPLOAD] Starting logo upload to Supabase Storage')
 
-    // Verificar configuración de Supabase
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('❌ [LOGO UPLOAD] Supabase configuration missing')
+    // Verificar configuración de almacenamiento
+    if (!storageAdapter.isConfigured()) {
+      console.error('❌ [LOGO UPLOAD] Storage configuration missing')
       return NextResponse.json(
         {
           success: false,
@@ -37,14 +33,6 @@ export async function POST(request: NextRequest) {
         }
       )
     }
-
-    // Crear cliente Supabase con service role key para bypassing RLS
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
 
     const formData = await request.formData()
     const file = formData.get('logo') as File
@@ -109,24 +97,19 @@ export async function POST(request: NextRequest) {
     // Convertir File a ArrayBuffer
     const arrayBuffer = await file.arrayBuffer()
 
-    // Subir a Supabase Storage
-    const { data, error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(storagePath, arrayBuffer, {
-        contentType: file.type,
-        upsert: false
-      })
+    // Subir a Storage (dual-write: Supabase + MinIO)
+    const uploadResult = await storageAdapter.upload(BUCKET_NAME, storagePath, Buffer.from(arrayBuffer), {
+      contentType: file.type,
+      upsert: false
+    })
 
-    if (error) {
-      console.error('❌ [LOGO UPLOAD] Supabase Storage Error:', {
-        message: error.message,
-        name: error.name
-      })
+    if (!uploadResult.success) {
+      console.error('❌ [LOGO UPLOAD] Storage Error:', uploadResult.error)
 
       return NextResponse.json(
         {
           success: false,
-          error: `Error al subir el archivo: ${error.message}`
+          error: `Error al subir el archivo: ${uploadResult.error}`
         },
         {
           status: 500,
@@ -135,7 +118,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('✅ [LOGO UPLOAD] File uploaded successfully to Supabase Storage')
+    console.log('✅ [LOGO UPLOAD] File uploaded successfully')
 
     // Eliminar logo antiguo si existe
     if (oldLogoUrl) {
@@ -143,36 +126,21 @@ export async function POST(request: NextRequest) {
         console.log('🗑️ [LOGO UPLOAD] Deleting old logo:', oldLogoUrl)
 
         // Extraer el path del storage desde la URL
-        // URL format: https://[project].supabase.co/storage/v1/object/public/company-documents/logos/logo-xxx.png
         const urlParts = oldLogoUrl.split('/storage/v1/object/public/' + BUCKET_NAME + '/')
         if (urlParts.length > 1) {
           const oldStoragePath = urlParts[1]
-
-          const { error: deleteError } = await supabase.storage
-            .from(BUCKET_NAME)
-            .remove([oldStoragePath])
-
-          if (deleteError) {
-            console.warn('⚠️ [LOGO UPLOAD] Could not delete old logo:', deleteError.message)
-            // No fallar la request si no se puede eliminar el logo antiguo
-          } else {
-            console.log('✅ [LOGO UPLOAD] Old logo deleted successfully')
-          }
+          await storageAdapter.remove(BUCKET_NAME, [oldStoragePath])
+          console.log('✅ [LOGO UPLOAD] Old logo deleted successfully')
         } else {
           console.warn('⚠️ [LOGO UPLOAD] Could not parse old logo URL path')
         }
       } catch (deleteErr: any) {
         console.warn('⚠️ [LOGO UPLOAD] Error deleting old logo:', deleteErr.message)
-        // No fallar la request si hay un error al eliminar
       }
     }
 
     // Obtener URL pública del archivo
-    const { data: publicUrlData } = supabase.storage
-      .from(BUCKET_NAME)
-      .getPublicUrl(storagePath)
-
-    const publicUrl = publicUrlData.publicUrl
+    const publicUrl = uploadResult.publicUrl || storageAdapter.getPublicUrl(BUCKET_NAME, storagePath)
 
     console.log('🌐 [LOGO UPLOAD] Public URL:', publicUrl)
 

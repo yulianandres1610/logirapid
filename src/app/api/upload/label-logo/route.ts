@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import * as storageAdapter from '@/lib/storage-adapter'
 import { randomBytes } from 'crypto'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 export const runtime = 'nodejs'
-
-// Configurar cliente Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const BUCKET_NAME = 'company-documents'
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
@@ -21,11 +17,11 @@ const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 
  */
 export async function POST(request: NextRequest) {
   try {
-    console.log('📤 [LABEL LOGO UPLOAD] Starting label logo upload to Supabase Storage')
+    console.log('📤 [LABEL LOGO UPLOAD] Starting label logo upload')
 
-    // Verificar configuración de Supabase
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('❌ [LABEL LOGO UPLOAD] Supabase configuration missing')
+    // Verificar configuración de almacenamiento
+    if (!storageAdapter.isConfigured()) {
+      console.error('❌ [LABEL LOGO UPLOAD] Storage configuration missing')
       return NextResponse.json(
         {
           success: false,
@@ -37,14 +33,6 @@ export async function POST(request: NextRequest) {
         }
       )
     }
-
-    // Crear cliente Supabase con service role key para bypassing RLS
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
 
     const formData = await request.formData()
     const file = formData.get('logo') as File
@@ -109,24 +97,19 @@ export async function POST(request: NextRequest) {
     // Convertir File a ArrayBuffer
     const arrayBuffer = await file.arrayBuffer()
 
-    // Subir a Supabase Storage
-    const { data, error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(storagePath, arrayBuffer, {
-        contentType: file.type,
-        upsert: false
-      })
+    // Subir a Storage (dual-write: Supabase + MinIO)
+    const uploadResult = await storageAdapter.upload(BUCKET_NAME, storagePath, Buffer.from(arrayBuffer), {
+      contentType: file.type,
+      upsert: false
+    })
 
-    if (error) {
-      console.error('❌ [LABEL LOGO UPLOAD] Supabase Storage Error:', {
-        message: error.message,
-        name: error.name
-      })
+    if (!uploadResult.success) {
+      console.error('❌ [LABEL LOGO UPLOAD] Storage Error:', uploadResult.error)
 
       return NextResponse.json(
         {
           success: false,
-          error: `Error al subir el archivo: ${error.message}`
+          error: `Error al subir el archivo: ${uploadResult.error}`
         },
         {
           status: 500,
@@ -135,44 +118,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('✅ [LABEL LOGO UPLOAD] File uploaded successfully to Supabase Storage')
+    console.log('✅ [LABEL LOGO UPLOAD] File uploaded successfully')
 
     // Eliminar logo antiguo si existe
     if (oldLogoUrl) {
       try {
         console.log('🗑️ [LABEL LOGO UPLOAD] Deleting old label logo:', oldLogoUrl)
 
-        // Extraer el path del storage desde la URL
-        // URL format: https://[project].supabase.co/storage/v1/object/public/company-documents/label-logos/label-logo-xxx.png
         const urlParts = oldLogoUrl.split('/storage/v1/object/public/' + BUCKET_NAME + '/')
         if (urlParts.length > 1) {
           const oldStoragePath = urlParts[1]
-
-          const { error: deleteError } = await supabase.storage
-            .from(BUCKET_NAME)
-            .remove([oldStoragePath])
-
-          if (deleteError) {
-            console.warn('⚠️ [LABEL LOGO UPLOAD] Could not delete old label logo:', deleteError.message)
-            // No fallar la request si no se puede eliminar el logo antiguo
-          } else {
-            console.log('✅ [LABEL LOGO UPLOAD] Old label logo deleted successfully')
-          }
+          await storageAdapter.remove(BUCKET_NAME, [oldStoragePath])
+          console.log('✅ [LABEL LOGO UPLOAD] Old label logo deleted successfully')
         } else {
           console.warn('⚠️ [LABEL LOGO UPLOAD] Could not parse old label logo URL path')
         }
       } catch (deleteErr: any) {
         console.warn('⚠️ [LABEL LOGO UPLOAD] Error deleting old label logo:', deleteErr.message)
-        // No fallar la request si hay un error al eliminar
       }
     }
 
     // Obtener URL pública del archivo
-    const { data: publicUrlData } = supabase.storage
-      .from(BUCKET_NAME)
-      .getPublicUrl(storagePath)
-
-    const publicUrl = publicUrlData.publicUrl
+    const publicUrl = uploadResult.publicUrl || storageAdapter.getPublicUrl(BUCKET_NAME, storagePath)
 
     console.log('🌐 [LABEL LOGO UPLOAD] Public URL:', publicUrl)
 

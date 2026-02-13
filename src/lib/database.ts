@@ -485,5 +485,64 @@ export async function getCompanyServices(companyId: number): Promise<string[]> {
   }
 }
 
+// ============================================================================
+// HEALTH CHECK FUNCTIONS (for HA monitoring)
+// ============================================================================
+
+export async function runHealthChecks(): Promise<{
+  primary: { healthy: boolean; latencyMs?: number; error?: string };
+  standby: { healthy: boolean; latencyMs?: number; error?: string } | null;
+  recoveryAttempted: boolean;
+}> {
+  const primaryResult: { healthy: boolean; latencyMs?: number; error?: string } = { healthy: false };
+  let standbyResult: { healthy: boolean; latencyMs?: number; error?: string } | null = null;
+
+  // Check primary
+  try {
+    const start = Date.now();
+    await db.query('SELECT 1');
+    primaryResult.healthy = true;
+    primaryResult.latencyMs = Date.now() - start;
+  } catch (err: any) {
+    primaryResult.error = err.message;
+  }
+
+  // Check standby if configured
+  const standbyUrl = process.env.DATABASE_URL_STANDBY;
+  if (standbyUrl) {
+    standbyResult = { healthy: false };
+    try {
+      const { Pool: StandbyPool } = require('pg');
+      const tmpPool = new StandbyPool({
+        connectionString: standbyUrl.replace(/[?&]sslmode=[^&]*/g, ''),
+        ssl: false,
+        max: 1,
+        connectionTimeoutMillis: 5000,
+      });
+      const start = Date.now();
+      await tmpPool.query('SELECT 1');
+      standbyResult.healthy = true;
+      standbyResult.latencyMs = Date.now() - start;
+      await tmpPool.end();
+    } catch (err: any) {
+      standbyResult.error = err.message;
+    }
+  }
+
+  return { primary: primaryResult, standby: standbyResult, recoveryAttempted: false };
+}
+
+export function getCurrentDatabaseInfo(): {
+  primaryConfigured: boolean;
+  standbyConfigured: boolean;
+  mode: string;
+} {
+  return {
+    primaryConfigured: !!connectionString,
+    standbyConfigured: !!process.env.DATABASE_URL_STANDBY,
+    mode: 'primary',
+  };
+}
+
 // Inicialización de la base de datos
 console.log('PostgreSQL database initialized - tables managed via migrations');
