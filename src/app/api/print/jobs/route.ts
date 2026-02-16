@@ -204,7 +204,8 @@ export async function POST(request: NextRequest) {
       'unified_reception',     // Recibo de recepción unificada (consignación/compra)
       'transfer_receipt',      // Recibo de transferencia
       'production_materials_receipt',  // Orden de entrega de materiales para producción
-      'production_reception_receipt'   // Recepción de productos terminados de producción
+      'production_reception_receipt',  // Recepción de productos terminados de producción
+      'asset_label'                    // Etiqueta de activo fijo
     ]
     if (!validDocTypes.includes(documentType)) {
       return NextResponse.json({

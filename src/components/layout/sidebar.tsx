@@ -652,13 +652,23 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Settings, label: "Configuración", href: "/dashboard/market/settings" },
   ]
 
-  // Menu items para MARKET_COMERCIAL (Compras, Marketplace, Inventario, Consignaciones - sin Dashboard)
+  // Menu items para MARKET_COMERCIAL (Compras, Marketplace, Inventario, Consignaciones, Activos Fijos - sin Dashboard)
   // NO tienen acceso a gestión de proveedores, solo pueden seleccionarlos en órdenes
   const marketComercialMenuItems = [
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
     { icon: Store, label: "Marketplace", href: "/dashboard/market/marketplace" },
     { icon: Package, label: "Inventario", href: "/dashboard/market/inventory" },
     { icon: ClipboardList, label: "Consignaciones", href: "/dashboard/market/consignments" },
+    {
+      icon: Box,
+      label: "Activos Fijos",
+      href: "/dashboard/market/fixed-assets",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: Box, label: "Inventario", href: "/dashboard/market/fixed-assets" },
+        { icon: Tag, label: "Categorías", href: "/dashboard/market/fixed-assets/categories" },
+      ]
+    },
     { icon: MessageCircle, label: "Conversaciones", href: "/dashboard/market/chat" },
   ]
 

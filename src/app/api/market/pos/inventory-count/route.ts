@@ -143,6 +143,43 @@ export async function GET(request: NextRequest) {
       ORDER BY scanned_at DESC
     `, [count.id])
 
+    // Recalcular productsWithDifferences y totalDifferenceValue con tolerancia
+    // para evitar problemas de punto flotante (ej: 12.06 - 12.06 = -0.01)
+    // Usamos > 0.01 (no >=) para excluir diferencias de exactamente 0.01 que son errores de redondeo
+    const DIFF_TOLERANCE = 0.01
+    let recalcProductsWithDifferences = 0
+    let recalcTotalDifferenceValue = 0
+
+    const lines = linesResult.rows.map(line => {
+      const difference = parseFloat(line.difference) || 0
+      const differenceValue = parseFloat(line.difference_value) || 0
+
+      // Solo contar como diferencia si supera estrictamente la tolerancia
+      // Esto excluye diferencias de 0.01, -0.01, 0.009, etc. que son errores de punto flotante
+      if (Math.abs(difference) > DIFF_TOLERANCE) {
+        recalcProductsWithDifferences++
+        recalcTotalDifferenceValue += differenceValue
+      }
+
+      return {
+        id: line.id,
+        productId: line.product_id,
+        variantId: line.variant_id,
+        productName: line.product_name,
+        productSku: line.product_sku,
+        productBarcode: line.product_barcode,
+        productImage: line.product_image || null,
+        unitPrice: parseFloat(line.unit_price) || 0,
+        expectedQuantity: parseFloat(line.expected_quantity) || 0,
+        countedQuantity: parseFloat(line.counted_quantity) || 0,
+        difference: difference,
+        differenceValue: differenceValue,
+        soldToday: parseFloat(line.sold_today) || 0,
+        scannedAt: line.scanned_at,
+        notes: line.notes
+      }
+    })
+
     return NextResponse.json({
       success: true,
       data: {
@@ -160,26 +197,11 @@ export async function GET(request: NextRequest) {
         completedAt: count.completed_at,
         adjustmentOperationId: count.adjustment_operation_id,
         totalProducts: count.total_products,
-        productsWithDifferences: count.products_with_differences,
-        totalDifferenceValue: parseFloat(count.total_difference_value) || 0,
+        // Usar valores recalculados con tolerancia
+        productsWithDifferences: recalcProductsWithDifferences,
+        totalDifferenceValue: Math.round(recalcTotalDifferenceValue * 100) / 100,
         notes: count.notes,
-        lines: linesResult.rows.map(line => ({
-          id: line.id,
-          productId: line.product_id,
-          variantId: line.variant_id,
-          productName: line.product_name,
-          productSku: line.product_sku,
-          productBarcode: line.product_barcode,
-          productImage: line.product_image || null,
-          unitPrice: parseFloat(line.unit_price) || 0,
-          expectedQuantity: parseFloat(line.expected_quantity) || 0,
-          countedQuantity: parseFloat(line.counted_quantity) || 0,
-          difference: parseFloat(line.difference) || 0,
-          differenceValue: parseFloat(line.difference_value) || 0,
-          soldToday: parseFloat(line.sold_today) || 0,
-          scannedAt: line.scanned_at,
-          notes: line.notes
-        }))
+        lines
       }
     })
 
@@ -649,6 +671,197 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: false,
       error: err.message || 'Error al guardar conteo'
+    }, { status: 500 })
+  }
+}
+
+/**
+ * PATCH /api/market/pos/inventory-count
+ * Re-evalúa conteos completados y auto-aprueba si no tienen diferencias reales
+ * Body: { countId?: number, sessionId?: number, action: 'reevaluate' }
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const cookieStore = await cookies()
+    const authToken = cookieStore.get('auth-token')?.value
+
+    if (!authToken) {
+      return NextResponse.json({
+        success: false,
+        error: 'No autorizado'
+      }, { status: 401 })
+    }
+
+    let payload: JWTPayload
+    try {
+      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+      payload = jwt.verify(authToken, secret) as JWTPayload
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: 'Token inválido'
+      }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { countId, sessionId, action } = body as { countId?: number; sessionId?: number; action?: string }
+
+    if (action !== 'reevaluate') {
+      return NextResponse.json({
+        success: false,
+        error: 'Acción no válida'
+      }, { status: 400 })
+    }
+
+    // Buscar el conteo
+    let countResult
+    if (countId) {
+      countResult = await db.query(`
+        SELECT c.*, s.session_code
+        FROM market_inventory_counts c
+        LEFT JOIN market_pos_sessions s ON c.session_id = s.id
+        WHERE c.id = $1
+      `, [countId])
+    } else if (sessionId) {
+      countResult = await db.query(`
+        SELECT c.*, s.session_code
+        FROM market_inventory_counts c
+        LEFT JOIN market_pos_sessions s ON c.session_id = s.id
+        WHERE c.session_id = $1
+        ORDER BY c.created_at DESC
+        LIMIT 1
+      `, [sessionId])
+    } else {
+      return NextResponse.json({
+        success: false,
+        error: 'countId o sessionId es requerido'
+      }, { status: 400 })
+    }
+
+    if (countResult.rows.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Conteo no encontrado'
+      }, { status: 404 })
+    }
+
+    const count = countResult.rows[0]
+
+    // Verificar permisos
+    if (payload.role !== 'SUPER_ADMIN' && count.company_id !== payload.companyId) {
+      return NextResponse.json({
+        success: false,
+        error: 'No tiene permisos para este conteo'
+      }, { status: 403 })
+    }
+
+    // Solo re-evaluar conteos completados (no aprobados ya)
+    if (count.status !== 'completed') {
+      return NextResponse.json({
+        success: true,
+        message: `Conteo tiene status '${count.status}', no requiere re-evaluación`,
+        data: { countId: count.id, status: count.status, updated: false }
+      })
+    }
+
+    // Obtener líneas y recalcular diferencias con tolerancia
+    const linesResult = await db.query(`
+      SELECT * FROM market_inventory_count_lines WHERE count_id = $1
+    `, [count.id])
+
+    const DIFF_TOLERANCE = 0.01
+    let realDifferencesCount = 0
+    let realDifferenceValue = 0
+
+    for (const line of linesResult.rows) {
+      const difference = parseFloat(line.difference) || 0
+      const differenceValue = parseFloat(line.difference_value) || 0
+
+      // Solo contar como diferencia real si supera estrictamente la tolerancia
+      if (Math.abs(difference) > DIFF_TOLERANCE) {
+        realDifferencesCount++
+        realDifferenceValue += differenceValue
+      }
+    }
+
+    // Si no hay diferencias reales, auto-aprobar
+    if (realDifferencesCount === 0) {
+      // Actualizar totales en el conteo
+      await db.query(`
+        UPDATE market_inventory_counts
+        SET
+          products_with_differences = 0,
+          total_difference_value = 0,
+          status = 'approved',
+          auto_approved = true,
+          approved_by = $1,
+          approved_at = NOW(),
+          updated_at = NOW()
+        WHERE id = $2
+      `, [payload.userId, count.id])
+
+      // Limpiar el valor de faltante en la sesión POS si existe
+      if (count.session_id) {
+        await db.query(`
+          UPDATE market_pos_sessions
+          SET inventory_shortage_value = 0
+          WHERE id = $1
+        `, [count.session_id])
+      }
+
+      // Si había una operación de ajuste pendiente, cancelarla
+      if (count.adjustment_operation_id) {
+        await db.query(`
+          UPDATE market_warehouse_operations
+          SET status = 'cancelled', notes = COALESCE(notes, '') || ' - Cancelado: sin diferencias reales después de re-evaluación'
+          WHERE id = $1 AND status = 'pending_approval'
+        `, [count.adjustment_operation_id])
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Conteo re-evaluado y auto-aprobado (sin diferencias reales)',
+        data: {
+          countId: count.id,
+          countNumber: count.count_number,
+          status: 'approved',
+          updated: true,
+          previousDifferences: count.products_with_differences,
+          realDifferences: 0
+        }
+      })
+    } else {
+      // Hay diferencias reales, actualizar los totales correctos
+      await db.query(`
+        UPDATE market_inventory_counts
+        SET
+          products_with_differences = $1,
+          total_difference_value = $2,
+          updated_at = NOW()
+        WHERE id = $3
+      `, [realDifferencesCount, Math.round(realDifferenceValue * 100) / 100, count.id])
+
+      return NextResponse.json({
+        success: true,
+        message: `Conteo re-evaluado: ${realDifferencesCount} diferencias reales encontradas`,
+        data: {
+          countId: count.id,
+          countNumber: count.count_number,
+          status: 'completed',
+          updated: true,
+          previousDifferences: count.products_with_differences,
+          realDifferences: realDifferencesCount,
+          totalDifferenceValue: Math.round(realDifferenceValue * 100) / 100
+        }
+      })
+    }
+
+  } catch (error: unknown) {
+    const err = error as Error
+    console.error('[Inventory Count PATCH] Error:', err)
+    return NextResponse.json({
+      success: false,
+      error: err.message || 'Error al re-evaluar conteo'
     }, { status: 500 })
   }
 }
