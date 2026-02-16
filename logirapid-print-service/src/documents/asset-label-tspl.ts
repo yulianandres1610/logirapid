@@ -49,17 +49,9 @@ export function generateAssetLabelTspl(data: AssetLabelData): Buffer {
   tspl.push('DENSITY 8')
   tspl.push('CLS')
 
-  // ========== ROW 1: Asset Name (left) + Value (right) ==========
-  const assetName = truncate(data.assetName.toUpperCase(), 18)
+  // ========== ROW 1: Asset Name (NO price for security) ==========
+  const assetName = truncate(data.assetName.toUpperCase(), 25)
   tspl.push(`TEXT 8,5,"2",0,1,1,"${escapeTspl(assetName)}"`)
-
-  // Value - right side (if provided)
-  if (data.value && data.value > 0) {
-    const currency = data.currency || 'USD'
-    const formattedValue = `$${Math.round(data.value).toLocaleString('es-ES')} ${currency}`
-    const valueX = labelWidthDots - 10 - (formattedValue.length * 7)
-    tspl.push(`TEXT ${Math.max(valueX, 200)},5,"1",0,1,1,"${escapeTspl(formattedValue)}"`)
-  }
 
   // ========== ROW 2: Asset Code (left) + Location (right) ==========
   tspl.push(`TEXT 8,30,"2",0,1,1,"${escapeTspl(data.assetCode)}"`)
@@ -125,31 +117,25 @@ export function generateAssetLabelTspl3x2(data: AssetLabelData): Buffer {
   tspl.push('DENSITY 8')
   tspl.push('CLS')
 
-  // ========== ROW 1: Asset Name (LARGE) ==========
+  // ========== ROW 1: Asset Name (LARGE) - moved down ==========
   const assetName = truncate(data.assetName.toUpperCase(), 28)
-  tspl.push(`TEXT 15,10,"4",0,1,1,"${escapeTspl(assetName)}"`)
+  tspl.push(`TEXT 15,25,"4",0,1,1,"${escapeTspl(assetName)}"`)
 
-  // ========== ROW 2: Value + Category ==========
-  if (data.value && data.value > 0) {
-    const currency = data.currency || 'USD'
-    const formattedValue = `$${Math.round(data.value).toLocaleString('es-ES')} ${currency}`
-    tspl.push(`TEXT 15,50,"3",0,1,1,"${escapeTspl(formattedValue)}"`)
-  }
-
+  // ========== ROW 2: Category (NO price for security) - moved down ==========
   if (data.categoryName) {
-    const category = truncate(data.categoryName, 18)
-    tspl.push(`TEXT ${labelWidthDots - 200},50,"2",0,1,1,"${escapeTspl(category)}"`)
+    const category = truncate(data.categoryName, 30)
+    tspl.push(`TEXT 15,65,"3",0,1,1,"${escapeTspl(category)}"`)
   }
 
-  // ========== Divider line ==========
-  tspl.push(`BAR 15,85,${labelWidthDots - 30},2`)
+  // ========== Divider line - moved down ==========
+  tspl.push(`BAR 15,100,${labelWidthDots - 30},2`)
 
-  // ========== Details Section ==========
-  let yPos = 95
+  // ========== Details Section - moved down ==========
+  let yPos = 115
 
-  // Asset Code
-  tspl.push(`TEXT 15,${yPos},"2",0,1,1,"Codigo: ${escapeTspl(data.assetCode)}"`)
-  yPos += 30
+  // Asset Code - BIGGER font
+  tspl.push(`TEXT 15,${yPos},"3",0,1,1,"Codigo: ${escapeTspl(data.assetCode)}"`)
+  yPos += 35
 
   // Location
   if (data.location) {
@@ -158,26 +144,25 @@ export function generateAssetLabelTspl3x2(data: AssetLabelData): Buffer {
     yPos += 30
   }
 
-  // Responsible
-  if (data.responsibleName) {
-    const responsible = truncate(`Responsable: ${data.responsibleName}`, 35)
-    tspl.push(`TEXT 15,${yPos},"2",0,1,1,"${escapeTspl(responsible)}"`)
-    yPos += 30
-  }
+  // Responsible - ALWAYS show
+  const responsibleText = data.responsibleName || 'Sin asignar'
+  const responsible = truncate(`Responsable: ${responsibleText}`, 35)
+  tspl.push(`TEXT 15,${yPos},"3",0,1,1,"${escapeTspl(responsible)}"`)
+  yPos += 32
 
   // Serial Number
   if (data.serialNumber) {
     const serial = truncate(`S/N: ${data.serialNumber}`, 35)
-    tspl.push(`TEXT 15,${yPos},"1",0,1,1,"${escapeTspl(serial)}"`)
-    yPos += 25
+    tspl.push(`TEXT 15,${yPos},"2",0,1,1,"${escapeTspl(serial)}"`)
+    yPos += 28
   }
 
-  // ========== Barcode (Code128) at bottom ==========
+  // ========== Barcode (Code128) CENTERED at bottom ==========
   const barcodeData = data.barcode || data.assetCode.replace(/-/g, '')
-  const barcodeX = 80
-  const barcodeY = Math.max(yPos + 10, 280)
+  const barcodeX = Math.round((labelWidthDots - 350) / 2)  // Centered
+  const barcodeY = Math.max(yPos + 20, 300)
 
-  tspl.push(`BARCODE ${barcodeX},${barcodeY},"128",90,1,0,3,3,"${barcodeData}"`)
+  tspl.push(`BARCODE ${barcodeX},${barcodeY},"128",80,1,0,3,3,"${barcodeData}"`)
 
   // Print command
   tspl.push('PRINT 1,1')

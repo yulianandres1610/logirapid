@@ -52,17 +52,9 @@ export function generateAssetLabelZpl(data: AssetLabelData): Buffer {
   zpl.push('^PON')                       // Print orientation normal
   zpl.push('^LH0,0')                     // Label home position
 
-  // ========== ROW 1: Asset Name (left) + Value (right) ==========
-  const assetName = truncate(data.assetName.toUpperCase(), 18)
+  // ========== ROW 1: Asset Name (NO price for security) ==========
+  const assetName = truncate(data.assetName.toUpperCase(), 25)
   zpl.push(`^FO${margin},${margin}^A0N,20,20^FD${escapeZpl(assetName)}^FS`)
-
-  // Value - right side (if provided)
-  if (data.value && data.value > 0) {
-    const currency = data.currency || 'USD'
-    const formattedValue = `$${Math.round(data.value).toLocaleString('es-ES')} ${currency}`
-    const valueOffset = 130
-    zpl.push(`^FO${labelWidth - valueOffset},${margin}^A0N,18,18^FD${escapeZpl(formattedValue)}^FS`)
-  }
 
   // ========== ROW 2: Asset Code (left) + Location (right) ==========
   const row2Y = 38
