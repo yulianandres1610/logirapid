@@ -54,7 +54,8 @@ import {
   Fingerprint,
   Briefcase,
   Scale,
-  Factory
+  Factory,
+  Shield
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -325,6 +326,13 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       setOpenSubmenus(prev => ({
         ...prev,
         'Mayoreo': true
+      }))
+    }
+    // Auto-expand Door Security submenu
+    if (pathname.includes('/market/door-security')) {
+      setOpenSubmenus(prev => ({
+        ...prev,
+        'Seguridad Puerta': true
       }))
     }
   }, [pathname])
@@ -619,6 +627,17 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: CalendarClock, label: "Turnos Rotativos", href: "/dashboard/market/hr/scheduling" },
         { icon: Calendar, label: "Asistencia", href: "/dashboard/market/hr/attendance" },
         { icon: Fingerprint, label: "Kioscos", href: "/dashboard/market/hr/kiosks" },
+      ]
+    },
+    {
+      icon: Shield,
+      label: "Seguridad Puerta",
+      href: "/dashboard/market/door-security",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: Monitor, label: "Kiosks", href: "/dashboard/market/door-security/kiosks" },
+        { icon: Users, label: "Visitantes", href: "/dashboard/market/door-security/visitors" },
+        { icon: Clock, label: "Historial", href: "/dashboard/market/door-security/logs" },
       ]
     },
     { icon: MessageCircle, label: "Conversaciones", href: "/dashboard/market/chat" },
