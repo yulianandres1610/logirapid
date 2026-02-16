@@ -357,6 +357,10 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
       ? `${asset.warehouseName}${asset.locationCode ? ` / ${asset.locationCode}` : ''}`
       : asset.locationCode || ''
 
+    // Build extra info for 3x2 label
+    const brandModel = [asset.brand, asset.model].filter(Boolean).join(' ')
+    const categoryInfo = asset.categoryName || ''
+
     const htmlContent = is3x2 ? `
       <!DOCTYPE html>
       <html>
@@ -364,22 +368,30 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
         <title>Etiqueta ${asset.assetCode}</title>
         <style>
           @page { size: ${width} ${height}; margin: 0; }
-          body { margin: 0; padding: 3mm; font-family: Arial, sans-serif; width: ${width}; height: ${height}; box-sizing: border-box; }
-          .label { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
-          .header { font-size: 14pt; font-weight: bold; text-align: center; margin-bottom: 2mm; }
-          .code { font-size: 11pt; font-family: monospace; font-weight: bold; text-align: center; }
-          .name { font-size: 9pt; text-align: center; margin: 2mm 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-          .location { font-size: 8pt; color: #666; text-align: center; }
-          .barcode { text-align: center; margin-top: auto; }
-          .barcode img { max-width: 100%; height: auto; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; width: ${width}; height: ${height}; padding: 2mm; }
+          .label { width: 100%; height: 100%; display: flex; flex-direction: column; }
+          .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1mm; }
+          .code { font-size: 14pt; font-family: monospace; font-weight: bold; letter-spacing: 0.5px; }
+          .category { font-size: 7pt; color: #666; text-align: right; max-width: 50%; }
+          .name { font-size: 10pt; font-weight: 600; line-height: 1.2; margin-bottom: 1mm; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+          .info { font-size: 7pt; color: #333; display: flex; justify-content: space-between; margin-bottom: 1mm; }
+          .info-left { }
+          .info-right { text-align: right; color: #666; }
+          .barcode { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
+          .barcode img { max-width: 100%; max-height: 100%; object-fit: contain; }
         </style>
       </head>
       <body>
         <div class="label">
-          <div>
+          <div class="header">
             <div class="code">${asset.assetCode}</div>
-            <div class="name">${asset.name}</div>
-            <div class="location">${location}</div>
+            <div class="category">${categoryInfo}</div>
+          </div>
+          <div class="name">${asset.name}</div>
+          <div class="info">
+            <div class="info-left">${brandModel || ''}</div>
+            <div class="info-right">${location}</div>
           </div>
           <div class="barcode">
             <img src="${barcodeDataUrl}" alt="barcode" />
@@ -395,14 +407,15 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
         <title>Etiqueta ${asset.assetCode}</title>
         <style>
           @page { size: ${width} ${height}; margin: 0; }
-          body { margin: 0; padding: 1mm; font-family: Arial, sans-serif; width: ${width}; height: ${height}; box-sizing: border-box; }
-          .label { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; width: ${width}; height: ${height}; padding: 1mm; }
+          .label { width: 100%; height: 100%; display: flex; flex-direction: column; }
           .top { display: flex; justify-content: space-between; align-items: center; }
-          .code { font-size: 9pt; font-family: monospace; font-weight: bold; }
-          .location { font-size: 7pt; color: #666; }
-          .name { font-size: 7pt; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-          .barcode { text-align: center; }
-          .barcode img { max-width: 100%; height: 18mm; }
+          .code { font-size: 10pt; font-family: monospace; font-weight: bold; }
+          .location { font-size: 6pt; color: #666; max-width: 45%; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .name { font-size: 7pt; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3; }
+          .barcode { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
+          .barcode img { max-width: 100%; max-height: 100%; object-fit: contain; }
         </style>
       </head>
       <body>
@@ -1411,22 +1424,26 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
                       theme === 'dark' ? 'bg-white' : 'bg-gray-50 border-gray-200'
                     )}>
                       {labelSize === '3x2' ? (
-                        <div className="max-w-[200px] mx-auto p-3 text-center">
-                          <p className="font-mono font-bold text-gray-900">{asset.assetCode}</p>
-                          <p className="text-sm text-gray-700 truncate">{asset.name}</p>
-                          <p className="text-xs text-gray-500">
-                            {asset.warehouseName || ''}{asset.locationCode ? ` / ${asset.locationCode}` : ''}
-                          </p>
-                          <div className="mt-2 flex justify-center">
-                            <svg className="h-10" ref={el => {
+                        <div className="w-[220px] h-[147px] mx-auto p-2 border border-gray-300 bg-white flex flex-col">
+                          <div className="flex justify-between items-start">
+                            <span className="font-mono font-bold text-sm text-gray-900">{asset.assetCode}</span>
+                            <span className="text-[9px] text-gray-500 text-right max-w-[50%] truncate">{asset.categoryName || ''}</span>
+                          </div>
+                          <p className="text-xs font-semibold text-gray-800 leading-tight mt-0.5 line-clamp-2">{asset.name}</p>
+                          <div className="flex justify-between text-[8px] text-gray-600 mt-0.5">
+                            <span>{[asset.brand, asset.model].filter(Boolean).join(' ')}</span>
+                            <span>{asset.warehouseName || ''}{asset.locationCode ? ` / ${asset.locationCode}` : ''}</span>
+                          </div>
+                          <div className="flex-1 flex items-center justify-center mt-1">
+                            <svg className="w-full h-auto max-h-[70px]" ref={el => {
                               if (el) {
                                 try {
                                   JsBarcode(el, asset.barcode, {
                                     format: 'CODE128',
-                                    width: 1.5,
-                                    height: 30,
+                                    width: 2,
+                                    height: 50,
                                     displayValue: true,
-                                    fontSize: 10,
+                                    fontSize: 11,
                                     margin: 2,
                                     background: 'transparent'
                                   })
@@ -1436,22 +1453,25 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
                           </div>
                         </div>
                       ) : (
-                        <div className="max-w-[180px] mx-auto p-2">
-                          <div className="flex justify-between items-start text-xs">
-                            <span className="font-mono font-bold text-gray-900">{asset.assetCode}</span>
-                            <span className="text-gray-500">{asset.locationCode || ''}</span>
+                        <div className="w-[180px] h-[88px] mx-auto p-1.5 border border-gray-300 bg-white flex flex-col">
+                          <div className="flex justify-between items-center">
+                            <span className="font-mono font-bold text-[11px] text-gray-900">{asset.assetCode}</span>
+                            <span className="text-[7px] text-gray-500 max-w-[45%] truncate text-right">
+                              {asset.warehouseName || ''}{asset.locationCode ? ` / ${asset.locationCode}` : ''}
+                            </span>
                           </div>
-                          <p className="text-xs text-gray-700 truncate">{asset.name}</p>
-                          <div className="mt-1 flex justify-center">
-                            <svg className="h-8" ref={el => {
+                          <p className="text-[8px] text-gray-700 truncate leading-tight">{asset.name}</p>
+                          <div className="flex-1 flex items-center justify-center">
+                            <svg className="w-full h-auto max-h-[45px]" ref={el => {
                               if (el) {
                                 try {
                                   JsBarcode(el, asset.barcode, {
                                     format: 'CODE128',
-                                    width: 1,
-                                    height: 20,
-                                    displayValue: false,
-                                    margin: 0,
+                                    width: 1.5,
+                                    height: 35,
+                                    displayValue: true,
+                                    fontSize: 9,
+                                    margin: 1,
                                     background: 'transparent'
                                   })
                                 } catch (e) { console.error(e) }
