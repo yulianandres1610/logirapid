@@ -288,3 +288,29 @@ a {
   width: 0;
   display: none;
 }
+
+/* ============================================================
+   SERVISUMIC BRAND STYLES
+   These ensure correct styling once the brand class is applied
+   ============================================================ */
+
+/* Servisumic login form inputs - ensure dark text on light backgrounds */
+html.brand-servisumic input[type="email"],
+html.brand-servisumic input[type="password"],
+html.brand-servisumic input[type="text"] {
+  color: #1c1917 !important; /* stone-900 */
+}
+
+html.brand-servisumic input::placeholder {
+  color: #a8a29e !important; /* stone-400 */
+}
+
+/* Servisumic brand colors override */
+html.brand-servisumic {
+  --brand-primary: #eb5b0c;
+  --brand-primary-hover: #d14f09;
+  --brand-primary-light: #fb923c;
+  --brand-secondary: #3f3b39;
+  --brand-secondary-hover: #2d2a28;
+  --brand-secondary-light: #78716c;
+}

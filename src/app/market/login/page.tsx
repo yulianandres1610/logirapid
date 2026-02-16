@@ -174,6 +174,7 @@ export default function MarketLoginPage() {
                   <input
                     type="email"
                     placeholder="Correo electrónico"
+                    autoComplete="email"
                     {...register('email')}
                     className={`
                       w-full pl-12 pr-4 py-4 rounded-2xl focus:outline-none focus:ring-2 transition-all duration-300
@@ -207,6 +208,7 @@ export default function MarketLoginPage() {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Contraseña"
+                    autoComplete="current-password"
                     {...register('password')}
                     className={`
                       w-full pl-12 pr-12 py-4 rounded-2xl focus:outline-none focus:ring-2 transition-all duration-300
