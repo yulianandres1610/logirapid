@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { LogOut, ClipboardCheck } from 'lucide-react'
+import { useBrandSafe } from '@/contexts/brand-context'
 
 interface User {
   id: number
@@ -22,6 +23,7 @@ export default function AuditLayout({
   const pathname = usePathname()
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const { brand } = useBrandSafe()
 
   // Pages that should be full-width without the layout header
   const isFullWidthPage = pathname?.includes('/count') || pathname?.includes('/report')
@@ -58,7 +60,7 @@ export default function AuditLayout({
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
@@ -77,12 +79,12 @@ export default function AuditLayout({
           <div className="flex items-center justify-between h-16">
             {/* Logo and Title */}
             <div className="flex items-center space-x-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-amber-500/20">
-                <ClipboardCheck className="w-6 h-6 text-amber-500" />
+              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-brand-primary/20">
+                <ClipboardCheck className="w-6 h-6 text-brand-primary" />
               </div>
               <div>
                 <h1 className="text-lg font-semibold text-white">Portal Auditoría</h1>
-                <p className="text-xs text-gray-400">{user?.companyName || 'LogiRapid'}</p>
+                <p className="text-xs text-gray-400">{user?.companyName || brand.displayName}</p>
               </div>
             </div>
 

@@ -61,6 +61,7 @@ import { Button } from '@/components/ui/button'
 import { useTheme } from '@/contexts/theme-context'
 import { useAuth } from '@/hooks/useAuth'
 import { useEnabledServices } from '@/hooks/useEnabledServices'
+import { useBrandSafe } from '@/contexts/brand-context'
 
 interface SidebarItemProps {
   icon: any
@@ -88,6 +89,7 @@ const SidebarItem = ({
   const router = useRouter()
   const pathname = usePathname()
   const { theme } = useTheme()
+  const { brand } = useBrandSafe()
 
   const handleClick = () => {
     if (hasSubmenu && onToggleSubmenu) {
@@ -105,11 +107,11 @@ const SidebarItem = ({
         "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 relative overflow-hidden group",
         isActive
           ? theme === 'dark'
-            ? `bg-exa-secondary/20 text-exa-secondary border border-exa-secondary/30`
-            : `bg-exa-primary/20 text-exa-primary border border-exa-primary/30`
+            ? `bg-brand-secondary/20 text-brand-secondary border border-brand-secondary/30`
+            : `bg-brand-primary/20 text-brand-primary border border-brand-primary/30`
           : theme === 'dark'
             ? "text-gray-400 hover:text-white hover:bg-white/5"
-            : "text-gray-600 hover:text-gray-900 hover:bg-exa-primary/5"
+            : "text-gray-600 hover:text-gray-900 hover:bg-brand-primary/5"
       )}
       whileHover={{ scale: 1.02, x: isActive ? 0 : 5 }}
       whileTap={{ scale: 0.98 }}
@@ -119,7 +121,7 @@ const SidebarItem = ({
         <motion.div
           className={cn(
             "absolute inset-0 rounded-xl",
-            theme === 'dark' ? "bg-exa-secondary/10" : "bg-exa-primary/10"
+            theme === 'dark' ? "bg-brand-secondary/10" : "bg-brand-primary/10"
           )}
           initial={{ opacity: 0 }}
           animate={{ opacity: [0.5, 1, 0.5] }}
@@ -136,7 +138,7 @@ const SidebarItem = ({
         <Icon className={cn(
           "w-5 h-5",
           isActive
-            ? theme === 'dark' ? "text-exa-secondary" : "text-exa-primary"
+            ? theme === 'dark' ? "text-brand-secondary" : "text-brand-primary"
             : theme === 'dark'
               ? "text-gray-400 group-hover:text-white"
               : "text-gray-600 group-hover:text-gray-900"
@@ -178,7 +180,7 @@ const SidebarItem = ({
         <motion.div
           className={cn(
             "absolute right-2 w-1 h-8 rounded-full opacity-0 group-hover:opacity-100",
-            theme === 'dark' ? "bg-exa-secondary" : "bg-exa-primary"
+            theme === 'dark' ? "bg-brand-secondary" : "bg-brand-primary"
           )}
           initial={{ opacity: 0, scaleY: 0 }}
           whileHover={{ opacity: 1, scaleY: 1 }}
@@ -209,8 +211,8 @@ const SidebarItem = ({
                   "w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 relative group",
                   pathname === subItem.href
                     ? theme === 'dark'
-                      ? "text-exa-secondary"
-                      : "text-exa-primary"
+                      ? "text-brand-secondary"
+                      : "text-brand-primary"
                     : theme === 'dark'
                       ? "text-gray-400 hover:text-white"
                       : "text-gray-600 hover:text-gray-900"
@@ -221,7 +223,7 @@ const SidebarItem = ({
                 <subItem.icon className={cn(
                   "w-4 h-4",
                   pathname === subItem.href
-                    ? theme === 'dark' ? "text-exa-secondary" : "text-exa-primary"
+                    ? theme === 'dark' ? "text-brand-secondary" : "text-brand-primary"
                     : theme === 'dark'
                       ? "text-gray-400 group-hover:text-white"
                       : "text-gray-600 group-hover:text-gray-900"
@@ -231,7 +233,7 @@ const SidebarItem = ({
                   <motion.div
                     className={cn(
                       "absolute right-2 w-1 h-6 rounded-full",
-                      theme === 'dark' ? "bg-exa-secondary" : "bg-exa-primary"
+                      theme === 'dark' ? "bg-brand-secondary" : "bg-brand-primary"
                     )}
                     initial={{ scaleY: 0 }}
                     animate={{ scaleY: 1 }}
@@ -276,6 +278,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const { theme } = useTheme()
   const { user } = useAuth()
+  const { brand } = useBrandSafe()
   const [openSubmenus, setOpenSubmenus] = useState<{ [key: string]: boolean }>({})
   const [branding, setBranding] = useState<BrandingData | null>(null)
   const [isBranch, setIsBranch] = useState<boolean>(false)
@@ -806,7 +809,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         {theme === 'light' ? (
           <>
             <motion.div
-              className="absolute top-10 right-10 w-40 h-40 bg-gradient-to-br from-exa-primary/15 to-exa-secondary/10 rounded-full filter blur-3xl"
+              className="absolute top-10 right-10 w-40 h-40 bg-gradient-to-br from-brand-primary/15 to-brand-secondary/10 rounded-full filter blur-3xl"
               animate={{
                 scale: [1, 1.4, 1],
                 opacity: [0.4, 0.7, 0.4],
@@ -818,7 +821,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
               }}
             />
             <motion.div
-              className="absolute bottom-20 left-10 w-32 h-32 bg-gradient-to-tr from-exa-secondary/15 to-exa-primary/10 rounded-full filter blur-3xl"
+              className="absolute bottom-20 left-10 w-32 h-32 bg-gradient-to-tr from-brand-secondary/15 to-brand-primary/10 rounded-full filter blur-3xl"
               animate={{
                 scale: [1, 1.5, 1],
                 opacity: [0.3, 0.6, 0.3],
@@ -831,7 +834,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
               }}
             />
             <motion.div
-              className="absolute top-1/2 left-1/4 w-28 h-28 bg-gradient-to-r from-exa-primary/10 to-transparent rounded-full filter blur-2xl"
+              className="absolute top-1/2 left-1/4 w-28 h-28 bg-gradient-to-r from-brand-primary/10 to-transparent rounded-full filter blur-2xl"
               animate={{
                 scale: [1, 1.3, 1],
                 opacity: [0.2, 0.4, 0.2],
@@ -849,7 +852,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
             <motion.div
               className={cn(
                 "absolute top-10 right-10 w-32 h-32 rounded-full filter blur-2xl",
-                theme === 'dark' ? "bg-exa-secondary/10" : "bg-exa-primary/10"
+                theme === 'dark' ? "bg-brand-secondary/10" : "bg-brand-primary/10"
               )}
               animate={{
                 scale: [1, 1.2, 1],
@@ -862,7 +865,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
               }}
             />
             <motion.div
-              className="absolute bottom-20 left-10 w-24 h-24 bg-exa-secondary/10 rounded-full filter blur-2xl"
+              className="absolute bottom-20 left-10 w-24 h-24 bg-brand-secondary/10 rounded-full filter blur-2xl"
               animate={{
                 scale: [1, 1.3, 1],
                 opacity: [0.2, 0.5, 0.2],
@@ -899,9 +902,9 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                 >
                   <img
                     src={theme === 'light'
-                      ? (branding?.logoUrlLight || branding?.logoUrl || "/images/negro.png")
-                      : (branding?.logoUrlDark || branding?.logoUrl || "/images/blanco.png")}
-                    alt={branding?.companyName || "LogiRapid"}
+                      ? (branding?.logoUrlLight || branding?.logoUrl || brand.logos.light)
+                      : (branding?.logoUrlDark || branding?.logoUrl || brand.logos.dark)}
+                    alt={branding?.companyName || brand.displayName}
                     className={cn(
                       "h-14 object-contain transition-all duration-300",
                       "w-full max-w-[200px] drop-shadow-lg"
@@ -1057,10 +1060,10 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
               variant="ghost"
               onClick={() => router.push('/developers')}
               className={cn(
-                "w-full justify-start gap-3 hover:bg-exa-primary/10",
+                "w-full justify-start gap-3 hover:bg-brand-primary/10",
                 theme === 'dark'
-                  ? "text-gray-400 hover:text-exa-secondary"
-                  : "text-gray-600 hover:text-exa-primary",
+                  ? "text-gray-400 hover:text-brand-secondary"
+                  : "text-gray-600 hover:text-brand-primary",
                 isCollapsed && "justify-center px-3"
               )}
             >
@@ -1088,10 +1091,10 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
               variant="ghost"
               onClick={() => router.push('/dashboard/support')}
               className={cn(
-                "w-full justify-start gap-3 hover:bg-exa-primary/10",
+                "w-full justify-start gap-3 hover:bg-brand-primary/10",
                 theme === 'dark'
-                  ? "text-gray-400 hover:text-exa-secondary"
-                  : "text-gray-600 hover:text-exa-primary",
+                  ? "text-gray-400 hover:text-brand-secondary"
+                  : "text-gray-600 hover:text-brand-primary",
                 isCollapsed && "justify-center px-3"
               )}
             >

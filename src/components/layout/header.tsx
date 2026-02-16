@@ -43,6 +43,7 @@ import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { useWalletBalance } from '@/hooks/useWalletBalance'
 import { AnimatedCounter } from '@/components/ui/animated-counter'
+import { useBrandSafe } from '@/contexts/brand-context'
 
 // Navigation pages for quick search
 interface NavPage {
@@ -95,6 +96,7 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
   const router = useRouter()
   const { user } = useAuth()
   const { theme, toggleTheme } = useTheme()
+  const { brand } = useBrandSafe()
   const { notifications, markAsRead, getUnreadCount } = useNotifications()
   const {
     companyBalance,
@@ -276,7 +278,7 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
         {theme === 'light' ? (
           <>
             <motion.div
-              className="absolute top-0 right-1/4 w-72 h-72 bg-gradient-to-br from-exa-primary/10 to-exa-secondary/8 rounded-full filter blur-3xl"
+              className="absolute top-0 right-1/4 w-72 h-72 bg-gradient-to-br from-brand-primary/10 to-brand-secondary/8 rounded-full filter blur-3xl"
               animate={{
                 scale: [1, 1.3, 1],
                 opacity: [0.12, 0.25, 0.12],
@@ -288,7 +290,7 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
               }}
             />
             <motion.div
-              className="absolute bottom-0 left-1/3 w-56 h-56 bg-gradient-to-tr from-exa-secondary/10 to-exa-primary/8 rounded-full filter blur-3xl"
+              className="absolute bottom-0 left-1/3 w-56 h-56 bg-gradient-to-tr from-brand-secondary/10 to-brand-primary/8 rounded-full filter blur-3xl"
               animate={{
                 scale: [1, 1.4, 1],
                 opacity: [0.1, 0.2, 0.1],
@@ -304,7 +306,7 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
         ) : (
           <>
             <motion.div
-              className="absolute top-0 right-1/4 w-64 h-64 bg-exa-primary/5 rounded-full filter blur-3xl"
+              className="absolute top-0 right-1/4 w-64 h-64 bg-brand-primary/5 rounded-full filter blur-3xl"
               animate={{
                 scale: [1, 1.2, 1],
                 opacity: [0.1, 0.2, 0.1],
@@ -316,7 +318,7 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
               }}
             />
             <motion.div
-              className="absolute bottom-0 left-1/3 w-48 h-48 bg-exa-secondary/5 rounded-full filter blur-3xl"
+              className="absolute bottom-0 left-1/3 w-48 h-48 bg-brand-secondary/5 rounded-full filter blur-3xl"
               animate={{
                 scale: [1, 1.3, 1],
                 opacity: [0.08, 0.15, 0.08],
@@ -346,7 +348,7 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
                   "md:hidden flex-shrink-0 rounded-xl transition-all duration-200",
                   theme === 'dark'
                     ? "text-gray-400 hover:text-white hover:bg-gray-800"
-                    : "text-gray-600 hover:text-exa-primary hover:bg-gray-100"
+                    : "text-gray-600 hover:text-brand-primary hover:bg-gray-100"
                 )}
               >
                 <Menu className="w-6 h-6" />
@@ -365,18 +367,18 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
                     searchFocused
                       ? `ring-2 ${
                           theme === 'dark'
-                            ? 'border-exa-secondary ring-exa-secondary/30 bg-gray-800/70'
-                            : 'border-exa-primary ring-exa-primary/20 bg-white shadow-md'
+                            ? 'border-brand-secondary ring-brand-secondary/30 bg-gray-800/70'
+                            : 'border-brand-primary ring-brand-primary/20 bg-white shadow-md'
                         } w-[220px] md:w-[380px]`
                       : theme === 'dark'
                         ? "hover:border-gray-600"
-                        : "hover:border-exa-primary/40 hover:shadow-md"
+                        : "hover:border-brand-primary/40 hover:shadow-md"
                   )}
                 >
                   <Search className={cn(
                     "absolute left-3 md:left-4 w-4 md:w-5 h-4 md:h-5 transition-all duration-300",
                     searchFocused
-                      ? theme === 'dark' ? "text-exa-secondary scale-110" : "text-exa-primary scale-110"
+                      ? theme === 'dark' ? "text-brand-secondary scale-110" : "text-brand-primary scale-110"
                       : theme === 'dark'
                         ? "text-gray-400"
                         : "text-gray-500"
@@ -615,7 +617,7 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
                 "hidden sm:flex relative hover:bg-white/10 transition-all duration-300 rounded-lg md:rounded-xl w-9 h-9 md:w-10 md:h-10",
                 theme === 'dark'
                   ? "text-gray-400 hover:text-white"
-                  : "text-gray-600 hover:text-exa-primary hover:bg-exa-primary/5"
+                  : "text-gray-600 hover:text-brand-primary hover:bg-brand-primary/5"
               )}
             >
               <motion.div
@@ -639,8 +641,8 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
                 className={cn(
                   "relative hover:bg-white/10 transition-all duration-300 rounded-lg md:rounded-xl border border-transparent w-9 h-9 md:w-10 md:h-10",
                   theme === 'dark'
-                    ? "text-gray-400 hover:text-white hover:border-exa-secondary/30"
-                    : "text-gray-600 hover:text-exa-primary hover:bg-exa-primary/5 hover:border-exa-primary/30"
+                    ? "text-gray-400 hover:text-white hover:border-brand-secondary/30"
+                    : "text-gray-600 hover:text-brand-primary hover:bg-brand-primary/5 hover:border-brand-primary/30"
                 )}
               >
                 <Bell className="w-4 md:w-5 h-4 md:h-5" />
@@ -671,13 +673,13 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
                     className={cn(
                       "absolute right-0 mt-3 w-80 border rounded-2xl shadow-2xl overflow-hidden",
                       theme === 'dark'
-                        ? "bg-gray-800 border-exa-secondary/20"
-                        : "bg-white/95 backdrop-blur-xl border-exa-primary/20 shadow-xl"
+                        ? "bg-gray-800 border-brand-secondary/20"
+                        : "bg-white/95 backdrop-blur-xl border-brand-primary/20 shadow-xl"
                     )}
                   >
                     <div className={cn(
                       "p-5 border-b",
-                      theme === 'dark' ? "border-gray-700" : "border-gray-100 bg-gradient-to-r from-exa-primary/5 to-exa-secondary/5"
+                      theme === 'dark' ? "border-gray-700" : "border-gray-100 bg-gradient-to-r from-brand-primary/5 to-brand-secondary/5"
                     )}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -685,7 +687,7 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
                             "w-2 h-2 rounded-full animate-pulse",
                             unreadCount > 0
                               ? "bg-red-500"
-                              : theme === 'dark' ? "bg-exa-secondary" : "bg-exa-primary"
+                              : theme === 'dark' ? "bg-brand-secondary" : "bg-brand-primary"
                           )}></div>
                           <h3 className={cn(
                             "font-semibold text-lg",
@@ -743,12 +745,12 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
                               "p-4 border-b cursor-pointer transition-all duration-200",
                               !notification.read && (
                                 theme === 'dark'
-                                  ? "bg-gray-700/20 border-l-2 border-l-exa-secondary"
-                                  : "bg-exa-primary/5 border-l-2 border-l-exa-primary"
+                                  ? "bg-gray-700/20 border-l-2 border-l-brand-secondary"
+                                  : "bg-brand-primary/5 border-l-2 border-l-brand-primary"
                               ),
                               theme === 'dark'
                                 ? "border-gray-700/50 hover:bg-gray-700/30"
-                                : "border-gray-50 hover:bg-gradient-to-r hover:from-exa-primary/5 hover:to-exa-secondary/5"
+                                : "border-gray-50 hover:bg-gradient-to-r hover:from-brand-primary/5 hover:to-brand-secondary/5"
                             )}
                           >
                             <div className="flex items-start gap-3">
@@ -779,7 +781,7 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
                               {!notification.read && (
                                 <div className={cn(
                                   "w-2 h-2 rounded-full flex-shrink-0 mt-2",
-                                  theme === 'dark' ? "bg-exa-secondary" : "bg-exa-primary"
+                                  theme === 'dark' ? "bg-brand-secondary" : "bg-brand-primary"
                                 )} />
                               )}
                             </div>
@@ -819,14 +821,14 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
                 className={cn(
                   "flex items-center gap-2 md:gap-3 px-2 md:px-4 py-1.5 md:py-2.5 rounded-xl md:rounded-2xl hover:bg-white/10 transition-all duration-300",
                   theme === 'dark'
-                    ? "text-gray-400 hover:text-white border border-transparent hover:border-exa-secondary/20"
-                    : "text-gray-700 hover:text-exa-primary hover:bg-exa-primary/5 border border-transparent hover:border-exa-primary/20"
+                    ? "text-gray-400 hover:text-white border border-transparent hover:border-brand-secondary/20"
+                    : "text-gray-700 hover:text-brand-primary hover:bg-brand-primary/5 border border-transparent hover:border-brand-primary/20"
                 )}
               >
                 <div className="relative">
                   <div className={cn(
                     "w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center",
-                    theme === 'dark' ? "bg-gradient-exa" : "bg-exa-primary"
+                    theme === 'dark' ? "bg-gradient-exa" : "bg-brand-primary"
                   )}>
                     <User className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
                   </div>
@@ -861,19 +863,19 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
                     className={cn(
                       "absolute right-0 mt-3 w-64 border rounded-2xl shadow-2xl overflow-hidden",
                       theme === 'dark'
-                        ? "bg-gray-800 border-exa-secondary/20"
-                        : "bg-white/95 backdrop-blur-xl border-exa-primary/20 shadow-xl"
+                        ? "bg-gray-800 border-brand-secondary/20"
+                        : "bg-white/95 backdrop-blur-xl border-brand-primary/20 shadow-xl"
                     )}
                   >
                     {/* User Profile Header */}
                     <div className={cn(
                       "p-5 border-b",
-                      theme === 'dark' ? "border-gray-700" : "border-gray-100 bg-gradient-to-br from-exa-primary/8 to-exa-secondary/8"
+                      theme === 'dark' ? "border-gray-700" : "border-gray-100 bg-gradient-to-br from-brand-primary/8 to-brand-secondary/8"
                     )}>
                       <div className="flex items-center gap-3">
                         <div className={cn(
                           "w-10 h-10 rounded-full flex items-center justify-center shadow-lg",
-                          theme === 'dark' ? "bg-gradient-exa" : "bg-exa-primary"
+                          theme === 'dark' ? "bg-gradient-exa" : "bg-brand-primary"
                         )}>
                           <User className="w-5 h-5 text-white" />
                         </div>
@@ -951,7 +953,7 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
                           "w-full justify-start gap-3 px-4 py-3 rounded-xl hover:bg-white/10 transition-all duration-200",
                           theme === 'dark'
                             ? "text-gray-400 hover:text-white"
-                            : "text-gray-700 hover:text-exa-primary hover:bg-exa-primary/5"
+                            : "text-gray-700 hover:text-brand-primary hover:bg-brand-primary/5"
                         )}
                       >
                         <User className="w-4 h-4" />
@@ -963,7 +965,7 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
                           "w-full justify-start gap-3 px-4 py-3 rounded-xl hover:bg-white/10 transition-all duration-200",
                           theme === 'dark'
                             ? "text-gray-400 hover:text-white"
-                            : "text-gray-700 hover:text-exa-primary hover:bg-exa-primary/5"
+                            : "text-gray-700 hover:text-brand-primary hover:bg-brand-primary/5"
                         )}
                       >
                         <Settings className="w-4 h-4" />
