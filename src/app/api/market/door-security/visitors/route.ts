@@ -234,14 +234,14 @@ export async function POST(request: NextRequest) {
           const buffer = Buffer.from(cleanBase64, 'base64')
           const fileName = `visitor-documents/${payload.companyId}/${idNumber}-${Date.now()}.jpg`
 
-          const { data, error } = await storageAdapter.upload(
+          const uploadResult = await storageAdapter.upload(
             'company-private-documents',
             fileName,
             buffer,
             { contentType: 'image/jpeg', upsert: true }
           )
 
-          if (!error && data) {
+          if (uploadResult.success) {
             idPhotoUrl = fileName
           }
         } catch (uploadError) {
