@@ -52,17 +52,9 @@ export function generateAssetLabelZpl(data: AssetLabelData): Buffer {
   zpl.push('^PON')                       // Print orientation normal
   zpl.push('^LH0,0')                     // Label home position
 
-  // ========== ROW 1: Asset Name (left) + Value (right) ==========
-  const assetName = truncate(data.assetName.toUpperCase(), 18)
+  // ========== ROW 1: Asset Name (NO price for security) ==========
+  const assetName = truncate(data.assetName.toUpperCase(), 25)
   zpl.push(`^FO${margin},${margin}^A0N,20,20^FD${escapeZpl(assetName)}^FS`)
-
-  // Value - right side (if provided)
-  if (data.value && data.value > 0) {
-    const currency = data.currency || 'USD'
-    const formattedValue = `$${Math.round(data.value).toLocaleString('es-ES')} ${currency}`
-    const valueOffset = 130
-    zpl.push(`^FO${labelWidth - valueOffset},${margin}^A0N,18,18^FD${escapeZpl(formattedValue)}^FS`)
-  }
 
   // ========== ROW 2: Asset Code (left) + Location (right) ==========
   const row2Y = 38
@@ -133,62 +125,58 @@ export function generateAssetLabelZpl3x2(data: AssetLabelData): Buffer {
   zpl.push('^PON')
   zpl.push('^LH0,0')
 
-  // ========== ROW 1: Asset Name (LARGE) ==========
+  // ========== ROW 1: Asset Name (LARGE) - moved down ==========
   const assetName = truncate(data.assetName.toUpperCase(), 28)
-  zpl.push(`^FO${margin},10^A0N,32,32^FD${escapeZpl(assetName)}^FS`)
+  zpl.push(`^FO${margin},25^A0N,32,32^FD${escapeZpl(assetName)}^FS`)
 
-  // ========== ROW 2: Value + Category ==========
-  let row2Y = 50
-  if (data.value && data.value > 0) {
-    const currency = data.currency || 'USD'
-    const formattedValue = `$${Math.round(data.value).toLocaleString('es-ES')} ${currency}`
-    zpl.push(`^FO${margin},${row2Y}^A0N,24,24^FD${escapeZpl(formattedValue)}^FS`)
-  }
-
+  // ========== ROW 2: Category (NO price for security) - moved down ==========
+  let row2Y = 65
   if (data.categoryName) {
-    const category = truncate(data.categoryName, 18)
-    zpl.push(`^FO${labelWidth - 200},${row2Y}^A0N,20,20^FD${escapeZpl(category)}^FS`)
+    const category = truncate(data.categoryName, 30)
+    zpl.push(`^FO${margin},${row2Y}^A0N,22,22^FD${escapeZpl(category)}^FS`)
   }
 
-  // ========== Divider line ==========
-  const lineY = 85
+  // ========== Divider line - moved down ==========
+  const lineY = 100
   zpl.push(`^FO${margin},${lineY}^GB${labelWidth - (margin * 2)},2,2^FS`)
 
-  // ========== Details Section ==========
-  let yPos = 95
+  // ========== Details Section - moved down ==========
+  let yPos = 115
 
-  // Asset Code
-  zpl.push(`^FO${margin},${yPos}^A0N,20,20^FDCodigo: ${escapeZpl(data.assetCode)}^FS`)
-  yPos += 28
+  // Asset Code - BIGGER font (28 instead of 20)
+  zpl.push(`^FO${margin},${yPos}^A0N,28,28^FDCodigo: ${escapeZpl(data.assetCode)}^FS`)
+  yPos += 35
 
   // Location
   if (data.location) {
     const location = truncate(`Ubicacion: ${data.location}`, 35)
-    zpl.push(`^FO${margin},${yPos}^A0N,20,20^FD${escapeZpl(location)}^FS`)
-    yPos += 28
+    zpl.push(`^FO${margin},${yPos}^A0N,22,22^FD${escapeZpl(location)}^FS`)
+    yPos += 30
   }
 
-  // Responsible
-  if (data.responsibleName) {
-    const responsible = truncate(`Responsable: ${data.responsibleName}`, 35)
-    zpl.push(`^FO${margin},${yPos}^A0N,20,20^FD${escapeZpl(responsible)}^FS`)
-    yPos += 28
-  }
+  // Responsible - ALWAYS show, bigger font
+  const responsibleText = data.responsibleName || 'Sin asignar'
+  const responsible = truncate(`Responsable: ${responsibleText}`, 35)
+  zpl.push(`^FO${margin},${yPos}^A0N,24,24^FD${escapeZpl(responsible)}^FS`)
+  yPos += 32
 
   // Serial Number
   if (data.serialNumber) {
     const serial = truncate(`S/N: ${data.serialNumber}`, 35)
-    zpl.push(`^FO${margin},${yPos}^A0N,18,18^FD${escapeZpl(serial)}^FS`)
-    yPos += 25
+    zpl.push(`^FO${margin},${yPos}^A0N,20,20^FD${escapeZpl(serial)}^FS`)
+    yPos += 28
   }
 
-  // ========== Barcode (Code128) at bottom ==========
+  // ========== Barcode (Code128) CENTERED at bottom ==========
   const barcodeData = data.barcode || data.assetCode.replace(/-/g, '')
-  const barcodeX = 80
-  const barcodeY = Math.max(yPos + 15, 290)
-  const barcodeHeight = 70
+  // Calculate center position: barcode width is approx chars * 11 modules * moduleWidth
+  // For Code128 with BY2, each char ~22 dots, so 13 chars = ~286 dots
+  // Center: (608 - 286) / 2 = ~161, but barcode has quiet zones, so use ~120
+  const barcodeX = Math.round((labelWidth - 350) / 2)  // Centered
+  const barcodeY = Math.max(yPos + 20, 300)
+  const barcodeHeight = 65
 
-  zpl.push(`^FO${barcodeX},${barcodeY}^BY2.5`)
+  zpl.push(`^FO${barcodeX},${barcodeY}^BY2`)
   zpl.push(`^BCN,${barcodeHeight},Y,N,N^FD${barcodeData}^FS`)
 
   // End format

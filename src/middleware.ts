@@ -192,6 +192,102 @@ export async function middleware(request: NextRequest) {
   }
 
   // ============================================================
+  // FACTORY SUBDOMAIN HANDLING - fabrica.servisumic.com
+  // ============================================================
+  const isFactorySubdomain =
+    host.startsWith('fabrica.') ||
+    host.includes('servisumic.com') ||
+    host.includes('fabrica.servisumic')
+
+  if (isFactorySubdomain) {
+    // Allow static resources
+    if (pathname.startsWith('/_next') || pathname.startsWith('/images') || pathname === '/favicon.ico') {
+      return NextResponse.next()
+    }
+
+    // Allow factory login page
+    if (pathname === '/factory/login' || pathname.startsWith('/factory/login')) {
+      return NextResponse.next()
+    }
+
+    // Allow public upload page (phone upload via QR)
+    if (pathname.startsWith('/upload/')) {
+      return NextResponse.next()
+    }
+
+    // Allow market API routes (same as market subdomain - factory uses market dashboard)
+    if (pathname.startsWith('/api/market') ||
+        pathname.startsWith('/api/auth') ||
+        pathname.startsWith('/api/consignments') ||
+        pathname.startsWith('/api/order-invoices') ||
+        pathname.startsWith('/api/upload') ||
+        pathname.startsWith('/api/migrations') ||
+        pathname.startsWith('/api/ai') ||
+        pathname.startsWith('/api/print') ||
+        pathname.startsWith('/api/users') ||
+        pathname.startsWith('/api/audit') ||
+        pathname.startsWith('/api/companies') ||
+        pathname.startsWith('/api/webhooks')) {
+      return NextResponse.next()
+    }
+
+    // Check for auth-token on market dashboard routes
+    if (pathname.startsWith('/dashboard/market')) {
+      const authToken = request.cookies.get('auth-token')?.value
+
+      if (!authToken) {
+        console.log('[MIDDLEWARE] Factory subdomain - no token, redirecting to login')
+        const loginUrl = new URL('/factory/login', request.url)
+        return NextResponse.redirect(loginUrl)
+      }
+
+      // Validate JWT
+      try {
+        const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+        const secret = new TextEncoder().encode(jwtSecret)
+        const { payload } = await jwtVerify(authToken, secret)
+
+        // Verify user belongs to a market company
+        if (payload.companyType !== 'market') {
+          console.log('[MIDDLEWARE] User is not from market company, redirecting to login')
+          const loginUrl = new URL('/factory/login', request.url)
+          return NextResponse.redirect(loginUrl)
+        }
+
+        console.log('[MIDDLEWARE] Factory user authenticated:', payload.email)
+        return NextResponse.next()
+      } catch (error) {
+        console.error('[MIDDLEWARE] Invalid token on factory subdomain:', error)
+        const loginUrl = new URL('/factory/login', request.url)
+        return NextResponse.redirect(loginUrl)
+      }
+    }
+
+    // Redirect root to factory login or dashboard
+    if (pathname === '/') {
+      const authToken = request.cookies.get('auth-token')?.value
+      if (authToken) {
+        try {
+          const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+          const secret = new TextEncoder().encode(jwtSecret)
+          const { payload } = await jwtVerify(authToken, secret)
+
+          if (payload.companyType === 'market') {
+            return NextResponse.redirect(new URL('/dashboard/market', request.url))
+          }
+        } catch {
+          // Token invalid, redirect to login
+        }
+      }
+      return NextResponse.redirect(new URL('/factory/login', request.url))
+    }
+
+    // Block other routes on factory subdomain
+    console.log('[MIDDLEWARE] Factory subdomain - blocking route:', pathname)
+    return NextResponse.redirect(new URL('/factory/login', request.url))
+  }
+
+  // ============================================================
   // EMPLOYEE SUBDOMAIN HANDLING - empleados.logirapid.com
   // ============================================================
   const isEmployeeSubdomain = host.startsWith('empleados.') || host.includes('empleados.logirapid')
@@ -558,6 +654,7 @@ export async function middleware(request: NextRequest) {
     '/broker/login',    // Broker login is also public on main domain
     '/driver/login',    // Driver login is also public on main domain
     '/audit/login',     // Audit login is also public on main domain
+    '/factory/login',   // Factory login is also public on main domain
   ]
 
   // Recursos estáticos (pero NO API)
