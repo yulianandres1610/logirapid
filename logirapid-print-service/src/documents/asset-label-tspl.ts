@@ -14,6 +14,7 @@ export interface AssetLabelData {
   responsibleName?: string // "Juan Pérez" (opcional)
   categoryName?: string    // "Equipos de Cómputo"
   serialNumber?: string    // "SN123456"
+  labelSize?: '2x1' | '3x2' // Label size, defaults to 2x1
 }
 
 /**
@@ -29,6 +30,11 @@ export interface AssetLabelData {
  * └─────────────────────────────────────────┘
  */
 export function generateAssetLabelTspl(data: AssetLabelData): Buffer {
+  // Check if 3x2 format requested
+  if (data.labelSize === '3x2') {
+    return generateAssetLabelTspl3x2(data)
+  }
+
   const labelWidthMm = 51
   const labelHeightMm = 25
   const labelWidthDots = labelWidthMm * 8  // 408 dots
