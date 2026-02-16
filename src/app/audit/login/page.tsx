@@ -7,6 +7,15 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Mail, Lock, Eye, EyeOff, AlertCircle, ClipboardCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  BrandedLoginBackground,
+  BrandedLoginCard,
+  BrandedLogo,
+  BrandedFooter,
+  BrandedLoadingOverlay,
+  BrandedSessionCheck,
+  useBrandedFormStyles
+} from '@/components/login/BrandedLoginBackground'
 
 const auditLoginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -16,6 +25,7 @@ const auditLoginSchema = z.object({
 type AuditLoginFormData = z.infer<typeof auditLoginSchema>
 
 export default function AuditLoginPage() {
+  const styles = useBrandedFormStyles()
   const [isRedirecting, setIsRedirecting] = useState(false)
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(false)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
@@ -36,7 +46,6 @@ export default function AuditLoginPage() {
   const watchedEmail = watch('email')
   const watchedPassword = watch('password')
 
-  // Check if user is already authenticated on mount
   useEffect(() => {
     if (typeof window === 'undefined') return
 
@@ -49,7 +58,6 @@ export default function AuditLoginPage() {
           const now = Math.floor(Date.now() / 1000)
           if (payload.exp < now) return false
         }
-        // Check if it's a market company user with MARKET_MANAGER role
         if (payload.companyType !== 'market') return false
         if (payload.role !== 'MARKET_MANAGER') return false
         return true
@@ -65,7 +73,6 @@ export default function AuditLoginPage() {
         ?.split('=')[1]
 
       if (authToken && isTokenValid(authToken)) {
-        console.log('[AUDIT LOGIN] User already authenticated, redirecting to dashboard')
         setShowLoadingOverlay(true)
         setIsRedirecting(true)
         window.location.href = '/dashboard/audit'
@@ -99,7 +106,6 @@ export default function AuditLoginPage() {
         return
       }
 
-      // Check if user belongs to a market company
       if (result.user?.companyType !== 'market') {
         setError('Esta cuenta no pertenece a un mercado. Solo usuarios de mercados pueden acceder.')
         setShowLoadingOverlay(false)
@@ -107,7 +113,6 @@ export default function AuditLoginPage() {
         return
       }
 
-      // Check if user has MARKET_MANAGER role
       if (result.user?.role !== 'MARKET_MANAGER') {
         setError('Solo usuarios con rol MARKET_MANAGER pueden acceder al Portal de Auditoría.')
         setShowLoadingOverlay(false)
@@ -115,14 +120,11 @@ export default function AuditLoginPage() {
         return
       }
 
-      // Store user data
       localStorage.setItem('user', JSON.stringify(result.user))
       localStorage.setItem('auth-token', result.token)
 
-      // Login exitoso, esperar cookies y redirigir
       setIsRedirecting(true)
 
-      // Esperar a que las cookies se propaguen
       const waitForCookie = () => {
         const maxAttempts = 60
         let attempts = 0
@@ -152,87 +154,18 @@ export default function AuditLoginPage() {
     }
   }
 
-  // Show loading while checking authentication
   if (isCheckingAuth) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-white text-lg">Verificando sesión...</p>
-        </div>
-      </div>
-    )
+    return <BrandedSessionCheck />
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Animated Background Elements */}
-      <div className="absolute inset-0">
-        {/* Reflejos principales de marca Exa */}
-        <div className="absolute top-0 left-0 w-96 h-96 bg-amber-500/25 rounded-full filter blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-amber-600/25 rounded-full filter blur-3xl animate-pulse delay-1000" />
-
-        {/* Más reflejos de color ámbar */}
-        <div className="absolute top-20 right-1/4 w-72 h-72 bg-amber-500/18 rounded-full filter blur-3xl animate-pulse delay-700" />
-        <div className="absolute bottom-32 left-1/3 w-80 h-80 bg-amber-500/15 rounded-full filter blur-3xl animate-pulse delay-300" />
-        <div className="absolute top-1/3 right-1/5 w-64 h-64 bg-amber-500/20 rounded-full filter blur-3xl animate-pulse delay-1200" />
-        <div className="absolute bottom-1/4 left-1/6 w-56 h-56 bg-amber-500/12 rounded-full filter blur-2xl animate-pulse delay-900" />
-        <div className="absolute top-3/4 right-1/3 w-48 h-48 bg-amber-500/16 rounded-full filter blur-2xl animate-pulse delay-600" />
-        <div className="absolute left-1/5 top-1/6 w-68 h-68 bg-amber-500/14 rounded-full filter blur-3xl animate-pulse delay-1500" />
-        <div className="absolute right-1/6 bottom-1/5 w-60 h-60 bg-amber-500/18 rounded-full filter blur-2xl animate-pulse delay-400" />
-        <div className="absolute top-2/3 left-1/4 w-52 h-52 bg-amber-500/10 rounded-full filter blur-3xl animate-pulse delay-1100" />
-
-        {/* Reflejos de color secundario */}
-        <div className="absolute bottom-1/3 right-1/4 w-76 h-76 bg-orange-500/15 rounded-full filter blur-3xl animate-pulse delay-800" />
-        <div className="absolute top-1/5 left-1/2 w-64 h-64 bg-orange-500/12 rounded-full filter blur-2xl animate-pulse delay-1400" />
-        <div className="absolute top-3/5 left-1/6 w-56 h-56 bg-orange-500/18 rounded-full filter blur-3xl animate-pulse delay-200" />
-        <div className="absolute bottom-2/5 right-1/5 w-48 h-48 bg-orange-500/14 rounded-full filter blur-2xl animate-pulse delay-1700" />
-        <div className="absolute left-2/5 top-1/4 w-72 h-72 bg-orange-500/16 rounded-full filter blur-3xl animate-pulse delay-500" />
-      </div>
-
-
-      {/* Main Container - Centrado */}
+    <BrandedLoginBackground>
       <div className="relative z-10 w-full max-w-md mx-auto">
-        {/* Login Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4, duration: 0.6 }}
-          className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl"
-        >
-          {/* Logo Header */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2, duration: 0.6 }}
-            className="flex flex-col items-center pt-8 pb-4"
-          >
-            <img
-              src="/images/blanco.png"
-              alt="LogiRapid"
-              className="object-contain w-full max-w-xs h-auto"
-              onError={(e) => {
-                console.error('Error loading logo:', e);
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-                const parent = target.parentElement;
-                if (parent) {
-                  parent.innerHTML = `
-                    <div class="text-white font-bold text-3xl tracking-wider px-4 py-2">
-                      LogiRapid
-                    </div>
-                    <p class="text-amber-500 text-sm mt-2">Portal Auditoría</p>
-                  `;
-                }
-              }}
-            />
-            <p className="text-amber-500 text-sm mt-2 font-medium">Portal Auditoría</p>
-          </motion.div>
+        <BrandedLoginCard>
+          <BrandedLogo subtitle="Portal Auditoría" />
 
-          {/* Form Content */}
           <div className="p-8 pt-4">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-              {/* Email Field */}
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -240,17 +173,16 @@ export default function AuditLoginPage() {
               >
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Mail className="h-5 w-5 text-gray-400" />
+                    <Mail className={`h-5 w-5 ${styles.iconColor}`} />
                   </div>
                   <input
                     type="email"
                     placeholder="Correo electrónico"
                     {...register('email')}
                     className={`
-                      w-full pl-12 pr-4 py-4 bg-white/5 border ${errors.email ? 'border-red-500' : 'border-amber-500/30'}
-                      rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:ring-2
-                      focus:ring-amber-500 focus:border-amber-500 transition-all duration-300
-                      ${watchedEmail ? 'bg-white/10 border-amber-500/50' : ''}
+                      w-full pl-12 pr-4 py-4 rounded-2xl focus:outline-none focus:ring-2 transition-all duration-300
+                      ${errors.email ? 'border-red-500' : styles.inputBase}
+                      ${watchedEmail ? styles.inputFilled : ''}
                     `}
                     disabled={isLoading}
                   />
@@ -267,7 +199,6 @@ export default function AuditLoginPage() {
                 )}
               </motion.div>
 
-              {/* Password Field */}
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -275,31 +206,26 @@ export default function AuditLoginPage() {
               >
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-gray-400" />
+                    <Lock className={`h-5 w-5 ${styles.iconColor}`} />
                   </div>
                   <input
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Contraseña"
                     {...register('password')}
                     className={`
-                      w-full pl-12 pr-12 py-4 bg-white/5 border ${errors.password ? 'border-red-500' : 'border-amber-500/30'}
-                      rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:ring-2
-                      focus:ring-amber-500 focus:border-amber-500 transition-all duration-300
-                      ${watchedPassword ? 'bg-white/10 border-amber-500/50' : ''}
+                      w-full pl-12 pr-12 py-4 rounded-2xl focus:outline-none focus:ring-2 transition-all duration-300
+                      ${errors.password ? 'border-red-500' : styles.inputBase}
+                      ${watchedPassword ? styles.inputFilled : ''}
                     `}
                     disabled={isLoading}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-white transition-colors"
+                    className={`absolute inset-y-0 right-0 pr-4 flex items-center ${styles.linkSecondary} transition-colors`}
                     disabled={isLoading}
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-5 w-5" />
-                    ) : (
-                      <Eye className="h-5 w-5" />
-                    )}
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
                 {errors.password && (
@@ -314,7 +240,6 @@ export default function AuditLoginPage() {
                 )}
               </motion.div>
 
-              {/* Error Message */}
               <AnimatePresence>
                 {error && (
                   <motion.div
@@ -330,7 +255,6 @@ export default function AuditLoginPage() {
                 )}
               </AnimatePresence>
 
-              {/* Submit Button */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -338,7 +262,7 @@ export default function AuditLoginPage() {
               >
                 <Button
                   type="submit"
-                  className="w-full h-14 text-base font-semibold bg-amber-500 hover:bg-amber-600 text-white rounded-2xl transition-all duration-300 hover:shadow-xl hover:shadow-amber-500/25"
+                  className={`w-full h-14 text-base font-semibold rounded-2xl transition-all duration-300 ${styles.buttonPrimary}`}
                   loading={isLoading}
                   disabled={!isValid || !watchedEmail || !watchedPassword || isLoading}
                 >
@@ -354,154 +278,28 @@ export default function AuditLoginPage() {
               </motion.div>
             </form>
 
-            {/* Info Text */}
             <div className="mt-8 text-center">
-              <p className="text-gray-400 text-sm">
+              <p className={`${styles.textMuted} text-sm`}>
                 Acceso exclusivo para auditores de inventario
               </p>
-              <p className="text-gray-500 text-xs mt-2">
+              <p className={`${styles.textMuted} text-xs mt-2 opacity-75`}>
                 Solo usuarios MARKET_MANAGER
               </p>
             </div>
           </div>
-        </motion.div>
+        </BrandedLoginCard>
 
-        {/* Footer */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.8 }}
-          className="text-center mt-8"
-        >
-          <p className="text-gray-500 text-xs">
-            © 2024 LogiRapid. Todos los derechos reservados.
-          </p>
-        </motion.div>
+        <BrandedFooter />
       </div>
 
-      {/* Floating Elements */}
-      <motion.div
-        className="absolute top-20 right-20 w-4 h-4 bg-amber-500 rounded-full opacity-80"
-        animate={{
-          y: [0, -40, 0],
-          x: [0, 25, 0],
-        }}
-        transition={{
-          duration: 4,
-          repeat: Infinity,
-          ease: "easeInOut"
-        }}
-      />
-      <motion.div
-        className="absolute bottom-32 left-16 w-3 h-3 bg-orange-500 rounded-full opacity-70"
-        animate={{
-          y: [0, -25, 0],
-          x: [0, -20, 0],
-        }}
-        transition={{
-          duration: 3,
-          repeat: Infinity,
-          ease: "easeInOut",
-          delay: 1
-        }}
-      />
-      <motion.div
-        className="absolute top-1/3 left-1/4 w-3 h-3 bg-amber-500 rounded-full opacity-60"
-        animate={{
-          y: [0, -30, 0],
-          x: [0, 15, 0],
-        }}
-        transition={{
-          duration: 3.5,
-          repeat: Infinity,
-          ease: "easeInOut",
-          delay: 0.5
-        }}
-      />
-      <motion.div
-        className="absolute bottom-1/4 right-1/3 w-2 h-2 bg-orange-500 rounded-full opacity-70"
-        animate={{
-          y: [0, -20, 0],
-          x: [0, -18, 0],
-        }}
-        transition={{
-          duration: 2.8,
-          repeat: Infinity,
-          ease: "easeInOut",
-          delay: 1.5
-        }}
-      />
-
-      {/* Loading Overlay */}
       <AnimatePresence>
-        {(isRedirecting || showLoadingOverlay) && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-gray-900/95 backdrop-blur-sm flex items-center justify-center z-50"
-          >
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.2, duration: 0.5 }}
-              className="flex flex-col items-center justify-center space-y-6"
-            >
-              {/* Loading Animation */}
-              <div className="relative">
-                <div className="animate-spin rounded-full h-24 w-24 border-b-4 border-t-4 border-amber-500"></div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <ClipboardCheck className="h-12 w-12 text-amber-500 animate-pulse" />
-                </div>
-              </div>
-
-              {/* Loading Text */}
-              <div className="text-center space-y-3">
-                <motion.p
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                  className="text-2xl font-semibold text-white"
-                >
-                  Accediendo a Auditoría
-                </motion.p>
-                <motion.p
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.6 }}
-                  className="text-sm text-gray-400"
-                >
-                  Preparando el sistema de conteo...
-                </motion.p>
-              </div>
-
-              {/* Loading Dots Animation */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.8 }}
-                className="flex space-x-2"
-              >
-                <motion.div
-                  animate={{ scale: [1, 1.2, 1] }}
-                  transition={{ duration: 1, repeat: Infinity, delay: 0 }}
-                  className="w-3 h-3 bg-amber-500 rounded-full"
-                />
-                <motion.div
-                  animate={{ scale: [1, 1.2, 1] }}
-                  transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
-                  className="w-3 h-3 bg-orange-500 rounded-full"
-                />
-                <motion.div
-                  animate={{ scale: [1, 1.2, 1] }}
-                  transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
-                  className="w-3 h-3 bg-amber-500 rounded-full"
-                />
-              </motion.div>
-            </motion.div>
-          </motion.div>
-        )}
+        <BrandedLoadingOverlay
+          isVisible={isRedirecting || showLoadingOverlay}
+          title="Accediendo a Auditoría"
+          subtitle="Preparando el sistema de conteo..."
+          icon={ClipboardCheck}
+        />
       </AnimatePresence>
-    </div>
+    </BrandedLoginBackground>
   )
 }

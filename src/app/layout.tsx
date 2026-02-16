@@ -4,6 +4,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { AuthProvider } from '@/components/providers/auth-provider'
 import { ThemeProvider } from '@/contexts/theme-context'
+import { BrandProvider } from '@/contexts/brand-context'
 import { NotificationProvider } from '@/contexts/NotificationContext'
 import { CompanyProvider } from '@/contexts/company-context'
 import NotificationPopup from '@/components/ui/NotificationPopup'
@@ -37,16 +38,18 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={inter.className}>
-        <ThemeProvider>
-          <AuthProvider>
-            <CompanyProvider>
-              <NotificationProvider>
-                {children}
-                <NotificationPopup />
-              </NotificationProvider>
-            </CompanyProvider>
-          </AuthProvider>
-        </ThemeProvider>
+        <BrandProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <CompanyProvider>
+                <NotificationProvider>
+                  {children}
+                  <NotificationPopup />
+                </NotificationProvider>
+              </CompanyProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </BrandProvider>
         <SpeedInsights />
         <Analytics />
       </body>

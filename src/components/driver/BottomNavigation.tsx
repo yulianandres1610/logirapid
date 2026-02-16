@@ -56,14 +56,14 @@ export function BottomNavigation() {
               className={`
                 flex flex-col items-center justify-center flex-1 h-full
                 transition-all duration-200 relative
-                ${active ? 'text-exa-primary' : 'text-gray-400 hover:text-gray-200'}
+                ${active ? 'text-brand-primary' : 'text-gray-400 hover:text-gray-200'}
               `}
             >
               {/* Active indicator */}
               {active && (
                 <motion.div
                   layoutId="activeTab"
-                  className="absolute top-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-exa-primary rounded-b-full"
+                  className="absolute top-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-brand-primary rounded-b-full"
                   initial={false}
                   transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                 />
@@ -78,7 +78,7 @@ export function BottomNavigation() {
               </motion.div>
 
               {/* Label */}
-              <span className={`text-xs mt-1 font-medium ${active ? 'text-exa-primary' : ''}`}>
+              <span className={`text-xs mt-1 font-medium ${active ? 'text-brand-primary' : ''}`}>
                 {item.label}
               </span>
             </button>

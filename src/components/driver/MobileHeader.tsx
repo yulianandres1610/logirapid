@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { ArrowLeft, Settings, LogOut, User } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useState } from 'react'
+import { useBrandSafe } from '@/contexts/brand-context'
 
 interface MobileHeaderProps {
   userName?: string
@@ -16,6 +17,7 @@ export function MobileHeader({ userName, title, showBack, onBack }: MobileHeader
   const router = useRouter()
   const pathname = usePathname()
   const [showMenu, setShowMenu] = useState(false)
+  const { brand } = useBrandSafe()
 
   // Determine if we should show the back button
   const isSubPage = pathname.split('/').length > 3 || showBack
@@ -76,8 +78,8 @@ export function MobileHeader({ userName, title, showBack, onBack }: MobileHeader
             </button>
           ) : (
             <img
-              src="/images/blanco.png"
-              alt="LogiRapid"
+              src={brand.logos.dark}
+              alt={brand.displayName}
               className="h-10 w-auto object-contain"
               onError={(e) => {
                 const target = e.target as HTMLImageElement

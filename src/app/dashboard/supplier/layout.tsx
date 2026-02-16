@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Home, Package, DollarSign, User, LogOut, Menu, X } from 'lucide-react'
 import { useState } from 'react'
+import { useBrandSafe } from '@/contexts/brand-context'
 
 const navItems = [
   { id: 'home', label: 'Inicio', icon: Home, href: '/dashboard/supplier' },
@@ -21,6 +22,7 @@ export default function SupplierDashboardLayout({
   const router = useRouter()
   const [loggingOut, setLoggingOut] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { brand } = useBrandSafe()
 
   const handleLogout = async () => {
     setLoggingOut(true)
@@ -56,7 +58,7 @@ export default function SupplierDashboardLayout({
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-col z-40">
         {/* Logo */}
         <div className="h-16 flex items-center px-6 border-b border-gray-200 dark:border-gray-700">
-          <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-brand-primary rounded-xl flex items-center justify-center">
             <Package className="w-5 h-5 text-white" />
           </div>
           <span className="ml-3 font-bold text-lg text-gray-900 dark:text-white">
@@ -78,7 +80,7 @@ export default function SupplierDashboardLayout({
                 onClick={() => router.push(item.href)}
                 className={`w-full flex items-center px-4 py-3 mb-2 rounded-xl transition-all ${
                   active
-                    ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-lg shadow-teal-500/30'
+                    ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30'
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50'
                 }`}
               >
@@ -107,7 +109,7 @@ export default function SupplierDashboardLayout({
       {/* Mobile Header */}
       <header className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-50 flex items-center justify-between px-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-brand-primary rounded-xl flex items-center justify-center">
             <Package className="w-5 h-5 text-white" />
           </div>
           <span className="font-bold text-gray-900 dark:text-white">Portal Proveedor</span>
@@ -162,7 +164,7 @@ export default function SupplierDashboardLayout({
                 }}
                 className={`w-full flex items-center px-4 py-4 mb-2 rounded-xl transition-all ${
                   active
-                    ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white'
+                    ? 'bg-brand-primary text-white'
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
               >
@@ -200,14 +202,14 @@ export default function SupplierDashboardLayout({
                 onClick={() => router.push(item.href)}
                 className={`flex flex-col items-center justify-center flex-1 h-full min-w-[64px] relative ${
                   active
-                    ? 'text-teal-600 dark:text-teal-400'
+                    ? 'text-brand-primary'
                     : 'text-gray-500 dark:text-gray-400'
                 }`}
               >
                 {active && (
                   <motion.div
                     layoutId="activeTab"
-                    className="absolute top-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-teal-500 rounded-b-full"
+                    className="absolute top-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-brand-primary rounded-b-full"
                   />
                 )}
                 <Icon className="w-5 h-5" />

@@ -14,6 +14,14 @@ const config: Config = {
           primary: '#cc0a46',
           secondary: '#0374e5',
         },
+        brand: {
+          primary: 'var(--brand-primary)',
+          'primary-hover': 'var(--brand-primary-hover)',
+          'primary-light': 'var(--brand-primary-light)',
+          secondary: 'var(--brand-secondary)',
+          'secondary-hover': 'var(--brand-secondary-hover)',
+          'secondary-light': 'var(--brand-secondary-light)',
+        },
         gray: {
           900: '#111827',
           800: '#1f2937',
