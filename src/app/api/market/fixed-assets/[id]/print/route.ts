@@ -12,8 +12,19 @@ interface JWTPayload {
 }
 
 /**
+ * Generate a unique job number
+ */
+function generateJobNumber(): string {
+  const year = new Date().getFullYear()
+  const random = Math.floor(Math.random() * 1000000).toString().padStart(6, '0')
+  return `PRJ-${year}-${random}`
+}
+
+/**
  * POST /api/market/fixed-assets/[id]/print
- * Queue a print job for the asset label (2x1" with Code128 barcode)
+ * Queue a print job for the asset label using the unified print system
+ * Supports label sizes: 3x2" (76x51mm) and 2x1" (51x25mm)
+ * Compatible with Zebra (ZPL) and 4barcode printers
  */
 export async function POST(
   request: NextRequest,
@@ -37,7 +48,7 @@ export async function POST(
     } catch {
       return NextResponse.json({
         success: false,
-        error: 'Token inválido'
+        error: 'Token invalido'
       }, { status: 401 })
     }
 
@@ -47,7 +58,7 @@ export async function POST(
     if (isNaN(assetId)) {
       return NextResponse.json({
         success: false,
-        error: 'ID de activo inválido'
+        error: 'ID de activo invalido'
       }, { status: 400 })
     }
 
@@ -56,12 +67,17 @@ export async function POST(
       SELECT
         a.*,
         c.name as category_name,
+        c.code as category_code,
         w.name as warehouse_name,
-        e.first_name || ' ' || e.last_name as responsible_name
+        w.code as warehouse_code,
+        e.first_name || ' ' || e.last_name as responsible_name,
+        e.position as responsible_position,
+        s.name as supplier_name
       FROM market_fixed_assets a
       LEFT JOIN market_fixed_asset_categories c ON a.category_id = c.id
       LEFT JOIN market_warehouses w ON a.warehouse_id = w.id
       LEFT JOIN market_employees e ON a.responsible_employee_id = e.id
+      LEFT JOIN market_suppliers s ON a.supplier_id = s.id
       WHERE a.id = $1
     `, [assetId])
 
@@ -85,66 +101,142 @@ export async function POST(
     // Get print options from request body
     const body = await request.json().catch(() => ({}))
     const {
-      printerName,
-      copies = 1,
-      serviceCode
+      printServiceId,
+      printerId,
+      labelSize = '3x2',
+      copies = 1
     } = body
 
-    if (!serviceCode) {
+    // Validate label size
+    if (!['3x2', '2x1'].includes(labelSize)) {
       return NextResponse.json({
         success: false,
-        error: 'serviceCode es requerido para imprimir'
+        error: 'Tamano de etiqueta invalido. Use "3x2" o "2x1"'
       }, { status: 400 })
     }
 
-    // Generate job number
-    const year = new Date().getFullYear()
-    const month = String(new Date().getMonth() + 1).padStart(2, '0')
-    const day = String(new Date().getDate()).padStart(2, '0')
-    const random = Math.random().toString(36).substring(2, 8).toUpperCase()
-    const jobNumber = `ASSET-${year}${month}${day}-${random}`
+    // Validate copies
+    const numCopies = Math.min(Math.max(1, parseInt(copies) || 1), 99)
+
+    // Verify print service belongs to company if provided
+    let resolvedServiceId = printServiceId
+    let resolvedPrinterId = printerId
+
+    if (resolvedServiceId) {
+      const serviceCheck = await db.query(
+        `SELECT id, status FROM print_services
+         WHERE id = $1 AND company_id = $2 AND status IN ('active', 'pending')`,
+        [resolvedServiceId, payload.companyId]
+      )
+      if (serviceCheck.rows.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Servicio de impresion no encontrado o no esta activo'
+        }, { status: 400 })
+      }
+    }
+
+    // Build location string
+    const location = asset.warehouse_name
+      ? `${asset.warehouse_name}${asset.location_code ? ` / ${asset.location_code}` : ''}`
+      : asset.location_code || ''
 
     // Prepare label data
     const labelData = {
       assetCode: asset.asset_code,
       assetName: asset.name,
       barcode: asset.barcode,
-      location: asset.warehouse_name
-        ? `${asset.warehouse_name}${asset.location_code ? ` / ${asset.location_code}` : ''}`
-        : asset.location_code || '',
+      barcodeFormat: 'CODE128',
+      labelSize,
+      location,
+      warehouseName: asset.warehouse_name || '',
+      warehouseCode: asset.warehouse_code || '',
+      locationCode: asset.location_code || '',
       value: parseFloat(asset.acquisition_cost) || 0,
+      currentValue: parseFloat(asset.current_value) || parseFloat(asset.acquisition_cost) || 0,
       currency: asset.currency || 'USD',
       responsibleName: asset.responsible_name || '',
+      responsiblePosition: asset.responsible_position || '',
       categoryName: asset.category_name || '',
-      serialNumber: asset.serial_number || ''
+      categoryCode: asset.category_code || '',
+      serialNumber: asset.serial_number || '',
+      brand: asset.brand || '',
+      model: asset.model || '',
+      acquisitionDate: asset.acquisition_date,
+      status: asset.status,
+      condition: asset.condition,
+      // Label dimensions in mm
+      labelWidth: labelSize === '3x2' ? 76 : 51,
+      labelHeight: labelSize === '3x2' ? 51 : 25
     }
 
-    // Create print job
-    const jobResult = await db.query(`
-      INSERT INTO market_print_jobs (
-        company_id, service_code, job_number, document_type,
-        document_data, printer_name, copies, priority, status,
-        created_by, created_at
-      ) VALUES ($1, $2, $3, 'asset_label', $4, $5, $6, 5, 'pending', $7, NOW())
+    // Generate unique job number
+    let jobNumber = generateJobNumber()
+    let attempts = 0
+    while (attempts < 10) {
+      const existing = await db.query('SELECT id FROM print_jobs WHERE job_number = $1', [jobNumber])
+      if (existing.rows.length === 0) break
+      jobNumber = generateJobNumber()
+      attempts++
+    }
+
+    // Create the job using the unified print_jobs table
+    const result = await db.query(`
+      INSERT INTO print_jobs (
+        job_number,
+        company_id,
+        print_service_id,
+        printer_id,
+        document_type,
+        source_type,
+        source_id,
+        document_data,
+        copies,
+        priority,
+        status,
+        requested_by,
+        created_at
+      ) VALUES ($1, $2, $3, $4, 'asset_label', 'fixed_asset', $5, $6, $7, 5, 'pending', $8, NOW())
       RETURNING id, job_number
     `, [
-      payload.companyId,
-      serviceCode,
       jobNumber,
+      payload.companyId,
+      resolvedServiceId || null,
+      resolvedPrinterId || null,
+      assetId,
       JSON.stringify(labelData),
-      printerName || null,
-      copies,
+      numCopies,
       payload.userId
     ])
 
+    const jobId = result.rows[0].id
+
+    // Log job creation
+    await db.query(`
+      INSERT INTO print_job_history (print_job_id, event_type, event_data, created_at)
+      VALUES ($1, 'created', $2, NOW())
+    `, [jobId, JSON.stringify({
+      requestedBy: payload.email,
+      documentType: 'asset_label',
+      labelSize,
+      copies: numCopies,
+      assetCode: asset.asset_code
+    })])
+
+    console.log(`[Fixed Asset Print] Created job ${jobNumber} for asset ${asset.asset_code}, size: ${labelSize}, copies: ${numCopies}`)
+
     return NextResponse.json({
       success: true,
-      message: 'Trabajo de impresión creado exitosamente',
+      message: 'Trabajo de impresion creado exitosamente',
       data: {
-        jobId: jobResult.rows[0].id,
-        jobNumber: jobResult.rows[0].job_number,
+        jobId,
+        jobNumber,
         assetCode: asset.asset_code,
-        copies
+        labelSize,
+        copies: numCopies,
+        printServiceId: resolvedServiceId,
+        printerId: resolvedPrinterId,
+        status: 'pending'
       }
     })
 
@@ -153,7 +245,7 @@ export async function POST(
     console.error('[Fixed Asset Print] Error:', err)
     return NextResponse.json({
       success: false,
-      error: err.message || 'Error al crear trabajo de impresión'
+      error: err.message || 'Error al crear trabajo de impresion'
     }, { status: 500 })
   }
 }

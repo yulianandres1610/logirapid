@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState, useCallback, use } from 'react'
+import { useEffect, useState, useCallback, use, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft,
   Loader2,
@@ -15,15 +15,24 @@ import {
   Calendar,
   DollarSign,
   Barcode,
-  History,
   CheckCircle2,
   AlertTriangle,
   Wrench,
-  Clock,
-  Save,
   X,
   ArrowRight,
-  ClipboardCheck
+  ClipboardCheck,
+  Building2,
+  Hash,
+  Package,
+  TrendingDown,
+  Clock,
+  FileText,
+  History,
+  Tag,
+  Layers,
+  CircleDot,
+  Check,
+  Monitor
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -31,6 +40,7 @@ import { ProtectedRoute } from '@/components/protected-route'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
+import JsBarcode from 'jsbarcode'
 
 interface FixedAsset {
   id: number
@@ -49,6 +59,8 @@ interface FixedAsset {
   responsibleEmployeeId: number
   responsibleName: string
   responsiblePosition: string
+  responsibleEmail?: string
+  responsiblePhone?: string
   acquisitionDate: string
   acquisitionCost: number
   currency: string
@@ -103,21 +115,53 @@ interface AuditRecord {
   notes: string
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
-  active: { label: 'Activo', color: 'text-green-500 bg-green-500/10 border-green-500/30', icon: CheckCircle2 },
-  in_repair: { label: 'En Reparación', color: 'text-yellow-500 bg-yellow-500/10 border-yellow-500/30', icon: Wrench },
-  disposed: { label: 'Dado de Baja', color: 'text-gray-500 bg-gray-500/10 border-gray-500/30', icon: Trash2 },
-  lost: { label: 'Perdido', color: 'text-red-500 bg-red-500/10 border-red-500/30', icon: AlertTriangle }
+interface PrintService {
+  id: number
+  serviceCode: string
+  serviceName: string
+  status: string
+  printers: PrinterInfo[]
 }
 
-const MOVEMENT_TYPES: Record<string, { label: string; icon: React.ElementType }> = {
-  creation: { label: 'Registro inicial', icon: Box },
-  transfer: { label: 'Transferencia', icon: ArrowRight },
-  assignment: { label: 'Cambio de responsable', icon: User },
-  status_change: { label: 'Cambio de estado', icon: AlertTriangle },
-  repair: { label: 'Enviado a reparación', icon: Wrench },
-  disposal: { label: 'Dado de baja', icon: Trash2 }
+interface PrinterInfo {
+  id: number
+  printerName: string
+  printerId: string
+  printerType: string
+  isOnline: boolean
+  isDefault: boolean
+  supportedDocumentTypes: string[]
 }
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; bgGradient: string; icon: React.ElementType; step: number }> = {
+  active: { label: 'Activo', color: 'emerald', bgGradient: 'from-emerald-500 to-teal-500', icon: CheckCircle2, step: 1 },
+  in_repair: { label: 'En Reparacion', color: 'amber', bgGradient: 'from-amber-500 to-orange-500', icon: Wrench, step: 2 },
+  disposed: { label: 'Dado de Baja', color: 'gray', bgGradient: 'from-gray-500 to-slate-500', icon: Trash2, step: 3 },
+  lost: { label: 'Perdido', color: 'red', bgGradient: 'from-red-500 to-rose-500', icon: AlertTriangle, step: 0 }
+}
+
+const CONDITION_LABELS: Record<string, string> = {
+  new: 'Nuevo',
+  good: 'Bueno',
+  fair: 'Regular',
+  poor: 'Malo'
+}
+
+const MOVEMENT_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
+  creation: { label: 'Registro inicial', icon: Box, color: 'blue' },
+  transfer: { label: 'Transferencia', icon: ArrowRight, color: 'purple' },
+  assignment: { label: 'Cambio de responsable', icon: User, color: 'cyan' },
+  status_change: { label: 'Cambio de estado', icon: AlertTriangle, color: 'amber' },
+  repair: { label: 'Enviado a reparacion', icon: Wrench, color: 'orange' },
+  disposal: { label: 'Dado de baja', icon: Trash2, color: 'gray' },
+  audit: { label: 'Auditoria', icon: ClipboardCheck, color: 'indigo' }
+}
+
+const LIFECYCLE_STEPS = [
+  { key: 'active', label: 'Activo', icon: CheckCircle2 },
+  { key: 'in_repair', label: 'En Reparacion', icon: Wrench },
+  { key: 'disposed', label: 'Dado de Baja', icon: Trash2 }
+]
 
 export default function FixedAssetDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)
@@ -130,12 +174,19 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
   const [movements, setMovements] = useState<Movement[]>([])
   const [audits, setAudits] = useState<AuditRecord[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'details' | 'history' | 'audits'>('details')
 
-  // Print modal
+  // Print modal state
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [printLoading, setPrintLoading] = useState(false)
-  const [serviceCode, setServiceCode] = useState('')
+  const [printServices, setPrintServices] = useState<PrintService[]>([])
+  const [loadingServices, setLoadingServices] = useState(false)
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null)
+  const [selectedPrinterId, setSelectedPrinterId] = useState<number | null>(null)
+  const [labelSize, setLabelSize] = useState<'3x2' | '2x1'>('3x2')
+  const [copies, setCopies] = useState(1)
+
+  // Barcode ref for preview
+  const barcodeRef = useRef<SVGSVGElement>(null)
 
   const fetchAsset = useCallback(async () => {
     setLoading(true)
@@ -153,7 +204,7 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
         setError(data.error || 'Error al cargar el activo')
       }
     } catch {
-      setError('Error de conexión')
+      setError('Error de conexion')
     } finally {
       setLoading(false)
     }
@@ -163,8 +214,60 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
     fetchAsset()
   }, [fetchAsset])
 
+  // Generate barcode when asset is loaded
+  useEffect(() => {
+    if (asset?.barcode && barcodeRef.current) {
+      try {
+        JsBarcode(barcodeRef.current, asset.barcode, {
+          format: 'CODE128',
+          width: 2,
+          height: 40,
+          displayValue: true,
+          fontSize: 12,
+          margin: 5,
+          background: 'transparent',
+          lineColor: theme === 'dark' ? '#e5e7eb' : '#1f2937'
+        })
+      } catch (e) {
+        console.error('Error generating barcode:', e)
+      }
+    }
+  }, [asset?.barcode, theme, showPrintModal])
+
+  const fetchPrintServices = async () => {
+    setLoadingServices(true)
+    try {
+      const res = await fetch('/api/print/services')
+      const data = await res.json()
+      if (data.success) {
+        // Filter to show only active/online services with label-compatible printers
+        const services = (data.data.services || []).filter((s: PrintService) =>
+          s.status === 'active' || s.status === 'offline'
+        )
+        setPrintServices(services)
+
+        // Auto-select first service with online printer
+        const serviceWithOnline = services.find((s: PrintService) =>
+          s.status === 'active' && s.printers.some(p => p.isOnline)
+        )
+        if (serviceWithOnline) {
+          setSelectedServiceId(serviceWithOnline.id)
+          const onlinePrinter = serviceWithOnline.printers.find((p: PrinterInfo) => p.isOnline && p.isDefault) ||
+            serviceWithOnline.printers.find((p: PrinterInfo) => p.isOnline)
+          if (onlinePrinter) {
+            setSelectedPrinterId(onlinePrinter.id)
+          }
+        }
+      }
+    } catch {
+      console.error('Error fetching print services')
+    } finally {
+      setLoadingServices(false)
+    }
+  }
+
   const deleteAsset = async () => {
-    if (!confirm('¿Dar de baja este activo? El activo quedará marcado como "disposed".')) return
+    if (!confirm('Dar de baja este activo? El activo quedara marcado como "disposed".')) return
 
     try {
       const res = await fetch(`/api/market/fixed-assets/${resolvedParams.id}`, {
@@ -181,13 +284,18 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
         showNotification('error', 'Error', data.error || 'Error al dar de baja')
       }
     } catch {
-      showNotification('error', 'Error de conexión', 'No se pudo completar la operación')
+      showNotification('error', 'Error de conexion', 'No se pudo completar la operacion')
     }
   }
 
-  const handlePrint = async () => {
-    if (!serviceCode.trim()) {
-      showNotification('error', 'Error', 'Debe ingresar el código del servicio de impresión')
+  const handleOpenPrintModal = () => {
+    setShowPrintModal(true)
+    fetchPrintServices()
+  }
+
+  const handlePrintWithService = async () => {
+    if (!selectedServiceId || !selectedPrinterId) {
+      showNotification('error', 'Error', 'Seleccione una impresora')
       return
     }
 
@@ -198,24 +306,123 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          serviceCode,
-          copies: 1
+          printServiceId: selectedServiceId,
+          printerId: selectedPrinterId,
+          labelSize,
+          copies
         })
       })
       const data = await res.json()
 
       if (data.success) {
-        showNotification('success', 'Etiqueta enviada', `Trabajo de impresión ${data.data.jobNumber} creado`)
+        showNotification('success', 'Etiqueta enviada', `Trabajo de impresion ${data.data.jobNumber} creado`)
         setShowPrintModal(false)
-        setServiceCode('')
       } else {
         showNotification('error', 'Error', data.error || 'Error al imprimir')
       }
     } catch {
-      showNotification('error', 'Error de conexión', 'No se pudo enviar la impresión')
+      showNotification('error', 'Error de conexion', 'No se pudo enviar la impresion')
     } finally {
       setPrintLoading(false)
     }
+  }
+
+  const handleBrowserPrint = () => {
+    if (!asset) return
+
+    // Create printable content
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      showNotification('error', 'Error', 'No se pudo abrir la ventana de impresion')
+      return
+    }
+
+    const is3x2 = labelSize === '3x2'
+    const width = is3x2 ? '76mm' : '51mm'
+    const height = is3x2 ? '51mm' : '25mm'
+
+    // Generate barcode SVG
+    const canvas = document.createElement('canvas')
+    JsBarcode(canvas, asset.barcode, {
+      format: 'CODE128',
+      width: is3x2 ? 2 : 1.5,
+      height: is3x2 ? 35 : 20,
+      displayValue: true,
+      fontSize: is3x2 ? 10 : 8,
+      margin: 2
+    })
+    const barcodeDataUrl = canvas.toDataURL('image/png')
+
+    const location = asset.warehouseName
+      ? `${asset.warehouseName}${asset.locationCode ? ` / ${asset.locationCode}` : ''}`
+      : asset.locationCode || ''
+
+    const htmlContent = is3x2 ? `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Etiqueta ${asset.assetCode}</title>
+        <style>
+          @page { size: ${width} ${height}; margin: 0; }
+          body { margin: 0; padding: 3mm; font-family: Arial, sans-serif; width: ${width}; height: ${height}; box-sizing: border-box; }
+          .label { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
+          .header { font-size: 14pt; font-weight: bold; text-align: center; margin-bottom: 2mm; }
+          .code { font-size: 11pt; font-family: monospace; font-weight: bold; text-align: center; }
+          .name { font-size: 9pt; text-align: center; margin: 2mm 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .location { font-size: 8pt; color: #666; text-align: center; }
+          .barcode { text-align: center; margin-top: auto; }
+          .barcode img { max-width: 100%; height: auto; }
+        </style>
+      </head>
+      <body>
+        <div class="label">
+          <div>
+            <div class="code">${asset.assetCode}</div>
+            <div class="name">${asset.name}</div>
+            <div class="location">${location}</div>
+          </div>
+          <div class="barcode">
+            <img src="${barcodeDataUrl}" alt="barcode" />
+          </div>
+        </div>
+        <script>window.onload = function() { window.print(); window.close(); }</script>
+      </body>
+      </html>
+    ` : `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Etiqueta ${asset.assetCode}</title>
+        <style>
+          @page { size: ${width} ${height}; margin: 0; }
+          body { margin: 0; padding: 1mm; font-family: Arial, sans-serif; width: ${width}; height: ${height}; box-sizing: border-box; }
+          .label { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
+          .top { display: flex; justify-content: space-between; align-items: center; }
+          .code { font-size: 9pt; font-family: monospace; font-weight: bold; }
+          .location { font-size: 7pt; color: #666; }
+          .name { font-size: 7pt; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .barcode { text-align: center; }
+          .barcode img { max-width: 100%; height: 18mm; }
+        </style>
+      </head>
+      <body>
+        <div class="label">
+          <div class="top">
+            <div class="code">${asset.assetCode}</div>
+            <div class="location">${location}</div>
+          </div>
+          <div class="name">${asset.name}</div>
+          <div class="barcode">
+            <img src="${barcodeDataUrl}" alt="barcode" />
+          </div>
+        </div>
+        <script>window.onload = function() { window.print(); window.close(); }</script>
+      </body>
+      </html>
+    `
+
+    printWindow.document.write(htmlContent)
+    printWindow.document.close()
   }
 
   const formatCurrency = (value: number, currency = 'USD') => {
@@ -228,18 +435,42 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-'
-    return new Date(dateStr).toLocaleDateString('es-ES')
+    return new Date(dateStr).toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric'
+    })
   }
 
   const formatDateTime = (dateStr: string | null) => {
     if (!dateStr) return '-'
     return new Date(dateStr).toLocaleString('es-ES', {
       day: '2-digit',
-      month: '2-digit',
+      month: 'short',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
     })
+  }
+
+  // Calculate depreciation
+  const calculateDepreciation = () => {
+    if (!asset) return { percent: 0, amount: 0 }
+    const depreciation = asset.acquisitionCost - (asset.currentValue || asset.acquisitionCost)
+    const percent = asset.acquisitionCost > 0 ? (depreciation / asset.acquisitionCost) * 100 : 0
+    return { percent, amount: depreciation }
+  }
+
+  // Calculate age in months
+  const calculateAge = () => {
+    if (!asset?.acquisitionDate) return '-'
+    const acquisition = new Date(asset.acquisitionDate)
+    const now = new Date()
+    const months = (now.getFullYear() - acquisition.getFullYear()) * 12 + (now.getMonth() - acquisition.getMonth())
+    if (months < 12) return `${months} meses`
+    const years = Math.floor(months / 12)
+    const remainingMonths = months % 12
+    return remainingMonths > 0 ? `${years} años ${remainingMonths} meses` : `${years} años`
   }
 
   if (loading) {
@@ -247,7 +478,15 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
       <ProtectedRoute>
         <DashboardLayout>
           <div className="min-h-screen flex items-center justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+            <div className="text-center">
+              <div className={cn(
+                'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4',
+                theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+              )}>
+                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+              </div>
+              <p className="text-gray-500">Cargando detalles...</p>
+            </div>
           </div>
         </DashboardLayout>
       </ProtectedRoute>
@@ -260,17 +499,31 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
         <DashboardLayout>
           <div className="min-h-screen p-6">
             <div className={cn(
-              "max-w-2xl mx-auto p-8 rounded-xl text-center",
-              theme === 'dark' ? 'bg-red-900/20 text-red-400' : 'bg-red-50 text-red-600'
+              "max-w-xl mx-auto p-8 rounded-2xl text-center",
+              theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-lg'
             )}>
-              <AlertTriangle className="w-12 h-12 mx-auto mb-4" />
-              <p className="text-lg">{error || 'Activo no encontrado'}</p>
-              <Link
-                href="/dashboard/market/fixed-assets"
-                className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Volver al listado
+              <div className={cn(
+                'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4',
+                theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
+              )}>
+                <AlertTriangle className="w-8 h-8 text-red-500" />
+              </div>
+              <h2 className={cn(
+                'text-xl font-bold mb-2',
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>
+                {error || 'Activo no encontrado'}
+              </h2>
+              <p className="text-gray-500 mb-6">No pudimos cargar los detalles de este activo.</p>
+              <Link href="/dashboard/market/fixed-assets">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Volver al listado
+                </motion.button>
               </Link>
             </div>
           </div>
@@ -281,478 +534,1025 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
 
   const statusConfig = STATUS_CONFIG[asset.status] || STATUS_CONFIG.active
   const StatusIcon = statusConfig.icon
+  const depreciation = calculateDepreciation()
+
+  // Get selected service and printer info
+  const selectedService = printServices.find(s => s.id === selectedServiceId)
+  const selectedPrinter = selectedService?.printers.find(p => p.id === selectedPrinterId)
 
   return (
     <ProtectedRoute>
       <DashboardLayout>
         <div className="min-h-screen p-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="max-w-5xl mx-auto space-y-6"
-          >
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-              <div className="flex items-start gap-4">
-                <Link
-                  href="/dashboard/market/fixed-assets"
+          {/* Header Section */}
+          <div className="max-w-6xl mx-auto mb-8">
+            {/* Navigation */}
+            <div className="flex items-center justify-between mb-6">
+              <Link href="/dashboard/market/fixed-assets">
+                <motion.button
+                  whileHover={{ scale: 1.02, x: -2 }}
+                  whileTap={{ scale: 0.98 }}
                   className={cn(
-                    "p-2 rounded-lg transition-colors",
-                    theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                    'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
+                    theme === 'dark'
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   )}
                 >
-                  <ArrowLeft className={cn(
-                    "w-5 h-5",
-                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                  )} />
-                </Link>
-                <div>
-                  <h1 className={cn(
-                    "text-2xl font-bold",
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>
-                    {asset.name}
-                  </h1>
-                  <p className={cn(
-                    "text-sm",
-                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                  )}>
-                    {asset.assetCode}
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowPrintModal(true)}
+                  <ArrowLeft className="w-4 h-4" />
+                  <span className="font-medium">Volver</span>
+                </motion.button>
+              </Link>
+
+              <div className="flex items-center gap-2">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleOpenPrintModal}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-lg transition-colors",
+                    'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
                     theme === 'dark'
-                      ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   )}
                 >
                   <Printer className="w-4 h-4" />
-                  Imprimir
-                </button>
-                <Link
-                  href={`/dashboard/market/fixed-assets/${asset.id}/edit`}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-lg transition-colors",
-                    "bg-blue-500 hover:bg-blue-600 text-white"
-                  )}
-                >
-                  <Edit className="w-4 h-4" />
-                  Editar
+                  <span className="font-medium">Imprimir</span>
+                </motion.button>
+
+                <Link href={`/dashboard/market/fixed-assets/${asset.id}/edit`}>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span className="font-medium">Editar</span>
+                  </motion.button>
                 </Link>
+
                 {asset.status !== 'disposed' && (
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={deleteAsset}
-                    className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-lg transition-colors",
-                      "bg-red-500 hover:bg-red-600 text-white"
-                    )}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700 transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
-                    Dar de Baja
-                  </button>
+                    <span className="font-medium">Dar de Baja</span>
+                  </motion.button>
                 )}
               </div>
             </div>
 
-            {/* Status Badge */}
-            <div className={cn(
-              "flex items-center gap-3 p-4 rounded-xl border",
-              statusConfig.color
-            )}>
-              <StatusIcon className="w-6 h-6" />
-              <div>
-                <p className="font-semibold">{statusConfig.label}</p>
-                <p className="text-sm opacity-80">
-                  Última actualización: {formatDateTime(asset.updatedAt)}
-                </p>
+            {/* Asset Header Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                'p-6 rounded-2xl border',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                {/* Left: Asset Info */}
+                <div className="flex items-start gap-4">
+                  <div className={cn(
+                    'w-14 h-14 rounded-2xl flex items-center justify-center shrink-0',
+                    `bg-gradient-to-br ${statusConfig.bgGradient}`
+                  )}>
+                    <Box className="w-7 h-7 text-white" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-3 mb-1 flex-wrap">
+                      <h1 className={cn(
+                        'text-2xl md:text-3xl font-bold font-mono',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        {asset.assetCode}
+                      </h1>
+                      <span className={cn(
+                        'inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium',
+                        statusConfig.color === 'emerald' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                        statusConfig.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                        statusConfig.color === 'gray' && 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+                        statusConfig.color === 'red' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                      )}>
+                        <StatusIcon className="w-3.5 h-3.5" />
+                        {statusConfig.label}
+                      </span>
+                    </div>
+                    <p className={cn(
+                      'text-lg font-medium mb-2',
+                      theme === 'dark' ? 'text-gray-200' : 'text-gray-800'
+                    )}>{asset.name}</p>
+                    <div className="flex items-center gap-4 text-sm text-gray-500">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4" />
+                        {formatDate(asset.acquisitionDate)}
+                      </span>
+                      {asset.responsibleName && (
+                        <span className="flex items-center gap-1.5">
+                          <User className="w-4 h-4" />
+                          {asset.responsibleName}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right: Value */}
+                <div className={cn(
+                  'p-4 rounded-xl',
+                  theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                )}>
+                  <p className="text-sm text-gray-500 mb-1">Valor Actual</p>
+                  <p className={cn(
+                    'text-3xl font-bold',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>
+                    {formatCurrency(asset.currentValue || asset.acquisitionCost, asset.currency)}
+                  </p>
+                </div>
               </div>
+            </motion.div>
+          </div>
+
+          {/* Activity Timeline */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className={cn(
+              'max-w-6xl mx-auto mb-6 p-6 rounded-2xl border',
+              theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+            )}
+          >
+            <div className="flex items-center gap-3 mb-5">
+              <div className={cn(
+                'p-2 rounded-xl',
+                theme === 'dark' ? 'bg-indigo-900/30' : 'bg-indigo-100'
+              )}>
+                <History className="w-5 h-5 text-indigo-500" />
+              </div>
+              <h3 className={cn(
+                'font-semibold',
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>Historial de Actividad</h3>
             </div>
 
-            {/* Tabs */}
-            <div className={cn(
-              "flex border-b",
-              theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-            )}>
+            <div className="relative">
+              {/* Timeline line */}
+              <div className={cn(
+                'absolute left-[17px] top-2 bottom-2 w-0.5',
+                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+              )} />
+
+              <div className="space-y-4">
+                {/* Creation event */}
+                <div className="flex items-start gap-4 relative">
+                  <div className={cn(
+                    'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                    theme === 'dark' ? 'bg-blue-900/50 ring-4 ring-gray-800' : 'bg-blue-100 ring-4 ring-white'
+                  )}>
+                    <Box className="w-4 h-4 text-blue-500" />
+                  </div>
+                  <div className="pt-1">
+                    <p className={cn(
+                      'text-sm font-medium',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>Activo registrado</p>
+                    <p className="text-xs text-gray-500">
+                      por {asset.createdByName}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(asset.createdAt)}</p>
+                  </div>
+                </div>
+
+                {/* Movement events */}
+                {movements.map((mov) => {
+                  const movConfig = MOVEMENT_CONFIG[mov.movementType] || MOVEMENT_CONFIG.status_change
+                  const MovIcon = movConfig.icon
+
+                  return (
+                    <div key={mov.id} className="flex items-start gap-4 relative">
+                      <div className={cn(
+                        'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                        movConfig.color === 'blue' && (theme === 'dark' ? 'bg-blue-900/50 ring-4 ring-gray-800' : 'bg-blue-100 ring-4 ring-white'),
+                        movConfig.color === 'purple' && (theme === 'dark' ? 'bg-purple-900/50 ring-4 ring-gray-800' : 'bg-purple-100 ring-4 ring-white'),
+                        movConfig.color === 'cyan' && (theme === 'dark' ? 'bg-cyan-900/50 ring-4 ring-gray-800' : 'bg-cyan-100 ring-4 ring-white'),
+                        movConfig.color === 'amber' && (theme === 'dark' ? 'bg-amber-900/50 ring-4 ring-gray-800' : 'bg-amber-100 ring-4 ring-white'),
+                        movConfig.color === 'orange' && (theme === 'dark' ? 'bg-orange-900/50 ring-4 ring-gray-800' : 'bg-orange-100 ring-4 ring-white'),
+                        movConfig.color === 'gray' && (theme === 'dark' ? 'bg-gray-700 ring-4 ring-gray-800' : 'bg-gray-100 ring-4 ring-white'),
+                        movConfig.color === 'indigo' && (theme === 'dark' ? 'bg-indigo-900/50 ring-4 ring-gray-800' : 'bg-indigo-100 ring-4 ring-white')
+                      )}>
+                        <MovIcon className={cn(
+                          'w-4 h-4',
+                          movConfig.color === 'blue' && 'text-blue-500',
+                          movConfig.color === 'purple' && 'text-purple-500',
+                          movConfig.color === 'cyan' && 'text-cyan-500',
+                          movConfig.color === 'amber' && 'text-amber-500',
+                          movConfig.color === 'orange' && 'text-orange-500',
+                          movConfig.color === 'gray' && 'text-gray-500',
+                          movConfig.color === 'indigo' && 'text-indigo-500'
+                        )} />
+                      </div>
+                      <div className="pt-1 flex-1">
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>{movConfig.label}</p>
+                        {mov.reason && (
+                          <p className="text-xs text-gray-500 mt-0.5">{mov.reason}</p>
+                        )}
+                        {(mov.fromWarehouseName || mov.toWarehouseName) && mov.movementType === 'transfer' && (
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {mov.fromWarehouseName || 'Sin ubicacion'} → {mov.toWarehouseName || 'Sin ubicacion'}
+                          </p>
+                        )}
+                        {(mov.fromResponsibleName || mov.toResponsibleName) && mov.movementType === 'assignment' && (
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {mov.fromResponsibleName || 'Sin responsable'} → {mov.toResponsibleName || 'Sin responsable'}
+                          </p>
+                        )}
+                        {(mov.fromStatus || mov.toStatus) && mov.movementType === 'status_change' && (
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {STATUS_CONFIG[mov.fromStatus]?.label || mov.fromStatus} → {STATUS_CONFIG[mov.toStatus]?.label || mov.toStatus}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {formatDateTime(mov.createdAt)} {mov.createdByName && `• ${mov.createdByName}`}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* Audit events */}
+                {audits.slice(0, 3).map((audit) => (
+                  <div key={audit.id} className="flex items-start gap-4 relative">
+                    <div className={cn(
+                      'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                      audit.scanStatus === 'found'
+                        ? theme === 'dark' ? 'bg-emerald-900/50 ring-4 ring-gray-800' : 'bg-emerald-100 ring-4 ring-white'
+                        : theme === 'dark' ? 'bg-red-900/50 ring-4 ring-gray-800' : 'bg-red-100 ring-4 ring-white'
+                    )}>
+                      <ClipboardCheck className={cn(
+                        'w-4 h-4',
+                        audit.scanStatus === 'found' ? 'text-emerald-500' : 'text-red-500'
+                      )} />
+                    </div>
+                    <div className="pt-1">
+                      <p className={cn(
+                        'text-sm font-medium',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        Auditoria {audit.auditNumber}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {audit.scanStatus === 'found' ? 'Encontrado' : 'No encontrado'}
+                        {audit.foundLocation && ` en ${audit.foundLocation}`}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {formatDateTime(audit.scannedAt || audit.auditDate)} • {audit.scannedByName}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Show more indicator */}
+                {(movements.length > 0 || audits.length > 3) && (
+                  <div className="flex items-center gap-4 pl-[17px]">
+                    <div className={cn(
+                      'w-[35px] h-[35px] rounded-full flex items-center justify-center',
+                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                    )}>
+                      <Clock className="w-4 h-4 text-gray-400" />
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {movements.length + audits.length} eventos en total
+                    </p>
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {movements.length === 0 && audits.length === 0 && (
+                  <div className="flex items-center gap-4 pl-[17px]">
+                    <p className="text-sm text-gray-500">Sin movimientos adicionales registrados</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Content */}
+          <div className="max-w-6xl mx-auto space-y-6">
+            {/* Lifecycle Progress */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                'p-6 rounded-2xl border',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <h3 className={cn(
+                'text-sm font-medium mb-6',
+                theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+              )}>
+                Ciclo de Vida del Activo
+              </h3>
+
+              <div className="relative">
+                {/* Progress line */}
+                <div className={cn(
+                  'absolute top-6 left-0 right-0 h-1 rounded-full',
+                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                )} />
+                <div
+                  className={cn('absolute top-6 left-0 h-1 rounded-full transition-all duration-500', `bg-gradient-to-r ${statusConfig.bgGradient}`)}
+                  style={{ width: `${Math.max(0, ((statusConfig.step - 1) / (LIFECYCLE_STEPS.length - 1)) * 100)}%` }}
+                />
+
+                {/* Steps */}
+                <div className="relative flex justify-between">
+                  {LIFECYCLE_STEPS.map((step, index) => {
+                    const isActive = statusConfig.step >= (index + 1)
+                    const isCurrent = statusConfig.step === (index + 1)
+                    const StepIcon = step.icon
+
+                    return (
+                      <div key={step.key} className="flex flex-col items-center">
+                        <motion.div
+                          initial={false}
+                          animate={{ scale: isCurrent ? 1.1 : 1 }}
+                          className={cn(
+                            'w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 z-10',
+                            isActive
+                              ? `bg-gradient-to-br ${statusConfig.bgGradient} text-white shadow-lg`
+                              : theme === 'dark'
+                                ? 'bg-gray-700 text-gray-500'
+                                : 'bg-gray-100 text-gray-400'
+                          )}
+                        >
+                          <StepIcon className="w-5 h-5" />
+                        </motion.div>
+                        <span className={cn(
+                          'mt-3 text-xs font-medium',
+                          isActive
+                            ? theme === 'dark' ? 'text-white' : 'text-gray-900'
+                            : 'text-gray-500'
+                        )}>
+                          {step.label}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
-                { key: 'details', label: 'Detalles', icon: Box },
-                { key: 'history', label: 'Historial', icon: History },
-                { key: 'audits', label: 'Auditorías', icon: ClipboardCheck }
-              ].map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key as typeof activeTab)}
+                {
+                  label: 'Codigo',
+                  value: asset.assetCode,
+                  icon: Hash,
+                  color: 'blue'
+                },
+                {
+                  label: 'Categoria',
+                  value: asset.categoryName || 'Sin categoria',
+                  icon: Tag,
+                  color: 'purple'
+                },
+                {
+                  label: 'Condicion',
+                  value: CONDITION_LABELS[asset.condition] || asset.condition,
+                  icon: Layers,
+                  color: 'emerald'
+                },
+                {
+                  label: 'Ultima Auditoria',
+                  value: asset.lastAuditDate ? formatDate(asset.lastAuditDate) : 'Sin auditar',
+                  icon: ClipboardCheck,
+                  color: 'amber'
+                },
+                {
+                  label: 'Costo Adquisicion',
+                  value: formatCurrency(asset.acquisitionCost, asset.currency),
+                  icon: DollarSign,
+                  color: 'blue'
+                },
+                {
+                  label: 'Valor Actual',
+                  value: formatCurrency(asset.currentValue || asset.acquisitionCost, asset.currency),
+                  icon: TrendingDown,
+                  color: 'purple'
+                },
+                {
+                  label: 'Depreciacion',
+                  value: `${depreciation.percent.toFixed(1)}%`,
+                  icon: TrendingDown,
+                  color: depreciation.percent > 50 ? 'red' : 'amber'
+                },
+                {
+                  label: 'Tiempo de Vida',
+                  value: calculateAge(),
+                  icon: Clock,
+                  color: 'emerald'
+                }
+              ].map((stat, idx) => (
+                <motion.div
+                  key={stat.label}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.05 }}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-3 border-b-2 transition-colors",
-                    activeTab === tab.key
-                      ? 'border-blue-500 text-blue-500'
-                      : cn(
-                          'border-transparent',
-                          theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
-                        )
+                    'p-5 rounded-2xl border relative overflow-hidden group',
+                    theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
                   )}
                 >
-                  <tab.icon className="w-4 h-4" />
-                  {tab.label}
-                </button>
+                  <div className={cn(
+                    'absolute -right-4 -top-4 w-20 h-20 rounded-full opacity-10 group-hover:opacity-20 transition-opacity',
+                    stat.color === 'blue' && 'bg-blue-500',
+                    stat.color === 'purple' && 'bg-purple-500',
+                    stat.color === 'emerald' && 'bg-emerald-500',
+                    stat.color === 'amber' && 'bg-amber-500',
+                    stat.color === 'red' && 'bg-red-500'
+                  )} />
+
+                  <div className="relative">
+                    <div className={cn(
+                      'w-10 h-10 rounded-xl flex items-center justify-center mb-3',
+                      stat.color === 'blue' && (theme === 'dark' ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'),
+                      stat.color === 'purple' && (theme === 'dark' ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600'),
+                      stat.color === 'emerald' && (theme === 'dark' ? 'bg-emerald-900/50 text-emerald-400' : 'bg-emerald-100 text-emerald-600'),
+                      stat.color === 'amber' && (theme === 'dark' ? 'bg-amber-900/50 text-amber-400' : 'bg-amber-100 text-amber-600'),
+                      stat.color === 'red' && (theme === 'dark' ? 'bg-red-900/50 text-red-400' : 'bg-red-100 text-red-600')
+                    )}>
+                      <stat.icon className="w-5 h-5" />
+                    </div>
+                    <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
+                    <p className={cn(
+                      'text-lg font-bold truncate',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      {stat.value}
+                    </p>
+                  </div>
+                </motion.div>
               ))}
             </div>
 
-            {/* Tab Content */}
-            {activeTab === 'details' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Basic Info */}
-                <div className={cn(
-                  "p-6 rounded-xl",
-                  theme === 'dark' ? 'bg-gray-800/50 border border-gray-700' : 'bg-white border border-gray-200'
-                )}>
-                  <h3 className={cn(
-                    "font-semibold mb-4 flex items-center gap-2",
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>
-                    <Box className="w-5 h-5 text-blue-500" />
-                    Información Básica
-                  </h3>
-                  <dl className="space-y-3">
-                    <div className="flex justify-between">
-                      <dt className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Código</dt>
-                      <dd className={cn("font-mono", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{asset.assetCode}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Barcode</dt>
-                      <dd className={cn("font-mono", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{asset.barcode}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Categoría</dt>
-                      <dd className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{asset.categoryName || '-'}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Condición</dt>
-                      <dd className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                        {asset.condition === 'new' ? 'Nuevo' :
-                         asset.condition === 'good' ? 'Bueno' :
-                         asset.condition === 'fair' ? 'Regular' : 'Malo'}
-                      </dd>
-                    </div>
-                    {asset.description && (
-                      <div>
-                        <dt className={cn("text-sm mb-1", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Descripción</dt>
-                        <dd className={cn("text-sm", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>{asset.description}</dd>
-                      </div>
-                    )}
-                  </dl>
-                </div>
-
-                {/* Location */}
-                <div className={cn(
-                  "p-6 rounded-xl",
-                  theme === 'dark' ? 'bg-gray-800/50 border border-gray-700' : 'bg-white border border-gray-200'
-                )}>
-                  <h3 className={cn(
-                    "font-semibold mb-4 flex items-center gap-2",
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+            {/* Info Cards Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Location Card */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={cn(
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-green-900/30' : 'bg-green-100'
                   )}>
                     <MapPin className="w-5 h-5 text-green-500" />
-                    Ubicación
-                  </h3>
-                  <dl className="space-y-3">
-                    <div className="flex justify-between">
-                      <dt className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Almacén</dt>
-                      <dd className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{asset.warehouseName || '-'}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Ubicación específica</dt>
-                      <dd className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{asset.locationCode || '-'}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Responsable</dt>
-                      <dd className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{asset.responsibleName || '-'}</dd>
-                    </div>
-                  </dl>
-                </div>
-
-                {/* Financial */}
-                <div className={cn(
-                  "p-6 rounded-xl",
-                  theme === 'dark' ? 'bg-gray-800/50 border border-gray-700' : 'bg-white border border-gray-200'
-                )}>
-                  <h3 className={cn(
-                    "font-semibold mb-4 flex items-center gap-2",
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>
-                    <DollarSign className="w-5 h-5 text-yellow-500" />
-                    Información Financiera
-                  </h3>
-                  <dl className="space-y-3">
-                    <div className="flex justify-between">
-                      <dt className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Fecha adquisición</dt>
-                      <dd className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{formatDate(asset.acquisitionDate)}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Costo adquisición</dt>
-                      <dd className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                        {formatCurrency(asset.acquisitionCost, asset.currency)}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Valor actual</dt>
-                      <dd className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                        {formatCurrency(asset.currentValue || asset.acquisitionCost, asset.currency)}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Proveedor</dt>
-                      <dd className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{asset.supplierName || '-'}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Factura</dt>
-                      <dd className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{asset.invoiceNumber || '-'}</dd>
-                    </div>
-                  </dl>
-                </div>
-
-                {/* Technical */}
-                <div className={cn(
-                  "p-6 rounded-xl",
-                  theme === 'dark' ? 'bg-gray-800/50 border border-gray-700' : 'bg-white border border-gray-200'
-                )}>
-                  <h3 className={cn(
-                    "font-semibold mb-4 flex items-center gap-2",
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>
-                    <Barcode className="w-5 h-5 text-purple-500" />
-                    Información Técnica
-                  </h3>
-                  <dl className="space-y-3">
-                    <div className="flex justify-between">
-                      <dt className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Número de serie</dt>
-                      <dd className={cn("font-mono", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{asset.serialNumber || '-'}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Marca</dt>
-                      <dd className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{asset.brand || '-'}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Modelo</dt>
-                      <dd className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{asset.model || '-'}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Última auditoría</dt>
-                      <dd className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{formatDate(asset.lastAuditDate)}</dd>
-                    </div>
-                  </dl>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'history' && (
-              <div className={cn(
-                "rounded-xl overflow-hidden",
-                theme === 'dark' ? 'bg-gray-800/50 border border-gray-700' : 'bg-white border border-gray-200'
-              )}>
-                {movements.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <History className={cn("w-12 h-12 mx-auto mb-4", theme === 'dark' ? 'text-gray-600' : 'text-gray-400')} />
-                    <p className={cn(theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                      No hay movimientos registrados
-                    </p>
                   </div>
-                ) : (
-                  <div className="divide-y divide-gray-700">
-                    {movements.map((mov, idx) => {
-                      const movType = MOVEMENT_TYPES[mov.movementType] || MOVEMENT_TYPES.status_change
-                      const MovIcon = movType.icon
+                  <h3 className={cn(
+                    'font-semibold',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>Ubicacion</h3>
+                </div>
 
-                      return (
-                        <div key={mov.id} className={cn(
-                          "p-4 flex gap-4",
-                          theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'
-                        )}>
-                          <div className={cn(
-                            "w-10 h-10 rounded-full flex items-center justify-center",
-                            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                          )}>
-                            <MovIcon className={cn("w-5 h-5", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')} />
-                          </div>
-                          <div className="flex-1">
-                            <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                              {movType.label}
-                            </p>
-                            {mov.reason && (
-                              <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                                {mov.reason}
-                              </p>
-                            )}
-                            {(mov.fromWarehouseName || mov.toWarehouseName) && (
-                              <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                                {mov.fromWarehouseName || 'Sin ubicación'} → {mov.toWarehouseName || 'Sin ubicación'}
-                              </p>
-                            )}
-                            {(mov.fromResponsibleName || mov.toResponsibleName) && (
-                              <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                                {mov.fromResponsibleName || 'Sin responsable'} → {mov.toResponsibleName || 'Sin responsable'}
-                              </p>
-                            )}
-                            {(mov.fromStatus || mov.toStatus) && (
-                              <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                                Estado: {mov.fromStatus} → {mov.toStatus}
-                              </p>
-                            )}
-                            <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
-                              {formatDateTime(mov.createdAt)} • {mov.createdByName}
-                            </p>
-                          </div>
-                        </div>
-                      )
-                    })}
+                <div className="flex items-center gap-4">
+                  <div className={cn(
+                    'w-14 h-14 rounded-2xl flex items-center justify-center shrink-0',
+                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                  )}>
+                    <Building2 className="w-6 h-6 text-gray-500" />
                   </div>
+                  <div>
+                    <p className={cn(
+                      'font-semibold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>{asset.warehouseName || 'Sin almacen'}</p>
+                    {asset.locationCode && (
+                      <p className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                        <Hash className="w-3.5 h-3.5" />
+                        {asset.locationCode}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Responsible Card */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
                 )}
-              </div>
-            )}
-
-            {activeTab === 'audits' && (
-              <div className={cn(
-                "rounded-xl overflow-hidden",
-                theme === 'dark' ? 'bg-gray-800/50 border border-gray-700' : 'bg-white border border-gray-200'
-              )}>
-                {audits.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <ClipboardCheck className={cn("w-12 h-12 mx-auto mb-4", theme === 'dark' ? 'text-gray-600' : 'text-gray-400')} />
-                    <p className={cn(theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                      No hay registros de auditoría
-                    </p>
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={cn(
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
+                  )}>
+                    <User className="w-5 h-5 text-blue-500" />
                   </div>
-                ) : (
-                  <div className="divide-y divide-gray-700">
-                    {audits.map(audit => (
-                      <div key={audit.id} className={cn(
-                        "p-4",
-                        theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'
-                      )}>
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                              {audit.auditNumber}
-                            </p>
-                            <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                              Estado: {audit.scanStatus === 'found' ? '✓ Encontrado' : audit.scanStatus === 'missing' ? '✗ Faltante' : audit.scanStatus}
-                            </p>
-                            {audit.foundLocation && (
-                              <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                                Ubicación encontrada: {audit.foundLocation}
-                              </p>
-                            )}
-                            {audit.observedCondition && (
-                              <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                                Condición observada: {audit.observedCondition}
-                              </p>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                              {formatDate(audit.auditDate)}
-                            </p>
-                            <p className={cn("text-xs", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
-                              {audit.scannedByName}
-                            </p>
-                          </div>
-                        </div>
+                  <h3 className={cn(
+                    'font-semibold',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>Responsable</h3>
+                </div>
+
+                <div className="space-y-3">
+                  <p className={cn(
+                    'font-semibold text-lg',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>{asset.responsibleName || 'Sin asignar'}</p>
+
+                  {asset.responsiblePosition && (
+                    <p className="text-sm text-gray-500">{asset.responsiblePosition}</p>
+                  )}
+                </div>
+              </motion.div>
+
+              {/* Supplier Card */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={cn(
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'
+                  )}>
+                    <Package className="w-5 h-5 text-purple-500" />
+                  </div>
+                  <h3 className={cn(
+                    'font-semibold',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>Proveedor</h3>
+                </div>
+
+                <div className="space-y-3">
+                  <p className={cn(
+                    'font-semibold text-lg',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>{asset.supplierName || 'Sin proveedor'}</p>
+
+                  {asset.invoiceNumber && (
+                    <div className={cn(
+                      'pt-3 border-t',
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <div className="flex items-center gap-3">
+                        <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+                        <span className={cn(
+                          'text-sm',
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                        )}>Factura: {asset.invoiceNumber}</span>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </div>
+
+            {/* Technical Info */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className={cn(
+                'p-6 rounded-2xl border',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className={cn(
+                  'p-2 rounded-xl',
+                  theme === 'dark' ? 'bg-cyan-900/30' : 'bg-cyan-100'
+                )}>
+                  <Barcode className="w-5 h-5 text-cyan-500" />
+                </div>
+                <h3 className={cn(
+                  'font-semibold',
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                )}>Informacion Tecnica</h3>
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Marca</p>
+                  <p className={cn(
+                    'font-medium',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>{asset.brand || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Modelo</p>
+                  <p className={cn(
+                    'font-medium',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>{asset.model || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Numero de Serie</p>
+                  <p className={cn(
+                    'font-medium font-mono',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>{asset.serialNumber || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Codigo de Barras</p>
+                  <p className={cn(
+                    'font-medium font-mono',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>{asset.barcode}</p>
+                </div>
+              </div>
+
+              {/* Barcode visualization */}
+              <div className={cn(
+                'mt-6 p-4 rounded-xl text-center',
+                theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+              )}>
+                <svg ref={barcodeRef} className="mx-auto" />
+              </div>
+            </motion.div>
+
+            {/* Notes */}
+            {asset.notes && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={cn(
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100'
+                  )}>
+                    <FileText className="w-5 h-5 text-amber-500" />
+                  </div>
+                  <h3 className={cn(
+                    'font-semibold',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>Notas / Observaciones</h3>
+                </div>
+                <p className={cn(
+                  'text-sm leading-relaxed',
+                  theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                )}>{asset.notes}</p>
+              </motion.div>
             )}
-          </motion.div>
+          </div>
         </div>
 
         {/* Print Modal */}
-        {showPrintModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className={cn(
-                "w-full max-w-md p-6 rounded-xl",
-                theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-              )}
-            >
-              <div className="flex justify-between items-center mb-4">
-                <h3 className={cn("text-lg font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                  Imprimir Etiqueta
-                </h3>
-                <button onClick={() => setShowPrintModal(false)}>
-                  <X className={cn("w-5 h-5", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')} />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className={cn("block text-sm font-medium mb-1", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                    Código del Servicio de Impresión
-                  </label>
-                  <input
-                    type="text"
-                    value={serviceCode}
-                    onChange={(e) => setServiceCode(e.target.value)}
-                    placeholder="Ej: PRINT-001"
-                    className={cn(
-                      "w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500",
-                      theme === 'dark'
-                        ? 'bg-gray-700 border-gray-600 text-white'
-                        : 'bg-white border-gray-300 text-gray-900'
-                    )}
-                  />
-                </div>
-
+        <AnimatePresence>
+          {showPrintModal && asset && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className={cn(
+                  "w-full max-w-lg rounded-2xl overflow-hidden",
+                  theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                )}
+              >
+                {/* Modal Header */}
                 <div className={cn(
-                  "p-4 rounded-lg",
-                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                  'px-6 py-4 border-b flex items-center justify-between',
+                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                 )}>
-                  <p className={cn("text-sm", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                    Se imprimirá una etiqueta 2x1" con:
-                  </p>
-                  <ul className={cn("text-sm mt-2 space-y-1", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                    <li>• Nombre: {asset.name}</li>
-                    <li>• Código: {asset.assetCode}</li>
-                    <li>• Código de barras: {asset.barcode}</li>
-                    <li>• Ubicación: {asset.warehouseName || '-'}</li>
-                  </ul>
-                </div>
-
-                <div className="flex justify-end gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-2 rounded-xl',
+                      theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
+                    )}>
+                      <Tag className="w-5 h-5 text-blue-500" />
+                    </div>
+                    <div>
+                      <h3 className={cn("text-lg font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        Imprimir Etiqueta de Activo
+                      </h3>
+                      <p className="text-sm text-gray-500 font-mono">{asset.assetCode}</p>
+                    </div>
+                  </div>
                   <button
                     onClick={() => setShowPrintModal(false)}
                     className={cn(
-                      "px-4 py-2 rounded-lg",
+                      'p-2 rounded-lg transition-colors',
+                      theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                    )}
+                  >
+                    <X className={cn("w-5 h-5", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')} />
+                  </button>
+                </div>
+
+                {/* Modal Body */}
+                <div className="p-6 space-y-6">
+                  {/* Printer Selection */}
+                  <div>
+                    <label className={cn("block text-sm font-medium mb-3", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                      Seleccionar Impresora
+                    </label>
+
+                    {loadingServices ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                      </div>
+                    ) : printServices.length === 0 ? (
+                      <div className={cn(
+                        'p-4 rounded-xl text-center',
+                        theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                      )}>
+                        <Monitor className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                        <p className="text-sm text-gray-500">No hay servicios de impresion disponibles</p>
+                        <p className="text-xs text-gray-400 mt-1">Configure un servicio de impresion primero</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {printServices.map(service => (
+                          <div key={service.id}>
+                            {service.printers.map(printer => (
+                              <button
+                                key={printer.id}
+                                onClick={() => {
+                                  setSelectedServiceId(service.id)
+                                  setSelectedPrinterId(printer.id)
+                                }}
+                                className={cn(
+                                  'w-full p-3 rounded-xl border text-left transition-all',
+                                  selectedServiceId === service.id && selectedPrinterId === printer.id
+                                    ? theme === 'dark'
+                                      ? 'border-blue-500 bg-blue-900/30'
+                                      : 'border-blue-500 bg-blue-50'
+                                    : theme === 'dark'
+                                      ? 'border-gray-700 hover:border-gray-600 bg-gray-700/30'
+                                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                                )}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={cn(
+                                    'w-3 h-3 rounded-full',
+                                    printer.isOnline ? 'bg-green-500' : 'bg-gray-400'
+                                  )} />
+                                  <div className="flex-1 min-w-0">
+                                    <p className={cn(
+                                      'font-medium truncate',
+                                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                    )}>{printer.printerName}</p>
+                                    <p className="text-xs text-gray-500">
+                                      {service.serviceName} • {printer.isOnline ? 'En linea' : 'Desconectada'}
+                                    </p>
+                                  </div>
+                                  {selectedServiceId === service.id && selectedPrinterId === printer.id && (
+                                    <Check className="w-5 h-5 text-blue-500" />
+                                  )}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Label Size Selection */}
+                  <div>
+                    <label className={cn("block text-sm font-medium mb-3", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                      Tamano de Etiqueta
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => setLabelSize('3x2')}
+                        className={cn(
+                          'p-4 rounded-xl border text-center transition-all',
+                          labelSize === '3x2'
+                            ? theme === 'dark'
+                              ? 'border-blue-500 bg-blue-900/30'
+                              : 'border-blue-500 bg-blue-50'
+                            : theme === 'dark'
+                              ? 'border-gray-700 hover:border-gray-600'
+                              : 'border-gray-200 hover:border-gray-300'
+                        )}
+                      >
+                        <div className={cn(
+                          'w-16 h-10 mx-auto mb-2 rounded border-2 border-dashed',
+                          labelSize === '3x2'
+                            ? 'border-blue-400'
+                            : theme === 'dark' ? 'border-gray-600' : 'border-gray-300'
+                        )} />
+                        <p className={cn(
+                          'font-medium',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>3" x 2"</p>
+                        <p className="text-xs text-gray-500">(76x51mm)</p>
+                      </button>
+                      <button
+                        onClick={() => setLabelSize('2x1')}
+                        className={cn(
+                          'p-4 rounded-xl border text-center transition-all',
+                          labelSize === '2x1'
+                            ? theme === 'dark'
+                              ? 'border-blue-500 bg-blue-900/30'
+                              : 'border-blue-500 bg-blue-50'
+                            : theme === 'dark'
+                              ? 'border-gray-700 hover:border-gray-600'
+                              : 'border-gray-200 hover:border-gray-300'
+                        )}
+                      >
+                        <div className={cn(
+                          'w-12 h-6 mx-auto mb-2 rounded border-2 border-dashed',
+                          labelSize === '2x1'
+                            ? 'border-blue-400'
+                            : theme === 'dark' ? 'border-gray-600' : 'border-gray-300'
+                        )} />
+                        <p className={cn(
+                          'font-medium',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>2" x 1"</p>
+                        <p className="text-xs text-gray-500">(51x25mm)</p>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Preview */}
+                  <div>
+                    <label className={cn("block text-sm font-medium mb-3", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                      Vista Previa
+                    </label>
+                    <div className={cn(
+                      'p-4 rounded-xl border',
+                      theme === 'dark' ? 'bg-white' : 'bg-gray-50 border-gray-200'
+                    )}>
+                      {labelSize === '3x2' ? (
+                        <div className="max-w-[200px] mx-auto p-3 text-center">
+                          <p className="font-mono font-bold text-gray-900">{asset.assetCode}</p>
+                          <p className="text-sm text-gray-700 truncate">{asset.name}</p>
+                          <p className="text-xs text-gray-500">
+                            {asset.warehouseName || ''}{asset.locationCode ? ` / ${asset.locationCode}` : ''}
+                          </p>
+                          <div className="mt-2 flex justify-center">
+                            <svg className="h-10" ref={el => {
+                              if (el) {
+                                try {
+                                  JsBarcode(el, asset.barcode, {
+                                    format: 'CODE128',
+                                    width: 1.5,
+                                    height: 30,
+                                    displayValue: true,
+                                    fontSize: 10,
+                                    margin: 2,
+                                    background: 'transparent'
+                                  })
+                                } catch (e) { console.error(e) }
+                              }
+                            }} />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="max-w-[180px] mx-auto p-2">
+                          <div className="flex justify-between items-start text-xs">
+                            <span className="font-mono font-bold text-gray-900">{asset.assetCode}</span>
+                            <span className="text-gray-500">{asset.locationCode || ''}</span>
+                          </div>
+                          <p className="text-xs text-gray-700 truncate">{asset.name}</p>
+                          <div className="mt-1 flex justify-center">
+                            <svg className="h-8" ref={el => {
+                              if (el) {
+                                try {
+                                  JsBarcode(el, asset.barcode, {
+                                    format: 'CODE128',
+                                    width: 1,
+                                    height: 20,
+                                    displayValue: false,
+                                    margin: 0,
+                                    background: 'transparent'
+                                  })
+                                } catch (e) { console.error(e) }
+                              }
+                            }} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Copies */}
+                  <div>
+                    <label className={cn("block text-sm font-medium mb-3", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                      Copias
+                    </label>
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={() => setCopies(Math.max(1, copies - 1))}
+                        disabled={copies <= 1}
+                        className={cn(
+                          'w-10 h-10 rounded-lg flex items-center justify-center transition-colors',
+                          copies <= 1
+                            ? 'opacity-50 cursor-not-allowed'
+                            : '',
+                          theme === 'dark'
+                            ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                        )}
+                      >
+                        -
+                      </button>
+                      <span className={cn(
+                        'text-xl font-bold w-12 text-center',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>{copies}</span>
+                      <button
+                        onClick={() => setCopies(Math.min(99, copies + 1))}
+                        disabled={copies >= 99}
+                        className={cn(
+                          'w-10 h-10 rounded-lg flex items-center justify-center transition-colors',
+                          copies >= 99
+                            ? 'opacity-50 cursor-not-allowed'
+                            : '',
+                          theme === 'dark'
+                            ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                        )}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className={cn(
+                  'px-6 py-4 border-t flex items-center justify-between',
+                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                )}>
+                  <button
+                    onClick={handleBrowserPrint}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors',
                       theme === 'dark'
                         ? 'bg-gray-700 hover:bg-gray-600 text-white'
                         : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
                     )}
                   >
-                    Cancelar
+                    <Monitor className="w-4 h-4" />
+                    Imprimir (Navegador)
                   </button>
+
                   <button
-                    onClick={handlePrint}
-                    disabled={printLoading}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                    onClick={handlePrintWithService}
+                    disabled={printLoading || !selectedPrinterId}
+                    className={cn(
+                      'flex items-center gap-2 px-6 py-2 rounded-lg font-medium transition-colors',
+                      printLoading || !selectedPrinterId
+                        ? 'bg-blue-400 cursor-not-allowed'
+                        : 'bg-blue-600 hover:bg-blue-700',
+                      'text-white'
+                    )}
                   >
                     {printLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Enviando...
+                      </>
                     ) : (
-                      <Printer className="w-4 h-4" />
+                      <>
+                        <Printer className="w-4 h-4" />
+                        Imprimir ({copies})
+                      </>
                     )}
-                    Imprimir
                   </button>
                 </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </DashboardLayout>
     </ProtectedRoute>
   )
