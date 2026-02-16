@@ -34,9 +34,11 @@ interface Warehouse {
 
 interface Employee {
   id: number
-  first_name: string
-  last_name: string
-  position: string
+  firstName: string
+  lastName: string
+  fullName: string
+  role: string
+  email: string
 }
 
 interface Supplier {
@@ -252,7 +254,7 @@ export default function NewFixedAssetPage() {
     return {
       category: category ? `${category.code ? `[${category.code}] ` : ''}${category.name}` : null,
       warehouse: warehouse?.name,
-      employee: employee ? `${employee.first_name} ${employee.last_name}` : null,
+      employee: employee ? (employee.fullName || `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.email) : null,
       supplier: supplier?.name,
       assetType: assetType?.label,
       condition: condition?.label
@@ -570,7 +572,7 @@ export default function NewFixedAssetPage() {
                           <option value="">Seleccionar responsable</option>
                           {employees.map(emp => (
                             <option key={emp.id} value={emp.id}>
-                              {emp.first_name} {emp.last_name} {emp.position ? `- ${emp.position}` : ''}
+                              {emp.fullName || `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.email}
                             </option>
                           ))}
                         </select>
