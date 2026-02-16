@@ -118,14 +118,11 @@ export async function GET(
     if (visitor.idphotourl && ['SUPER_ADMIN', 'ADMIN', 'MARKET_MANAGER'].includes(payload.role)) {
       if (storageAdapter.isConfigured()) {
         try {
-          const { signedUrl, error } = await storageAdapter.createSignedUrl(
+          idPhotoSignedUrl = await storageAdapter.createSignedUrl(
             'company-private-documents',
             visitor.idphotourl,
             3600 // 1 hour expiry
           )
-          if (!error && signedUrl) {
-            idPhotoSignedUrl = signedUrl
-          }
         } catch (e) {
           console.error('[Visitor GET] Error getting signed URL:', e)
         }
