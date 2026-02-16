@@ -148,6 +148,9 @@ export function BrandedLoginCard({ children }: { children: React.ReactNode }) {
 
 /**
  * Componente de logo con soporte multi-marca
+ *
+ * Para Servisumic: El logo ya incluye el nombre de la marca, no se muestra texto adicional
+ * Para LogiRapid: Se muestra el logo y opcionalmente un subtítulo
  */
 export function BrandedLogo({ subtitle }: { subtitle?: string }) {
   const { brand, isServisumic } = useBrandSafe()
@@ -166,22 +169,24 @@ export function BrandedLogo({ subtitle }: { subtitle?: string }) {
       <img
         src={logoSrc}
         alt={brand.displayName}
-        className="object-contain w-full max-w-xs h-auto"
+        className={`object-contain w-full h-auto ${isServisumic ? 'max-w-[280px]' : 'max-w-xs'}`}
         onError={(e) => {
           const target = e.target as HTMLImageElement
           target.style.display = 'none'
           const parent = target.parentElement
           if (parent) {
+            // Solo mostrar texto de fallback si NO es Servisumic (ya que su logo incluye el texto)
             parent.innerHTML = `
               <div class="${textClass} font-bold text-3xl tracking-wider px-4 py-2">
                 ${brand.displayName}
               </div>
-              ${subtitle ? `<p class="${subtitleClass} text-sm mt-2">${subtitle}</p>` : ''}
+              ${subtitle && !isServisumic ? `<p class="${subtitleClass} text-sm mt-2">${subtitle}</p>` : ''}
             `
           }
         }}
       />
-      {subtitle && (
+      {/* Para Servisumic no mostramos subtítulo ya que el logo incluye el nombre completo */}
+      {subtitle && !isServisumic && (
         <p className={`${subtitleClass} text-sm mt-2 font-medium`}>{subtitle}</p>
       )}
     </motion.div>
