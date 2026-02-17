@@ -127,8 +127,8 @@ export default function DoorVisitorsPage() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Visitantes</h1>
-        <p className="text-gray-500">Registro histórico de visitantes</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Visitantes</h1>
+        <p className="text-gray-500 dark:text-gray-400">Registro histórico de visitantes</p>
       </div>
 
       {/* Search */}
@@ -140,7 +140,7 @@ export default function DoorVisitorsPage() {
             placeholder="Buscar por nombre o ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400"
           />
         </div>
         <button
@@ -152,7 +152,7 @@ export default function DoorVisitorsPage() {
       </form>
 
       {/* Visitors List */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center">
             <div className="animate-spin w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full mx-auto"></div>
@@ -161,40 +161,40 @@ export default function DoorVisitorsPage() {
           <>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50">
+                <thead className="bg-gray-50 dark:bg-gray-700">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Visitante
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Identificación
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Visitas
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Última Visita
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Estado
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Acciones
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                   {visitors.map(visitor => (
-                    <tr key={visitor.id} className="hover:bg-gray-50">
+                    <tr key={visitor.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center">
-                            <User className="w-5 h-5 text-teal-600" />
+                          <div className="w-10 h-10 bg-teal-100 dark:bg-teal-900/30 rounded-full flex items-center justify-center">
+                            <User className="w-5 h-5 text-teal-600 dark:text-teal-400" />
                           </div>
                           <div>
-                            <p className="font-medium text-gray-900">{visitor.fullName}</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{visitor.fullName}</p>
                             {visitor.nationality && (
-                              <p className="text-sm text-gray-500">{visitor.nationality}</p>
+                              <p className="text-sm text-gray-500 dark:text-gray-400">{visitor.nationality}</p>
                             )}
                           </div>
                         </div>
@@ -202,29 +202,29 @@ export default function DoorVisitorsPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <CreditCard className="w-4 h-4 text-gray-400" />
-                          <span className="text-gray-900">{visitor.idNumber}</span>
+                          <span className="text-gray-900 dark:text-white">{visitor.idNumber}</span>
                         </div>
                         {visitor.idType && (
-                          <p className="text-sm text-gray-500 mt-1">{visitor.idType}</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{visitor.idType}</p>
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="font-medium text-gray-900">{visitor.totalVisits}</span>
+                        <span className="font-medium text-gray-900 dark:text-white">{visitor.totalVisits}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <p className="text-gray-900">{formatDate(visitor.lastVisit)}</p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-gray-900 dark:text-white">{formatDate(visitor.lastVisit)}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
                           Primera: {formatDate(visitor.firstVisit)}
                         </p>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {visitor.isCurrentlyInside ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+                          <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-sm font-medium">
                             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                             Adentro
                           </span>
                         ) : (
-                          <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-sm">
+                          <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full text-sm">
                             Afuera
                           </span>
                         )}
@@ -232,7 +232,7 @@ export default function DoorVisitorsPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <button
                           onClick={() => viewVisitorDetails(visitor.id)}
-                          className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg"
+                          className="p-2 text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-lg"
                           title="Ver detalles"
                         >
                           <Eye className="w-5 h-5" />
@@ -245,22 +245,22 @@ export default function DoorVisitorsPage() {
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
-              <p className="text-sm text-gray-500">
+            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 dark:border-gray-700">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 Página {page} de {totalPages}
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
                 <button
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300"
                 >
                   <ChevronRight className="w-5 h-5" />
                 </button>
@@ -269,8 +269,8 @@ export default function DoorVisitorsPage() {
           </>
         ) : (
           <div className="p-12 text-center">
-            <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">
+            <Users className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+            <p className="text-gray-500 dark:text-gray-400">
               {search ? 'No se encontraron visitantes' : 'No hay visitantes registrados'}
             </p>
           </div>
@@ -280,22 +280,22 @@ export default function DoorVisitorsPage() {
       {/* Visitor Detail Modal */}
       {showDetailModal && selectedVisitor && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl w-full max-w-2xl m-4 max-h-[80vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-100">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-2xl m-4 max-h-[80vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-100 dark:border-gray-700">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-teal-100 rounded-full flex items-center justify-center">
-                    <User className="w-8 h-8 text-teal-600" />
+                  <div className="w-16 h-16 bg-teal-100 dark:bg-teal-900/30 rounded-full flex items-center justify-center">
+                    <User className="w-8 h-8 text-teal-600 dark:text-teal-400" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-gray-900">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                       {selectedVisitor.visitor.fullName}
                     </h2>
-                    <p className="text-gray-500">
+                    <p className="text-gray-500 dark:text-gray-400">
                       {selectedVisitor.visitor.idType}: {selectedVisitor.visitor.idNumber}
                     </p>
                     {selectedVisitor.isCurrentlyInside && (
-                      <span className="inline-flex items-center gap-1 mt-2 px-2 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+                      <span className="inline-flex items-center gap-1 mt-2 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-sm font-medium">
                         <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                         Actualmente adentro
                       </span>
@@ -308,36 +308,36 @@ export default function DoorVisitorsPage() {
             <div className="p-6 space-y-6">
               {/* Info Grid */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-sm text-gray-500">Total de visitas</p>
-                  <p className="text-2xl font-bold text-gray-900">
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Total de visitas</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
                     {selectedVisitor.visitor.totalVisits}
                   </p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-sm text-gray-500">Primera visita</p>
-                  <p className="text-lg font-medium text-gray-900">
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Primera visita</p>
+                  <p className="text-lg font-medium text-gray-900 dark:text-white">
                     {formatDate(selectedVisitor.visitor.firstVisit)}
                   </p>
                 </div>
                 {selectedVisitor.visitor.dateOfBirth && (
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-sm text-gray-500 flex items-center gap-1">
+                  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
                       <Calendar className="w-4 h-4" />
                       Fecha de nacimiento
                     </p>
-                    <p className="text-lg font-medium text-gray-900">
+                    <p className="text-lg font-medium text-gray-900 dark:text-white">
                       {formatDate(selectedVisitor.visitor.dateOfBirth)}
                     </p>
                   </div>
                 )}
                 {selectedVisitor.visitor.address && (
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-sm text-gray-500 flex items-center gap-1">
+                  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
                       <MapPin className="w-4 h-4" />
                       Dirección
                     </p>
-                    <p className="text-sm font-medium text-gray-900 line-clamp-2">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2">
                       {selectedVisitor.visitor.address}
                     </p>
                   </div>
@@ -346,9 +346,9 @@ export default function DoorVisitorsPage() {
 
               {/* Active Log */}
               {selectedVisitor.activeLog && (
-                <div className="bg-green-50 rounded-xl p-4 border border-green-200">
-                  <h3 className="font-medium text-green-800 mb-2">Visita activa</h3>
-                  <div className="flex items-center gap-4 text-sm text-green-700">
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 border border-green-200 dark:border-green-800">
+                  <h3 className="font-medium text-green-800 dark:text-green-400 mb-2">Visita activa</h3>
+                  <div className="flex items-center gap-4 text-sm text-green-700 dark:text-green-300">
                     <span className="flex items-center gap-1">
                       <Clock className="w-4 h-4" />
                       Entrada: {formatDateTime(selectedVisitor.activeLog.entryTime)}
@@ -365,29 +365,29 @@ export default function DoorVisitorsPage() {
 
               {/* Recent History */}
               <div>
-                <h3 className="font-medium text-gray-900 mb-3">Historial reciente</h3>
+                <h3 className="font-medium text-gray-900 dark:text-white mb-3">Historial reciente</h3>
                 <div className="space-y-2">
                   {selectedVisitor.recentHistory.length > 0 ? (
                     selectedVisitor.recentHistory.map(log => (
                       <div
                         key={log.id}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
                       >
                         <div>
-                          <p className="font-medium text-gray-900">
+                          <p className="font-medium text-gray-900 dark:text-white">
                             {formatDateTime(log.entryTime)}
                           </p>
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
                             {log.visitPurpose || 'Sin motivo'} • {log.kioskName}
                           </p>
                         </div>
                         <div className="text-right">
                           {log.exitTime ? (
-                            <p className="text-sm text-gray-600">
+                            <p className="text-sm text-gray-600 dark:text-gray-300">
                               Salida: {formatDateTime(log.exitTime)}
                             </p>
                           ) : (
-                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">
+                            <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded text-xs">
                               Activa
                             </span>
                           )}
@@ -395,19 +395,19 @@ export default function DoorVisitorsPage() {
                       </div>
                     ))
                   ) : (
-                    <p className="text-gray-400 text-sm">Sin historial</p>
+                    <p className="text-gray-400 dark:text-gray-500 text-sm">Sin historial</p>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="p-6 border-t border-gray-100">
+            <div className="p-6 border-t border-gray-100 dark:border-gray-700">
               <button
                 onClick={() => {
                   setShowDetailModal(false)
                   setSelectedVisitor(null)
                 }}
-                className="w-full py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50"
+                className="w-full py-2 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cerrar
               </button>

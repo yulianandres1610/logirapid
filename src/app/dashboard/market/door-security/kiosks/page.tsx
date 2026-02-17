@@ -273,10 +273,10 @@ export default function DoorKiosksPage() {
     return (
       <div className="p-6">
         <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
+          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-6"></div>
           <div className="space-y-4">
             {[1, 2, 3].map(i => (
-              <div key={i} className="h-24 bg-gray-200 rounded-xl"></div>
+              <div key={i} className="h-24 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
             ))}
           </div>
         </div>
@@ -289,8 +289,8 @@ export default function DoorKiosksPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Kiosks de Puerta</h1>
-          <p className="text-gray-500">Gestionar dispositivos de control de acceso</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Kiosks de Puerta</h1>
+          <p className="text-gray-500 dark:text-gray-400">Gestionar dispositivos de control de acceso</p>
         </div>
         <button
           onClick={() => {
@@ -313,7 +313,7 @@ export default function DoorKiosksPage() {
           placeholder="Buscar kiosks..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400"
         />
       </div>
 
@@ -322,22 +322,22 @@ export default function DoorKiosksPage() {
         {filteredKiosks.map(kiosk => (
           <div
             key={kiosk.id}
-            className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden"
           >
             <div className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                    kiosk.isActive ? 'bg-teal-100' : 'bg-gray-100'
+                    kiosk.isActive ? 'bg-teal-100 dark:bg-teal-900/30' : 'bg-gray-100 dark:bg-gray-700'
                   }`}>
                     <Monitor className={`w-6 h-6 ${
-                      kiosk.isActive ? 'text-teal-600' : 'text-gray-400'
+                      kiosk.isActive ? 'text-teal-600 dark:text-teal-400' : 'text-gray-400'
                     }`} />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">{kiosk.name}</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">{kiosk.name}</h3>
                     {kiosk.location && (
-                      <p className="text-sm text-gray-500 flex items-center gap-1">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
                         <MapPin className="w-3 h-3" />
                         {kiosk.location}
                       </p>
@@ -346,46 +346,46 @@ export default function DoorKiosksPage() {
                 </div>
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                   kiosk.isActive
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-100 text-gray-600'
+                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                 }`}>
                   {kiosk.isActive ? 'Activo' : 'Inactivo'}
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500">Hoy</p>
-                  <p className="text-lg font-bold text-gray-900">{kiosk.todayVisitors}</p>
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Hoy</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-white">{kiosk.todayVisitors}</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500">Adentro</p>
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Adentro</p>
                   <p className="text-lg font-bold text-green-600">{kiosk.activeVisitors}</p>
                 </div>
               </div>
 
-              <p className="text-xs text-gray-400 mb-4">
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">
                 ID: {kiosk.deviceId}
               </p>
 
               {/* Guards */}
               <div className="mb-4">
-                <p className="text-xs font-medium text-gray-500 mb-2">Guardias asignados:</p>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Guardias asignados:</p>
                 <div className="flex flex-wrap gap-1">
                   {kioskGuards(kiosk.id).length > 0 ? (
                     kioskGuards(kiosk.id).slice(0, 3).map(guard => (
                       <span
                         key={guard.id}
-                        className="px-2 py-1 bg-teal-50 text-teal-700 rounded text-xs"
+                        className="px-2 py-1 bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 rounded text-xs"
                       >
                         {guard.employeeName.split(' ')[0]}
                       </span>
                     ))
                   ) : (
-                    <span className="text-xs text-gray-400">Sin guardias</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">Sin guardias</span>
                   )}
                   {kioskGuards(kiosk.id).length > 3 && (
-                    <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">
+                    <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs">
                       +{kioskGuards(kiosk.id).length - 3}
                     </span>
                   )}
@@ -393,25 +393,25 @@ export default function DoorKiosksPage() {
               </div>
             </div>
 
-            <div className="border-t border-gray-100 p-4 flex items-center justify-between">
+            <div className="border-t border-gray-100 dark:border-gray-700 p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => openEditModal(kiosk)}
-                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+                  className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                   title="Editar"
                 >
                   <Edit2 className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => openGuardModal(kiosk)}
-                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+                  className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                   title="Gestionar guardias"
                 >
                   <Shield className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => deleteKiosk(kiosk)}
-                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
                   title="Eliminar"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -421,8 +421,8 @@ export default function DoorKiosksPage() {
                 onClick={() => toggleKioskStatus(kiosk)}
                 className={`px-3 py-1 rounded-lg text-sm font-medium ${
                   kiosk.isActive
-                    ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    : 'bg-green-100 text-green-700 hover:bg-green-200'
+                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
                 }`}
               >
                 {kiosk.isActive ? 'Desactivar' : 'Activar'}
@@ -434,11 +434,11 @@ export default function DoorKiosksPage() {
 
       {filteredKiosks.length === 0 && (
         <div className="text-center py-12">
-          <Monitor className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">No hay kiosks configurados</p>
+          <Monitor className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-gray-400">No hay kiosks configurados</p>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="mt-4 text-teal-600 hover:text-teal-700"
+            className="mt-4 text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300"
           >
             Crear primer kiosk
           </button>
@@ -448,12 +448,12 @@ export default function DoorKiosksPage() {
       {/* Create Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md m-4">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Nuevo Kiosk de Puerta</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md m-4">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Nuevo Kiosk de Puerta</h2>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Nombre
                 </label>
                 <input
@@ -461,11 +461,11 @@ export default function DoorKiosksPage() {
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   placeholder="Ej: Puerta Principal"
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Ubicación (opcional)
                 </label>
                 <input
@@ -473,7 +473,7 @@ export default function DoorKiosksPage() {
                   value={formLocation}
                   onChange={(e) => setFormLocation(e.target.value)}
                   placeholder="Ej: Entrada Norte"
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400"
                 />
               </div>
             </div>
@@ -481,7 +481,7 @@ export default function DoorKiosksPage() {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="flex-1 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50"
+                className="flex-1 py-2 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancelar
               </button>
@@ -500,30 +500,30 @@ export default function DoorKiosksPage() {
       {/* Edit Modal */}
       {showEditModal && selectedKiosk && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md m-4">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Editar Kiosk</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md m-4">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Editar Kiosk</h2>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Nombre
                 </label>
                 <input
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Ubicación
                 </label>
                 <input
                   type="text"
                   value={formLocation}
                   onChange={(e) => setFormLocation(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white"
                 />
               </div>
             </div>
@@ -534,7 +534,7 @@ export default function DoorKiosksPage() {
                   setShowEditModal(false)
                   setSelectedKiosk(null)
                 }}
-                className="flex-1 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50"
+                className="flex-1 py-2 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancelar
               </button>
@@ -553,50 +553,50 @@ export default function DoorKiosksPage() {
       {/* Guard Management Modal */}
       {showGuardModal && selectedKiosk && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg m-4 max-h-[80vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-gray-900 mb-2">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-lg m-4 max-h-[80vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
               Gestionar Guardias
             </h2>
-            <p className="text-gray-500 text-sm mb-4">
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
               {selectedKiosk.name}
             </p>
 
             {/* Current Guards */}
             <div className="mb-6">
-              <h3 className="font-medium text-gray-900 mb-3">Guardias asignados:</h3>
+              <h3 className="font-medium text-gray-900 dark:text-white mb-3">Guardias asignados:</h3>
               <div className="space-y-2">
                 {kioskGuards(selectedKiosk.id).length > 0 ? (
                   kioskGuards(selectedKiosk.id).map(guard => (
                     <div
                       key={guard.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                      className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
                     >
                       <div>
-                        <p className="font-medium text-gray-900">{guard.employeeName}</p>
-                        <p className="text-sm text-gray-500">{guard.employeeCode}</p>
+                        <p className="font-medium text-gray-900 dark:text-white">{guard.employeeName}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{guard.employeeCode}</p>
                       </div>
                       <button
                         onClick={() => removeGuard(guard.id)}
-                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                        className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   ))
                 ) : (
-                  <p className="text-gray-400 text-sm">No hay guardias asignados</p>
+                  <p className="text-gray-400 dark:text-gray-500 text-sm">No hay guardias asignados</p>
                 )}
               </div>
             </div>
 
             {/* Add Guard */}
             <div>
-              <h3 className="font-medium text-gray-900 mb-3">Agregar guardia:</h3>
+              <h3 className="font-medium text-gray-900 dark:text-white mb-3">Agregar guardia:</h3>
               <div className="flex gap-2">
                 <select
                   value={selectedEmployeeId || ''}
                   onChange={(e) => setSelectedEmployeeId(parseInt(e.target.value) || null)}
-                  className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500"
+                  className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white"
                 >
                   <option value="">Seleccionar empleado...</option>
                   {employees
@@ -619,7 +619,7 @@ export default function DoorKiosksPage() {
                   <UserPlus className="w-5 h-5" />
                 </button>
               </div>
-              <p className="text-xs text-gray-400 mt-2">
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
                 * Los empleados deben tener un PIN configurado
               </p>
             </div>
@@ -630,7 +630,7 @@ export default function DoorKiosksPage() {
                 setSelectedKiosk(null)
                 setSelectedEmployeeId(null)
               }}
-              className="w-full mt-6 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50"
+              className="w-full mt-6 py-2 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               Cerrar
             </button>
