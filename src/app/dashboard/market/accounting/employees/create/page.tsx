@@ -575,7 +575,7 @@ export default function CreateEmployeePage() {
                         value={formData.email}
                         onChange={(e) => updateFormData('email', e.target.value)}
                         placeholder="empleado@empresa.com"
-                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900"
+                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                       />
                     </div>
 
@@ -612,7 +612,7 @@ export default function CreateEmployeePage() {
                         value={formData.firstName}
                         onChange={(e) => updateFormData('firstName', e.target.value)}
                         placeholder="Nombre"
-                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900"
+                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                       />
                     </div>
 
@@ -626,7 +626,7 @@ export default function CreateEmployeePage() {
                         value={formData.lastName}
                         onChange={(e) => updateFormData('lastName', e.target.value)}
                         placeholder="Apellido"
-                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900"
+                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                       />
                     </div>
 
@@ -640,7 +640,7 @@ export default function CreateEmployeePage() {
                         value={formData.phone}
                         onChange={(e) => updateFormData('phone', e.target.value)}
                         placeholder="+1 234 567 8900"
-                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900"
+                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                       />
                     </div>
                   </div>
@@ -760,7 +760,7 @@ export default function CreateEmployeePage() {
                         placeholder="0.00"
                         step="0.0001"
                         min="0"
-                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900"
+                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                       />
                     </div>
 
@@ -771,7 +771,7 @@ export default function CreateEmployeePage() {
                       <select
                         value={formData.currency}
                         onChange={(e) => updateFormData('currency', e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900"
+                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                       >
                         <option value="USD">USD</option>
                         <option value="COP">COP</option>
@@ -793,7 +793,7 @@ export default function CreateEmployeePage() {
                         step="0.5"
                         min="0"
                         max="100"
-                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900"
+                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                       />
                     </div>
                   </div>
@@ -807,7 +807,7 @@ export default function CreateEmployeePage() {
                       type="date"
                       value={formData.hireDate}
                       onChange={(e) => updateFormData('hireDate', e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900"
+                      className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                     />
                   </div>
                 </motion.div>
@@ -862,7 +862,7 @@ export default function CreateEmployeePage() {
                         value={formData.badgeCode}
                         onChange={(e) => updateFormData('badgeCode', e.target.value)}
                         placeholder="Escanear o ingresar código"
-                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900"
+                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                       />
                       <p className="text-xs text-gray-500 mt-1">Opcional: Para login con tarjeta/badge</p>
                     </div>

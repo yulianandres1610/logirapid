@@ -281,7 +281,7 @@ export default function ProductPricingStep({
               <select
                 value={markupType}
                 onChange={(e) => onMarkupChange(e.target.value as 'percentage' | 'fixed', markupValue)}
-                className="w-40 px-3 py-2 text-sm border rounded-md dark:bg-gray-800 dark:border-gray-600"
+                className="w-40 px-3 py-2 text-sm border rounded-md dark:bg-gray-800 dark:border-gray-600 dark:text-white"
               >
                 <option value="percentage">Porcentaje (%)</option>
                 <option value="fixed">Monto Fijo ($)</option>
@@ -302,7 +302,7 @@ export default function ProductPricingStep({
                   onChange={(e) => onMarkupChange(markupType, parseFloat(e.target.value) || 0)}
                   min="0"
                   step={markupType === 'percentage' ? '0.5' : '0.01'}
-                  className="w-28 pl-8 pr-3 py-2 text-sm border rounded-md dark:bg-gray-800 dark:border-gray-600"
+                  className="w-28 pl-8 pr-3 py-2 text-sm border rounded-md dark:bg-gray-800 dark:border-gray-600 dark:text-white"
                 />
               </div>
             </div>

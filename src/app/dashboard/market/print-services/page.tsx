@@ -570,7 +570,7 @@ export default function MarketPrintServicesPage() {
                       type="text"
                       value={newCredentials.apiKey}
                       readOnly
-                      className="flex-1 px-3 py-2 text-xs font-mono bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg"
+                      className="flex-1 px-3 py-2 text-xs font-mono bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white"
                     />
                     <Button
                       variant="outline"
@@ -590,7 +590,7 @@ export default function MarketPrintServicesPage() {
                       type="text"
                       value={newCredentials.apiSecret}
                       readOnly
-                      className="flex-1 px-3 py-2 text-xs font-mono bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg"
+                      className="flex-1 px-3 py-2 text-xs font-mono bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white"
                     />
                     <Button
                       variant="outline"
@@ -610,7 +610,7 @@ export default function MarketPrintServicesPage() {
                       type="text"
                       value={`Bearer ${newCredentials.apiKey}:${newCredentials.apiSecret}`}
                       readOnly
-                      className="flex-1 px-3 py-2 text-xs font-mono bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg"
+                      className="flex-1 px-3 py-2 text-xs font-mono bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white"
                     />
                     <Button
                       variant="outline"

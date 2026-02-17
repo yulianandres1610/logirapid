@@ -638,7 +638,7 @@ export default function MarketPrintServiceDetailPage({ params }: { params: Promi
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nueva API Key</label>
                     <div className="flex gap-2">
-                      <input type="text" value={newCredentials.apiKey} readOnly className="flex-1 px-3 py-2 text-xs font-mono bg-gray-100 dark:bg-gray-900 rounded-lg" />
+                      <input type="text" value={newCredentials.apiKey} readOnly className="flex-1 px-3 py-2 text-xs font-mono bg-gray-100 dark:bg-gray-900 rounded-lg text-gray-900 dark:text-white" />
                       <Button variant="outline" size="sm" onClick={() => copyToClipboard(newCredentials.apiKey, 'API Key')}>
                         <Copy className="w-4 h-4" />
                       </Button>
@@ -647,7 +647,7 @@ export default function MarketPrintServiceDetailPage({ params }: { params: Promi
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nuevo API Secret</label>
                     <div className="flex gap-2">
-                      <input type="text" value={newCredentials.apiSecret} readOnly className="flex-1 px-3 py-2 text-xs font-mono bg-gray-100 dark:bg-gray-900 rounded-lg" />
+                      <input type="text" value={newCredentials.apiSecret} readOnly className="flex-1 px-3 py-2 text-xs font-mono bg-gray-100 dark:bg-gray-900 rounded-lg text-gray-900 dark:text-white" />
                       <Button variant="outline" size="sm" onClick={() => copyToClipboard(newCredentials.apiSecret, 'API Secret')}>
                         <Copy className="w-4 h-4" />
                       </Button>

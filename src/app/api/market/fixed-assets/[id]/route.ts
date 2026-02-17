@@ -308,6 +308,25 @@ export async function PUT(
     const hasResponsibleChange = responsibleEmployeeId !== undefined && responsibleEmployeeId !== existing.responsible_employee_id
     const hasStatusChange = status !== undefined && status !== existing.status
 
+    // Check for general field changes (for edit logging)
+    const changedFields: string[] = []
+    if (name !== undefined && name !== existing.name) changedFields.push('nombre')
+    if (description !== undefined && description !== existing.description) changedFields.push('descripcion')
+    if (categoryId !== undefined && categoryId !== existing.category_id) changedFields.push('categoria')
+    if (assetType !== undefined && assetType !== existing.asset_type) changedFields.push('tipo')
+    if (acquisitionDate !== undefined && acquisitionDate !== existing.acquisition_date) changedFields.push('fecha adquisicion')
+    if (acquisitionCost !== undefined && parseFloat(acquisitionCost) !== parseFloat(existing.acquisition_cost)) changedFields.push('costo')
+    if (currency !== undefined && currency !== existing.currency) changedFields.push('moneda')
+    if (currentValue !== undefined && parseFloat(currentValue) !== parseFloat(existing.current_value)) changedFields.push('valor actual')
+    if (supplierId !== undefined && supplierId !== existing.supplier_id) changedFields.push('proveedor')
+    if (invoiceNumber !== undefined && invoiceNumber !== existing.invoice_number) changedFields.push('factura')
+    if (serialNumber !== undefined && serialNumber !== existing.serial_number) changedFields.push('numero serie')
+    if (brand !== undefined && brand !== existing.brand) changedFields.push('marca')
+    if (model !== undefined && model !== existing.model) changedFields.push('modelo')
+    if (condition !== undefined && condition !== existing.condition) changedFields.push('condicion')
+    if (notes !== undefined && notes !== existing.notes) changedFields.push('notas')
+    if (imageUrl !== undefined && imageUrl !== existing.image_url) changedFields.push('imagen')
+
     // Update asset
     await db.query(`
       UPDATE market_fixed_assets SET
@@ -408,6 +427,23 @@ export async function PUT(
         existing.status,
         status,
         movementReason || 'Cambio de estado',
+        payload.userId
+      ])
+    }
+
+    // Create edit movement record for general field changes
+    // (only if there are changes not already covered by transfer/assignment/status_change)
+    if (changedFields.length > 0) {
+      const editReason = movementReason || `Campos editados: ${changedFields.join(', ')}`
+      await db.query(`
+        INSERT INTO market_fixed_asset_movements (
+          asset_id, company_id, movement_type,
+          reason, created_by
+        ) VALUES ($1, $2, 'edit', $3, $4)
+      `, [
+        assetId,
+        existing.company_id,
+        editReason,
         payload.userId
       ])
     }
