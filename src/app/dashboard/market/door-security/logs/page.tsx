@@ -294,10 +294,14 @@ export default function DoorLogsPage() {
                             </span>
                           )}
                           {log.hasPendingInvoices && !log.invoicesValidated && (
-                            <AlertTriangle className="w-4 h-4 text-orange-500" title="Facturas pendientes" />
+                            <span title="Facturas pendientes">
+                              <AlertTriangle className="w-4 h-4 text-orange-500" />
+                            </span>
                           )}
                           {log.invoicesValidated && (
-                            <CheckCircle className="w-4 h-4 text-green-500" title="Facturas validadas" />
+                            <span title="Facturas validadas">
+                              <CheckCircle className="w-4 h-4 text-green-500" />
+                            </span>
                           )}
                         </div>
                       </td>
