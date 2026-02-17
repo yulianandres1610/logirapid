@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
 
     const total = parseInt(countResult.rows[0]?.total || '0')
 
-    // Get kiosks with warehouse info
+    // Get kiosks (without warehouse join to avoid dependency issues)
     const result = await db.query(`
       SELECT
         k.id,
@@ -83,7 +83,6 @@ export async function GET(request: NextRequest) {
         k.lastping,
         k.settings,
         k.createdat,
-        w.name as warehousename,
         (
           SELECT COUNT(*)
           FROM market_visitor_logs vl
@@ -95,7 +94,6 @@ export async function GET(request: NextRequest) {
           WHERE vl.kioskid = k.id AND DATE(vl.entrytime) = CURRENT_DATE
         ) as todayvisitors
       FROM market_door_kiosks k
-      LEFT JOIN market_warehouses w ON k.warehouseid = w.id
       ${whereClause}
       ORDER BY k.createdat DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -110,7 +108,7 @@ export async function GET(request: NextRequest) {
           location: k.location,
           deviceId: k.deviceid,
           warehouseId: k.warehouseid,
-          warehouseName: k.warehousename,
+          warehouseName: null,
           isActive: k.isactive,
           lastPing: k.lastping,
           settings: k.settings,

@@ -49,16 +49,16 @@ export async function POST(request: NextRequest) {
 
     const results: string[] = []
 
-    // Create market_door_kiosks table
+    // Create market_door_kiosks table (no foreign key to market_warehouses to avoid dependency issues)
     try {
       await db.query(`
         CREATE TABLE IF NOT EXISTS market_door_kiosks (
           id SERIAL PRIMARY KEY,
-          companyid INTEGER REFERENCES companies(id),
+          companyid INTEGER NOT NULL,
           name VARCHAR(100) NOT NULL,
           location VARCHAR(200),
           deviceid VARCHAR(100) UNIQUE,
-          warehouseid INTEGER REFERENCES market_warehouses(id),
+          warehouseid INTEGER,
           isactive BOOLEAN DEFAULT true,
           lastping TIMESTAMP,
           settings JSONB DEFAULT '{}',
@@ -81,9 +81,9 @@ export async function POST(request: NextRequest) {
         CREATE INDEX IF NOT EXISTS idx_market_door_kiosks_companyid
         ON market_door_kiosks(companyid)
       `)
-      results.push('index on companyid created')
+      results.push('index on kiosks companyid created')
     } catch {
-      results.push('index on companyid already exists or failed')
+      results.push('index on kiosks companyid already exists or failed')
     }
 
     // Create market_visitors table
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
       await db.query(`
         CREATE TABLE IF NOT EXISTS market_visitors (
           id SERIAL PRIMARY KEY,
-          companyid INTEGER REFERENCES companies(id),
+          companyid INTEGER NOT NULL,
           fullname VARCHAR(200) NOT NULL,
           idtype VARCHAR(50),
           idnumber VARCHAR(50) NOT NULL,
@@ -132,19 +132,19 @@ export async function POST(request: NextRequest) {
       results.push('visitor indexes already exist or failed')
     }
 
-    // Create market_visitor_logs table
+    // Create market_visitor_logs table (with foreign key to visitors and kiosks only)
     try {
       await db.query(`
         CREATE TABLE IF NOT EXISTS market_visitor_logs (
           id SERIAL PRIMARY KEY,
-          companyid INTEGER REFERENCES companies(id),
-          visitorid INTEGER REFERENCES market_visitors(id),
-          kioskid INTEGER REFERENCES market_door_kiosks(id),
+          companyid INTEGER NOT NULL,
+          visitorid INTEGER REFERENCES market_visitors(id) ON DELETE CASCADE,
+          kioskid INTEGER REFERENCES market_door_kiosks(id) ON DELETE SET NULL,
           entrytime TIMESTAMP NOT NULL,
           exittime TIMESTAMP,
           visitpurpose VARCHAR(100),
           visitnotes TEXT,
-          hostemployeeid INTEGER REFERENCES market_employees(id),
+          hostemployeeid INTEGER,
           haspendinginvoices BOOLEAN DEFAULT false,
           invoicesvalidated BOOLEAN DEFAULT false,
           validatedat TIMESTAMP,
@@ -190,7 +190,7 @@ export async function POST(request: NextRequest) {
       await db.query(`
         CREATE TABLE IF NOT EXISTS market_visitor_invoice_validations (
           id SERIAL PRIMARY KEY,
-          visitorlogid INTEGER REFERENCES market_visitor_logs(id),
+          visitorlogid INTEGER REFERENCES market_visitor_logs(id) ON DELETE CASCADE,
           documenttype VARCHAR(20) NOT NULL,
           documentid INTEGER,
           documentnumber VARCHAR(50),
@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
           currency VARCHAR(10),
           validated BOOLEAN DEFAULT false,
           validatedat TIMESTAMP,
-          validatedby INTEGER REFERENCES market_employees(id),
+          validatedby INTEGER,
           notes TEXT,
           createdat TIMESTAMP DEFAULT NOW()
         )
@@ -223,14 +223,14 @@ export async function POST(request: NextRequest) {
       results.push('invoice_validations index already exists or failed')
     }
 
-    // Create market_door_guards table
+    // Create market_door_guards table (no hard FK to market_employees)
     try {
       await db.query(`
         CREATE TABLE IF NOT EXISTS market_door_guards (
           id SERIAL PRIMARY KEY,
-          companyid INTEGER REFERENCES companies(id),
-          employeeid INTEGER REFERENCES market_employees(id),
-          kioskid INTEGER REFERENCES market_door_kiosks(id),
+          companyid INTEGER NOT NULL,
+          employeeid INTEGER NOT NULL,
+          kioskid INTEGER REFERENCES market_door_kiosks(id) ON DELETE CASCADE,
           isactive BOOLEAN DEFAULT true,
           createdat TIMESTAMP DEFAULT NOW(),
           UNIQUE(companyid, employeeid, kioskid)
@@ -258,21 +258,6 @@ export async function POST(request: NextRequest) {
       results.push('guards indexes created')
     } catch {
       results.push('guards indexes already exist or failed')
-    }
-
-    // Add door_security_enabled column to market_company_settings if it doesn't exist
-    try {
-      await db.query(`
-        ALTER TABLE market_company_settings
-        ADD COLUMN IF NOT EXISTS door_security_enabled BOOLEAN DEFAULT false
-      `)
-      await db.query(`
-        ALTER TABLE market_company_settings
-        ADD COLUMN IF NOT EXISTS door_require_invoice_validation BOOLEAN DEFAULT true
-      `)
-      results.push('market_company_settings columns added')
-    } catch (error: any) {
-      results.push(`settings columns: ${error.message}`)
     }
 
     console.log('[Door Security Init] Tables initialized:', results)

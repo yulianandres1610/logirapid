@@ -58,47 +58,59 @@ export async function GET(request: NextRequest) {
       paramIndex++
     }
 
-    const result = await db.query(`
-      SELECT
-        g.id,
-        g.employeeid,
-        g.kioskid,
-        g.isactive,
-        g.createdat,
-        e.firstname,
-        e.lastname,
-        e.employeecode,
-        e.position,
-        e.email,
-        e.phone,
-        e.isactive as employeeactive,
-        k.name as kioskname
-      FROM market_door_guards g
-      JOIN market_employees e ON g.employeeid = e.id
-      LEFT JOIN market_door_kiosks k ON g.kioskid = k.id
-      ${whereClause}
-      ORDER BY e.lastname, e.firstname
-    `, params)
+    // Try to get guards with employee info, return empty if tables don't exist
+    try {
+      const result = await db.query(`
+        SELECT
+          g.id,
+          g.employeeid,
+          g.kioskid,
+          g.isactive,
+          g.createdat,
+          e.firstname,
+          e.lastname,
+          e.employeecode,
+          e.position,
+          e.email,
+          e.phone,
+          e.isactive as employeeactive,
+          k.name as kioskname
+        FROM market_door_guards g
+        LEFT JOIN market_employees e ON g.employeeid = e.id
+        LEFT JOIN market_door_kiosks k ON g.kioskid = k.id
+        ${whereClause}
+        ORDER BY g.createdat DESC
+      `, params)
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        guards: result.rows.map(g => ({
-          id: g.id,
-          employeeId: g.employeeid,
-          employeeName: `${g.firstname} ${g.lastname}`,
-          employeeCode: g.employeecode,
-          position: g.position,
-          email: g.email,
-          phone: g.phone,
-          kioskId: g.kioskid,
-          kioskName: g.kioskname || 'Todos los kiosks',
-          isActive: g.isactive,
-          employeeActive: g.employeeactive,
-          createdAt: g.createdat
-        }))
+      return NextResponse.json({
+        success: true,
+        data: {
+          guards: result.rows.map(g => ({
+            id: g.id,
+            employeeId: g.employeeid,
+            employeeName: g.firstname ? `${g.firstname} ${g.lastname}` : `Empleado #${g.employeeid}`,
+            employeeCode: g.employeecode || '',
+            position: g.position || '',
+            email: g.email || '',
+            phone: g.phone || '',
+            kioskId: g.kioskid,
+            kioskName: g.kioskname || 'Todos los kiosks',
+            isActive: g.isactive,
+            employeeActive: g.employeeactive !== false,
+            createdAt: g.createdat
+          }))
+        }
+      })
+    } catch (tableError: any) {
+      // If tables don't exist yet, return empty list
+      if (tableError.message?.includes('does not exist')) {
+        return NextResponse.json({
+          success: true,
+          data: { guards: [] }
+        })
       }
-    })
+      throw tableError
+    }
 
   } catch (error) {
     console.error('[Guards GET] Error:', error)
@@ -155,26 +167,37 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify employee exists and belongs to company
-    const employeeResult = await db.query(`
-      SELECT id, firstname, lastname, pin FROM market_employees
-      WHERE id = $1 AND companyid = $2 AND isactive = true
-    `, [employeeId, payload.companyId])
+    let employee: any = null
+    try {
+      const employeeResult = await db.query(`
+        SELECT id, firstname, lastname, pin FROM market_employees
+        WHERE id = $1 AND companyid = $2 AND isactive = true
+      `, [employeeId, payload.companyId])
 
-    if (employeeResult.rows.length === 0) {
-      return NextResponse.json({
-        success: false,
-        error: 'Empleado no encontrado o inactivo'
-      }, { status: 404 })
-    }
+      if (employeeResult.rows.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Empleado no encontrado o inactivo'
+        }, { status: 404 })
+      }
 
-    const employee = employeeResult.rows[0]
+      employee = employeeResult.rows[0]
 
-    // Check employee has PIN
-    if (!employee.pin) {
-      return NextResponse.json({
-        success: false,
-        error: 'El empleado debe tener un PIN configurado para ser guardia'
-      }, { status: 400 })
+      // Check employee has PIN
+      if (!employee.pin) {
+        return NextResponse.json({
+          success: false,
+          error: 'El empleado debe tener un PIN configurado para ser guardia'
+        }, { status: 400 })
+      }
+    } catch (tableError: any) {
+      if (tableError.message?.includes('does not exist')) {
+        return NextResponse.json({
+          success: false,
+          error: 'La tabla de empleados no existe. Inicialice primero el módulo de RRHH.'
+        }, { status: 400 })
+      }
+      throw tableError
     }
 
     // Verify kiosk if provided
