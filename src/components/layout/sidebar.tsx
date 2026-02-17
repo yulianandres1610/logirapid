@@ -108,7 +108,7 @@ const SidebarItem = ({
         "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 relative overflow-hidden group",
         isActive
           ? theme === 'dark'
-            ? brand === 'servisumic'
+            ? brand.name === 'servisumic'
               ? `bg-brand-primary/20 text-brand-primary border border-brand-primary/30`
               : `bg-brand-secondary/20 text-brand-secondary border border-brand-secondary/30`
             : `bg-brand-primary/20 text-brand-primary border border-brand-primary/30`
@@ -125,7 +125,7 @@ const SidebarItem = ({
           className={cn(
             "absolute inset-0 rounded-xl",
             theme === 'dark'
-              ? brand === 'servisumic' ? "bg-brand-primary/10" : "bg-brand-secondary/10"
+              ? brand.name === 'servisumic' ? "bg-brand-primary/10" : "bg-brand-secondary/10"
               : "bg-brand-primary/10"
           )}
           initial={{ opacity: 0 }}
@@ -144,7 +144,7 @@ const SidebarItem = ({
           "w-5 h-5",
           isActive
             ? theme === 'dark'
-              ? brand === 'servisumic' ? "text-brand-primary" : "text-brand-secondary"
+              ? brand.name === 'servisumic' ? "text-brand-primary" : "text-brand-secondary"
               : "text-brand-primary"
             : theme === 'dark'
               ? "text-gray-400 group-hover:text-white"
@@ -188,7 +188,7 @@ const SidebarItem = ({
           className={cn(
             "absolute right-2 w-1 h-8 rounded-full opacity-0 group-hover:opacity-100",
             theme === 'dark'
-              ? brand === 'servisumic' ? "bg-brand-primary" : "bg-brand-secondary"
+              ? brand.name === 'servisumic' ? "bg-brand-primary" : "bg-brand-secondary"
               : "bg-brand-primary"
           )}
           initial={{ opacity: 0, scaleY: 0 }}
@@ -220,7 +220,7 @@ const SidebarItem = ({
                   "w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 relative group",
                   pathname === subItem.href
                     ? theme === 'dark'
-                      ? brand === 'servisumic' ? "text-brand-primary" : "text-brand-secondary"
+                      ? brand.name === 'servisumic' ? "text-brand-primary" : "text-brand-secondary"
                       : "text-brand-primary"
                     : theme === 'dark'
                       ? "text-gray-400 hover:text-white"
@@ -233,7 +233,7 @@ const SidebarItem = ({
                   "w-4 h-4",
                   pathname === subItem.href
                     ? theme === 'dark'
-                      ? brand === 'servisumic' ? "text-brand-primary" : "text-brand-secondary"
+                      ? brand.name === 'servisumic' ? "text-brand-primary" : "text-brand-secondary"
                       : "text-brand-primary"
                     : theme === 'dark'
                       ? "text-gray-400 group-hover:text-white"
@@ -245,7 +245,7 @@ const SidebarItem = ({
                     className={cn(
                       "absolute right-2 w-1 h-6 rounded-full",
                       theme === 'dark'
-                        ? brand === 'servisumic' ? "bg-brand-primary" : "bg-brand-secondary"
+                        ? brand.name === 'servisumic' ? "bg-brand-primary" : "bg-brand-secondary"
                         : "bg-brand-primary"
                     )}
                     initial={{ scaleY: 0 }}
@@ -1093,7 +1093,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
               className={cn(
                 "w-full justify-start gap-3 hover:bg-brand-primary/10",
                 theme === 'dark'
-                  ? brand === 'servisumic'
+                  ? brand.name === 'servisumic'
                     ? "text-gray-400 hover:text-brand-primary"
                     : "text-gray-400 hover:text-brand-secondary"
                   : "text-gray-600 hover:text-brand-primary",
@@ -1126,7 +1126,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
               className={cn(
                 "w-full justify-start gap-3 hover:bg-brand-primary/10",
                 theme === 'dark'
-                  ? brand === 'servisumic'
+                  ? brand.name === 'servisumic'
                     ? "text-gray-400 hover:text-brand-primary"
                     : "text-gray-400 hover:text-brand-secondary"
                   : "text-gray-600 hover:text-brand-primary",

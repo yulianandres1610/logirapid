@@ -13,6 +13,8 @@ import {
   ChevronLeft,
   Eye
 } from 'lucide-react'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { ProtectedRoute } from '@/components/protected-route'
 
 interface Visitor {
   id: number
@@ -124,10 +126,12 @@ export default function DoorVisitorsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Visitantes</h1>
+    <ProtectedRoute>
+      <DashboardLayout>
+        <div className="p-6 space-y-6">
+          {/* Header */}
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Visitantes</h1>
         <p className="text-gray-500 dark:text-gray-400">Registro histórico de visitantes</p>
       </div>
 
@@ -415,6 +419,8 @@ export default function DoorVisitorsPage() {
           </div>
         </div>
       )}
-    </div>
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
   )
 }

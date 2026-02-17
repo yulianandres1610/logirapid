@@ -16,6 +16,8 @@ import {
   XCircle,
   UserPlus
 } from 'lucide-react'
+import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { ProtectedRoute } from '@/components/protected-route'
 
 interface Kiosk {
   id: number
@@ -271,21 +273,27 @@ export default function DoorKiosksPage() {
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-6"></div>
-          <div className="space-y-4">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-24 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
-            ))}
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="p-6">
+            <div className="animate-pulse">
+              <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-6"></div>
+              <div className="space-y-4">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="h-24 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </DashboardLayout>
+      </ProtectedRoute>
     )
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <ProtectedRoute>
+      <DashboardLayout>
+        <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -637,6 +645,8 @@ export default function DoorKiosksPage() {
           </div>
         </div>
       )}
-    </div>
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
   )
 }
