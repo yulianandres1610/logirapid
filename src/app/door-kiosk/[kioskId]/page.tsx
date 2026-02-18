@@ -24,7 +24,9 @@ import {
   MapPin,
   Clock,
   Sun,
-  Moon
+  Moon,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react'
 
 interface KioskInfo {
@@ -132,6 +134,7 @@ export default function DoorKioskPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const pinInputRef = useRef<HTMLInputElement>(null)
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Reset inactivity timer
   const resetInactivityTimer = useCallback(() => {
@@ -341,9 +344,43 @@ export default function DoorKioskPage() {
     canvas.height = video.videoHeight
     ctx.drawImage(video, 0, 0)
 
-    const imageData = canvas.toDataURL('image/jpeg', 0.8)
+    const imageData = canvas.toDataURL('image/jpeg', 0.9)
     setCapturedImage(imageData)
+    stopCamera()
     processIdDocument(imageData)
+  }
+
+  // Handle file input (for mobile devices - native camera or gallery)
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Stop camera if active
+    stopCamera()
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const imageData = e.target?.result as string
+      if (imageData) {
+        setCapturedImage(imageData)
+        processIdDocument(imageData)
+      }
+    }
+    reader.onerror = () => {
+      setMessage('Error al leer la imagen')
+      setStep('error')
+    }
+    reader.readAsDataURL(file)
+
+    // Reset input so same file can be selected again
+    event.target.value = ''
+  }
+
+  // Open native camera on mobile
+  const openNativeCamera = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click()
+    }
   }
 
   const processIdDocument = async (imageBase64: string) => {
@@ -356,7 +393,10 @@ export default function DoorKioskPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fileBase64: imageBase64.split(',')[1],
-          mimeType: 'image/jpeg'
+          mimeType: 'image/jpeg',
+          // Pass kiosk credentials for authentication
+          kioskId: parseInt(kioskId),
+          guardId: guard?.id
         })
       })
 
@@ -366,7 +406,7 @@ export default function DoorKioskPage() {
         setScannedData(result.data)
         await checkOrRegisterVisitor(result.data, imageBase64)
       } else {
-        setMessage('No se pudo leer el documento. Intente con una foto más clara.')
+        setMessage(result.error || 'No se pudo leer el documento. Intente con una foto más clara.')
         setStep('error')
       }
     } catch (error) {
@@ -1014,31 +1054,92 @@ export default function DoorKioskPage() {
                   Escanear Identificación
                 </h2>
                 <p className={`${theme.textMuted} text-sm`}>
-                  Tome una foto del documento
+                  Tome una foto del documento de identidad
                 </p>
               </div>
 
-              <div className="relative rounded-2xl overflow-hidden mb-4 bg-black aspect-[4/3]">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover"
-                />
-                <canvas ref={canvasRef} className="hidden" />
+              {/* Hidden file input for native camera/gallery */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
 
-                <div className="absolute inset-4 border-2 border-dashed border-white/50 rounded-xl pointer-events-none" />
+              {/* Web Camera View */}
+              {cameraActive && (
+                <div className="relative rounded-2xl overflow-hidden mb-4 bg-black aspect-[4/3]">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                  <canvas ref={canvasRef} className="hidden" />
 
+                  <div className="absolute inset-4 border-2 border-dashed border-white/50 rounded-xl pointer-events-none" />
+
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={capturePhoto}
+                    className="absolute bottom-4 left-1/2 -translate-x-1/2 w-16 h-16 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center shadow-lg"
+                  >
+                    <Camera className="w-8 h-8 text-white" />
+                  </motion.button>
+                </div>
+              )}
+
+              {/* Mobile-friendly options - shown when camera not active or as alternatives */}
+              <div className="space-y-3 mb-4">
+                {/* Main button - Take Photo with native camera (best for mobile) */}
                 <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={capturePhoto}
-                  disabled={!cameraActive}
-                  className="absolute bottom-4 left-1/2 -translate-x-1/2 w-16 h-16 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center shadow-lg"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={openNativeCamera}
+                  className="w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-2xl font-bold text-lg transition-all shadow-lg"
                 >
-                  <Camera className="w-8 h-8 text-white" />
+                  <Camera className="w-6 h-6" />
+                  Tomar Foto
                 </motion.button>
+
+                {/* Secondary options */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Use web camera (for desktop or if preferred) */}
+                  {!cameraActive && (
+                    <button
+                      onClick={startCamera}
+                      className={`flex items-center justify-center gap-2 py-3 ${theme.cancelBtn} rounded-xl font-medium transition-colors`}
+                    >
+                      <ImageIcon className="w-5 h-5" />
+                      Cámara Web
+                    </button>
+                  )}
+                  {cameraActive && (
+                    <button
+                      onClick={stopCamera}
+                      className={`flex items-center justify-center gap-2 py-3 ${theme.cancelBtn} rounded-xl font-medium transition-colors`}
+                    >
+                      <XCircle className="w-5 h-5" />
+                      Cerrar Cámara
+                    </button>
+                  )}
+
+                  {/* Select from gallery */}
+                  <label className={`flex items-center justify-center gap-2 py-3 ${theme.cancelBtn} rounded-xl font-medium transition-colors cursor-pointer`}>
+                    <Upload className="w-5 h-5" />
+                    Galería
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
               </div>
 
               <button
