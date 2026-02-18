@@ -112,7 +112,7 @@ export default function DoorKiosksPage() {
       const res = await fetch('/api/market/hr/employees?limit=100')
       const data = await res.json()
       if (data.success) {
-        setEmployees(data.data.employees.filter((e: any) => e.isActive))
+        setEmployees(data.data.employees.filter((e: any) => e.status === 'active'))
       }
     } catch (error) {
       console.error('Error fetching employees:', error)
