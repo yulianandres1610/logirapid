@@ -1,13 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Users,
   Search,
   User,
-  Calendar,
-  MapPin,
-  Clock,
   CreditCard,
   ChevronRight,
   ChevronLeft,
@@ -31,33 +29,13 @@ interface Visitor {
   isCurrentlyInside: boolean
 }
 
-interface VisitorDetail {
-  visitor: Visitor
-  isCurrentlyInside: boolean
-  activeLog: {
-    id: number
-    entryTime: string
-    visitPurpose: string
-    kioskName: string
-  } | null
-  recentHistory: Array<{
-    id: number
-    entryTime: string
-    exitTime: string | null
-    visitPurpose: string
-    status: string
-    kioskName: string
-  }>
-}
-
 export default function DoorVisitorsPage() {
+  const router = useRouter()
   const [visitors, setVisitors] = useState<Visitor[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [selectedVisitor, setSelectedVisitor] = useState<VisitorDetail | null>(null)
-  const [showDetailModal, setShowDetailModal] = useState(false)
 
   useEffect(() => {
     fetchVisitors()
@@ -86,18 +64,8 @@ export default function DoorVisitorsPage() {
     }
   }
 
-  const viewVisitorDetails = async (visitorId: number) => {
-    try {
-      const res = await fetch(`/api/market/door-security/visitors/${visitorId}`)
-      const data = await res.json()
-
-      if (data.success) {
-        setSelectedVisitor(data.data)
-        setShowDetailModal(true)
-      }
-    } catch (error) {
-      console.error('Error fetching visitor details:', error)
-    }
+  const viewVisitorDetails = (visitorId: number) => {
+    router.push(`/dashboard/market/door-security/visitors/${visitorId}`)
   }
 
   const handleSearch = (e: React.FormEvent) => {
@@ -112,16 +80,6 @@ export default function DoorVisitorsPage() {
       day: '2-digit',
       month: 'short',
       year: 'numeric'
-    })
-  }
-
-  const formatDateTime = (dateStr: string | null) => {
-    if (!dateStr) return '-'
-    return new Date(dateStr).toLocaleString('es', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit'
     })
   }
 
@@ -281,144 +239,6 @@ export default function DoorVisitorsPage() {
         )}
       </div>
 
-      {/* Visitor Detail Modal */}
-      {showDetailModal && selectedVisitor && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-2xl m-4 max-h-[80vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-700">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-teal-100 dark:bg-teal-900/30 rounded-full flex items-center justify-center">
-                    <User className="w-8 h-8 text-teal-600 dark:text-teal-400" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                      {selectedVisitor.visitor.fullName}
-                    </h2>
-                    <p className="text-gray-500 dark:text-gray-400">
-                      {selectedVisitor.visitor.idType}: {selectedVisitor.visitor.idNumber}
-                    </p>
-                    {selectedVisitor.isCurrentlyInside && (
-                      <span className="inline-flex items-center gap-1 mt-2 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-sm font-medium">
-                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                        Actualmente adentro
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Info Grid */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Total de visitas</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {selectedVisitor.visitor.totalVisits}
-                  </p>
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Primera visita</p>
-                  <p className="text-lg font-medium text-gray-900 dark:text-white">
-                    {formatDate(selectedVisitor.visitor.firstVisit)}
-                  </p>
-                </div>
-                {selectedVisitor.visitor.dateOfBirth && (
-                  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                    <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      Fecha de nacimiento
-                    </p>
-                    <p className="text-lg font-medium text-gray-900 dark:text-white">
-                      {formatDate(selectedVisitor.visitor.dateOfBirth)}
-                    </p>
-                  </div>
-                )}
-                {selectedVisitor.visitor.address && (
-                  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                    <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                      <MapPin className="w-4 h-4" />
-                      Dirección
-                    </p>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2">
-                      {selectedVisitor.visitor.address}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Active Log */}
-              {selectedVisitor.activeLog && (
-                <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 border border-green-200 dark:border-green-800">
-                  <h3 className="font-medium text-green-800 dark:text-green-400 mb-2">Visita activa</h3>
-                  <div className="flex items-center gap-4 text-sm text-green-700 dark:text-green-300">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-4 h-4" />
-                      Entrada: {formatDateTime(selectedVisitor.activeLog.entryTime)}
-                    </span>
-                    <span>
-                      Motivo: {selectedVisitor.activeLog.visitPurpose || 'No especificado'}
-                    </span>
-                    <span>
-                      Kiosk: {selectedVisitor.activeLog.kioskName}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Recent History */}
-              <div>
-                <h3 className="font-medium text-gray-900 dark:text-white mb-3">Historial reciente</h3>
-                <div className="space-y-2">
-                  {selectedVisitor.recentHistory.length > 0 ? (
-                    selectedVisitor.recentHistory.map(log => (
-                      <div
-                        key={log.id}
-                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
-                      >
-                        <div>
-                          <p className="font-medium text-gray-900 dark:text-white">
-                            {formatDateTime(log.entryTime)}
-                          </p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {log.visitPurpose || 'Sin motivo'} • {log.kioskName}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          {log.exitTime ? (
-                            <p className="text-sm text-gray-600 dark:text-gray-300">
-                              Salida: {formatDateTime(log.exitTime)}
-                            </p>
-                          ) : (
-                            <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded text-xs">
-                              Activa
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-gray-400 dark:text-gray-500 text-sm">Sin historial</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 border-t border-gray-100 dark:border-gray-700">
-              <button
-                onClick={() => {
-                  setShowDetailModal(false)
-                  setSelectedVisitor(null)
-                }}
-                className="w-full py-2 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
         </div>
       </DashboardLayout>
     </ProtectedRoute>
