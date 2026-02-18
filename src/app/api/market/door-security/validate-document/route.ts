@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
       // Try to find employee by user ID
       const employeeResult = await db.query(`
         SELECT id FROM market_employees
-        WHERE userid = $1 AND companyid = $2
+        WHERE user_id = $1 AND company_id = $2
         LIMIT 1
       `, [payload.userId, payload.companyId])
 

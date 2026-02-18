@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import sharp from 'sharp'
+import { db } from '@/lib/database'
 
 // API Key para Gemini
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
@@ -120,12 +121,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check kiosk authentication (kioskId + guardId)
+    // Check kiosk authentication (kioskId + guardId) with database validation
     if (!isAuthenticated && kioskId && guardId) {
-      // For kiosk mode, we trust the request if it has valid kiosk and guard IDs
-      // The guard was already authenticated via PIN on the kiosk
-      isAuthenticated = true
-      console.log('[ID Scanner] Kiosk mode authentication - kioskId:', kioskId, 'guardId:', guardId)
+      // Validate kiosk exists and is active
+      const kioskResult = await db.query(
+        'SELECT id FROM market_door_kiosks WHERE id = $1 AND isactive = true',
+        [kioskId]
+      )
+      if (kioskResult.rows.length > 0) {
+        // Validate guard exists and is active
+        const guardResult = await db.query(
+          'SELECT id FROM market_door_guards WHERE id = $1 AND isactive = true',
+          [guardId]
+        )
+        if (guardResult.rows.length > 0) {
+          isAuthenticated = true
+          console.log('[ID Scanner] Kiosk mode authentication - kioskId:', kioskId, 'guardId:', guardId)
+        }
+      }
     }
 
     if (!isAuthenticated) {
