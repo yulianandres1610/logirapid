@@ -176,7 +176,8 @@ export default function DoorKioskPage() {
 
   const fetchKiosk = async () => {
     try {
-      const response = await fetch(`/api/market/door-security/kiosks/${kioskId}`)
+      // Use public endpoint (no auth required for kiosk display)
+      const response = await fetch(`/api/market/door-security/kiosks/${kioskId}/public`)
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
