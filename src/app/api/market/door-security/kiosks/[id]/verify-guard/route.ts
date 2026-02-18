@@ -50,17 +50,18 @@ export async function POST(
     const guardResult = await db.query(`
       SELECT
         e.id as employeeid,
-        e.firstname,
-        e.lastname,
-        e.employeecode,
-        e.position,
+        u.firstname,
+        u.lastname,
+        e.employee_code,
+        u.role,
         g.id as guardid,
         g.kioskid
       FROM market_employees e
+      JOIN users u ON e.user_id = u.id
       JOIN market_door_guards g ON e.id = g.employeeid
-      WHERE e.companyid = $1
-        AND e.pin = $2
-        AND e.isactive = true
+      WHERE e.company_id = $1
+        AND e.pos_pin = $2
+        AND e.status = 'active'
         AND g.isactive = true
         AND (g.kioskid = $3 OR g.kioskid IS NULL)
       LIMIT 1
@@ -92,9 +93,9 @@ export async function POST(
       data: {
         guard: {
           id: guard.employeeid,
-          name: `${guard.firstname} ${guard.lastname}`,
-          code: guard.employeecode,
-          position: guard.position
+          name: `${guard.firstname || ''} ${guard.lastname || ''}`.trim(),
+          code: guard.employee_code || '',
+          role: guard.role || ''
         },
         kiosk: {
           id: kiosk.id,

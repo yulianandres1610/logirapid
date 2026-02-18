@@ -521,7 +521,7 @@ export default function DoorKioskPage() {
   // Kiosk not found
   if (kioskNotFound) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-teal-900 via-emerald-900 to-teal-900 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-stone-800 via-stone-900 to-stone-800 flex flex-col items-center justify-center p-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -536,7 +536,7 @@ export default function DoorKioskPage() {
           </p>
           <button
             onClick={changeKiosk}
-            className="flex items-center justify-center gap-2 w-full py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-medium"
+            className="flex items-center justify-center gap-2 w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-medium"
           >
             <ArrowLeft className="w-5 h-5" />
             Seleccionar otro kiosco
@@ -547,17 +547,28 @@ export default function DoorKioskPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-900 via-emerald-900 to-teal-900 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-stone-800 via-stone-900 to-stone-800 flex flex-col items-center justify-center p-4">
+      {/* Company Logo */}
+      {kiosk?.companyLogo && (
+        <div className="mb-4">
+          <img
+            src={kiosk.companyLogo}
+            alt={kiosk.companyName || 'Logo'}
+            className="h-16 w-auto object-contain"
+          />
+        </div>
+      )}
+
       {/* Header */}
       <div className="text-center mb-6">
         <h1 className="text-3xl font-bold text-white mb-1">
           {kiosk?.name || 'Control de Puerta'}
         </h1>
         {kiosk?.location && (
-          <p className="text-emerald-200">{kiosk.location}</p>
+          <p className="text-stone-300">{kiosk.location}</p>
         )}
         {guard && (
-          <p className="text-emerald-300 text-sm mt-2">
+          <p className="text-orange-400 text-sm mt-2">
             Guardia: {guard.name}
           </p>
         )}
@@ -568,7 +579,7 @@ export default function DoorKioskPage() {
         <p className="text-5xl font-bold text-white tracking-wider">
           {formatTime(currentTime)}
         </p>
-        <p className="text-emerald-200 mt-1 capitalize">
+        <p className="text-stone-400 mt-1 capitalize">
           {formatDate(currentTime)}
         </p>
       </div>
@@ -589,7 +600,7 @@ export default function DoorKioskPage() {
               className="p-8"
             >
               <div className="text-center mb-6">
-                <Shield className="w-12 h-12 text-teal-600 mx-auto mb-3" />
+                <Shield className="w-12 h-12 text-orange-500 mx-auto mb-3" />
                 <h2 className="text-xl font-bold text-gray-900">
                   Acceso de Guardia
                 </h2>
@@ -604,7 +615,7 @@ export default function DoorKioskPage() {
                     key={i}
                     className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-colors ${
                       i < pin.length
-                        ? 'border-teal-500 bg-teal-50 text-teal-600'
+                        ? 'border-orange-500 bg-orange-50 text-orange-600'
                         : 'border-gray-200'
                     }`}
                   >
@@ -632,7 +643,7 @@ export default function DoorKioskPage() {
                         ? 'invisible'
                         : digit === 'del'
                           ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                          : 'bg-gray-100 text-gray-900 hover:bg-teal-100'
+                          : 'bg-stone-100 text-stone-900 hover:bg-orange-100'
                     }`}
                   >
                     {digit === 'del' ? '⌫' : digit}
@@ -641,7 +652,7 @@ export default function DoorKioskPage() {
               </div>
 
               {loading && (
-                <div className="flex items-center justify-center gap-2 text-teal-600">
+                <div className="flex items-center justify-center gap-2 text-orange-600">
                   <RefreshCw className="w-5 h-5 animate-spin" />
                   <span>Verificando...</span>
                 </div>
@@ -658,8 +669,8 @@ export default function DoorKioskPage() {
               exit={{ opacity: 0 }}
               className="p-8 text-center"
             >
-              <div className="w-24 h-24 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Shield className="w-12 h-12 text-teal-600" />
+              <div className="w-24 h-24 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Shield className="w-12 h-12 text-orange-500" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 Control de Acceso
@@ -671,14 +682,14 @@ export default function DoorKioskPage() {
               <div className="space-y-3">
                 <button
                   onClick={() => setStep('scan_id')}
-                  className="w-full flex items-center justify-center gap-3 py-4 bg-teal-600 hover:bg-teal-700 text-white rounded-2xl font-bold text-lg transition-colors"
+                  className="w-full flex items-center justify-center gap-3 py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-bold text-lg transition-colors"
                 >
                   <LogIn className="w-6 h-6" />
                   Registrar Entrada
                 </button>
                 <button
                   onClick={() => setStep('scan_id')}
-                  className="w-full flex items-center justify-center gap-3 py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-bold text-lg transition-colors"
+                  className="w-full flex items-center justify-center gap-3 py-4 bg-stone-700 hover:bg-stone-800 text-white rounded-2xl font-bold text-lg transition-colors"
                 >
                   <LogOut className="w-6 h-6" />
                   Registrar Salida
@@ -697,7 +708,7 @@ export default function DoorKioskPage() {
               className="p-6"
             >
               <div className="text-center mb-4">
-                <CreditCard className="w-10 h-10 text-teal-600 mx-auto mb-2" />
+                <CreditCard className="w-10 h-10 text-orange-500 mx-auto mb-2" />
                 <h2 className="text-xl font-bold text-gray-900">
                   Escanear Identificación
                 </h2>
@@ -723,7 +734,7 @@ export default function DoorKioskPage() {
                   disabled={!cameraActive}
                   className="absolute bottom-4 left-1/2 -translate-x-1/2 w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
                 >
-                  <Camera className="w-8 h-8 text-teal-600" />
+                  <Camera className="w-8 h-8 text-orange-500" />
                 </button>
               </div>
 
@@ -745,7 +756,7 @@ export default function DoorKioskPage() {
               exit={{ opacity: 0 }}
               className="p-8 text-center"
             >
-              <RefreshCw className="w-16 h-16 text-teal-600 mx-auto mb-6 animate-spin" />
+              <RefreshCw className="w-16 h-16 text-orange-500 mx-auto mb-6 animate-spin" />
               <h2 className="text-xl font-bold text-gray-900 mb-2">
                 Analizando Documento
               </h2>
@@ -765,8 +776,8 @@ export default function DoorKioskPage() {
               className="p-6"
             >
               <div className="text-center mb-6">
-                <div className="w-20 h-20 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <User className="w-10 h-10 text-teal-600" />
+                <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <User className="w-10 h-10 text-orange-500" />
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900">
                   {visitor.fullName}
@@ -775,7 +786,7 @@ export default function DoorKioskPage() {
                   {visitor.idType}: {visitor.idNumber}
                 </p>
                 {visitor.totalVisits > 1 && (
-                  <span className="inline-block mt-2 px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm">
+                  <span className="inline-block mt-2 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm">
                     Visita #{visitor.totalVisits}
                   </span>
                 )}
@@ -792,8 +803,8 @@ export default function DoorKioskPage() {
                       onClick={() => setSelectedPurpose(purpose.id)}
                       className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-colors ${
                         selectedPurpose === purpose.id
-                          ? 'border-teal-500 bg-teal-50 text-teal-700'
-                          : 'border-gray-200 hover:border-teal-300'
+                          ? 'border-orange-500 bg-orange-50 text-orange-700'
+                          : 'border-gray-200 hover:border-orange-300'
                       }`}
                     >
                       <purpose.icon className="w-5 h-5" />
@@ -866,7 +877,7 @@ export default function DoorKioskPage() {
                           <p className="text-sm text-gray-500">
                             #{sale.documentNumber}
                           </p>
-                          <p className="text-lg font-bold text-teal-600 mt-1">
+                          <p className="text-lg font-bold text-orange-600 mt-1">
                             {sale.currency} {sale.total.toFixed(2)}
                           </p>
                         </div>
@@ -878,7 +889,7 @@ export default function DoorKioskPage() {
                         ) : (
                           <button
                             onClick={() => validateSale(sale)}
-                            className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium"
+                            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm font-medium"
                           >
                             Validar
                           </button>
@@ -899,7 +910,7 @@ export default function DoorKioskPage() {
                 <button
                   onClick={() => activeLogId && registerExit(activeLogId)}
                   disabled={pendingSales.some(s => !validatedSales.has(`${s.type}-${s.id}`))}
-                  className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-medium hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 py-3 bg-stone-700 text-white rounded-xl font-medium hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Permitir Salida
                 </button>
@@ -995,20 +1006,20 @@ export default function DoorKioskPage() {
 
       {/* Footer */}
       <div className="mt-6 flex items-center gap-4">
-        <p className="text-emerald-200 text-sm">
-          puerta.logirapid.com
+        <p className="text-stone-400 text-sm">
+          {kiosk?.companyName || 'Servisumic'}
         </p>
         {guard && (
           <>
             <button
               onClick={logoutGuard}
-              className="text-emerald-300 hover:text-white text-sm"
+              className="text-orange-400 hover:text-orange-300 text-sm"
             >
               Cerrar sesión
             </button>
             <button
               onClick={changeKiosk}
-              className="text-emerald-300 hover:text-white p-2"
+              className="text-stone-400 hover:text-white p-2"
               title="Cambiar kiosco"
             >
               <Settings className="w-5 h-5" />

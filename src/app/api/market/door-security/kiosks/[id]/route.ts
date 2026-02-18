@@ -87,13 +87,14 @@ export async function GET(
         g.id,
         g.employeeid,
         g.isactive,
-        e.firstname,
-        e.lastname,
-        e.employeecode,
-        e.pin
+        u.firstname,
+        u.lastname,
+        e.employee_code,
+        e.pos_pin
       FROM market_door_guards g
       JOIN market_employees e ON g.employeeid = e.id
-      WHERE g.kioskid = $1 OR g.kioskid IS NULL
+      JOIN users u ON e.user_id = u.id
+      WHERE (g.kioskid = $1 OR g.kioskid IS NULL)
       AND g.companyid = $2
       AND g.isactive = true
     `, [kiosk.id, kiosk.companyid])
@@ -129,9 +130,9 @@ export async function GET(
         guards: guardsResult.rows.map(g => ({
           id: g.id,
           employeeId: g.employeeid,
-          name: `${g.firstname} ${g.lastname}`,
-          code: g.employeecode,
-          hasPin: !!g.pin,
+          name: `${g.firstname || ''} ${g.lastname || ''}`.trim(),
+          code: g.employee_code || '',
+          hasPin: !!g.pos_pin,
           isActive: g.isactive
         })),
         stats: {

@@ -38,11 +38,10 @@ export async function POST(request: NextRequest) {
     let guardQuery = `
       SELECT
         e.id as employeeid,
-        e.firstname,
-        e.lastname,
-        e.employeecode,
-        e.position,
-        e.companyid,
+        u.firstname,
+        u.lastname,
+        e.employee_code,
+        e.company_id,
         u.role as userrole,
         g.id as guardid,
         g.kioskid,
@@ -55,8 +54,8 @@ export async function POST(request: NextRequest) {
       JOIN users u ON e.user_id = u.id
       JOIN market_door_guards g ON e.id = g.employeeid
       LEFT JOIN market_door_kiosks k ON g.kioskid = k.id
-      WHERE e.pin = $1
-        AND e.isactive = true
+      WHERE e.pos_pin = $1
+        AND e.status = 'active'
         AND g.isactive = true
         AND u.role IN ('MARKET_GUARDIA', 'MARKET_MANAGER', 'ADMIN', 'SUPER_ADMIN')
     `
@@ -64,7 +63,7 @@ export async function POST(request: NextRequest) {
     const params: any[] = [pin]
 
     if (companyId) {
-      guardQuery += ` AND e.companyid = $2`
+      guardQuery += ` AND e.company_id = $2`
       params.push(companyId)
     }
 
@@ -89,9 +88,9 @@ export async function POST(request: NextRequest) {
         data: {
           guard: {
             id: guard.employeeid,
-            name: `${guard.firstname} ${guard.lastname}`.trim(),
-            code: guard.employeecode,
-            position: guard.position
+            name: `${guard.firstname || ''} ${guard.lastname || ''}`.trim(),
+            code: guard.employee_code || '',
+            role: guard.userrole || ''
           },
           kiosk: {
             id: guard.kiosk_id,
@@ -110,7 +109,7 @@ export async function POST(request: NextRequest) {
       FROM market_door_kiosks
       WHERE companyid = $1 AND isactive = true
       ORDER BY name
-    `, [guard.companyid])
+    `, [guard.company_id])
 
     const kiosks = kiosksResult.rows.map(k => ({
       id: k.id,
@@ -128,9 +127,9 @@ export async function POST(request: NextRequest) {
         data: {
           guard: {
             id: guard.employeeid,
-            name: `${guard.firstname} ${guard.lastname}`.trim(),
-            code: guard.employeecode,
-            position: guard.position
+            name: `${guard.firstname || ''} ${guard.lastname || ''}`.trim(),
+            code: guard.employee_code || '',
+            role: guard.userrole || ''
           },
           kiosk: kiosks[0],
           redirectTo: `/door-kiosk/${kiosks[0].id}`
@@ -144,9 +143,9 @@ export async function POST(request: NextRequest) {
       data: {
         guard: {
           id: guard.employeeid,
-          name: `${guard.firstname} ${guard.lastname}`.trim(),
-          code: guard.employeecode,
-          position: guard.position
+          name: `${guard.firstname || ''} ${guard.lastname || ''}`.trim(),
+          code: guard.employee_code || '',
+          role: guard.userrole || ''
         },
         kiosks: kiosks,
         redirectTo: null // User must select a kiosk
