@@ -136,7 +136,7 @@ export default function EditCustomerPage({ params }: { params: Promise<{ id: str
       if (pricelistsRes.ok) {
         const result = await pricelistsRes.json()
         if (result.success) {
-          setPricelists(result.data || [])
+          setPricelists(result.data?.pricelists || [])
         }
       }
     } catch (error) {
