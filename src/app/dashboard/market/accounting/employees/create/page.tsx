@@ -63,7 +63,8 @@ const ROLES = [
   { value: 'MARKET_MANAGER_TIENDA', label: 'Manager Tienda', description: 'Gestiona tienda: acepta transferencias, arqueos, cajeros' },
   { value: 'MARKET_COMERCIAL', label: 'Comercial', description: 'Ventas, puede ver sus comisiones' },
   { value: 'MARKET_ALMACENERO', label: 'Almacenero', description: 'Inventario, sin acceso a nóminas' },
-  { value: 'MARKET_VENDEDOR', label: 'Vendedor', description: 'Solo POS, ve sus ventas y comisiones' }
+  { value: 'MARKET_VENDEDOR', label: 'Vendedor', description: 'Solo POS, ve sus ventas y comisiones' },
+  { value: 'MARKET_GUARDIA', label: 'Guardia', description: 'Solo acceso al kiosko de puerta (control de visitantes)' }
 ]
 
 const PAY_TYPES = [

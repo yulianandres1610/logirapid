@@ -128,9 +128,23 @@ export default function DoorKioskPage() {
     return () => clearInterval(timer)
   }, [])
 
-  // Fetch kiosk info
+  // Fetch kiosk info and check for pre-authenticated guard
   useEffect(() => {
     fetchKiosk()
+
+    // Check if guard was already authenticated from selector page
+    const savedGuard = sessionStorage.getItem('door-guard')
+    if (savedGuard) {
+      try {
+        const guardInfo = JSON.parse(savedGuard)
+        setGuard(guardInfo)
+        setStep('idle')
+        // Clear the session storage after use
+        sessionStorage.removeItem('door-guard')
+      } catch (e) {
+        console.error('Error parsing saved guard info:', e)
+      }
+    }
   }, [kioskId])
 
   // Focus PIN input

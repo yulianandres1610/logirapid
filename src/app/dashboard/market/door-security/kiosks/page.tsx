@@ -14,7 +14,10 @@ import {
   Search,
   CheckCircle,
   XCircle,
-  UserPlus
+  UserPlus,
+  ExternalLink,
+  Copy,
+  Check
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -69,6 +72,8 @@ export default function DoorKiosksPage() {
   const [formName, setFormName] = useState('')
   const [formLocation, setFormLocation] = useState('')
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null)
+  const [selectedGuardIds, setSelectedGuardIds] = useState<number[]>([])
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchKiosks()
@@ -129,10 +134,28 @@ export default function DoorKiosksPage() {
 
       const data = await res.json()
       if (data.success) {
-        setKiosks([data.data, ...kiosks])
+        const newKiosk = data.data
+
+        // Add selected guards
+        if (selectedGuardIds.length > 0) {
+          for (const employeeId of selectedGuardIds) {
+            await fetch('/api/market/door-security/guards', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                employeeId,
+                kioskId: newKiosk.id
+              })
+            })
+          }
+          await fetchGuards()
+        }
+
+        setKiosks([newKiosk, ...kiosks])
         setShowCreateModal(false)
         setFormName('')
         setFormLocation('')
+        setSelectedGuardIds([])
       } else {
         alert('Error: ' + data.error)
       }
@@ -271,6 +294,27 @@ export default function DoorKiosksPage() {
   const kioskGuards = (kioskId: number) =>
     guards.filter(g => g.kioskId === kioskId || g.kioskId === null)
 
+  const getKioskUrl = (deviceId: string) => {
+    // Use the current host to build the door-kiosk URL
+    if (typeof window !== 'undefined') {
+      const host = window.location.host
+      return `${window.location.protocol}//${host}/door-kiosk/${deviceId}`
+    }
+    return `/door-kiosk/${deviceId}`
+  }
+
+  const copyKioskUrl = async (deviceId: string) => {
+    const url = getKioskUrl(deviceId)
+    await navigator.clipboard.writeText(url)
+    setCopiedId(deviceId)
+    setTimeout(() => setCopiedId(null), 2000)
+  }
+
+  const openKioskUI = (deviceId: string) => {
+    const url = getKioskUrl(deviceId)
+    window.open(url, '_blank')
+  }
+
   if (loading) {
     return (
       <ProtectedRoute>
@@ -372,9 +416,33 @@ export default function DoorKiosksPage() {
                 </div>
               </div>
 
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">
-                ID: {kiosk.deviceId}
-              </p>
+              {/* Kiosk URL Access */}
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 mb-4">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">URL del Kiosk:</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs text-gray-600 dark:text-gray-300 truncate">
+                    /door-kiosk/{kiosk.deviceId}
+                  </code>
+                  <button
+                    onClick={() => copyKioskUrl(kiosk.deviceId)}
+                    className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                    title="Copiar URL"
+                  >
+                    {copiedId === kiosk.deviceId ? (
+                      <Check className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => openKioskUI(kiosk.deviceId)}
+                    className="p-1.5 text-teal-600 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/30 rounded"
+                    title="Abrir Kiosk"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
 
               {/* Guards */}
               <div className="mb-4">
@@ -456,7 +524,7 @@ export default function DoorKiosksPage() {
       {/* Create Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md m-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md m-4 max-h-[80vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Nuevo Kiosk de Puerta</h2>
 
             <div className="space-y-4">
@@ -484,11 +552,66 @@ export default function DoorKiosksPage() {
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400"
                 />
               </div>
+
+              {/* Guard selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Guardias (opcional)
+                </label>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
+                  Selecciona los empleados que pueden usar este kiosk
+                </p>
+                <div className="max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-lg">
+                  {employees.map(e => (
+                    <label
+                      key={e.id}
+                      className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedGuardIds.includes(e.id)}
+                        onChange={(ev) => {
+                          if (ev.target.checked) {
+                            setSelectedGuardIds([...selectedGuardIds, e.id])
+                          } else {
+                            setSelectedGuardIds(selectedGuardIds.filter(id => id !== e.id))
+                          }
+                        }}
+                        className="w-4 h-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {e.firstName} {e.lastName}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{e.employeeCode}</p>
+                      </div>
+                      {e.hasPin && (
+                        <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded-full">
+                          PIN
+                        </span>
+                      )}
+                    </label>
+                  ))}
+                  {employees.length === 0 && (
+                    <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-4">
+                      No hay empleados disponibles
+                    </p>
+                  )}
+                </div>
+                {selectedGuardIds.length > 0 && (
+                  <p className="text-xs text-teal-600 dark:text-teal-400 mt-1">
+                    {selectedGuardIds.length} guardia{selectedGuardIds.length > 1 ? 's' : ''} seleccionado{selectedGuardIds.length > 1 ? 's' : ''}
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="flex gap-3 mt-6">
               <button
-                onClick={() => setShowCreateModal(false)}
+                onClick={() => {
+                  setShowCreateModal(false)
+                  setSelectedGuardIds([])
+                }}
                 className="flex-1 py-2 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancelar

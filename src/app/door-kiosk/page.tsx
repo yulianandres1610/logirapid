@@ -1,77 +1,134 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
-import { Shield, MapPin, RefreshCw, ChevronRight, AlertCircle } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Shield,
+  MapPin,
+  RefreshCw,
+  ChevronRight,
+  AlertCircle,
+  Keyboard,
+  User,
+  Lock
+} from 'lucide-react'
 
 interface Kiosk {
   id: number
   name: string
   location: string | null
   deviceId: string
-  isActive: boolean
 }
+
+interface GuardInfo {
+  id: number
+  name: string
+  code: string
+  position: string | null
+}
+
+type Step = 'pin' | 'select_kiosk'
 
 export default function DoorKioskSelectorPage() {
   const router = useRouter()
-  const [kiosks, setKiosks] = useState<Kiosk[]>([])
-  const [loading, setLoading] = useState(true)
+  const [step, setStep] = useState<Step>('pin')
+  const [pin, setPin] = useState('')
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [kioskIdInput, setKioskIdInput] = useState('')
+  const [guard, setGuard] = useState<GuardInfo | null>(null)
+  const [kiosks, setKiosks] = useState<Kiosk[]>([])
+  const pinInputRef = useRef<HTMLInputElement>(null)
 
+  // Focus PIN input on mount
   useEffect(() => {
-    // Check if there's a saved kiosk ID in localStorage
-    const savedKioskId = localStorage.getItem('door-kiosk-id')
-    if (savedKioskId) {
-      router.push(`/door-kiosk/${savedKioskId}`)
-      return
+    if (step === 'pin' && pinInputRef.current) {
+      pinInputRef.current.focus()
     }
+  }, [step])
 
-    fetchKiosks()
-  }, [router])
+  // Auto-verify when PIN reaches 4 digits
+  useEffect(() => {
+    if (pin.length >= 4 && !loading) {
+      verifyPin()
+    }
+  }, [pin])
 
-  const fetchKiosks = async () => {
+  const handlePinChange = (digit: string) => {
+    if (pin.length < 6) {
+      setPin(prev => prev + digit)
+      setError(null)
+    }
+  }
+
+  const handlePinDelete = () => {
+    setPin(prev => prev.slice(0, -1))
+    setError(null)
+  }
+
+  const verifyPin = async () => {
+    if (pin.length < 4) return
+
+    setLoading(true)
+    setError(null)
+
     try {
-      setLoading(true)
-      const response = await fetch('/api/market/door-security/kiosks')
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success) {
-          setKiosks(result.data.kiosks.filter((k: Kiosk) => k.isActive))
+      // Get subdomain from current host
+      const host = window.location.host
+      const subdomain = host.split('.')[0] // e.g., "puerta" from "puerta.logirapid.com"
+
+      const response = await fetch('/api/market/door-security/auth-guard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pin,
+          companySubdomain: subdomain !== 'puerta' ? subdomain : undefined
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setGuard(result.data.guard)
+
+        // If there's a direct redirect (single kiosk assigned), go there
+        if (result.data.redirectTo) {
+          // Save guard info for the kiosk page
+          sessionStorage.setItem('door-guard', JSON.stringify(result.data.guard))
+          router.push(result.data.redirectTo)
+        } else if (result.data.kiosks && result.data.kiosks.length > 0) {
+          // Multiple kiosks - show selection
+          setKiosks(result.data.kiosks)
+          setStep('select_kiosk')
+        } else {
+          setError('No hay kiosks de puerta disponibles')
+          setPin('')
         }
       } else {
-        setError('No se pudieron cargar los kiosks')
+        setError(result.error || 'PIN inválido')
+        setPin('')
       }
     } catch (err) {
-      console.error('Error fetching kiosks:', err)
-      setError('Error al cargar los kioscos')
+      console.error('Error verifying PIN:', err)
+      setError('Error de conexión')
+      setPin('')
     } finally {
       setLoading(false)
     }
   }
 
-  const selectKiosk = (kioskId: number) => {
-    // Save to localStorage for auto-redirect next time
-    localStorage.setItem('door-kiosk-id', kioskId.toString())
-    router.push(`/door-kiosk/${kioskId}`)
+  const selectKiosk = (kiosk: Kiosk) => {
+    // Save guard info for the kiosk page
+    sessionStorage.setItem('door-guard', JSON.stringify(guard))
+    router.push(`/door-kiosk/${kiosk.id}`)
   }
 
-  const handleManualEntry = (e: React.FormEvent) => {
-    e.preventDefault()
-    // Accept ID or deviceId
-    if (kioskIdInput.trim()) {
-      localStorage.setItem('door-kiosk-id', kioskIdInput.trim())
-      router.push(`/door-kiosk/${kioskIdInput.trim()}`)
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-teal-900 via-emerald-900 to-teal-900 flex items-center justify-center">
-        <RefreshCw className="w-10 h-10 text-white animate-spin" />
-      </div>
-    )
+  const resetToPin = () => {
+    setStep('pin')
+    setPin('')
+    setGuard(null)
+    setKiosks([])
+    setError(null)
   }
 
   return (
@@ -89,7 +146,7 @@ export default function DoorKioskSelectorPage() {
           Control de Acceso
         </h1>
         <p className="text-emerald-200">
-          Selecciona el kiosko de puerta para comenzar
+          {step === 'pin' ? 'Ingresa tu PIN de guardia' : `Bienvenido, ${guard?.name}`}
         </p>
       </motion.div>
 
@@ -99,79 +156,149 @@ export default function DoorKioskSelectorPage() {
         animate={{ opacity: 1, scale: 1 }}
         className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
       >
-        {error ? (
-          <div className="p-8 text-center">
-            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <p className="text-gray-600 mb-4">{error}</p>
-            <button
-              onClick={fetchKiosks}
-              className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
+        <AnimatePresence mode="wait">
+          {/* PIN Entry Step */}
+          {step === 'pin' && (
+            <motion.div
+              key="pin"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="p-8"
             >
-              Reintentar
-            </button>
-          </div>
-        ) : kiosks.length > 0 ? (
-          <div className="p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Kioscos de Puerta Disponibles
-            </h2>
-            <div className="space-y-3">
-              {kiosks.map((kiosk) => (
-                <button
-                  key={kiosk.id}
-                  onClick={() => selectKiosk(kiosk.id)}
-                  className="w-full flex items-center gap-4 p-4 bg-gray-50 hover:bg-teal-50 rounded-xl transition-colors text-left group"
-                >
-                  <div className="w-12 h-12 bg-teal-100 rounded-xl flex items-center justify-center">
-                    <Shield className="w-6 h-6 text-teal-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-900">{kiosk.name}</p>
-                    {kiosk.location && (
-                      <p className="text-sm text-gray-500 flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        {kiosk.location}
-                      </p>
-                    )}
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-teal-600" />
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="p-8 text-center">
-            <Shield className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-600 mb-4">
-              No hay kioscos de puerta configurados
-            </p>
-          </div>
-        )}
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-teal-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <Lock className="w-8 h-8 text-teal-600" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  Ingresa tu PIN
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  PIN de 4-6 dígitos
+                </p>
+              </div>
 
-        {/* Manual ID Entry */}
-        <div className="border-t p-6">
-          <form onSubmit={handleManualEntry} className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700">
-              O ingresa el ID del kiosco manualmente:
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={kioskIdInput}
-                onChange={(e) => setKioskIdInput(e.target.value)}
-                placeholder="ID o Device ID"
-                className="flex-1 px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              />
+              {/* Error Message */}
+              <AnimatePresence>
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2"
+                  >
+                    <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                    <span className="text-red-700 text-sm">{error}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* PIN Display */}
+              <div className="flex justify-center gap-3 mb-6">
+                {[0, 1, 2, 3, 4, 5].map(i => (
+                  <div
+                    key={i}
+                    className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-all ${
+                      i < pin.length
+                        ? 'border-teal-500 bg-teal-50 text-teal-600'
+                        : 'border-gray-200'
+                    }`}
+                  >
+                    {i < pin.length ? '•' : ''}
+                  </div>
+                ))}
+              </div>
+
+              {/* Numeric Keypad */}
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((digit, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      if (digit === null) return
+                      if (digit === 'del') handlePinDelete()
+                      else handlePinChange(digit.toString())
+                    }}
+                    disabled={loading || digit === null}
+                    className={`h-16 rounded-xl text-2xl font-bold transition-colors ${
+                      digit === null
+                        ? 'invisible'
+                        : digit === 'del'
+                          ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          : 'bg-gray-100 text-gray-900 hover:bg-teal-100'
+                    }`}
+                  >
+                    {digit === 'del' ? '⌫' : digit}
+                  </button>
+                ))}
+              </div>
+
+              {loading && (
+                <div className="flex items-center justify-center gap-2 text-teal-600 py-4">
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                  <span>Verificando...</span>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* Kiosk Selection Step */}
+          {step === 'select_kiosk' && (
+            <motion.div
+              key="select"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="p-6"
+            >
+              {/* Guard Info */}
+              <div className="flex items-center gap-4 mb-6 p-4 bg-teal-50 rounded-xl">
+                <div className="w-12 h-12 bg-teal-100 rounded-full flex items-center justify-center">
+                  <User className="w-6 h-6 text-teal-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900">{guard?.name}</p>
+                  <p className="text-sm text-gray-500">{guard?.code}</p>
+                </div>
+              </div>
+
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                Selecciona el Kiosk
+              </h2>
+
+              <div className="space-y-3">
+                {kiosks.map((kiosk) => (
+                  <button
+                    key={kiosk.id}
+                    onClick={() => selectKiosk(kiosk)}
+                    className="w-full flex items-center gap-4 p-4 bg-gray-50 hover:bg-teal-50 rounded-xl transition-colors text-left group"
+                  >
+                    <div className="w-12 h-12 bg-teal-100 rounded-xl flex items-center justify-center">
+                      <Shield className="w-6 h-6 text-teal-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900">{kiosk.name}</p>
+                      {kiosk.location && (
+                        <p className="text-sm text-gray-500 flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          {kiosk.location}
+                        </p>
+                      )}
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-teal-600" />
+                  </button>
+                ))}
+              </div>
+
               <button
-                type="submit"
-                disabled={!kioskIdInput}
-                className="px-6 py-2 bg-teal-600 text-white rounded-xl hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={resetToPin}
+                className="w-full mt-6 py-3 text-gray-500 hover:text-gray-700 text-sm"
               >
-                Ir
+                Cambiar usuario
               </button>
-            </div>
-          </form>
-        </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
 
       {/* Footer */}
