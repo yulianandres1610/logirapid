@@ -170,60 +170,70 @@ export async function POST(request: NextRequest) {
 
     // Prompt optimizado para extraer datos de documentos de identidad
     // Especialmente entrenado para carnet de identidad cubano (frente y reverso)
-    const prompt = `Eres un experto en OCR de documentos de identidad. Extrae TODOS los datos visibles de esta imagen.
+    const prompt = `Eres un experto en OCR de documentos de identidad cubanos. Extrae TODOS los datos visibles de esta imagen.
 
 ## CARNET DE IDENTIDAD CUBANO (CI):
 El carnet cubano tiene DOS lados con información diferente:
 
 **FRENTE (lado con foto):**
-- NI: Número de Identidad (11 dígitos: AAMMDDXXXXXC donde AA=año, MM=mes, DD=día de nacimiento)
-- NOMBRE/FIRST NAME: Primer nombre
-- APELLIDOS/LAST NAME: Apellidos (dos apellidos)
+- NI: Número de Identidad (11 dígitos: AAMMDDXXXXXC)
+- NOMBRE: Primer nombre y segundo nombre (ej: "YULIAN ANDRES")
+- APELLIDOS: Dos apellidos (ej: "DIAZ PEREZ")
 - PADRE: Nombre del padre
 - MADRE: Nombre de la madre
 - SEXO: F (femenino) o M (masculino)
 - FECHA DE VENCIMIENTO: DD/MM/YYYY
-- REGISTRO CIVIL: Nombre del registro
-- TOMO, FOLIO, AÑO: Datos de registro
 
 **REVERSO (lado con código MRZ):**
-- RESIDENCIA: Dirección completa (ej: "CALLE SOCARRAS # 1203 E/ CALLE ALEJANDRO RODRIGUEZ Y CALLE CESPEDES")
-- MUNICIPIO, PROVINCIA: Ubicación (ej: "FLORIDA, CAMAGUEY")
-- Código alfanumérico (ej: AEC496280)
-- Línea MRZ: I<CUBAEC496280356092604195<<<<
+- RESIDENCIA: Dirección completa
+- MUNICIPIO, PROVINCIA: Ubicación
 
-## IMPORTANTE - Extracción de fecha de nacimiento:
-- El NI cubano SIEMPRE contiene la fecha de nacimiento en los primeros 6 dígitos
-- Formato: AAMMDD (Año2díg + Mes2díg + Día2díg)
-- Ejemplo: NI 56092604195 → Fecha: 26/09/1956 (día 26, mes 09, año 56)
-- Para determinar el siglo: si AA > 25 → 19XX, si AA <= 25 → 20XX
+## MUY IMPORTANTE - ORDEN DEL NOMBRE:
+En el carnet cubano, el campo "NOMBRE" contiene los nombres de pila y "APELLIDOS" contiene los apellidos.
+Para el campo fullName, SIEMPRE pon los NOMBRES PRIMERO, luego los APELLIDOS.
+Ejemplo: Si el carnet dice NOMBRE: "YULIAN ANDRES" y APELLIDOS: "DIAZ PEREZ"
+→ fullName debe ser: "YULIAN ANDRES DIAZ PEREZ" (nombre primero, apellido después)
+
+## EXTRACCIÓN DE FECHA DE NACIMIENTO DEL NI:
+El NI cubano tiene formato AAMMDDXXXXXC donde:
+- AA = año (2 dígitos)
+- MM = mes (2 dígitos)
+- DD = día (2 dígitos)
+- Posiciones: [0-1]=año, [2-3]=mes, [4-5]=día
+
+Ejemplo: NI "99101604195"
+- Año: 99 → 1999
+- Mes: 10 → octubre
+- Día: 16
+- Fecha: 1999-10-16
+
+Para el siglo: si AA > 30 → 19XX, si AA <= 30 → 20XX
 
 ## DIRECCIÓN:
-- Lee la dirección EXACTAMENTE como aparece en el documento
-- Incluye número de casa, calles de referencia (E/ = entre)
-- Incluye municipio y provincia si están visibles
+- Lee la dirección EXACTAMENTE como aparece
+- Incluye E/ (entre), municipio y provincia
 
-Responde SOLO con JSON válido (sin markdown, sin \`\`\`):
+Responde SOLO con JSON válido (sin markdown, sin backticks):
 {
-  "fullName": "NOMBRE + APELLIDOS completos",
-  "firstName": "solo primer nombre",
-  "lastName": "apellido paterno + apellido materno",
+  "fullName": "NOMBRES APELLIDOS (ej: YULIAN ANDRES DIAZ PEREZ)",
+  "firstName": "solo nombres de pila",
+  "lastName": "solo apellidos",
   "documentType": "cedula",
   "documentNumber": "NI de 11 dígitos sin espacios",
-  "dateOfBirth": "YYYY-MM-DD extraído del NI",
+  "dateOfBirth": "YYYY-MM-DD (extraído del NI)",
   "expiryDate": "YYYY-MM-DD si visible",
   "nationality": "Cubana",
-  "address": "dirección completa incluyendo municipio y provincia",
+  "address": "dirección completa con municipio y provincia",
   "gender": "M o F",
   "issuingCountry": "Cuba",
   "confidence": 0.0-1.0
 }
 
-REGLAS:
-1. El día de nacimiento está en posiciones 5-6 del NI (NO confundir con el mes)
-2. La dirección puede incluir "E/" que significa "entre" (calles de referencia)
-3. Si es el reverso del carnet, busca RESIDENCIA para la dirección
-4. Responde SOLO el JSON, nada más`
+REGLAS CRÍTICAS:
+1. fullName = NOMBRES + APELLIDOS (en ese orden, nombre primero)
+2. dateOfBirth se extrae de los primeros 6 dígitos del NI: posiciones 4-5 son el DÍA
+3. Si es el reverso, busca RESIDENCIA para la dirección
+4. Responde SOLO el JSON, sin explicaciones`
 
     // Retry logic for OCR processing
     let lastError: Error | null = null

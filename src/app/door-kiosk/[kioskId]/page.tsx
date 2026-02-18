@@ -133,7 +133,7 @@ export default function DoorKioskPage() {
   const [validatedSales, setValidatedSales] = useState<Set<string>>(new Set())
   const [selectedPurpose, setSelectedPurpose] = useState<string>('')
   const [message, setMessage] = useState('')
-  const [currentTime, setCurrentTime] = useState(new Date())
+  const [currentTime, setCurrentTime] = useState<Date | null>(null)
   const [loading, setLoading] = useState(false)
   const [kioskNotFound, setKioskNotFound] = useState(false)
   const [cameraActive, setCameraActive] = useState(false)
@@ -262,8 +262,9 @@ export default function DoorKioskPage() {
     }
   }, [guard, step, handleActivity, resetInactivityTimer])
 
-  // Update time every second
+  // Update time every second (client-side only to avoid hydration mismatch)
   useEffect(() => {
+    setCurrentTime(new Date()) // Set initial time on client
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
@@ -1001,11 +1002,13 @@ export default function DoorKioskPage() {
     setStep('guard_pin')
   }
 
-  const formatTime = (date: Date) => {
+  const formatTime = (date: Date | null) => {
+    if (!date) return '--:--:--'
     return date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   }
 
-  const formatDate = (date: Date) => {
+  const formatDate = (date: Date | null) => {
+    if (!date) return '...'
     return date.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })
   }
 
