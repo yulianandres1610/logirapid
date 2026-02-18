@@ -1,17 +1,15 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Shield,
-  Clock,
   LogIn,
   LogOut,
   User,
   CheckCircle,
   XCircle,
-  Keyboard,
   Camera,
   RefreshCw,
   Settings,
@@ -20,7 +18,11 @@ import {
   FileText,
   Check,
   AlertTriangle,
-  Package
+  Package,
+  Lock,
+  UserCircle,
+  MapPin,
+  Clock
 } from 'lucide-react'
 
 interface KioskInfo {
@@ -76,6 +78,7 @@ interface PendingSale {
 type KioskStep =
   | 'guard_pin'
   | 'idle'
+  | 'locked'
   | 'select_action'
   | 'scan_id'
   | 'processing_id'
@@ -94,6 +97,8 @@ const VISIT_PURPOSES = [
   { id: 'servicio', label: 'Servicio', icon: Settings },
   { id: 'otro', label: 'Otro', icon: CheckCircle },
 ]
+
+const INACTIVITY_TIMEOUT = 20000 // 20 seconds
 
 export default function DoorKioskPage() {
   const params = useParams()
@@ -121,6 +126,46 @@ export default function DoorKioskPage() {
   const streamRef = useRef<MediaStream | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const pinInputRef = useRef<HTMLInputElement>(null)
+  const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Reset inactivity timer
+  const resetInactivityTimer = useCallback(() => {
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current)
+    }
+
+    // Only set timer if guard is logged in and not already locked
+    if (guard && step !== 'guard_pin' && step !== 'locked') {
+      inactivityTimerRef.current = setTimeout(() => {
+        setStep('locked')
+      }, INACTIVITY_TIMEOUT)
+    }
+  }, [guard, step])
+
+  // Handle user activity
+  const handleActivity = useCallback(() => {
+    resetInactivityTimer()
+  }, [resetInactivityTimer])
+
+  // Set up activity listeners
+  useEffect(() => {
+    if (guard && step !== 'guard_pin' && step !== 'locked') {
+      window.addEventListener('click', handleActivity)
+      window.addEventListener('touchstart', handleActivity)
+      window.addEventListener('keydown', handleActivity)
+
+      resetInactivityTimer()
+
+      return () => {
+        window.removeEventListener('click', handleActivity)
+        window.removeEventListener('touchstart', handleActivity)
+        window.removeEventListener('keydown', handleActivity)
+        if (inactivityTimerRef.current) {
+          clearTimeout(inactivityTimerRef.current)
+        }
+      }
+    }
+  }, [guard, step, handleActivity, resetInactivityTimer])
 
   // Update time every second
   useEffect(() => {
@@ -149,7 +194,7 @@ export default function DoorKioskPage() {
 
   // Focus PIN input
   useEffect(() => {
-    if (step === 'guard_pin' && pinInputRef.current) {
+    if ((step === 'guard_pin' || step === 'locked') && pinInputRef.current) {
       pinInputRef.current.focus()
     }
   }, [step])
@@ -200,7 +245,7 @@ export default function DoorKioskPage() {
         video: {
           width: { ideal: 1280 },
           height: { ideal: 720 },
-          facingMode: 'environment' // Use back camera for document scanning
+          facingMode: 'environment'
         }
       })
 
@@ -260,7 +305,6 @@ export default function DoorKioskPage() {
 
       if (result.success && result.data.fullName) {
         setScannedData(result.data)
-        // Check if visitor exists
         await checkOrRegisterVisitor(result.data, imageBase64)
       } else {
         setMessage('No se pudo leer el documento. Intente con una foto más clara.')
@@ -296,10 +340,8 @@ export default function DoorKioskPage() {
       if (result.success) {
         setVisitor(result.data.visitor)
 
-        // Check if visitor already has active entry
         if (result.data.visitor.isCurrentlyInside) {
           setActiveLogId(result.data.visitor.activeLogId)
-          // Go directly to check sales for exit
           await checkPendingSales(result.data.visitor.activeLogId)
         } else {
           setStep('visitor_info')
@@ -331,16 +373,13 @@ export default function DoorKioskPage() {
           setPendingSales(allPending)
           setStep('validate_sales')
         } else {
-          // No pending sales, proceed with exit
           await registerExit(logId)
         }
       } else {
-        // If error checking sales, still allow exit
         await registerExit(logId)
       }
     } catch (error) {
       console.error('Error checking sales:', error)
-      // On error, still allow exit
       await registerExit(logId)
     } finally {
       setLoading(false)
@@ -371,7 +410,6 @@ export default function DoorKioskPage() {
         const saleKey = `${sale.type}-${sale.id}`
         setValidatedSales(prev => new Set([...prev, saleKey]))
 
-        // If all validated, proceed with exit
         if (result.data.allValidated) {
           await registerExit(activeLogId)
         }
@@ -471,13 +509,53 @@ export default function DoorKioskPage() {
     }
   }
 
+  const unlockKiosk = async (pinCode: string) => {
+    setLoading(true)
+    try {
+      const response = await fetch(`/api/market/door-security/kiosks/${kioskId}/verify-guard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pinCode })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        // Verify it's the same guard
+        if (result.data.guard.id === guard?.id) {
+          setStep('idle')
+          setPin('')
+          setMessage('')
+        } else {
+          // Different guard - update guard info
+          setGuard(result.data.guard)
+          setStep('idle')
+          setPin('')
+          setMessage('')
+        }
+      } else {
+        setMessage(result.error || 'PIN inválido')
+        setPin('')
+      }
+    } catch (error) {
+      console.error('Error verifying PIN:', error)
+      setMessage('Error de conexión')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handlePinChange = (digit: string) => {
     if (pin.length < 4) {
       const newPin = pin + digit
       setPin(newPin)
 
       if (newPin.length === 4) {
-        verifyGuardPin(newPin)
+        if (step === 'locked') {
+          unlockKiosk(newPin)
+        } else {
+          verifyGuardPin(newPin)
+        }
       }
     }
   }
@@ -519,25 +597,30 @@ export default function DoorKioskPage() {
     return date.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })
   }
 
+  // Get guard initials for avatar
+  const getGuardInitials = (name: string) => {
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  }
+
   // Kiosk not found
   if (kioskNotFound) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-stone-800 via-stone-900 to-stone-800 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-stone-900 via-stone-800 to-stone-900 flex flex-col items-center justify-center p-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 text-center"
+          className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl w-full max-w-md p-8 text-center border border-white/20"
         >
-          <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-900 mb-2">
+          <XCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-white mb-2">
             Kiosco no encontrado
           </h2>
-          <p className="text-gray-500 mb-6">
+          <p className="text-stone-300 mb-6">
             El kiosco con ID {kioskId} no existe o no está activo.
           </p>
           <button
             onClick={changeKiosk}
-            className="flex items-center justify-center gap-2 w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-medium"
+            className="flex items-center justify-center gap-2 w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-medium transition-all"
           >
             <ArrowLeft className="w-5 h-5" />
             Seleccionar otro kiosco
@@ -548,47 +631,94 @@ export default function DoorKioskPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-stone-800 via-stone-900 to-stone-800 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-stone-900 via-stone-800 to-stone-900 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 opacity-5">
+        <div className="absolute inset-0" style={{
+          backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
+          backgroundSize: '40px 40px'
+        }} />
+      </div>
+
       {/* Company Logo */}
       {kiosk?.companyLogo && (
-        <div className="mb-4">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6"
+        >
           <img
             src={kiosk.companyLogo}
             alt={kiosk.companyName || 'Logo'}
-            className="h-16 w-auto object-contain"
+            className="h-14 w-auto object-contain"
           />
-        </div>
+        </motion.div>
       )}
 
-      {/* Header */}
-      <div className="text-center mb-6">
-        <h1 className="text-3xl font-bold text-white mb-1">
-          {kiosk?.name || 'Control de Puerta'}
-        </h1>
-        {kiosk?.location && (
-          <p className="text-stone-300">{kiosk.location}</p>
-        )}
-        {guard && (
-          <p className="text-orange-400 text-sm mt-2">
-            Guardia: {guard.name}
-          </p>
-        )}
-      </div>
-
-      {/* Time Display */}
-      <div className="text-center mb-6">
-        <p className="text-5xl font-bold text-white tracking-wider">
+      {/* Time Display - Prominent */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-center mb-8"
+      >
+        <p className="text-6xl font-extralight text-white tracking-wider font-mono">
           {formatTime(currentTime)}
         </p>
-        <p className="text-stone-400 mt-1 capitalize">
+        <p className="text-stone-400 mt-2 capitalize text-lg">
           {formatDate(currentTime)}
         </p>
-      </div>
+      </motion.div>
+
+      {/* Guard Info Bar - When logged in */}
+      {guard && step !== 'guard_pin' && step !== 'locked' && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-lg mb-4"
+        >
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl px-5 py-3 flex items-center justify-between border border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">
+                {getGuardInitials(guard.name)}
+              </div>
+              <div>
+                <p className="text-white font-medium">{guard.name}</p>
+                <p className="text-stone-400 text-xs">{guard.code}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={logoutGuard}
+                className="text-stone-400 hover:text-orange-400 text-sm transition-colors"
+              >
+                Salir
+              </button>
+              <button
+                onClick={changeKiosk}
+                className="text-stone-500 hover:text-white p-1.5 transition-colors"
+                title="Cambiar kiosco"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Kiosk Info */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex items-center gap-2 mb-4 text-stone-400"
+      >
+        <MapPin className="w-4 h-4" />
+        <span className="text-sm">{kiosk?.name} • {kiosk?.location}</span>
+      </motion.div>
 
       {/* Main Card */}
       <motion.div
         layout
-        className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden"
+        className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-white/20 relative"
       >
         <AnimatePresence mode="wait">
           {/* Guard PIN Entry */}
@@ -600,24 +730,26 @@ export default function DoorKioskPage() {
               exit={{ opacity: 0 }}
               className="p-8"
             >
-              <div className="text-center mb-6">
-                <Shield className="w-12 h-12 text-orange-500 mx-auto mb-3" />
-                <h2 className="text-xl font-bold text-gray-900">
+              <div className="text-center mb-8">
+                <div className="w-20 h-20 bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-orange-500/30">
+                  <Shield className="w-10 h-10 text-white" />
+                </div>
+                <h2 className="text-2xl font-bold text-white">
                   Acceso de Guardia
                 </h2>
-                <p className="text-gray-500 text-sm">
-                  Ingrese su PIN para comenzar
+                <p className="text-stone-400 text-sm mt-1">
+                  Ingrese su PIN de 4 dígitos
                 </p>
               </div>
 
-              <div className="flex justify-center gap-4 mb-6">
+              <div className="flex justify-center gap-4 mb-8">
                 {[0, 1, 2, 3].map(i => (
                   <div
                     key={i}
-                    className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-colors ${
+                    className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-all ${
                       i < pin.length
-                        ? 'border-orange-500 bg-orange-50 text-orange-600'
-                        : 'border-gray-200'
+                        ? 'border-orange-500 bg-orange-500/20 text-orange-400'
+                        : 'border-stone-600 bg-stone-800/50'
                     }`}
                   >
                     {i < pin.length ? '•' : ''}
@@ -626,10 +758,10 @@ export default function DoorKioskPage() {
               </div>
 
               {message && (
-                <p className="text-center text-red-500 text-sm mb-4">{message}</p>
+                <p className="text-center text-red-400 text-sm mb-4">{message}</p>
               )}
 
-              <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="grid grid-cols-3 gap-3">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((digit, i) => (
                   <button
                     key={i}
@@ -639,12 +771,12 @@ export default function DoorKioskPage() {
                       else handlePinChange(digit.toString())
                     }}
                     disabled={loading || digit === null}
-                    className={`h-14 rounded-xl text-xl font-bold transition-colors ${
+                    className={`h-16 rounded-xl text-xl font-semibold transition-all ${
                       digit === null
                         ? 'invisible'
                         : digit === 'del'
-                          ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                          : 'bg-stone-100 text-stone-900 hover:bg-orange-100'
+                          ? 'bg-stone-700/50 text-stone-400 hover:bg-stone-600/50'
+                          : 'bg-stone-700/50 text-white hover:bg-orange-500/30 hover:text-orange-400 active:scale-95'
                     }`}
                   >
                     {digit === 'del' ? '⌫' : digit}
@@ -653,7 +785,7 @@ export default function DoorKioskPage() {
               </div>
 
               {loading && (
-                <div className="flex items-center justify-center gap-2 text-orange-600">
+                <div className="flex items-center justify-center gap-2 text-orange-400 mt-6">
                   <RefreshCw className="w-5 h-5 animate-spin" />
                   <span>Verificando...</span>
                 </div>
@@ -661,40 +793,133 @@ export default function DoorKioskPage() {
             </motion.div>
           )}
 
-          {/* Idle State */}
+          {/* Locked State */}
+          {step === 'locked' && (
+            <motion.div
+              key="locked"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="p-8"
+            >
+              <div className="text-center mb-8">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', bounce: 0.5 }}
+                  className="w-20 h-20 bg-stone-700 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                >
+                  <Lock className="w-10 h-10 text-stone-400" />
+                </motion.div>
+                <h2 className="text-2xl font-bold text-white">
+                  Kiosco Bloqueado
+                </h2>
+                <p className="text-stone-400 text-sm mt-1">
+                  Ingrese su PIN para desbloquear
+                </p>
+                {guard && (
+                  <div className="flex items-center justify-center gap-2 mt-3">
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white text-xs font-bold">
+                      {getGuardInitials(guard.name)}
+                    </div>
+                    <span className="text-stone-300 text-sm">{guard.name}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-center gap-4 mb-8">
+                {[0, 1, 2, 3].map(i => (
+                  <div
+                    key={i}
+                    className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-all ${
+                      i < pin.length
+                        ? 'border-orange-500 bg-orange-500/20 text-orange-400'
+                        : 'border-stone-600 bg-stone-800/50'
+                    }`}
+                  >
+                    {i < pin.length ? '•' : ''}
+                  </div>
+                ))}
+              </div>
+
+              {message && (
+                <p className="text-center text-red-400 text-sm mb-4">{message}</p>
+              )}
+
+              <div className="grid grid-cols-3 gap-3">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((digit, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      if (digit === null) return
+                      if (digit === 'del') handlePinDelete()
+                      else handlePinChange(digit.toString())
+                    }}
+                    disabled={loading || digit === null}
+                    className={`h-16 rounded-xl text-xl font-semibold transition-all ${
+                      digit === null
+                        ? 'invisible'
+                        : digit === 'del'
+                          ? 'bg-stone-700/50 text-stone-400 hover:bg-stone-600/50'
+                          : 'bg-stone-700/50 text-white hover:bg-orange-500/30 hover:text-orange-400 active:scale-95'
+                    }`}
+                  >
+                    {digit === 'del' ? '⌫' : digit}
+                  </button>
+                ))}
+              </div>
+
+              {loading && (
+                <div className="flex items-center justify-center gap-2 text-orange-400 mt-6">
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                  <span>Verificando...</span>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* Idle State - Modern */}
           {step === 'idle' && (
             <motion.div
               key="idle"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-8 text-center"
+              className="p-8"
             >
-              <div className="w-24 h-24 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Shield className="w-12 h-12 text-orange-500" />
+              <div className="text-center mb-8">
+                <h2 className="text-2xl font-bold text-white mb-2">
+                  Control de Acceso
+                </h2>
+                <p className="text-stone-400">
+                  Seleccione una acción para continuar
+                </p>
               </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                Control de Acceso
-              </h2>
-              <p className="text-gray-500 mb-8">
-                Seleccione una acción
-              </p>
 
-              <div className="space-y-3">
-                <button
+              <div className="grid grid-cols-2 gap-4">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => setStep('scan_id')}
-                  className="w-full flex items-center justify-center gap-3 py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-bold text-lg transition-colors"
+                  className="flex flex-col items-center justify-center gap-3 py-8 bg-gradient-to-br from-green-500 to-green-600 text-white rounded-2xl font-bold transition-all shadow-lg shadow-green-500/30"
                 >
-                  <LogIn className="w-6 h-6" />
-                  Registrar Entrada
-                </button>
-                <button
+                  <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center">
+                    <LogIn className="w-8 h-8" />
+                  </div>
+                  <span className="text-lg">Entrada</span>
+                </motion.button>
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => setStep('scan_id')}
-                  className="w-full flex items-center justify-center gap-3 py-4 bg-stone-700 hover:bg-stone-800 text-white rounded-2xl font-bold text-lg transition-colors"
+                  className="flex flex-col items-center justify-center gap-3 py-8 bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-2xl font-bold transition-all shadow-lg shadow-orange-500/30"
                 >
-                  <LogOut className="w-6 h-6" />
-                  Registrar Salida
-                </button>
+                  <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center">
+                    <LogOut className="w-8 h-8" />
+                  </div>
+                  <span className="text-lg">Salida</span>
+                </motion.button>
               </div>
             </motion.div>
           )}
@@ -709,12 +934,12 @@ export default function DoorKioskPage() {
               className="p-6"
             >
               <div className="text-center mb-4">
-                <CreditCard className="w-10 h-10 text-orange-500 mx-auto mb-2" />
-                <h2 className="text-xl font-bold text-gray-900">
+                <CreditCard className="w-10 h-10 text-orange-400 mx-auto mb-2" />
+                <h2 className="text-xl font-bold text-white">
                   Escanear Identificación
                 </h2>
-                <p className="text-gray-500 text-sm">
-                  Tome una foto del documento de identidad
+                <p className="text-stone-400 text-sm">
+                  Tome una foto del documento
                 </p>
               </div>
 
@@ -730,18 +955,20 @@ export default function DoorKioskPage() {
 
                 <div className="absolute inset-4 border-2 border-dashed border-white/50 rounded-xl pointer-events-none" />
 
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={capturePhoto}
                   disabled={!cameraActive}
-                  className="absolute bottom-4 left-1/2 -translate-x-1/2 w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
+                  className="absolute bottom-4 left-1/2 -translate-x-1/2 w-16 h-16 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center shadow-lg"
                 >
-                  <Camera className="w-8 h-8 text-orange-500" />
-                </button>
+                  <Camera className="w-8 h-8 text-white" />
+                </motion.button>
               </div>
 
               <button
                 onClick={resetToIdle}
-                className="w-full py-3 text-gray-500 hover:text-gray-700"
+                className="w-full py-3 text-stone-400 hover:text-white transition-colors"
               >
                 Cancelar
               </button>
@@ -757,11 +984,11 @@ export default function DoorKioskPage() {
               exit={{ opacity: 0 }}
               className="p-8 text-center"
             >
-              <RefreshCw className="w-16 h-16 text-orange-500 mx-auto mb-6 animate-spin" />
-              <h2 className="text-xl font-bold text-gray-900 mb-2">
+              <RefreshCw className="w-16 h-16 text-orange-400 mx-auto mb-6 animate-spin" />
+              <h2 className="text-xl font-bold text-white mb-2">
                 Analizando Documento
               </h2>
-              <p className="text-gray-500">
+              <p className="text-stone-400">
                 Por favor espere...
               </p>
             </motion.div>
@@ -777,24 +1004,24 @@ export default function DoorKioskPage() {
               className="p-6"
             >
               <div className="text-center mb-6">
-                <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <User className="w-10 h-10 text-orange-500" />
+                <div className="w-20 h-20 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                  <User className="w-10 h-10 text-white" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900">
+                <h2 className="text-2xl font-bold text-white">
                   {visitor.fullName}
                 </h2>
-                <p className="text-gray-500">
+                <p className="text-stone-400">
                   {visitor.idType}: {visitor.idNumber}
                 </p>
                 {visitor.totalVisits > 1 && (
-                  <span className="inline-block mt-2 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm">
+                  <span className="inline-block mt-2 px-3 py-1 bg-orange-500/20 text-orange-400 rounded-full text-sm">
                     Visita #{visitor.totalVisits}
                   </span>
                 )}
               </div>
 
               <div className="mb-6">
-                <p className="text-sm font-medium text-gray-700 mb-3">
+                <p className="text-sm font-medium text-stone-300 mb-3">
                   Motivo de la visita:
                 </p>
                 <div className="grid grid-cols-2 gap-2">
@@ -802,10 +1029,10 @@ export default function DoorKioskPage() {
                     <button
                       key={purpose.id}
                       onClick={() => setSelectedPurpose(purpose.id)}
-                      className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-colors ${
+                      className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
                         selectedPurpose === purpose.id
-                          ? 'border-orange-500 bg-orange-50 text-orange-700'
-                          : 'border-gray-200 hover:border-orange-300'
+                          ? 'border-orange-500 bg-orange-500/20 text-orange-400'
+                          : 'border-stone-600 text-stone-300 hover:border-orange-400/50'
                       }`}
                     >
                       <purpose.icon className="w-5 h-5" />
@@ -815,10 +1042,12 @@ export default function DoorKioskPage() {
                 </div>
               </div>
 
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => registerEntry(selectedPurpose)}
                 disabled={!selectedPurpose || loading}
-                className="w-full flex items-center justify-center gap-3 py-4 bg-green-500 hover:bg-green-600 text-white rounded-2xl font-bold text-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-2xl font-bold text-lg transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <RefreshCw className="w-6 h-6 animate-spin" />
@@ -826,11 +1055,11 @@ export default function DoorKioskPage() {
                   <LogIn className="w-6 h-6" />
                 )}
                 Confirmar Entrada
-              </button>
+              </motion.button>
 
               <button
                 onClick={resetToIdle}
-                className="w-full py-3 mt-3 text-gray-500 hover:text-gray-700"
+                className="w-full py-3 mt-3 text-stone-400 hover:text-white transition-colors"
               >
                 Cancelar
               </button>
@@ -847,12 +1076,12 @@ export default function DoorKioskPage() {
               className="p-6"
             >
               <div className="text-center mb-4">
-                <AlertTriangle className="w-10 h-10 text-orange-500 mx-auto mb-2" />
-                <h2 className="text-xl font-bold text-gray-900">
+                <AlertTriangle className="w-10 h-10 text-yellow-400 mx-auto mb-2" />
+                <h2 className="text-xl font-bold text-white">
                   Validar Compras
                 </h2>
-                <p className="text-gray-500 text-sm">
-                  El visitante tiene compras pendientes de validación
+                <p className="text-stone-400 text-sm">
+                  Compras pendientes de validación
                 </p>
               </div>
 
@@ -864,33 +1093,33 @@ export default function DoorKioskPage() {
                   return (
                     <div
                       key={saleKey}
-                      className={`p-4 rounded-xl border-2 ${
+                      className={`p-4 rounded-xl border-2 transition-all ${
                         isValidated
-                          ? 'border-green-500 bg-green-50'
-                          : 'border-gray-200'
+                          ? 'border-green-500 bg-green-500/10'
+                          : 'border-stone-600 bg-stone-800/50'
                       }`}
                     >
                       <div className="flex items-start justify-between">
                         <div>
-                          <p className="font-medium text-gray-900">
+                          <p className="font-medium text-white">
                             {sale.type === 'pos_receipt' ? 'Ticket POS' : 'Factura'}
                           </p>
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-stone-400">
                             #{sale.documentNumber}
                           </p>
-                          <p className="text-lg font-bold text-orange-600 mt-1">
+                          <p className="text-lg font-bold text-orange-400 mt-1">
                             {sale.currency} {sale.total.toFixed(2)}
                           </p>
                         </div>
                         {isValidated ? (
-                          <div className="flex items-center gap-1 text-green-600">
+                          <div className="flex items-center gap-1 text-green-400">
                             <Check className="w-5 h-5" />
                             <span className="text-sm">Validado</span>
                           </div>
                         ) : (
                           <button
                             onClick={() => validateSale(sale)}
-                            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm font-medium"
+                            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm font-medium transition-colors"
                           >
                             Validar
                           </button>
@@ -904,14 +1133,14 @@ export default function DoorKioskPage() {
               <div className="flex gap-3">
                 <button
                   onClick={resetToIdle}
-                  className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200"
+                  className="flex-1 py-3 bg-stone-700 text-white rounded-xl font-medium hover:bg-stone-600 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={() => activeLogId && registerExit(activeLogId)}
                   disabled={pendingSales.some(s => !validatedSales.has(`${s.type}-${s.id}`))}
-                  className="flex-1 py-3 bg-stone-700 text-white rounded-xl font-medium hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Permitir Salida
                 </button>
@@ -932,16 +1161,16 @@ export default function DoorKioskPage() {
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ type: 'spring', bounce: 0.5 }}
-                className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"
+                className="w-24 h-24 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-500/30"
               >
-                <CheckCircle className="w-14 h-14 text-green-500" />
+                <CheckCircle className="w-14 h-14 text-white" />
               </motion.div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              <h2 className="text-2xl font-bold text-white mb-2">
                 Entrada Registrada
               </h2>
-              <p className="text-gray-600">{message}</p>
-              <p className="text-sm text-gray-400 mt-4">
-                Puede pasar
+              <p className="text-stone-300">{message}</p>
+              <p className="text-sm text-green-400 mt-4 font-medium">
+                ✓ Puede pasar
               </p>
             </motion.div>
           )}
@@ -959,15 +1188,15 @@ export default function DoorKioskPage() {
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ type: 'spring', bounce: 0.5 }}
-                className="w-24 h-24 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6"
+                className="w-24 h-24 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-orange-500/30"
               >
-                <LogOut className="w-14 h-14 text-orange-500" />
+                <LogOut className="w-14 h-14 text-white" />
               </motion.div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              <h2 className="text-2xl font-bold text-white mb-2">
                 Salida Registrada
               </h2>
-              <p className="text-gray-600">{message}</p>
-              <p className="text-sm text-gray-400 mt-4">
+              <p className="text-stone-300">{message}</p>
+              <p className="text-sm text-orange-400 mt-4 font-medium">
                 Que tenga buen día
               </p>
             </motion.div>
@@ -986,17 +1215,17 @@ export default function DoorKioskPage() {
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ type: 'spring', bounce: 0.5 }}
-                className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6"
+                className="w-24 h-24 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6"
               >
-                <XCircle className="w-14 h-14 text-red-500" />
+                <XCircle className="w-14 h-14 text-red-400" />
               </motion.div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              <h2 className="text-2xl font-bold text-white mb-2">
                 Error
               </h2>
-              <p className="text-gray-600 mb-6">{message}</p>
+              <p className="text-stone-300 mb-6">{message}</p>
               <button
                 onClick={resetToIdle}
-                className="px-6 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium"
+                className="px-6 py-2 bg-stone-700 hover:bg-stone-600 text-white rounded-xl font-medium transition-colors"
               >
                 Intentar de nuevo
               </button>
@@ -1006,28 +1235,15 @@ export default function DoorKioskPage() {
       </motion.div>
 
       {/* Footer */}
-      <div className="mt-6 flex items-center gap-4">
-        <p className="text-stone-400 text-sm">
-          {kiosk?.companyName || 'Servisumic'}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="mt-6 text-center"
+      >
+        <p className="text-stone-500 text-sm">
+          {kiosk?.companyName}
         </p>
-        {guard && (
-          <>
-            <button
-              onClick={logoutGuard}
-              className="text-orange-400 hover:text-orange-300 text-sm"
-            >
-              Cerrar sesión
-            </button>
-            <button
-              onClick={changeKiosk}
-              className="text-stone-400 hover:text-white p-2"
-              title="Cambiar kiosco"
-            >
-              <Settings className="w-5 h-5" />
-            </button>
-          </>
-        )}
-      </div>
+      </motion.div>
     </div>
   )
 }
