@@ -28,6 +28,12 @@ export function CompanyProvider({
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    // Skip company info loading for kiosk routes (they use PIN auth, not JWT)
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/door-kiosk')) {
+      setIsLoading(false)
+      return
+    }
+
     // Intentar obtener la información de la empresa de las cookies
     // que el middleware podría haber establecido
     const getCompanyInfoFromCookies = async () => {
