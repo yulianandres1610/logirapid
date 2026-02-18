@@ -778,10 +778,22 @@ export default function DoorKioskPage() {
   }
 
   const logoutGuard = () => {
+    // Clear guard session
     setGuard(null)
     setPin('')
+    // Cleanup without resetting to idle (which would override the step)
+    stopCamera()
+    setVisitor(null)
+    setScannedData(null)
+    setCapturedImage(null)
+    setCameraError(null)
+    setActiveLogId(null)
+    setPendingSales([])
+    setValidatedSales(new Set())
+    setSelectedPurpose('')
+    setMessage('')
+    // Set step to guard_pin LAST to ensure it takes effect
     setStep('guard_pin')
-    resetToIdle()
   }
 
   const formatTime = (date: Date) => {
