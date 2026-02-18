@@ -206,3 +206,108 @@ export async function GET(
     }, { status: 500 })
   }
 }
+
+/**
+ * DELETE /api/market/door-security/visitors/[id]
+ * Delete a visitor (admin only)
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const cookieStore = await cookies()
+    const authToken = cookieStore.get('auth-token')?.value
+
+    if (!authToken) {
+      return NextResponse.json({
+        success: false,
+        error: 'No autorizado'
+      }, { status: 401 })
+    }
+
+    let payload: JWTPayload
+    try {
+      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+      payload = jwt.verify(authToken, secret) as JWTPayload
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: 'Token inválido'
+      }, { status: 401 })
+    }
+
+    // Only SUPER_ADMIN and ADMIN can delete visitors
+    if (!['SUPER_ADMIN', 'ADMIN'].includes(payload.role)) {
+      return NextResponse.json({
+        success: false,
+        error: 'Solo administradores pueden eliminar visitantes'
+      }, { status: 403 })
+    }
+
+    // Check if visitor exists and belongs to company
+    const visitorResult = await db.query(`
+      SELECT id, companyid, fullname FROM market_visitors WHERE id = $1
+    `, [id])
+
+    if (visitorResult.rows.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Visitante no encontrado'
+      }, { status: 404 })
+    }
+
+    const visitor = visitorResult.rows[0]
+
+    // Check company access (unless SUPER_ADMIN)
+    if (payload.role !== 'SUPER_ADMIN' && visitor.companyid !== payload.companyId) {
+      return NextResponse.json({
+        success: false,
+        error: 'No tiene acceso a este visitante'
+      }, { status: 403 })
+    }
+
+    // Check if visitor has active visit
+    const activeLogResult = await db.query(`
+      SELECT id FROM market_visitor_logs WHERE visitorid = $1 AND status = 'active'
+    `, [id])
+
+    if (activeLogResult.rows.length > 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'No se puede eliminar un visitante con una visita activa'
+      }, { status: 400 })
+    }
+
+    // Delete invoice validations first (depends on visitor logs)
+    await db.query(`
+      DELETE FROM market_visitor_invoice_validations
+      WHERE visitorlogid IN (SELECT id FROM market_visitor_logs WHERE visitorid = $1)
+    `, [id])
+
+    // Delete visitor logs second (depends on visitor)
+    await db.query(`
+      DELETE FROM market_visitor_logs WHERE visitorid = $1
+    `, [id])
+
+    // Delete the visitor last
+    await db.query(`
+      DELETE FROM market_visitors WHERE id = $1
+    `, [id])
+
+    console.log('[Visitor DELETE] Deleted visitor:', id, '-', visitor.fullname)
+
+    return NextResponse.json({
+      success: true,
+      message: `Visitante ${visitor.fullname} eliminado correctamente`
+    })
+
+  } catch (error) {
+    console.error('[Visitor DELETE] Error:', error)
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al eliminar visitante'
+    }, { status: 500 })
+  }
+}

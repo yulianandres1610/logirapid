@@ -220,11 +220,14 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Check if visitor already exists
+    // Normalize ID number - trim whitespace, remove special characters for comparison
+    const normalizedIdNumber = idNumber.toString().trim().replace(/[\s-]/g, '')
+
+    // Check if visitor already exists (case-insensitive idNumber match)
     const existingResult = await db.query(`
       SELECT id, totalvisits FROM market_visitors
-      WHERE companyid = $1 AND idnumber = $2
-    `, [companyId, idNumber])
+      WHERE companyid = $1 AND REPLACE(REPLACE(TRIM(idnumber), ' ', ''), '-', '') = $2
+    `, [companyId, normalizedIdNumber])
 
     let visitorId: number
     let isNewVisitor = false
@@ -325,7 +328,7 @@ export async function POST(request: NextRequest) {
         companyId,
         fullName,
         idType || null,
-        idNumber,
+        normalizedIdNumber, // Use normalized ID for consistency
         dateOfBirth || null,
         address || null,
         nationality || null,
