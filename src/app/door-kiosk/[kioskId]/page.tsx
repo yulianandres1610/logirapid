@@ -22,7 +22,9 @@ import {
   Lock,
   UserCircle,
   MapPin,
-  Clock
+  Clock,
+  Sun,
+  Moon
 } from 'lucide-react'
 
 interface KioskInfo {
@@ -100,6 +102,8 @@ const VISIT_PURPOSES = [
 
 const INACTIVITY_TIMEOUT = 20000 // 20 seconds
 
+type KioskTheme = 'light' | 'dark'
+
 export default function DoorKioskPage() {
   const params = useParams()
   const router = useRouter()
@@ -121,6 +125,7 @@ export default function DoorKioskPage() {
   const [kioskNotFound, setKioskNotFound] = useState(false)
   const [cameraActive, setCameraActive] = useState(false)
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
+  const [kioskTheme, setKioskTheme] = useState<KioskTheme>('dark')
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -172,6 +177,60 @@ export default function DoorKioskPage() {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
+
+  // Load saved theme
+  useEffect(() => {
+    const saved = localStorage.getItem(`door-kiosk-theme-${kioskId}`)
+    if (saved === 'light' || saved === 'dark') {
+      setKioskTheme(saved)
+    }
+  }, [kioskId])
+
+  // Toggle theme function
+  const toggleTheme = () => {
+    const newTheme: KioskTheme = kioskTheme === 'dark' ? 'light' : 'dark'
+    setKioskTheme(newTheme)
+    localStorage.setItem(`door-kiosk-theme-${kioskId}`, newTheme)
+  }
+
+  // Theme-aware classes
+  const theme = {
+    bg: kioskTheme === 'dark'
+      ? 'bg-gradient-to-br from-stone-900 via-stone-800 to-stone-900'
+      : 'bg-gradient-to-br from-stone-100 via-white to-stone-100',
+    card: kioskTheme === 'dark'
+      ? 'bg-white/10 backdrop-blur-xl border-white/20'
+      : 'bg-white shadow-2xl border-stone-200',
+    cardSolid: kioskTheme === 'dark'
+      ? 'bg-stone-800/90 backdrop-blur-xl border-white/10'
+      : 'bg-white shadow-xl border-stone-200',
+    text: kioskTheme === 'dark' ? 'text-white' : 'text-stone-900',
+    textMuted: kioskTheme === 'dark' ? 'text-stone-400' : 'text-stone-500',
+    textSecondary: kioskTheme === 'dark' ? 'text-stone-300' : 'text-stone-600',
+    pinBox: kioskTheme === 'dark'
+      ? 'border-stone-600 bg-stone-800/50'
+      : 'border-stone-300 bg-stone-50',
+    pinBoxActive: 'border-orange-500 bg-orange-500/20 text-orange-400',
+    numpadBtn: kioskTheme === 'dark'
+      ? 'bg-stone-700/50 text-white hover:bg-orange-500/30 hover:text-orange-400'
+      : 'bg-stone-100 text-stone-900 hover:bg-orange-100 hover:text-orange-600',
+    numpadDel: kioskTheme === 'dark'
+      ? 'bg-stone-700/50 text-stone-400 hover:bg-stone-600/50'
+      : 'bg-stone-200 text-stone-600 hover:bg-stone-300',
+    purposeBtn: kioskTheme === 'dark'
+      ? 'border-stone-600 text-stone-300 hover:border-orange-400/50'
+      : 'border-stone-300 text-stone-600 hover:border-orange-400',
+    purposeBtnActive: 'border-orange-500 bg-orange-500/20 text-orange-400',
+    saleCard: kioskTheme === 'dark'
+      ? 'border-stone-600 bg-stone-800/50'
+      : 'border-stone-200 bg-stone-50',
+    saleCardValidated: kioskTheme === 'dark'
+      ? 'border-green-500 bg-green-500/10'
+      : 'border-green-400 bg-green-50',
+    cancelBtn: kioskTheme === 'dark'
+      ? 'bg-stone-700 text-white hover:bg-stone-600'
+      : 'bg-stone-200 text-stone-800 hover:bg-stone-300',
+  }
 
   // Fetch kiosk info and check for pre-authenticated guard
   useEffect(() => {
@@ -605,17 +664,17 @@ export default function DoorKioskPage() {
   // Kiosk not found
   if (kioskNotFound) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-stone-900 via-stone-800 to-stone-900 flex flex-col items-center justify-center p-4">
+      <div className={`min-h-screen ${theme.bg} flex flex-col items-center justify-center p-4`}>
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl w-full max-w-md p-8 text-center border border-white/20"
+          className={`${theme.card} rounded-3xl shadow-2xl w-full max-w-md p-8 text-center border`}
         >
           <XCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-white mb-2">
+          <h2 className={`text-xl font-bold ${theme.text} mb-2`}>
             Kiosco no encontrado
           </h2>
-          <p className="text-stone-300 mb-6">
+          <p className={`${theme.textSecondary} mb-6`}>
             El kiosco con ID {kioskId} no existe o no está activo.
           </p>
           <button
@@ -631,29 +690,45 @@ export default function DoorKioskPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-stone-900 via-stone-800 to-stone-900 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+    <div className={`min-h-screen ${theme.bg} flex flex-col items-center justify-center p-4 relative overflow-hidden`}>
       {/* Background Pattern */}
-      <div className="absolute inset-0 opacity-5">
+      <div className={`absolute inset-0 ${kioskTheme === 'dark' ? 'opacity-5' : 'opacity-[0.02]'}`}>
         <div className="absolute inset-0" style={{
-          backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
+          backgroundImage: `radial-gradient(circle at 2px 2px, ${kioskTheme === 'dark' ? 'white' : 'black'} 1px, transparent 0)`,
           backgroundSize: '40px 40px'
         }} />
       </div>
 
-      {/* Company Logo */}
-      {kiosk?.companyLogo && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6"
-        >
+      {/* Theme Toggle - Top Right */}
+      <motion.button
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        onClick={toggleTheme}
+        className={`absolute top-4 right-4 p-3 rounded-xl ${kioskTheme === 'dark' ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-stone-200 hover:bg-stone-300 text-stone-700'} transition-all z-10`}
+        title={kioskTheme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
+      >
+        {kioskTheme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+      </motion.button>
+
+      {/* Company Logo - Prominent */}
+      <motion.div
+        initial={{ opacity: 0, y: -20, scale: 0.9 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: 'spring', bounce: 0.3 }}
+        className="mb-6 flex flex-col items-center"
+      >
+        {kiosk?.companyLogo ? (
           <img
             src={kiosk.companyLogo}
             alt={kiosk.companyName || 'Logo'}
-            className="h-14 w-auto object-contain"
+            className="h-24 w-auto object-contain drop-shadow-lg"
           />
-        </motion.div>
-      )}
+        ) : kiosk?.companyName ? (
+          <div className={`text-3xl font-bold ${theme.text} tracking-tight`}>
+            {kiosk.companyName}
+          </div>
+        ) : null}
+      </motion.div>
 
       {/* Time Display - Prominent */}
       <motion.div
@@ -661,10 +736,10 @@ export default function DoorKioskPage() {
         animate={{ opacity: 1, y: 0 }}
         className="text-center mb-8"
       >
-        <p className="text-6xl font-extralight text-white tracking-wider font-mono">
+        <p className={`text-6xl font-extralight ${theme.text} tracking-wider font-mono`}>
           {formatTime(currentTime)}
         </p>
-        <p className="text-stone-400 mt-2 capitalize text-lg">
+        <p className={`${theme.textMuted} mt-2 capitalize text-lg`}>
           {formatDate(currentTime)}
         </p>
       </motion.div>
@@ -676,26 +751,26 @@ export default function DoorKioskPage() {
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-lg mb-4"
         >
-          <div className="bg-white/10 backdrop-blur-md rounded-2xl px-5 py-3 flex items-center justify-between border border-white/10">
+          <div className={`${theme.cardSolid} rounded-2xl px-5 py-3 flex items-center justify-between border`}>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">
                 {getGuardInitials(guard.name)}
               </div>
               <div>
-                <p className="text-white font-medium">{guard.name}</p>
-                <p className="text-stone-400 text-xs">{guard.code}</p>
+                <p className={`${theme.text} font-medium`}>{guard.name}</p>
+                <p className={`${theme.textMuted} text-xs`}>{guard.code}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={logoutGuard}
-                className="text-stone-400 hover:text-orange-400 text-sm transition-colors"
+                className={`${theme.textMuted} hover:text-orange-400 text-sm transition-colors`}
               >
                 Salir
               </button>
               <button
                 onClick={changeKiosk}
-                className="text-stone-500 hover:text-white p-1.5 transition-colors"
+                className={`${theme.textMuted} hover:text-orange-500 p-1.5 transition-colors`}
                 title="Cambiar kiosco"
               >
                 <Settings className="w-4 h-4" />
@@ -709,7 +784,7 @@ export default function DoorKioskPage() {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="flex items-center gap-2 mb-4 text-stone-400"
+        className={`flex items-center gap-2 mb-4 ${theme.textMuted}`}
       >
         <MapPin className="w-4 h-4" />
         <span className="text-sm">{kiosk?.name} • {kiosk?.location}</span>
@@ -718,7 +793,7 @@ export default function DoorKioskPage() {
       {/* Main Card */}
       <motion.div
         layout
-        className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-white/20 relative"
+        className={`${theme.card} rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border relative`}
       >
         <AnimatePresence mode="wait">
           {/* Guard PIN Entry */}
@@ -734,10 +809,10 @@ export default function DoorKioskPage() {
                 <div className="w-20 h-20 bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-orange-500/30">
                   <Shield className="w-10 h-10 text-white" />
                 </div>
-                <h2 className="text-2xl font-bold text-white">
+                <h2 className={`text-2xl font-bold ${theme.text}`}>
                   Acceso de Guardia
                 </h2>
-                <p className="text-stone-400 text-sm mt-1">
+                <p className={`${theme.textMuted} text-sm mt-1`}>
                   Ingrese su PIN de 4 dígitos
                 </p>
               </div>
@@ -748,8 +823,8 @@ export default function DoorKioskPage() {
                     key={i}
                     className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-all ${
                       i < pin.length
-                        ? 'border-orange-500 bg-orange-500/20 text-orange-400'
-                        : 'border-stone-600 bg-stone-800/50'
+                        ? theme.pinBoxActive
+                        : theme.pinBox
                     }`}
                   >
                     {i < pin.length ? '•' : ''}
@@ -775,8 +850,8 @@ export default function DoorKioskPage() {
                       digit === null
                         ? 'invisible'
                         : digit === 'del'
-                          ? 'bg-stone-700/50 text-stone-400 hover:bg-stone-600/50'
-                          : 'bg-stone-700/50 text-white hover:bg-orange-500/30 hover:text-orange-400 active:scale-95'
+                          ? theme.numpadDel
+                          : `${theme.numpadBtn} active:scale-95`
                     }`}
                   >
                     {digit === 'del' ? '⌫' : digit}
@@ -807,14 +882,14 @@ export default function DoorKioskPage() {
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ type: 'spring', bounce: 0.5 }}
-                  className="w-20 h-20 bg-stone-700 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                  className={`w-20 h-20 ${kioskTheme === 'dark' ? 'bg-stone-700' : 'bg-stone-200'} rounded-2xl flex items-center justify-center mx-auto mb-4`}
                 >
-                  <Lock className="w-10 h-10 text-stone-400" />
+                  <Lock className={`w-10 h-10 ${theme.textMuted}`} />
                 </motion.div>
-                <h2 className="text-2xl font-bold text-white">
+                <h2 className={`text-2xl font-bold ${theme.text}`}>
                   Kiosco Bloqueado
                 </h2>
-                <p className="text-stone-400 text-sm mt-1">
+                <p className={`${theme.textMuted} text-sm mt-1`}>
                   Ingrese su PIN para desbloquear
                 </p>
                 {guard && (
@@ -822,7 +897,7 @@ export default function DoorKioskPage() {
                     <div className="w-6 h-6 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white text-xs font-bold">
                       {getGuardInitials(guard.name)}
                     </div>
-                    <span className="text-stone-300 text-sm">{guard.name}</span>
+                    <span className={`${theme.textSecondary} text-sm`}>{guard.name}</span>
                   </div>
                 )}
               </div>
@@ -833,8 +908,8 @@ export default function DoorKioskPage() {
                     key={i}
                     className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-all ${
                       i < pin.length
-                        ? 'border-orange-500 bg-orange-500/20 text-orange-400'
-                        : 'border-stone-600 bg-stone-800/50'
+                        ? theme.pinBoxActive
+                        : theme.pinBox
                     }`}
                   >
                     {i < pin.length ? '•' : ''}
@@ -860,8 +935,8 @@ export default function DoorKioskPage() {
                       digit === null
                         ? 'invisible'
                         : digit === 'del'
-                          ? 'bg-stone-700/50 text-stone-400 hover:bg-stone-600/50'
-                          : 'bg-stone-700/50 text-white hover:bg-orange-500/30 hover:text-orange-400 active:scale-95'
+                          ? theme.numpadDel
+                          : `${theme.numpadBtn} active:scale-95`
                     }`}
                   >
                     {digit === 'del' ? '⌫' : digit}
@@ -888,10 +963,10 @@ export default function DoorKioskPage() {
               className="p-8"
             >
               <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-white mb-2">
+                <h2 className={`text-2xl font-bold ${theme.text} mb-2`}>
                   Control de Acceso
                 </h2>
-                <p className="text-stone-400">
+                <p className={theme.textMuted}>
                   Seleccione una acción para continuar
                 </p>
               </div>
@@ -935,10 +1010,10 @@ export default function DoorKioskPage() {
             >
               <div className="text-center mb-4">
                 <CreditCard className="w-10 h-10 text-orange-400 mx-auto mb-2" />
-                <h2 className="text-xl font-bold text-white">
+                <h2 className={`text-xl font-bold ${theme.text}`}>
                   Escanear Identificación
                 </h2>
-                <p className="text-stone-400 text-sm">
+                <p className={`${theme.textMuted} text-sm`}>
                   Tome una foto del documento
                 </p>
               </div>
@@ -968,7 +1043,7 @@ export default function DoorKioskPage() {
 
               <button
                 onClick={resetToIdle}
-                className="w-full py-3 text-stone-400 hover:text-white transition-colors"
+                className={`w-full py-3 ${theme.textMuted} hover:text-orange-400 transition-colors`}
               >
                 Cancelar
               </button>
@@ -985,10 +1060,10 @@ export default function DoorKioskPage() {
               className="p-8 text-center"
             >
               <RefreshCw className="w-16 h-16 text-orange-400 mx-auto mb-6 animate-spin" />
-              <h2 className="text-xl font-bold text-white mb-2">
+              <h2 className={`text-xl font-bold ${theme.text} mb-2`}>
                 Analizando Documento
               </h2>
-              <p className="text-stone-400">
+              <p className={theme.textMuted}>
                 Por favor espere...
               </p>
             </motion.div>
@@ -1007,10 +1082,10 @@ export default function DoorKioskPage() {
                 <div className="w-20 h-20 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
                   <User className="w-10 h-10 text-white" />
                 </div>
-                <h2 className="text-2xl font-bold text-white">
+                <h2 className={`text-2xl font-bold ${theme.text}`}>
                   {visitor.fullName}
                 </h2>
-                <p className="text-stone-400">
+                <p className={theme.textMuted}>
                   {visitor.idType}: {visitor.idNumber}
                 </p>
                 {visitor.totalVisits > 1 && (
@@ -1021,7 +1096,7 @@ export default function DoorKioskPage() {
               </div>
 
               <div className="mb-6">
-                <p className="text-sm font-medium text-stone-300 mb-3">
+                <p className={`text-sm font-medium ${theme.textSecondary} mb-3`}>
                   Motivo de la visita:
                 </p>
                 <div className="grid grid-cols-2 gap-2">
@@ -1031,8 +1106,8 @@ export default function DoorKioskPage() {
                       onClick={() => setSelectedPurpose(purpose.id)}
                       className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
                         selectedPurpose === purpose.id
-                          ? 'border-orange-500 bg-orange-500/20 text-orange-400'
-                          : 'border-stone-600 text-stone-300 hover:border-orange-400/50'
+                          ? theme.purposeBtnActive
+                          : theme.purposeBtn
                       }`}
                     >
                       <purpose.icon className="w-5 h-5" />
@@ -1059,7 +1134,7 @@ export default function DoorKioskPage() {
 
               <button
                 onClick={resetToIdle}
-                className="w-full py-3 mt-3 text-stone-400 hover:text-white transition-colors"
+                className={`w-full py-3 mt-3 ${theme.textMuted} hover:text-orange-400 transition-colors`}
               >
                 Cancelar
               </button>
@@ -1077,10 +1152,10 @@ export default function DoorKioskPage() {
             >
               <div className="text-center mb-4">
                 <AlertTriangle className="w-10 h-10 text-yellow-400 mx-auto mb-2" />
-                <h2 className="text-xl font-bold text-white">
+                <h2 className={`text-xl font-bold ${theme.text}`}>
                   Validar Compras
                 </h2>
-                <p className="text-stone-400 text-sm">
+                <p className={`${theme.textMuted} text-sm`}>
                   Compras pendientes de validación
                 </p>
               </div>
@@ -1095,16 +1170,16 @@ export default function DoorKioskPage() {
                       key={saleKey}
                       className={`p-4 rounded-xl border-2 transition-all ${
                         isValidated
-                          ? 'border-green-500 bg-green-500/10'
-                          : 'border-stone-600 bg-stone-800/50'
+                          ? theme.saleCardValidated
+                          : theme.saleCard
                       }`}
                     >
                       <div className="flex items-start justify-between">
                         <div>
-                          <p className="font-medium text-white">
+                          <p className={`font-medium ${theme.text}`}>
                             {sale.type === 'pos_receipt' ? 'Ticket POS' : 'Factura'}
                           </p>
-                          <p className="text-sm text-stone-400">
+                          <p className={`text-sm ${theme.textMuted}`}>
                             #{sale.documentNumber}
                           </p>
                           <p className="text-lg font-bold text-orange-400 mt-1">
@@ -1133,7 +1208,7 @@ export default function DoorKioskPage() {
               <div className="flex gap-3">
                 <button
                   onClick={resetToIdle}
-                  className="flex-1 py-3 bg-stone-700 text-white rounded-xl font-medium hover:bg-stone-600 transition-colors"
+                  className={`flex-1 py-3 ${theme.cancelBtn} rounded-xl font-medium transition-colors`}
                 >
                   Cancelar
                 </button>
@@ -1165,12 +1240,12 @@ export default function DoorKioskPage() {
               >
                 <CheckCircle className="w-14 h-14 text-white" />
               </motion.div>
-              <h2 className="text-2xl font-bold text-white mb-2">
+              <h2 className={`text-2xl font-bold ${theme.text} mb-2`}>
                 Entrada Registrada
               </h2>
-              <p className="text-stone-300">{message}</p>
+              <p className={theme.textSecondary}>{message}</p>
               <p className="text-sm text-green-400 mt-4 font-medium">
-                ✓ Puede pasar
+                Puede pasar
               </p>
             </motion.div>
           )}
@@ -1192,10 +1267,10 @@ export default function DoorKioskPage() {
               >
                 <LogOut className="w-14 h-14 text-white" />
               </motion.div>
-              <h2 className="text-2xl font-bold text-white mb-2">
+              <h2 className={`text-2xl font-bold ${theme.text} mb-2`}>
                 Salida Registrada
               </h2>
-              <p className="text-stone-300">{message}</p>
+              <p className={theme.textSecondary}>{message}</p>
               <p className="text-sm text-orange-400 mt-4 font-medium">
                 Que tenga buen día
               </p>
@@ -1215,17 +1290,17 @@ export default function DoorKioskPage() {
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ type: 'spring', bounce: 0.5 }}
-                className="w-24 h-24 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6"
+                className={`w-24 h-24 ${kioskTheme === 'dark' ? 'bg-red-500/20' : 'bg-red-100'} rounded-full flex items-center justify-center mx-auto mb-6`}
               >
                 <XCircle className="w-14 h-14 text-red-400" />
               </motion.div>
-              <h2 className="text-2xl font-bold text-white mb-2">
+              <h2 className={`text-2xl font-bold ${theme.text} mb-2`}>
                 Error
               </h2>
-              <p className="text-stone-300 mb-6">{message}</p>
+              <p className={`${theme.textSecondary} mb-6`}>{message}</p>
               <button
                 onClick={resetToIdle}
-                className="px-6 py-2 bg-stone-700 hover:bg-stone-600 text-white rounded-xl font-medium transition-colors"
+                className={`px-6 py-2 ${theme.cancelBtn} rounded-xl font-medium transition-colors`}
               >
                 Intentar de nuevo
               </button>
@@ -1240,7 +1315,7 @@ export default function DoorKioskPage() {
         animate={{ opacity: 1 }}
         className="mt-6 text-center"
       >
-        <p className="text-stone-500 text-sm">
+        <p className={`${theme.textMuted} text-sm`}>
           {kiosk?.companyName}
         </p>
       </motion.div>

@@ -31,12 +31,13 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Find kiosk by ID or deviceId
+    // Find kiosk by ID (numeric) or deviceId (string)
+    const kioskId = parseInt(id)
     const kioskResult = await db.query(`
       SELECT id, companyid, name, isactive
       FROM market_door_kiosks
-      WHERE (id = $1 OR deviceid = $1)
-    `, [id])
+      WHERE id = $1 OR deviceid = $2
+    `, [isNaN(kioskId) ? null : kioskId, id])
 
     if (kioskResult.rows.length === 0) {
       return NextResponse.json({

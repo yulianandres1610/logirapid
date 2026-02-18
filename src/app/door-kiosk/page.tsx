@@ -11,7 +11,9 @@ import {
   AlertCircle,
   Keyboard,
   User,
-  Lock
+  Lock,
+  Sun,
+  Moon
 } from 'lucide-react'
 
 interface Kiosk {
@@ -29,6 +31,7 @@ interface GuardInfo {
 }
 
 type Step = 'pin' | 'select_kiosk'
+type KioskTheme = 'light' | 'dark'
 
 export default function DoorKioskSelectorPage() {
   const router = useRouter()
@@ -39,6 +42,7 @@ export default function DoorKioskSelectorPage() {
   const [guard, setGuard] = useState<GuardInfo | null>(null)
   const [kiosks, setKiosks] = useState<Kiosk[]>([])
   const pinInputRef = useRef<HTMLInputElement>(null)
+  const [kioskTheme, setKioskTheme] = useState<KioskTheme>('dark')
 
   // Focus PIN input on mount
   useEffect(() => {
@@ -46,6 +50,35 @@ export default function DoorKioskSelectorPage() {
       pinInputRef.current.focus()
     }
   }, [step])
+
+  // Load saved theme
+  useEffect(() => {
+    const saved = localStorage.getItem('door-kiosk-selector-theme')
+    if (saved === 'light' || saved === 'dark') {
+      setKioskTheme(saved)
+    }
+  }, [])
+
+  // Toggle theme function
+  const toggleTheme = () => {
+    const newTheme: KioskTheme = kioskTheme === 'dark' ? 'light' : 'dark'
+    setKioskTheme(newTheme)
+    localStorage.setItem('door-kiosk-selector-theme', newTheme)
+  }
+
+  // Theme-aware classes
+  const theme = {
+    bg: kioskTheme === 'dark'
+      ? 'bg-gradient-to-br from-stone-800 via-stone-900 to-stone-800'
+      : 'bg-gradient-to-br from-stone-100 via-white to-stone-100',
+    card: kioskTheme === 'dark'
+      ? 'bg-white rounded-3xl shadow-2xl'
+      : 'bg-white rounded-3xl shadow-2xl border border-stone-200',
+    text: kioskTheme === 'dark' ? 'text-white' : 'text-stone-900',
+    textMuted: kioskTheme === 'dark' ? 'text-stone-300' : 'text-stone-500',
+    textSecondary: kioskTheme === 'dark' ? 'text-stone-400' : 'text-stone-600',
+    iconBg: kioskTheme === 'dark' ? 'bg-white/10' : 'bg-orange-100',
+  }
 
   // Auto-verify when PIN reaches 4 digits
   useEffect(() => {
@@ -132,20 +165,31 @@ export default function DoorKioskSelectorPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-stone-800 via-stone-900 to-stone-800 flex flex-col items-center justify-center p-4">
+    <div className={`min-h-screen ${theme.bg} flex flex-col items-center justify-center p-4 relative`}>
+      {/* Theme Toggle - Top Right */}
+      <motion.button
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        onClick={toggleTheme}
+        className={`absolute top-4 right-4 p-3 rounded-xl ${kioskTheme === 'dark' ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-stone-200 hover:bg-stone-300 text-stone-700'} transition-all z-10`}
+        title={kioskTheme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
+      >
+        {kioskTheme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+      </motion.button>
+
       {/* Logo/Title */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="text-center mb-8"
       >
-        <div className="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <div className={`w-20 h-20 ${theme.iconBg} rounded-2xl flex items-center justify-center mx-auto mb-4`}>
           <Shield className="w-10 h-10 text-orange-500" />
         </div>
-        <h1 className="text-3xl font-bold text-white mb-2">
+        <h1 className={`text-3xl font-bold ${theme.text} mb-2`}>
           Control de Acceso
         </h1>
-        <p className="text-stone-300">
+        <p className={theme.textMuted}>
           {step === 'pin' ? 'Ingresa tu PIN de guardia' : `Bienvenido, ${guard?.name}`}
         </p>
       </motion.div>
@@ -302,7 +346,7 @@ export default function DoorKioskSelectorPage() {
       </motion.div>
 
       {/* Footer */}
-      <p className="text-stone-400 text-sm mt-8">
+      <p className={`${theme.textSecondary} text-sm mt-8`}>
         puerta.servisumic.com
       </p>
     </div>

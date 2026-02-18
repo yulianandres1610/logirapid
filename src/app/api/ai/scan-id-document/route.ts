@@ -8,11 +8,14 @@ import sharp from 'sharp'
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
 
 // Modelo para OCR de documentos de identificación
-const OCR_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
+// gemini-1.5-flash is faster and more stable for OCR tasks
+const OCR_MODEL = process.env.GEMINI_OCR_MODEL || 'gemini-1.5-flash'
 
-// Límite de tamaño para imágenes enviadas a Gemini
-const GEMINI_MAX_IMAGE_SIZE = 2 * 1024 * 1024 // 2MB en base64
-const GEMINI_TARGET_SIZE = 1024 // Redimensionar a max 1024px
+// Maximum retries for OCR processing
+const MAX_RETRIES = 2
+
+// Image processing settings - no size limits, just optimize orientation
+const GEMINI_TARGET_SIZE = 2048 // Max dimension for very large images (optional resize)
 
 interface JWTPayload {
   userId: number
@@ -38,64 +41,51 @@ interface IdDocumentData {
 }
 
 /**
- * Comprime/redimensiona una imagen si excede el límite de Gemini
+ * Prepara la imagen para Gemini - sin límites de tamaño, solo optimiza orientación
+ * Móviles modernos toman fotos de alta calidad que Gemini puede procesar
  */
-async function compressImageForGemini(base64Data: string): Promise<string> {
+async function prepareImageForGemini(base64Data: string): Promise<string> {
   const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '')
 
   try {
     const inputBuffer = Buffer.from(cleanBase64, 'base64')
+    const inputSizeKB = Math.round(inputBuffer.length / 1024)
 
-    // Auto-rotate based on EXIF orientation first
-    const rotatedBuffer = await sharp(inputBuffer)
-      .rotate() // Auto-rotate based on EXIF
-      .toBuffer()
-
-    // Check size after rotation
-    const rotatedBase64 = rotatedBuffer.toString('base64')
-    if (rotatedBase64.length <= GEMINI_MAX_IMAGE_SIZE) {
-      console.log('[ID Scanner] Image size OK after rotation:', Math.round(rotatedBase64.length / 1024), 'KB')
-      return rotatedBase64
-    }
-
-    console.log('[ID Scanner] Image too large:', Math.round(rotatedBase64.length / 1024), 'KB, compressing...')
-
-    // Obtener metadata para saber dimensiones actuales
-    const metadata = await sharp(rotatedBuffer).metadata()
+    // Auto-rotate based on EXIF orientation (important for mobile photos)
+    const metadata = await sharp(inputBuffer).metadata()
     const maxDimension = Math.max(metadata.width || 0, metadata.height || 0)
 
-    // Calcular ratio de redimensionamiento si es necesario
-    let resizeOptions = {}
-    if (maxDimension > GEMINI_TARGET_SIZE) {
-      resizeOptions = {
-        width: GEMINI_TARGET_SIZE,
-        height: GEMINI_TARGET_SIZE,
-        fit: 'inside' as const,
-        withoutEnlargement: true
-      }
+    console.log('[ID Scanner] Input image:', inputSizeKB, 'KB,', metadata.width, 'x', metadata.height)
+
+    // Only resize if image is extremely large (>4000px in any dimension)
+    // This preserves quality for high-resolution mobile cameras
+    let processedBuffer: Buffer
+    if (maxDimension > 4000) {
+      processedBuffer = await sharp(inputBuffer)
+        .rotate() // Auto-rotate based on EXIF
+        .resize({
+          width: GEMINI_TARGET_SIZE,
+          height: GEMINI_TARGET_SIZE,
+          fit: 'inside',
+          withoutEnlargement: true
+        })
+        .jpeg({ quality: 90, mozjpeg: true })
+        .toBuffer()
+      console.log('[ID Scanner] Resized very large image to fit within', GEMINI_TARGET_SIZE, 'px')
+    } else {
+      // Just auto-rotate, preserve original quality
+      processedBuffer = await sharp(inputBuffer)
+        .rotate() // Auto-rotate based on EXIF
+        .toBuffer()
     }
 
-    // Comprimir con calidad reducida progresivamente hasta que quepa
-    let quality = 85
-    let outputBuffer: Buffer
-    let outputBase64: string
-
-    do {
-      outputBuffer = await sharp(rotatedBuffer)
-        .resize(resizeOptions)
-        .jpeg({ quality, mozjpeg: true })
-        .toBuffer()
-
-      outputBase64 = outputBuffer.toString('base64')
-      quality -= 10
-    } while (outputBase64.length > GEMINI_MAX_IMAGE_SIZE && quality > 20)
-
-    console.log('[ID Scanner] Compressed to:', Math.round(outputBase64.length / 1024), 'KB (quality:', quality + 10, ')')
+    const outputBase64 = processedBuffer.toString('base64')
+    console.log('[ID Scanner] Output image:', Math.round(outputBase64.length / 1024), 'KB')
 
     return outputBase64
   } catch (error) {
-    console.error('[ID Scanner] Compression error:', error)
-    // En caso de error, devolver original
+    console.error('[ID Scanner] Image processing error:', error)
+    // On error, return original
     return cleanBase64
   }
 }
@@ -149,8 +139,8 @@ export async function POST(request: NextRequest) {
     const genAI = new GoogleGenerativeAI(GOOGLE_AI_API_KEY)
     const model = genAI.getGenerativeModel({ model: OCR_MODEL })
 
-    // Compress image if needed
-    const compressedBase64 = await compressImageForGemini(fileBase64)
+    // Prepare image (auto-rotate, handle very large images)
+    const compressedBase64 = await prepareImageForGemini(fileBase64)
 
     // Detect mimeType from data URL or use provided
     let mimeType = providedMimeType
@@ -163,120 +153,112 @@ export async function POST(request: NextRequest) {
 
     console.log('[ID Scanner] Processing document:', { mimeType, documentType, model: OCR_MODEL })
 
-    // Prompt optimizado para extraer datos de documentos de identidad
-    const prompt = `Analiza esta imagen de un documento de identificación y extrae los datos.
+    // Prompt optimizado para extraer datos de documentos de identidad (conciso para respuesta rápida)
+    const prompt = `Extrae datos de este documento de identidad (cédula/pasaporte/licencia).
 
-TIPOS DE DOCUMENTOS QUE PUEDES ENCONTRAR:
-- Cédula de identidad (Cuba, República Dominicana, otros países latinoamericanos)
-- Pasaporte (cualquier país)
-- Licencia de conducir
-- Carnet de identidad
-
-EXTRAE LOS SIGUIENTES DATOS (si están visibles):
-
-1. NOMBRE COMPLETO: El nombre completo de la persona
-2. TIPO DE DOCUMENTO: cedula, passport, license
-3. NÚMERO DE DOCUMENTO: El número o código del documento
-4. FECHA DE NACIMIENTO: En formato YYYY-MM-DD
-5. FECHA DE VENCIMIENTO: Si está visible, en formato YYYY-MM-DD
-6. NACIONALIDAD: País de nacionalidad
-7. DIRECCIÓN: Si está visible
-8. GÉNERO: M o F
-9. PAÍS EMISOR: País que emitió el documento
-
-INSTRUCCIONES IMPORTANTES:
-- Si es una cédula cubana, el número tiene 11 dígitos (los primeros 6 son la fecha de nacimiento: AAMMDD)
-- Para pasaportes, busca el número en la parte superior o en la zona MRZ
-- Si no puedes leer un campo, usa null
-- Evalúa tu confianza de 0 a 1 basado en la claridad de la imagen
-
-Responde ÚNICAMENTE en formato JSON con esta estructura:
+Responde SOLO con JSON válido:
 {
   "fullName": "nombre completo",
   "firstName": "primer nombre",
   "lastName": "apellidos",
   "documentType": "cedula|passport|license|unknown",
-  "documentNumber": "número del documento",
+  "documentNumber": "número",
   "dateOfBirth": "YYYY-MM-DD o null",
   "expiryDate": "YYYY-MM-DD o null",
   "nationality": "nacionalidad o null",
   "address": "dirección o null",
-  "gender": "M|F o null",
+  "gender": "M|F|null",
   "issuingCountry": "país emisor",
-  "confidence": 0.95
+  "confidence": 0.0-1.0
 }
 
-IMPORTANTE: Solo responde con el JSON, sin texto adicional, sin markdown.`
+Nota: Cédula cubana tiene 11 dígitos (AAMMDDXXXXXC). Sin markdown, solo JSON.`
 
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          mimeType,
-          data: compressedBase64
+    // Retry logic for OCR processing
+    let lastError: Error | null = null
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const result = await model.generateContent([
+          prompt,
+          {
+            inlineData: {
+              mimeType,
+              data: compressedBase64
+            }
+          }
+        ])
+
+        const response = await result.response
+        let text = response.text()
+
+        // Clean up the response - remove markdown code blocks if present
+        text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+
+        console.log('[ID Scanner] Raw response (attempt', attempt, '):', text.substring(0, 200))
+
+        const extractedData = JSON.parse(text) as IdDocumentData
+
+        // Validate essential fields
+        if (!extractedData.fullName && !extractedData.documentNumber) {
+          if (attempt < MAX_RETRIES) {
+            console.log('[ID Scanner] Missing essential fields, retrying...')
+            continue
+          }
+          return NextResponse.json({
+            success: false,
+            error: 'No se pudo extraer información del documento. Por favor tome una foto más clara.'
+          }, { status: 422 })
         }
-      }
-    ])
 
-    const response = await result.response
-    let text = response.text()
+        // Process Cuban cedula - extract date of birth from ID number if not present
+        if (extractedData.documentType === 'cedula' &&
+            extractedData.documentNumber &&
+            !extractedData.dateOfBirth) {
+          const idNum = extractedData.documentNumber.replace(/\D/g, '')
+          if (idNum.length === 11) {
+            // Cuban ID format: AAMMDDXXXXXC
+            const year = parseInt(idNum.substring(0, 2))
+            const month = idNum.substring(2, 4)
+            const day = idNum.substring(4, 6)
+            // Determine century (people born before 2000 have year > 25 usually)
+            const fullYear = year > 25 ? 1900 + year : 2000 + year
+            extractedData.dateOfBirth = `${fullYear}-${month}-${day}`
+          }
+        }
 
-    // Clean up the response - remove markdown code blocks if present
-    text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-
-    console.log('[ID Scanner] Raw response:', text)
-
-    try {
-      const extractedData = JSON.parse(text) as IdDocumentData
-
-      // Validate essential fields
-      if (!extractedData.fullName && !extractedData.documentNumber) {
         return NextResponse.json({
-          success: false,
-          error: 'No se pudo extraer información del documento. Por favor tome una foto más clara.'
-        }, { status: 422 })
-      }
-
-      // Process Cuban cedula - extract date of birth from ID number if not present
-      if (extractedData.documentType === 'cedula' &&
-          extractedData.documentNumber &&
-          !extractedData.dateOfBirth) {
-        const idNum = extractedData.documentNumber.replace(/\D/g, '')
-        if (idNum.length === 11) {
-          // Cuban ID format: AAMMDDXXXXXC
-          const year = parseInt(idNum.substring(0, 2))
-          const month = idNum.substring(2, 4)
-          const day = idNum.substring(4, 6)
-          // Determine century (people born before 2000 have year > 25 usually)
-          const fullYear = year > 25 ? 1900 + year : 2000 + year
-          extractedData.dateOfBirth = `${fullYear}-${month}-${day}`
+          success: true,
+          data: {
+            fullName: extractedData.fullName || null,
+            firstName: extractedData.firstName || null,
+            lastName: extractedData.lastName || null,
+            documentType: extractedData.documentType || 'unknown',
+            documentNumber: extractedData.documentNumber || null,
+            dateOfBirth: extractedData.dateOfBirth || null,
+            expiryDate: extractedData.expiryDate || null,
+            nationality: extractedData.nationality || null,
+            address: extractedData.address || null,
+            gender: extractedData.gender || null,
+            issuingCountry: extractedData.issuingCountry || null,
+            confidence: extractedData.confidence || 0.5
+          }
+        })
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error))
+        console.error(`[ID Scanner] Attempt ${attempt} failed:`, lastError.message)
+        if (attempt < MAX_RETRIES) {
+          // Wait briefly before retry
+          await new Promise(resolve => setTimeout(resolve, 500))
         }
       }
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          fullName: extractedData.fullName || null,
-          firstName: extractedData.firstName || null,
-          lastName: extractedData.lastName || null,
-          documentType: extractedData.documentType || 'unknown',
-          documentNumber: extractedData.documentNumber || null,
-          dateOfBirth: extractedData.dateOfBirth || null,
-          expiryDate: extractedData.expiryDate || null,
-          nationality: extractedData.nationality || null,
-          address: extractedData.address || null,
-          gender: extractedData.gender || null,
-          issuingCountry: extractedData.issuingCountry || null,
-          confidence: extractedData.confidence || 0.5
-        }
-      })
-    } catch (parseError) {
-      console.error('[ID Scanner] Parse error:', parseError, 'Text:', text)
-      return NextResponse.json({
-        success: false,
-        error: 'No se pudo interpretar el documento. Intenta con una imagen más clara.'
-      }, { status: 422 })
     }
+
+    // All retries failed
+    console.error('[ID Scanner] All retries failed:', lastError)
+    return NextResponse.json({
+      success: false,
+      error: 'No se pudo interpretar el documento. Intenta con una imagen más clara.'
+    }, { status: 422 })
 
   } catch (error) {
     console.error('[ID Scanner] Error:', error)
