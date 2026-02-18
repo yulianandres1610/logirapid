@@ -119,6 +119,11 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
 
+    // Allow door-kiosk routes (public kiosk pages)
+    if (pathname.startsWith('/door-kiosk')) {
+      return NextResponse.next()
+    }
+
     // Allow market API routes (including consignments, purchases, order-invoices, uploads, migrations, ai, print, users, audit)
     if (pathname.startsWith('/api/market') ||
         pathname.startsWith('/api/auth') ||
@@ -253,6 +258,11 @@ export async function middleware(request: NextRequest) {
 
     // Allow public upload page (phone upload via QR)
     if (pathname.startsWith('/upload/')) {
+      return NextResponse.next()
+    }
+
+    // Allow door-kiosk routes (public kiosk pages)
+    if (pathname.startsWith('/door-kiosk')) {
       return NextResponse.next()
     }
 

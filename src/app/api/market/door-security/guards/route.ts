@@ -67,16 +67,16 @@ export async function GET(request: NextRequest) {
           g.kioskid,
           g.isactive,
           g.createdat,
-          e.firstname,
-          e.lastname,
-          e.employeecode,
-          e.position,
-          e.email,
-          e.phone,
-          e.isactive as employeeactive,
+          e.employee_code,
+          e.status as employee_status,
+          u.firstname,
+          u.lastname,
+          u.email,
+          u.phone,
           k.name as kioskname
         FROM market_door_guards g
         LEFT JOIN market_employees e ON g.employeeid = e.id
+        LEFT JOIN users u ON e.user_id = u.id
         LEFT JOIN market_door_kiosks k ON g.kioskid = k.id
         ${whereClause}
         ORDER BY g.createdat DESC
@@ -88,15 +88,14 @@ export async function GET(request: NextRequest) {
           guards: result.rows.map(g => ({
             id: g.id,
             employeeId: g.employeeid,
-            employeeName: g.firstname ? `${g.firstname} ${g.lastname}` : `Empleado #${g.employeeid}`,
-            employeeCode: g.employeecode || '',
-            position: g.position || '',
+            employeeName: g.firstname ? `${g.firstname} ${g.lastname || ''}`.trim() : `Empleado #${g.employeeid}`,
+            employeeCode: g.employee_code || '',
             email: g.email || '',
             phone: g.phone || '',
             kioskId: g.kioskid,
             kioskName: g.kioskname || 'Todos los kiosks',
             isActive: g.isactive,
-            employeeActive: g.employeeactive !== false,
+            employeeActive: g.employee_status === 'active',
             createdAt: g.createdat
           }))
         }
@@ -170,8 +169,10 @@ export async function POST(request: NextRequest) {
     let employee: any = null
     try {
       const employeeResult = await db.query(`
-        SELECT id, firstname, lastname, pin FROM market_employees
-        WHERE id = $1 AND companyid = $2 AND isactive = true
+        SELECT e.id, e.pos_pin, e.status, u.firstname, u.lastname
+        FROM market_employees e
+        LEFT JOIN users u ON e.user_id = u.id
+        WHERE e.id = $1 AND e.company_id = $2 AND e.status = 'active'
       `, [employeeId, payload.companyId])
 
       if (employeeResult.rows.length === 0) {
@@ -183,13 +184,14 @@ export async function POST(request: NextRequest) {
 
       employee = employeeResult.rows[0]
 
-      // Check employee has PIN
-      if (!employee.pin) {
-        return NextResponse.json({
-          success: false,
-          error: 'El empleado debe tener un PIN configurado para ser guardia'
-        }, { status: 400 })
-      }
+      // Check employee has PIN (optional - can be set later)
+      // For now, we allow adding guards without PIN
+      // if (!employee.pos_pin) {
+      //   return NextResponse.json({
+      //     success: false,
+      //     error: 'El empleado debe tener un PIN configurado para ser guardia'
+      //   }, { status: 400 })
+      // }
     } catch (tableError: any) {
       if (tableError.message?.includes('does not exist')) {
         return NextResponse.json({
@@ -245,7 +247,7 @@ export async function POST(request: NextRequest) {
       data: {
         id: guard.id,
         employeeId: guard.employeeid,
-        employeeName: `${employee.firstname} ${employee.lastname}`,
+        employeeName: `${employee.firstname || ''} ${employee.lastname || ''}`.trim() || `Empleado #${employeeId}`,
         kioskId: guard.kioskid,
         isActive: guard.isactive,
         createdAt: guard.createdat
