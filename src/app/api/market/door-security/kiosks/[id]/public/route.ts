@@ -28,8 +28,8 @@ export async function GET(
         k.location,
         k.deviceid,
         k.isactive,
-        c.name as companyname,
-        c.logo as companylogo
+        c.legalname as companyname,
+        c.logo_url as companylogo
       FROM market_door_kiosks k
       LEFT JOIN companies c ON k.companyid = c.id
       WHERE k.id::text = $1 OR k.deviceid = $1

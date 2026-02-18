@@ -56,8 +56,8 @@ export async function GET(
         k.settings,
         k.createdat,
         w.name as warehousename,
-        c.name as companyname,
-        c.logo as companylogo
+        c.legalname as companyname,
+        c.logo_url as companylogo
       FROM market_door_kiosks k
       LEFT JOIN market_warehouses w ON k.warehouseid = w.id
       LEFT JOIN companies c ON k.companyid = c.id
