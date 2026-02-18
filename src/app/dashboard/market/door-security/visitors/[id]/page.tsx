@@ -1,33 +1,30 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useEffect, useState, useCallback, use } from 'react'
+import { useRouter } from 'next/navigation'
+import { motion } from 'framer-motion'
 import {
   ArrowLeft,
+  Loader2,
   User,
   Calendar,
   MapPin,
-  CreditCard,
   Clock,
-  LogIn,
-  LogOut,
-  FileText,
-  Loader2,
-  CheckCircle,
-  XCircle,
-  Image as ImageIcon,
-  History,
+  CreditCard,
+  AlertTriangle,
   Shield,
-  Eye
+  History,
+  LogIn,
+  LogOut
 } from 'lucide-react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
-import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import { useTheme } from '@/contexts/theme-context'
 
-interface VisitorDetail {
+interface Visitor {
   id: number
   fullName: string
   idType: string | null
@@ -50,83 +47,71 @@ interface ActiveLog {
   visitPurpose: string | null
   notes: string | null
   hasPendingInvoices: boolean
-  kioskName: string
+  kioskName: string | null
 }
 
-interface VisitHistory {
+interface HistoryItem {
   id: number
   entryTime: string
   exitTime: string | null
   visitPurpose: string | null
   notes: string | null
   status: string
-  kioskName: string
+  kioskName: string | null
 }
 
 interface VisitorData {
-  visitor: VisitorDetail
+  visitor: Visitor
   isCurrentlyInside: boolean
   activeLog: ActiveLog | null
-  recentHistory: VisitHistory[]
-}
-
-const VISIT_PURPOSES: Record<string, string> = {
-  compra: 'Compra',
-  reunion: 'Reunión',
-  entrega: 'Entrega',
-  servicio: 'Servicio',
-  otro: 'Otro'
-}
-
-const GENDER_LABELS: Record<string, string> = {
-  M: 'Masculino',
-  F: 'Femenino'
+  recentHistory: HistoryItem[]
 }
 
 export default function VisitorDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { theme } = useTheme()
-  const router = useRouter()
   const resolvedParams = use(params)
-  const visitorId = resolvedParams.id
+  const router = useRouter()
+  const { theme } = useTheme()
 
-  const [data, setData] = useState<VisitorData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('details')
-  const [showPhotoModal, setShowPhotoModal] = useState(false)
-  const [selectedPhoto, setSelectedPhoto] = useState<'front' | 'reverse'>('front')
+  const [data, setData] = useState<VisitorData | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchVisitor()
-  }, [visitorId])
+  const fetchVisitor = useCallback(async () => {
+    setLoading(true)
+    setError(null)
 
-  const fetchVisitor = async () => {
     try {
-      const response = await fetch(`/api/market/door-security/visitors/${visitorId}`)
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success) {
-          setData(result.data)
-        }
+      const res = await fetch(`/api/market/door-security/visitors/${resolvedParams.id}`)
+      const json = await res.json()
+
+      if (json.success) {
+        setData(json.data)
+      } else {
+        setError(json.error || 'Error al cargar el visitante')
       }
-    } catch (error) {
-      console.error('Error fetching visitor:', error)
+    } catch {
+      setError('Error de conexion')
     } finally {
       setLoading(false)
     }
-  }
+  }, [resolvedParams.id])
 
-  const formatDate = (date: string | null) => {
-    if (!date) return '-'
-    return new Date(date).toLocaleDateString('es-ES', {
+  useEffect(() => {
+    fetchVisitor()
+  }, [fetchVisitor])
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return '-'
+    return new Date(dateStr).toLocaleDateString('es-ES', {
       day: '2-digit',
       month: 'long',
       year: 'numeric'
     })
   }
 
-  const formatDateTime = (date: string | null) => {
-    if (!date) return '-'
-    return new Date(date).toLocaleString('es-ES', {
+  const formatDateTime = (dateStr: string | null) => {
+    if (!dateStr) return '-'
+    return new Date(dateStr).toLocaleString('es-ES', {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -137,26 +122,21 @@ export default function VisitorDetailPage({ params }: { params: Promise<{ id: st
 
   const calculateAge = (dateOfBirth: string | null) => {
     if (!dateOfBirth) return null
-    const today = new Date()
     const birth = new Date(dateOfBirth)
+    const today = new Date()
     let age = today.getFullYear() - birth.getFullYear()
-    const m = today.getMonth() - birth.getMonth()
-    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+    const monthDiff = today.getMonth() - birth.getMonth()
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
       age--
     }
     return age
-  }
-
-  const openPhotoModal = (type: 'front' | 'reverse') => {
-    setSelectedPhoto(type)
-    setShowPhotoModal(true)
   }
 
   if (loading) {
     return (
       <ProtectedRoute>
         <DashboardLayout>
-          <div className="min-h-screen p-6 flex items-center justify-center">
+          <div className="min-h-screen flex items-center justify-center">
             <div className="text-center">
               <div className={cn(
                 'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4',
@@ -172,26 +152,26 @@ export default function VisitorDetailPage({ params }: { params: Promise<{ id: st
     )
   }
 
-  if (!data) {
+  if (error || !data) {
     return (
       <ProtectedRoute>
         <DashboardLayout>
           <div className="min-h-screen p-6">
             <div className={cn(
-              'max-w-xl mx-auto text-center p-8 rounded-2xl',
+              "max-w-xl mx-auto p-8 rounded-2xl text-center",
               theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-lg'
             )}>
               <div className={cn(
                 'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4',
                 theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
               )}>
-                <User className="w-8 h-8 text-red-500" />
+                <AlertTriangle className="w-8 h-8 text-red-500" />
               </div>
               <h2 className={cn(
                 'text-xl font-bold mb-2',
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               )}>
-                Visitante no encontrado
+                {error || 'Visitante no encontrado'}
               </h2>
               <p className="text-gray-500 mb-6">No pudimos cargar los detalles de este visitante.</p>
               <Link href="/dashboard/market/door-security/visitors">
@@ -201,7 +181,7 @@ export default function VisitorDetailPage({ params }: { params: Promise<{ id: st
                   className="inline-flex items-center gap-2 px-6 py-3 bg-teal-600 text-white rounded-xl font-medium hover:bg-teal-700 transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  Volver a visitantes
+                  Volver al listado
                 </motion.button>
               </Link>
             </div>
@@ -218,8 +198,7 @@ export default function VisitorDetailPage({ params }: { params: Promise<{ id: st
     <ProtectedRoute>
       <DashboardLayout>
         <div className="min-h-screen p-6">
-          {/* Header Section */}
-          <div className="max-w-6xl mx-auto mb-8">
+          <div className="max-w-6xl mx-auto">
             {/* Navigation */}
             <div className="flex items-center justify-between mb-6">
               <Link href="/dashboard/market/door-security/visitors">
@@ -239,62 +218,70 @@ export default function VisitorDetailPage({ params }: { params: Promise<{ id: st
               </Link>
             </div>
 
-            {/* Visitor Header Card */}
+            {/* Header Card */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className={cn(
-                'p-6 rounded-2xl border',
+                'p-6 rounded-2xl border mb-6',
                 theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
               )}
             >
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-                {/* Left: Visitor Info */}
-                <div className="flex items-start gap-4">
-                  <div className={cn(
-                    'w-16 h-16 rounded-2xl flex items-center justify-center shrink-0',
-                    isCurrentlyInside
-                      ? 'bg-gradient-to-br from-green-500 to-emerald-500'
-                      : 'bg-gradient-to-br from-teal-500 to-cyan-500'
-                  )}>
-                    <User className="w-8 h-8 text-white" />
+              <div className="flex flex-col md:flex-row md:items-start gap-6">
+                {/* Avatar */}
+                <div className={cn(
+                  'w-20 h-20 rounded-2xl flex items-center justify-center shrink-0',
+                  isCurrentlyInside
+                    ? 'bg-gradient-to-br from-green-500 to-emerald-500'
+                    : 'bg-gradient-to-br from-teal-500 to-cyan-500'
+                )}>
+                  <User className="w-10 h-10 text-white" />
+                </div>
+
+                {/* Info */}
+                <div className="flex-1">
+                  <div className="flex flex-wrap items-center gap-3 mb-2">
+                    <h1 className={cn(
+                      'text-2xl md:text-3xl font-bold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      {visitor.fullName}
+                    </h1>
+                    {isCurrentlyInside && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-sm font-medium">
+                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                        Adentro
+                      </span>
+                    )}
                   </div>
-                  <div>
-                    <div className="flex items-center gap-3 mb-1 flex-wrap">
-                      <h1 className={cn(
-                        'text-2xl md:text-3xl font-bold',
-                        theme === 'dark' ? 'text-white' : 'text-gray-900'
-                      )}>
-                        {visitor.fullName}
-                      </h1>
-                      {isCurrentlyInside ? (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                          Adentro
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                          Afuera
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-500">
+
+                  <div className="flex flex-wrap items-center gap-4 text-gray-500">
+                    <span className="flex items-center gap-1.5">
                       <CreditCard className="w-4 h-4" />
-                      <span>{visitor.idType || 'ID'}: <span className="font-mono">{visitor.idNumber}</span></span>
-                    </div>
+                      {visitor.idType || 'ID'}: {visitor.idNumber}
+                    </span>
                     {visitor.nationality && (
-                      <p className="text-sm text-gray-500 mt-1">
-                        {visitor.nationality} {visitor.gender && `• ${GENDER_LABELS[visitor.gender] || visitor.gender}`}
-                      </p>
+                      <span className="flex items-center gap-1.5">
+                        <Shield className="w-4 h-4" />
+                        {visitor.nationality}
+                      </span>
+                    )}
+                    {visitor.gender && (
+                      <span>
+                        {visitor.gender === 'M' ? 'Masculino' : visitor.gender === 'F' ? 'Femenino' : visitor.gender}
+                      </span>
                     )}
                   </div>
                 </div>
 
-                {/* Right: Stats */}
-                <div className="text-right">
-                  <p className="text-sm text-gray-500 mb-1">Total de Visitas</p>
+                {/* Stats */}
+                <div className={cn(
+                  'p-4 rounded-xl',
+                  theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                )}>
+                  <p className="text-sm text-gray-500 mb-1">Total de visitas</p>
                   <p className={cn(
-                    'text-4xl font-bold',
+                    'text-3xl font-bold',
                     theme === 'dark' ? 'text-white' : 'text-gray-900'
                   )}>
                     {visitor.totalVisits}
@@ -302,515 +289,358 @@ export default function VisitorDetailPage({ params }: { params: Promise<{ id: st
                 </div>
               </div>
             </motion.div>
-          </div>
 
-          {/* Main Content */}
-          <div className="max-w-6xl mx-auto">
-            {/* Tabs */}
-            <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-              {[
-                { key: 'details', label: 'Detalles', icon: FileText },
-                { key: 'documents', label: 'Documentos', icon: ImageIcon },
-                { key: 'history', label: 'Historial', icon: History, count: recentHistory.length }
-              ].map(tab => {
-                const TabIcon = tab.icon
-                return (
-                  <motion.button
-                    key={tab.key}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setActiveTab(tab.key)}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all whitespace-nowrap',
-                      activeTab === tab.key
-                        ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-lg shadow-teal-500/25'
-                        : theme === 'dark'
-                          ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    <TabIcon className="w-4 h-4" />
-                    {tab.label}
-                    {tab.count !== undefined && tab.count > 0 && (
-                      <span className={cn(
-                        'px-2 py-0.5 rounded-full text-xs',
-                        activeTab === tab.key
-                          ? 'bg-white/20'
-                          : 'bg-gray-200 dark:bg-gray-700'
-                      )}>
-                        {tab.count}
-                      </span>
-                    )}
-                  </motion.button>
-                )
-              })}
-            </div>
-
-            {/* Tab Content */}
-            <AnimatePresence mode="wait">
-              {activeTab === 'details' && (
-                <motion.div
-                  key="details"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="space-y-6"
-                >
-                  {/* Active Visit Alert */}
-                  {isCurrentlyInside && activeLog && (
-                    <div className={cn(
-                      'p-4 rounded-xl border-2',
-                      theme === 'dark'
-                        ? 'bg-green-900/20 border-green-700'
-                        : 'bg-green-50 border-green-200'
-                    )}>
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
-                          <LogIn className="w-5 h-5 text-green-600" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-green-700 dark:text-green-400">
-                            Visita Activa
-                          </h3>
-                          <p className="text-sm text-green-600 dark:text-green-500 mt-1">
-                            Entrada: {formatDateTime(activeLog.entryTime)}
-                            {activeLog.visitPurpose && ` • ${VISIT_PURPOSES[activeLog.visitPurpose] || activeLog.visitPurpose}`}
-                            {activeLog.kioskName && ` • ${activeLog.kioskName}`}
-                          </p>
-                          {activeLog.notes && (
-                            <p className="text-sm text-green-600 dark:text-green-500 mt-1 italic">
-                              Notas: {activeLog.notes}
-                            </p>
-                          )}
-                        </div>
-                      </div>
+            {/* Active Visit Alert */}
+            {activeLog && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <LogIn className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  <h3 className="font-semibold text-green-800 dark:text-green-400">Visita Activa</h3>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <p className="text-green-600 dark:text-green-500">Entrada</p>
+                    <p className="font-medium text-green-800 dark:text-green-300">{formatDateTime(activeLog.entryTime)}</p>
+                  </div>
+                  <div>
+                    <p className="text-green-600 dark:text-green-500">Motivo</p>
+                    <p className="font-medium text-green-800 dark:text-green-300">{activeLog.visitPurpose || 'No especificado'}</p>
+                  </div>
+                  <div>
+                    <p className="text-green-600 dark:text-green-500">Kiosko</p>
+                    <p className="font-medium text-green-800 dark:text-green-300">{activeLog.kioskName || '-'}</p>
+                  </div>
+                  {activeLog.hasPendingInvoices && (
+                    <div>
+                      <p className="text-amber-600 dark:text-amber-500">Estado</p>
+                      <p className="font-medium text-amber-700 dark:text-amber-300">Facturas pendientes</p>
                     </div>
                   )}
+                </div>
+              </motion.div>
+            )}
 
-                  {/* Info Cards */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Content Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column - Info */}
+              <div className="lg:col-span-2 space-y-6">
+                {/* Personal Info */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className={cn(
+                    'p-6 rounded-2xl border',
+                    theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                  )}
+                >
+                  <div className="flex items-center gap-3 mb-6">
                     <div className={cn(
-                      'p-4 rounded-xl border',
-                      theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-                    )}>
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className={cn(
-                          'w-10 h-10 rounded-lg flex items-center justify-center',
-                          theme === 'dark' ? 'bg-teal-900/30' : 'bg-teal-100'
-                        )}>
-                          <History className="w-5 h-5 text-teal-500" />
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Total Visitas</p>
-                          <p className={cn(
-                            'text-xl font-bold',
-                            theme === 'dark' ? 'text-white' : 'text-gray-900'
-                          )}>{visitor.totalVisits}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className={cn(
-                      'p-4 rounded-xl border',
-                      theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-                    )}>
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className={cn(
-                          'w-10 h-10 rounded-lg flex items-center justify-center',
-                          theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
-                        )}>
-                          <Calendar className="w-5 h-5 text-blue-500" />
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Primera Visita</p>
-                          <p className={cn(
-                            'text-sm font-medium',
-                            theme === 'dark' ? 'text-white' : 'text-gray-900'
-                          )}>{formatDate(visitor.firstVisit)}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className={cn(
-                      'p-4 rounded-xl border',
-                      theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-                    )}>
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className={cn(
-                          'w-10 h-10 rounded-lg flex items-center justify-center',
-                          theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'
-                        )}>
-                          <Clock className="w-5 h-5 text-purple-500" />
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Última Visita</p>
-                          <p className={cn(
-                            'text-sm font-medium',
-                            theme === 'dark' ? 'text-white' : 'text-gray-900'
-                          )}>{formatDate(visitor.lastVisit)}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {visitor.dateOfBirth && age !== null && (
-                      <div className={cn(
-                        'p-4 rounded-xl border',
-                        theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-                      )}>
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className={cn(
-                            'w-10 h-10 rounded-lg flex items-center justify-center',
-                            theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100'
-                          )}>
-                            <User className="w-5 h-5 text-amber-500" />
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-500">Edad</p>
-                            <p className={cn(
-                              'text-xl font-bold',
-                              theme === 'dark' ? 'text-white' : 'text-gray-900'
-                            )}>{age} años</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Personal Info */}
-                  <div className={cn(
-                    'p-6 rounded-xl border',
-                    theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-                  )}>
-                    <h3 className={cn(
-                      'font-semibold mb-4 flex items-center gap-2',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      'p-2 rounded-xl',
+                      theme === 'dark' ? 'bg-teal-900/30' : 'bg-teal-100'
                     )}>
                       <User className="w-5 h-5 text-teal-500" />
-                      Información Personal
-                    </h3>
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div className="space-y-3">
-                        <div>
-                          <p className="text-sm text-gray-500">Nombre Completo</p>
-                          <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                            {visitor.fullName}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Documento de Identidad</p>
-                          <p className={cn('font-medium font-mono', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                            {visitor.idType || 'ID'}: {visitor.idNumber}
-                          </p>
-                        </div>
-                        {visitor.dateOfBirth && (
-                          <div>
-                            <p className="text-sm text-gray-500">Fecha de Nacimiento</p>
-                            <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                              {formatDate(visitor.dateOfBirth)}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                      <div className="space-y-3">
-                        {visitor.gender && (
-                          <div>
-                            <p className="text-sm text-gray-500">Género</p>
-                            <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                              {GENDER_LABELS[visitor.gender] || visitor.gender}
-                            </p>
-                          </div>
-                        )}
-                        {visitor.nationality && (
-                          <div>
-                            <p className="text-sm text-gray-500">Nacionalidad</p>
-                            <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                              {visitor.nationality}
-                            </p>
-                          </div>
-                        )}
-                        {visitor.address && (
-                          <div>
-                            <p className="text-sm text-gray-500 flex items-center gap-1">
-                              <MapPin className="w-3 h-3" /> Dirección
-                            </p>
-                            <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                              {visitor.address}
-                            </p>
-                          </div>
-                        )}
-                      </div>
                     </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {activeTab === 'documents' && (
-                <motion.div
-                  key="documents"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="space-y-6"
-                >
-                  <div className={cn(
-                    'p-6 rounded-xl border',
-                    theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-                  )}>
                     <h3 className={cn(
-                      'font-semibold mb-4 flex items-center gap-2',
+                      'font-semibold',
                       theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      <CreditCard className="w-5 h-5 text-teal-500" />
-                      Documento de Identidad
-                    </h3>
+                    )}>Informacion Personal</h3>
+                  </div>
 
-                    {(visitor.idPhotoUrl || visitor.idPhotoReverseUrl) ? (
-                      <div className="grid md:grid-cols-2 gap-6">
-                        {/* Front Photo */}
-                        <div>
-                          <p className="text-sm text-gray-500 mb-2">Frente</p>
-                          {visitor.idPhotoUrl ? (
-                            <div
-                              className="relative group cursor-pointer"
-                              onClick={() => openPhotoModal('front')}
-                            >
-                              <img
-                                src={visitor.idPhotoUrl}
-                                alt="Documento - Frente"
-                                className="w-full rounded-xl border border-gray-200 dark:border-gray-700 object-cover aspect-[3/2]"
-                              />
-                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
-                                <Eye className="w-8 h-8 text-white" />
-                              </div>
-                            </div>
-                          ) : (
-                            <div className={cn(
-                              'aspect-[3/2] rounded-xl border-2 border-dashed flex items-center justify-center',
-                              theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-300 bg-gray-50'
-                            )}>
-                              <div className="text-center text-gray-400">
-                                <ImageIcon className="w-8 h-8 mx-auto mb-2" />
-                                <p className="text-sm">Sin imagen</p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Reverse Photo */}
-                        <div>
-                          <p className="text-sm text-gray-500 mb-2">Reverso</p>
-                          {visitor.idPhotoReverseUrl ? (
-                            <div
-                              className="relative group cursor-pointer"
-                              onClick={() => openPhotoModal('reverse')}
-                            >
-                              <img
-                                src={visitor.idPhotoReverseUrl}
-                                alt="Documento - Reverso"
-                                className="w-full rounded-xl border border-gray-200 dark:border-gray-700 object-cover aspect-[3/2]"
-                              />
-                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
-                                <Eye className="w-8 h-8 text-white" />
-                              </div>
-                            </div>
-                          ) : (
-                            <div className={cn(
-                              'aspect-[3/2] rounded-xl border-2 border-dashed flex items-center justify-center',
-                              theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-300 bg-gray-50'
-                            )}>
-                              <div className="text-center text-gray-400">
-                                <ImageIcon className="w-8 h-8 mx-auto mb-2" />
-                                <p className="text-sm">Sin imagen</p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className={cn(
-                        'p-12 rounded-xl border-2 border-dashed text-center',
-                        theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-300 bg-gray-50'
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1">Nombre Completo</p>
+                      <p className={cn(
+                        'font-medium',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>{visitor.fullName}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1">Numero de Identificacion</p>
+                      <p className={cn(
+                        'font-medium font-mono',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>{visitor.idNumber}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1">Tipo de Documento</p>
+                      <p className={cn(
+                        'font-medium',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>{visitor.idType || 'No especificado'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1">Fecha de Nacimiento</p>
+                      <p className={cn(
+                        'font-medium',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
                       )}>
-                        <ImageIcon className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                        <p className={cn(
-                          'font-medium mb-2',
-                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                        )}>No hay documentos</p>
-                        <p className="text-sm text-gray-500">
-                          Las fotos del documento se capturan en el kiosco
+                        {formatDate(visitor.dateOfBirth)}
+                        {age !== null && <span className="text-gray-500 ml-2">({age} anos)</span>}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1">Nacionalidad</p>
+                      <p className={cn(
+                        'font-medium',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>{visitor.nationality || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1">Genero</p>
+                      <p className={cn(
+                        'font-medium',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        {visitor.gender === 'M' ? 'Masculino' : visitor.gender === 'F' ? 'Femenino' : visitor.gender || '-'}
+                      </p>
+                    </div>
+                    {visitor.address && (
+                      <div className="md:col-span-2">
+                        <p className="text-sm text-gray-500 mb-1 flex items-center gap-1">
+                          <MapPin className="w-3.5 h-3.5" />
+                          Direccion
                         </p>
+                        <p className={cn(
+                          'font-medium',
+                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                        )}>{visitor.address}</p>
                       </div>
                     )}
                   </div>
                 </motion.div>
-              )}
 
-              {activeTab === 'history' && (
+                {/* Visit History */}
                 <motion.div
-                  key="history"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="space-y-4"
+                  transition={{ delay: 0.3 }}
+                  className={cn(
+                    'p-6 rounded-2xl border',
+                    theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                  )}
                 >
-                  {recentHistory.length === 0 ? (
+                  <div className="flex items-center gap-3 mb-6">
                     <div className={cn(
-                      'p-12 rounded-xl border text-center',
-                      theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
+                      'p-2 rounded-xl',
+                      theme === 'dark' ? 'bg-indigo-900/30' : 'bg-indigo-100'
                     )}>
-                      <History className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                      <p className={cn(
-                        'font-medium mb-2',
-                        theme === 'dark' ? 'text-white' : 'text-gray-900'
-                      )}>Sin historial</p>
-                      <p className="text-sm text-gray-500">
-                        No hay visitas registradas
-                      </p>
+                      <History className="w-5 h-5 text-indigo-500" />
                     </div>
-                  ) : (
-                    recentHistory.map((visit) => {
-                      const isActive = visit.status === 'active'
+                    <h3 className={cn(
+                      'font-semibold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>Historial de Visitas</h3>
+                  </div>
 
-                      return (
-                        <motion.div
-                          key={visit.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
+                  {recentHistory.length > 0 ? (
+                    <div className="space-y-3">
+                      {recentHistory.map((log) => (
+                        <div
+                          key={log.id}
                           className={cn(
                             'p-4 rounded-xl border',
-                            theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
+                            log.status === 'active'
+                              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                              : theme === 'dark'
+                                ? 'bg-gray-700/50 border-gray-600'
+                                : 'bg-gray-50 border-gray-200'
                           )}
                         >
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-start gap-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex items-center gap-3">
                               <div className={cn(
-                                'w-10 h-10 rounded-lg flex items-center justify-center',
-                                isActive
-                                  ? 'bg-green-100 dark:bg-green-900/30'
-                                  : 'bg-gray-100 dark:bg-gray-700'
+                                'w-8 h-8 rounded-full flex items-center justify-center',
+                                log.status === 'active'
+                                  ? 'bg-green-100 dark:bg-green-900/50'
+                                  : log.status === 'completed'
+                                    ? 'bg-gray-100 dark:bg-gray-600'
+                                    : 'bg-red-100 dark:bg-red-900/50'
                               )}>
-                                {isActive ? (
-                                  <LogIn className="w-5 h-5 text-green-600" />
+                                {log.status === 'active' ? (
+                                  <LogIn className="w-4 h-4 text-green-600 dark:text-green-400" />
                                 ) : (
-                                  <LogOut className="w-5 h-5 text-gray-500" />
+                                  <LogOut className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                                 )}
                               </div>
                               <div>
-                                <div className="flex items-center gap-2">
-                                  <p className={cn(
-                                    'font-medium',
-                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                  )}>
-                                    {formatDateTime(visit.entryTime)}
-                                  </p>
-                                  {isActive && (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                                      Activa
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-sm text-gray-500 mt-1">
-                                  {VISIT_PURPOSES[visit.visitPurpose || ''] || visit.visitPurpose || 'Sin motivo'}
-                                  {visit.kioskName && ` • ${visit.kioskName}`}
+                                <p className={cn(
+                                  'font-medium',
+                                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                )}>
+                                  {formatDateTime(log.entryTime)}
                                 </p>
-                                {visit.notes && (
-                                  <p className="text-sm text-gray-400 mt-1 italic">
-                                    {visit.notes}
-                                  </p>
-                                )}
+                                <p className="text-sm text-gray-500">
+                                  {log.visitPurpose || 'Sin motivo'} {log.kioskName && `- ${log.kioskName}`}
+                                </p>
                               </div>
                             </div>
                             <div className="text-right">
-                              {visit.exitTime ? (
-                                <div>
-                                  <p className="text-sm text-gray-500">Salida</p>
-                                  <p className={cn(
-                                    'font-medium',
-                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                  )}>
-                                    {formatDateTime(visit.exitTime)}
-                                  </p>
-                                </div>
-                              ) : isActive ? (
-                                <span className="text-sm text-green-500">En curso</span>
+                              {log.exitTime ? (
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                  Salida: {formatDateTime(log.exitTime)}
+                                </p>
                               ) : (
-                                <span className="text-sm text-gray-400">-</span>
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded text-xs font-medium">
+                                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                                  Activa
+                                </span>
                               )}
                             </div>
                           </div>
-                        </motion.div>
-                      )
-                    })
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <History className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+                      <p className="text-gray-500">Sin historial de visitas</p>
+                    </div>
                   )}
                 </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+              </div>
 
-          {/* Photo Modal */}
-          <AnimatePresence>
-            {showPhotoModal && (
-              <>
+              {/* Right Column - Stats & Photos */}
+              <div className="space-y-6">
+                {/* Stats */}
                 <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  onClick={() => setShowPhotoModal(false)}
-                  className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
-                />
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  className="fixed inset-4 z-50 flex items-center justify-center"
-                  onClick={() => setShowPhotoModal(false)}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className={cn(
+                    'p-6 rounded-2xl border',
+                    theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                  )}
                 >
-                  <div className="relative max-w-4xl max-h-full" onClick={e => e.stopPropagation()}>
-                    <img
-                      src={selectedPhoto === 'front' ? visitor.idPhotoUrl! : visitor.idPhotoReverseUrl!}
-                      alt={`Documento - ${selectedPhoto === 'front' ? 'Frente' : 'Reverso'}`}
-                      className="max-w-full max-h-[80vh] rounded-xl object-contain"
-                    />
-                    <button
-                      onClick={() => setShowPhotoModal(false)}
-                      className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
-                    >
-                      <XCircle className="w-6 h-6" />
-                    </button>
+                  <h3 className={cn(
+                    'font-semibold mb-4',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>Estadisticas</h3>
 
-                    {/* Photo tabs */}
-                    {visitor.idPhotoUrl && visitor.idPhotoReverseUrl && (
-                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 bg-black/50 p-1 rounded-full">
-                        <button
-                          onClick={() => setSelectedPhoto('front')}
-                          className={cn(
-                            'px-4 py-2 rounded-full text-sm font-medium transition-colors',
-                            selectedPhoto === 'front'
-                              ? 'bg-white text-black'
-                              : 'text-white hover:bg-white/20'
-                          )}
-                        >
-                          Frente
-                        </button>
-                        <button
-                          onClick={() => setSelectedPhoto('reverse')}
-                          className={cn(
-                            'px-4 py-2 rounded-full text-sm font-medium transition-colors',
-                            selectedPhoto === 'reverse'
-                              ? 'bg-white text-black'
-                              : 'text-white hover:bg-white/20'
-                          )}
-                        >
-                          Reverso
-                        </button>
+                  <div className="space-y-4">
+                    <div className={cn(
+                      'p-4 rounded-xl',
+                      theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                    )}>
+                      <div className="flex items-center gap-3 mb-2">
+                        <Calendar className="w-4 h-4 text-gray-400" />
+                        <p className="text-sm text-gray-500">Primera visita</p>
                       </div>
-                    )}
+                      <p className={cn(
+                        'font-semibold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>{formatDate(visitor.firstVisit)}</p>
+                    </div>
+
+                    <div className={cn(
+                      'p-4 rounded-xl',
+                      theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                    )}>
+                      <div className="flex items-center gap-3 mb-2">
+                        <Clock className="w-4 h-4 text-gray-400" />
+                        <p className="text-sm text-gray-500">Ultima visita</p>
+                      </div>
+                      <p className={cn(
+                        'font-semibold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>{formatDate(visitor.lastVisit)}</p>
+                    </div>
+
+                    <div className={cn(
+                      'p-4 rounded-xl',
+                      theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                    )}>
+                      <div className="flex items-center gap-3 mb-2">
+                        <History className="w-4 h-4 text-gray-400" />
+                        <p className="text-sm text-gray-500">Total de visitas</p>
+                      </div>
+                      <p className={cn(
+                        'text-2xl font-bold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>{visitor.totalVisits}</p>
+                    </div>
                   </div>
                 </motion.div>
-              </>
-            )}
-          </AnimatePresence>
+
+                {/* ID Photos */}
+                {(visitor.idPhotoUrl || visitor.idPhotoReverseUrl) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className={cn(
+                      'p-6 rounded-2xl border',
+                      theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                    )}
+                  >
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className={cn(
+                        'p-2 rounded-xl',
+                        theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100'
+                      )}>
+                        <CreditCard className="w-5 h-5 text-amber-500" />
+                      </div>
+                      <h3 className={cn(
+                        'font-semibold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>Documento de Identidad</h3>
+                    </div>
+
+                    <div className="space-y-4">
+                      {visitor.idPhotoUrl && (
+                        <div>
+                          <p className="text-sm text-gray-500 mb-2">Frente</p>
+                          <div className="relative aspect-[16/10] rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700">
+                            <Image
+                              src={visitor.idPhotoUrl}
+                              alt="Documento frente"
+                              fill
+                              className="object-contain"
+                              unoptimized
+                            />
+                          </div>
+                        </div>
+                      )}
+                      {visitor.idPhotoReverseUrl && (
+                        <div>
+                          <p className="text-sm text-gray-500 mb-2">Reverso</p>
+                          <div className="relative aspect-[16/10] rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700">
+                            <Image
+                              src={visitor.idPhotoReverseUrl}
+                              alt="Documento reverso"
+                              fill
+                              className="object-contain"
+                              unoptimized
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Registration Info */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className={cn(
+                    'p-4 rounded-xl border text-sm',
+                    theme === 'dark' ? 'bg-gray-800/30 border-gray-700' : 'bg-gray-50 border-gray-200'
+                  )}
+                >
+                  <p className="text-gray-500">
+                    Registrado el {formatDateTime(visitor.createdAt)}
+                  </p>
+                </motion.div>
+              </div>
+            </div>
+          </div>
         </div>
       </DashboardLayout>
     </ProtectedRoute>
