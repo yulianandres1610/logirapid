@@ -11,7 +11,6 @@ import {
   TrendingUp,
   Clock,
   CheckCircle,
-  Calendar,
   Eye,
   Trash2,
   RefreshCw,
@@ -20,7 +19,6 @@ import {
   ChevronRight,
   Play,
   PackageCheck,
-  AlertTriangle,
   ArrowRight
 } from 'lucide-react'
 import Link from 'next/link'
@@ -177,14 +175,6 @@ export default function DosificationPage() {
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-US', { style: 'currency', currency: 'USD' }).format(value)
-  }
-
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    })
   }
 
   const formatWeight = (kg: number) => {
@@ -404,17 +394,17 @@ export default function DosificationPage() {
                   : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
               )}
             >
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col lg:flex-row gap-3">
                 {/* Search */}
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <div className="flex-1 relative min-w-0">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Buscar por número de orden o producto..."
+                    placeholder="Buscar orden o producto..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className={cn(
-                      'w-full pl-10 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all',
+                      'w-full pl-9 pr-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 transition-all',
                       theme === 'dark'
                         ? 'bg-gray-800/50 border-gray-700 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
                         : 'bg-white border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
@@ -422,89 +412,84 @@ export default function DosificationPage() {
                   />
                 </div>
 
-                {/* Status Filter */}
-                <select
-                  value={selectedStatus || ''}
-                  onChange={(e) => setSelectedStatus(e.target.value || null)}
-                  className={cn(
-                    'px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all min-w-[180px]',
-                    theme === 'dark'
-                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
-                      : 'bg-white border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
-                  )}
-                >
-                  <option value="">Todos los estados</option>
-                  <option value="pending">Pendiente</option>
-                  <option value="in_progress">En Proceso</option>
-                  <option value="completed">Completada</option>
-                  <option value="cancelled">Cancelada</option>
-                </select>
-
-                {/* Date Range */}
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-gray-400 hidden sm:block" />
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                {/* Filters Row */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Status Filter */}
+                  <select
+                    value={selectedStatus || ''}
+                    onChange={(e) => setSelectedStatus(e.target.value || null)}
                     className={cn(
-                      'px-3 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all w-[140px]',
+                      'px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 transition-all',
                       theme === 'dark'
                         ? 'bg-gray-800/50 border-gray-700 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
                         : 'bg-white border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
-                    )}
-                  />
-                  <span className="text-gray-400">-</span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className={cn(
-                      'px-3 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all w-[140px]',
-                      theme === 'dark'
-                        ? 'bg-gray-800/50 border-gray-700 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
-                        : 'bg-white border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
-                    )}
-                  />
-                </div>
-
-                {/* Clear Filters */}
-                {(search || selectedStatus || startDate || endDate) && (
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      setSearch('')
-                      setSelectedStatus(null)
-                      setStartDate('')
-                      setEndDate('')
-                    }}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all',
-                      theme === 'dark'
-                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     )}
                   >
-                    <X className="w-4 h-4" />
-                    Limpiar
-                  </motion.button>
-                )}
+                    <option value="">Estado</option>
+                    <option value="pending">Pendiente</option>
+                    <option value="in_progress">En Proceso</option>
+                    <option value="completed">Completada</option>
+                    <option value="cancelled">Cancelada</option>
+                  </select>
 
-                {/* Refresh */}
-                <div className="flex items-center gap-2">
-                  {lastUpdated && (
-                    <span className="text-xs text-gray-400 hidden sm:inline">
-                      {lastUpdated.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
+                  {/* Date Range */}
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className={cn(
+                        'px-2 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 transition-all w-[120px]',
+                        theme === 'dark'
+                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
+                          : 'bg-white border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
+                      )}
+                    />
+                    <span className="text-gray-400 text-sm">-</span>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className={cn(
+                        'px-2 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 transition-all w-[120px]',
+                        theme === 'dark'
+                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
+                          : 'bg-white border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
+                      )}
+                    />
+                  </div>
+
+                  {/* Clear Filters */}
+                  {(search || selectedStatus || startDate || endDate) && (
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        setSearch('')
+                        setSelectedStatus(null)
+                        setStartDate('')
+                        setEndDate('')
+                      }}
+                      className={cn(
+                        'p-2 rounded-lg transition-all',
+                        theme === 'dark'
+                          ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      )}
+                      title="Limpiar filtros"
+                    >
+                      <X className="w-4 h-4" />
+                    </motion.button>
                   )}
+
+                  {/* Refresh */}
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleManualRefresh}
                     disabled={loading || isRefreshing}
                     className={cn(
-                      'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all',
+                      'p-2 rounded-lg transition-all',
                       theme === 'dark'
                         ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
@@ -513,19 +498,19 @@ export default function DosificationPage() {
                   >
                     <RefreshCw className={cn('w-4 h-4', (loading || isRefreshing) && 'animate-spin')} />
                   </motion.button>
-                </div>
 
-                {/* New Order Button */}
-                <Link href="/dashboard/market/production/dosification/create">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25"
-                  >
-                    <Plus className="w-5 h-5" />
-                    Nueva Orden
-                  </motion.button>
-                </Link>
+                  {/* New Order Button */}
+                  <Link href="/dashboard/market/production/dosification/create">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg text-sm font-medium hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Nueva
+                    </motion.button>
+                  </Link>
+                </div>
               </div>
             </motion.div>
 
@@ -542,22 +527,22 @@ export default function DosificationPage() {
               )}
             >
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full table-fixed">
                   <thead>
                     <tr className={cn(
                       'border-b',
                       theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
                     )}>
-                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider"># Orden</th>
-                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Producto Fuente</th>
-                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
-                      <th className="text-left py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Producto Final</th>
-                      <th className="text-right py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Peso / Porciones</th>
-                      <th className="text-right py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Merma/Sobrante</th>
-                      <th className="text-right py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Costo/Unidad</th>
-                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                      <th className="text-center py-4 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                      <th className="text-left py-3 px-3 text-xs font-medium text-gray-500 uppercase tracking-wider w-[90px]"># Orden</th>
+                      <th className="text-left py-3 px-3 text-xs font-medium text-gray-500 uppercase tracking-wider w-[180px]">Fuente</th>
+                      <th className="text-center py-3 px-1 text-xs font-medium text-gray-500 uppercase tracking-wider w-[30px]"></th>
+                      <th className="text-left py-3 px-3 text-xs font-medium text-gray-500 uppercase tracking-wider w-[180px]">Final</th>
+                      <th className="text-right py-3 px-3 text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Peso</th>
+                      <th className="text-right py-3 px-3 text-xs font-medium text-gray-500 uppercase tracking-wider w-[90px]">Merma</th>
+                      <th className="text-right py-3 px-3 text-xs font-medium text-gray-500 uppercase tracking-wider w-[80px]">$/Ud</th>
+                      <th className="text-center py-3 px-3 text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Estado</th>
+                      <th className="text-center py-3 px-3 text-xs font-medium text-gray-500 uppercase tracking-wider w-[80px]">Fecha</th>
+                      <th className="text-center py-3 px-2 text-xs font-medium text-gray-500 uppercase tracking-wider w-[70px]"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -603,33 +588,33 @@ export default function DosificationPage() {
                               theme === 'dark' ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'
                             )}
                           >
-                            <td className="py-4 px-4">
+                            <td className="py-3 px-3">
                               <span className={cn(
-                                'font-mono text-sm font-medium',
+                                'font-mono text-xs font-medium',
                                 theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
                               )}>
                                 {order.orderNumber}
                               </span>
                             </td>
-                            <td className="py-4 px-4">
-                              <div className="flex items-center gap-3">
+                            <td className="py-3 px-3">
+                              <div className="flex items-center gap-2 min-w-0">
                                 {order.sourceProduct.imageUrl ? (
                                   <img
                                     src={order.sourceProduct.imageUrl}
                                     alt={order.sourceProduct.name}
-                                    className="w-10 h-10 rounded-lg object-cover"
+                                    className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
                                   />
                                 ) : (
                                   <div className={cn(
-                                    'w-10 h-10 rounded-lg flex items-center justify-center',
+                                    'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
                                     theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
                                   )}>
-                                    <Package className="w-5 h-5 text-gray-400" />
+                                    <Package className="w-4 h-4 text-gray-400" />
                                   </div>
                                 )}
-                                <div>
+                                <div className="min-w-0 flex-1">
                                   <p className={cn(
-                                    'text-sm font-medium truncate max-w-[150px]',
+                                    'text-xs font-medium truncate',
                                     theme === 'dark' ? 'text-white' : 'text-gray-900'
                                   )}>
                                     {order.sourceProduct.name}
@@ -640,94 +625,93 @@ export default function DosificationPage() {
                                 </div>
                               </div>
                             </td>
-                            <td className="py-4 px-4 text-center">
+                            <td className="py-3 px-1 text-center">
                               <ArrowRight className={cn(
-                                'w-4 h-4',
+                                'w-3 h-3 mx-auto',
                                 theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
                               )} />
                             </td>
-                            <td className="py-4 px-4">
-                              <div className="flex items-center gap-3">
+                            <td className="py-3 px-3">
+                              <div className="flex items-center gap-2 min-w-0">
                                 {order.targetProduct.imageUrl ? (
                                   <img
                                     src={order.targetProduct.imageUrl}
                                     alt={order.targetProduct.name}
-                                    className="w-10 h-10 rounded-lg object-cover"
+                                    className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
                                   />
                                 ) : (
                                   <div className={cn(
-                                    'w-10 h-10 rounded-lg flex items-center justify-center',
+                                    'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
                                     theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
                                   )}>
-                                    <PackageCheck className="w-5 h-5 text-gray-400" />
+                                    <PackageCheck className="w-4 h-4 text-gray-400" />
                                   </div>
                                 )}
-                                <div>
+                                <div className="min-w-0 flex-1">
                                   <p className={cn(
-                                    'text-sm font-medium truncate max-w-[150px]',
+                                    'text-xs font-medium truncate',
                                     theme === 'dark' ? 'text-white' : 'text-gray-900'
                                   )}>
                                     {order.targetProduct.name}
                                   </p>
                                   <p className="text-xs text-gray-500">
-                                    {order.actualQuantity ?? order.targetQuantity} × {formatWeight(order.targetPortionWeight)}
+                                    {order.actualQuantity ?? order.targetQuantity} × {order.targetPortionWeight.toFixed(2)}kg
                                   </p>
                                 </div>
                               </div>
                             </td>
-                            <td className="py-4 px-4 text-right">
+                            <td className="py-3 px-3 text-right">
                               <p className={cn(
-                                'text-sm',
+                                'text-xs',
                                 theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                               )}>
-                                {formatWeight(order.sourceWeight)}
+                                {order.sourceWeight.toFixed(2)} kg
                               </p>
                               <p className="text-xs text-gray-500">
-                                → {order.actualQuantity ?? order.targetQuantity} porciones
+                                → {order.actualQuantity ?? order.targetQuantity} uds
                               </p>
                             </td>
-                            <td className="py-4 px-4 text-right">
+                            <td className="py-3 px-3 text-right">
                               {order.wasteSurplus.type === 'exact' ? (
-                                <span className="text-xs text-gray-500">Exacto</span>
+                                <span className="text-xs text-gray-500">-</span>
                               ) : (
                                 <span className={cn(
-                                  'inline-flex items-center gap-1 text-sm font-medium',
+                                  'text-xs font-medium',
                                   order.wasteSurplus.type === 'surplus' ? 'text-green-600' : 'text-red-600'
                                 )}>
-                                  {order.wasteSurplus.type === 'waste' && <AlertTriangle className="w-3 h-3" />}
                                   {order.wasteSurplus.type === 'surplus' ? '+' : '-'}
-                                  {Math.abs(order.wasteSurplus.kg).toFixed(3)} kg
+                                  {Math.abs(order.wasteSurplus.kg).toFixed(2)}
                                 </span>
                               )}
                             </td>
-                            <td className="py-4 px-4 text-right">
-                              <span className="text-sm font-bold text-emerald-600">
-                                {formatCurrency(order.costPerUnit)}
+                            <td className="py-3 px-3 text-right">
+                              <span className="text-xs font-bold text-emerald-600">
+                                ${order.costPerUnit.toFixed(2)}
                               </span>
                             </td>
-                            <td className="py-4 px-4 text-center">
+                            <td className="py-3 px-3 text-center">
                               <span className={cn(
-                                'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium',
+                                'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium',
                                 statusConfig.bgColor,
                                 statusConfig.color
                               )}>
                                 <StatusIcon className="w-3 h-3" />
-                                {statusConfig.label}
+                                <span className="hidden xl:inline">{statusConfig.label}</span>
                               </span>
                             </td>
-                            <td className="py-4 px-4 text-center">
-                              <span className="text-sm text-gray-500">
-                                {formatDate(order.createdAt)}
+                            <td className="py-3 px-3 text-center">
+                              <span className="text-xs text-gray-500">
+                                {new Date(order.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
                               </span>
                             </td>
-                            <td className="py-4 px-4 text-center">
-                              <div className="flex items-center justify-center gap-1">
+                            <td className="py-3 px-2 text-center">
+                              <div className="flex items-center justify-center gap-0.5">
                                 <Link href={`/dashboard/market/production/dosification/${order.id}`}>
                                   <motion.button
                                     whileHover={{ scale: 1.1 }}
                                     whileTap={{ scale: 0.9 }}
                                     onClick={(e) => e.stopPropagation()}
-                                    className="p-2 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                                    className="p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
                                     title="Ver detalle"
                                   >
                                     <Eye className="w-4 h-4 text-blue-500" />
@@ -738,7 +722,7 @@ export default function DosificationPage() {
                                     whileHover={{ scale: 1.1 }}
                                     whileTap={{ scale: 0.9 }}
                                     onClick={(e) => deleteOrder(order.id, e)}
-                                    className="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                                    className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
                                     title="Cancelar"
                                   >
                                     <Trash2 className="w-4 h-4 text-red-500" />
