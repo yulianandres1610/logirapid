@@ -180,14 +180,14 @@ export async function POST(request: NextRequest) {
     // Try kiosk authentication if JWT failed
     if (!isAuthenticated && kioskId && guardId) {
       const kioskResult = await db.query(
-        'SELECT companyid FROM market_door_kiosks WHERE id = $1 AND status = $2',
-        [kioskId, 'active']
+        'SELECT companyid FROM market_door_kiosks WHERE id = $1 AND isactive = true',
+        [kioskId]
       )
       if (kioskResult.rows.length > 0) {
-        // Verify guard exists
+        // Verify guard exists and is active
         const guardResult = await db.query(
-          'SELECT id FROM market_door_guards WHERE id = $1 AND status = $2',
-          [guardId, 'active']
+          'SELECT id FROM market_door_guards WHERE id = $1 AND isactive = true',
+          [guardId]
         )
         if (guardResult.rows.length > 0) {
           companyId = kioskResult.rows[0].companyid

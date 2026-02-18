@@ -65,13 +65,15 @@ export async function GET(
         v.address as visitoraddress,
         k.name as kioskname,
         k.location as kiosklocation,
-        e.firstname || ' ' || e.lastname as hostname,
-        vb.firstname || ' ' || vb.lastname as validatedbyname
+        COALESCE(uh.firstname || ' ' || uh.lastname, uh.email) as hostname,
+        COALESCE(uvb.firstname || ' ' || uvb.lastname, uvb.email) as validatedbyname
       FROM market_visitor_logs vl
       JOIN market_visitors v ON vl.visitorid = v.id
       LEFT JOIN market_door_kiosks k ON vl.kioskid = k.id
       LEFT JOIN market_employees e ON vl.hostemployeeid = e.id
+      LEFT JOIN users uh ON e.user_id = uh.id
       LEFT JOIN market_employees vb ON vl.validatedby = vb.id
+      LEFT JOIN users uvb ON vb.user_id = uvb.id
       WHERE vl.id = $1
     `, [id])
 
@@ -104,9 +106,10 @@ export async function GET(
         iv.validated,
         iv.validatedat,
         iv.notes,
-        e.firstname || ' ' || e.lastname as validatedbyname
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as validatedbyname
       FROM market_visitor_invoice_validations iv
       LEFT JOIN market_employees e ON iv.validatedby = e.id
+      LEFT JOIN users u ON e.user_id = u.id
       WHERE iv.visitorlogid = $1
       ORDER BY iv.createdat ASC
     `, [id])
