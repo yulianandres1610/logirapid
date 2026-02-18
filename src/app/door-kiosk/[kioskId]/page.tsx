@@ -126,6 +126,8 @@ export default function DoorKioskPage() {
   const [loading, setLoading] = useState(false)
   const [kioskNotFound, setKioskNotFound] = useState(false)
   const [cameraActive, setCameraActive] = useState(false)
+  const [cameraLoading, setCameraLoading] = useState(false)
+  const [cameraError, setCameraError] = useState<string | null>(null)
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
   const [kioskTheme, setKioskTheme] = useState<KioskTheme>('dark')
 
@@ -261,14 +263,20 @@ export default function DoorKioskPage() {
     }
   }, [step])
 
-  // Start/stop camera
+  // Stop camera when leaving scan_id step
   useEffect(() => {
-    if (step === 'scan_id') {
-      startCamera()
-    } else {
+    if (step !== 'scan_id') {
       stopCamera()
     }
     return () => stopCamera()
+  }, [step])
+
+  // Reset camera state when entering scan_id
+  useEffect(() => {
+    if (step === 'scan_id') {
+      setCameraError(null)
+      setCapturedImage(null)
+    }
   }, [step])
 
   // Auto-reset after success
@@ -302,33 +310,119 @@ export default function DoorKioskPage() {
   }
 
   const startCamera = async () => {
+    // Don't start if already active or loading
+    if (cameraActive || cameraLoading) {
+      console.log('[Camera] Already active or loading, skipping')
+      return
+    }
+
+    setCameraLoading(true)
+    setCameraError(null)
+
     try {
+      // Check if camera is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Cámara no soportada en este dispositivo')
+      }
+
+      console.log('[Camera] Requesting camera access...')
+
+      // Try to get camera - prefer back camera on mobile
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'environment'
-        }
+          width: { ideal: 1920, min: 640 },
+          height: { ideal: 1080, min: 480 },
+          facingMode: { ideal: 'environment' }
+        },
+        audio: false
       })
+
+      console.log('[Camera] Got stream, setting up video element...')
+
+      // Store stream reference
+      streamRef.current = stream
+
+      // Wait for video element to be available
+      if (!videoRef.current) {
+        console.log('[Camera] Video element not ready, waiting...')
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        streamRef.current = stream
+
+        // Wait for video to be ready to play
+        await new Promise<void>((resolve, reject) => {
+          const video = videoRef.current!
+          const timeout = setTimeout(() => {
+            reject(new Error('Timeout esperando video'))
+          }, 5000)
+
+          video.onloadedmetadata = () => {
+            clearTimeout(timeout)
+            video.play()
+              .then(() => {
+                console.log('[Camera] Video playing successfully')
+                resolve()
+              })
+              .catch(reject)
+          }
+
+          video.onerror = () => {
+            clearTimeout(timeout)
+            reject(new Error('Error cargando video'))
+          }
+        })
+
         setCameraActive(true)
+        console.log('[Camera] Camera active and ready')
+      } else {
+        throw new Error('Elemento de video no disponible')
       }
     } catch (err) {
-      console.error('Error accessing camera:', err)
-      setMessage('No se pudo acceder a la cámara')
-      setStep('error')
+      console.error('[Camera] Error:', err)
+
+      // Clean up any partial stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+        streamRef.current = null
+      }
+
+      // Set user-friendly error message
+      let errorMsg = 'No se pudo acceder a la cámara'
+      if (err instanceof Error) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          errorMsg = 'Permiso de cámara denegado. Por favor permita el acceso a la cámara.'
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+          errorMsg = 'No se encontró cámara en el dispositivo'
+        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+          errorMsg = 'La cámara está siendo usada por otra aplicación'
+        } else if (err.message) {
+          errorMsg = err.message
+        }
+      }
+
+      setCameraError(errorMsg)
+      setCameraActive(false)
+    } finally {
+      setCameraLoading(false)
     }
   }
 
   const stopCamera = () => {
+    console.log('[Camera] Stopping camera...')
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop())
+      streamRef.current.getTracks().forEach(track => {
+        track.stop()
+        console.log('[Camera] Track stopped:', track.kind)
+      })
       streamRef.current = null
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
     setCameraActive(false)
+    setCameraLoading(false)
   }
 
   const capturePhoto = () => {
@@ -665,10 +759,12 @@ export default function DoorKioskPage() {
   }
 
   const resetToIdle = () => {
+    stopCamera()
     setStep('idle')
     setVisitor(null)
     setScannedData(null)
     setCapturedImage(null)
+    setCameraError(null)
     setActiveLogId(null)
     setPendingSales([])
     setValidatedSales(new Set())
@@ -1068,8 +1164,36 @@ export default function DoorKioskPage() {
                 className="hidden"
               />
 
-              {/* Web Camera View */}
-              {cameraActive && (
+              {/* Canvas for capturing - always present but hidden */}
+              <canvas ref={canvasRef} className="hidden" />
+
+              {/* Camera Error Message */}
+              {cameraError && (
+                <div className={`mb-4 p-3 rounded-xl ${kioskTheme === 'dark' ? 'bg-red-500/20 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}>
+                  <p className="text-red-400 text-sm text-center">{cameraError}</p>
+                </div>
+              )}
+
+              {/* Camera Loading State */}
+              {cameraLoading && (
+                <div className="relative rounded-2xl overflow-hidden mb-4 bg-black aspect-[4/3] flex items-center justify-center">
+                  <div className="text-center">
+                    <RefreshCw className="w-10 h-10 text-orange-400 mx-auto mb-2 animate-spin" />
+                    <p className="text-white text-sm">Iniciando cámara...</p>
+                  </div>
+                  {/* Hidden video to receive stream */}
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="hidden"
+                  />
+                </div>
+              )}
+
+              {/* Web Camera View - Active */}
+              {cameraActive && !cameraLoading && (
                 <div className="relative rounded-2xl overflow-hidden mb-4 bg-black aspect-[4/3]">
                   <video
                     ref={videoRef}
@@ -1078,29 +1202,39 @@ export default function DoorKioskPage() {
                     muted
                     className="w-full h-full object-cover"
                   />
-                  <canvas ref={canvasRef} className="hidden" />
 
+                  {/* Guide frame */}
                   <div className="absolute inset-4 border-2 border-dashed border-white/50 rounded-xl pointer-events-none" />
 
+                  {/* Capture button */}
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={capturePhoto}
-                    className="absolute bottom-4 left-1/2 -translate-x-1/2 w-16 h-16 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center shadow-lg"
+                    className="absolute bottom-4 left-1/2 -translate-x-1/2 w-16 h-16 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center shadow-lg shadow-orange-500/30"
                   >
                     <Camera className="w-8 h-8 text-white" />
                   </motion.button>
+
+                  {/* Close camera button */}
+                  <button
+                    onClick={stopCamera}
+                    className="absolute top-3 right-3 p-2 bg-black/50 hover:bg-black/70 rounded-full transition-colors"
+                  >
+                    <XCircle className="w-5 h-5 text-white" />
+                  </button>
                 </div>
               )}
 
-              {/* Mobile-friendly options - shown when camera not active or as alternatives */}
+              {/* Action buttons */}
               <div className="space-y-3 mb-4">
                 {/* Main button - Take Photo with native camera (best for mobile) */}
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={openNativeCamera}
-                  className="w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-2xl font-bold text-lg transition-all shadow-lg"
+                  disabled={cameraLoading}
+                  className="w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-2xl font-bold text-lg transition-all shadow-lg disabled:opacity-50"
                 >
                   <Camera className="w-6 h-6" />
                   Tomar Foto
@@ -1109,7 +1243,7 @@ export default function DoorKioskPage() {
                 {/* Secondary options */}
                 <div className="grid grid-cols-2 gap-3">
                   {/* Use web camera (for desktop or if preferred) */}
-                  {!cameraActive && (
+                  {!cameraActive && !cameraLoading && (
                     <button
                       onClick={startCamera}
                       className={`flex items-center justify-center gap-2 py-3 ${theme.cancelBtn} rounded-xl font-medium transition-colors`}
@@ -1118,7 +1252,7 @@ export default function DoorKioskPage() {
                       Cámara Web
                     </button>
                   )}
-                  {cameraActive && (
+                  {(cameraActive || cameraLoading) && (
                     <button
                       onClick={stopCamera}
                       className={`flex items-center justify-center gap-2 py-3 ${theme.cancelBtn} rounded-xl font-medium transition-colors`}
