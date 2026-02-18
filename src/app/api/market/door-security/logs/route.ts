@@ -113,11 +113,12 @@ export async function GET(request: NextRequest) {
         v.idtype as visitoridtype,
         k.name as kioskname,
         k.location as kiosklocation,
-        e.firstname || ' ' || e.lastname as hostname
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as hostname
       FROM market_visitor_logs vl
       JOIN market_visitors v ON vl.visitorid = v.id
       LEFT JOIN market_door_kiosks k ON vl.kioskid = k.id
       LEFT JOIN market_employees e ON vl.hostemployeeid = e.id
+      LEFT JOIN users u ON e.user_id = u.id
       ${whereClause}
       ORDER BY vl.entrytime DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
