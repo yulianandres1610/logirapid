@@ -137,6 +137,66 @@ export default function DoorKioskPage() {
   const pinInputRef = useRef<HTMLInputElement>(null)
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const compressionCanvasRef = useRef<HTMLCanvasElement>(null)
+
+  /**
+   * Compress image on client side before sending to API
+   * This prevents 413 errors from large mobile photos
+   */
+  const compressImage = useCallback(async (dataUrl: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => {
+        try {
+          // Max dimensions for OCR - 1920px is plenty for reading text
+          const MAX_SIZE = 1920
+          const QUALITY = 0.85
+
+          let { width, height } = img
+
+          // Calculate new dimensions maintaining aspect ratio
+          if (width > MAX_SIZE || height > MAX_SIZE) {
+            if (width > height) {
+              height = Math.round((height / width) * MAX_SIZE)
+              width = MAX_SIZE
+            } else {
+              width = Math.round((width / height) * MAX_SIZE)
+              height = MAX_SIZE
+            }
+          }
+
+          // Use the ref canvas or create one
+          const canvas = compressionCanvasRef.current || document.createElement('canvas')
+          canvas.width = width
+          canvas.height = height
+
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            reject(new Error('Could not get canvas context'))
+            return
+          }
+
+          // Draw image with white background (in case of transparency)
+          ctx.fillStyle = '#FFFFFF'
+          ctx.fillRect(0, 0, width, height)
+          ctx.drawImage(img, 0, 0, width, height)
+
+          // Convert to JPEG with compression
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', QUALITY)
+
+          console.log('[Image Compress] Original size:', Math.round(dataUrl.length / 1024), 'KB')
+          console.log('[Image Compress] Compressed size:', Math.round(compressedDataUrl.length / 1024), 'KB')
+          console.log('[Image Compress] Dimensions:', width, 'x', height)
+
+          resolve(compressedDataUrl)
+        } catch (err) {
+          reject(err)
+        }
+      }
+      img.onerror = () => reject(new Error('Failed to load image for compression'))
+      img.src = dataUrl
+    })
+  }, [])
 
   // Reset inactivity timer
   const resetInactivityTimer = useCallback(() => {
@@ -425,7 +485,7 @@ export default function DoorKioskPage() {
     setCameraLoading(false)
   }
 
-  const capturePhoto = () => {
+  const capturePhoto = async () => {
     if (!videoRef.current || !canvasRef.current) return
 
     const video = videoRef.current
@@ -439,30 +499,53 @@ export default function DoorKioskPage() {
     ctx.drawImage(video, 0, 0)
 
     const imageData = canvas.toDataURL('image/jpeg', 0.9)
-    setCapturedImage(imageData)
     stopCamera()
-    processIdDocument(imageData)
+
+    // Compress image before processing
+    try {
+      const compressedImage = await compressImage(imageData)
+      setCapturedImage(compressedImage)
+      processIdDocument(compressedImage)
+    } catch (err) {
+      console.error('[Capture] Compression failed, using original:', err)
+      setCapturedImage(imageData)
+      processIdDocument(imageData)
+    }
   }
 
   // Handle file input (for mobile devices - native camera or gallery)
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
     // Stop camera if active
     stopCamera()
 
+    // Show processing state immediately
+    setStep('processing_id')
+    setLoading(true)
+
     const reader = new FileReader()
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const imageData = e.target?.result as string
       if (imageData) {
-        setCapturedImage(imageData)
-        processIdDocument(imageData)
+        try {
+          // Compress image before processing (prevents 413 errors)
+          const compressedImage = await compressImage(imageData)
+          setCapturedImage(compressedImage)
+          // Note: processIdDocument will set loading to false
+          await processIdDocument(compressedImage)
+        } catch (err) {
+          console.error('[FileSelect] Compression failed, trying original:', err)
+          setCapturedImage(imageData)
+          await processIdDocument(imageData)
+        }
       }
     }
     reader.onerror = () => {
       setMessage('Error al leer la imagen')
       setStep('error')
+      setLoading(false)
     }
     reader.readAsDataURL(file)
 
@@ -1178,6 +1261,8 @@ export default function DoorKioskPage() {
 
               {/* Canvas for capturing - always present but hidden */}
               <canvas ref={canvasRef} className="hidden" />
+              {/* Canvas for compression - always present but hidden */}
+              <canvas ref={compressionCanvasRef} className="hidden" />
 
               {/* Camera Error Message */}
               {cameraError && (
