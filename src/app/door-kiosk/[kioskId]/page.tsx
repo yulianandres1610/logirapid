@@ -800,24 +800,24 @@ export default function DoorKioskPage() {
   // Kiosk not found
   if (kioskNotFound) {
     return (
-      <div className={`min-h-screen ${theme.bg} flex flex-col items-center justify-center p-4`}>
+      <div className={`min-h-screen min-h-[100dvh] ${theme.bg} flex flex-col items-center justify-center p-3 sm:p-4`}>
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className={`${theme.card} rounded-3xl shadow-2xl w-full max-w-md p-8 text-center border`}
+          className={`${theme.card} rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-8 text-center border`}
         >
-          <XCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-          <h2 className={`text-xl font-bold ${theme.text} mb-2`}>
+          <XCircle className="w-12 h-12 sm:w-16 sm:h-16 text-red-400 mx-auto mb-3 sm:mb-4" />
+          <h2 className={`text-lg sm:text-xl font-bold ${theme.text} mb-2`}>
             Kiosco no encontrado
           </h2>
-          <p className={`${theme.textSecondary} mb-6`}>
+          <p className={`${theme.textSecondary} text-sm sm:text-base mb-4 sm:mb-6`}>
             El kiosco con ID {kioskId} no existe o no está activo.
           </p>
           <button
             onClick={changeKiosk}
-            className="flex items-center justify-center gap-2 w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-medium transition-all"
+            className="flex items-center justify-center gap-2 w-full py-2.5 sm:py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-all"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             Seleccionar otro kiosco
           </button>
         </motion.div>
@@ -826,7 +826,7 @@ export default function DoorKioskPage() {
   }
 
   return (
-    <div className={`min-h-screen ${theme.bg} flex flex-col items-center justify-center p-4 relative overflow-hidden`}>
+    <div className={`min-h-screen min-h-[100dvh] ${theme.bg} flex flex-col items-center justify-center p-2 sm:p-4 relative overflow-hidden`}>
       {/* Background Pattern */}
       <div className={`absolute inset-0 ${kioskTheme === 'dark' ? 'opacity-5' : 'opacity-[0.02]'}`}>
         <div className="absolute inset-0" style={{
@@ -840,10 +840,10 @@ export default function DoorKioskPage() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         onClick={toggleTheme}
-        className={`absolute top-4 right-4 p-3 rounded-xl ${kioskTheme === 'dark' ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-stone-200 hover:bg-stone-300 text-stone-700'} transition-all z-10`}
+        className={`absolute top-2 right-2 sm:top-4 sm:right-4 p-2 sm:p-3 rounded-xl ${kioskTheme === 'dark' ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-stone-200 hover:bg-stone-300 text-stone-700'} transition-all z-10`}
         title={kioskTheme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
       >
-        {kioskTheme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        {kioskTheme === 'dark' ? <Sun className="w-4 h-4 sm:w-5 sm:h-5" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />}
       </motion.button>
 
       {/* Company Logo - Prominent */}
@@ -851,16 +851,16 @@ export default function DoorKioskPage() {
         initial={{ opacity: 0, y: -20, scale: 0.9 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ type: 'spring', bounce: 0.3 }}
-        className="mb-6 flex flex-col items-center"
+        className="mb-3 sm:mb-6 flex flex-col items-center"
       >
         {kiosk?.companyLogo ? (
           <img
             src={kiosk.companyLogo}
             alt={kiosk.companyName || 'Logo'}
-            className="h-24 w-auto object-contain drop-shadow-lg"
+            className="h-16 sm:h-24 w-auto object-contain drop-shadow-lg"
           />
         ) : kiosk?.companyName ? (
-          <div className={`text-3xl font-bold ${theme.text} tracking-tight`}>
+          <div className={`text-xl sm:text-3xl font-bold ${theme.text} tracking-tight`}>
             {kiosk.companyName}
           </div>
         ) : null}
@@ -870,12 +870,12 @@ export default function DoorKioskPage() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-8"
+        className="text-center mb-4 sm:mb-8"
       >
-        <p className={`text-6xl font-extralight ${theme.text} tracking-wider font-mono`}>
+        <p className={`text-4xl sm:text-6xl font-extralight ${theme.text} tracking-wider font-mono`}>
           {formatTime(currentTime)}
         </p>
-        <p className={`${theme.textMuted} mt-2 capitalize text-lg`}>
+        <p className={`${theme.textMuted} mt-1 sm:mt-2 capitalize text-sm sm:text-lg`}>
           {formatDate(currentTime)}
         </p>
       </motion.div>
@@ -885,31 +885,31 @@ export default function DoorKioskPage() {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-lg mb-4"
+          className="w-full max-w-lg mb-2 sm:mb-4 px-1"
         >
-          <div className={`${theme.cardSolid} rounded-2xl px-5 py-3 flex items-center justify-between border`}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">
+          <div className={`${theme.cardSolid} rounded-xl sm:rounded-2xl px-3 sm:px-5 py-2 sm:py-3 flex items-center justify-between border`}>
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-lg flex-shrink-0">
                 {getGuardInitials(guard.name)}
               </div>
-              <div>
-                <p className={`${theme.text} font-medium`}>{guard.name}</p>
-                <p className={`${theme.textMuted} text-xs`}>{guard.code}</p>
+              <div className="min-w-0">
+                <p className={`${theme.text} font-medium text-sm sm:text-base truncate`}>{guard.name}</p>
+                <p className={`${theme.textMuted} text-xs hidden sm:block`}>{guard.code}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
               <button
                 onClick={logoutGuard}
-                className={`${theme.textMuted} hover:text-orange-400 text-sm transition-colors`}
+                className={`${theme.textMuted} hover:text-orange-400 text-xs sm:text-sm transition-colors`}
               >
                 Salir
               </button>
               <button
                 onClick={changeKiosk}
-                className={`${theme.textMuted} hover:text-orange-500 p-1.5 transition-colors`}
+                className={`${theme.textMuted} hover:text-orange-500 p-1 sm:p-1.5 transition-colors`}
                 title="Cambiar kiosco"
               >
-                <Settings className="w-4 h-4" />
+                <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
             </div>
           </div>
@@ -920,16 +920,16 @@ export default function DoorKioskPage() {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className={`flex items-center gap-2 mb-4 ${theme.textMuted}`}
+        className={`flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-4 ${theme.textMuted}`}
       >
-        <MapPin className="w-4 h-4" />
-        <span className="text-sm">{kiosk?.name} • {kiosk?.location}</span>
+        <MapPin className="w-3 h-3 sm:w-4 sm:h-4" />
+        <span className="text-xs sm:text-sm truncate max-w-[250px] sm:max-w-none">{kiosk?.name} • {kiosk?.location}</span>
       </motion.div>
 
       {/* Main Card */}
       <motion.div
         layout
-        className={`${theme.card} rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border relative`}
+        className={`${theme.card} rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border relative mx-1`}
       >
         <AnimatePresence mode="wait">
           {/* Guard PIN Entry */}
@@ -939,25 +939,25 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-8"
+              className="p-4 sm:p-8"
             >
-              <div className="text-center mb-8">
-                <div className="w-20 h-20 bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-orange-500/30">
-                  <Shield className="w-10 h-10 text-white" />
+              <div className="text-center mb-4 sm:mb-8">
+                <div className="w-14 h-14 sm:w-20 sm:h-20 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4 shadow-lg shadow-orange-500/30">
+                  <Shield className="w-7 h-7 sm:w-10 sm:h-10 text-white" />
                 </div>
-                <h2 className={`text-2xl font-bold ${theme.text}`}>
+                <h2 className={`text-xl sm:text-2xl font-bold ${theme.text}`}>
                   Acceso de Guardia
                 </h2>
-                <p className={`${theme.textMuted} text-sm mt-1`}>
+                <p className={`${theme.textMuted} text-xs sm:text-sm mt-1`}>
                   Ingrese su PIN de 4 dígitos
                 </p>
               </div>
 
-              <div className="flex justify-center gap-4 mb-8">
+              <div className="flex justify-center gap-2 sm:gap-4 mb-4 sm:mb-8">
                 {[0, 1, 2, 3].map(i => (
                   <div
                     key={i}
-                    className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-all ${
+                    className={`w-11 h-11 sm:w-14 sm:h-14 rounded-lg sm:rounded-xl border-2 flex items-center justify-center text-xl sm:text-2xl font-bold transition-all ${
                       i < pin.length
                         ? theme.pinBoxActive
                         : theme.pinBox
@@ -969,10 +969,10 @@ export default function DoorKioskPage() {
               </div>
 
               {message && (
-                <p className="text-center text-red-400 text-sm mb-4">{message}</p>
+                <p className="text-center text-red-400 text-xs sm:text-sm mb-3 sm:mb-4">{message}</p>
               )}
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((digit, i) => (
                   <button
                     key={i}
@@ -982,7 +982,7 @@ export default function DoorKioskPage() {
                       else handlePinChange(digit.toString())
                     }}
                     disabled={loading || digit === null}
-                    className={`h-16 rounded-xl text-xl font-semibold transition-all ${
+                    className={`h-12 sm:h-16 rounded-lg sm:rounded-xl text-lg sm:text-xl font-semibold transition-all ${
                       digit === null
                         ? 'invisible'
                         : digit === 'del'
@@ -996,9 +996,9 @@ export default function DoorKioskPage() {
               </div>
 
               {loading && (
-                <div className="flex items-center justify-center gap-2 text-orange-400 mt-6">
-                  <RefreshCw className="w-5 h-5 animate-spin" />
-                  <span>Verificando...</span>
+                <div className="flex items-center justify-center gap-2 text-orange-400 mt-4 sm:mt-6">
+                  <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                  <span className="text-sm sm:text-base">Verificando...</span>
                 </div>
               )}
             </motion.div>
@@ -1011,38 +1011,38 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-8"
+              className="p-4 sm:p-8"
             >
-              <div className="text-center mb-8">
+              <div className="text-center mb-4 sm:mb-8">
                 <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ type: 'spring', bounce: 0.5 }}
-                  className={`w-20 h-20 ${kioskTheme === 'dark' ? 'bg-stone-700' : 'bg-stone-200'} rounded-2xl flex items-center justify-center mx-auto mb-4`}
+                  className={`w-14 h-14 sm:w-20 sm:h-20 ${kioskTheme === 'dark' ? 'bg-stone-700' : 'bg-stone-200'} rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4`}
                 >
-                  <Lock className={`w-10 h-10 ${theme.textMuted}`} />
+                  <Lock className={`w-7 h-7 sm:w-10 sm:h-10 ${theme.textMuted}`} />
                 </motion.div>
-                <h2 className={`text-2xl font-bold ${theme.text}`}>
+                <h2 className={`text-xl sm:text-2xl font-bold ${theme.text}`}>
                   Kiosco Bloqueado
                 </h2>
-                <p className={`${theme.textMuted} text-sm mt-1`}>
+                <p className={`${theme.textMuted} text-xs sm:text-sm mt-1`}>
                   Ingrese su PIN para desbloquear
                 </p>
                 {guard && (
-                  <div className="flex items-center justify-center gap-2 mt-3">
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white text-xs font-bold">
+                  <div className="flex items-center justify-center gap-2 mt-2 sm:mt-3">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white text-[10px] sm:text-xs font-bold">
                       {getGuardInitials(guard.name)}
                     </div>
-                    <span className={`${theme.textSecondary} text-sm`}>{guard.name}</span>
+                    <span className={`${theme.textSecondary} text-xs sm:text-sm`}>{guard.name}</span>
                   </div>
                 )}
               </div>
 
-              <div className="flex justify-center gap-4 mb-8">
+              <div className="flex justify-center gap-2 sm:gap-4 mb-4 sm:mb-8">
                 {[0, 1, 2, 3].map(i => (
                   <div
                     key={i}
-                    className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-all ${
+                    className={`w-11 h-11 sm:w-14 sm:h-14 rounded-lg sm:rounded-xl border-2 flex items-center justify-center text-xl sm:text-2xl font-bold transition-all ${
                       i < pin.length
                         ? theme.pinBoxActive
                         : theme.pinBox
@@ -1054,10 +1054,10 @@ export default function DoorKioskPage() {
               </div>
 
               {message && (
-                <p className="text-center text-red-400 text-sm mb-4">{message}</p>
+                <p className="text-center text-red-400 text-xs sm:text-sm mb-3 sm:mb-4">{message}</p>
               )}
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((digit, i) => (
                   <button
                     key={i}
@@ -1067,7 +1067,7 @@ export default function DoorKioskPage() {
                       else handlePinChange(digit.toString())
                     }}
                     disabled={loading || digit === null}
-                    className={`h-16 rounded-xl text-xl font-semibold transition-all ${
+                    className={`h-12 sm:h-16 rounded-lg sm:rounded-xl text-lg sm:text-xl font-semibold transition-all ${
                       digit === null
                         ? 'invisible'
                         : digit === 'del'
@@ -1081,9 +1081,9 @@ export default function DoorKioskPage() {
               </div>
 
               {loading && (
-                <div className="flex items-center justify-center gap-2 text-orange-400 mt-6">
-                  <RefreshCw className="w-5 h-5 animate-spin" />
-                  <span>Verificando...</span>
+                <div className="flex items-center justify-center gap-2 text-orange-400 mt-4 sm:mt-6">
+                  <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                  <span className="text-sm sm:text-base">Verificando...</span>
                 </div>
               )}
             </motion.div>
@@ -1096,40 +1096,40 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-8"
+              className="p-4 sm:p-8"
             >
-              <div className="text-center mb-8">
-                <h2 className={`text-2xl font-bold ${theme.text} mb-2`}>
+              <div className="text-center mb-4 sm:mb-8">
+                <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-1 sm:mb-2`}>
                   Control de Acceso
                 </h2>
-                <p className={theme.textMuted}>
+                <p className={`${theme.textMuted} text-sm sm:text-base`}>
                   Seleccione una acción para continuar
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setStep('scan_id')}
-                  className="flex flex-col items-center justify-center gap-3 py-8 bg-gradient-to-br from-green-500 to-green-600 text-white rounded-2xl font-bold transition-all shadow-lg shadow-green-500/30"
+                  className="flex flex-col items-center justify-center gap-2 sm:gap-3 py-5 sm:py-8 bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl sm:rounded-2xl font-bold transition-all shadow-lg shadow-green-500/30"
                 >
-                  <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center">
-                    <LogIn className="w-8 h-8" />
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white/20 rounded-xl sm:rounded-2xl flex items-center justify-center">
+                    <LogIn className="w-6 h-6 sm:w-8 sm:h-8" />
                   </div>
-                  <span className="text-lg">Entrada</span>
+                  <span className="text-base sm:text-lg">Entrada</span>
                 </motion.button>
 
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setStep('scan_id')}
-                  className="flex flex-col items-center justify-center gap-3 py-8 bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-2xl font-bold transition-all shadow-lg shadow-orange-500/30"
+                  className="flex flex-col items-center justify-center gap-2 sm:gap-3 py-5 sm:py-8 bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-xl sm:rounded-2xl font-bold transition-all shadow-lg shadow-orange-500/30"
                 >
-                  <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center">
-                    <LogOut className="w-8 h-8" />
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white/20 rounded-xl sm:rounded-2xl flex items-center justify-center">
+                    <LogOut className="w-6 h-6 sm:w-8 sm:h-8" />
                   </div>
-                  <span className="text-lg">Salida</span>
+                  <span className="text-base sm:text-lg">Salida</span>
                 </motion.button>
               </div>
             </motion.div>
@@ -1142,14 +1142,14 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-6"
+              className="p-3 sm:p-6"
             >
-              <div className="text-center mb-4">
-                <CreditCard className="w-10 h-10 text-orange-400 mx-auto mb-2" />
-                <h2 className={`text-xl font-bold ${theme.text}`}>
+              <div className="text-center mb-3 sm:mb-4">
+                <CreditCard className="w-8 h-8 sm:w-10 sm:h-10 text-orange-400 mx-auto mb-2" />
+                <h2 className={`text-lg sm:text-xl font-bold ${theme.text}`}>
                   Escanear Identificación
                 </h2>
-                <p className={`${theme.textMuted} text-sm`}>
+                <p className={`${theme.textMuted} text-xs sm:text-sm`}>
                   Tome una foto del documento de identidad
                 </p>
               </div>
@@ -1169,17 +1169,17 @@ export default function DoorKioskPage() {
 
               {/* Camera Error Message */}
               {cameraError && (
-                <div className={`mb-4 p-3 rounded-xl ${kioskTheme === 'dark' ? 'bg-red-500/20 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}>
-                  <p className="text-red-400 text-sm text-center">{cameraError}</p>
+                <div className={`mb-3 sm:mb-4 p-2 sm:p-3 rounded-lg sm:rounded-xl ${kioskTheme === 'dark' ? 'bg-red-500/20 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}>
+                  <p className="text-red-400 text-xs sm:text-sm text-center">{cameraError}</p>
                 </div>
               )}
 
               {/* Camera Loading State */}
               {cameraLoading && (
-                <div className="relative rounded-2xl overflow-hidden mb-4 bg-black aspect-[4/3] flex items-center justify-center">
+                <div className="relative rounded-xl sm:rounded-2xl overflow-hidden mb-3 sm:mb-4 bg-black aspect-[4/3] flex items-center justify-center">
                   <div className="text-center">
-                    <RefreshCw className="w-10 h-10 text-orange-400 mx-auto mb-2 animate-spin" />
-                    <p className="text-white text-sm">Iniciando cámara...</p>
+                    <RefreshCw className="w-8 h-8 sm:w-10 sm:h-10 text-orange-400 mx-auto mb-2 animate-spin" />
+                    <p className="text-white text-xs sm:text-sm">Iniciando cámara...</p>
                   </div>
                   {/* Hidden video to receive stream */}
                   <video
@@ -1194,7 +1194,7 @@ export default function DoorKioskPage() {
 
               {/* Web Camera View - Active */}
               {cameraActive && !cameraLoading && (
-                <div className="relative rounded-2xl overflow-hidden mb-4 bg-black aspect-[4/3]">
+                <div className="relative rounded-xl sm:rounded-2xl overflow-hidden mb-3 sm:mb-4 bg-black aspect-[4/3]">
                   <video
                     ref={videoRef}
                     autoPlay
@@ -1204,67 +1204,67 @@ export default function DoorKioskPage() {
                   />
 
                   {/* Guide frame */}
-                  <div className="absolute inset-4 border-2 border-dashed border-white/50 rounded-xl pointer-events-none" />
+                  <div className="absolute inset-2 sm:inset-4 border-2 border-dashed border-white/50 rounded-lg sm:rounded-xl pointer-events-none" />
 
                   {/* Capture button */}
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={capturePhoto}
-                    className="absolute bottom-4 left-1/2 -translate-x-1/2 w-16 h-16 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center shadow-lg shadow-orange-500/30"
+                    className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center shadow-lg shadow-orange-500/30"
                   >
-                    <Camera className="w-8 h-8 text-white" />
+                    <Camera className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
                   </motion.button>
 
                   {/* Close camera button */}
                   <button
                     onClick={stopCamera}
-                    className="absolute top-3 right-3 p-2 bg-black/50 hover:bg-black/70 rounded-full transition-colors"
+                    className="absolute top-2 right-2 sm:top-3 sm:right-3 p-1.5 sm:p-2 bg-black/50 hover:bg-black/70 rounded-full transition-colors"
                   >
-                    <XCircle className="w-5 h-5 text-white" />
+                    <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   </button>
                 </div>
               )}
 
               {/* Action buttons */}
-              <div className="space-y-3 mb-4">
+              <div className="space-y-2 sm:space-y-3 mb-3 sm:mb-4">
                 {/* Main button - Take Photo with native camera (best for mobile) */}
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={openNativeCamera}
                   disabled={cameraLoading}
-                  className="w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-2xl font-bold text-lg transition-all shadow-lg disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg transition-all shadow-lg disabled:opacity-50"
                 >
-                  <Camera className="w-6 h-6" />
+                  <Camera className="w-5 h-5 sm:w-6 sm:h-6" />
                   Tomar Foto
                 </motion.button>
 
                 {/* Secondary options */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   {/* Use web camera (for desktop or if preferred) */}
                   {!cameraActive && !cameraLoading && (
                     <button
                       onClick={startCamera}
-                      className={`flex items-center justify-center gap-2 py-3 ${theme.cancelBtn} rounded-xl font-medium transition-colors`}
+                      className={`flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
                     >
-                      <ImageIcon className="w-5 h-5" />
-                      Cámara Web
+                      <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <span className="hidden sm:inline">Cámara </span>Web
                     </button>
                   )}
                   {(cameraActive || cameraLoading) && (
                     <button
                       onClick={stopCamera}
-                      className={`flex items-center justify-center gap-2 py-3 ${theme.cancelBtn} rounded-xl font-medium transition-colors`}
+                      className={`flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
                     >
-                      <XCircle className="w-5 h-5" />
-                      Cerrar Cámara
+                      <XCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+                      Cerrar
                     </button>
                   )}
 
                   {/* Select from gallery */}
-                  <label className={`flex items-center justify-center gap-2 py-3 ${theme.cancelBtn} rounded-xl font-medium transition-colors cursor-pointer`}>
-                    <Upload className="w-5 h-5" />
+                  <label className={`flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors cursor-pointer`}>
+                    <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
                     Galería
                     <input
                       type="file"
@@ -1278,7 +1278,7 @@ export default function DoorKioskPage() {
 
               <button
                 onClick={resetToIdle}
-                className={`w-full py-3 ${theme.textMuted} hover:text-orange-400 transition-colors`}
+                className={`w-full py-2.5 sm:py-3 ${theme.textMuted} hover:text-orange-400 transition-colors text-sm sm:text-base`}
               >
                 Cancelar
               </button>
@@ -1292,13 +1292,13 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-8 text-center"
+              className="p-6 sm:p-8 text-center"
             >
-              <RefreshCw className="w-16 h-16 text-orange-400 mx-auto mb-6 animate-spin" />
-              <h2 className={`text-xl font-bold ${theme.text} mb-2`}>
+              <RefreshCw className="w-12 h-12 sm:w-16 sm:h-16 text-orange-400 mx-auto mb-4 sm:mb-6 animate-spin" />
+              <h2 className={`text-lg sm:text-xl font-bold ${theme.text} mb-2`}>
                 Analizando Documento
               </h2>
-              <p className={theme.textMuted}>
+              <p className={`${theme.textMuted} text-sm sm:text-base`}>
                 Por favor espere...
               </p>
             </motion.div>
@@ -1311,42 +1311,42 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-6"
+              className="p-4 sm:p-6"
             >
-              <div className="text-center mb-6">
-                <div className="w-20 h-20 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                  <User className="w-10 h-10 text-white" />
+              <div className="text-center mb-4 sm:mb-6">
+                <div className="w-14 h-14 sm:w-20 sm:h-20 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4 shadow-lg">
+                  <User className="w-7 h-7 sm:w-10 sm:h-10 text-white" />
                 </div>
-                <h2 className={`text-2xl font-bold ${theme.text}`}>
+                <h2 className={`text-lg sm:text-2xl font-bold ${theme.text}`}>
                   {visitor.fullName}
                 </h2>
-                <p className={theme.textMuted}>
+                <p className={`${theme.textMuted} text-xs sm:text-base`}>
                   {visitor.idType}: {visitor.idNumber}
                 </p>
                 {visitor.totalVisits > 1 && (
-                  <span className="inline-block mt-2 px-3 py-1 bg-orange-500/20 text-orange-400 rounded-full text-sm">
+                  <span className="inline-block mt-2 px-2 sm:px-3 py-0.5 sm:py-1 bg-orange-500/20 text-orange-400 rounded-full text-xs sm:text-sm">
                     Visita #{visitor.totalVisits}
                   </span>
                 )}
               </div>
 
-              <div className="mb-6">
-                <p className={`text-sm font-medium ${theme.textSecondary} mb-3`}>
+              <div className="mb-4 sm:mb-6">
+                <p className={`text-xs sm:text-sm font-medium ${theme.textSecondary} mb-2 sm:mb-3`}>
                   Motivo de la visita:
                 </p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
                   {VISIT_PURPOSES.map(purpose => (
                     <button
                       key={purpose.id}
                       onClick={() => setSelectedPurpose(purpose.id)}
-                      className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
+                      className={`flex items-center gap-1.5 sm:gap-2 p-2 sm:p-3 rounded-lg sm:rounded-xl border-2 transition-all ${
                         selectedPurpose === purpose.id
                           ? theme.purposeBtnActive
                           : theme.purposeBtn
                       }`}
                     >
-                      <purpose.icon className="w-5 h-5" />
-                      <span className="font-medium">{purpose.label}</span>
+                      <purpose.icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <span className="font-medium text-sm sm:text-base">{purpose.label}</span>
                     </button>
                   ))}
                 </div>
@@ -1357,19 +1357,19 @@ export default function DoorKioskPage() {
                 whileTap={{ scale: 0.98 }}
                 onClick={() => registerEntry(selectedPurpose)}
                 disabled={!selectedPurpose || loading}
-                className="w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-2xl font-bold text-lg transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
-                  <RefreshCw className="w-6 h-6 animate-spin" />
+                  <RefreshCw className="w-5 h-5 sm:w-6 sm:h-6 animate-spin" />
                 ) : (
-                  <LogIn className="w-6 h-6" />
+                  <LogIn className="w-5 h-5 sm:w-6 sm:h-6" />
                 )}
                 Confirmar Entrada
               </motion.button>
 
               <button
                 onClick={resetToIdle}
-                className={`w-full py-3 mt-3 ${theme.textMuted} hover:text-orange-400 transition-colors`}
+                className={`w-full py-2.5 sm:py-3 mt-2 sm:mt-3 ${theme.textMuted} hover:text-orange-400 transition-colors text-sm sm:text-base`}
               >
                 Cancelar
               </button>
@@ -1383,19 +1383,19 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-6"
+              className="p-4 sm:p-6"
             >
-              <div className="text-center mb-4">
-                <AlertTriangle className="w-10 h-10 text-yellow-400 mx-auto mb-2" />
-                <h2 className={`text-xl font-bold ${theme.text}`}>
+              <div className="text-center mb-3 sm:mb-4">
+                <AlertTriangle className="w-8 h-8 sm:w-10 sm:h-10 text-yellow-400 mx-auto mb-2" />
+                <h2 className={`text-lg sm:text-xl font-bold ${theme.text}`}>
                   Validar Compras
                 </h2>
-                <p className={`${theme.textMuted} text-sm`}>
+                <p className={`${theme.textMuted} text-xs sm:text-sm`}>
                   Compras pendientes de validación
                 </p>
               </div>
 
-              <div className="space-y-3 max-h-64 overflow-y-auto mb-4">
+              <div className="space-y-2 sm:space-y-3 max-h-48 sm:max-h-64 overflow-y-auto mb-3 sm:mb-4">
                 {pendingSales.map(sale => {
                   const saleKey = `${sale.type}-${sale.id}`
                   const isValidated = validatedSales.has(saleKey)
@@ -1403,33 +1403,33 @@ export default function DoorKioskPage() {
                   return (
                     <div
                       key={saleKey}
-                      className={`p-4 rounded-xl border-2 transition-all ${
+                      className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border-2 transition-all ${
                         isValidated
                           ? theme.saleCardValidated
                           : theme.saleCard
                       }`}
                     >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className={`font-medium ${theme.text}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className={`font-medium text-sm sm:text-base ${theme.text}`}>
                             {sale.type === 'pos_receipt' ? 'Ticket POS' : 'Factura'}
                           </p>
-                          <p className={`text-sm ${theme.textMuted}`}>
+                          <p className={`text-xs sm:text-sm ${theme.textMuted} truncate`}>
                             #{sale.documentNumber}
                           </p>
-                          <p className="text-lg font-bold text-orange-400 mt-1">
+                          <p className="text-base sm:text-lg font-bold text-orange-400 mt-0.5 sm:mt-1">
                             {sale.currency} {sale.total.toFixed(2)}
                           </p>
                         </div>
                         {isValidated ? (
-                          <div className="flex items-center gap-1 text-green-400">
-                            <Check className="w-5 h-5" />
-                            <span className="text-sm">Validado</span>
+                          <div className="flex items-center gap-1 text-green-400 flex-shrink-0">
+                            <Check className="w-4 h-4 sm:w-5 sm:h-5" />
+                            <span className="text-xs sm:text-sm">OK</span>
                           </div>
                         ) : (
                           <button
                             onClick={() => validateSale(sale)}
-                            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm font-medium transition-colors"
+                            className="px-3 sm:px-4 py-1.5 sm:py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-xs sm:text-sm font-medium transition-colors flex-shrink-0"
                           >
                             Validar
                           </button>
@@ -1440,17 +1440,17 @@ export default function DoorKioskPage() {
                 })}
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex gap-2 sm:gap-3">
                 <button
                   onClick={resetToIdle}
-                  className={`flex-1 py-3 ${theme.cancelBtn} rounded-xl font-medium transition-colors`}
+                  className={`flex-1 py-2.5 sm:py-3 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={() => activeLogId && registerExit(activeLogId)}
                   disabled={pendingSales.some(s => !validatedSales.has(`${s.type}-${s.id}`))}
-                  className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 py-2.5 sm:py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Permitir Salida
                 </button>
@@ -1465,21 +1465,21 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="p-8 text-center"
+              className="p-6 sm:p-8 text-center"
             >
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ type: 'spring', bounce: 0.5 }}
-                className="w-24 h-24 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-500/30"
+                className="w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-lg shadow-green-500/30"
               >
-                <CheckCircle className="w-14 h-14 text-white" />
+                <CheckCircle className="w-10 h-10 sm:w-14 sm:h-14 text-white" />
               </motion.div>
-              <h2 className={`text-2xl font-bold ${theme.text} mb-2`}>
+              <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-2`}>
                 Entrada Registrada
               </h2>
-              <p className={theme.textSecondary}>{message}</p>
-              <p className="text-sm text-green-400 mt-4 font-medium">
+              <p className={`${theme.textSecondary} text-sm sm:text-base`}>{message}</p>
+              <p className="text-xs sm:text-sm text-green-400 mt-3 sm:mt-4 font-medium">
                 Puede pasar
               </p>
             </motion.div>
@@ -1492,21 +1492,21 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="p-8 text-center"
+              className="p-6 sm:p-8 text-center"
             >
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ type: 'spring', bounce: 0.5 }}
-                className="w-24 h-24 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-orange-500/30"
+                className="w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-lg shadow-orange-500/30"
               >
-                <LogOut className="w-14 h-14 text-white" />
+                <LogOut className="w-10 h-10 sm:w-14 sm:h-14 text-white" />
               </motion.div>
-              <h2 className={`text-2xl font-bold ${theme.text} mb-2`}>
+              <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-2`}>
                 Salida Registrada
               </h2>
-              <p className={theme.textSecondary}>{message}</p>
-              <p className="text-sm text-orange-400 mt-4 font-medium">
+              <p className={`${theme.textSecondary} text-sm sm:text-base`}>{message}</p>
+              <p className="text-xs sm:text-sm text-orange-400 mt-3 sm:mt-4 font-medium">
                 Que tenga buen día
               </p>
             </motion.div>
@@ -1519,23 +1519,23 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="p-8 text-center"
+              className="p-6 sm:p-8 text-center"
             >
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ type: 'spring', bounce: 0.5 }}
-                className={`w-24 h-24 ${kioskTheme === 'dark' ? 'bg-red-500/20' : 'bg-red-100'} rounded-full flex items-center justify-center mx-auto mb-6`}
+                className={`w-16 h-16 sm:w-24 sm:h-24 ${kioskTheme === 'dark' ? 'bg-red-500/20' : 'bg-red-100'} rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6`}
               >
-                <XCircle className="w-14 h-14 text-red-400" />
+                <XCircle className="w-10 h-10 sm:w-14 sm:h-14 text-red-400" />
               </motion.div>
-              <h2 className={`text-2xl font-bold ${theme.text} mb-2`}>
+              <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-2`}>
                 Error
               </h2>
-              <p className={`${theme.textSecondary} mb-6`}>{message}</p>
+              <p className={`${theme.textSecondary} text-sm sm:text-base mb-4 sm:mb-6`}>{message}</p>
               <button
                 onClick={resetToIdle}
-                className={`px-6 py-2 ${theme.cancelBtn} rounded-xl font-medium transition-colors`}
+                className={`px-5 sm:px-6 py-2 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
               >
                 Intentar de nuevo
               </button>
@@ -1548,9 +1548,9 @@ export default function DoorKioskPage() {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="mt-6 text-center"
+        className="mt-4 sm:mt-6 text-center"
       >
-        <p className={`${theme.textMuted} text-sm`}>
+        <p className={`${theme.textMuted} text-xs sm:text-sm`}>
           {kiosk?.companyName}
         </p>
       </motion.div>

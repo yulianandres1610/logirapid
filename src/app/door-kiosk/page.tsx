@@ -165,31 +165,31 @@ export default function DoorKioskSelectorPage() {
   }
 
   return (
-    <div className={`min-h-screen ${theme.bg} flex flex-col items-center justify-center p-4 relative`}>
+    <div className={`min-h-screen min-h-[100dvh] ${theme.bg} flex flex-col items-center justify-center p-2 sm:p-4 relative`}>
       {/* Theme Toggle - Top Right */}
       <motion.button
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         onClick={toggleTheme}
-        className={`absolute top-4 right-4 p-3 rounded-xl ${kioskTheme === 'dark' ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-stone-200 hover:bg-stone-300 text-stone-700'} transition-all z-10`}
+        className={`absolute top-2 right-2 sm:top-4 sm:right-4 p-2 sm:p-3 rounded-xl ${kioskTheme === 'dark' ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-stone-200 hover:bg-stone-300 text-stone-700'} transition-all z-10`}
         title={kioskTheme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
       >
-        {kioskTheme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        {kioskTheme === 'dark' ? <Sun className="w-4 h-4 sm:w-5 sm:h-5" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />}
       </motion.button>
 
       {/* Logo/Title */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-8"
+        className="text-center mb-4 sm:mb-8"
       >
-        <div className={`w-20 h-20 ${theme.iconBg} rounded-2xl flex items-center justify-center mx-auto mb-4`}>
-          <Shield className="w-10 h-10 text-orange-500" />
+        <div className={`w-14 h-14 sm:w-20 sm:h-20 ${theme.iconBg} rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4`}>
+          <Shield className="w-7 h-7 sm:w-10 sm:h-10 text-orange-500" />
         </div>
-        <h1 className={`text-3xl font-bold ${theme.text} mb-2`}>
+        <h1 className={`text-2xl sm:text-3xl font-bold ${theme.text} mb-1 sm:mb-2`}>
           Control de Acceso
         </h1>
-        <p className={theme.textMuted}>
+        <p className={`${theme.textMuted} text-sm sm:text-base`}>
           {step === 'pin' ? 'Ingresa tu PIN de guardia' : `Bienvenido, ${guard?.name}`}
         </p>
       </motion.div>
@@ -198,7 +198,7 @@ export default function DoorKioskSelectorPage() {
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+        className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-md overflow-hidden mx-1"
       >
         <AnimatePresence mode="wait">
           {/* PIN Entry Step */}
@@ -208,16 +208,16 @@ export default function DoorKioskSelectorPage() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="p-8"
+              className="p-4 sm:p-8"
             >
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-orange-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Lock className="w-8 h-8 text-orange-500" />
+              <div className="text-center mb-4 sm:mb-6">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-orange-100 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                  <Lock className="w-6 h-6 sm:w-8 sm:h-8 text-orange-500" />
                 </div>
-                <h2 className="text-xl font-bold text-gray-900">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900">
                   Ingresa tu PIN
                 </h2>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-xs sm:text-sm text-gray-500 mt-1">
                   PIN de 4 dígitos
                 </p>
               </div>
@@ -229,20 +229,20 @@ export default function DoorKioskSelectorPage() {
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
-                    className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2"
+                    className="mb-3 sm:mb-4 p-2 sm:p-3 bg-red-50 border border-red-200 rounded-lg sm:rounded-xl flex items-center gap-2"
                   >
-                    <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-                    <span className="text-red-700 text-sm">{error}</span>
+                    <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 flex-shrink-0" />
+                    <span className="text-red-700 text-xs sm:text-sm">{error}</span>
                   </motion.div>
                 )}
               </AnimatePresence>
 
               {/* PIN Display - 4 digits */}
-              <div className="flex justify-center gap-3 mb-6">
+              <div className="flex justify-center gap-2 sm:gap-3 mb-4 sm:mb-6">
                 {[0, 1, 2, 3].map(i => (
                   <div
                     key={i}
-                    className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-all ${
+                    className={`w-11 h-11 sm:w-14 sm:h-14 rounded-lg sm:rounded-xl border-2 flex items-center justify-center text-xl sm:text-2xl font-bold transition-all ${
                       i < pin.length
                         ? 'border-orange-500 bg-orange-50 text-orange-600'
                         : 'border-gray-200'
@@ -254,7 +254,7 @@ export default function DoorKioskSelectorPage() {
               </div>
 
               {/* Numeric Keypad */}
-              <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-3 sm:mb-4">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((digit, i) => (
                   <button
                     key={i}
@@ -264,12 +264,12 @@ export default function DoorKioskSelectorPage() {
                       else handlePinChange(digit.toString())
                     }}
                     disabled={loading || digit === null}
-                    className={`h-16 rounded-xl text-2xl font-bold transition-colors ${
+                    className={`h-12 sm:h-16 rounded-lg sm:rounded-xl text-lg sm:text-2xl font-bold transition-colors ${
                       digit === null
                         ? 'invisible'
                         : digit === 'del'
                           ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                          : 'bg-stone-100 text-stone-900 hover:bg-orange-100'
+                          : 'bg-stone-100 text-stone-900 hover:bg-orange-100 active:scale-95'
                     }`}
                   >
                     {digit === 'del' ? '⌫' : digit}
@@ -278,9 +278,9 @@ export default function DoorKioskSelectorPage() {
               </div>
 
               {loading && (
-                <div className="flex items-center justify-center gap-2 text-orange-600 py-4">
-                  <RefreshCw className="w-5 h-5 animate-spin" />
-                  <span>Verificando...</span>
+                <div className="flex items-center justify-center gap-2 text-orange-600 py-3 sm:py-4">
+                  <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                  <span className="text-sm sm:text-base">Verificando...</span>
                 </div>
               )}
             </motion.div>
@@ -293,50 +293,50 @@ export default function DoorKioskSelectorPage() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="p-6"
+              className="p-4 sm:p-6"
             >
               {/* Guard Info */}
-              <div className="flex items-center gap-4 mb-6 p-4 bg-orange-50 rounded-xl">
-                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-                  <User className="w-6 h-6 text-orange-500" />
+              <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-orange-50 rounded-lg sm:rounded-xl">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <User className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500" />
                 </div>
-                <div>
-                  <p className="font-semibold text-gray-900">{guard?.name}</p>
-                  <p className="text-sm text-gray-500">{guard?.code}</p>
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{guard?.name}</p>
+                  <p className="text-xs sm:text-sm text-gray-500">{guard?.code}</p>
                 </div>
               </div>
 
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
                 Selecciona el Kiosk
               </h2>
 
-              <div className="space-y-3">
+              <div className="space-y-2 sm:space-y-3 max-h-[40vh] overflow-y-auto">
                 {kiosks.map((kiosk) => (
                   <button
                     key={kiosk.id}
                     onClick={() => selectKiosk(kiosk)}
-                    className="w-full flex items-center gap-4 p-4 bg-gray-50 hover:bg-orange-50 rounded-xl transition-colors text-left group"
+                    className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-gray-50 hover:bg-orange-50 rounded-lg sm:rounded-xl transition-colors text-left group"
                   >
-                    <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-                      <Shield className="w-6 h-6 text-orange-500" />
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-100 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500" />
                     </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-gray-900">{kiosk.name}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{kiosk.name}</p>
                       {kiosk.location && (
-                        <p className="text-sm text-gray-500 flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
+                        <p className="text-xs sm:text-sm text-gray-500 flex items-center gap-1 truncate">
+                          <MapPin className="w-3 h-3 flex-shrink-0" />
                           {kiosk.location}
                         </p>
                       )}
                     </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-orange-500" />
+                    <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-orange-500 flex-shrink-0" />
                   </button>
                 ))}
               </div>
 
               <button
                 onClick={resetToPin}
-                className="w-full mt-6 py-3 text-gray-500 hover:text-gray-700 text-sm"
+                className="w-full mt-4 sm:mt-6 py-2.5 sm:py-3 text-gray-500 hover:text-gray-700 text-xs sm:text-sm"
               >
                 Cambiar usuario
               </button>
@@ -346,7 +346,7 @@ export default function DoorKioskSelectorPage() {
       </motion.div>
 
       {/* Footer */}
-      <p className={`${theme.textSecondary} text-sm mt-8`}>
+      <p className={`${theme.textSecondary} text-xs sm:text-sm mt-4 sm:mt-8`}>
         puerta.servisumic.com
       </p>
     </div>
