@@ -295,14 +295,15 @@ a {
    ============================================================ */
 
 /* Servisumic login form inputs - ensure dark text on light backgrounds */
-html.brand-servisumic input[type="email"],
-html.brand-servisumic input[type="password"],
-html.brand-servisumic input[type="text"] {
-  color: #1c1917 !important; /* stone-900 */
+/* Only apply to light theme login forms, not dark mode dashboard inputs */
+html.brand-servisumic.light input[type="email"],
+html.brand-servisumic.light input[type="password"],
+html.brand-servisumic.light input[type="text"] {
+  color: #1c1917; /* stone-900 - only in light mode */
 }
 
-html.brand-servisumic input::placeholder {
-  color: #a8a29e !important; /* stone-400 */
+html.brand-servisumic.light input::placeholder {
+  color: #a8a29e; /* stone-400 - only in light mode */
 }
 
 /* Servisumic brand colors override */
