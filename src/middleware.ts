@@ -119,6 +119,11 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
 
+    // Allow door-kiosk routes (public kiosk pages)
+    if (pathname.startsWith('/door-kiosk')) {
+      return NextResponse.next()
+    }
+
     // Allow market API routes (including consignments, purchases, order-invoices, uploads, migrations, ai, print, users, audit)
     if (pathname.startsWith('/api/market') ||
         pathname.startsWith('/api/auth') ||
@@ -192,6 +197,47 @@ export async function middleware(request: NextRequest) {
   }
 
   // ============================================================
+  // DOOR KIOSK SUBDOMAIN HANDLING - puerta.logirapid.com, puerta.servisumic.com
+  // Must be checked BEFORE factory subdomain to avoid being caught by servisumic.com wildcard
+  // ============================================================
+  const isDoorKioskSubdomain =
+    host.startsWith('puerta.') ||
+    host.includes('puerta.logirapid') ||
+    host.includes('puerta.servisumic')
+
+  if (isDoorKioskSubdomain) {
+    // Allow static resources
+    if (pathname.startsWith('/_next') || pathname.startsWith('/images') || pathname === '/favicon.ico') {
+      return NextResponse.next()
+    }
+
+    // Allow door security API routes (for kiosk operations)
+    if (pathname.startsWith('/api/market/door-security') ||
+        pathname.startsWith('/api/ai/scan-id-document')) {
+      return NextResponse.next()
+    }
+
+    // Allow door-kiosk pages - /door-kiosk/[kioskId]
+    if (pathname.startsWith('/door-kiosk/')) {
+      return NextResponse.next()
+    }
+
+    // Redirect root to door-kiosk selector page
+    if (pathname === '/') {
+      return NextResponse.rewrite(new URL('/door-kiosk', request.url))
+    }
+
+    // Allow /door-kiosk routes
+    if (pathname === '/door-kiosk' || pathname.startsWith('/door-kiosk')) {
+      return NextResponse.next()
+    }
+
+    // Block other routes on door kiosk subdomain
+    console.log('[MIDDLEWARE] Door kiosk subdomain - blocking route:', pathname)
+    return NextResponse.rewrite(new URL('/door-kiosk', request.url))
+  }
+
+  // ============================================================
   // FACTORY SUBDOMAIN HANDLING - fabrica.servisumic.com
   // ============================================================
   const isFactorySubdomain =
@@ -212,6 +258,11 @@ export async function middleware(request: NextRequest) {
 
     // Allow public upload page (phone upload via QR)
     if (pathname.startsWith('/upload/')) {
+      return NextResponse.next()
+    }
+
+    // Allow door-kiosk routes (public kiosk pages)
+    if (pathname.startsWith('/door-kiosk')) {
       return NextResponse.next()
     }
 

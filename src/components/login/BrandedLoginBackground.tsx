@@ -169,7 +169,7 @@ export function BrandedLogo({ subtitle }: { subtitle?: string }) {
       <img
         src={logoSrc}
         alt={brand.displayName}
-        className={`object-contain w-full h-auto ${isServisumic ? 'max-w-[280px]' : 'max-w-xs'}`}
+        className={`object-contain w-full h-auto ${isServisumic ? 'max-w-[380px]' : 'max-w-xs'}`}
         onError={(e) => {
           const target = e.target as HTMLImageElement
           target.style.display = 'none'

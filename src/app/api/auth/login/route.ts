@@ -161,11 +161,22 @@ export async function POST(request: NextRequest) {
     })
 
     // Set authentication cookies with domain for cross-subdomain support
-    const cookieDomain = process.env.COOKIE_DOMAIN || (
-      process.env.NODE_ENV === 'production' ? '.logirapid.com' : undefined
-    )
+    // Detectar el dominio dinámicamente desde el host de la solicitud
+    const host = request.headers.get('host') || ''
+    let cookieDomain: string | undefined
+
+    if (process.env.NODE_ENV === 'production') {
+      // Determinar el dominio base desde el host - SIEMPRE dinámico
+      if (host.includes('servisumic.com')) {
+        cookieDomain = '.servisumic.com'
+      } else if (host.includes('logirapid.com')) {
+        cookieDomain = '.logirapid.com'
+      }
+    }
+    // En desarrollo, no establecer dominio (undefined)
 
     console.log('[LOGIN] Cookie configuration:', {
+      host,
       domain: cookieDomain,
       secure: process.env.NODE_ENV === 'production',
       httpOnly: false,

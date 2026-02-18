@@ -764,7 +764,7 @@ export default function MarketWalletPage() {
                           value={depositAmount}
                           onChange={e => setDepositAmount(e.target.value)}
                           placeholder="0.00"
-                          className="w-full pl-10 pr-16 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-600 dark:focus:ring-green-500 focus:border-transparent"
+                          className="w-full pl-10 pr-16 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-green-600 dark:focus:ring-green-500 focus:border-transparent"
                         />
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-500">
                           {depositCurrency}
@@ -781,7 +781,7 @@ export default function MarketWalletPage() {
                         onChange={e => setDepositNotes(e.target.value)}
                         placeholder="Referencia o descripcion del deposito..."
                         rows={2}
-                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-600 dark:focus:ring-green-500 focus:border-transparent resize-none"
+                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-green-600 dark:focus:ring-green-500 focus:border-transparent resize-none"
                       />
                     </div>
                   </div>

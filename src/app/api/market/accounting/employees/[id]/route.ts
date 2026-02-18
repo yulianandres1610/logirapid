@@ -258,7 +258,7 @@ export async function PUT(
     try {
       // Update user info
       if (firstName !== undefined || lastName !== undefined || phone !== undefined || role !== undefined || password) {
-        const validRoles = ['MARKET_MANAGER', 'MARKET_MANAGER_TIENDA', 'MARKET_COMERCIAL', 'MARKET_ALMACENERO', 'MARKET_VENDEDOR']
+        const validRoles = ['MARKET_MANAGER', 'MARKET_MANAGER_TIENDA', 'MARKET_COMERCIAL', 'MARKET_ALMACENERO', 'MARKET_VENDEDOR', 'MARKET_GUARDIA']
         if (role && !validRoles.includes(role)) {
           await db.query('ROLLBACK')
           return NextResponse.json({

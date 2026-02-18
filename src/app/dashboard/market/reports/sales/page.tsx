@@ -589,7 +589,7 @@ export default function SalesReportPage() {
                       value={realtimeDate}
                       onChange={(e) => setRealtimeDate(e.target.value)}
                       max={new Date().toISOString().split('T')[0]}
-                      className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                     <button
                       onClick={() => setAutoRefresh(!autoRefresh)}

@@ -991,10 +991,14 @@ export function Header({ onToggleSidebar, onToggleMobileMenu, sidebarCollapsed, 
                               'user-company-name',
                             ]
 
-                            // Determine domain for production
-                            const cookieDomain = window.location.hostname.includes('logirapid.com')
-                              ? '.logirapid.com'
-                              : undefined
+                            // Determine domain for production - support both brands
+                            const hostname = window.location.hostname
+                            let cookieDomain: string | undefined
+                            if (hostname.includes('servisumic.com')) {
+                              cookieDomain = '.servisumic.com'
+                            } else if (hostname.includes('logirapid.com')) {
+                              cookieDomain = '.logirapid.com'
+                            }
 
                             cookiesToClear.forEach(cookie => {
                               // Clear with domain if applicable (production)

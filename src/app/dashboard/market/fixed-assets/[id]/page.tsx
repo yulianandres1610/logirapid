@@ -154,7 +154,9 @@ const MOVEMENT_CONFIG: Record<string, { label: string; icon: React.ElementType; 
   status_change: { label: 'Cambio de estado', icon: AlertTriangle, color: 'amber' },
   repair: { label: 'Enviado a reparacion', icon: Wrench, color: 'orange' },
   disposal: { label: 'Dado de baja', icon: Trash2, color: 'gray' },
-  audit: { label: 'Auditoria', icon: ClipboardCheck, color: 'indigo' }
+  audit: { label: 'Auditoria', icon: ClipboardCheck, color: 'indigo' },
+  label_printed: { label: 'Etiqueta impresa', icon: Printer, color: 'green' },
+  edit: { label: 'Editado', icon: Edit, color: 'teal' }
 }
 
 const LIFECYCLE_STEPS = [
@@ -757,7 +759,9 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
                         movConfig.color === 'amber' && (theme === 'dark' ? 'bg-amber-900/50 ring-4 ring-gray-800' : 'bg-amber-100 ring-4 ring-white'),
                         movConfig.color === 'orange' && (theme === 'dark' ? 'bg-orange-900/50 ring-4 ring-gray-800' : 'bg-orange-100 ring-4 ring-white'),
                         movConfig.color === 'gray' && (theme === 'dark' ? 'bg-gray-700 ring-4 ring-gray-800' : 'bg-gray-100 ring-4 ring-white'),
-                        movConfig.color === 'indigo' && (theme === 'dark' ? 'bg-indigo-900/50 ring-4 ring-gray-800' : 'bg-indigo-100 ring-4 ring-white')
+                        movConfig.color === 'indigo' && (theme === 'dark' ? 'bg-indigo-900/50 ring-4 ring-gray-800' : 'bg-indigo-100 ring-4 ring-white'),
+                        movConfig.color === 'green' && (theme === 'dark' ? 'bg-green-900/50 ring-4 ring-gray-800' : 'bg-green-100 ring-4 ring-white'),
+                        movConfig.color === 'teal' && (theme === 'dark' ? 'bg-teal-900/50 ring-4 ring-gray-800' : 'bg-teal-100 ring-4 ring-white')
                       )}>
                         <MovIcon className={cn(
                           'w-4 h-4',
@@ -767,7 +771,9 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
                           movConfig.color === 'amber' && 'text-amber-500',
                           movConfig.color === 'orange' && 'text-orange-500',
                           movConfig.color === 'gray' && 'text-gray-500',
-                          movConfig.color === 'indigo' && 'text-indigo-500'
+                          movConfig.color === 'indigo' && 'text-indigo-500',
+                          movConfig.color === 'green' && 'text-green-500',
+                          movConfig.color === 'teal' && 'text-teal-500'
                         )} />
                       </div>
                       <div className="pt-1 flex-1">

@@ -210,7 +210,7 @@ export async function POST(
 
     const jobId = result.rows[0].id
 
-    // Log job creation
+    // Log job creation in print_job_history
     await db.query(`
       INSERT INTO print_job_history (print_job_id, event_type, event_data, created_at)
       VALUES ($1, 'created', $2, NOW())
@@ -221,6 +221,23 @@ export async function POST(
       copies: numCopies,
       assetCode: asset.asset_code
     })])
+
+    // Log label print in asset movements history
+    await db.query(`
+      INSERT INTO market_fixed_asset_movements (
+        asset_id,
+        company_id,
+        movement_type,
+        reason,
+        created_by,
+        created_at
+      ) VALUES ($1, $2, 'label_printed', $3, $4, NOW())
+    `, [
+      assetId,
+      payload.companyId,
+      `Etiqueta impresa (${labelSize}", ${numCopies} ${numCopies === 1 ? 'copia' : 'copias'}) - Job: ${jobNumber}`,
+      payload.userId
+    ])
 
     console.log(`[Fixed Asset Print] Created job ${jobNumber} for asset ${asset.asset_code}, size: ${labelSize}, copies: ${numCopies}`)
 

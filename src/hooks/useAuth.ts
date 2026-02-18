@@ -36,10 +36,14 @@ export function useAuth(): UseAuthReturn {
         // Clear all auth data
         localStorage.removeItem('user')
         localStorage.removeItem('auth-token')
-        // Clear cookies
-        const cookieDomain = window.location.hostname.includes('logirapid.com')
-          ? '.logirapid.com'
-          : undefined
+        // Clear cookies - detect domain based on hostname
+        const hostname = window.location.hostname
+        let cookieDomain: string | undefined
+        if (hostname.includes('servisumic.com')) {
+          cookieDomain = '.servisumic.com'
+        } else if (hostname.includes('logirapid.com')) {
+          cookieDomain = '.logirapid.com'
+        }
         const cookiesToClear = ['auth-token', 'user-id', 'user-name', 'user-email', 'user-role', 'user-company-id', 'user-company-name', 'user-company-type']
         cookiesToClear.forEach(cookie => {
           if (cookieDomain) {
@@ -334,9 +338,14 @@ export function useAuth(): UseAuthReturn {
         'user-company-name',
         'user-company-type',
       ]
-      const cookieDomain = window.location.hostname.includes('logirapid.com')
-        ? '.logirapid.com'
-        : undefined
+      // Detect domain based on hostname
+      const hostname = window.location.hostname
+      let cookieDomain: string | undefined
+      if (hostname.includes('servisumic.com')) {
+        cookieDomain = '.servisumic.com'
+      } else if (hostname.includes('logirapid.com')) {
+        cookieDomain = '.logirapid.com'
+      }
       cookiesToClear.forEach(cookie => {
         // Clear with domain if applicable
         if (cookieDomain) {

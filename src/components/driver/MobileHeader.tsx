@@ -31,9 +31,15 @@ export function MobileHeader({ userName, title, showBack, onBack }: MobileHeader
   }
 
   const handleLogout = () => {
-    // Determine cookie domain based on environment
-    const isProduction = typeof window !== 'undefined' && window.location.hostname.includes('logirapid.com')
-    const domainPart = isProduction ? 'domain=.logirapid.com;' : ''
+    // Determine cookie domain based on current hostname
+    const hostname = typeof window !== 'undefined' ? window.location.hostname : ''
+    let domainPart = ''
+
+    if (hostname.includes('servisumic.com')) {
+      domainPart = 'domain=.servisumic.com;'
+    } else if (hostname.includes('logirapid.com')) {
+      domainPart = 'domain=.logirapid.com;'
+    }
 
     // Clear ALL cookies (with and without domain for safety)
     const cookieNames = [

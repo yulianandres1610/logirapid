@@ -70,7 +70,8 @@ const roleLabels: Record<string, string> = {
   MARKET_COMERCIAL: 'Comercial',
   MARKET_ALMACENERO: 'Almacenero',
   MARKET_VENDEDOR: 'Vendedor',
-  MARKET_MANAGER_TIENDA: 'Manager Tienda'
+  MARKET_MANAGER_TIENDA: 'Manager Tienda',
+  MARKET_GUARDIA: 'Guardia'
 }
 
 export default function HREmployeesPage() {

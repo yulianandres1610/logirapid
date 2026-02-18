@@ -1743,7 +1743,7 @@ export default function CreateExpensePage() {
                             type="date"
                             value={formData.expenseDate}
                             onChange={(e) => setFormData(prev => ({ ...prev, expenseDate: e.target.value }))}
-                            className="w-full px-4 py-2 border rounded-xl bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
+                            className="w-full px-4 py-2 border rounded-xl bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
                           />
                         </div>
                         <div>
@@ -1755,7 +1755,7 @@ export default function CreateExpensePage() {
                             value={formData.vendorName}
                             onChange={(e) => setFormData(prev => ({ ...prev, vendorName: e.target.value }))}
                             placeholder="Nombre del proveedor"
-                            className="w-full px-4 py-2 border rounded-xl bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
+                            className="w-full px-4 py-2 border rounded-xl bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
                           />
                         </div>
                       </div>
@@ -1782,7 +1782,7 @@ export default function CreateExpensePage() {
                           }}
                           placeholder="Ej: Pago de electricidad del mes"
                           className={cn(
-                            "w-full px-4 py-3 border rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-orange-500",
+                            "w-full px-4 py-3 border rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500",
                             errors.description ? "border-red-500" : "border-gray-200 dark:border-gray-700"
                           )}
                         />
@@ -1819,7 +1819,7 @@ export default function CreateExpensePage() {
                             onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
                             placeholder="0.00"
                             className={cn(
-                              "w-full pl-10 pr-4 py-3 border rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-orange-500",
+                              "w-full pl-10 pr-4 py-3 border rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500",
                               errors.amount ? "border-red-500" : "border-gray-200 dark:border-gray-700"
                             )}
                           />
@@ -1840,7 +1840,7 @@ export default function CreateExpensePage() {
                             value={formData.expenseDate}
                             onChange={(e) => setFormData(prev => ({ ...prev, expenseDate: e.target.value }))}
                             className={cn(
-                              "w-full pl-10 pr-4 py-3 border rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-orange-500",
+                              "w-full pl-10 pr-4 py-3 border rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500",
                               errors.expenseDate ? "border-red-500" : "border-gray-200 dark:border-gray-700"
                             )}
                           />
@@ -1861,7 +1861,7 @@ export default function CreateExpensePage() {
                         <select
                           value={formData.categoryId}
                           onChange={(e) => setFormData(prev => ({ ...prev, categoryId: e.target.value }))}
-                          className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-orange-500"
+                          className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500"
                         >
                           <option value="">Seleccionar categoria</option>
                           {categories.map(cat => (
@@ -1883,7 +1883,7 @@ export default function CreateExpensePage() {
                           value={formData.vendorName}
                           onChange={(e) => setFormData(prev => ({ ...prev, vendorName: e.target.value }))}
                           placeholder="Nombre del proveedor (opcional)"
-                          className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-orange-500"
+                          className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500"
                         />
                       </div>
                     </div>

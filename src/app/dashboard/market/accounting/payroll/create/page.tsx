@@ -533,7 +533,7 @@ export default function CreatePayrollPage() {
                             value={formData.periodStart}
                             onChange={(e) => setFormData(prev => ({ ...prev, periodStart: e.target.value }))}
                             className={cn(
-                              "w-full pl-10 pr-4 py-3 border rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-purple-500",
+                              "w-full pl-10 pr-4 py-3 border rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500",
                               errors.periodStart ? "border-red-500" : "border-gray-200 dark:border-gray-700"
                             )}
                           />
@@ -554,7 +554,7 @@ export default function CreatePayrollPage() {
                             value={formData.periodEnd}
                             onChange={(e) => setFormData(prev => ({ ...prev, periodEnd: e.target.value }))}
                             className={cn(
-                              "w-full pl-10 pr-4 py-3 border rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-purple-500",
+                              "w-full pl-10 pr-4 py-3 border rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500",
                               errors.periodEnd ? "border-red-500" : "border-gray-200 dark:border-gray-700"
                             )}
                           />
@@ -584,7 +584,7 @@ export default function CreatePayrollPage() {
                               value={formData.hoursWorked}
                               onChange={(e) => setFormData(prev => ({ ...prev, hoursWorked: e.target.value }))}
                               placeholder="Auto"
-                              className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-purple-500"
+                              className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
                             />
                           </div>
                         </div>
@@ -600,7 +600,7 @@ export default function CreatePayrollPage() {
                               value={formData.daysWorked}
                               onChange={(e) => setFormData(prev => ({ ...prev, daysWorked: e.target.value }))}
                               placeholder="Auto"
-                              className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-purple-500"
+                              className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
                             />
                           </div>
                         </div>
@@ -666,7 +666,7 @@ export default function CreatePayrollPage() {
                           value={formData.bonusAmount}
                           onChange={(e) => setFormData(prev => ({ ...prev, bonusAmount: e.target.value }))}
                           placeholder="0.00"
-                          className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-purple-500"
+                          className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
                         />
                       </div>
                       <input
@@ -674,7 +674,7 @@ export default function CreatePayrollPage() {
                         value={formData.bonusDescription}
                         onChange={(e) => setFormData(prev => ({ ...prev, bonusDescription: e.target.value }))}
                         placeholder="Descripcion del bono"
-                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-purple-500"
+                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
                       />
                     </div>
                   </div>
@@ -695,7 +695,7 @@ export default function CreatePayrollPage() {
                           value={formData.deductions}
                           onChange={(e) => setFormData(prev => ({ ...prev, deductions: e.target.value }))}
                           placeholder="0.00"
-                          className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-purple-500"
+                          className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
                         />
                       </div>
                       <input
@@ -703,7 +703,7 @@ export default function CreatePayrollPage() {
                         value={formData.deductionNotes}
                         onChange={(e) => setFormData(prev => ({ ...prev, deductionNotes: e.target.value }))}
                         placeholder="Nota de deduccion"
-                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-purple-500"
+                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
                       />
                     </div>
                   </div>

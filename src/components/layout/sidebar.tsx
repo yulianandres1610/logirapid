@@ -54,7 +54,8 @@ import {
   Fingerprint,
   Briefcase,
   Scale,
-  Factory
+  Factory,
+  Shield
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -107,7 +108,9 @@ const SidebarItem = ({
         "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 relative overflow-hidden group",
         isActive
           ? theme === 'dark'
-            ? `bg-brand-secondary/20 text-brand-secondary border border-brand-secondary/30`
+            ? brand.name === 'servisumic'
+              ? `bg-brand-primary/20 text-brand-primary border border-brand-primary/30`
+              : `bg-brand-secondary/20 text-brand-secondary border border-brand-secondary/30`
             : `bg-brand-primary/20 text-brand-primary border border-brand-primary/30`
           : theme === 'dark'
             ? "text-gray-400 hover:text-white hover:bg-white/5"
@@ -121,7 +124,9 @@ const SidebarItem = ({
         <motion.div
           className={cn(
             "absolute inset-0 rounded-xl",
-            theme === 'dark' ? "bg-brand-secondary/10" : "bg-brand-primary/10"
+            theme === 'dark'
+              ? brand.name === 'servisumic' ? "bg-brand-primary/10" : "bg-brand-secondary/10"
+              : "bg-brand-primary/10"
           )}
           initial={{ opacity: 0 }}
           animate={{ opacity: [0.5, 1, 0.5] }}
@@ -138,7 +143,9 @@ const SidebarItem = ({
         <Icon className={cn(
           "w-5 h-5",
           isActive
-            ? theme === 'dark' ? "text-brand-secondary" : "text-brand-primary"
+            ? theme === 'dark'
+              ? brand.name === 'servisumic' ? "text-brand-primary" : "text-brand-secondary"
+              : "text-brand-primary"
             : theme === 'dark'
               ? "text-gray-400 group-hover:text-white"
               : "text-gray-600 group-hover:text-gray-900"
@@ -180,7 +187,9 @@ const SidebarItem = ({
         <motion.div
           className={cn(
             "absolute right-2 w-1 h-8 rounded-full opacity-0 group-hover:opacity-100",
-            theme === 'dark' ? "bg-brand-secondary" : "bg-brand-primary"
+            theme === 'dark'
+              ? brand.name === 'servisumic' ? "bg-brand-primary" : "bg-brand-secondary"
+              : "bg-brand-primary"
           )}
           initial={{ opacity: 0, scaleY: 0 }}
           whileHover={{ opacity: 1, scaleY: 1 }}
@@ -211,7 +220,7 @@ const SidebarItem = ({
                   "w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 relative group",
                   pathname === subItem.href
                     ? theme === 'dark'
-                      ? "text-brand-secondary"
+                      ? brand.name === 'servisumic' ? "text-brand-primary" : "text-brand-secondary"
                       : "text-brand-primary"
                     : theme === 'dark'
                       ? "text-gray-400 hover:text-white"
@@ -223,7 +232,9 @@ const SidebarItem = ({
                 <subItem.icon className={cn(
                   "w-4 h-4",
                   pathname === subItem.href
-                    ? theme === 'dark' ? "text-brand-secondary" : "text-brand-primary"
+                    ? theme === 'dark'
+                      ? brand.name === 'servisumic' ? "text-brand-primary" : "text-brand-secondary"
+                      : "text-brand-primary"
                     : theme === 'dark'
                       ? "text-gray-400 group-hover:text-white"
                       : "text-gray-600 group-hover:text-gray-900"
@@ -233,7 +244,9 @@ const SidebarItem = ({
                   <motion.div
                     className={cn(
                       "absolute right-2 w-1 h-6 rounded-full",
-                      theme === 'dark' ? "bg-brand-secondary" : "bg-brand-primary"
+                      theme === 'dark'
+                        ? brand.name === 'servisumic' ? "bg-brand-primary" : "bg-brand-secondary"
+                        : "bg-brand-primary"
                     )}
                     initial={{ scaleY: 0 }}
                     animate={{ scaleY: 1 }}
@@ -325,6 +338,13 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       setOpenSubmenus(prev => ({
         ...prev,
         'Mayoreo': true
+      }))
+    }
+    // Auto-expand Door Security submenu
+    if (pathname.includes('/market/door-security')) {
+      setOpenSubmenus(prev => ({
+        ...prev,
+        'Seguridad Puerta': true
       }))
     }
   }, [pathname])
@@ -619,6 +639,17 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: CalendarClock, label: "Turnos Rotativos", href: "/dashboard/market/hr/scheduling" },
         { icon: Calendar, label: "Asistencia", href: "/dashboard/market/hr/attendance" },
         { icon: Fingerprint, label: "Kioscos", href: "/dashboard/market/hr/kiosks" },
+      ]
+    },
+    {
+      icon: Shield,
+      label: "Seguridad Puerta",
+      href: "/dashboard/market/door-security",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: Monitor, label: "Kiosks", href: "/dashboard/market/door-security/kiosks" },
+        { icon: Users, label: "Visitantes", href: "/dashboard/market/door-security/visitors" },
+        { icon: Clock, label: "Historial", href: "/dashboard/market/door-security/logs" },
       ]
     },
     { icon: MessageCircle, label: "Conversaciones", href: "/dashboard/market/chat" },
@@ -1062,7 +1093,9 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
               className={cn(
                 "w-full justify-start gap-3 hover:bg-brand-primary/10",
                 theme === 'dark'
-                  ? "text-gray-400 hover:text-brand-secondary"
+                  ? brand.name === 'servisumic'
+                    ? "text-gray-400 hover:text-brand-primary"
+                    : "text-gray-400 hover:text-brand-secondary"
                   : "text-gray-600 hover:text-brand-primary",
                 isCollapsed && "justify-center px-3"
               )}
@@ -1093,7 +1126,9 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
               className={cn(
                 "w-full justify-start gap-3 hover:bg-brand-primary/10",
                 theme === 'dark'
-                  ? "text-gray-400 hover:text-brand-secondary"
+                  ? brand.name === 'servisumic'
+                    ? "text-gray-400 hover:text-brand-primary"
+                    : "text-gray-400 hover:text-brand-secondary"
                   : "text-gray-600 hover:text-brand-primary",
                 isCollapsed && "justify-center px-3"
               )}
