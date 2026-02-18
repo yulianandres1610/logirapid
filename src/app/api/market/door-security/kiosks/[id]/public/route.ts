@@ -12,21 +12,42 @@ export async function GET(
   try {
     const { id } = await params
 
-    // Fetch kiosk by ID or deviceId
-    const result = await db.query(`
-      SELECT
-        k.id,
-        k.companyid,
-        k.name,
-        k.location,
-        k.deviceid,
-        k.isactive,
-        c.name as companyname,
-        c.logo as companylogo
-      FROM market_door_kiosks k
-      LEFT JOIN companies c ON k.companyid = c.id
-      WHERE (k.id = $1 OR k.deviceid = $1)
-    `, [id])
+    // Check if ID is numeric
+    const isNumericId = /^\d+$/.test(id)
+
+    // Fetch kiosk by ID (numeric) or deviceId (string)
+    let result
+    if (isNumericId) {
+      result = await db.query(`
+        SELECT
+          k.id,
+          k.companyid,
+          k.name,
+          k.location,
+          k.deviceid,
+          k.isactive,
+          c.name as companyname,
+          c.logo as companylogo
+        FROM market_door_kiosks k
+        LEFT JOIN companies c ON k.companyid = c.id
+        WHERE k.id = $1
+      `, [parseInt(id)])
+    } else {
+      result = await db.query(`
+        SELECT
+          k.id,
+          k.companyid,
+          k.name,
+          k.location,
+          k.deviceid,
+          k.isactive,
+          c.name as companyname,
+          c.logo as companylogo
+        FROM market_door_kiosks k
+        LEFT JOIN companies c ON k.companyid = c.id
+        WHERE k.deviceid = $1
+      `, [id])
+    }
 
     if (result.rows.length === 0) {
       return NextResponse.json({
