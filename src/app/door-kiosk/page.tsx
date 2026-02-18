@@ -132,7 +132,7 @@ export default function DoorKioskSelectorPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-900 via-emerald-900 to-teal-900 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-stone-800 via-stone-900 to-stone-800 flex flex-col items-center justify-center p-4">
       {/* Logo/Title */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -140,12 +140,12 @@ export default function DoorKioskSelectorPage() {
         className="text-center mb-8"
       >
         <div className="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <Shield className="w-10 h-10 text-white" />
+          <Shield className="w-10 h-10 text-orange-500" />
         </div>
         <h1 className="text-3xl font-bold text-white mb-2">
           Control de Acceso
         </h1>
-        <p className="text-emerald-200">
+        <p className="text-stone-300">
           {step === 'pin' ? 'Ingresa tu PIN de guardia' : `Bienvenido, ${guard?.name}`}
         </p>
       </motion.div>
@@ -167,8 +167,8 @@ export default function DoorKioskSelectorPage() {
               className="p-8"
             >
               <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-teal-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Lock className="w-8 h-8 text-teal-600" />
+                <div className="w-16 h-16 bg-orange-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <Lock className="w-8 h-8 text-orange-500" />
                 </div>
                 <h2 className="text-xl font-bold text-gray-900">
                   Ingresa tu PIN
@@ -200,7 +200,7 @@ export default function DoorKioskSelectorPage() {
                     key={i}
                     className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-all ${
                       i < pin.length
-                        ? 'border-teal-500 bg-teal-50 text-teal-600'
+                        ? 'border-orange-500 bg-orange-50 text-orange-600'
                         : 'border-gray-200'
                     }`}
                   >
@@ -225,7 +225,7 @@ export default function DoorKioskSelectorPage() {
                         ? 'invisible'
                         : digit === 'del'
                           ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                          : 'bg-gray-100 text-gray-900 hover:bg-teal-100'
+                          : 'bg-stone-100 text-stone-900 hover:bg-orange-100'
                     }`}
                   >
                     {digit === 'del' ? '⌫' : digit}
@@ -234,7 +234,7 @@ export default function DoorKioskSelectorPage() {
               </div>
 
               {loading && (
-                <div className="flex items-center justify-center gap-2 text-teal-600 py-4">
+                <div className="flex items-center justify-center gap-2 text-orange-600 py-4">
                   <RefreshCw className="w-5 h-5 animate-spin" />
                   <span>Verificando...</span>
                 </div>
@@ -252,9 +252,9 @@ export default function DoorKioskSelectorPage() {
               className="p-6"
             >
               {/* Guard Info */}
-              <div className="flex items-center gap-4 mb-6 p-4 bg-teal-50 rounded-xl">
-                <div className="w-12 h-12 bg-teal-100 rounded-full flex items-center justify-center">
-                  <User className="w-6 h-6 text-teal-600" />
+              <div className="flex items-center gap-4 mb-6 p-4 bg-orange-50 rounded-xl">
+                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+                  <User className="w-6 h-6 text-orange-500" />
                 </div>
                 <div>
                   <p className="font-semibold text-gray-900">{guard?.name}</p>
@@ -271,10 +271,10 @@ export default function DoorKioskSelectorPage() {
                   <button
                     key={kiosk.id}
                     onClick={() => selectKiosk(kiosk)}
-                    className="w-full flex items-center gap-4 p-4 bg-gray-50 hover:bg-teal-50 rounded-xl transition-colors text-left group"
+                    className="w-full flex items-center gap-4 p-4 bg-gray-50 hover:bg-orange-50 rounded-xl transition-colors text-left group"
                   >
-                    <div className="w-12 h-12 bg-teal-100 rounded-xl flex items-center justify-center">
-                      <Shield className="w-6 h-6 text-teal-600" />
+                    <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+                      <Shield className="w-6 h-6 text-orange-500" />
                     </div>
                     <div className="flex-1">
                       <p className="font-semibold text-gray-900">{kiosk.name}</p>
@@ -285,7 +285,7 @@ export default function DoorKioskSelectorPage() {
                         </p>
                       )}
                     </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-teal-600" />
+                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-orange-500" />
                   </button>
                 ))}
               </div>
@@ -302,8 +302,8 @@ export default function DoorKioskSelectorPage() {
       </motion.div>
 
       {/* Footer */}
-      <p className="text-emerald-200 text-sm mt-8">
-        puerta.logirapid.com
+      <p className="text-stone-400 text-sm mt-8">
+        puerta.servisumic.com
       </p>
     </div>
   )
