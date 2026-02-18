@@ -15,7 +15,8 @@ import {
   Shield,
   History,
   LogIn,
-  LogOut
+  LogOut,
+  Trash2
 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -23,6 +24,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
+import { useCompany } from '@/contexts/company-context'
 
 interface Visitor {
   id: number
@@ -71,10 +73,16 @@ export default function VisitorDetailPage({ params }: { params: Promise<{ id: st
   const resolvedParams = use(params)
   const router = useRouter()
   const { theme } = useTheme()
+  const { companyInfo } = useCompany()
 
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<VisitorData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  // Check if user is admin
+  const isAdmin = companyInfo.userRole === 'SUPER_ADMIN' || companyInfo.userRole === 'ADMIN'
 
   const fetchVisitor = useCallback(async () => {
     setLoading(true)
@@ -99,6 +107,28 @@ export default function VisitorDetailPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     fetchVisitor()
   }, [fetchVisitor])
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/market/door-security/visitors/${resolvedParams.id}`, {
+        method: 'DELETE'
+      })
+      const json = await res.json()
+
+      if (json.success) {
+        router.push('/dashboard/market/door-security/visitors')
+      } else {
+        setError(json.error || 'Error al eliminar visitante')
+        setShowDeleteConfirm(false)
+      }
+    } catch {
+      setError('Error de conexion al eliminar')
+      setShowDeleteConfirm(false)
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-'
@@ -216,7 +246,89 @@ export default function VisitorDetailPage({ params }: { params: Promise<{ id: st
                   <span className="font-medium">Volver</span>
                 </motion.button>
               </Link>
+
+              {/* Delete Button - Admin Only */}
+              {isAdmin && !isCurrentlyInside && (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
+                    'bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50'
+                  )}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span className="font-medium">Eliminar</span>
+                </motion.button>
+              )}
             </div>
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteConfirm && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+              >
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className={cn(
+                    'w-full max-w-md p-6 rounded-2xl',
+                    theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                  )}
+                >
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                      <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                    </div>
+                    <div>
+                      <h3 className={cn(
+                        'text-lg font-bold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>Eliminar Visitante</h3>
+                      <p className="text-sm text-gray-500">Esta accion no se puede deshacer</p>
+                    </div>
+                  </div>
+
+                  <p className={cn(
+                    'mb-6',
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                  )}>
+                    ¿Estas seguro que deseas eliminar a <strong>{visitor.fullName}</strong>?
+                    Se eliminara todo su historial de visitas.
+                  </p>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowDeleteConfirm(false)}
+                      disabled={deleting}
+                      className={cn(
+                        'flex-1 px-4 py-2.5 rounded-xl font-medium transition-colors',
+                        theme === 'dark'
+                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      )}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {deleting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                      {deleting ? 'Eliminando...' : 'Eliminar'}
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
 
             {/* Header Card */}
             <motion.div
