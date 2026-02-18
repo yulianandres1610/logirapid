@@ -426,7 +426,7 @@ export default function MarketPrintServiceDetailPage({ params }: { params: Promi
                     type="text"
                     value={service.apiKey}
                     readOnly
-                    className="flex-1 px-2 py-1 text-xs font-mono bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded"
+                    className="flex-1 px-2 py-1 text-xs font-mono bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded text-gray-900 dark:text-white"
                   />
                   <Button variant="ghost" size="sm" onClick={() => copyToClipboard(service.apiKey, 'API Key')}>
                     <Copy className="w-3 h-3" />

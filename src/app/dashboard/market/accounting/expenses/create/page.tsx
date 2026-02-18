@@ -1861,7 +1861,7 @@ export default function CreateExpensePage() {
                         <select
                           value={formData.categoryId}
                           onChange={(e) => setFormData(prev => ({ ...prev, categoryId: e.target.value }))}
-                          className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-orange-500"
+                          className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500"
                         >
                           <option value="">Seleccionar categoria</option>
                           {categories.map(cat => (
@@ -1883,7 +1883,7 @@ export default function CreateExpensePage() {
                           value={formData.vendorName}
                           onChange={(e) => setFormData(prev => ({ ...prev, vendorName: e.target.value }))}
                           placeholder="Nombre del proveedor (opcional)"
-                          className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-orange-500"
+                          className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500"
                         />
                       </div>
                     </div>
