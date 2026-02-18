@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
           nationality VARCHAR(100),
           gender VARCHAR(20),
           idphotourl TEXT,
+          idphotoreverseurl TEXT,
           firstvisit TIMESTAMP DEFAULT NOW(),
           lastvisit TIMESTAMP,
           totalvisits INTEGER DEFAULT 0,
@@ -130,6 +131,21 @@ export async function POST(request: NextRequest) {
       results.push('visitor indexes created')
     } catch {
       results.push('visitor indexes already exist or failed')
+    }
+
+    // Add idphotoreverseurl column if missing (migration for existing databases)
+    try {
+      await db.query(`
+        ALTER TABLE market_visitors
+        ADD COLUMN IF NOT EXISTS idphotoreverseurl TEXT
+      `)
+      results.push('idphotoreverseurl column added/verified')
+    } catch (error: any) {
+      if (error.message?.includes('already exists')) {
+        results.push('idphotoreverseurl column already exists')
+      } else {
+        results.push(`idphotoreverseurl migration: ${error.message}`)
+      }
     }
 
     // Create market_visitor_logs table (with foreign key to visitors and kiosks only)

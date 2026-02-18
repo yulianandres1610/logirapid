@@ -168,26 +168,62 @@ export async function POST(request: NextRequest) {
 
     console.log('[ID Scanner] Processing document:', { mimeType, documentType, model: OCR_MODEL })
 
-    // Prompt optimizado para extraer datos de documentos de identidad (conciso para respuesta rápida)
-    const prompt = `Extrae datos de este documento de identidad (cédula/pasaporte/licencia).
+    // Prompt optimizado para extraer datos de documentos de identidad
+    // Especialmente entrenado para carnet de identidad cubano (frente y reverso)
+    const prompt = `Eres un experto en OCR de documentos de identidad. Extrae TODOS los datos visibles de esta imagen.
 
-Responde SOLO con JSON válido:
+## CARNET DE IDENTIDAD CUBANO (CI):
+El carnet cubano tiene DOS lados con información diferente:
+
+**FRENTE (lado con foto):**
+- NI: Número de Identidad (11 dígitos: AAMMDDXXXXXC donde AA=año, MM=mes, DD=día de nacimiento)
+- NOMBRE/FIRST NAME: Primer nombre
+- APELLIDOS/LAST NAME: Apellidos (dos apellidos)
+- PADRE: Nombre del padre
+- MADRE: Nombre de la madre
+- SEXO: F (femenino) o M (masculino)
+- FECHA DE VENCIMIENTO: DD/MM/YYYY
+- REGISTRO CIVIL: Nombre del registro
+- TOMO, FOLIO, AÑO: Datos de registro
+
+**REVERSO (lado con código MRZ):**
+- RESIDENCIA: Dirección completa (ej: "CALLE SOCARRAS # 1203 E/ CALLE ALEJANDRO RODRIGUEZ Y CALLE CESPEDES")
+- MUNICIPIO, PROVINCIA: Ubicación (ej: "FLORIDA, CAMAGUEY")
+- Código alfanumérico (ej: AEC496280)
+- Línea MRZ: I<CUBAEC496280356092604195<<<<
+
+## IMPORTANTE - Extracción de fecha de nacimiento:
+- El NI cubano SIEMPRE contiene la fecha de nacimiento en los primeros 6 dígitos
+- Formato: AAMMDD (Año2díg + Mes2díg + Día2díg)
+- Ejemplo: NI 56092604195 → Fecha: 26/09/1956 (día 26, mes 09, año 56)
+- Para determinar el siglo: si AA > 25 → 19XX, si AA <= 25 → 20XX
+
+## DIRECCIÓN:
+- Lee la dirección EXACTAMENTE como aparece en el documento
+- Incluye número de casa, calles de referencia (E/ = entre)
+- Incluye municipio y provincia si están visibles
+
+Responde SOLO con JSON válido (sin markdown, sin \`\`\`):
 {
-  "fullName": "nombre completo",
-  "firstName": "primer nombre",
-  "lastName": "apellidos",
-  "documentType": "cedula|passport|license|unknown",
-  "documentNumber": "número",
-  "dateOfBirth": "YYYY-MM-DD o null",
-  "expiryDate": "YYYY-MM-DD o null",
-  "nationality": "nacionalidad o null",
-  "address": "dirección o null",
-  "gender": "M|F|null",
-  "issuingCountry": "país emisor",
+  "fullName": "NOMBRE + APELLIDOS completos",
+  "firstName": "solo primer nombre",
+  "lastName": "apellido paterno + apellido materno",
+  "documentType": "cedula",
+  "documentNumber": "NI de 11 dígitos sin espacios",
+  "dateOfBirth": "YYYY-MM-DD extraído del NI",
+  "expiryDate": "YYYY-MM-DD si visible",
+  "nationality": "Cubana",
+  "address": "dirección completa incluyendo municipio y provincia",
+  "gender": "M o F",
+  "issuingCountry": "Cuba",
   "confidence": 0.0-1.0
 }
 
-Nota: Cédula cubana tiene 11 dígitos (AAMMDDXXXXXC). Sin markdown, solo JSON.`
+REGLAS:
+1. El día de nacimiento está en posiciones 5-6 del NI (NO confundir con el mes)
+2. La dirección puede incluir "E/" que significa "entre" (calles de referencia)
+3. Si es el reverso del carnet, busca RESIDENCIA para la dirección
+4. Responde SOLO el JSON, nada más`
 
     // Retry logic for OCR processing
     let lastError: Error | null = null
