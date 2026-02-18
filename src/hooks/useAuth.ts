@@ -23,6 +23,11 @@ export function useAuth(): UseAuthReturn {
 
   // Verify session with server (check if user still exists in DB)
   const verifySession = useCallback(async () => {
+    // Skip verification for kiosk routes (they use PIN auth, not JWT)
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/door-kiosk')) {
+      return true
+    }
+
     try {
       const response = await fetch('/api/auth/verify-session', {
         method: 'GET',
@@ -68,6 +73,12 @@ export function useAuth(): UseAuthReturn {
   // Check for existing auth on mount
   useEffect(() => {
     if (typeof window === 'undefined') return
+
+    // Skip auth initialization for kiosk routes (they use PIN auth, not JWT)
+    if (window.location.pathname.startsWith('/door-kiosk')) {
+      setState(prev => ({ ...prev, isLoading: false }))
+      return
+    }
 
     const initAuth = async () => {
       try {
