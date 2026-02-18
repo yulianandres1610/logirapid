@@ -43,6 +43,16 @@ export async function GET(
       }, { status: 401 })
     }
 
+    // Ensure idphotoreverseurl column exists (auto-migration)
+    try {
+      await db.query(`
+        ALTER TABLE market_visitors
+        ADD COLUMN IF NOT EXISTS idphotoreverseurl TEXT
+      `)
+    } catch {
+      // Column might already exist or DB doesn't support IF NOT EXISTS
+    }
+
     // Check if ID is the visitor ID or ID number
     let whereClause = 'WHERE v.companyid = $1 AND '
     if (/^\d+$/.test(id)) {
