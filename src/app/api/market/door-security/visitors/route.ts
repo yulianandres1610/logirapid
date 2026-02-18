@@ -203,6 +203,16 @@ export async function POST(request: NextRequest) {
       }, { status: 401 })
     }
 
+    // Ensure idphotoreverseurl column exists (auto-migration)
+    try {
+      await db.query(`
+        ALTER TABLE market_visitors
+        ADD COLUMN IF NOT EXISTS idphotoreverseurl TEXT
+      `)
+    } catch {
+      // Column might already exist or DB doesn't support IF NOT EXISTS
+    }
+
     if (!fullName || !idNumber) {
       return NextResponse.json({
         success: false,
