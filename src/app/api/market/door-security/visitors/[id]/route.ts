@@ -63,6 +63,7 @@ export async function GET(
         v.nationality,
         v.gender,
         v.idphotourl,
+        v.idphotoreverseurl,
         v.firstvisit,
         v.lastvisit,
         v.totalvisits,
@@ -86,6 +87,7 @@ export async function GET(
         vl.id,
         vl.entrytime,
         vl.visitpurpose,
+        vl.visitnotes,
         vl.haspendinginvoices,
         k.name as kioskname
       FROM market_visitor_logs vl
@@ -104,19 +106,23 @@ export async function GET(
         vl.entrytime,
         vl.exittime,
         vl.visitpurpose,
+        vl.visitnotes,
         vl.status,
         k.name as kioskname
       FROM market_visitor_logs vl
       LEFT JOIN market_door_kiosks k ON vl.kioskid = k.id
       WHERE vl.visitorid = $1
       ORDER BY vl.entrytime DESC
-      LIMIT 10
+      LIMIT 20
     `, [visitor.id])
 
-    // Generate signed URL for ID photo if admin requesting
+    // Generate signed URLs for ID photos if admin requesting
     let idPhotoSignedUrl = null
-    if (visitor.idphotourl && ['SUPER_ADMIN', 'ADMIN', 'MARKET_MANAGER'].includes(payload.role)) {
-      if (storageAdapter.isConfigured()) {
+    let idPhotoReverseSignedUrl = null
+
+    if (['SUPER_ADMIN', 'ADMIN', 'MARKET_MANAGER'].includes(payload.role) && storageAdapter.isConfigured()) {
+      // Front photo
+      if (visitor.idphotourl) {
         try {
           idPhotoSignedUrl = await storageAdapter.createSignedUrl(
             'company-private-documents',
@@ -124,7 +130,20 @@ export async function GET(
             3600 // 1 hour expiry
           )
         } catch (e) {
-          console.error('[Visitor GET] Error getting signed URL:', e)
+          console.error('[Visitor GET] Error getting signed URL for front:', e)
+        }
+      }
+
+      // Reverse photo (for Cuban cedula)
+      if (visitor.idphotoreverseurl) {
+        try {
+          idPhotoReverseSignedUrl = await storageAdapter.createSignedUrl(
+            'company-private-documents',
+            visitor.idphotoreverseurl,
+            3600
+          )
+        } catch (e) {
+          console.error('[Visitor GET] Error getting signed URL for reverse:', e)
         }
       }
     }
@@ -142,6 +161,7 @@ export async function GET(
           nationality: visitor.nationality,
           gender: visitor.gender,
           idPhotoUrl: idPhotoSignedUrl,
+          idPhotoReverseUrl: idPhotoReverseSignedUrl,
           firstVisit: visitor.firstvisit,
           lastVisit: visitor.lastvisit,
           totalVisits: visitor.totalvisits,
@@ -152,6 +172,7 @@ export async function GET(
           id: activeLog.id,
           entryTime: activeLog.entrytime,
           visitPurpose: activeLog.visitpurpose,
+          notes: activeLog.visitnotes,
           hasPendingInvoices: activeLog.haspendinginvoices,
           kioskName: activeLog.kioskname
         } : null,
@@ -160,6 +181,7 @@ export async function GET(
           entryTime: h.entrytime,
           exitTime: h.exittime,
           visitPurpose: h.visitpurpose,
+          notes: h.visitnotes,
           status: h.status,
           kioskName: h.kioskname
         }))

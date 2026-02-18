@@ -140,29 +140,12 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/market/door-security/visitors
  * Register a new visitor or update existing one
+ * Supports both JWT authentication and kiosk authentication (kioskId + guardId)
  */
 export async function POST(request: NextRequest) {
   try {
     const cookieStore = await cookies()
     const authToken = cookieStore.get('auth-token')?.value
-
-    if (!authToken) {
-      return NextResponse.json({
-        success: false,
-        error: 'No autorizado'
-      }, { status: 401 })
-    }
-
-    let payload: JWTPayload
-    try {
-      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
-      payload = jwt.verify(authToken, secret) as JWTPayload
-    } catch {
-      return NextResponse.json({
-        success: false,
-        error: 'Token inválido'
-      }, { status: 401 })
-    }
 
     const body = await request.json()
     const {
@@ -173,8 +156,52 @@ export async function POST(request: NextRequest) {
       address,
       nationality,
       gender,
-      idPhotoBase64
+      idPhotoBase64,
+      idPhotoReverseBase64,
+      kioskId,
+      guardId
     } = body
+
+    let companyId: number | null = null
+    let isAuthenticated = false
+
+    // Try JWT authentication first
+    if (authToken) {
+      try {
+        const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+        const payload = jwt.verify(authToken, secret) as JWTPayload
+        companyId = payload.companyId
+        isAuthenticated = true
+      } catch {
+        // JWT failed, will try kiosk auth
+      }
+    }
+
+    // Try kiosk authentication if JWT failed
+    if (!isAuthenticated && kioskId && guardId) {
+      const kioskResult = await db.query(
+        'SELECT companyid FROM market_door_kiosks WHERE id = $1 AND status = $2',
+        [kioskId, 'active']
+      )
+      if (kioskResult.rows.length > 0) {
+        // Verify guard exists
+        const guardResult = await db.query(
+          'SELECT id FROM market_door_guards WHERE id = $1 AND status = $2',
+          [guardId, 'active']
+        )
+        if (guardResult.rows.length > 0) {
+          companyId = kioskResult.rows[0].companyid
+          isAuthenticated = true
+        }
+      }
+    }
+
+    if (!isAuthenticated || !companyId) {
+      return NextResponse.json({
+        success: false,
+        error: 'No autorizado'
+      }, { status: 401 })
+    }
 
     if (!fullName || !idNumber) {
       return NextResponse.json({
@@ -187,7 +214,7 @@ export async function POST(request: NextRequest) {
     const existingResult = await db.query(`
       SELECT id, totalvisits FROM market_visitors
       WHERE companyid = $1 AND idnumber = $2
-    `, [payload.companyId, idNumber])
+    `, [companyId, idNumber])
 
     let visitorId: number
     let isNewVisitor = false
@@ -226,39 +253,66 @@ export async function POST(request: NextRequest) {
       // Create new visitor
       isNewVisitor = true
 
-      // Upload ID photo if provided
+      // Upload ID photos if provided
       let idPhotoUrl = null
-      if (idPhotoBase64 && storageAdapter.isConfigured()) {
-        try {
-          const cleanBase64 = idPhotoBase64.replace(/^data:image\/\w+;base64,/, '')
-          const buffer = Buffer.from(cleanBase64, 'base64')
-          const fileName = `visitor-documents/${payload.companyId}/${idNumber}-${Date.now()}.jpg`
+      let idPhotoReverseUrl = null
+      const timestamp = Date.now()
 
-          const uploadResult = await storageAdapter.upload(
-            'company-private-documents',
-            fileName,
-            buffer,
-            { contentType: 'image/jpeg', upsert: true }
-          )
+      if (storageAdapter.isConfigured()) {
+        // Upload front photo
+        if (idPhotoBase64) {
+          try {
+            const cleanBase64 = idPhotoBase64.replace(/^data:image\/\w+;base64,/, '')
+            const buffer = Buffer.from(cleanBase64, 'base64')
+            const fileName = `visitor-documents/${companyId}/${idNumber}-front-${timestamp}.jpg`
 
-          if (uploadResult.success) {
-            idPhotoUrl = fileName
+            const uploadResult = await storageAdapter.upload(
+              'company-private-documents',
+              fileName,
+              buffer,
+              { contentType: 'image/jpeg', upsert: true }
+            )
+
+            if (uploadResult.success) {
+              idPhotoUrl = fileName
+            }
+          } catch (uploadError) {
+            console.error('[Visitors POST] Front photo upload error:', uploadError)
           }
-        } catch (uploadError) {
-          console.error('[Visitors POST] Photo upload error:', uploadError)
-          // Continue without photo
+        }
+
+        // Upload reverse photo (for Cuban cedula)
+        if (idPhotoReverseBase64) {
+          try {
+            const cleanBase64 = idPhotoReverseBase64.replace(/^data:image\/\w+;base64,/, '')
+            const buffer = Buffer.from(cleanBase64, 'base64')
+            const fileName = `visitor-documents/${companyId}/${idNumber}-reverse-${timestamp}.jpg`
+
+            const uploadResult = await storageAdapter.upload(
+              'company-private-documents',
+              fileName,
+              buffer,
+              { contentType: 'image/jpeg', upsert: true }
+            )
+
+            if (uploadResult.success) {
+              idPhotoReverseUrl = fileName
+            }
+          } catch (uploadError) {
+            console.error('[Visitors POST] Reverse photo upload error:', uploadError)
+          }
         }
       }
 
       const result = await db.query(`
         INSERT INTO market_visitors (
           companyid, fullname, idtype, idnumber, dateofbirth,
-          address, nationality, gender, idphotourl,
+          address, nationality, gender, idphotourl, idphotoreverseurl,
           firstvisit, lastvisit, totalvisits
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW(), 1)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), 1)
         RETURNING id
       `, [
-        payload.companyId,
+        companyId,
         fullName,
         idType || null,
         idNumber,
@@ -266,20 +320,44 @@ export async function POST(request: NextRequest) {
         address || null,
         nationality || null,
         gender || null,
-        idPhotoUrl
+        idPhotoUrl,
+        idPhotoReverseUrl
       ])
 
       visitorId = result.rows[0].id
       console.log('[Visitors POST] Created new visitor:', visitorId)
     }
 
-    // Fetch the visitor data
+    // Fetch the visitor data with current status
     const visitorResult = await db.query(`
       SELECT
-        id, fullname, idtype, idnumber, dateofbirth,
-        address, nationality, gender, idphotourl,
-        firstvisit, lastvisit, totalvisits
-      FROM market_visitors WHERE id = $1
+        v.id,
+        v.fullname,
+        v.idtype,
+        v.idnumber,
+        v.dateofbirth,
+        v.address,
+        v.nationality,
+        v.gender,
+        v.idphotourl,
+        v.firstvisit,
+        v.lastvisit,
+        v.totalvisits,
+        CASE
+          WHEN EXISTS (
+            SELECT 1 FROM market_visitor_logs
+            WHERE visitorid = v.id AND status = 'active'
+          ) THEN true
+          ELSE false
+        END as iscurrentlyinside,
+        (
+          SELECT id FROM market_visitor_logs
+          WHERE visitorid = v.id AND status = 'active'
+          ORDER BY entrytime DESC
+          LIMIT 1
+        ) as activelogid
+      FROM market_visitors v
+      WHERE v.id = $1
     `, [visitorId])
 
     const visitor = visitorResult.rows[0]
@@ -300,7 +378,9 @@ export async function POST(request: NextRequest) {
           idPhotoUrl: visitor.idphotourl,
           firstVisit: visitor.firstvisit,
           lastVisit: visitor.lastvisit,
-          totalVisits: visitor.totalvisits
+          totalVisits: visitor.totalvisits,
+          isCurrentlyInside: visitor.iscurrentlyinside,
+          activeLogId: visitor.activelogid
         }
       }
     })

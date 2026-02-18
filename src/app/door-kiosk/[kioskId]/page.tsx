@@ -26,7 +26,10 @@ import {
   Sun,
   Moon,
   Upload,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Edit3,
+  BookUser,
+  Car
 } from 'lucide-react'
 
 interface KioskInfo {
@@ -85,7 +88,9 @@ type KioskStep =
   | 'locked'
   | 'select_action'
   | 'scan_id'
+  | 'scan_id_reverse'
   | 'processing_id'
+  | 'manual_register'
   | 'visitor_info'
   | 'select_purpose'
   | 'entry_success'
@@ -100,6 +105,12 @@ const VISIT_PURPOSES = [
   { id: 'entrega', label: 'Entrega', icon: FileText },
   { id: 'servicio', label: 'Servicio', icon: Settings },
   { id: 'otro', label: 'Otro', icon: CheckCircle },
+]
+
+const DOCUMENT_TYPES = [
+  { id: 'cedula', label: 'Cédula', icon: CreditCard },
+  { id: 'passport', label: 'Pasaporte', icon: BookUser },
+  { id: 'license', label: 'Licencia', icon: Car },
 ]
 
 const INACTIVITY_TIMEOUT = 20000 // 20 seconds
@@ -130,6 +141,20 @@ export default function DoorKioskPage() {
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
   const [kioskTheme, setKioskTheme] = useState<KioskTheme>('dark')
+
+  // Manual registration states
+  const [manualName, setManualName] = useState('')
+  const [manualIdNumber, setManualIdNumber] = useState('')
+  const [manualIdType, setManualIdType] = useState<string>('cedula')
+  const [isOcrError, setIsOcrError] = useState(false)
+
+  // Two-photo capture for Cuban cedula (front + reverse)
+  const [capturedImageReverse, setCapturedImageReverse] = useState<string | null>(null)
+  const [capturingSide, setCapturingSide] = useState<'front' | 'reverse'>('front')
+  const [needsReversePhoto, setNeedsReversePhoto] = useState(false)
+
+  // Notes for "otro" purpose
+  const [purposeNotes, setPurposeNotes] = useState('')
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -560,9 +585,10 @@ export default function DoorKioskPage() {
     }
   }
 
-  const processIdDocument = async (imageBase64: string) => {
+  const processIdDocument = async (imageBase64: string, isReverse: boolean = false) => {
     setStep('processing_id')
     setLoading(true)
+    setIsOcrError(false)
 
     try {
       const response = await fetch('/api/ai/scan-id-document', {
@@ -580,35 +606,80 @@ export default function DoorKioskPage() {
       const result = await response.json()
 
       if (result.success && result.data.fullName) {
-        setScannedData(result.data)
-        await checkOrRegisterVisitor(result.data, imageBase64)
+        // Merge data if this is the reverse side
+        if (isReverse && scannedData) {
+          // Merge address from reverse with existing data
+          const mergedData: ScannedIdData = {
+            ...scannedData,
+            address: result.data.address || scannedData.address
+          }
+          setScannedData(mergedData)
+          // Now register with both photos
+          await checkOrRegisterVisitor(mergedData, capturedImage || '', imageBase64)
+        } else {
+          setScannedData(result.data)
+
+          // Check if it's a Cuban cedula - offer to scan reverse for address
+          const isCubanCedula = result.data.documentType === 'cedula' &&
+            (result.data.issuingCountry === 'Cuba' ||
+             result.data.nationality === 'Cubana' ||
+             (result.data.documentNumber && result.data.documentNumber.length === 11))
+
+          if (isCubanCedula && !result.data.address) {
+            // Offer to scan reverse side for address
+            setNeedsReversePhoto(true)
+            setCapturingSide('reverse')
+            setStep('scan_id_reverse')
+          } else {
+            // Continue with registration
+            await checkOrRegisterVisitor(result.data, imageBase64, null)
+          }
+        }
       } else {
+        // OCR failed - show options to retry or register manually
         setMessage(result.error || 'No se pudo leer el documento. Intente con una foto más clara.')
+        setIsOcrError(true)
         setStep('error')
       }
     } catch (error) {
       console.error('Error processing ID:', error)
       setMessage('Error al procesar el documento')
+      // Connection error - not OCR error
+      setIsOcrError(false)
       setStep('error')
     } finally {
       setLoading(false)
     }
   }
 
-  const checkOrRegisterVisitor = async (data: ScannedIdData, photoBase64: string) => {
+  const checkOrRegisterVisitor = async (data: ScannedIdData, photoBase64: string, photoReverseBase64: string | null = null) => {
     try {
+      const requestBody: any = {
+        fullName: data.fullName,
+        idType: data.documentType,
+        idNumber: data.documentNumber,
+        dateOfBirth: data.dateOfBirth,
+        address: data.address,
+        gender: data.gender,
+        // Pass kiosk credentials for authentication (when no JWT)
+        kioskId: parseInt(kioskId),
+        guardId: guard?.id
+      }
+
+      // Add front photo if available
+      if (photoBase64) {
+        requestBody.idPhotoBase64 = photoBase64.includes(',') ? photoBase64.split(',')[1] : photoBase64
+      }
+
+      // Add reverse photo if available (Cuban cedula)
+      if (photoReverseBase64) {
+        requestBody.idPhotoReverseBase64 = photoReverseBase64.includes(',') ? photoReverseBase64.split(',')[1] : photoReverseBase64
+      }
+
       const response = await fetch('/api/market/door-security/visitors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fullName: data.fullName,
-          idType: data.documentType,
-          idNumber: data.documentNumber,
-          dateOfBirth: data.dateOfBirth,
-          address: data.address,
-          gender: data.gender,
-          idPhotoBase64: photoBase64.split(',')[1]
-        })
+        body: JSON.stringify(requestBody)
       })
 
       const result = await response.json()
@@ -631,6 +702,45 @@ export default function DoorKioskPage() {
       setMessage('Error de conexión')
       setStep('error')
     }
+  }
+
+  const submitManualRegistration = async () => {
+    if (!manualName.trim() || !manualIdNumber.trim()) {
+      setMessage('Nombre y número de ID son requeridos')
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      // Create data simulating OCR structure
+      const manualData: ScannedIdData = {
+        fullName: manualName.trim(),
+        documentType: manualIdType,
+        documentNumber: manualIdNumber.trim(),
+        dateOfBirth: null,
+        address: null,
+        gender: null,
+        confidence: 0 // Indicates manual registration
+      }
+
+      // Use same flow as successful OCR
+      await checkOrRegisterVisitor(manualData, capturedImage || '')
+    } catch (error) {
+      console.error('Error in manual registration:', error)
+      setMessage('Error al registrar visitante')
+      setStep('error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const goToManualRegister = () => {
+    // Reset manual registration fields
+    setManualName('')
+    setManualIdNumber('')
+    setManualIdType('cedula')
+    setStep('manual_register')
   }
 
   const checkPendingSales = async (logId: number) => {
@@ -695,7 +805,7 @@ export default function DoorKioskPage() {
     }
   }
 
-  const registerEntry = async (purpose: string) => {
+  const registerEntry = async (purpose: string, notes?: string) => {
     if (!visitor) return
 
     setLoading(true)
@@ -707,7 +817,8 @@ export default function DoorKioskPage() {
           action: 'entry',
           visitorId: visitor.id,
           kioskId: parseInt(kioskId),
-          visitPurpose: purpose
+          visitPurpose: purpose,
+          visitNotes: notes || null
         })
       })
 
@@ -847,9 +958,20 @@ export default function DoorKioskPage() {
     setVisitor(null)
     setScannedData(null)
     setCapturedImage(null)
+    setCapturedImageReverse(null)
     setCameraError(null)
     setActiveLogId(null)
     setPendingSales([])
+    // Reset manual registration states
+    setManualName('')
+    setManualIdNumber('')
+    setManualIdType('cedula')
+    setIsOcrError(false)
+    // Reset two-photo capture states
+    setCapturingSide('front')
+    setNeedsReversePhoto(false)
+    // Reset notes
+    setPurposeNotes('')
     setValidatedSales(new Set())
     setSelectedPurpose('')
     setMessage('')
@@ -1382,6 +1504,110 @@ export default function DoorKioskPage() {
             </motion.div>
           )}
 
+          {/* Scan ID Reverse (for Cuban cedula) */}
+          {step === 'scan_id_reverse' && (
+            <motion.div
+              key="scan_id_reverse"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="p-3 sm:p-6"
+            >
+              <div className="text-center mb-3 sm:mb-4">
+                <CreditCard className="w-8 h-8 sm:w-10 sm:h-10 text-orange-400 mx-auto mb-2" />
+                <h2 className={`text-lg sm:text-xl font-bold ${theme.text}`}>
+                  Reverso del Carnet
+                </h2>
+                <p className={`${theme.textMuted} text-xs sm:text-sm`}>
+                  Tome una foto del reverso para capturar la dirección
+                </p>
+              </div>
+
+              {/* Show captured front image */}
+              {capturedImage && (
+                <div className="mb-3 sm:mb-4">
+                  <p className={`text-xs ${theme.textMuted} mb-1`}>Frente capturado:</p>
+                  <img
+                    src={capturedImage}
+                    alt="Frente del documento"
+                    className="w-24 h-auto rounded-lg border-2 border-green-500/30 mx-auto"
+                  />
+                </div>
+              )}
+
+              {/* Hidden file input for reverse photo */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  stopCamera()
+                  setLoading(true)
+                  const reader = new FileReader()
+                  reader.onload = async (ev) => {
+                    const imageData = ev.target?.result as string
+                    if (imageData) {
+                      try {
+                        const compressedImage = await compressImage(imageData)
+                        setCapturedImageReverse(compressedImage)
+                        await processIdDocument(compressedImage, true)
+                      } catch (err) {
+                        setCapturedImageReverse(imageData)
+                        await processIdDocument(imageData, true)
+                      }
+                    }
+                  }
+                  reader.readAsDataURL(file)
+                  e.target.value = ''
+                }}
+                className="hidden"
+              />
+
+              {/* Action buttons */}
+              <div className="space-y-2 sm:space-y-3 mb-3 sm:mb-4">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={openNativeCamera}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg transition-all shadow-lg disabled:opacity-50"
+                >
+                  <Camera className="w-5 h-5 sm:w-6 sm:h-6" />
+                  Tomar Foto del Reverso
+                </motion.button>
+
+                {/* Skip reverse photo */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={async () => {
+                    // Continue without reverse photo
+                    if (scannedData && capturedImage) {
+                      setLoading(true)
+                      await checkOrRegisterVisitor(scannedData, capturedImage, null)
+                      setLoading(false)
+                    }
+                  }}
+                  disabled={loading}
+                  className={`w-full flex items-center justify-center gap-2 py-2.5 sm:py-3 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
+                >
+                  <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+                  Continuar sin reverso
+                </motion.button>
+              </div>
+
+              <button
+                onClick={resetToIdle}
+                className={`w-full py-2.5 sm:py-3 ${theme.textMuted} hover:text-orange-400 transition-colors text-sm sm:text-base`}
+              >
+                Cancelar
+              </button>
+            </motion.div>
+          )}
+
           {/* Processing ID */}
           {step === 'processing_id' && (
             <motion.div
@@ -1398,6 +1624,127 @@ export default function DoorKioskPage() {
               <p className={`${theme.textMuted} text-sm sm:text-base`}>
                 Por favor espere...
               </p>
+            </motion.div>
+          )}
+
+          {/* Manual Registration Form */}
+          {step === 'manual_register' && (
+            <motion.div
+              key="manual_register"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="p-4 sm:p-6"
+            >
+              <div className="text-center mb-4 sm:mb-6">
+                <Edit3 className="w-8 h-8 sm:w-10 sm:h-10 text-orange-400 mx-auto mb-2" />
+                <h2 className={`text-lg sm:text-xl font-bold ${theme.text}`}>
+                  Registro Manual
+                </h2>
+                <p className={`${theme.textMuted} text-xs sm:text-sm`}>
+                  No pudimos leer el documento. Complete los datos.
+                </p>
+              </div>
+
+              {/* Show captured image as reference */}
+              {capturedImage && (
+                <div className="flex justify-center mb-4">
+                  <img
+                    src={capturedImage}
+                    alt="Documento capturado"
+                    className="w-24 h-auto rounded-lg border-2 border-orange-500/30"
+                  />
+                </div>
+              )}
+
+              {/* Name field - Required */}
+              <div className="mb-3 sm:mb-4">
+                <label className={`block text-xs sm:text-sm font-medium ${theme.textSecondary} mb-1 sm:mb-2`}>
+                  Nombre completo *
+                </label>
+                <input
+                  type="text"
+                  value={manualName}
+                  onChange={(e) => setManualName(e.target.value)}
+                  placeholder="Ej: Juan Pérez García"
+                  className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl border-2 text-sm sm:text-base transition-all focus:outline-none focus:border-orange-500 ${
+                    kioskTheme === 'dark'
+                      ? 'bg-stone-800/50 border-stone-600 text-white placeholder-stone-500'
+                      : 'bg-stone-50 border-stone-300 text-stone-900 placeholder-stone-400'
+                  }`}
+                  autoFocus
+                />
+              </div>
+
+              {/* ID Number field - Required */}
+              <div className="mb-3 sm:mb-4">
+                <label className={`block text-xs sm:text-sm font-medium ${theme.textSecondary} mb-1 sm:mb-2`}>
+                  Número de identificación *
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={manualIdNumber}
+                  onChange={(e) => setManualIdNumber(e.target.value)}
+                  placeholder="Ej: 12345678"
+                  className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl border-2 text-sm sm:text-base transition-all focus:outline-none focus:border-orange-500 ${
+                    kioskTheme === 'dark'
+                      ? 'bg-stone-800/50 border-stone-600 text-white placeholder-stone-500'
+                      : 'bg-stone-50 border-stone-300 text-stone-900 placeholder-stone-400'
+                  }`}
+                />
+              </div>
+
+              {/* Document type selector */}
+              <div className="mb-4 sm:mb-6">
+                <label className={`block text-xs sm:text-sm font-medium ${theme.textSecondary} mb-1 sm:mb-2`}>
+                  Tipo de documento
+                </label>
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+                  {DOCUMENT_TYPES.map(docType => (
+                    <button
+                      key={docType.id}
+                      onClick={() => setManualIdType(docType.id)}
+                      className={`flex flex-col items-center gap-1 p-2 sm:p-3 rounded-lg sm:rounded-xl border-2 transition-all ${
+                        manualIdType === docType.id
+                          ? theme.purposeBtnActive
+                          : theme.purposeBtn
+                      }`}
+                    >
+                      <docType.icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <span className="text-[10px] sm:text-xs font-medium">{docType.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Error message */}
+              {message && (
+                <p className="text-center text-red-400 text-xs sm:text-sm mb-3">{message}</p>
+              )}
+
+              {/* Submit button */}
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={submitManualRegistration}
+                disabled={!manualName.trim() || !manualIdNumber.trim() || loading}
+                className="w-full flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <RefreshCw className="w-5 h-5 sm:w-6 sm:h-6 animate-spin" />
+                ) : (
+                  <Check className="w-5 h-5 sm:w-6 sm:h-6" />
+                )}
+                Registrar Visitante
+              </motion.button>
+
+              <button
+                onClick={resetToIdle}
+                className={`w-full py-2.5 sm:py-3 mt-2 sm:mt-3 ${theme.textMuted} hover:text-orange-400 transition-colors text-sm sm:text-base`}
+              >
+                Cancelar
+              </button>
             </motion.div>
           )}
 
@@ -1435,7 +1782,13 @@ export default function DoorKioskPage() {
                   {VISIT_PURPOSES.map(purpose => (
                     <button
                       key={purpose.id}
-                      onClick={() => setSelectedPurpose(purpose.id)}
+                      onClick={() => {
+                        setSelectedPurpose(purpose.id)
+                        // Clear notes when selecting a different purpose
+                        if (purpose.id !== 'otro') {
+                          setPurposeNotes('')
+                        }
+                      }}
                       className={`flex items-center gap-1.5 sm:gap-2 p-2 sm:p-3 rounded-lg sm:rounded-xl border-2 transition-all ${
                         selectedPurpose === purpose.id
                           ? theme.purposeBtnActive
@@ -1447,13 +1800,30 @@ export default function DoorKioskPage() {
                     </button>
                   ))}
                 </div>
+
+                {/* Notes field when "Otro" is selected */}
+                {selectedPurpose === 'otro' && (
+                  <div className="mt-3">
+                    <textarea
+                      value={purposeNotes}
+                      onChange={(e) => setPurposeNotes(e.target.value)}
+                      placeholder="Especifique el motivo de la visita..."
+                      rows={2}
+                      className={`w-full px-3 py-2 rounded-lg border-2 text-sm transition-all focus:outline-none focus:border-orange-500 resize-none ${
+                        kioskTheme === 'dark'
+                          ? 'bg-stone-800/50 border-stone-600 text-white placeholder-stone-500'
+                          : 'bg-stone-50 border-stone-300 text-stone-900 placeholder-stone-400'
+                      }`}
+                    />
+                  </div>
+                )}
               </div>
 
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => registerEntry(selectedPurpose)}
-                disabled={!selectedPurpose || loading}
+                onClick={() => registerEntry(selectedPurpose, selectedPurpose === 'otro' ? purposeNotes : undefined)}
+                disabled={!selectedPurpose || loading || (selectedPurpose === 'otro' && !purposeNotes.trim())}
                 className="w-full flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
@@ -1627,15 +1997,46 @@ export default function DoorKioskPage() {
                 <XCircle className="w-10 h-10 sm:w-14 sm:h-14 text-red-400" />
               </motion.div>
               <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-2`}>
-                Error
+                {isOcrError ? 'No se pudo leer el documento' : 'Error'}
               </h2>
               <p className={`${theme.textSecondary} text-sm sm:text-base mb-4 sm:mb-6`}>{message}</p>
-              <button
-                onClick={resetToIdle}
-                className={`px-5 sm:px-6 py-2 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
-              >
-                Intentar de nuevo
-              </button>
+
+              {/* OCR Error - Show retry and manual registration options */}
+              {isOcrError && capturedImage ? (
+                <div className="space-y-2 sm:space-y-3">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setStep('scan_id')}
+                    className={`w-full flex items-center justify-center gap-2 py-2.5 sm:py-3 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
+                  >
+                    <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
+                    Tomar otra foto
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={goToManualRegister}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 sm:py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-all shadow-lg"
+                  >
+                    <Edit3 className="w-4 h-4 sm:w-5 sm:h-5" />
+                    Registrar manualmente
+                  </motion.button>
+                  <button
+                    onClick={resetToIdle}
+                    className={`w-full py-2 ${theme.textMuted} hover:text-orange-400 transition-colors text-sm`}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={resetToIdle}
+                  className={`px-5 sm:px-6 py-2 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
+                >
+                  Intentar de nuevo
+                </button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
