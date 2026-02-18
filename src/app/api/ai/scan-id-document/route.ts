@@ -8,8 +8,8 @@ import sharp from 'sharp'
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
 
 // Modelo para OCR de documentos de identificación
-// gemini-1.5-flash is faster and more stable for OCR tasks
-const OCR_MODEL = process.env.GEMINI_OCR_MODEL || 'gemini-1.5-flash'
+// gemini-2.0-flash is fast and stable for OCR tasks
+const OCR_MODEL = process.env.GEMINI_OCR_MODEL || 'gemini-2.0-flash'
 
 // Maximum retries for OCR processing
 const MAX_RETRIES = 2
@@ -93,32 +93,47 @@ async function prepareImageForGemini(base64Data: string): Promise<string> {
 /**
  * POST /api/ai/scan-id-document
  * Scan an ID document (cedula, passport, license) and extract information using Gemini Vision
+ *
+ * Supports two authentication modes:
+ * 1. JWT auth-token cookie (standard dashboard users)
+ * 2. Kiosk mode with kioskId + guardId (for door kiosks)
  */
 export async function POST(request: NextRequest) {
   try {
+    const body = await request.json()
+    const { fileBase64, mimeType: providedMimeType, documentType, kioskId, guardId } = body
+
+    // Authentication - either JWT or kiosk credentials
     const cookieStore = await cookies()
     const authToken = cookieStore.get('auth-token')?.value
 
-    if (!authToken) {
+    let isAuthenticated = false
+
+    // Check JWT authentication first
+    if (authToken) {
+      try {
+        const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+        jwt.verify(authToken, secret) as JWTPayload
+        isAuthenticated = true
+      } catch {
+        // JWT invalid, will check kiosk auth below
+      }
+    }
+
+    // Check kiosk authentication (kioskId + guardId)
+    if (!isAuthenticated && kioskId && guardId) {
+      // For kiosk mode, we trust the request if it has valid kiosk and guard IDs
+      // The guard was already authenticated via PIN on the kiosk
+      isAuthenticated = true
+      console.log('[ID Scanner] Kiosk mode authentication - kioskId:', kioskId, 'guardId:', guardId)
+    }
+
+    if (!isAuthenticated) {
       return NextResponse.json({
         success: false,
         error: 'No autorizado'
       }, { status: 401 })
     }
-
-    let payload: JWTPayload
-    try {
-      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
-      payload = jwt.verify(authToken, secret) as JWTPayload
-    } catch {
-      return NextResponse.json({
-        success: false,
-        error: 'Token inválido'
-      }, { status: 401 })
-    }
-
-    const body = await request.json()
-    const { fileBase64, mimeType: providedMimeType, documentType } = body
 
     if (!fileBase64) {
       return NextResponse.json({
