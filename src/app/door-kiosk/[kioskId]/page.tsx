@@ -725,8 +725,8 @@ export default function DoorKioskPage() {
         confidence: 0 // Indicates manual registration
       }
 
-      // Use same flow as successful OCR
-      await checkOrRegisterVisitor(manualData, capturedImage || '')
+      // Use same flow as successful OCR, include reverse photo if captured
+      await checkOrRegisterVisitor(manualData, capturedImage || '', capturedImageReverse)
     } catch (error) {
       console.error('Error in manual registration:', error)
       setMessage('Error al registrar visitante')
@@ -1649,16 +1649,65 @@ export default function DoorKioskPage() {
                 </p>
               </div>
 
-              {/* Show captured image as reference */}
-              {capturedImage && (
-                <div className="flex justify-center mb-4">
-                  <img
-                    src={capturedImage}
-                    alt="Documento capturado"
-                    className="w-24 h-auto rounded-lg border-2 border-orange-500/30"
-                  />
-                </div>
-              )}
+              {/* Show captured images as reference */}
+              <div className="flex justify-center gap-3 mb-4">
+                {capturedImage && (
+                  <div className="text-center">
+                    <p className={`text-xs ${theme.textMuted} mb-1`}>Frente</p>
+                    <img
+                      src={capturedImage}
+                      alt="Frente del documento"
+                      className="w-20 h-auto rounded-lg border-2 border-green-500/30"
+                    />
+                  </div>
+                )}
+                {capturedImageReverse ? (
+                  <div className="text-center">
+                    <p className={`text-xs ${theme.textMuted} mb-1`}>Reverso</p>
+                    <img
+                      src={capturedImageReverse}
+                      alt="Reverso del documento"
+                      className="w-20 h-auto rounded-lg border-2 border-green-500/30"
+                    />
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <p className={`text-xs ${theme.textMuted} mb-1`}>Reverso</p>
+                    <label className={`w-20 h-14 flex flex-col items-center justify-center rounded-lg border-2 border-dashed cursor-pointer transition-colors ${
+                      kioskTheme === 'dark'
+                        ? 'border-stone-600 hover:border-orange-500'
+                        : 'border-stone-300 hover:border-orange-400'
+                    }`}>
+                      <Camera className={`w-4 h-4 ${theme.textMuted}`} />
+                      <span className={`text-[10px] ${theme.textMuted}`}>Agregar</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]
+                          if (!file) return
+                          const reader = new FileReader()
+                          reader.onload = async (ev) => {
+                            const imageData = ev.target?.result as string
+                            if (imageData) {
+                              try {
+                                const compressedImage = await compressImage(imageData)
+                                setCapturedImageReverse(compressedImage)
+                              } catch {
+                                setCapturedImageReverse(imageData)
+                              }
+                            }
+                          }
+                          reader.readAsDataURL(file)
+                          e.target.value = ''
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
 
               {/* Name field - Required */}
               <div className="mb-3 sm:mb-4">
