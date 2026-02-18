@@ -154,13 +154,6 @@ const nextConfig = {
       bodySizeLimit: '50mb',
     },
   },
-  // Configuración para API routes
-  api: {
-    bodyParser: {
-      sizeLimit: '50mb',
-    },
-    responseLimit: false,
-  },
 }
 
 module.exports = withPWA(nextConfig)
