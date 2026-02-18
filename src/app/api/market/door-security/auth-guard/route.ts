@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import bcrypt from 'bcryptjs'
 
 /**
  * POST /api/market/door-security/auth-guard
@@ -18,6 +19,14 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    // Validate PIN format (4 digits)
+    if (!/^\d{4,6}$/.test(pin)) {
+      return NextResponse.json({
+        success: false,
+        error: 'El PIN debe ser de 4 a 6 dígitos'
+      }, { status: 400 })
+    }
+
     // First, try to find the company by subdomain or custom domain
     let companyId: number | null = null
 
@@ -33,11 +42,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Find employee (guard) with matching PIN
-    // Must be in market_door_guards table AND have MARKET_GUARDIA role (or be a manager)
+    // Find all active guards (we'll verify PIN with bcrypt)
     let guardQuery = `
       SELECT
         e.id as employeeid,
+        e.pos_pin,
         u.firstname,
         u.lastname,
         e.employee_code,
@@ -54,22 +63,32 @@ export async function POST(request: NextRequest) {
       JOIN users u ON e.user_id = u.id
       JOIN market_door_guards g ON e.id = g.employeeid
       LEFT JOIN market_door_kiosks k ON g.kioskid = k.id
-      WHERE e.pos_pin = $1
+      WHERE e.pos_pin IS NOT NULL
         AND e.status = 'active'
         AND g.isactive = true
         AND u.role IN ('MARKET_GUARDIA', 'MARKET_MANAGER', 'ADMIN', 'SUPER_ADMIN')
     `
 
-    const params: any[] = [pin]
+    const params: any[] = []
 
     if (companyId) {
-      guardQuery += ` AND e.company_id = $2`
+      guardQuery += ` AND e.company_id = $1`
       params.push(companyId)
     }
 
-    const guardResult = await db.query(guardQuery, params)
+    const guardsResult = await db.query(guardQuery, params)
 
-    if (guardResult.rows.length === 0) {
+    // Verify PIN against each guard using bcrypt
+    let matchedGuard = null
+    for (const guard of guardsResult.rows) {
+      const isMatch = await bcrypt.compare(pin, guard.pos_pin)
+      if (isMatch) {
+        matchedGuard = guard
+        break
+      }
+    }
+
+    if (!matchedGuard) {
       console.log('[Door Security] Failed PIN attempt - no guard found')
       return NextResponse.json({
         success: false,
@@ -77,7 +96,7 @@ export async function POST(request: NextRequest) {
       }, { status: 401 })
     }
 
-    const guard = guardResult.rows[0]
+    const guard = matchedGuard
 
     // If guard is assigned to a specific kiosk, return that kiosk
     if (guard.kioskid && guard.kiosk_is_active) {

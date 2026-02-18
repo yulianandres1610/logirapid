@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import bcrypt from 'bcryptjs'
 
 /**
  * POST /api/market/door-security/kiosks/[id]/verify-guard
@@ -19,6 +20,14 @@ export async function POST(
       return NextResponse.json({
         success: false,
         error: 'PIN requerido'
+      }, { status: 400 })
+    }
+
+    // Validate PIN format (4 digits)
+    if (!/^\d{4,6}$/.test(pin)) {
+      return NextResponse.json({
+        success: false,
+        error: 'El PIN debe ser de 4 a 6 dígitos'
       }, { status: 400 })
     }
 
@@ -45,11 +54,11 @@ export async function POST(
       }, { status: 403 })
     }
 
-    // Find employee with matching PIN who is authorized as guard
-    // Guards can be assigned to specific kiosk (kioskid = kiosk.id) or all kiosks (kioskid IS NULL)
-    const guardResult = await db.query(`
+    // Find all active guards for this kiosk (we'll verify PIN with bcrypt)
+    const guardsResult = await db.query(`
       SELECT
         e.id as employeeid,
+        e.pos_pin,
         u.firstname,
         u.lastname,
         e.employee_code,
@@ -60,14 +69,23 @@ export async function POST(
       JOIN users u ON e.user_id = u.id
       JOIN market_door_guards g ON e.id = g.employeeid
       WHERE e.company_id = $1
-        AND e.pos_pin = $2
+        AND e.pos_pin IS NOT NULL
         AND e.status = 'active'
         AND g.isactive = true
-        AND (g.kioskid = $3 OR g.kioskid IS NULL)
-      LIMIT 1
-    `, [kiosk.companyid, pin, kiosk.id])
+        AND (g.kioskid = $2 OR g.kioskid IS NULL)
+    `, [kiosk.companyid, kiosk.id])
 
-    if (guardResult.rows.length === 0) {
+    // Verify PIN against each guard using bcrypt
+    let matchedGuard = null
+    for (const guard of guardsResult.rows) {
+      const isMatch = await bcrypt.compare(pin, guard.pos_pin)
+      if (isMatch) {
+        matchedGuard = guard
+        break
+      }
+    }
+
+    if (!matchedGuard) {
       // Log failed attempt
       console.log('[Door Security] Failed PIN attempt for kiosk:', kiosk.id)
 
@@ -77,7 +95,7 @@ export async function POST(
       }, { status: 401 })
     }
 
-    const guard = guardResult.rows[0]
+    const guard = matchedGuard
 
     // Update kiosk last ping
     await db.query(`

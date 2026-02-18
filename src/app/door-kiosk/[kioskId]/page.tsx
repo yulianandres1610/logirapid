@@ -471,11 +471,11 @@ export default function DoorKioskPage() {
   }
 
   const handlePinChange = (digit: string) => {
-    if (pin.length < 6) {
+    if (pin.length < 4) {
       const newPin = pin + digit
       setPin(newPin)
 
-      if (newPin.length >= 4) {
+      if (newPin.length === 4) {
         verifyGuardPin(newPin)
       }
     }
@@ -609,11 +609,11 @@ export default function DoorKioskPage() {
                 </p>
               </div>
 
-              <div className="flex justify-center gap-3 mb-6">
-                {[0, 1, 2, 3, 4, 5].map(i => (
+              <div className="flex justify-center gap-4 mb-6">
+                {[0, 1, 2, 3].map(i => (
                   <div
                     key={i}
-                    className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-colors ${
+                    className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-colors ${
                       i < pin.length
                         ? 'border-orange-500 bg-orange-50 text-orange-600'
                         : 'border-gray-200'

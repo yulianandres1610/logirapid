@@ -55,7 +55,7 @@ export default function DoorKioskSelectorPage() {
   }, [pin])
 
   const handlePinChange = (digit: string) => {
-    if (pin.length < 6) {
+    if (pin.length < 4) {
       setPin(prev => prev + digit)
       setError(null)
     }
@@ -174,7 +174,7 @@ export default function DoorKioskSelectorPage() {
                   Ingresa tu PIN
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">
-                  PIN de 4-6 dígitos
+                  PIN de 4 dígitos
                 </p>
               </div>
 
@@ -193,12 +193,12 @@ export default function DoorKioskSelectorPage() {
                 )}
               </AnimatePresence>
 
-              {/* PIN Display */}
+              {/* PIN Display - 4 digits */}
               <div className="flex justify-center gap-3 mb-6">
-                {[0, 1, 2, 3, 4, 5].map(i => (
+                {[0, 1, 2, 3].map(i => (
                   <div
                     key={i}
-                    className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-all ${
+                    className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-all ${
                       i < pin.length
                         ? 'border-orange-500 bg-orange-50 text-orange-600'
                         : 'border-gray-200'
