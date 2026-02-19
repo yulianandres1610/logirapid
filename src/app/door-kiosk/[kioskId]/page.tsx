@@ -390,12 +390,21 @@ export default function DoorKioskPage() {
     }
   }, [kioskId])
 
-  // Focus PIN input
+  // Handle physical keyboard input for PIN
   useEffect(() => {
-    if ((step === 'guard_pin' || step === 'locked') && pinInputRef.current) {
-      pinInputRef.current.focus()
+    if (step !== 'guard_pin' && step !== 'locked') return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key >= '0' && e.key <= '9') {
+        handlePinChange(e.key)
+      } else if (e.key === 'Backspace') {
+        handlePinDelete()
+      }
     }
-  }, [step])
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [step, pin])
 
   // Stop camera when leaving scan_id step
   useEffect(() => {
@@ -1251,9 +1260,9 @@ export default function DoorKioskPage() {
             <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
               <button
                 onClick={logoutGuard}
-                className={`${theme.textMuted} hover:text-orange-400 text-xs sm:text-sm transition-colors`}
+                className="text-red-400 hover:text-red-300 text-xs sm:text-sm font-medium transition-colors"
               >
-                Salir
+                Cerrar Sesión
               </button>
               <button
                 onClick={changeKiosk}
@@ -2603,15 +2612,15 @@ export default function DoorKioskPage() {
                       const entryDate = new Date(log.entryTime)
                       const exitDate = log.exitTime ? new Date(log.exitTime) : null
 
-                      // Calculate time inside
+                      // Calculate time inside (for active: elapsed, for completed: duration)
                       let timeInside = ''
-                      if (isInside) {
-                        const now = new Date()
-                        const diffMs = now.getTime() - entryDate.getTime()
+                      const endTime = isInside ? new Date() : exitDate
+                      if (endTime) {
+                        const diffMs = endTime.getTime() - entryDate.getTime()
                         const diffMins = Math.floor(diffMs / 60000)
                         const hours = Math.floor(diffMins / 60)
                         const mins = diffMins % 60
-                        timeInside = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
+                        timeInside = hours > 0 ? `${hours} h ${mins} min` : `${mins} min`
                       }
 
                       return (
@@ -2659,9 +2668,17 @@ export default function DoorKioskPage() {
                                   </p>
                                 </div>
                               ) : (
-                                <span className={`text-[10px] sm:text-xs ${theme.textMuted}`}>
-                                  Salió
-                                </span>
+                                <div>
+                                  <span className={`text-[10px] sm:text-xs ${theme.textMuted}`}>
+                                    Salió
+                                  </span>
+                                  {timeInside && (
+                                    <p className={`text-[10px] ${theme.textMuted} font-medium`}>
+                                      <Clock className="w-3 h-3 inline mr-0.5" />
+                                      {timeInside}
+                                    </p>
+                                  )}
+                                </div>
                               )}
                               <p className={`text-[10px] ${theme.textMuted} mt-0.5`}>
                                 {entryDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
