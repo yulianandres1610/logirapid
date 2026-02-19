@@ -25,21 +25,48 @@ export async function GET(
     const cookieStore = await cookies()
     const authToken = cookieStore.get('auth-token')?.value
 
-    if (!authToken) {
+    // Get query params for kiosk authentication
+    const { searchParams } = new URL(request.url)
+    const kioskId = searchParams.get('kioskId')
+    const guardId = searchParams.get('guardId')
+
+    let companyId: number | null = null
+    let isAuthenticated = false
+
+    // Try JWT authentication first
+    if (authToken) {
+      try {
+        const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+        const payload = jwt.verify(authToken, secret) as JWTPayload
+        companyId = payload.companyId
+        isAuthenticated = true
+      } catch {
+        // JWT invalid, will try kiosk auth
+      }
+    }
+
+    // Try kiosk authentication if JWT failed
+    if (!isAuthenticated && kioskId && guardId) {
+      const kioskResult = await db.query(
+        'SELECT companyid FROM market_door_kiosks WHERE id = $1 AND isactive = true',
+        [kioskId]
+      )
+      if (kioskResult.rows.length > 0) {
+        const guardResult = await db.query(
+          'SELECT id FROM market_door_guards WHERE id = $1 AND isactive = true',
+          [guardId]
+        )
+        if (guardResult.rows.length > 0) {
+          companyId = kioskResult.rows[0].companyid
+          isAuthenticated = true
+        }
+      }
+    }
+
+    if (!isAuthenticated || !companyId) {
       return NextResponse.json({
         success: false,
         error: 'No autorizado'
-      }, { status: 401 })
-    }
-
-    let payload: JWTPayload
-    try {
-      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
-      payload = jwt.verify(authToken, secret) as JWTPayload
-    } catch {
-      return NextResponse.json({
-        success: false,
-        error: 'Token inválido'
       }, { status: 401 })
     }
 
@@ -67,7 +94,7 @@ export async function GET(
     const log = logResult.rows[0]
 
     // Check access
-    if (payload.role !== 'SUPER_ADMIN' && log.companyid !== payload.companyId) {
+    if (log.companyid !== companyId) {
       return NextResponse.json({
         success: false,
         error: 'No tiene acceso a este registro'
