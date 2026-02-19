@@ -77,7 +77,8 @@ export async function GET(
         v.firstvisit,
         v.lastvisit,
         v.totalvisits,
-        v.createdat
+        v.createdat,
+        (SELECT COUNT(*) FROM market_visitor_logs vl WHERE vl.visitorid = v.id) as realvisitcount
       FROM market_visitors v
       ${whereClause}
     `, [payload.companyId, id])
@@ -174,7 +175,7 @@ export async function GET(
           idPhotoReverseUrl: idPhotoReverseSignedUrl,
           firstVisit: visitor.firstvisit,
           lastVisit: visitor.lastvisit,
-          totalVisits: visitor.totalvisits,
+          totalVisits: parseInt(visitor.realvisitcount) || visitor.totalvisits,
           createdAt: visitor.createdat
         },
         isCurrentlyInside: !!activeLog,
