@@ -262,13 +262,20 @@ export default function InventoryCountPage() {
           }
         }
 
-        // Load existing count if any - try in_progress first, then any status
-        let countRes = await fetch(`/api/market/pos/inventory-count?sessionId=${openSession.id}`)
+        // Load existing count if any - use cache: 'no-store' to ensure fresh data on recount
+        const cacheBuster = `&_t=${Date.now()}`
+        let countRes = await fetch(
+          `/api/market/pos/inventory-count?sessionId=${openSession.id}${cacheBuster}`,
+          { cache: 'no-store' }
+        )
         let countData = await countRes.json()
 
         // If no in_progress count, try loading any count (including completed for recount)
         if (countData.success && !countData.data) {
-          countRes = await fetch(`/api/market/pos/inventory-count?sessionId=${openSession.id}&status=any`)
+          countRes = await fetch(
+            `/api/market/pos/inventory-count?sessionId=${openSession.id}&status=any${cacheBuster}`,
+            { cache: 'no-store' }
+          )
           countData = await countRes.json()
         }
 
@@ -627,6 +634,12 @@ export default function InventoryCountPage() {
   const saveCount = useCallback(async () => {
     if (!session) return
 
+    // Cancel any pending auto-save
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current)
+      autoSaveTimeoutRef.current = null
+    }
+
     try {
       setSaving(true)
       const response = await fetch('/api/market/pos/inventory-count', {
@@ -642,6 +655,9 @@ export default function InventoryCountPage() {
 
       const data = await response.json()
       if (!data.success) throw new Error(data.error)
+
+      // Update ref to prevent duplicate auto-save
+      lastSavedRef.current = JSON.stringify(countedProducts)
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar')
@@ -654,6 +670,12 @@ export default function InventoryCountPage() {
   const goToReport = useCallback(async () => {
     if (!session || countedProducts.length === 0) return
 
+    // Cancel any pending auto-save to prevent race conditions
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current)
+      autoSaveTimeoutRef.current = null
+    }
+
     try {
       setSaving(true)
       const response = await fetch('/api/market/pos/inventory-count', {
@@ -670,7 +692,11 @@ export default function InventoryCountPage() {
       const data = await response.json()
       if (!data.success) throw new Error(data.error)
 
-      router.push(`/dashboard/market/pos/${terminalId}/count/report`)
+      // Update lastSavedRef to prevent auto-save from firing on unmount
+      lastSavedRef.current = JSON.stringify(countedProducts)
+
+      // Navigate with timestamp to bust Next.js router cache
+      router.push(`/dashboard/market/pos/${terminalId}/count/report?t=${Date.now()}`)
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar')

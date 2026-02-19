@@ -208,7 +208,7 @@ export async function GET(request: NextRequest) {
       recountHistory = []
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         id: count.id,
@@ -233,6 +233,9 @@ export async function GET(request: NextRequest) {
         lines
       }
     })
+    // Prevent browser caching - critical for recount flow
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+    return response
 
   } catch (error: unknown) {
     const err = error as Error
