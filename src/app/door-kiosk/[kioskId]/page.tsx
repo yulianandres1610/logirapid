@@ -186,9 +186,9 @@ export default function DoorKioskPage() {
       const img = new Image()
       img.onload = () => {
         try {
-          // Max dimensions for OCR - 1920px is plenty for reading text
-          const MAX_SIZE = 1920
-          const QUALITY = 0.85
+          // Max dimensions for OCR - 1280px is sufficient for reading ID text
+          const MAX_SIZE = 1280
+          const QUALITY = 0.70
 
           let { width, height } = img
 
@@ -429,8 +429,8 @@ export default function DoorKioskPage() {
       // Try to get camera - prefer back camera on mobile
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1920, min: 640 },
-          height: { ideal: 1080, min: 480 },
+          width: { ideal: 1280, min: 640 },
+          height: { ideal: 720, min: 480 },
           facingMode: { ideal: 'environment' }
         },
         audio: false
@@ -1358,7 +1358,7 @@ export default function DoorKioskPage() {
             </motion.div>
           )}
 
-          {/* Idle State - Modern */}
+          {/* Idle State - Single scan button (auto-detects entry/exit) */}
           {step === 'idle' && (
             <motion.div
               key="idle"
@@ -1372,35 +1372,24 @@ export default function DoorKioskPage() {
                   Control de Acceso
                 </h2>
                 <p className={`${theme.textMuted} text-sm sm:text-base`}>
-                  Seleccione una acción para continuar
+                  Escanee el documento del visitante
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setStep('scan_id')}
-                  className="flex flex-col items-center justify-center gap-2 sm:gap-3 py-5 sm:py-8 bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl sm:rounded-2xl font-bold transition-all shadow-lg shadow-green-500/30"
-                >
-                  <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white/20 rounded-xl sm:rounded-2xl flex items-center justify-center">
-                    <LogIn className="w-6 h-6 sm:w-8 sm:h-8" />
-                  </div>
-                  <span className="text-base sm:text-lg">Entrada</span>
-                </motion.button>
-
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setStep('scan_id')}
-                  className="flex flex-col items-center justify-center gap-2 sm:gap-3 py-5 sm:py-8 bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-xl sm:rounded-2xl font-bold transition-all shadow-lg shadow-orange-500/30"
-                >
-                  <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white/20 rounded-xl sm:rounded-2xl flex items-center justify-center">
-                    <LogOut className="w-6 h-6 sm:w-8 sm:h-8" />
-                  </div>
-                  <span className="text-base sm:text-lg">Salida</span>
-                </motion.button>
-              </div>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setStep('scan_id')}
+                className="w-full flex flex-col items-center justify-center gap-3 sm:gap-4 py-8 sm:py-12 bg-gradient-to-br from-teal-500 to-teal-600 text-white rounded-xl sm:rounded-2xl font-bold transition-all shadow-lg shadow-teal-500/30"
+              >
+                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/20 rounded-xl sm:rounded-2xl flex items-center justify-center">
+                  <CreditCard className="w-8 h-8 sm:w-10 sm:h-10" />
+                </div>
+                <span className="text-lg sm:text-xl">Escanear Documento</span>
+                <span className={`text-sm font-normal opacity-80`}>
+                  El sistema detecta automáticamente entrada o salida
+                </span>
+              </motion.button>
             </motion.div>
           )}
 

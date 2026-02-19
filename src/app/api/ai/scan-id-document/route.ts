@@ -15,8 +15,8 @@ const OCR_MODEL = process.env.GEMINI_OCR_MODEL || 'gemini-2.0-flash'
 // Maximum retries for OCR processing
 const MAX_RETRIES = 2
 
-// Image processing settings - no size limits, just optimize orientation
-const GEMINI_TARGET_SIZE = 2048 // Max dimension for very large images (optional resize)
+// Image processing settings - optimize for speed
+const GEMINI_TARGET_SIZE = 1600 // Max dimension for Gemini (smaller = faster)
 
 interface JWTPayload {
   userId: number
@@ -58,10 +58,9 @@ async function prepareImageForGemini(base64Data: string): Promise<string> {
 
     console.log('[ID Scanner] Input image:', inputSizeKB, 'KB,', metadata.width, 'x', metadata.height)
 
-    // Only resize if image is extremely large (>4000px in any dimension)
-    // This preserves quality for high-resolution mobile cameras
+    // Resize if image is large (>2000px) for faster Gemini processing
     let processedBuffer: Buffer
-    if (maxDimension > 4000) {
+    if (maxDimension > 2000) {
       processedBuffer = await sharp(inputBuffer)
         .rotate() // Auto-rotate based on EXIF
         .resize({
@@ -70,13 +69,14 @@ async function prepareImageForGemini(base64Data: string): Promise<string> {
           fit: 'inside',
           withoutEnlargement: true
         })
-        .jpeg({ quality: 90, mozjpeg: true })
+        .jpeg({ quality: 85, mozjpeg: true })
         .toBuffer()
-      console.log('[ID Scanner] Resized very large image to fit within', GEMINI_TARGET_SIZE, 'px')
+      console.log('[ID Scanner] Resized image to fit within', GEMINI_TARGET_SIZE, 'px')
     } else {
-      // Just auto-rotate, preserve original quality
+      // Just auto-rotate, keep size
       processedBuffer = await sharp(inputBuffer)
         .rotate() // Auto-rotate based on EXIF
+        .jpeg({ quality: 85, mozjpeg: true })
         .toBuffer()
     }
 
@@ -321,8 +321,7 @@ REGLAS CRÍTICAS:
         lastError = error instanceof Error ? error : new Error(String(error))
         console.error(`[ID Scanner] Attempt ${attempt} failed:`, lastError.message)
         if (attempt < MAX_RETRIES) {
-          // Wait briefly before retry
-          await new Promise(resolve => setTimeout(resolve, 500))
+          // Retry immediately for speed
         }
       }
     }
