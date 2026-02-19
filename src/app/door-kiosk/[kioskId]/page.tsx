@@ -1126,10 +1126,12 @@ export default function DoorKioskPage() {
   }
 
   const logoutGuard = () => {
-    // Clear guard session
-    setGuard(null)
-    setPin('')
-    // Cleanup without resetting to idle (which would override the step)
+    // Clear inactivity timer first
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current)
+      inactivityTimerRef.current = null
+    }
+    // Cleanup
     stopCamera()
     setVisitor(null)
     setScannedData(null)
@@ -1140,7 +1142,10 @@ export default function DoorKioskPage() {
     setValidatedSales(new Set())
     setSelectedPurpose('')
     setMessage('')
-    // Set step to guard_pin LAST to ensure it takes effect
+    setPin('')
+    setDailyLogs([])
+    // Clear guard and go to PIN screen
+    setGuard(null)
     setStep('guard_pin')
   }
 
@@ -2628,7 +2633,7 @@ export default function DoorKioskPage() {
                       return (
                         <div
                           key={log.id}
-                          className={`rounded-xl p-2.5 sm:p-3 border transition-all ${
+                          className={`rounded-xl p-3 sm:p-3.5 border transition-all ${
                             isInside
                               ? kioskTheme === 'dark'
                                 ? 'bg-green-900/20 border-green-500/40'
@@ -2638,51 +2643,63 @@ export default function DoorKioskPage() {
                                 : 'bg-stone-50 border-stone-200'
                           }`}
                         >
-                          <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center justify-between gap-3">
+                            {/* Left: visitor info */}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 {isInside && (
-                                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
+                                  <span className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
                                 )}
-                                <p className={`text-sm font-semibold ${theme.text} truncate`}>
+                                <p className={`text-sm font-bold ${theme.text} truncate`}>
                                   {log.visitorName}
                                 </p>
                               </div>
-                              <p className={`text-[10px] sm:text-xs ${theme.textMuted} mt-0.5`}>
+                              <p className={`text-[11px] ${theme.textMuted} mt-0.5`}>
                                 {log.visitorIdNumber}
-                                {log.visitPurpose && ` · ${log.visitPurpose}`}
                               </p>
+                            </div>
+
+                            {/* Center: purpose & notes */}
+                            <div className="flex-shrink-0 text-center max-w-[120px]">
+                              {log.visitPurpose && (
+                                <span className={`inline-block text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                  kioskTheme === 'dark'
+                                    ? 'bg-orange-500/20 text-orange-300'
+                                    : 'bg-orange-100 text-orange-600'
+                                }`}>
+                                  {log.visitPurpose}
+                                </span>
+                              )}
                               {log.visitNotes && (
                                 <p className={`text-[10px] ${theme.textMuted} mt-0.5 truncate italic`}>
                                   {log.visitNotes}
                                 </p>
                               )}
                             </div>
+
+                            {/* Right: time info */}
                             <div className="text-right flex-shrink-0">
-                              {isInside ? (
-                                <div>
-                                  <span className="text-xs font-bold text-green-400">
-                                    Adentro
-                                  </span>
-                                  <p className="text-[10px] text-green-400/80 font-medium">
-                                    <Clock className="w-3 h-3 inline mr-0.5" />
-                                    {timeInside}
-                                  </p>
-                                </div>
-                              ) : (
-                                <div>
-                                  <span className={`text-[10px] sm:text-xs ${theme.textMuted}`}>
-                                    Salió
-                                  </span>
-                                  {timeInside && (
-                                    <p className={`text-[10px] ${theme.textMuted} font-medium`}>
-                                      <Clock className="w-3 h-3 inline mr-0.5" />
-                                      {timeInside}
-                                    </p>
-                                  )}
-                                </div>
+                              {/* Duration in green */}
+                              {timeInside && (
+                                <p className="text-xs font-bold text-emerald-400">
+                                  <Clock className="w-3 h-3 inline mr-0.5" />
+                                  {timeInside}
+                                </p>
                               )}
-                              <p className={`text-[10px] ${theme.textMuted} mt-0.5`}>
+                              {/* Status badge */}
+                              {isInside ? (
+                                <span className="text-[10px] font-semibold text-green-400">
+                                  Adentro
+                                </span>
+                              ) : (
+                                <span className={`text-[10px] font-medium ${theme.textMuted}`}>
+                                  Salió
+                                </span>
+                              )}
+                              {/* Entry/exit times darker */}
+                              <p className={`text-[10px] font-medium mt-0.5 ${
+                                kioskTheme === 'dark' ? 'text-stone-400' : 'text-stone-500'
+                              }`}>
                                 {entryDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                                 {exitDate && (
                                   <> → {exitDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</>
