@@ -280,6 +280,8 @@ export default function DoorKioskPage() {
     // Only set timer if guard is logged in and not already locked
     if (guard && step !== 'guard_pin' && step !== 'locked') {
       inactivityTimerRef.current = setTimeout(() => {
+        setPin('')
+        setMessage('')
         setStep('locked')
       }, INACTIVITY_TIMEOUT)
     }
