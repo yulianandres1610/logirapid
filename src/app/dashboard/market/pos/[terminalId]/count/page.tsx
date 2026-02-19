@@ -149,6 +149,8 @@ export default function InventoryCountPage() {
   // Auto-save timer ref
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastSavedRef = useRef<string>('')
+  // Mutex to prevent concurrent saves (auto-save + manual save race condition)
+  const savingInProgressRef = useRef<boolean>(false)
 
   // Online status and theme
   useEffect(() => {
@@ -410,7 +412,11 @@ export default function InventoryCountPage() {
 
     // Schedule auto-save after 2 seconds of inactivity
     autoSaveTimeoutRef.current = setTimeout(async () => {
+      // Skip if a manual save is already in progress
+      if (savingInProgressRef.current) return
+
       try {
+        savingInProgressRef.current = true
         const response = await fetch('/api/market/pos/inventory-count', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -429,6 +435,8 @@ export default function InventoryCountPage() {
         }
       } catch (err) {
         console.error('[AutoSave] Error:', err)
+      } finally {
+        savingInProgressRef.current = false
       }
     }, 2000)
 
@@ -564,30 +572,100 @@ export default function InventoryCountPage() {
     }
   }, [selectedProduct, selectedVariant, numpadValue, countedProducts, editingIndex])
 
-  // Handle keyboard input
+  // Handle keyboard input - with barcode scanner filtering
+  // Barcode scanners emulate rapid keyboard input (< 50ms between keys).
+  // When the numpad is active, we buffer digit keystrokes and only apply them
+  // if they arrive at human typing speed. Rapid bursts are discarded.
+  const keyBufferRef = useRef<{ key: string; time: number }[]>([])
+  const keyFlushTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const handleNumpadRef = useRef(handleNumpad)
+  handleNumpadRef.current = handleNumpad
+
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (selectedProduct) {
-        if (e.key >= '0' && e.key <= '9') {
-          handleNumpad(e.key)
-        } else if (e.key === '.') {
-          handleNumpad('.')
-        } else if (e.key === 'Enter') {
-          handleNumpad('ENTER')
-        } else if (e.key === 'Backspace') {
-          handleNumpad('DEL')
-        } else if (e.key === 'Escape') {
-          setSelectedProduct(null)
-          setSelectedVariant(null)
-          setNumpadValue('')
-          setEditingIndex(null)
+    const flushKeyBuffer = () => {
+      const buffer = keyBufferRef.current
+      keyBufferRef.current = []
+
+      if (buffer.length === 0) return
+
+      // If 3+ rapid keys (avg gap < 70ms), it's a barcode scanner - discard
+      if (buffer.length >= 3) {
+        const totalTime = buffer[buffer.length - 1].time - buffer[0].time
+        const avgGap = totalTime / (buffer.length - 1)
+        if (avgGap < 70) {
+          console.log('[Numpad] Barcode scanner input discarded:', buffer.map(b => b.key).join(''))
+          return
         }
+      }
+
+      // Normal human typing - apply each key
+      for (const item of buffer) {
+        handleNumpadRef.current(item.key)
+      }
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!selectedProduct) return
+
+      // Ignore events from input/textarea elements
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+
+      if ((e.key >= '0' && e.key <= '9') || e.key === '.') {
+        e.preventDefault()
+        const now = Date.now()
+        keyBufferRef.current.push({ key: e.key, time: now })
+
+        // Reset flush timer
+        if (keyFlushTimeoutRef.current) clearTimeout(keyFlushTimeoutRef.current)
+
+        // Flush after 120ms of no more keys
+        // Barcode scanners complete within ~100ms for 10+ chars
+        // Human pause between digits is typically 150ms+
+        keyFlushTimeoutRef.current = setTimeout(flushKeyBuffer, 120)
+
+      } else if (e.key === 'Enter') {
+        // Flush pending buffer first
+        if (keyFlushTimeoutRef.current) clearTimeout(keyFlushTimeoutRef.current)
+        const buffer = keyBufferRef.current
+        keyBufferRef.current = []
+
+        // If buffer has rapid keys, it's a barcode ending with Enter - discard all
+        if (buffer.length >= 3) {
+          const totalTime = buffer[buffer.length - 1].time - buffer[0].time
+          const avgGap = totalTime / (buffer.length - 1)
+          if (avgGap < 70) {
+            console.log('[Numpad] Barcode+Enter discarded:', buffer.map(b => b.key).join(''))
+            e.preventDefault()
+            return
+          }
+        }
+
+        // Apply any buffered human-speed keys, then ENTER
+        for (const item of buffer) {
+          handleNumpadRef.current(item.key)
+        }
+        handleNumpadRef.current('ENTER')
+
+      } else if (e.key === 'Backspace') {
+        if (keyFlushTimeoutRef.current) clearTimeout(keyFlushTimeoutRef.current)
+        keyBufferRef.current = []
+        handleNumpadRef.current('DEL')
+      } else if (e.key === 'Escape') {
+        if (keyFlushTimeoutRef.current) clearTimeout(keyFlushTimeoutRef.current)
+        keyBufferRef.current = []
+        setSelectedProduct(null)
+        setSelectedVariant(null)
+        setNumpadValue('')
+        setEditingIndex(null)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedProduct, handleNumpad])
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      if (keyFlushTimeoutRef.current) clearTimeout(keyFlushTimeoutRef.current)
+    }
+  }, [selectedProduct])
 
   // Remove counted product
   const removeCountedProduct = useCallback(async (index: number) => {
@@ -700,6 +778,7 @@ export default function InventoryCountPage() {
 
     try {
       setSaving(true)
+      savingInProgressRef.current = true
       const response = await fetch('/api/market/pos/inventory-count', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -721,6 +800,7 @@ export default function InventoryCountPage() {
       setError(err instanceof Error ? err.message : 'Error al guardar')
     } finally {
       setSaving(false)
+      savingInProgressRef.current = false
     }
   }, [session, countedProducts, selectedProduct, selectedVariant, numpadValue, editingIndex])
 
@@ -789,6 +869,7 @@ export default function InventoryCountPage() {
 
     try {
       setSaving(true)
+      savingInProgressRef.current = true
       const response = await fetch('/api/market/pos/inventory-count', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -813,6 +894,7 @@ export default function InventoryCountPage() {
       setError(err instanceof Error ? err.message : 'Error al guardar')
     } finally {
       setSaving(false)
+      savingInProgressRef.current = false
     }
   }, [session, countedProducts, selectedProduct, selectedVariant, numpadValue, editingIndex, terminalId, router])
 

@@ -385,6 +385,14 @@ export async function POST(request: NextRequest) {
 
     // Procesar líneas si se proporcionan
     if (lines && lines.length > 0) {
+      // Dedup lines on the client side - keep only the last entry per product/variant
+      const deduped = new Map<string, CountLine>()
+      for (const line of lines) {
+        const key = `${line.productId}:${line.variantId || 'null'}`
+        deduped.set(key, line)
+      }
+      const uniqueLines = Array.from(deduped.values())
+
       // Obtener líneas anteriores para detectar cambios (reconteo)
       const oldLinesResult = await db.query(`
         SELECT product_id, variant_id, product_name, counted_quantity
@@ -403,7 +411,7 @@ export async function POST(request: NextRequest) {
       }
 
       const correctedProducts: Array<{ productName: string; oldQuantity: number; newQuantity: number }> = []
-      for (const line of lines) {
+      for (const line of uniqueLines) {
         const key = `${line.productId}:${line.variantId || 'null'}`
         const oldLine = oldLinesMap[key]
         if (oldLine && oldLine.countedQuantity !== (line.countedQuantity || 0)) {
@@ -455,9 +463,6 @@ export async function POST(request: NextRequest) {
         console.log(`[Inventory Count] Reconteo registrado por ${userName}: ${correctedProducts.length} producto(s) corregido(s)`)
       }
 
-      // Eliminar líneas anteriores
-      await db.query(`DELETE FROM market_inventory_count_lines WHERE count_id = $1`, [countId])
-
       // Obtener ventas del día agrupadas por producto Y variante
       const salesResult = await db.query(`
         SELECT
@@ -489,7 +494,7 @@ export async function POST(request: NextRequest) {
       })
 
       // Obtener stock actual del almacén (productos y variantes)
-      const productIds = lines.map(l => l.productId)
+      const productIds = uniqueLines.map(l => l.productId)
       const stockResult = await db.query(`
         SELECT product_id, variant_id, COALESCE(quantity_on_hand, 0) as stock
         FROM market_warehouse_stock
@@ -520,17 +525,10 @@ export async function POST(request: NextRequest) {
         }
       })
 
-      // Insertar nuevas líneas
-      // NUEVA FÓRMULA: difference = (Stock inicial - Vendido) - Contado
-      // Stock inicial ≈ Stock actual + Vendido hoy (si no hay otras operaciones)
-      // Entonces: difference = Stock actual - Contado
-      // Positivo = FALTANTE (hay menos de lo esperado)
-      // Negativo = SOBRANTE (hay más de lo esperado)
-
       // IMPORTANTE: Contar cuántas variantes de cada producto están siendo contadas
       // para evitar duplicar el stock a nivel producto
       const variantsPerProduct: Record<number, number[]> = {}
-      for (const line of lines) {
+      for (const line of uniqueLines) {
         if (line.variantId) {
           if (!variantsPerProduct[line.productId]) {
             variantsPerProduct[line.productId] = []
@@ -542,7 +540,15 @@ export async function POST(request: NextRequest) {
       // Track de productos cuyo stock a nivel producto ya fue asignado
       const productStockAssigned: Set<number> = new Set()
 
-      for (const line of lines) {
+      // Prepare all line data before the transaction
+      const lineInserts: Array<{
+        productId: number; variantId: number | null; displayName: string;
+        productSku: string; productBarcode: string; productImage: string | null;
+        unitPrice: number; expectedQuantity: number; countedQuantity: number;
+        difference: number; differenceValue: number; soldToday: number; notes: string | null;
+      }> = []
+
+      for (const line of uniqueLines) {
         const salesKey = `${line.productId}:${line.variantId || 'null'}`
         // Ventas del día: si no hay variant_id, usar suma de todas las variantes
         let soldToday = salesMap[salesKey] || 0
@@ -551,80 +557,69 @@ export async function POST(request: NextRequest) {
         }
 
         const stockKey = `${line.productId}:${line.variantId || 'null'}`
-
-        // Buscar stock según el tipo de línea:
-        // 1. Si la línea tiene variant_id específico, buscar stock de esa variante
-        // 2. Si la línea NO tiene variant_id (conteo agregado de producto):
-        //    a. Primero buscar registro de stock a nivel producto (variant_id IS NULL)
-        //    b. Si no existe, SUMAR todos los stocks de variantes del producto
         let currentStock = stockMap[stockKey] || 0
 
         if (line.variantId) {
-          // Contando una variante específica
-          // Solo sumar stock a nivel producto si:
-          // 1. Hay stock a nivel producto
-          // 2. Es la PRIMERA variante de este producto que procesamos (evitar duplicación)
-          // 3. Solo hay UNA variante siendo contada de este producto (si hay múltiples, no podemos saber a cuál asignar)
           const oldProductStock = productLevelStock[line.productId] || 0
           const variantsBeingCounted = variantsPerProduct[line.productId]?.length || 0
 
           if (oldProductStock > 0 && !productStockAssigned.has(line.productId)) {
             if (variantsBeingCounted === 1) {
-              // Solo una variante siendo contada, podemos sumar el stock huérfano
-              console.log(`[Inventory Count] Producto ${line.productId} variante ${line.variantId}: sumando stock nivel producto (${oldProductStock}) + stock variante (${currentStock})`)
               currentStock += oldProductStock
               productStockAssigned.add(line.productId)
-            } else {
-              // Múltiples variantes siendo contadas, NO sumar para evitar duplicación
-              console.warn(`[Inventory Count] ADVERTENCIA: Producto ${line.productId} tiene ${variantsBeingCounted} variantes siendo contadas Y stock huérfano (${oldProductStock}). No se suma para evitar duplicación. Use /api/market/stock-audit para corregir.`)
             }
           }
         } else if (currentStock === 0) {
-          // Contando producto sin variante y no hay stock a nivel producto
-          // Usar suma de todas las variantes
           currentStock = stockSumByProduct[line.productId] || 0
         }
-        // Stock esperado = Stock inicial del día - Vendido = (currentStock + soldToday) - soldToday = currentStock
+
         const expectedQuantity = currentStock
         const countedQuantity = line.countedQuantity || 0
-        // Fórmula: (Stock inicial - Vendido) - Contado = expectedQuantity - countedQuantity
-        // Positivo = FALTANTE, Negativo = SOBRANTE
-        // Redondear a 2 decimales para evitar errores de punto flotante
         const rawDifference = expectedQuantity - countedQuantity
         const difference = Math.round(rawDifference * 100) / 100
         const unitPrice = line.unitPrice || 0
-        // El valor de la diferencia: positivo = pérdida (faltante), negativo = ganancia (sobrante)
         const differenceValue = Math.round(difference * unitPrice * 100) / 100
-
-        // El nombre del producto ya viene formateado desde el cliente (incluye variante si aplica)
         const displayName = line.productName || ''
 
-        await db.query(`
-          INSERT INTO market_inventory_count_lines (
-            count_id, product_id, variant_id, product_name, product_sku,
-            product_barcode, product_image, unit_price, expected_quantity, counted_quantity,
-            difference, difference_value, sold_today, notes
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-        `, [
-          countId,
-          line.productId,
-          line.variantId || null,
+        lineInserts.push({
+          productId: line.productId,
+          variantId: line.variantId || null,
           displayName,
-          line.productSku || '',
-          line.productBarcode || '',
-          line.productImage || null,
+          productSku: line.productSku || '',
+          productBarcode: line.productBarcode || '',
+          productImage: line.productImage || null,
           unitPrice,
           expectedQuantity,
           countedQuantity,
           difference,
           differenceValue,
           soldToday,
-          line.notes || null
-        ])
+          notes: line.notes || null
+        })
       }
 
+      // Use a transaction for DELETE + INSERT to prevent duplicates from concurrent saves
+      await db.transaction(async (client) => {
+        // Delete old lines
+        await client.query(`DELETE FROM market_inventory_count_lines WHERE count_id = $1`, [countId])
+
+        // Insert new lines
+        for (const li of lineInserts) {
+          await client.query(`
+            INSERT INTO market_inventory_count_lines (
+              count_id, product_id, variant_id, product_name, product_sku,
+              product_barcode, product_image, unit_price, expected_quantity, counted_quantity,
+              difference, difference_value, sold_today, notes
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          `, [
+            countId, li.productId, li.variantId, li.displayName, li.productSku,
+            li.productBarcode, li.productImage, li.unitPrice, li.expectedQuantity,
+            li.countedQuantity, li.difference, li.differenceValue, li.soldToday, li.notes
+          ])
+        }
+      })
+
       // Actualizar totales en el conteo
-      // Usar tolerancia de 0.001 para ignorar errores de punto flotante
       const totals = await db.query(`
         SELECT
           COUNT(*) as total_products,
