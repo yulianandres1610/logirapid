@@ -620,20 +620,45 @@ export default function DoorKioskPage() {
         } else {
           setScannedData(result.data)
 
-          // Check if it's a Cuban cedula - offer to scan reverse for address
-          const isCubanCedula = result.data.documentType === 'cedula' &&
-            (result.data.issuingCountry === 'Cuba' ||
-             result.data.nationality === 'Cubana' ||
-             (result.data.documentNumber && result.data.documentNumber.length === 11))
-
-          if (isCubanCedula && !result.data.address) {
-            // Offer to scan reverse side for address
-            setNeedsReversePhoto(true)
-            setCapturingSide('reverse')
-            setStep('scan_id_reverse')
+          // If reverse photo was already captured, use it directly
+          if (capturedImageReverse) {
+            // Process reverse photo for address if needed
+            try {
+              const reverseResponse = await fetch('/api/ai/scan-id-document', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  fileBase64: capturedImageReverse.split(',')[1],
+                  mimeType: 'image/jpeg',
+                  kioskId: parseInt(kioskId),
+                  guardId: guard?.id
+                })
+              })
+              const reverseResult = await reverseResponse.json()
+              if (reverseResult.success && reverseResult.data.address) {
+                result.data.address = reverseResult.data.address
+              }
+            } catch (e) {
+              console.log('[ID Scanner] Error processing reverse, continuing without:', e)
+            }
+            // Register with both photos
+            await checkOrRegisterVisitor(result.data, imageBase64, capturedImageReverse)
           } else {
-            // Continue with registration
-            await checkOrRegisterVisitor(result.data, imageBase64, null)
+            // Check if it's a Cuban cedula - offer to scan reverse for address
+            const isCubanCedula = result.data.documentType === 'cedula' &&
+              (result.data.issuingCountry === 'Cuba' ||
+               result.data.nationality === 'Cubana' ||
+               (result.data.documentNumber && result.data.documentNumber.length === 11))
+
+            if (isCubanCedula && !result.data.address) {
+              // Offer to scan reverse side for address
+              setNeedsReversePhoto(true)
+              setCapturingSide('reverse')
+              setStep('scan_id_reverse')
+            } else {
+              // Continue with registration
+              await checkOrRegisterVisitor(result.data, imageBase64, null)
+            }
           }
         }
       } else {
@@ -747,7 +772,7 @@ export default function DoorKioskPage() {
   const checkPendingSales = async (logId: number) => {
     setLoading(true)
     try {
-      const response = await fetch(`/api/market/door-security/logs/${logId}/pending-sales`)
+      const response = await fetch(`/api/market/door-security/logs/${logId}/pending-sales?kioskId=${kioskId}&guardId=${guard?.id}`)
       const result = await response.json()
 
       if (result.success) {
@@ -1355,7 +1380,7 @@ export default function DoorKioskPage() {
             </motion.div>
           )}
 
-          {/* Scan ID State */}
+          {/* Scan ID State - Two Photo Capture */}
           {step === 'scan_id' && (
             <motion.div
               key="scan_id"
@@ -1370,11 +1395,11 @@ export default function DoorKioskPage() {
                   Escanear Identificación
                 </h2>
                 <p className={`${theme.textMuted} text-xs sm:text-sm`}>
-                  Tome una foto del documento de identidad
+                  Capture el frente y opcionalmente el reverso
                 </p>
               </div>
 
-              {/* Hidden file input for native camera/gallery */}
+              {/* Hidden file inputs */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1383,10 +1408,7 @@ export default function DoorKioskPage() {
                 onChange={handleFileSelect}
                 className="hidden"
               />
-
-              {/* Canvas for capturing - always present but hidden */}
               <canvas ref={canvasRef} className="hidden" />
-              {/* Canvas for compression - always present but hidden */}
               <canvas ref={compressionCanvasRef} className="hidden" />
 
               {/* Camera Error Message */}
@@ -1396,107 +1418,138 @@ export default function DoorKioskPage() {
                 </div>
               )}
 
-              {/* Camera Loading State */}
-              {cameraLoading && (
-                <div className="relative rounded-xl sm:rounded-2xl overflow-hidden mb-3 sm:mb-4 bg-black aspect-[4/3] flex items-center justify-center">
-                  <div className="text-center">
-                    <RefreshCw className="w-8 h-8 sm:w-10 sm:h-10 text-orange-400 mx-auto mb-2 animate-spin" />
-                    <p className="text-white text-xs sm:text-sm">Iniciando cámara...</p>
-                  </div>
-                  {/* Hidden video to receive stream */}
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="hidden"
-                  />
-                </div>
-              )}
-
-              {/* Web Camera View - Active */}
-              {cameraActive && !cameraLoading && (
-                <div className="relative rounded-xl sm:rounded-2xl overflow-hidden mb-3 sm:mb-4 bg-black aspect-[4/3]">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover"
-                  />
-
-                  {/* Guide frame */}
-                  <div className="absolute inset-2 sm:inset-4 border-2 border-dashed border-white/50 rounded-lg sm:rounded-xl pointer-events-none" />
-
-                  {/* Capture button */}
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={capturePhoto}
-                    className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center shadow-lg shadow-orange-500/30"
-                  >
-                    <Camera className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
-                  </motion.button>
-
-                  {/* Close camera button */}
-                  <button
-                    onClick={stopCamera}
-                    className="absolute top-2 right-2 sm:top-3 sm:right-3 p-1.5 sm:p-2 bg-black/50 hover:bg-black/70 rounded-full transition-colors"
-                  >
-                    <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                  </button>
-                </div>
-              )}
-
-              {/* Action buttons */}
-              <div className="space-y-2 sm:space-y-3 mb-3 sm:mb-4">
-                {/* Main button - Take Photo with native camera (best for mobile) */}
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={openNativeCamera}
-                  disabled={cameraLoading}
-                  className="w-full flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg transition-all shadow-lg disabled:opacity-50"
-                >
-                  <Camera className="w-5 h-5 sm:w-6 sm:h-6" />
-                  Tomar Foto
-                </motion.button>
-
-                {/* Secondary options */}
-                <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                  {/* Use web camera (for desktop or if preferred) */}
-                  {!cameraActive && !cameraLoading && (
-                    <button
-                      onClick={startCamera}
-                      className={`flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
-                    >
-                      <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                      <span className="hidden sm:inline">Cámara </span>Web
-                    </button>
+              {/* Two Photo Slots */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                {/* Front Photo Slot */}
+                <div className="text-center">
+                  <p className={`text-xs font-medium ${theme.textSecondary} mb-2`}>
+                    Frente *
+                  </p>
+                  {capturedImage ? (
+                    <div className="relative">
+                      <img
+                        src={capturedImage}
+                        alt="Frente del documento"
+                        className="w-full aspect-[4/3] object-cover rounded-xl border-2 border-green-500"
+                      />
+                      <button
+                        onClick={() => setCapturedImage(null)}
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className={`flex flex-col items-center justify-center aspect-[4/3] rounded-xl border-2 border-dashed cursor-pointer transition-colors ${
+                      kioskTheme === 'dark'
+                        ? 'border-stone-600 hover:border-orange-500 bg-stone-800/30'
+                        : 'border-stone-300 hover:border-orange-400 bg-stone-50'
+                    }`}>
+                      <Camera className={`w-8 h-8 mb-1 ${theme.textMuted}`} />
+                      <span className={`text-xs ${theme.textMuted}`}>Tomar foto</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]
+                          if (!file) return
+                          const reader = new FileReader()
+                          reader.onload = async (ev) => {
+                            const imageData = ev.target?.result as string
+                            if (imageData) {
+                              try {
+                                const compressed = await compressImage(imageData)
+                                setCapturedImage(compressed)
+                              } catch {
+                                setCapturedImage(imageData)
+                              }
+                            }
+                          }
+                          reader.readAsDataURL(file)
+                          e.target.value = ''
+                        }}
+                        className="hidden"
+                      />
+                    </label>
                   )}
-                  {(cameraActive || cameraLoading) && (
-                    <button
-                      onClick={stopCamera}
-                      className={`flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
-                    >
-                      <XCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                      Cerrar
-                    </button>
-                  )}
+                </div>
 
-                  {/* Select from gallery */}
-                  <label className={`flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors cursor-pointer`}>
-                    <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
-                    Galería
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileSelect}
-                      className="hidden"
-                    />
-                  </label>
+                {/* Reverse Photo Slot */}
+                <div className="text-center">
+                  <p className={`text-xs font-medium ${theme.textSecondary} mb-2`}>
+                    Reverso <span className={theme.textMuted}>(opcional)</span>
+                  </p>
+                  {capturedImageReverse ? (
+                    <div className="relative">
+                      <img
+                        src={capturedImageReverse}
+                        alt="Reverso del documento"
+                        className="w-full aspect-[4/3] object-cover rounded-xl border-2 border-green-500"
+                      />
+                      <button
+                        onClick={() => setCapturedImageReverse(null)}
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className={`flex flex-col items-center justify-center aspect-[4/3] rounded-xl border-2 border-dashed cursor-pointer transition-colors ${
+                      kioskTheme === 'dark'
+                        ? 'border-stone-600 hover:border-orange-500 bg-stone-800/30'
+                        : 'border-stone-300 hover:border-orange-400 bg-stone-50'
+                    }`}>
+                      <Camera className={`w-8 h-8 mb-1 ${theme.textMuted}`} />
+                      <span className={`text-xs ${theme.textMuted}`}>Tomar foto</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]
+                          if (!file) return
+                          const reader = new FileReader()
+                          reader.onload = async (ev) => {
+                            const imageData = ev.target?.result as string
+                            if (imageData) {
+                              try {
+                                const compressed = await compressImage(imageData)
+                                setCapturedImageReverse(compressed)
+                              } catch {
+                                setCapturedImageReverse(imageData)
+                              }
+                            }
+                          }
+                          reader.readAsDataURL(file)
+                          e.target.value = ''
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
                 </div>
               </div>
+
+              {/* Process Button */}
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={async () => {
+                  if (!capturedImage) return
+                  // Process front image with OCR
+                  await processIdDocument(capturedImage, false)
+                }}
+                disabled={!capturedImage || loading}
+                className="w-full flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed mb-3"
+              >
+                {loading ? (
+                  <RefreshCw className="w-5 h-5 sm:w-6 sm:h-6 animate-spin" />
+                ) : (
+                  <Check className="w-5 h-5 sm:w-6 sm:h-6" />
+                )}
+                Procesar Documento
+              </motion.button>
 
               <button
                 onClick={resetToIdle}
