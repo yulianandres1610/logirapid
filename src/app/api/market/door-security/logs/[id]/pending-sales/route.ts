@@ -112,70 +112,79 @@ export async function GET(
       validatedResult.rows.map(r => `${r.documenttype}-${r.documentid || r.documentnumber}`)
     )
 
-    // Find POS receipts for today matching visitor
-    // Look for receipts where customer name or ID matches
-    const posResult = await db.query(`
-      SELECT
-        ps.id,
-        ps.sessionid,
-        ps.receiptnumber,
-        ps.items,
-        ps.subtotal,
-        ps.tax,
-        ps.total,
-        ps.paymentmethod,
-        ps.customername,
-        ps.createdat,
-        pss.terminalid
-      FROM market_pos_sales ps
-      JOIN market_pos_sessions pss ON ps.sessionid = pss.id
-      WHERE ps.companyid = $1
-        AND DATE(ps.createdat) = DATE($2)
-        AND ps.status = 'completed'
-        AND (
-          LOWER(ps.customername) ILIKE LOWER($3)
-          OR ps.customername ILIKE $4
-        )
-      ORDER BY ps.createdat DESC
-    `, [
-      log.companyid,
-      log.entrytime,
-      `%${log.fullname.split(' ')[0]}%`, // Match first name
-      `%${log.idnumber}%`
-    ])
+    // Find POS receipts for today matching visitor (table may not exist)
+    let posResult = { rows: [] as any[] }
+    try {
+      posResult = await db.query(`
+        SELECT
+          ps.id,
+          ps.sessionid,
+          ps.receiptnumber,
+          ps.items,
+          ps.subtotal,
+          ps.tax,
+          ps.total,
+          ps.paymentmethod,
+          ps.customername,
+          ps.createdat,
+          pss.terminalid
+        FROM market_pos_sales ps
+        JOIN market_pos_sessions pss ON ps.sessionid = pss.id
+        WHERE ps.companyid = $1
+          AND DATE(ps.createdat) = DATE($2)
+          AND ps.status = 'completed'
+          AND (
+            LOWER(ps.customername) ILIKE LOWER($3)
+            OR ps.customername ILIKE $4
+          )
+        ORDER BY ps.createdat DESC
+      `, [
+        log.companyid,
+        log.entrytime,
+        `%${log.fullname.split(' ')[0]}%`,
+        `%${log.idnumber}%`
+      ])
+    } catch (e) {
+      console.log('[Pending Sales] POS tables not available, skipping')
+    }
 
-    // Find wholesale invoices for today matching visitor
-    const wholesaleResult = await db.query(`
-      SELECT
-        wi.id,
-        wi.invoicenumber,
-        wi.customerid,
-        wi.items,
-        wi.subtotal,
-        wi.tax,
-        wi.total,
-        wi.currency,
-        wi.paymentmethod,
-        wi.status,
-        wi.createdat,
-        c.businessname as customername,
-        c.identificationnumber as customeridnumber
-      FROM market_wholesale_invoices wi
-      LEFT JOIN market_customers c ON wi.customerid = c.id
-      WHERE wi.companyid = $1
-        AND DATE(wi.createdat) = DATE($2)
-        AND wi.status IN ('pending', 'completed', 'paid')
-        AND (
-          LOWER(c.businessname) ILIKE LOWER($3)
-          OR c.identificationnumber ILIKE $4
-        )
-      ORDER BY wi.createdat DESC
-    `, [
-      log.companyid,
-      log.entrytime,
-      `%${log.fullname.split(' ')[0]}%`,
-      `%${log.idnumber}%`
-    ])
+    // Find wholesale invoices for today matching visitor (table may not exist)
+    let wholesaleResult = { rows: [] as any[] }
+    try {
+      wholesaleResult = await db.query(`
+        SELECT
+          wi.id,
+          wi.invoicenumber,
+          wi.customerid,
+          wi.items,
+          wi.subtotal,
+          wi.tax,
+          wi.total,
+          wi.currency,
+          wi.paymentmethod,
+          wi.status,
+          wi.createdat,
+          c.businessname as customername,
+          c.identificationnumber as customeridnumber
+        FROM market_wholesale_invoices wi
+        LEFT JOIN market_customers c ON wi.customerid = c.id
+        WHERE wi.companyid = $1
+          AND DATE(wi.createdat) = DATE($2)
+          AND wi.status IN ('pending', 'completed', 'paid')
+          AND (
+            LOWER(c.businessname) ILIKE LOWER($3)
+            OR c.identificationnumber ILIKE $4
+          )
+        ORDER BY wi.createdat DESC
+      `, [
+        log.companyid,
+        log.entrytime,
+        `%${log.fullname.split(' ')[0]}%`,
+        `%${log.idnumber}%`
+      ])
+    } catch (e) {
+      console.log('[Pending Sales] Wholesale tables not available, skipping')
+    }
 
     // Format POS receipts
     const posReceipts = posResult.rows.map(r => {

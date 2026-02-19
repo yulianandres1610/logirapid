@@ -29,7 +29,8 @@ import {
   Image as ImageIcon,
   Edit3,
   BookUser,
-  Car
+  Car,
+  ClipboardList
 } from 'lucide-react'
 
 interface KioskInfo {
@@ -98,6 +99,7 @@ type KioskStep =
   | 'check_sales'
   | 'validate_sales'
   | 'exit_success'
+  | 'daily_log'
   | 'error'
 
 const VISIT_PURPOSES = [
@@ -126,6 +128,17 @@ interface Employee {
   id: number
   fullName: string
   department: string | null
+}
+
+interface DailyLogEntry {
+  id: number
+  visitorName: string
+  visitorIdNumber: string
+  entryTime: string
+  exitTime: string | null
+  visitPurpose: string | null
+  visitNotes: string | null
+  status: string
 }
 
 type KioskTheme = 'light' | 'dark'
@@ -186,6 +199,10 @@ export default function DoorKioskPage() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
   const [employeeSearch, setEmployeeSearch] = useState('')
   const [loadingEmployees, setLoadingEmployees] = useState(false)
+
+  // Daily log
+  const [dailyLogs, setDailyLogs] = useState<DailyLogEntry[]>([])
+  const [loadingDailyLog, setLoadingDailyLog] = useState(false)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -527,12 +544,10 @@ export default function DoorKioskPage() {
   }
 
   const stopCamera = () => {
+    if (!streamRef.current && !cameraActive) return
     console.log('[Camera] Stopping camera...')
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => {
-        track.stop()
-        console.log('[Camera] Track stopped:', track.kind)
-      })
+      streamRef.current.getTracks().forEach(track => track.stop())
       streamRef.current = null
     }
     if (videoRef.current) {
@@ -1068,6 +1083,32 @@ export default function DoorKioskPage() {
     }
   }
 
+  const fetchDailyLog = async () => {
+    setLoadingDailyLog(true)
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      const params = new URLSearchParams({
+        kioskId,
+        guardId: guard?.id?.toString() || '',
+        date: today
+      })
+      const res = await fetch(`/api/market/door-security/logs?${params}`)
+      const data = await res.json()
+      if (data.success) {
+        setDailyLogs(data.data.logs || [])
+      }
+    } catch (error) {
+      console.error('Error fetching daily log:', error)
+    } finally {
+      setLoadingDailyLog(false)
+    }
+  }
+
+  const openDailyLog = () => {
+    fetchDailyLog()
+    setStep('daily_log')
+  }
+
   const changeKiosk = () => {
     localStorage.removeItem('door-kiosk-id')
     router.push('/door-kiosk')
@@ -1433,6 +1474,18 @@ export default function DoorKioskPage() {
                   </span>
                 </div>
               </motion.button>
+
+              <button
+                onClick={openDailyLog}
+                className={`w-full flex items-center justify-center gap-2 py-3 mt-3 rounded-xl font-medium text-sm transition-all ${
+                  kioskTheme === 'dark'
+                    ? 'bg-stone-700/50 text-stone-300 hover:bg-stone-700'
+                    : 'bg-stone-200 text-stone-600 hover:bg-stone-300'
+                }`}
+              >
+                <ClipboardList className="w-4 h-4" />
+                Registro del Día
+              </button>
             </motion.div>
           )}
 
@@ -2459,6 +2512,165 @@ export default function DoorKioskPage() {
               <p className="text-xs sm:text-sm text-orange-400 mt-3 sm:mt-4 font-medium">
                 Que tenga buen día
               </p>
+            </motion.div>
+          )}
+
+          {/* Daily Log - Registro del Día */}
+          {step === 'daily_log' && (
+            <motion.div
+              key="daily_log"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="p-3 sm:p-5"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <button
+                  onClick={() => setStep('idle')}
+                  className={`flex items-center gap-1.5 text-sm font-medium ${theme.textSecondary} hover:${theme.text} transition-colors`}
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Volver
+                </button>
+                <button
+                  onClick={fetchDailyLog}
+                  disabled={loadingDailyLog}
+                  className={`flex items-center gap-1.5 text-sm font-medium text-orange-400 hover:text-orange-300 transition-colors ${loadingDailyLog ? 'animate-spin' : ''}`}
+                >
+                  <RefreshCw className={`w-4 h-4 ${loadingDailyLog ? 'animate-spin' : ''}`} />
+                  Actualizar
+                </button>
+              </div>
+
+              <h2 className={`text-lg sm:text-xl font-bold ${theme.text} mb-1`}>
+                <ClipboardList className="w-5 h-5 inline-block mr-2 text-orange-400" />
+                Registro del Día
+              </h2>
+              <p className={`text-xs sm:text-sm ${theme.textSecondary} mb-3`}>
+                {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+
+              {/* Summary cards */}
+              {(() => {
+                const inside = dailyLogs.filter(l => l.status === 'active')
+                const exited = dailyLogs.filter(l => l.status === 'completed')
+                return (
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className={`${kioskTheme === 'dark' ? 'bg-stone-800/80' : 'bg-stone-100'} rounded-xl p-2 sm:p-3 text-center`}>
+                      <p className="text-lg sm:text-2xl font-bold text-orange-400">{dailyLogs.length}</p>
+                      <p className={`text-[10px] sm:text-xs ${theme.textSecondary}`}>Total</p>
+                    </div>
+                    <div className={`${kioskTheme === 'dark' ? 'bg-green-900/30' : 'bg-green-50'} rounded-xl p-2 sm:p-3 text-center`}>
+                      <p className="text-lg sm:text-2xl font-bold text-green-400">{inside.length}</p>
+                      <p className={`text-[10px] sm:text-xs ${theme.textSecondary}`}>Adentro</p>
+                    </div>
+                    <div className={`${kioskTheme === 'dark' ? 'bg-stone-800/80' : 'bg-stone-100'} rounded-xl p-2 sm:p-3 text-center`}>
+                      <p className={`text-lg sm:text-2xl font-bold ${theme.textSecondary}`}>{exited.length}</p>
+                      <p className={`text-[10px] sm:text-xs ${theme.textSecondary}`}>Salieron</p>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Log list */}
+              {loadingDailyLog ? (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="w-6 h-6 text-orange-400 animate-spin" />
+                </div>
+              ) : dailyLogs.length === 0 ? (
+                <div className="text-center py-8">
+                  <ClipboardList className={`w-10 h-10 ${theme.textMuted} mx-auto mb-2`} />
+                  <p className={`${theme.textSecondary} text-sm`}>No hay registros hoy</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                  {/* People currently inside first */}
+                  {dailyLogs
+                    .sort((a, b) => {
+                      // Active (inside) first, then by entry time desc
+                      if (a.status === 'active' && b.status !== 'active') return -1
+                      if (a.status !== 'active' && b.status === 'active') return 1
+                      return new Date(b.entryTime).getTime() - new Date(a.entryTime).getTime()
+                    })
+                    .map(log => {
+                      const isInside = log.status === 'active'
+                      const entryDate = new Date(log.entryTime)
+                      const exitDate = log.exitTime ? new Date(log.exitTime) : null
+
+                      // Calculate time inside
+                      let timeInside = ''
+                      if (isInside) {
+                        const now = new Date()
+                        const diffMs = now.getTime() - entryDate.getTime()
+                        const diffMins = Math.floor(diffMs / 60000)
+                        const hours = Math.floor(diffMins / 60)
+                        const mins = diffMins % 60
+                        timeInside = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
+                      }
+
+                      return (
+                        <div
+                          key={log.id}
+                          className={`rounded-xl p-2.5 sm:p-3 border transition-all ${
+                            isInside
+                              ? kioskTheme === 'dark'
+                                ? 'bg-green-900/20 border-green-500/40'
+                                : 'bg-green-50 border-green-300'
+                              : kioskTheme === 'dark'
+                                ? 'bg-stone-800/50 border-stone-700'
+                                : 'bg-stone-50 border-stone-200'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                {isInside && (
+                                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
+                                )}
+                                <p className={`text-sm font-semibold ${theme.text} truncate`}>
+                                  {log.visitorName}
+                                </p>
+                              </div>
+                              <p className={`text-[10px] sm:text-xs ${theme.textMuted} mt-0.5`}>
+                                {log.visitorIdNumber}
+                                {log.visitPurpose && ` · ${log.visitPurpose}`}
+                              </p>
+                              {log.visitNotes && (
+                                <p className={`text-[10px] ${theme.textMuted} mt-0.5 truncate italic`}>
+                                  {log.visitNotes}
+                                </p>
+                              )}
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              {isInside ? (
+                                <div>
+                                  <span className="text-xs font-bold text-green-400">
+                                    Adentro
+                                  </span>
+                                  <p className="text-[10px] text-green-400/80 font-medium">
+                                    <Clock className="w-3 h-3 inline mr-0.5" />
+                                    {timeInside}
+                                  </p>
+                                </div>
+                              ) : (
+                                <span className={`text-[10px] sm:text-xs ${theme.textMuted}`}>
+                                  Salió
+                                </span>
+                              )}
+                              <p className={`text-[10px] ${theme.textMuted} mt-0.5`}>
+                                {entryDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                                {exitDate && (
+                                  <> → {exitDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+              )}
             </motion.div>
           )}
 
