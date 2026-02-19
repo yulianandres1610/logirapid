@@ -26,7 +26,8 @@ import {
   X,
   Trash2,
   ShieldAlert,
-  Lock
+  Lock,
+  RotateCcw
 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -55,6 +56,19 @@ interface CountLine {
   notes: string | null
 }
 
+interface RecountCorrectedProduct {
+  productName: string
+  oldQuantity: number
+  newQuantity: number
+}
+
+interface RecountEntry {
+  timestamp: string
+  userId: number
+  userName: string
+  correctedProducts: RecountCorrectedProduct[]
+}
+
 interface InventoryCount {
   id: number
   companyId: number
@@ -77,6 +91,7 @@ interface InventoryCount {
   approvedBy: number | null
   approvedByName: string | null
   approvedAt: string | null
+  recountHistory: RecountEntry[]
   lines: CountLine[]
 }
 
@@ -183,7 +198,8 @@ export default function InventoryCountDetailPage({ params }: { params: Promise<{
           ...data.data,
           autoApproved: approvalInfo?.autoApproved || false,
           approvedByName: approvalInfo?.approvedByName || null,
-          approvedAt: approvalInfo?.approvedAt || null
+          approvedAt: approvalInfo?.approvedAt || null,
+          recountHistory: data.data.recountHistory || []
         }
 
         // Verificar permisos de acceso:
@@ -634,6 +650,48 @@ export default function InventoryCountDetailPage({ params }: { params: Promise<{
                     <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(count.startedAt)}</p>
                   </div>
                 </div>
+
+                {/* Recount entries */}
+                {count.recountHistory && count.recountHistory.length > 0 && (
+                  count.recountHistory.map((recount, idx) => (
+                    <div key={`recount-${idx}`} className="flex items-start gap-4 relative">
+                      <div className={cn(
+                        'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                        theme === 'dark' ? 'bg-purple-900/50 ring-4 ring-gray-800' : 'bg-purple-100 ring-4 ring-white'
+                      )}>
+                        <RotateCcw className="w-4 h-4 text-purple-500" />
+                      </div>
+                      <div className="pt-1 flex-1 min-w-0">
+                        <p className={cn(
+                          'text-sm font-medium',
+                          theme === 'dark' ? 'text-purple-300' : 'text-purple-700'
+                        )}>Reconteo realizado</p>
+                        <p className="text-xs text-gray-500">por {recount.userName}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(recount.timestamp)}</p>
+                        {/* Corrected products */}
+                        <div className={cn(
+                          'mt-2 p-2.5 rounded-lg space-y-1.5',
+                          theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                        )}>
+                          <p className="text-xs font-medium text-gray-500 mb-1">
+                            {recount.correctedProducts.length} producto{recount.correctedProducts.length !== 1 ? 's' : ''} corregido{recount.correctedProducts.length !== 1 ? 's' : ''}:
+                          </p>
+                          {recount.correctedProducts.map((cp, cpIdx) => (
+                            <div key={cpIdx} className="flex items-center gap-2 text-xs">
+                              <span className={cn(
+                                'truncate max-w-[180px]',
+                                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                              )}>{cp.productName}</span>
+                              <span className="text-red-400 line-through flex-shrink-0">{cp.oldQuantity}</span>
+                              <span className="text-gray-500 flex-shrink-0">&rarr;</span>
+                              <span className="text-green-400 font-semibold flex-shrink-0">{cp.newQuantity}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
 
                 {/* Completed */}
                 {count.completedAt && (

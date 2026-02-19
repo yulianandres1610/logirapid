@@ -272,17 +272,9 @@ export default function InventoryCountPage() {
           countData = await countRes.json()
         }
 
-        // Helper to check if a date is today
-        const isToday = (dateStr: string) => {
-          if (!dateStr) return false
-          const countDate = new Date(dateStr)
-          const today = new Date()
-          return countDate.toDateString() === today.toDateString()
-        }
-
-        // Only load saved progress if the count was started today
+        // Load existing count data for this session (regardless of when it was started)
         let loadedCountedProducts: CountedProduct[] = []
-        if (countData.success && countData.data && countData.data.lines && isToday(countData.data.startedAt)) {
+        if (countData.success && countData.data && countData.data.lines) {
           loadedCountedProducts = countData.data.lines.map((l: {
             productId: number
             variantId?: number | null
@@ -307,9 +299,8 @@ export default function InventoryCountPage() {
           }))
         }
 
-        // Set counted products from loaded data (if any from today)
+        // Set counted products from loaded data
         // Note: Products with stock 0 are excluded from counting entirely
-        // They don't appear in pending list and don't affect progress percentage
         setCountedProducts(loadedCountedProducts)
         lastSavedRef.current = JSON.stringify(loadedCountedProducts)
 

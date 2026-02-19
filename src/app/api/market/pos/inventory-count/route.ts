@@ -32,6 +32,21 @@ interface CountRequest {
   action?: 'save' | 'complete'
 }
 
+// Auto-migration: ensure recount_history column exists
+let _recountColumnMigrated = false
+async function ensureRecountHistoryColumn() {
+  if (_recountColumnMigrated) return
+  try {
+    await db.query(`
+      ALTER TABLE market_inventory_counts
+      ADD COLUMN IF NOT EXISTS recount_history JSONB DEFAULT '[]'::jsonb
+    `)
+    _recountColumnMigrated = true
+  } catch {
+    _recountColumnMigrated = true // Don't retry on error
+  }
+}
+
 /**
  * GET /api/market/pos/inventory-count
  * Obtiene un conteo existente por sessionId o countId
@@ -43,6 +58,7 @@ interface CountRequest {
  */
 export async function GET(request: NextRequest) {
   try {
+    await ensureRecountHistoryColumn()
     const cookieStore = await cookies()
     const authToken = cookieStore.get('auth-token')?.value
 
@@ -180,6 +196,18 @@ export async function GET(request: NextRequest) {
       }
     })
 
+    // Parse recount history
+    let recountHistory: unknown[] = []
+    try {
+      if (count.recount_history) {
+        recountHistory = typeof count.recount_history === 'string'
+          ? JSON.parse(count.recount_history)
+          : count.recount_history
+      }
+    } catch {
+      recountHistory = []
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -201,6 +229,7 @@ export async function GET(request: NextRequest) {
         productsWithDifferences: recalcProductsWithDifferences,
         totalDifferenceValue: Math.round(recalcTotalDifferenceValue * 100) / 100,
         notes: count.notes,
+        recountHistory,
         lines
       }
     })
@@ -221,6 +250,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    await ensureRecountHistoryColumn()
     const cookieStore = await cookies()
     const authToken = cookieStore.get('auth-token')?.value
 
@@ -352,6 +382,76 @@ export async function POST(request: NextRequest) {
 
     // Procesar líneas si se proporcionan
     if (lines && lines.length > 0) {
+      // Obtener líneas anteriores para detectar cambios (reconteo)
+      const oldLinesResult = await db.query(`
+        SELECT product_id, variant_id, product_name, counted_quantity
+        FROM market_inventory_count_lines
+        WHERE count_id = $1
+      `, [countId])
+
+      // Detectar productos con cantidades corregidas
+      const oldLinesMap: Record<string, { productName: string; countedQuantity: number }> = {}
+      for (const ol of oldLinesResult.rows) {
+        const key = `${ol.product_id}:${ol.variant_id || 'null'}`
+        oldLinesMap[key] = {
+          productName: ol.product_name,
+          countedQuantity: parseFloat(ol.counted_quantity) || 0
+        }
+      }
+
+      const correctedProducts: Array<{ productName: string; oldQuantity: number; newQuantity: number }> = []
+      for (const line of lines) {
+        const key = `${line.productId}:${line.variantId || 'null'}`
+        const oldLine = oldLinesMap[key]
+        if (oldLine && oldLine.countedQuantity !== (line.countedQuantity || 0)) {
+          correctedProducts.push({
+            productName: line.productName || oldLine.productName,
+            oldQuantity: oldLine.countedQuantity,
+            newQuantity: line.countedQuantity || 0
+          })
+        }
+      }
+
+      // Si hay correcciones, registrar el reconteo en el historial
+      if (correctedProducts.length > 0) {
+        // Obtener nombre del usuario
+        const userResult = await db.query(
+          `SELECT firstname || ' ' || lastname as fullname FROM users WHERE id = $1`,
+          [payload.userId]
+        )
+        const userName = userResult.rows[0]?.fullname || 'Usuario'
+
+        // Obtener historial existente
+        let existingHistory: unknown[] = []
+        try {
+          const histResult = await db.query(
+            `SELECT recount_history FROM market_inventory_counts WHERE id = $1`,
+            [countId]
+          )
+          if (histResult.rows[0]?.recount_history) {
+            existingHistory = typeof histResult.rows[0].recount_history === 'string'
+              ? JSON.parse(histResult.rows[0].recount_history)
+              : histResult.rows[0].recount_history
+          }
+        } catch { /* ignore */ }
+
+        const recountEntry = {
+          timestamp: new Date().toISOString(),
+          userId: payload.userId,
+          userName,
+          correctedProducts
+        }
+
+        const updatedHistory = [...(Array.isArray(existingHistory) ? existingHistory : []), recountEntry]
+
+        await db.query(
+          `UPDATE market_inventory_counts SET recount_history = $1::jsonb WHERE id = $2`,
+          [JSON.stringify(updatedHistory), countId]
+        )
+
+        console.log(`[Inventory Count] Reconteo registrado por ${userName}: ${correctedProducts.length} producto(s) corregido(s)`)
+      }
+
       // Eliminar líneas anteriores
       await db.query(`DELETE FROM market_inventory_count_lines WHERE count_id = $1`, [countId])
 
