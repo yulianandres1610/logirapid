@@ -279,26 +279,46 @@ export async function POST(request: NextRequest) {
       }, { status: 403 })
     }
 
-    // Buscar conteo existente para esta sesión que esté EN PROGRESO
-    // Si ya hay un conteo completado, creamos uno nuevo
-    const existingCount = await db.query(`
+    // Buscar conteo existente para esta sesión
+    // Primero buscar in_progress, si no existe buscar completed (para recontar)
+    let existingCount = await db.query(`
       SELECT id, status FROM market_inventory_counts
       WHERE session_id = $1 AND status = 'in_progress'
       ORDER BY created_at DESC LIMIT 1
     `, [sessionId])
+
+    // Si no hay in_progress, buscar completed para permitir recontar
+    if (existingCount.rows.length === 0) {
+      existingCount = await db.query(`
+        SELECT id, status FROM market_inventory_counts
+        WHERE session_id = $1 AND status = 'completed'
+        ORDER BY created_at DESC LIMIT 1
+      `, [sessionId])
+    }
 
     let countId: number
     let countNumber: string
 
     if (existingCount.rows.length > 0) {
       countId = existingCount.rows[0].id
+      const existingStatus = existingCount.rows[0].status
 
-      // Actualizar conteo existente
-      await db.query(`
-        UPDATE market_inventory_counts
-        SET warehouse_id = $1, notes = $2, updated_at = NOW()
-        WHERE id = $3
-      `, [effectiveWarehouseId, notes, countId])
+      // Si el conteo estaba completado y se está recontando, volver a in_progress
+      if (existingStatus === 'completed') {
+        console.log(`[Inventory Count] Recontando conteo ${countId} - cambiando de completed a in_progress`)
+        await db.query(`
+          UPDATE market_inventory_counts
+          SET warehouse_id = $1, notes = $2, status = 'in_progress', updated_at = NOW()
+          WHERE id = $3
+        `, [effectiveWarehouseId, notes, countId])
+      } else {
+        // Actualizar conteo existente in_progress
+        await db.query(`
+          UPDATE market_inventory_counts
+          SET warehouse_id = $1, notes = $2, updated_at = NOW()
+          WHERE id = $3
+        `, [effectiveWarehouseId, notes, countId])
+      }
 
       const countData = await db.query(`SELECT count_number FROM market_inventory_counts WHERE id = $1`, [countId])
       countNumber = countData.rows[0].count_number

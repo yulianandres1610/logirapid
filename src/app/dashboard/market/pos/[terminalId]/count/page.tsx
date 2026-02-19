@@ -262,9 +262,15 @@ export default function InventoryCountPage() {
           }
         }
 
-        // Load existing count if any - but only if it's from today
-        const countRes = await fetch(`/api/market/pos/inventory-count?sessionId=${openSession.id}`)
-        const countData = await countRes.json()
+        // Load existing count if any - try in_progress first, then any status
+        let countRes = await fetch(`/api/market/pos/inventory-count?sessionId=${openSession.id}`)
+        let countData = await countRes.json()
+
+        // If no in_progress count, try loading any count (including completed for recount)
+        if (countData.success && !countData.data) {
+          countRes = await fetch(`/api/market/pos/inventory-count?sessionId=${openSession.id}&status=any`)
+          countData = await countRes.json()
+        }
 
         // Helper to check if a date is today
         const isToday = (dateStr: string) => {
