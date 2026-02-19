@@ -827,13 +827,116 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { countId, sessionId, action } = body as { countId?: number; sessionId?: number; action?: string }
+    const { countId, sessionId, action } = body as { countId?: number; sessionId?: number; action?: string; countNumber?: string; productNameSearch?: string; newCountedQuantity?: number }
 
-    if (action !== 'reevaluate') {
+    if (action !== 'reevaluate' && action !== 'update_line') {
       return NextResponse.json({
         success: false,
         error: 'Acción no válida'
       }, { status: 400 })
+    }
+
+    // ACTION: update_line - Directly fix a count line's counted quantity
+    if (action === 'update_line') {
+      const { countNumber: cn, productNameSearch: pns, newCountedQuantity: nq } = body as { countNumber?: string; productNameSearch?: string; newCountedQuantity?: number }
+
+      if (!cn || !pns || nq === undefined || nq === null) {
+        return NextResponse.json({
+          success: false,
+          error: 'countNumber, productNameSearch, y newCountedQuantity son requeridos'
+        }, { status: 400 })
+      }
+
+      // Find count by number
+      const countRes = await db.query(`
+        SELECT id, status, company_id, warehouse_id
+        FROM market_inventory_counts
+        WHERE count_number = $1
+      `, [cn])
+
+      if (countRes.rows.length === 0) {
+        return NextResponse.json({ success: false, error: `Conteo ${cn} no encontrado` }, { status: 404 })
+      }
+
+      const cnt = countRes.rows[0]
+
+      if (payload.role !== 'SUPER_ADMIN' && cnt.company_id !== payload.companyId) {
+        return NextResponse.json({ success: false, error: 'Sin permisos' }, { status: 403 })
+      }
+
+      // Find line by product name (partial match)
+      const lineRes = await db.query(`
+        SELECT id, product_name, counted_quantity, expected_quantity, unit_price
+        FROM market_inventory_count_lines
+        WHERE count_id = $1 AND LOWER(product_name) LIKE $2
+      `, [cnt.id, `%${pns.toLowerCase()}%`])
+
+      if (lineRes.rows.length === 0) {
+        return NextResponse.json({ success: false, error: `Producto "${pns}" no encontrado en el conteo` }, { status: 404 })
+      }
+
+      const line = lineRes.rows[0]
+      const oldQty = parseFloat(line.counted_quantity) || 0
+      const expectedQty = parseFloat(line.expected_quantity) || 0
+      const unitPrice = parseFloat(line.unit_price) || 0
+      const newDifference = Math.round((expectedQty - nq) * 100) / 100
+      const newDiffValue = Math.round(newDifference * unitPrice * 100) / 100
+
+      // Update the line
+      await db.query(`
+        UPDATE market_inventory_count_lines
+        SET counted_quantity = $1, difference = $2, difference_value = $3
+        WHERE id = $4
+      `, [nq, newDifference, newDiffValue, line.id])
+
+      // Recalculate count totals
+      const totals = await db.query(`
+        SELECT
+          COUNT(*) as total_products,
+          SUM(CASE WHEN ABS(difference) >= 0.01 THEN 1 ELSE 0 END) as products_with_differences,
+          SUM(CASE WHEN ABS(difference) >= 0.01 THEN difference_value ELSE 0 END) as total_difference_value
+        FROM market_inventory_count_lines
+        WHERE count_id = $1
+      `, [cnt.id])
+
+      await db.query(`
+        UPDATE market_inventory_counts
+        SET
+          total_products = $1,
+          products_with_differences = $2,
+          total_difference_value = $3,
+          updated_at = NOW()
+        WHERE id = $4
+      `, [
+        parseInt(totals.rows[0].total_products) || 0,
+        parseInt(totals.rows[0].products_with_differences) || 0,
+        parseFloat(totals.rows[0].total_difference_value) || 0,
+        cnt.id
+      ])
+
+      // If count was completed, reset to in_progress for re-review
+      if (cnt.status === 'completed') {
+        await db.query(`
+          UPDATE market_inventory_counts SET status = 'in_progress', updated_at = NOW() WHERE id = $1
+        `, [cnt.id])
+      }
+
+      console.log(`[Inventory Count] Line fixed: ${line.product_name} qty ${oldQty} → ${nq} (count ${cn})`)
+
+      return NextResponse.json({
+        success: true,
+        message: `Línea corregida: ${line.product_name} de ${oldQty} a ${nq}`,
+        data: {
+          countId: cnt.id,
+          countNumber: cn,
+          productName: line.product_name,
+          oldQuantity: oldQty,
+          newQuantity: nq,
+          expectedQuantity: expectedQty,
+          newDifference,
+          newDiffValue
+        }
+      })
     }
 
     // Buscar el conteo
