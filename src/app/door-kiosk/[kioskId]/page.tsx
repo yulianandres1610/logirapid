@@ -90,6 +90,7 @@ type KioskStep =
   | 'scan_id'
   | 'scan_id_reverse'
   | 'processing_id'
+  | 'verify_data'      // NEW: Verify OCR data before registering
   | 'manual_register'
   | 'visitor_info'
   | 'select_purpose'
@@ -142,11 +143,23 @@ export default function DoorKioskPage() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
   const [kioskTheme, setKioskTheme] = useState<KioskTheme>('dark')
 
-  // Manual registration states
-  const [manualName, setManualName] = useState('')
-  const [manualIdNumber, setManualIdNumber] = useState('')
-  const [manualIdType, setManualIdType] = useState<string>('cedula')
+  // Manual/verification form states (used for both manual entry and OCR verification)
+  const [formName, setFormName] = useState('')
+  const [formIdNumber, setFormIdNumber] = useState('')
+  const [formIdType, setFormIdType] = useState<string>('cedula')
+  const [formAddress, setFormAddress] = useState('')
+  const [formDateOfBirth, setFormDateOfBirth] = useState('')
+  const [formGender, setFormGender] = useState<string>('')
   const [isOcrError, setIsOcrError] = useState(false)
+  const [isExistingVisitor, setIsExistingVisitor] = useState(false)
+
+  // Aliases for backward compatibility
+  const manualName = formName
+  const setManualName = setFormName
+  const manualIdNumber = formIdNumber
+  const setManualIdNumber = setFormIdNumber
+  const manualIdType = formIdType
+  const setManualIdType = setFormIdType
 
   // Two-photo capture for Cuban cedula (front + reverse)
   const [capturedImageReverse, setCapturedImageReverse] = useState<string | null>(null)
@@ -607,60 +620,71 @@ export default function DoorKioskPage() {
       const result = await response.json()
 
       if (result.success && result.data.fullName) {
-        // Merge data if this is the reverse side
+        let finalData = result.data
+
+        // If reverse photo was already captured, process it for address
+        if (capturedImageReverse && !isReverse) {
+          try {
+            const reverseResponse = await fetch('/api/ai/scan-id-document', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                fileBase64: capturedImageReverse.split(',')[1],
+                mimeType: 'image/jpeg',
+                kioskId: parseInt(kioskId),
+                guardId: guard?.id
+              })
+            })
+            const reverseResult = await reverseResponse.json()
+            if (reverseResult.success && reverseResult.data.address) {
+              finalData.address = reverseResult.data.address
+            }
+          } catch (e) {
+            console.log('[ID Scanner] Error processing reverse, continuing without:', e)
+          }
+        }
+
+        // Merge data if this is the reverse side scan
         if (isReverse && scannedData) {
-          // Merge address from reverse with existing data
-          const mergedData: ScannedIdData = {
+          finalData = {
             ...scannedData,
             address: result.data.address || scannedData.address
           }
-          setScannedData(mergedData)
-          // Now register with both photos
-          await checkOrRegisterVisitor(mergedData, capturedImage || '', imageBase64)
-        } else {
-          setScannedData(result.data)
-
-          // If reverse photo was already captured, use it directly
-          if (capturedImageReverse) {
-            // Process reverse photo for address if needed
-            try {
-              const reverseResponse = await fetch('/api/ai/scan-id-document', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  fileBase64: capturedImageReverse.split(',')[1],
-                  mimeType: 'image/jpeg',
-                  kioskId: parseInt(kioskId),
-                  guardId: guard?.id
-                })
-              })
-              const reverseResult = await reverseResponse.json()
-              if (reverseResult.success && reverseResult.data.address) {
-                result.data.address = reverseResult.data.address
-              }
-            } catch (e) {
-              console.log('[ID Scanner] Error processing reverse, continuing without:', e)
-            }
-            // Register with both photos
-            await checkOrRegisterVisitor(result.data, imageBase64, capturedImageReverse)
-          } else {
-            // Check if it's a Cuban cedula - offer to scan reverse for address
-            const isCubanCedula = result.data.documentType === 'cedula' &&
-              (result.data.issuingCountry === 'Cuba' ||
-               result.data.nationality === 'Cubana' ||
-               (result.data.documentNumber && result.data.documentNumber.length === 11))
-
-            if (isCubanCedula && !result.data.address) {
-              // Offer to scan reverse side for address
-              setNeedsReversePhoto(true)
-              setCapturingSide('reverse')
-              setStep('scan_id_reverse')
-            } else {
-              // Continue with registration
-              await checkOrRegisterVisitor(result.data, imageBase64, null)
-            }
-          }
         }
+
+        setScannedData(finalData)
+
+        // Populate form fields with OCR data for verification
+        setFormName(finalData.fullName || '')
+        setFormIdNumber(finalData.documentNumber || '')
+        setFormIdType(finalData.documentType || 'cedula')
+        setFormAddress(finalData.address || '')
+        setFormDateOfBirth(finalData.dateOfBirth || '')
+        setFormGender(finalData.gender || '')
+
+        // Check if visitor already exists
+        try {
+          const checkResponse = await fetch(
+            `/api/market/door-security/visitors?idNumber=${encodeURIComponent(finalData.documentNumber)}&kioskId=${kioskId}&guardId=${guard?.id}`
+          )
+          const checkResult = await checkResponse.json()
+
+          if (checkResult.success && checkResult.data.visitors.length > 0) {
+            // Visitor exists - mark as existing and show their info
+            const existingVisitor = checkResult.data.visitors[0]
+            setVisitor(existingVisitor)
+            setIsExistingVisitor(true)
+          } else {
+            // New visitor
+            setIsExistingVisitor(false)
+          }
+        } catch (e) {
+          console.log('[Visitor Check] Error checking existing:', e)
+          setIsExistingVisitor(false)
+        }
+
+        // Go to verification step
+        setStep('verify_data')
       } else {
         // OCR failed - show options to retry or register manually
         setMessage(result.error || 'No se pudo leer el documento. Intente con una foto más clara.')
@@ -1680,6 +1704,244 @@ export default function DoorKioskPage() {
               <p className={`${theme.textMuted} text-sm sm:text-base`}>
                 Por favor espere...
               </p>
+            </motion.div>
+          )}
+
+          {/* Verify Data - Photo + Form side by side */}
+          {step === 'verify_data' && (
+            <motion.div
+              key="verify_data"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="p-3 sm:p-5"
+            >
+              {/* Header */}
+              <div className="text-center mb-3">
+                {isExistingVisitor ? (
+                  <>
+                    <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                    <h2 className={`text-lg font-bold ${theme.text}`}>
+                      Visitante Registrado
+                    </h2>
+                    <p className={`${theme.textMuted} text-xs`}>
+                      Este visitante ya está en el sistema
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <User className="w-8 h-8 text-orange-400 mx-auto mb-2" />
+                    <h2 className={`text-lg font-bold ${theme.text}`}>
+                      Verificar Datos
+                    </h2>
+                    <p className={`${theme.textMuted} text-xs`}>
+                      Revise y confirme la información
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {/* Two column layout: Photo | Form */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                {/* Left: Photos */}
+                <div className="space-y-2">
+                  {capturedImage && (
+                    <div>
+                      <p className={`text-xs ${theme.textMuted} mb-1`}>Documento (Frente)</p>
+                      <img
+                        src={capturedImage}
+                        alt="Frente"
+                        className="w-full rounded-lg border border-stone-600"
+                      />
+                    </div>
+                  )}
+                  {capturedImageReverse && (
+                    <div>
+                      <p className={`text-xs ${theme.textMuted} mb-1`}>Documento (Reverso)</p>
+                      <img
+                        src={capturedImageReverse}
+                        alt="Reverso"
+                        className="w-full rounded-lg border border-stone-600"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Right: Form fields */}
+                <div className="space-y-2">
+                  {/* Name */}
+                  <div>
+                    <label className={`block text-xs ${theme.textMuted} mb-0.5`}>Nombre completo</label>
+                    <input
+                      type="text"
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      disabled={isExistingVisitor}
+                      className={`w-full px-2 py-1.5 rounded-lg border text-sm ${
+                        kioskTheme === 'dark'
+                          ? 'bg-stone-800/50 border-stone-600 text-white'
+                          : 'bg-stone-50 border-stone-300 text-stone-900'
+                      } ${isExistingVisitor ? 'opacity-70' : ''}`}
+                    />
+                  </div>
+
+                  {/* ID Number */}
+                  <div>
+                    <label className={`block text-xs ${theme.textMuted} mb-0.5`}>Número de ID</label>
+                    <input
+                      type="text"
+                      value={formIdNumber}
+                      onChange={(e) => setFormIdNumber(e.target.value)}
+                      disabled={isExistingVisitor}
+                      className={`w-full px-2 py-1.5 rounded-lg border text-sm font-mono ${
+                        kioskTheme === 'dark'
+                          ? 'bg-stone-800/50 border-stone-600 text-white'
+                          : 'bg-stone-50 border-stone-300 text-stone-900'
+                      } ${isExistingVisitor ? 'opacity-70' : ''}`}
+                    />
+                  </div>
+
+                  {/* Document Type */}
+                  <div>
+                    <label className={`block text-xs ${theme.textMuted} mb-0.5`}>Tipo</label>
+                    <select
+                      value={formIdType}
+                      onChange={(e) => setFormIdType(e.target.value)}
+                      disabled={isExistingVisitor}
+                      className={`w-full px-2 py-1.5 rounded-lg border text-sm ${
+                        kioskTheme === 'dark'
+                          ? 'bg-stone-800/50 border-stone-600 text-white'
+                          : 'bg-stone-50 border-stone-300 text-stone-900'
+                      } ${isExistingVisitor ? 'opacity-70' : ''}`}
+                    >
+                      <option value="cedula">Cédula</option>
+                      <option value="passport">Pasaporte</option>
+                      <option value="license">Licencia</option>
+                    </select>
+                  </div>
+
+                  {/* Address (if available) */}
+                  {(formAddress || !isExistingVisitor) && (
+                    <div>
+                      <label className={`block text-xs ${theme.textMuted} mb-0.5`}>Dirección</label>
+                      <input
+                        type="text"
+                        value={formAddress}
+                        onChange={(e) => setFormAddress(e.target.value)}
+                        disabled={isExistingVisitor}
+                        placeholder="Opcional"
+                        className={`w-full px-2 py-1.5 rounded-lg border text-sm ${
+                          kioskTheme === 'dark'
+                            ? 'bg-stone-800/50 border-stone-600 text-white placeholder-stone-500'
+                            : 'bg-stone-50 border-stone-300 text-stone-900 placeholder-stone-400'
+                        } ${isExistingVisitor ? 'opacity-70' : ''}`}
+                      />
+                    </div>
+                  )}
+
+                  {/* Existing visitor stats */}
+                  {isExistingVisitor && visitor && (
+                    <div className={`p-2 rounded-lg ${kioskTheme === 'dark' ? 'bg-green-900/20 border border-green-700' : 'bg-green-50 border border-green-200'}`}>
+                      <p className="text-xs text-green-500">
+                        Visitas anteriores: <span className="font-bold">{visitor.totalVisits}</span>
+                      </p>
+                      {visitor.isCurrentlyInside && (
+                        <p className="text-xs text-amber-500 mt-1">
+                          ⚠️ Actualmente está adentro
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2">
+                {isExistingVisitor ? (
+                  // Existing visitor - go directly to purpose selection or exit
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => {
+                      if (visitor?.isCurrentlyInside) {
+                        // Exit flow
+                        setActiveLogId(visitor.activeLogId)
+                        checkPendingSales(visitor.activeLogId!)
+                      } else {
+                        // Entry flow
+                        setStep('visitor_info')
+                      }
+                    }}
+                    disabled={loading}
+                    className={`w-full flex items-center justify-center gap-2 py-3 ${
+                      visitor?.isCurrentlyInside
+                        ? 'bg-gradient-to-r from-orange-500 to-orange-600'
+                        : 'bg-gradient-to-r from-green-500 to-green-600'
+                    } text-white rounded-xl font-bold transition-all shadow-lg`}
+                  >
+                    {visitor?.isCurrentlyInside ? (
+                      <>
+                        <LogOut className="w-5 h-5" />
+                        Registrar Salida
+                      </>
+                    ) : (
+                      <>
+                        <LogIn className="w-5 h-5" />
+                        Registrar Entrada
+                      </>
+                    )}
+                  </motion.button>
+                ) : (
+                  // New visitor - confirm and register
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={async () => {
+                      if (!formName.trim() || !formIdNumber.trim()) {
+                        setMessage('Nombre y número de ID son requeridos')
+                        return
+                      }
+                      setLoading(true)
+                      try {
+                        // Create visitor data from form
+                        const visitorData: ScannedIdData = {
+                          fullName: formName.trim(),
+                          documentType: formIdType,
+                          documentNumber: formIdNumber.trim(),
+                          dateOfBirth: formDateOfBirth || null,
+                          address: formAddress || null,
+                          gender: formGender || null,
+                          confidence: scannedData?.confidence || 0.5
+                        }
+                        // Register new visitor with photos
+                        await checkOrRegisterVisitor(visitorData, capturedImage || '', capturedImageReverse)
+                      } catch (error) {
+                        console.error('Error registering:', error)
+                        setMessage('Error al registrar')
+                        setStep('error')
+                      } finally {
+                        setLoading(false)
+                      }
+                    }}
+                    disabled={!formName.trim() || !formIdNumber.trim() || loading}
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-bold transition-all shadow-lg disabled:opacity-50"
+                  >
+                    {loading ? (
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Check className="w-5 h-5" />
+                    )}
+                    Confirmar y Registrar
+                  </motion.button>
+                )}
+
+                <button
+                  onClick={resetToIdle}
+                  className={`w-full py-2 ${theme.textMuted} hover:text-orange-400 transition-colors text-sm`}
+                >
+                  Cancelar
+                </button>
+              </div>
             </motion.div>
           )}
 

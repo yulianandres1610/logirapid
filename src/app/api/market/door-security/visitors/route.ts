@@ -21,25 +21,50 @@ export async function GET(request: NextRequest) {
     const cookieStore = await cookies()
     const authToken = cookieStore.get('auth-token')?.value
 
-    if (!authToken) {
+    const { searchParams } = new URL(request.url)
+    const kioskId = searchParams.get('kioskId')
+    const guardId = searchParams.get('guardId')
+
+    let companyId: number | null = null
+    let isAuthenticated = false
+
+    // Try JWT authentication first
+    if (authToken) {
+      try {
+        const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+        const payload = jwt.verify(authToken, secret) as JWTPayload
+        companyId = payload.companyId
+        isAuthenticated = true
+      } catch {
+        // JWT invalid, will try kiosk auth
+      }
+    }
+
+    // Try kiosk authentication if JWT failed
+    if (!isAuthenticated && kioskId && guardId) {
+      const kioskResult = await db.query(
+        'SELECT companyid FROM market_door_kiosks WHERE id = $1 AND isactive = true',
+        [kioskId]
+      )
+      if (kioskResult.rows.length > 0) {
+        const guardResult = await db.query(
+          'SELECT id FROM market_door_guards WHERE id = $1 AND isactive = true',
+          [guardId]
+        )
+        if (guardResult.rows.length > 0) {
+          companyId = kioskResult.rows[0].companyid
+          isAuthenticated = true
+        }
+      }
+    }
+
+    if (!isAuthenticated || !companyId) {
       return NextResponse.json({
         success: false,
         error: 'No autorizado'
       }, { status: 401 })
     }
 
-    let payload: JWTPayload
-    try {
-      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
-      payload = jwt.verify(authToken, secret) as JWTPayload
-    } catch {
-      return NextResponse.json({
-        success: false,
-        error: 'Token inválido'
-      }, { status: 401 })
-    }
-
-    const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
     const search = searchParams.get('search') || ''
@@ -47,13 +72,15 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit
 
     let whereClause = 'WHERE v.companyid = $1'
-    const params: any[] = [payload.companyId]
+    const params: any[] = [companyId]
     let paramIndex = 2
 
     // If searching by exact ID number (for entry/exit lookup)
     if (idNumber) {
-      whereClause += ` AND v.idnumber = $${paramIndex}`
-      params.push(idNumber)
+      // Normalize ID for comparison
+      const normalizedId = idNumber.toString().trim().replace(/[\s-]/g, '')
+      whereClause += ` AND REPLACE(REPLACE(TRIM(v.idnumber), ' ', ''), '-', '') = $${paramIndex}`
+      params.push(normalizedId)
       paramIndex++
     } else if (search) {
       whereClause += ` AND (v.fullname ILIKE $${paramIndex} OR v.idnumber ILIKE $${paramIndex})`
