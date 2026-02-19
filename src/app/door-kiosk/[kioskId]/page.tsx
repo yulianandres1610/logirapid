@@ -1151,7 +1151,7 @@ export default function DoorKioskPage() {
 
   const formatTime = (date: Date | null) => {
     if (!date) return '--:--:--'
-    return date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    return date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
   }
 
   const formatDate = (date: Date | null) => {
@@ -2705,9 +2705,9 @@ export default function DoorKioskPage() {
                               <p className={`text-[10px] font-medium mt-0.5 ${
                                 kioskTheme === 'dark' ? 'text-stone-400' : 'text-stone-500'
                               }`}>
-                                {entryDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                                {entryDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })}
                                 {exitDate && (
-                                  <> → {exitDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</>
+                                  <> → {exitDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })}</>
                                 )}
                               </p>
                             </div>
