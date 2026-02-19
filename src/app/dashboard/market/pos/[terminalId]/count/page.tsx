@@ -649,6 +649,49 @@ export default function InventoryCountPage() {
   const saveCount = useCallback(async () => {
     if (!session) return
 
+    // If a product is selected with a pending numpad value, apply it first
+    let finalProducts = countedProducts
+    if (selectedProduct && numpadValue) {
+      const quantity = parseFloat(numpadValue)
+      if (!isNaN(quantity) && quantity >= 0) {
+        const variantId = selectedVariant?.id || null
+        let targetIndex = editingIndex
+        if (targetIndex === null) {
+          targetIndex = finalProducts.findIndex(p =>
+            p.productId === selectedProduct.id && p.variantId === variantId
+          )
+          if (targetIndex < 0) targetIndex = null
+        }
+
+        if (targetIndex !== null && targetIndex >= 0) {
+          finalProducts = [...finalProducts]
+          finalProducts[targetIndex] = { ...finalProducts[targetIndex], countedQuantity: quantity }
+        } else {
+          const productName = selectedVariant
+            ? `${selectedProduct.name} - ${selectedVariant.name}`
+            : selectedProduct.name
+          finalProducts = [{
+            productId: selectedProduct.id,
+            variantId: variantId,
+            variantName: selectedVariant?.name || null,
+            productName: productName,
+            productSku: selectedVariant?.sku || selectedProduct.sku,
+            productBarcode: selectedVariant?.barcode || selectedProduct.barcode,
+            productImage: selectedVariant?.imageUrl || selectedProduct.imageUrl,
+            unitPrice: selectedVariant?.sellingPrice ?? selectedProduct.sellingPrice,
+            countedQuantity: quantity,
+            expectedQuantity: selectedVariant?.stock ?? selectedProduct.stock
+          }, ...finalProducts]
+        }
+
+        setCountedProducts(finalProducts)
+        setSelectedProduct(null)
+        setSelectedVariant(null)
+        setNumpadValue('')
+        setEditingIndex(null)
+      }
+    }
+
     // Cancel any pending auto-save
     if (autoSaveTimeoutRef.current) {
       clearTimeout(autoSaveTimeoutRef.current)
@@ -663,7 +706,7 @@ export default function InventoryCountPage() {
         body: JSON.stringify({
           sessionId: session.id,
           warehouseId: session.warehouseId,
-          lines: countedProducts,
+          lines: finalProducts,
           action: 'save'
         })
       })
@@ -672,18 +715,71 @@ export default function InventoryCountPage() {
       if (!data.success) throw new Error(data.error)
 
       // Update ref to prevent duplicate auto-save
-      lastSavedRef.current = JSON.stringify(countedProducts)
+      lastSavedRef.current = JSON.stringify(finalProducts)
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar')
     } finally {
       setSaving(false)
     }
-  }, [session, countedProducts])
+  }, [session, countedProducts, selectedProduct, selectedVariant, numpadValue, editingIndex])
 
   // Go to report
   const goToReport = useCallback(async () => {
-    if (!session || countedProducts.length === 0) return
+    if (!session) return
+
+    // If a product is selected with a pending numpad value, apply it first
+    let finalProducts = countedProducts
+    if (selectedProduct && numpadValue) {
+      const quantity = parseFloat(numpadValue)
+      if (!isNaN(quantity) && quantity >= 0) {
+        const variantId = selectedVariant?.id || null
+
+        // Use editingIndex if editing, otherwise search by id
+        let targetIndex = editingIndex
+        if (targetIndex === null) {
+          targetIndex = finalProducts.findIndex(p =>
+            p.productId === selectedProduct.id && p.variantId === variantId
+          )
+          if (targetIndex < 0) targetIndex = null
+        }
+
+        if (targetIndex !== null && targetIndex >= 0) {
+          // Update existing product
+          finalProducts = [...finalProducts]
+          finalProducts[targetIndex] = {
+            ...finalProducts[targetIndex],
+            countedQuantity: quantity
+          }
+        } else {
+          // Add new product
+          const productName = selectedVariant
+            ? `${selectedProduct.name} - ${selectedVariant.name}`
+            : selectedProduct.name
+          finalProducts = [{
+            productId: selectedProduct.id,
+            variantId: variantId,
+            variantName: selectedVariant?.name || null,
+            productName: productName,
+            productSku: selectedVariant?.sku || selectedProduct.sku,
+            productBarcode: selectedVariant?.barcode || selectedProduct.barcode,
+            productImage: selectedVariant?.imageUrl || selectedProduct.imageUrl,
+            unitPrice: selectedVariant?.sellingPrice ?? selectedProduct.sellingPrice,
+            countedQuantity: quantity,
+            expectedQuantity: selectedVariant?.stock ?? selectedProduct.stock
+          }, ...finalProducts]
+        }
+
+        // Update state
+        setCountedProducts(finalProducts)
+        setSelectedProduct(null)
+        setSelectedVariant(null)
+        setNumpadValue('')
+        setEditingIndex(null)
+      }
+    }
+
+    if (finalProducts.length === 0) return
 
     // Cancel any pending auto-save to prevent race conditions
     if (autoSaveTimeoutRef.current) {
@@ -699,7 +795,7 @@ export default function InventoryCountPage() {
         body: JSON.stringify({
           sessionId: session.id,
           warehouseId: session.warehouseId,
-          lines: countedProducts,
+          lines: finalProducts,
           action: 'save'
         })
       })
@@ -708,7 +804,7 @@ export default function InventoryCountPage() {
       if (!data.success) throw new Error(data.error)
 
       // Update lastSavedRef to prevent auto-save from firing on unmount
-      lastSavedRef.current = JSON.stringify(countedProducts)
+      lastSavedRef.current = JSON.stringify(finalProducts)
 
       // Navigate with timestamp to bust Next.js router cache
       router.push(`/dashboard/market/pos/${terminalId}/count/report?t=${Date.now()}`)
@@ -718,7 +814,7 @@ export default function InventoryCountPage() {
     } finally {
       setSaving(false)
     }
-  }, [session, countedProducts, terminalId, router])
+  }, [session, countedProducts, selectedProduct, selectedVariant, numpadValue, editingIndex, terminalId, router])
 
   // Go back to POS
   const goBack = useCallback(() => {
