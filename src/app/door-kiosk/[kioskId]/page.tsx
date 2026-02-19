@@ -1125,7 +1125,8 @@ export default function DoorKioskPage() {
     router.push('/door-kiosk')
   }
 
-  const logoutGuard = () => {
+  const logoutGuard = useCallback(() => {
+    console.log('[Kiosk] logoutGuard called')
     // Clear inactivity timer first
     if (inactivityTimerRef.current) {
       clearTimeout(inactivityTimerRef.current)
@@ -1136,22 +1137,35 @@ export default function DoorKioskPage() {
     setVisitor(null)
     setScannedData(null)
     setCapturedImage(null)
+    setCapturedImageReverse(null)
     setCameraError(null)
     setActiveLogId(null)
     setPendingSales([])
     setValidatedSales(new Set())
     setSelectedPurpose('')
+    setPurposeNotes('')
+    setSelectedEmployee(null)
+    setEmployees([])
+    setEmployeeSearch('')
     setMessage('')
     setPin('')
     setDailyLogs([])
+    setFormName('')
+    setFormIdNumber('')
+    setFormIdType('cedula')
+    setFormAddress('')
+    setFormDateOfBirth('')
+    setFormGender('')
+    setIsOcrError(false)
+    setIsExistingVisitor(false)
     // Clear guard and go to PIN screen
     setGuard(null)
     setStep('guard_pin')
-  }
+  }, [])
 
   const formatTime = (date: Date | null) => {
     if (!date) return '--:--:--'
-    return date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
   }
 
   const formatDate = (date: Date | null) => {
@@ -1267,11 +1281,17 @@ export default function DoorKioskPage() {
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 type="button"
-                onPointerDown={(e) => {
+                onClick={(e) => {
+                  e.preventDefault()
                   e.stopPropagation()
                   logoutGuard()
                 }}
-                className="px-3 py-1.5 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 text-xs sm:text-sm font-semibold transition-colors"
+                onTouchEnd={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  logoutGuard()
+                }}
+                className="px-3 py-1.5 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 active:bg-red-500/40 text-xs sm:text-sm font-semibold transition-colors"
               >
                 Cerrar Sesión
               </button>
@@ -2705,9 +2725,9 @@ export default function DoorKioskPage() {
                               <p className={`text-[10px] font-medium mt-0.5 ${
                                 kioskTheme === 'dark' ? 'text-stone-400' : 'text-stone-500'
                               }`}>
-                                {entryDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                                {entryDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
                                 {exitDate && (
-                                  <> → {exitDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })}</>
+                                  <> → {exitDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</>
                                 )}
                               </p>
                             </div>
