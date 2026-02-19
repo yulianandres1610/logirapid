@@ -506,11 +506,18 @@ export default function InventoryCountPage() {
         if (!isNaN(quantity) && quantity >= 0) {
           const variantId = selectedVariant?.id || null
 
-          const existingIndex = countedProducts.findIndex(p =>
-            p.productId === selectedProduct.id && p.variantId === variantId
-          )
+          // When editing an existing product, use the stored editingIndex directly
+          // This avoids issues with variant matching (variantId mismatch)
+          let existingIndex = editingIndex
+          if (existingIndex === null) {
+            // Not editing - search for existing product by id + variant
+            existingIndex = countedProducts.findIndex(p =>
+              p.productId === selectedProduct.id && p.variantId === variantId
+            )
+            if (existingIndex < 0) existingIndex = null
+          }
 
-          if (existingIndex >= 0) {
+          if (existingIndex !== null && existingIndex >= 0) {
             const updated = [...countedProducts]
             updated[existingIndex] = {
               ...updated[existingIndex],
@@ -555,7 +562,7 @@ export default function InventoryCountPage() {
     } else if (key !== '.') {
       setNumpadValue(prev => prev.length < 10 ? prev + key : prev)
     }
-  }, [selectedProduct, selectedVariant, numpadValue, countedProducts])
+  }, [selectedProduct, selectedVariant, numpadValue, countedProducts, editingIndex])
 
   // Handle keyboard input
   useEffect(() => {
@@ -627,6 +634,14 @@ export default function InventoryCountPage() {
       setSelectedProduct(fullProduct)
       setNumpadValue(product.countedQuantity.toString())
       setEditingIndex(index)
+
+      // Restore variant selection so the ENTER handler can find the correct entry
+      if (product.variantId && fullProduct.variants) {
+        const variant = fullProduct.variants.find(v => v.id === product.variantId)
+        setSelectedVariant(variant || null)
+      } else {
+        setSelectedVariant(null)
+      }
     }
   }, [countedProducts, products])
 
