@@ -1851,7 +1851,7 @@ export default function DoorKioskPage() {
                   }`}>
                     <User className="w-4 h-4 text-green-500 flex-shrink-0" />
                     <p className="text-xs text-green-500 font-medium">
-                      Visitas: <span className="font-bold">{visitor.totalVisits}</span>
+                      Ha visitado <span className="font-bold">{visitor.totalVisits}</span> {visitor.totalVisits === 1 ? 'vez' : 'veces'}
                     </p>
                     {visitor.isCurrentlyInside && (
                       <p className="text-xs text-amber-500 ml-2">

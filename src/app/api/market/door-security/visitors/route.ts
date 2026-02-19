@@ -119,7 +119,12 @@ export async function GET(request: NextRequest) {
           WHERE vl.visitorid = v.id AND vl.status = 'active'
           ORDER BY vl.entrytime DESC
           LIMIT 1
-        ) as activelogid
+        ) as activelogid,
+        (
+          SELECT COUNT(*)
+          FROM market_visitor_logs vl
+          WHERE vl.visitorid = v.id
+        ) as realvisitcount
       FROM market_visitors v
       ${whereClause}
       ORDER BY v.lastvisit DESC NULLS LAST, v.createdat DESC
@@ -141,7 +146,7 @@ export async function GET(request: NextRequest) {
           idPhotoUrl: v.idphotourl,
           firstVisit: v.firstvisit,
           lastVisit: v.lastvisit,
-          totalVisits: v.totalvisits,
+          totalVisits: parseInt(v.realvisitcount) || v.totalvisits,
           createdAt: v.createdat,
           isCurrentlyInside: !!v.activelogid,
           activeLogId: v.activelogid
@@ -395,7 +400,12 @@ export async function POST(request: NextRequest) {
           WHERE visitorid = v.id AND status = 'active'
           ORDER BY entrytime DESC
           LIMIT 1
-        ) as activelogid
+        ) as activelogid,
+        (
+          SELECT COUNT(*)
+          FROM market_visitor_logs
+          WHERE visitorid = v.id
+        ) as realvisitcount
       FROM market_visitors v
       WHERE v.id = $1
     `, [visitorId])
@@ -418,7 +428,7 @@ export async function POST(request: NextRequest) {
           idPhotoUrl: visitor.idphotourl,
           firstVisit: visitor.firstvisit,
           lastVisit: visitor.lastvisit,
-          totalVisits: visitor.totalvisits,
+          totalVisits: parseInt(visitor.realvisitcount) || visitor.totalvisits,
           isCurrentlyInside: visitor.iscurrentlyinside,
           activeLogId: visitor.activelogid
         }
