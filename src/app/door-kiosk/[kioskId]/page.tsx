@@ -116,6 +116,18 @@ const DOCUMENT_TYPES = [
 
 const INACTIVITY_TIMEOUT = 300000 // 5 minutes
 
+const ID_TYPE_LABELS: Record<string, string> = {
+  cedula: 'Carnet de Identidad',
+  passport: 'Pasaporte',
+  license: 'Licencia',
+}
+
+interface Employee {
+  id: number
+  fullName: string
+  department: string | null
+}
+
 type KioskTheme = 'light' | 'dark'
 
 export default function DoorKioskPage() {
@@ -166,8 +178,14 @@ export default function DoorKioskPage() {
   const [capturingSide, setCapturingSide] = useState<'front' | 'reverse'>('front')
   const [needsReversePhoto, setNeedsReversePhoto] = useState(false)
 
-  // Notes for "otro" purpose
+  // Notes for visit purpose (mandatory for all)
   const [purposeNotes, setPurposeNotes] = useState('')
+
+  // Employee selection for "reunion" purpose
+  const [employees, setEmployees] = useState<Employee[]>([])
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
+  const [employeeSearch, setEmployeeSearch] = useState('')
+  const [loadingEmployees, setLoadingEmployees] = useState(false)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -1020,11 +1038,34 @@ export default function DoorKioskPage() {
     // Reset two-photo capture states
     setCapturingSide('front')
     setNeedsReversePhoto(false)
-    // Reset notes
+    // Reset notes and employee selection
     setPurposeNotes('')
     setValidatedSales(new Set())
     setSelectedPurpose('')
+    setSelectedEmployee(null)
+    setEmployees([])
+    setEmployeeSearch('')
     setMessage('')
+  }
+
+  const fetchEmployees = async (search?: string) => {
+    setLoadingEmployees(true)
+    try {
+      const params = new URLSearchParams({
+        kioskId,
+        guardId: guard?.id?.toString() || '',
+        ...(search && { search })
+      })
+      const res = await fetch(`/api/market/door-security/employees?${params}`)
+      const data = await res.json()
+      if (data.success) {
+        setEmployees(data.data)
+      }
+    } catch (error) {
+      console.error('Error fetching employees:', error)
+    } finally {
+      setLoadingEmployees(false)
+    }
   }
 
   const changeKiosk = () => {
@@ -2129,7 +2170,7 @@ export default function DoorKioskPage() {
                   {visitor.fullName}
                 </h2>
                 <p className={`${theme.textMuted} text-xs sm:text-base`}>
-                  {visitor.idType}: {visitor.idNumber}
+                  {ID_TYPE_LABELS[visitor.idType || ''] || visitor.idType || 'Documento'}: {visitor.idNumber}
                 </p>
                 {visitor.totalVisits > 1 && (
                   <span className="inline-block mt-2 px-2 sm:px-3 py-0.5 sm:py-1 bg-orange-500/20 text-orange-400 rounded-full text-xs sm:text-sm">
@@ -2138,8 +2179,8 @@ export default function DoorKioskPage() {
                 )}
               </div>
 
-              <div className="mb-4 sm:mb-6">
-                <p className={`text-xs sm:text-sm font-medium ${theme.textSecondary} mb-2 sm:mb-3`}>
+              <div className="mb-4 sm:mb-6 space-y-3">
+                <p className={`text-xs sm:text-sm font-medium ${theme.textSecondary}`}>
                   Motivo de la visita:
                 </p>
                 <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
@@ -2148,9 +2189,10 @@ export default function DoorKioskPage() {
                       key={purpose.id}
                       onClick={() => {
                         setSelectedPurpose(purpose.id)
-                        // Clear notes when selecting a different purpose
-                        if (purpose.id !== 'otro') {
-                          setPurposeNotes('')
+                        setSelectedEmployee(null)
+                        // Load employees when "reunion" is selected
+                        if (purpose.id === 'reunion') {
+                          fetchEmployees()
                         }
                       }}
                       className={`flex items-center gap-1.5 sm:gap-2 p-2 sm:p-3 rounded-lg sm:rounded-xl border-2 transition-all ${
@@ -2165,13 +2207,85 @@ export default function DoorKioskPage() {
                   ))}
                 </div>
 
-                {/* Notes field when "Otro" is selected */}
-                {selectedPurpose === 'otro' && (
-                  <div className="mt-3">
+                {/* Employee selector for "reunion" */}
+                {selectedPurpose === 'reunion' && (
+                  <div>
+                    <label className={`block text-xs font-medium ${theme.textSecondary} mb-1`}>
+                      Reunión con:
+                    </label>
+                    <input
+                      type="text"
+                      value={employeeSearch}
+                      onChange={(e) => {
+                        setEmployeeSearch(e.target.value)
+                        fetchEmployees(e.target.value)
+                      }}
+                      placeholder="Buscar empleado..."
+                      className={`w-full px-3 py-2 rounded-lg border text-sm transition-all focus:outline-none focus:border-orange-500 ${
+                        kioskTheme === 'dark'
+                          ? 'bg-stone-800 border-stone-600 text-white placeholder-stone-500'
+                          : 'bg-white border-stone-300 text-stone-900 placeholder-stone-400'
+                      }`}
+                    />
+                    {selectedEmployee && (
+                      <div className={`mt-1.5 px-3 py-2 rounded-lg flex items-center justify-between ${
+                        kioskTheme === 'dark' ? 'bg-orange-500/20 border border-orange-500/50' : 'bg-orange-50 border border-orange-200'
+                      }`}>
+                        <div>
+                          <p className="text-sm font-medium text-orange-500">{selectedEmployee.fullName}</p>
+                          {selectedEmployee.department && (
+                            <p className={`text-xs ${theme.textMuted}`}>{selectedEmployee.department}</p>
+                          )}
+                        </div>
+                        <button onClick={() => setSelectedEmployee(null)} className="text-orange-400 hover:text-orange-300">
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                    {!selectedEmployee && employees.length > 0 && (
+                      <div className={`mt-1.5 max-h-32 overflow-y-auto rounded-lg border ${
+                        kioskTheme === 'dark' ? 'bg-stone-800 border-stone-600' : 'bg-white border-stone-300'
+                      }`}>
+                        {loadingEmployees ? (
+                          <div className="p-3 text-center">
+                            <RefreshCw className={`w-4 h-4 animate-spin mx-auto ${theme.textMuted}`} />
+                          </div>
+                        ) : (
+                          employees.map(emp => (
+                            <button
+                              key={emp.id}
+                              onClick={() => {
+                                setSelectedEmployee(emp)
+                                setEmployeeSearch('')
+                              }}
+                              className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                                kioskTheme === 'dark'
+                                  ? 'hover:bg-stone-700 text-white'
+                                  : 'hover:bg-stone-100 text-stone-900'
+                              }`}
+                            >
+                              <span className="font-medium">{emp.fullName}</span>
+                              {emp.department && (
+                                <span className={`ml-2 text-xs ${theme.textMuted}`}>{emp.department}</span>
+                              )}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Notes field - mandatory for all purposes */}
+                {selectedPurpose && (
+                  <div>
+                    <label className={`block text-xs font-medium ${theme.textSecondary} mb-1`}>
+                      Nota / Motivo *
+                    </label>
                     <textarea
                       value={purposeNotes}
                       onChange={(e) => setPurposeNotes(e.target.value)}
-                      placeholder="Especifique el motivo de la visita..."
+                      placeholder="Describa el motivo de la visita..."
                       rows={2}
                       className={`w-full px-3 py-2 rounded-lg border-2 text-sm transition-all focus:outline-none focus:border-orange-500 resize-none ${
                         kioskTheme === 'dark'
@@ -2186,8 +2300,13 @@ export default function DoorKioskPage() {
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => registerEntry(selectedPurpose, selectedPurpose === 'otro' ? purposeNotes : undefined)}
-                disabled={!selectedPurpose || loading || (selectedPurpose === 'otro' && !purposeNotes.trim())}
+                onClick={() => {
+                  const notes = selectedPurpose === 'reunion' && selectedEmployee
+                    ? `Reunión con: ${selectedEmployee.fullName}${selectedEmployee.department ? ` (${selectedEmployee.department})` : ''}. ${purposeNotes}`
+                    : purposeNotes
+                  registerEntry(selectedPurpose, notes)
+                }}
+                disabled={!selectedPurpose || loading || !purposeNotes.trim() || (selectedPurpose === 'reunion' && !selectedEmployee)}
                 className="w-full flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
