@@ -1264,14 +1264,19 @@ export default function DoorKioskPage() {
                 <p className={`${theme.textMuted} text-xs hidden sm:block`}>{guard.code}</p>
               </div>
             </div>
-            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <button
-                onClick={logoutGuard}
-                className="text-red-400 hover:text-red-300 text-xs sm:text-sm font-medium transition-colors"
+                type="button"
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  logoutGuard()
+                }}
+                className="px-3 py-1.5 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 text-xs sm:text-sm font-semibold transition-colors"
               >
                 Cerrar Sesión
               </button>
               <button
+                type="button"
                 onClick={changeKiosk}
                 className={`${theme.textMuted} hover:text-orange-500 p-1 sm:p-1.5 transition-colors`}
                 title="Cambiar kiosco"
