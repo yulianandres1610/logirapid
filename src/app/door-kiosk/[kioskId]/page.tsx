@@ -109,12 +109,12 @@ const VISIT_PURPOSES = [
 ]
 
 const DOCUMENT_TYPES = [
-  { id: 'cedula', label: 'Cédula', icon: CreditCard },
+  { id: 'cedula', label: 'Carnet de Identidad', icon: CreditCard },
   { id: 'passport', label: 'Pasaporte', icon: BookUser },
   { id: 'license', label: 'Licencia', icon: Car },
 ]
 
-const INACTIVITY_TIMEOUT = 60000 // 60 seconds (1 minute)
+const INACTIVITY_TIMEOUT = 300000 // 5 minutes
 
 type KioskTheme = 'light' | 'dark'
 
@@ -1198,7 +1198,7 @@ export default function DoorKioskPage() {
       {/* Main Card */}
       <motion.div
         layout
-        className={`${theme.card} rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border relative mx-1`}
+        className={`${theme.card} rounded-2xl sm:rounded-3xl shadow-2xl w-full ${step === 'verify_data' ? 'max-w-4xl' : 'max-w-lg'} overflow-hidden border relative mx-1 transition-all duration-300`}
       >
         <AnimatePresence mode="wait">
           {/* Guard PIN Entry */}
@@ -1707,192 +1707,229 @@ export default function DoorKioskPage() {
             </motion.div>
           )}
 
-          {/* Verify Data - Photo + Form side by side */}
+          {/* Verify Data - Full-width layout with photos and form */}
           {step === 'verify_data' && (
             <motion.div
               key="verify_data"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-3 sm:p-5"
+              className="p-4 sm:p-6 lg:p-8"
             >
               {/* Header */}
-              <div className="text-center mb-3">
-                {isExistingVisitor ? (
-                  <>
-                    <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                    <h2 className={`text-lg font-bold ${theme.text}`}>
-                      Visitante Registrado
+              <div className="flex items-center justify-between mb-4 sm:mb-6">
+                <div className="flex items-center gap-3">
+                  {isExistingVisitor ? (
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-green-400 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                    </div>
+                  ) : (
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <User className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                    </div>
+                  )}
+                  <div>
+                    <h2 className={`text-lg sm:text-xl font-bold ${theme.text}`}>
+                      {isExistingVisitor ? 'Visitante Registrado' : 'Verificar Datos'}
                     </h2>
-                    <p className={`${theme.textMuted} text-xs`}>
-                      Este visitante ya está en el sistema
+                    <p className={`${theme.textMuted} text-xs sm:text-sm`}>
+                      {isExistingVisitor ? 'Este visitante ya está en el sistema' : 'Revise y confirme la información escaneada'}
                     </p>
-                  </>
-                ) : (
-                  <>
-                    <User className="w-8 h-8 text-orange-400 mx-auto mb-2" />
-                    <h2 className={`text-lg font-bold ${theme.text}`}>
-                      Verificar Datos
-                    </h2>
-                    <p className={`${theme.textMuted} text-xs`}>
-                      Revise y confirme la información
-                    </p>
-                  </>
-                )}
+                  </div>
+                </div>
+                <button
+                  onClick={resetToIdle}
+                  className={`p-2 rounded-lg ${theme.textMuted} hover:text-orange-400 transition-colors`}
+                  title="Cancelar"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
               </div>
 
-              {/* Two column layout: Photo | Form */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                {/* Left: Photos */}
-                <div className="space-y-2">
-                  {capturedImage && (
-                    <div>
-                      <p className={`text-xs ${theme.textMuted} mb-1`}>Documento (Frente)</p>
-                      <img
-                        src={capturedImage}
-                        alt="Frente"
-                        className="w-full rounded-lg border border-stone-600"
-                      />
-                    </div>
-                  )}
-                  {capturedImageReverse && (
-                    <div>
-                      <p className={`text-xs ${theme.textMuted} mb-1`}>Documento (Reverso)</p>
-                      <img
-                        src={capturedImageReverse}
-                        alt="Reverso"
-                        className="w-full rounded-lg border border-stone-600"
-                      />
-                    </div>
-                  )}
+              {/* Main content - Two column on desktop */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+                {/* Left: Document Photos */}
+                <div>
+                  <h3 className={`text-sm font-semibold ${theme.textSecondary} mb-3 flex items-center gap-2`}>
+                    <ImageIcon className="w-4 h-4" />
+                    Documento de Identidad
+                  </h3>
+                  <div className={`rounded-xl sm:rounded-2xl overflow-hidden border ${
+                    kioskTheme === 'dark' ? 'border-stone-700 bg-stone-800/30' : 'border-stone-200 bg-stone-50'
+                  }`}>
+                    {capturedImage && (
+                      <div className="p-3 sm:p-4">
+                        <p className={`text-xs font-medium ${theme.textMuted} mb-2 uppercase tracking-wider`}>Frente</p>
+                        <img
+                          src={capturedImage}
+                          alt="Frente del documento"
+                          className={`w-full rounded-lg border ${kioskTheme === 'dark' ? 'border-stone-600' : 'border-stone-300'}`}
+                        />
+                      </div>
+                    )}
+                    {capturedImageReverse && (
+                      <div className={`p-3 sm:p-4 ${capturedImage ? (kioskTheme === 'dark' ? 'border-t border-stone-700' : 'border-t border-stone-200') : ''}`}>
+                        <p className={`text-xs font-medium ${theme.textMuted} mb-2 uppercase tracking-wider`}>Reverso</p>
+                        <img
+                          src={capturedImageReverse}
+                          alt="Reverso del documento"
+                          className={`w-full rounded-lg border ${kioskTheme === 'dark' ? 'border-stone-600' : 'border-stone-300'}`}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Right: Form fields */}
-                <div className="space-y-2">
-                  {/* Name */}
-                  <div>
-                    <label className={`block text-xs ${theme.textMuted} mb-0.5`}>Nombre completo</label>
-                    <input
-                      type="text"
-                      value={formName}
-                      onChange={(e) => setFormName(e.target.value)}
-                      disabled={isExistingVisitor}
-                      className={`w-full px-2 py-1.5 rounded-lg border text-sm ${
-                        kioskTheme === 'dark'
-                          ? 'bg-stone-800/50 border-stone-600 text-white'
-                          : 'bg-stone-50 border-stone-300 text-stone-900'
-                      } ${isExistingVisitor ? 'opacity-70' : ''}`}
-                    />
-                  </div>
-
-                  {/* ID Number */}
-                  <div>
-                    <label className={`block text-xs ${theme.textMuted} mb-0.5`}>Número de ID</label>
-                    <input
-                      type="text"
-                      value={formIdNumber}
-                      onChange={(e) => setFormIdNumber(e.target.value)}
-                      disabled={isExistingVisitor}
-                      className={`w-full px-2 py-1.5 rounded-lg border text-sm font-mono ${
-                        kioskTheme === 'dark'
-                          ? 'bg-stone-800/50 border-stone-600 text-white'
-                          : 'bg-stone-50 border-stone-300 text-stone-900'
-                      } ${isExistingVisitor ? 'opacity-70' : ''}`}
-                    />
-                  </div>
-
-                  {/* Document Type */}
-                  <div>
-                    <label className={`block text-xs ${theme.textMuted} mb-0.5`}>Tipo</label>
-                    <select
-                      value={formIdType}
-                      onChange={(e) => setFormIdType(e.target.value)}
-                      disabled={isExistingVisitor}
-                      className={`w-full px-2 py-1.5 rounded-lg border text-sm ${
-                        kioskTheme === 'dark'
-                          ? 'bg-stone-800/50 border-stone-600 text-white'
-                          : 'bg-stone-50 border-stone-300 text-stone-900'
-                      } ${isExistingVisitor ? 'opacity-70' : ''}`}
-                    >
-                      <option value="cedula">Cédula</option>
-                      <option value="passport">Pasaporte</option>
-                      <option value="license">Licencia</option>
-                    </select>
-                  </div>
-
-                  {/* Address (if available) */}
-                  {(formAddress || !isExistingVisitor) && (
+                {/* Right: Form Fields */}
+                <div>
+                  <h3 className={`text-sm font-semibold ${theme.textSecondary} mb-3 flex items-center gap-2`}>
+                    <FileText className="w-4 h-4" />
+                    Información del Visitante
+                  </h3>
+                  <div className="space-y-3 sm:space-y-4">
+                    {/* Name */}
                     <div>
-                      <label className={`block text-xs ${theme.textMuted} mb-0.5`}>Dirección</label>
+                      <label className={`block text-xs sm:text-sm font-medium ${theme.textSecondary} mb-1`}>
+                        Nombre completo
+                      </label>
                       <input
                         type="text"
-                        value={formAddress}
-                        onChange={(e) => setFormAddress(e.target.value)}
+                        value={formName}
+                        onChange={(e) => setFormName(e.target.value)}
                         disabled={isExistingVisitor}
-                        placeholder="Opcional"
-                        className={`w-full px-2 py-1.5 rounded-lg border text-sm ${
+                        className={`w-full px-3 py-2.5 rounded-xl border-2 text-sm sm:text-base transition-all focus:outline-none focus:border-orange-500 ${
                           kioskTheme === 'dark'
-                            ? 'bg-stone-800/50 border-stone-600 text-white placeholder-stone-500'
-                            : 'bg-stone-50 border-stone-300 text-stone-900 placeholder-stone-400'
+                            ? 'bg-stone-800 border-stone-600 text-white'
+                            : 'bg-white border-stone-300 text-stone-900'
                         } ${isExistingVisitor ? 'opacity-70' : ''}`}
                       />
                     </div>
-                  )}
 
-                  {/* Existing visitor stats */}
-                  {isExistingVisitor && visitor && (
-                    <div className={`p-2 rounded-lg ${kioskTheme === 'dark' ? 'bg-green-900/20 border border-green-700' : 'bg-green-50 border border-green-200'}`}>
-                      <p className="text-xs text-green-500">
-                        Visitas anteriores: <span className="font-bold">{visitor.totalVisits}</span>
-                      </p>
-                      {visitor.isCurrentlyInside && (
-                        <p className="text-xs text-amber-500 mt-1">
-                          ⚠️ Actualmente está adentro
-                        </p>
-                      )}
+                    {/* ID Number + Document Type row */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className={`block text-xs sm:text-sm font-medium ${theme.textSecondary} mb-1`}>
+                          Numero de ID
+                        </label>
+                        <input
+                          type="text"
+                          value={formIdNumber}
+                          onChange={(e) => setFormIdNumber(e.target.value)}
+                          disabled={isExistingVisitor}
+                          className={`w-full px-3 py-2.5 rounded-xl border-2 text-sm sm:text-base font-mono transition-all focus:outline-none focus:border-orange-500 ${
+                            kioskTheme === 'dark'
+                              ? 'bg-stone-800 border-stone-600 text-white'
+                              : 'bg-white border-stone-300 text-stone-900'
+                          } ${isExistingVisitor ? 'opacity-70' : ''}`}
+                        />
+                      </div>
+                      <div>
+                        <label className={`block text-xs sm:text-sm font-medium ${theme.textSecondary} mb-1`}>
+                          Tipo de documento
+                        </label>
+                        <select
+                          value={formIdType}
+                          onChange={(e) => setFormIdType(e.target.value)}
+                          disabled={isExistingVisitor}
+                          className={`w-full px-3 py-2.5 rounded-xl border-2 text-sm sm:text-base transition-all focus:outline-none focus:border-orange-500 ${
+                            kioskTheme === 'dark'
+                              ? 'bg-stone-800 border-stone-600 text-white'
+                              : 'bg-white border-stone-300 text-stone-900'
+                          } ${isExistingVisitor ? 'opacity-70' : ''}`}
+                        >
+                          <option value="cedula" className={kioskTheme === 'dark' ? 'bg-stone-800 text-white' : ''}>Carnet de Identidad</option>
+                          <option value="passport" className={kioskTheme === 'dark' ? 'bg-stone-800 text-white' : ''}>Pasaporte</option>
+                          <option value="license" className={kioskTheme === 'dark' ? 'bg-stone-800 text-white' : ''}>Licencia</option>
+                        </select>
+                      </div>
                     </div>
-                  )}
+
+                    {/* Address */}
+                    {(formAddress || !isExistingVisitor) && (
+                      <div>
+                        <label className={`block text-xs sm:text-sm font-medium ${theme.textSecondary} mb-1`}>
+                          Direccion
+                        </label>
+                        <input
+                          type="text"
+                          value={formAddress}
+                          onChange={(e) => setFormAddress(e.target.value)}
+                          disabled={isExistingVisitor}
+                          placeholder="Opcional"
+                          className={`w-full px-3 py-2.5 rounded-xl border-2 text-sm sm:text-base transition-all focus:outline-none focus:border-orange-500 ${
+                            kioskTheme === 'dark'
+                              ? 'bg-stone-800 border-stone-600 text-white placeholder-stone-500'
+                              : 'bg-white border-stone-300 text-stone-900 placeholder-stone-400'
+                          } ${isExistingVisitor ? 'opacity-70' : ''}`}
+                        />
+                      </div>
+                    )}
+
+                    {/* Existing visitor stats */}
+                    {isExistingVisitor && visitor && (
+                      <div className={`p-3 rounded-xl flex items-center gap-3 ${
+                        kioskTheme === 'dark' ? 'bg-green-900/20 border border-green-700' : 'bg-green-50 border border-green-200'
+                      }`}>
+                        <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0">
+                          <User className="w-5 h-5 text-green-500" />
+                        </div>
+                        <div>
+                          <p className="text-sm text-green-500 font-medium">
+                            Visitas anteriores: <span className="font-bold">{visitor.totalVisits}</span>
+                          </p>
+                          {visitor.isCurrentlyInside && (
+                            <p className="text-xs text-amber-500 mt-0.5">
+                              Actualmente se encuentra adentro
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="space-y-2">
+              {/* Action Buttons - Full width at bottom */}
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                <button
+                  onClick={resetToIdle}
+                  className={`sm:w-auto px-6 py-3 ${theme.cancelBtn} rounded-xl font-medium text-sm sm:text-base transition-colors order-2 sm:order-1`}
+                >
+                  Cancelar
+                </button>
+
                 {isExistingVisitor ? (
-                  // Existing visitor - go directly to purpose selection or exit
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => {
                       if (visitor?.isCurrentlyInside) {
-                        // Exit flow
                         setActiveLogId(visitor.activeLogId)
                         checkPendingSales(visitor.activeLogId!)
                       } else {
-                        // Entry flow
                         setStep('visitor_info')
                       }
                     }}
                     disabled={loading}
-                    className={`w-full flex items-center justify-center gap-2 py-3 ${
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 sm:py-4 ${
                       visitor?.isCurrentlyInside
                         ? 'bg-gradient-to-r from-orange-500 to-orange-600'
                         : 'bg-gradient-to-r from-green-500 to-green-600'
-                    } text-white rounded-xl font-bold transition-all shadow-lg`}
+                    } text-white rounded-xl font-bold text-base sm:text-lg transition-all shadow-lg order-1 sm:order-2`}
                   >
                     {visitor?.isCurrentlyInside ? (
                       <>
-                        <LogOut className="w-5 h-5" />
+                        <LogOut className="w-5 h-5 sm:w-6 sm:h-6" />
                         Registrar Salida
                       </>
                     ) : (
                       <>
-                        <LogIn className="w-5 h-5" />
+                        <LogIn className="w-5 h-5 sm:w-6 sm:h-6" />
                         Registrar Entrada
                       </>
                     )}
                   </motion.button>
                 ) : (
-                  // New visitor - confirm and register
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
@@ -1903,7 +1940,6 @@ export default function DoorKioskPage() {
                       }
                       setLoading(true)
                       try {
-                        // Create visitor data from form
                         const visitorData: ScannedIdData = {
                           fullName: formName.trim(),
                           documentType: formIdType,
@@ -1913,7 +1949,6 @@ export default function DoorKioskPage() {
                           gender: formGender || null,
                           confidence: scannedData?.confidence || 0.5
                         }
-                        // Register new visitor with photos
                         await checkOrRegisterVisitor(visitorData, capturedImage || '', capturedImageReverse)
                       } catch (error) {
                         console.error('Error registering:', error)
@@ -1924,24 +1959,22 @@ export default function DoorKioskPage() {
                       }
                     }}
                     disabled={!formName.trim() || !formIdNumber.trim() || loading}
-                    className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-bold transition-all shadow-lg disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-2 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-bold text-base sm:text-lg transition-all shadow-lg disabled:opacity-50 order-1 sm:order-2"
                   >
                     {loading ? (
-                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      <RefreshCw className="w-5 h-5 sm:w-6 sm:h-6 animate-spin" />
                     ) : (
-                      <Check className="w-5 h-5" />
+                      <Check className="w-5 h-5 sm:w-6 sm:h-6" />
                     )}
                     Confirmar y Registrar
                   </motion.button>
                 )}
-
-                <button
-                  onClick={resetToIdle}
-                  className={`w-full py-2 ${theme.textMuted} hover:text-orange-400 transition-colors text-sm`}
-                >
-                  Cancelar
-                </button>
               </div>
+
+              {/* Error message */}
+              {message && (
+                <p className="text-center text-red-400 text-xs sm:text-sm mt-3">{message}</p>
+              )}
             </motion.div>
           )}
 
@@ -2036,7 +2069,7 @@ export default function DoorKioskPage() {
                   placeholder="Ej: Juan Pérez García"
                   className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl border-2 text-sm sm:text-base transition-all focus:outline-none focus:border-orange-500 ${
                     kioskTheme === 'dark'
-                      ? 'bg-stone-800/50 border-stone-600 text-white placeholder-stone-500'
+                      ? 'bg-stone-800 border-stone-600 text-white placeholder-stone-500'
                       : 'bg-stone-50 border-stone-300 text-stone-900 placeholder-stone-400'
                   }`}
                   autoFocus
@@ -2056,7 +2089,7 @@ export default function DoorKioskPage() {
                   placeholder="Ej: 12345678"
                   className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl border-2 text-sm sm:text-base transition-all focus:outline-none focus:border-orange-500 ${
                     kioskTheme === 'dark'
-                      ? 'bg-stone-800/50 border-stone-600 text-white placeholder-stone-500'
+                      ? 'bg-stone-800 border-stone-600 text-white placeholder-stone-500'
                       : 'bg-stone-50 border-stone-300 text-stone-900 placeholder-stone-400'
                   }`}
                 />
@@ -2178,7 +2211,7 @@ export default function DoorKioskPage() {
                       rows={2}
                       className={`w-full px-3 py-2 rounded-lg border-2 text-sm transition-all focus:outline-none focus:border-orange-500 resize-none ${
                         kioskTheme === 'dark'
-                          ? 'bg-stone-800/50 border-stone-600 text-white placeholder-stone-500'
+                          ? 'bg-stone-800 border-stone-600 text-white placeholder-stone-500'
                           : 'bg-stone-50 border-stone-300 text-stone-900 placeholder-stone-400'
                       }`}
                     />
