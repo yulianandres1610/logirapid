@@ -9,10 +9,13 @@ import {
   CreditCard,
   ChevronRight,
   ChevronLeft,
-  Eye
+  Eye,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
+import { useCompany } from '@/contexts/company-context'
 
 interface Visitor {
   id: number
@@ -31,11 +34,16 @@ interface Visitor {
 
 export default function DoorVisitorsPage() {
   const router = useRouter()
+  const { companyInfo } = useCompany()
   const [visitors, setVisitors] = useState<Visitor[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null)
+
+  const isAdmin = companyInfo.userRole === 'SUPER_ADMIN' || companyInfo.userRole === 'ADMIN'
 
   useEffect(() => {
     fetchVisitors()
@@ -72,6 +80,24 @@ export default function DoorVisitorsPage() {
     e.preventDefault()
     setPage(1)
     fetchVisitors()
+  }
+
+  const handleDeleteVisitor = async (visitorId: number) => {
+    setDeletingId(visitorId)
+    try {
+      const res = await fetch(`/api/market/door-security/visitors/${visitorId}`, {
+        method: 'DELETE'
+      })
+      const data = await res.json()
+      if (data.success) {
+        setVisitors(prev => prev.filter(v => v.id !== visitorId))
+      }
+    } catch (error) {
+      console.error('Error deleting visitor:', error)
+    } finally {
+      setDeletingId(null)
+      setShowDeleteConfirm(null)
+    }
   }
 
   const formatDate = (dateStr: string | null) => {
@@ -192,13 +218,24 @@ export default function DoorVisitorsPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <button
-                          onClick={() => viewVisitorDetails(visitor.id)}
-                          className="p-2 text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-lg"
-                          title="Ver detalles"
-                        >
-                          <Eye className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => viewVisitorDetails(visitor.id)}
+                            className="p-2 text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-lg"
+                            title="Ver detalles"
+                          >
+                            <Eye className="w-5 h-5" />
+                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => setShowDeleteConfirm(visitor.id)}
+                              className="p-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
+                              title="Eliminar visitante"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -239,6 +276,53 @@ export default function DoorVisitorsPage() {
         )}
       </div>
 
+          {/* Delete Confirmation Modal */}
+          {showDeleteConfirm !== null && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-sm w-full p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 dark:text-white">Eliminar visitante</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {visitors.find(v => v.id === showDeleteConfirm)?.fullName}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
+                  Esta accion eliminara al visitante y todo su historial de visitas. Esta accion no se puede deshacer.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowDeleteConfirm(null)}
+                    disabled={deletingId !== null}
+                    className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium text-sm"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => handleDeleteVisitor(showDeleteConfirm)}
+                    disabled={deletingId !== null}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {deletingId === showDeleteConfirm ? (
+                      <>
+                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                        Eliminando...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        Eliminar
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </DashboardLayout>
     </ProtectedRoute>
