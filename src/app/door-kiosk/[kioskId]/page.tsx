@@ -1380,15 +1380,17 @@ export default function DoorKioskPage() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setStep('scan_id')}
-                className="w-full flex flex-col items-center justify-center gap-3 sm:gap-4 py-8 sm:py-12 bg-gradient-to-br from-teal-500 to-teal-600 text-white rounded-xl sm:rounded-2xl font-bold transition-all shadow-lg shadow-teal-500/30"
+                className="w-full flex items-center justify-center gap-3 py-4 sm:py-5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl sm:rounded-2xl font-bold transition-all shadow-lg shadow-orange-500/30"
               >
-                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/20 rounded-xl sm:rounded-2xl flex items-center justify-center">
-                  <CreditCard className="w-8 h-8 sm:w-10 sm:h-10" />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <CreditCard className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <span className="text-lg sm:text-xl">Escanear Documento</span>
-                <span className={`text-sm font-normal opacity-80`}>
-                  El sistema detecta automáticamente entrada o salida
-                </span>
+                <div className="text-left">
+                  <span className="text-base sm:text-lg block">Escanear Documento</span>
+                  <span className="text-xs sm:text-sm font-normal opacity-80">
+                    Detecta automáticamente entrada o salida
+                  </span>
+                </div>
               </motion.button>
             </motion.div>
           )}
