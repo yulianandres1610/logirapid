@@ -114,7 +114,7 @@ const DOCUMENT_TYPES = [
   { id: 'license', label: 'Licencia', icon: Car },
 ]
 
-const INACTIVITY_TIMEOUT = 20000 // 20 seconds
+const INACTIVITY_TIMEOUT = 60000 // 60 seconds (1 minute)
 
 type KioskTheme = 'light' | 'dark'
 
