@@ -948,26 +948,13 @@ export default function CreateInvoicePage() {
         if (result.success) {
           clearStorage() // Clear saved draft on success
 
-          // Auto-confirm to create warehouse operations and delivery orders
+          // Auto-confirm: creates delivery + deducts stock in one transaction
           try {
             const confirmRes = await fetch(`/api/market/wholesale/invoices/${result.data.id}/confirm`, {
               method: 'POST'
             })
             const confirmResult = await confirmRes.json()
-            if (confirmResult.success && confirmResult.data?.deliveries) {
-              // Auto-complete each delivery to deduct stock immediately
-              for (const delivery of confirmResult.data.deliveries) {
-                try {
-                  await fetch(`/api/market/warehouses/${delivery.warehouseId}/wholesale-deliveries/${delivery.operationId}/complete`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({})
-                  })
-                } catch (completeError) {
-                  console.error('[Invoice Create] Auto-complete delivery failed:', completeError)
-                }
-              }
-            } else if (!confirmResult.success) {
+            if (!confirmResult.success) {
               console.warn('[Invoice Create] Auto-confirm warning:', confirmResult.error)
             }
           } catch (confirmError) {

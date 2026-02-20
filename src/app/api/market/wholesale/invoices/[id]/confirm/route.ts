@@ -27,13 +27,9 @@ async function getPayload(): Promise<JWTPayload | null> {
   }
 }
 
-/**
- * Generate next operation number for wholesale delivery
- */
 async function generateOperationNumber(companyId: number): Promise<string> {
   const year = new Date().getFullYear()
   const prefix = `WD-${year}-`
-
   const result = await db.query(`
     SELECT operation_number FROM market_warehouse_operations
     WHERE company_id = $1 AND operation_number LIKE $2
@@ -42,23 +38,15 @@ async function generateOperationNumber(companyId: number): Promise<string> {
 
   let nextNumber = 1
   if (result.rows.length > 0) {
-    const lastNumber = result.rows[0].operation_number
-    const match = lastNumber.match(/WD-\d{4}-(\d+)/)
-    if (match) {
-      nextNumber = parseInt(match[1]) + 1
-    }
+    const match = result.rows[0].operation_number.match(/WD-\d{4}-(\d+)/)
+    if (match) nextNumber = parseInt(match[1]) + 1
   }
-
   return `${prefix}${nextNumber.toString().padStart(4, '0')}`
 }
 
-/**
- * Generate next delivery number
- */
 async function generateDeliveryNumber(companyId: number): Promise<string> {
   const year = new Date().getFullYear()
   const prefix = `ENT-${year}-`
-
   const result = await db.query(`
     SELECT delivery_number FROM market_invoice_deliveries
     WHERE delivery_number LIKE $1
@@ -67,20 +55,212 @@ async function generateDeliveryNumber(companyId: number): Promise<string> {
 
   let nextNumber = 1
   if (result.rows.length > 0) {
-    const lastNumber = result.rows[0].delivery_number
-    const match = lastNumber.match(/ENT-\d{4}-(\d+)/)
-    if (match) {
-      nextNumber = parseInt(match[1]) + 1
-    }
+    const match = result.rows[0].delivery_number.match(/ENT-\d{4}-(\d+)/)
+    if (match) nextNumber = parseInt(match[1]) + 1
   }
-
   return `${prefix}${nextNumber.toString().padStart(4, '0')}`
 }
 
 /**
+ * Deduct stock from warehouse using FIFO across all lot types
+ */
+async function deductStockFIFO(
+  warehouseId: number,
+  productId: number,
+  variantId: number | null,
+  quantity: number,
+  companyId: number,
+  userId: number,
+  invoiceNumber: string,
+  customerName: string,
+  operationId: number,
+  productName: string
+) {
+  const variantClause = variantId ? 'AND variant_id = $3' : 'AND variant_id IS NULL'
+  const variantParams = variantId
+    ? [warehouseId, productId, variantId]
+    : [warehouseId, productId]
+
+  // Get current stock
+  const stockResult = await db.query(`
+    SELECT id, quantity_on_hand, quantity_reserved
+    FROM market_warehouse_stock
+    WHERE warehouse_id = $1 AND product_id = $2 ${variantClause}
+  `, variantParams)
+
+  if (stockResult.rows.length > 0) {
+    const stock = stockResult.rows[0]
+    const previousOnHand = parseFloat(stock.quantity_on_hand) || 0
+    const newOnHand = previousOnHand - quantity
+
+    // Deduct from on_hand directly (NO reservation - direct deduction)
+    await db.query(`
+      UPDATE market_warehouse_stock SET
+        quantity_on_hand = $1,
+        quantity_reserved = GREATEST(0, COALESCE(quantity_reserved, 0)),
+        updated_at = NOW()
+      WHERE id = $2
+    `, [newOnHand, stock.id])
+
+    // Create stock movement
+    await db.query(`
+      INSERT INTO market_stock_movements (
+        company_id, from_warehouse_id, product_id, variant_id,
+        movement_type, quantity, quantity_before, quantity_after,
+        reference_type, reference_id, notes, created_by, created_at
+      ) VALUES ($1, $2, $3, $4, 'wholesale_out', $5, $6, $7, 'wholesale_delivery', $8, $9, $10, NOW())
+    `, [
+      companyId, warehouseId, productId, variantId,
+      quantity, previousOnHand, newOnHand,
+      operationId,
+      `Entrega mayorista ${invoiceNumber} a ${customerName}`,
+      userId
+    ])
+
+    // Create inventory movement
+    try {
+      await db.query(`
+        INSERT INTO market_inventory_movements (
+          product_id, company_id, movement_type, quantity,
+          quantity_before, quantity_after, reference_type, reference_id, notes, created_at
+        )
+        SELECT $1, company_id, 'wholesale_out', $2, $3, $4, 'wholesale_invoice', $5, $6, NOW()
+        FROM market_products WHERE id = $1
+      `, [productId, -quantity, previousOnHand, newOnHand, operationId,
+        `Venta Mayorista: ${invoiceNumber} - ${customerName}`])
+    } catch { /* non-fatal */ }
+
+    // Update variant quantity if applicable
+    if (variantId) {
+      try {
+        const totalResult = await db.query(`
+          SELECT COALESCE(SUM(quantity_on_hand), 0) as total
+          FROM market_warehouse_stock WHERE product_id = $1 AND variant_id = $2
+        `, [productId, variantId])
+        await db.query(`
+          UPDATE market_product_variants SET quantity_on_hand = $1, updated_at = NOW() WHERE id = $2
+        `, [totalResult.rows[0].total, variantId])
+      } catch { /* non-fatal */ }
+    }
+
+    // Update main product quantity
+    try {
+      await db.query(`
+        UPDATE market_products SET quantity_on_hand = (
+          SELECT COALESCE(SUM(quantity_on_hand), 0) FROM market_warehouse_stock
+          WHERE product_id = $1 AND variant_id IS NULL
+        ), updated_at = NOW() WHERE id = $1
+      `, [productId])
+    } catch { /* non-fatal */ }
+  }
+
+  // Process FIFO lots
+  let remainingQty = quantity
+
+  // 1. Consignment lots
+  try {
+    const lots = await db.query(`
+      SELECT id, lot_number, quantity_available, unit_cost, supplier_id, order_line_id
+      FROM consignment_lot_inventory
+      WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available > 0
+      ${variantId ? 'AND (variant_id = $4 OR variant_id IS NULL)' : 'AND variant_id IS NULL'}
+      ORDER BY received_at ASC FOR UPDATE
+    `, variantId
+      ? [warehouseId, productId, companyId, variantId]
+      : [warehouseId, productId, companyId])
+
+    for (const lot of lots.rows) {
+      if (remainingQty <= 0) break
+      const toDeduct = Math.min(remainingQty, parseFloat(lot.quantity_available) || 0)
+      const unitCost = parseFloat(lot.unit_cost)
+
+      await db.query(`
+        UPDATE consignment_lot_inventory
+        SET quantity_available = quantity_available - $1, quantity_sold = COALESCE(quantity_sold, 0) + $1
+        WHERE id = $2
+      `, [toDeduct, lot.id])
+
+      if (lot.order_line_id) {
+        const olr = await db.query(`SELECT order_id, unit_price FROM consignment_order_lines WHERE id = $1`, [lot.order_line_id])
+        await db.query(`UPDATE consignment_order_lines SET quantity_sold = COALESCE(quantity_sold, 0) + $1 WHERE id = $2`, [toDeduct, lot.order_line_id])
+        if (olr.rows.length > 0) {
+          await db.query(`UPDATE consignment_orders SET total_sold = COALESCE(total_sold, 0) + $1, updated_at = NOW() WHERE id = $2`,
+            [toDeduct * (parseFloat(olr.rows[0].unit_price) || 0), olr.rows[0].order_id])
+        }
+      }
+
+      const wr = await db.query('SELECT id FROM consignment_supplier_wallets WHERE supplier_id = $1', [lot.supplier_id])
+      if (wr.rows.length > 0) {
+        const earnings = toDeduct * unitCost
+        await db.query(`UPDATE consignment_supplier_wallets SET balance_available = balance_available + $1, total_earned = COALESCE(total_earned, 0) + $1, updated_at = NOW() WHERE id = $2`, [earnings, wr.rows[0].id])
+        await db.query(`INSERT INTO consignment_wallet_transactions (wallet_id, transaction_type, amount, product_id, quantity, unit_price, notes, created_by, created_at) VALUES ($1, 'sale', $2, $3, $4, $5, $6, $7, NOW())`,
+          [wr.rows[0].id, earnings, productId, toDeduct, unitCost, `Venta Mayorista: ${invoiceNumber} - ${productName}`, userId])
+      }
+      remainingQty -= toDeduct
+    }
+    await db.query(`DELETE FROM consignment_lot_inventory WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available <= 0`, [warehouseId, productId, companyId])
+  } catch { /* consignment tables may not exist */ }
+
+  // 2. Production lots
+  if (remainingQty > 0) {
+    try {
+      const lots = await db.query(`
+        SELECT id, lot_number, quantity_available FROM production_lot_inventory
+        WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available > 0
+        ${variantId ? 'AND (variant_id = $4 OR variant_id IS NULL)' : 'AND variant_id IS NULL'}
+        ORDER BY received_at ASC FOR UPDATE
+      `, variantId ? [warehouseId, productId, companyId, variantId] : [warehouseId, productId, companyId])
+      for (const lot of lots.rows) {
+        if (remainingQty <= 0) break
+        const toDeduct = Math.min(remainingQty, parseFloat(lot.quantity_available) || 0)
+        await db.query(`UPDATE production_lot_inventory SET quantity_available = quantity_available - $1, quantity_sold = COALESCE(quantity_sold, 0) + $1 WHERE id = $2`, [toDeduct, lot.id])
+        remainingQty -= toDeduct
+      }
+      await db.query(`DELETE FROM production_lot_inventory WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available <= 0`, [warehouseId, productId, companyId])
+    } catch { /* production tables may not exist */ }
+  }
+
+  // 3. Purchase lots
+  if (remainingQty > 0) {
+    try {
+      const lots = await db.query(`
+        SELECT id, lot_number, quantity_available FROM purchase_lot_inventory
+        WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available > 0
+        ${variantId ? 'AND (variant_id = $4 OR variant_id IS NULL)' : 'AND variant_id IS NULL'}
+        ORDER BY created_at ASC FOR UPDATE
+      `, variantId ? [warehouseId, productId, companyId, variantId] : [warehouseId, productId, companyId])
+      for (const lot of lots.rows) {
+        if (remainingQty <= 0) break
+        const toDeduct = Math.min(remainingQty, parseFloat(lot.quantity_available) || 0)
+        await db.query(`UPDATE purchase_lot_inventory SET quantity_available = quantity_available - $1, quantity_sold = COALESCE(quantity_sold, 0) + $1 WHERE id = $2`, [toDeduct, lot.id])
+        remainingQty -= toDeduct
+      }
+      await db.query(`DELETE FROM purchase_lot_inventory WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available <= 0`, [warehouseId, productId, companyId])
+    } catch { /* purchase tables may not exist */ }
+  }
+
+  // 4. Manual lots
+  if (remainingQty > 0) {
+    try {
+      const lots = await db.query(`
+        SELECT id, lot_number, quantity_available FROM market_product_lots
+        WHERE product_id = $1 AND company_id = $2 AND quantity_available > 0 AND is_active = true
+        ORDER BY expiration_date ASC NULLS LAST, created_at ASC FOR UPDATE
+      `, [productId, companyId])
+      for (const lot of lots.rows) {
+        if (remainingQty <= 0) break
+        const toDeduct = Math.min(remainingQty, parseFloat(lot.quantity_available) || 0)
+        await db.query(`UPDATE market_product_lots SET quantity_available = quantity_available - $1 WHERE id = $2`, [toDeduct, lot.id])
+        remainingQty -= toDeduct
+      }
+      await db.query(`UPDATE market_product_lots SET is_active = false WHERE product_id = $1 AND company_id = $2 AND quantity_available <= 0`, [productId, companyId])
+    } catch { /* manual lots may not exist */ }
+  }
+}
+
+/**
  * POST /api/market/wholesale/invoices/[id]/confirm
- * Confirm an invoice (changes status from draft to confirmed)
- * Supports multi-warehouse: creates separate deliveries per warehouse
+ * Confirm invoice + create delivery + deduct stock - all in ONE transaction
  */
 export async function POST(
   request: NextRequest,
@@ -95,7 +275,7 @@ export async function POST(
     const { id } = await params
     const invoiceId = parseInt(id)
 
-    // Ensure required tables and columns exist (inline migrations)
+    // Inline migrations - ensure tables and columns exist
     try {
       await db.query(`
         CREATE TABLE IF NOT EXISTS market_invoice_deliveries (
@@ -126,11 +306,14 @@ export async function POST(
           created_at TIMESTAMP DEFAULT NOW()
         )
       `)
-      // Ensure columns exist on warehouse operations tables
       await db.query(`ALTER TABLE market_warehouse_operations ADD COLUMN IF NOT EXISTS validation_status VARCHAR(50)`)
       await db.query(`ALTER TABLE market_warehouse_operations ADD COLUMN IF NOT EXISTS reference_number VARCHAR(100)`)
       await db.query(`ALTER TABLE market_warehouse_operations ADD COLUMN IF NOT EXISTS discrepancy_notes TEXT`)
+      await db.query(`ALTER TABLE market_warehouse_operations ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP`)
+      await db.query(`ALTER TABLE market_warehouse_operations ADD COLUMN IF NOT EXISTS completed_by INTEGER`)
       await db.query(`ALTER TABLE market_warehouse_operation_lines ADD COLUMN IF NOT EXISTS quantity_validated DECIMAL(15,3) DEFAULT 0`)
+      await db.query(`ALTER TABLE market_invoice_deliveries ADD COLUMN IF NOT EXISTS dispatched_by INTEGER`)
+      await db.query(`ALTER TABLE market_invoice_deliveries ADD COLUMN IF NOT EXISTS delivered_by INTEGER`)
     } catch (migrationError) {
       console.error('[Wholesale Confirm] Migration error (non-fatal):', migrationError)
     }
@@ -146,41 +329,27 @@ export async function POST(
     `, [invoiceId, payload.companyId])
 
     if (checkResult.rows.length === 0) {
-      return NextResponse.json({
-        success: false,
-        error: 'Factura no encontrada'
-      }, { status: 404 })
+      return NextResponse.json({ success: false, error: 'Factura no encontrada' }, { status: 404 })
     }
 
     const invoice = checkResult.rows[0]
 
     if (invoice.status === 'cancelled') {
-      return NextResponse.json({
-        success: false,
-        error: 'No se pueden confirmar facturas canceladas'
-      }, { status: 400 })
+      return NextResponse.json({ success: false, error: 'No se pueden confirmar facturas canceladas' }, { status: 400 })
     }
-
     if (invoice.status === 'delivered') {
-      return NextResponse.json({
-        success: false,
-        error: 'Esta factura ya fue entregada'
-      }, { status: 400 })
+      return NextResponse.json({ success: false, error: 'Esta factura ya fue entregada' }, { status: 400 })
     }
 
-    // Check if deliveries already exist (avoid duplicates)
+    // Check if deliveries already exist
     const existingDeliveries = await db.query(
-      'SELECT id FROM market_invoice_deliveries WHERE invoice_id = $1',
-      [invoiceId]
+      'SELECT id FROM market_invoice_deliveries WHERE invoice_id = $1', [invoiceId]
     )
     if (existingDeliveries.rows.length > 0) {
-      return NextResponse.json({
-        success: false,
-        error: 'Esta factura ya tiene entregas creadas'
-      }, { status: 400 })
+      return NextResponse.json({ success: false, error: 'Esta factura ya tiene entregas creadas' }, { status: 400 })
     }
 
-    // Get invoice lines with warehouse_quantities
+    // Get invoice lines
     const linesResult = await db.query(`
       SELECT il.*, p.name as product_name, p.sku as product_sku, p.barcode
       FROM market_invoice_lines il
@@ -188,428 +357,281 @@ export async function POST(
       WHERE il.invoice_id = $1
     `, [invoiceId])
 
-    // Determine if this is multi-warehouse (has warehouse_quantities data)
+    // Determine warehouse mode
     const isMultiWarehouse = linesResult.rows.some(line => {
       const wq = line.warehouse_quantities
       if (!wq || typeof wq !== 'object') return false
-      const quantities = wq as WarehouseQuantities
-      return Object.keys(quantities).length > 0 && Object.values(quantities).some(q => q > 0)
+      return Object.keys(wq).length > 0 && Object.values(wq as WarehouseQuantities).some(q => q > 0)
     })
 
-    // Collect all warehouse IDs involved
+    // Collect warehouse IDs
     const warehouseIds = new Set<number>()
-
     if (isMultiWarehouse) {
-      // Multi-warehouse mode: collect warehouses from line quantities
       for (const line of linesResult.rows) {
         const wq = line.warehouse_quantities as WarehouseQuantities || {}
-        for (const [warehouseIdStr, qty] of Object.entries(wq)) {
-          if (qty > 0) {
-            warehouseIds.add(parseInt(warehouseIdStr))
-          }
+        for (const [wId, qty] of Object.entries(wq)) {
+          if (qty > 0) warehouseIds.add(parseInt(wId))
         }
       }
-
       if (warehouseIds.size === 0) {
-        return NextResponse.json({
-          success: false,
-          error: 'No se especificaron cantidades por almacén para los productos'
-        }, { status: 400 })
+        return NextResponse.json({ success: false, error: 'No se especificaron cantidades por almacén' }, { status: 400 })
       }
     } else {
-      // Single warehouse mode (legacy)
       if (!invoice.warehouse_id) {
-        return NextResponse.json({
-          success: false,
-          error: 'Debe seleccionar un almacén para confirmar la factura'
-        }, { status: 400 })
+        return NextResponse.json({ success: false, error: 'Debe seleccionar un almacén' }, { status: 400 })
       }
       warehouseIds.add(invoice.warehouse_id)
     }
 
-    // Get warehouse names for response
-    const warehouseResult = await db.query(`
-      SELECT id, name FROM market_warehouses WHERE id = ANY($1)
-    `, [Array.from(warehouseIds)])
+    // Get warehouse names
+    const warehouseResult = await db.query('SELECT id, name FROM market_warehouses WHERE id = ANY($1)', [Array.from(warehouseIds)])
     const warehouseNames = new Map<number, string>()
-    for (const row of warehouseResult.rows) {
-      warehouseNames.set(row.id, row.name)
-    }
+    for (const row of warehouseResult.rows) warehouseNames.set(row.id, row.name)
 
-    // Verify stock availability per warehouse
-    const insufficientStock: Array<{
-      product: string
-      warehouseName: string
-      required: number
-      available: number
-      onHand: number
-      reserved: number
-    }> = []
+    // Check stock availability (before transaction)
+    const insufficientStock: Array<{ product: string; warehouseName: string; required: number; available: number }> = []
 
     for (const line of linesResult.rows) {
       if (isMultiWarehouse) {
-        // Check stock for each warehouse quantity
         const wq = line.warehouse_quantities as WarehouseQuantities || {}
-        for (const [warehouseIdStr, qty] of Object.entries(wq)) {
+        for (const [wIdStr, qty] of Object.entries(wq)) {
           if (qty <= 0) continue
-          const warehouseId = parseInt(warehouseIdStr)
-
-          const stockResult = await db.query(`
-            SELECT
-              COALESCE(quantity_on_hand, 0) as on_hand,
-              COALESCE(quantity_reserved, 0) as reserved
-            FROM market_warehouse_stock
-            WHERE warehouse_id = $1 AND product_id = $2
+          const wId = parseInt(wIdStr)
+          const sr = await db.query(`
+            SELECT COALESCE(quantity_on_hand, 0) as on_hand, COALESCE(quantity_reserved, 0) as reserved
+            FROM market_warehouse_stock WHERE warehouse_id = $1 AND product_id = $2
             ${line.variant_id ? 'AND variant_id = $3' : 'AND variant_id IS NULL'}
-          `, line.variant_id
-            ? [warehouseId, line.product_id, line.variant_id]
-            : [warehouseId, line.product_id]
-          )
-
-          const onHand = parseFloat(stockResult.rows[0]?.on_hand) || 0
-          const reserved = parseFloat(stockResult.rows[0]?.reserved) || 0
-          const available = onHand - reserved
-
+          `, line.variant_id ? [wId, line.product_id, line.variant_id] : [wId, line.product_id])
+          const available = (parseFloat(sr.rows[0]?.on_hand) || 0) - (parseFloat(sr.rows[0]?.reserved) || 0)
           if (available < qty) {
-            insufficientStock.push({
-              product: line.product_name,
-              warehouseName: warehouseNames.get(warehouseId) || `Almacén ${warehouseId}`,
-              required: qty,
-              available: available,
-              onHand: onHand,
-              reserved: reserved
-            })
+            insufficientStock.push({ product: line.product_name, warehouseName: warehouseNames.get(wId) || `Almacén ${wId}`, required: qty, available })
           }
         }
       } else {
-        // Legacy single warehouse check
-        const stockResult = await db.query(`
-          SELECT
-            COALESCE(quantity_on_hand, 0) as on_hand,
-            COALESCE(quantity_reserved, 0) as reserved
-          FROM market_warehouse_stock
-          WHERE warehouse_id = $1 AND product_id = $2
+        const sr = await db.query(`
+          SELECT COALESCE(quantity_on_hand, 0) as on_hand, COALESCE(quantity_reserved, 0) as reserved
+          FROM market_warehouse_stock WHERE warehouse_id = $1 AND product_id = $2
           ${line.variant_id ? 'AND variant_id = $3' : 'AND variant_id IS NULL'}
-        `, line.variant_id
-          ? [invoice.warehouse_id, line.product_id, line.variant_id]
-          : [invoice.warehouse_id, line.product_id]
-        )
-
-        const onHand = parseFloat(stockResult.rows[0]?.on_hand) || 0
-        const reserved = parseFloat(stockResult.rows[0]?.reserved) || 0
-        const available = onHand - reserved
+        `, line.variant_id ? [invoice.warehouse_id, line.product_id, line.variant_id] : [invoice.warehouse_id, line.product_id])
+        const available = (parseFloat(sr.rows[0]?.on_hand) || 0) - (parseFloat(sr.rows[0]?.reserved) || 0)
         const required = parseFloat(line.quantity)
-
         if (available < required) {
-          insufficientStock.push({
-            product: line.product_name,
-            warehouseName: invoice.warehouse_name || 'Almacén',
-            required: required,
-            available: available,
-            onHand: onHand,
-            reserved: reserved
-          })
+          insufficientStock.push({ product: line.product_name, warehouseName: invoice.warehouse_name || 'Almacén', required, available })
         }
       }
     }
 
     if (insufficientStock.length > 0) {
-      return NextResponse.json({
-        success: false,
-        error: 'Stock insuficiente para algunos productos',
-        data: { insufficientStock }
-      }, { status: 400 })
+      return NextResponse.json({ success: false, error: 'Stock insuficiente', data: { insufficientStock } }, { status: 400 })
     }
 
-    // Start transaction
+    // === SINGLE TRANSACTION: confirm + create delivery + deduct stock + mark delivered ===
     await db.query('BEGIN')
 
     try {
-      // 1. Confirm invoice (preserve confirmed_at if already set)
-      await db.query(`
-        UPDATE market_invoices SET
-          status = 'confirmed',
-          confirmed_at = COALESCE(confirmed_at, NOW()),
-          updated_at = NOW()
-        WHERE id = $1
-      `, [invoiceId])
-
       const createdDeliveries: Array<{
-        deliveryId: number
-        deliveryNumber: string
-        operationId: number
-        warehouseId: number
-        warehouseName: string
-        operationNumber: string
-        productCount: number
+        deliveryId: number; deliveryNumber: string; operationId: number
+        warehouseId: number; warehouseName: string; operationNumber: string; productCount: number
       }> = []
 
       if (isMultiWarehouse) {
-        // Multi-warehouse: create delivery per warehouse
         // Group lines by warehouse
         const linesByWarehouse = new Map<number, Array<{
-          lineId: number
-          productId: number
-          variantId: number | null
-          productName: string
-          quantity: number
+          lineId: number; productId: number; variantId: number | null; productName: string; quantity: number
         }>>()
 
         for (const line of linesResult.rows) {
           const wq = line.warehouse_quantities as WarehouseQuantities || {}
-          for (const [warehouseIdStr, qty] of Object.entries(wq)) {
+          for (const [wIdStr, qty] of Object.entries(wq)) {
             if (qty <= 0) continue
-            const warehouseId = parseInt(warehouseIdStr)
-
-            if (!linesByWarehouse.has(warehouseId)) {
-              linesByWarehouse.set(warehouseId, [])
-            }
-            linesByWarehouse.get(warehouseId)!.push({
-              lineId: line.id,
-              productId: line.product_id,
-              variantId: line.variant_id,
-              productName: line.product_name,
-              quantity: qty
+            const wId = parseInt(wIdStr)
+            if (!linesByWarehouse.has(wId)) linesByWarehouse.set(wId, [])
+            linesByWarehouse.get(wId)!.push({
+              lineId: line.id, productId: line.product_id, variantId: line.variant_id,
+              productName: line.product_name, quantity: qty
             })
-
-            // Reserve stock in this warehouse
-            const stockCheck = await db.query(`
-              SELECT id FROM market_warehouse_stock
-              WHERE warehouse_id = $1 AND product_id = $2
-              ${line.variant_id ? 'AND variant_id = $3' : 'AND variant_id IS NULL'}
-            `, line.variant_id
-              ? [warehouseId, line.product_id, line.variant_id]
-              : [warehouseId, line.product_id]
-            )
-
-            if (stockCheck.rows.length > 0) {
-              await db.query(`
-                UPDATE market_warehouse_stock SET
-                  quantity_reserved = COALESCE(quantity_reserved, 0) + $1,
-                  updated_at = NOW()
-                WHERE warehouse_id = $2 AND product_id = $3
-                ${line.variant_id ? 'AND variant_id = $4' : 'AND variant_id IS NULL'}
-              `, line.variant_id
-                ? [qty, warehouseId, line.product_id, line.variant_id]
-                : [qty, warehouseId, line.product_id]
-              )
-            }
           }
         }
 
-        // Create delivery and operation for each warehouse
         for (const [warehouseId, warehouseLines] of linesByWarehouse) {
           const deliveryNumber = await generateDeliveryNumber(payload.companyId)
           const operationNumber = await generateOperationNumber(payload.companyId)
 
-          // Create warehouse operation
-          const operationResult = await db.query(`
+          // Create operation as DONE (not pending)
+          const opResult = await db.query(`
             INSERT INTO market_warehouse_operations (
               company_id, operation_number, operation_type, status,
               source_warehouse_id, validation_status,
               reference_type, reference_id, reference_number,
-              notes, created_by, created_at
-            ) VALUES (
-              $1, $2, 'wholesale_delivery', 'pending',
-              $3, 'pending_validation',
-              'wholesale_invoice', $4, $5,
-              $6, $7, NOW()
+              notes, created_by, created_at, completed_at, completed_by
+            ) VALUES ($1, $2, 'wholesale_delivery', 'done', $3, 'validated',
+              'wholesale_invoice', $4, $5, $6, $7, NOW(), NOW(), $7
             ) RETURNING id
-          `, [
-            payload.companyId,
-            operationNumber,
-            warehouseId,
-            invoiceId,
-            invoice.invoice_number,
-            `Entrega mayorista - Cliente: ${invoice.customer_name}`,
-            payload.userId
-          ])
+          `, [payload.companyId, operationNumber, warehouseId, invoiceId, invoice.invoice_number,
+            `Entrega mayorista - Cliente: ${invoice.customer_name}`, payload.userId])
+          const operationId = opResult.rows[0].id
 
-          const operationId = operationResult.rows[0].id
-
-          // Create delivery record
-          const deliveryResult = await db.query(`
+          // Create delivery as DELIVERED
+          const delResult = await db.query(`
             INSERT INTO market_invoice_deliveries (
               invoice_id, delivery_number, warehouse_id, operation_id,
-              status, delivery_address, notes, created_by, created_at
-            ) VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, NOW())
+              status, delivery_address, notes, created_by, created_at,
+              dispatched_at, delivered_at, dispatched_by, delivered_by
+            ) VALUES ($1, $2, $3, $4, 'delivered', $5, $6, $7, NOW(), NOW(), NOW(), $7, $7)
             RETURNING id
-          `, [
-            invoiceId,
-            deliveryNumber,
-            warehouseId,
-            operationId,
+          `, [invoiceId, deliveryNumber, warehouseId, operationId,
             invoice.customer_address || null,
             `Entrega desde ${warehouseNames.get(warehouseId) || 'almacén'}`,
-            payload.userId
-          ])
+            payload.userId])
+          const deliveryId = delResult.rows[0].id
 
-          const deliveryId = deliveryResult.rows[0].id
+          // Create lines and deduct stock for each product
+          for (const item of warehouseLines) {
+            await db.query(`
+              INSERT INTO market_warehouse_operation_lines (
+                operation_id, product_id, variant_id, quantity_planned, quantity_validated, created_at
+              ) VALUES ($1, $2, $3, $4, $4, NOW())
+            `, [operationId, item.productId, item.variantId, item.quantity])
 
-          // Create delivery lines and operation lines
-          for (const lineItem of warehouseLines) {
-            // Delivery line
             await db.query(`
               INSERT INTO market_invoice_delivery_lines (
                 delivery_id, invoice_line_id, product_id, variant_id,
                 quantity_to_deliver, quantity_delivered, created_at
-              ) VALUES ($1, $2, $3, $4, $5, 0, NOW())
-            `, [
-              deliveryId,
-              lineItem.lineId,
-              lineItem.productId,
-              lineItem.variantId,
-              lineItem.quantity
-            ])
+              ) VALUES ($1, $2, $3, $4, $5, $5, NOW())
+            `, [deliveryId, item.lineId, item.productId, item.variantId, item.quantity])
 
-            // Operation line
-            await db.query(`
-              INSERT INTO market_warehouse_operation_lines (
-                operation_id, product_id, variant_id,
-                quantity_planned, quantity_validated,
-                created_at
-              ) VALUES ($1, $2, $3, $4, 0, NOW())
-            `, [operationId, lineItem.productId, lineItem.variantId, lineItem.quantity])
+            // Deduct stock directly (NO reservation)
+            await deductStockFIFO(
+              warehouseId, item.productId, item.variantId, item.quantity,
+              payload.companyId, payload.userId, invoice.invoice_number,
+              invoice.customer_name, operationId, item.productName
+            )
           }
 
           createdDeliveries.push({
-            deliveryId,
-            deliveryNumber,
-            operationId,
-            warehouseId,
+            deliveryId, deliveryNumber, operationId, warehouseId,
             warehouseName: warehouseNames.get(warehouseId) || 'Almacén',
-            operationNumber,
-            productCount: warehouseLines.length
+            operationNumber, productCount: warehouseLines.length
           })
         }
       } else {
-        // Legacy single warehouse mode
+        // Single warehouse mode
         const operationNumber = await generateOperationNumber(payload.companyId)
         const deliveryNumber = await generateDeliveryNumber(payload.companyId)
 
-        // Reserve stock for each line
-        for (const line of linesResult.rows) {
-          const stockCheck = await db.query(`
-            SELECT id FROM market_warehouse_stock
-            WHERE warehouse_id = $1 AND product_id = $2
-            ${line.variant_id ? 'AND variant_id = $3' : 'AND variant_id IS NULL'}
-          `, line.variant_id
-            ? [invoice.warehouse_id, line.product_id, line.variant_id]
-            : [invoice.warehouse_id, line.product_id]
-          )
-
-          if (stockCheck.rows.length > 0) {
-            await db.query(`
-              UPDATE market_warehouse_stock SET
-                quantity_reserved = COALESCE(quantity_reserved, 0) + $1,
-                updated_at = NOW()
-              WHERE warehouse_id = $2 AND product_id = $3
-              ${line.variant_id ? 'AND variant_id = $4' : 'AND variant_id IS NULL'}
-            `, line.variant_id
-              ? [line.quantity, invoice.warehouse_id, line.product_id, line.variant_id]
-              : [line.quantity, invoice.warehouse_id, line.product_id]
-            )
-          }
-        }
-
-        // Create warehouse operation
-        const operationResult = await db.query(`
+        const opResult = await db.query(`
           INSERT INTO market_warehouse_operations (
             company_id, operation_number, operation_type, status,
             source_warehouse_id, validation_status,
             reference_type, reference_id, reference_number,
-            notes, created_by, created_at
-          ) VALUES (
-            $1, $2, 'wholesale_delivery', 'pending',
-            $3, 'pending_validation',
-            'wholesale_invoice', $4, $5,
-            $6, $7, NOW()
+            notes, created_by, created_at, completed_at, completed_by
+          ) VALUES ($1, $2, 'wholesale_delivery', 'done', $3, 'validated',
+            'wholesale_invoice', $4, $5, $6, $7, NOW(), NOW(), $7
           ) RETURNING id
-        `, [
-          payload.companyId,
-          operationNumber,
-          invoice.warehouse_id,
-          invoiceId,
-          invoice.invoice_number,
-          `Entrega mayorista - Cliente: ${invoice.customer_name}`,
-          payload.userId
-        ])
+        `, [payload.companyId, operationNumber, invoice.warehouse_id, invoiceId, invoice.invoice_number,
+          `Entrega mayorista - Cliente: ${invoice.customer_name}`, payload.userId])
+        const operationId = opResult.rows[0].id
 
-        const operationId = operationResult.rows[0].id
-
-        // Create delivery record
-        const deliveryResult = await db.query(`
+        const delResult = await db.query(`
           INSERT INTO market_invoice_deliveries (
             invoice_id, delivery_number, warehouse_id, operation_id,
-            status, delivery_address, notes, created_by, created_at
-          ) VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, NOW())
+            status, delivery_address, notes, created_by, created_at,
+            dispatched_at, delivered_at, dispatched_by, delivered_by
+          ) VALUES ($1, $2, $3, $4, 'delivered', $5, $6, $7, NOW(), NOW(), NOW(), $7, $7)
           RETURNING id
-        `, [
-          invoiceId,
-          deliveryNumber,
-          invoice.warehouse_id,
-          operationId,
+        `, [invoiceId, deliveryNumber, invoice.warehouse_id, operationId,
           invoice.customer_address || null,
           `Entrega desde ${invoice.warehouse_name || 'almacén'}`,
-          payload.userId
-        ])
+          payload.userId])
+        const deliveryId = delResult.rows[0].id
 
-        const deliveryId = deliveryResult.rows[0].id
-
-        // Create operation lines and delivery lines
         for (const line of linesResult.rows) {
+          const qty = parseFloat(line.quantity)
+
           await db.query(`
             INSERT INTO market_warehouse_operation_lines (
-              operation_id, product_id, variant_id,
-              quantity_planned, quantity_validated,
-              created_at
-            ) VALUES ($1, $2, $3, $4, 0, NOW())
-          `, [operationId, line.product_id, line.variant_id, line.quantity])
+              operation_id, product_id, variant_id, quantity_planned, quantity_validated, created_at
+            ) VALUES ($1, $2, $3, $4, $4, NOW())
+          `, [operationId, line.product_id, line.variant_id, qty])
 
           await db.query(`
             INSERT INTO market_invoice_delivery_lines (
               delivery_id, invoice_line_id, product_id, variant_id,
               quantity_to_deliver, quantity_delivered, created_at
-            ) VALUES ($1, $2, $3, $4, $5, 0, NOW())
-          `, [
-            deliveryId,
-            line.id,
-            line.product_id,
-            line.variant_id,
-            line.quantity
-          ])
+            ) VALUES ($1, $2, $3, $4, $5, $5, NOW())
+          `, [deliveryId, line.id, line.product_id, line.variant_id, qty])
+
+          await deductStockFIFO(
+            invoice.warehouse_id, line.product_id, line.variant_id, qty,
+            payload.companyId, payload.userId, invoice.invoice_number,
+            invoice.customer_name, operationId, line.product_name
+          )
         }
 
         createdDeliveries.push({
-          deliveryId,
-          deliveryNumber,
-          operationId,
+          deliveryId, deliveryNumber, operationId,
           warehouseId: invoice.warehouse_id,
           warehouseName: invoice.warehouse_name || 'Almacén',
-          operationNumber,
-          productCount: linesResult.rows.length
+          operationNumber, productCount: linesResult.rows.length
         })
       }
 
-      // Update customer balance
-      const invoiceTotal = await db.query(
-        'SELECT total_amount FROM market_invoices WHERE id = $1',
-        [invoiceId]
-      )
-      const { total_amount } = invoiceTotal.rows[0]
+      // Update invoice lines quantity_delivered
+      for (const line of linesResult.rows) {
+        const qty = isMultiWarehouse
+          ? Object.values(line.warehouse_quantities as WarehouseQuantities || {}).reduce((s, v) => s + (v > 0 ? v : 0), 0)
+          : parseFloat(line.quantity)
+        await db.query(`
+          UPDATE market_invoice_lines SET quantity_delivered = COALESCE(quantity_delivered, 0) + $1
+          WHERE id = $2
+        `, [qty, line.id])
+      }
 
+      // Update invoice status to delivered
+      await db.query(`
+        UPDATE market_invoices SET
+          status = 'delivered',
+          confirmed_at = COALESCE(confirmed_at, NOW()),
+          delivered_at = NOW(),
+          updated_at = NOW()
+        WHERE id = $1
+      `, [invoiceId])
+
+      // Update customer balance
+      const invoiceTotal = await db.query('SELECT total_amount FROM market_invoices WHERE id = $1', [invoiceId])
       await db.query(`
         UPDATE market_wholesale_customers SET
-          current_balance = current_balance + $1,
-          updated_at = NOW()
+          current_balance = current_balance + $1, updated_at = NOW()
         WHERE id = $2
-      `, [total_amount, invoice.customer_id])
+      `, [invoiceTotal.rows[0].total_amount, invoice.customer_id])
+
+      // Clean up any stuck reservations for these products
+      for (const line of linesResult.rows) {
+        try {
+          if (isMultiWarehouse) {
+            const wq = line.warehouse_quantities as WarehouseQuantities || {}
+            for (const [wIdStr] of Object.entries(wq)) {
+              await db.query(`
+                UPDATE market_warehouse_stock SET quantity_reserved = 0, updated_at = NOW()
+                WHERE warehouse_id = $1 AND product_id = $2 AND quantity_reserved > 0
+                ${line.variant_id ? 'AND variant_id = $3' : 'AND variant_id IS NULL'}
+              `, line.variant_id ? [parseInt(wIdStr), line.product_id, line.variant_id] : [parseInt(wIdStr), line.product_id])
+            }
+          } else {
+            await db.query(`
+              UPDATE market_warehouse_stock SET quantity_reserved = 0, updated_at = NOW()
+              WHERE warehouse_id = $1 AND product_id = $2 AND quantity_reserved > 0
+              ${line.variant_id ? 'AND variant_id = $3' : 'AND variant_id IS NULL'}
+            `, line.variant_id ? [invoice.warehouse_id, line.product_id, line.variant_id] : [invoice.warehouse_id, line.product_id])
+          }
+        } catch { /* non-fatal */ }
+      }
 
       await db.query('COMMIT')
 
       return NextResponse.json({
         success: true,
-        message: `Factura ${invoice.invoice_number} confirmada exitosamente`,
+        message: `Factura ${invoice.invoice_number} confirmada y entregada exitosamente`,
         data: {
           invoiceNumber: invoice.invoice_number,
           deliveries: createdDeliveries,

@@ -285,23 +285,10 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         method: 'POST'
       })
       const result = await response.json()
-      if (result.success && result.data?.deliveries) {
-        // Auto-complete each delivery to deduct stock immediately
-        for (const delivery of result.data.deliveries) {
-          try {
-            await fetch(`/api/market/warehouses/${delivery.warehouseId}/wholesale-deliveries/${delivery.operationId}/complete`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({})
-            })
-          } catch (completeError) {
-            console.error('Error completing delivery:', completeError)
-          }
-        }
-        fetchInvoice()
-      } else if (response.ok) {
-        fetchInvoice()
+      if (!response.ok) {
+        alert(result.error || 'Error al confirmar factura')
       }
+      fetchInvoice()
     } catch (error) {
       console.error('Error confirming invoice:', error)
     } finally {
