@@ -94,7 +94,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (date) {
-      whereClause += ` AND DATE(vl.entrytime) = $${paramIndex}`
+      // Use timezone-aware comparison to match entries by local date (Cuba = America/Havana)
+      whereClause += ` AND DATE(vl.entrytime AT TIME ZONE 'America/Havana') = $${paramIndex}`
       params.push(date)
       paramIndex++
     }
@@ -198,34 +199,57 @@ export async function POST(request: NextRequest) {
     const cookieStore = await cookies()
     const authToken = cookieStore.get('auth-token')?.value
 
-    if (!authToken) {
-      return NextResponse.json({
-        success: false,
-        error: 'No autorizado'
-      }, { status: 401 })
-    }
-
-    let payload: JWTPayload
-    try {
-      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
-      payload = jwt.verify(authToken, secret) as JWTPayload
-    } catch {
-      return NextResponse.json({
-        success: false,
-        error: 'Token inválido'
-      }, { status: 401 })
-    }
-
     const body = await request.json()
     const {
       action, // 'entry' or 'exit'
       visitorId,
       kioskId,
+      guardId,
       visitPurpose,
       visitNotes,
       hostEmployeeId,
       logId // For exit action
     } = body
+
+    let companyId: number | null = null
+    let isAuthenticated = false
+
+    // Try JWT authentication first
+    if (authToken) {
+      try {
+        const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+        const payload = jwt.verify(authToken, secret) as JWTPayload
+        companyId = payload.companyId
+        isAuthenticated = true
+      } catch {
+        // JWT invalid, will try kiosk auth
+      }
+    }
+
+    // Try kiosk authentication if JWT failed
+    if (!isAuthenticated && kioskId && guardId) {
+      const kioskResult = await db.query(
+        'SELECT companyid FROM market_door_kiosks WHERE id = $1 AND isactive = true',
+        [kioskId]
+      )
+      if (kioskResult.rows.length > 0) {
+        const guardResult = await db.query(
+          'SELECT id FROM market_door_guards WHERE id = $1 AND isactive = true',
+          [guardId]
+        )
+        if (guardResult.rows.length > 0) {
+          companyId = kioskResult.rows[0].companyid
+          isAuthenticated = true
+        }
+      }
+    }
+
+    if (!isAuthenticated || !companyId) {
+      return NextResponse.json({
+        success: false,
+        error: 'No autorizado'
+      }, { status: 401 })
+    }
 
     if (!action || !['entry', 'exit'].includes(action)) {
       return NextResponse.json({
@@ -247,7 +271,7 @@ export async function POST(request: NextRequest) {
       const activeEntry = await db.query(`
         SELECT id FROM market_visitor_logs
         WHERE visitorid = $1 AND companyid = $2 AND status = 'active'
-      `, [visitorId, payload.companyId])
+      `, [visitorId, companyId])
 
       if (activeEntry.rows.length > 0) {
         return NextResponse.json({
@@ -264,7 +288,7 @@ export async function POST(request: NextRequest) {
         ) VALUES ($1, $2, $3, NOW(), $4, $5, $6, 'active')
         RETURNING *
       `, [
-        payload.companyId,
+        companyId,
         visitorId,
         kioskId || null,
         visitPurpose || null,
@@ -300,7 +324,7 @@ export async function POST(request: NextRequest) {
         const logResult = await db.query(`
           SELECT * FROM market_visitor_logs
           WHERE id = $1 AND companyid = $2 AND status = 'active'
-        `, [logId, payload.companyId])
+        `, [logId, companyId])
 
         if (logResult.rows.length === 0) {
           return NextResponse.json({
@@ -316,7 +340,7 @@ export async function POST(request: NextRequest) {
           WHERE visitorid = $1 AND companyid = $2 AND status = 'active'
           ORDER BY entrytime DESC
           LIMIT 1
-        `, [visitorId, payload.companyId])
+        `, [visitorId, companyId])
 
         if (logResult.rows.length === 0) {
           return NextResponse.json({
@@ -331,9 +355,6 @@ export async function POST(request: NextRequest) {
           error: 'Se requiere logId o visitorId para registrar salida'
         }, { status: 400 })
       }
-
-      // Check for pending invoices if required
-      // This will be checked in a separate endpoint
 
       // Update log with exit time
       const updateResult = await db.query(`
