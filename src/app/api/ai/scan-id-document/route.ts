@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
       if (kioskResult.rows.length > 0) {
         // Validate guard exists and is active
         const guardResult = await db.query(
-          'SELECT id FROM market_door_guards WHERE id = $1 AND isactive = true',
+          'SELECT id FROM market_door_guards WHERE employeeid = $1 AND isactive = true',
           [guardId]
         )
         if (guardResult.rows.length > 0) {
