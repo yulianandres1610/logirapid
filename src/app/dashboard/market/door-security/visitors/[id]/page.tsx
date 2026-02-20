@@ -26,6 +26,12 @@ import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { useCompany } from '@/contexts/company-context'
 
+const ID_TYPE_LABELS: Record<string, string> = {
+  cedula: 'Carnet de Identidad',
+  passport: 'Pasaporte',
+  license: 'Licencia',
+}
+
 interface Visitor {
   id: number
   fullName: string
@@ -80,6 +86,7 @@ export default function VisitorDetailPage({ params }: { params: Promise<{ id: st
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   // Check if user is admin
   const isAdmin = companyInfo.userRole === 'SUPER_ADMIN' || companyInfo.userRole === 'ADMIN'
@@ -370,7 +377,7 @@ export default function VisitorDetailPage({ params }: { params: Promise<{ id: st
                   <div className="flex flex-wrap items-center gap-4 text-gray-500">
                     <span className="flex items-center gap-1.5">
                       <CreditCard className="w-4 h-4" />
-                      {visitor.idType || 'ID'}: {visitor.idNumber}
+                      {(visitor.idType && ID_TYPE_LABELS[visitor.idType]) || visitor.idType || 'ID'}: {visitor.idNumber}
                     </span>
                     {visitor.nationality && (
                       <span className="flex items-center gap-1.5">
@@ -484,7 +491,7 @@ export default function VisitorDetailPage({ params }: { params: Promise<{ id: st
                       <p className={cn(
                         'font-medium',
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
-                      )}>{visitor.idType || 'No especificado'}</p>
+                      )}>{(visitor.idType && ID_TYPE_LABELS[visitor.idType]) || visitor.idType || 'No especificado'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-500 mb-1">Fecha de Nacimiento</p>
@@ -707,7 +714,10 @@ export default function VisitorDetailPage({ params }: { params: Promise<{ id: st
                       {visitor.idPhotoUrl && (
                         <div>
                           <p className="text-sm text-gray-500 mb-2">Frente</p>
-                          <div className="relative aspect-[16/10] rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700">
+                          <div
+                            className="relative aspect-[16/10] rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 cursor-pointer hover:ring-2 hover:ring-teal-500 transition-all"
+                            onClick={() => setLightboxUrl(visitor.idPhotoUrl)}
+                          >
                             <Image
                               src={visitor.idPhotoUrl}
                               alt="Documento frente"
@@ -721,7 +731,10 @@ export default function VisitorDetailPage({ params }: { params: Promise<{ id: st
                       {visitor.idPhotoReverseUrl && (
                         <div>
                           <p className="text-sm text-gray-500 mb-2">Reverso</p>
-                          <div className="relative aspect-[16/10] rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700">
+                          <div
+                            className="relative aspect-[16/10] rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 cursor-pointer hover:ring-2 hover:ring-teal-500 transition-all"
+                            onClick={() => setLightboxUrl(visitor.idPhotoReverseUrl)}
+                          >
                             <Image
                               src={visitor.idPhotoReverseUrl}
                               alt="Documento reverso"
@@ -754,6 +767,40 @@ export default function VisitorDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
         </div>
+
+        {/* Image Lightbox */}
+        {lightboxUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80"
+            onClick={() => setLightboxUrl(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="relative max-w-4xl max-h-[90vh] w-full"
+              onClick={e => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setLightboxUrl(null)}
+                className="absolute -top-10 right-0 text-white/80 hover:text-white text-sm font-medium z-10"
+              >
+                Cerrar &times;
+              </button>
+              <div className="relative w-full h-[80vh] rounded-xl overflow-hidden bg-black">
+                <Image
+                  src={lightboxUrl}
+                  alt="Documento de identidad"
+                  fill
+                  className="object-contain"
+                  unoptimized
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </DashboardLayout>
     </ProtectedRoute>
   )

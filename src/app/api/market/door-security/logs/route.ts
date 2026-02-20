@@ -17,30 +17,53 @@ interface JWTPayload {
  */
 export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url)
     const cookieStore = await cookies()
     const authToken = cookieStore.get('auth-token')?.value
 
-    if (!authToken) {
+    let companyId: number | null = null
+
+    // Try JWT authentication first
+    if (authToken) {
+      try {
+        const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+        const payload = jwt.verify(authToken, secret) as JWTPayload
+        companyId = payload.companyId
+      } catch {
+        // JWT invalid, try kiosk auth
+      }
+    }
+
+    // Try kiosk authentication
+    if (!companyId) {
+      const kioskIdParam = searchParams.get('kioskId')
+      const guardIdParam = searchParams.get('guardId')
+      if (kioskIdParam && guardIdParam) {
+        const kioskResult = await db.query(
+          'SELECT companyid FROM market_door_kiosks WHERE id = $1 AND isactive = true',
+          [kioskIdParam]
+        )
+        if (kioskResult.rows.length > 0) {
+          const guardResult = await db.query(
+            'SELECT id FROM market_door_guards WHERE id = $1 AND isactive = true',
+            [guardIdParam]
+          )
+          if (guardResult.rows.length > 0) {
+            companyId = kioskResult.rows[0].companyid
+          }
+        }
+      }
+    }
+
+    if (!companyId) {
       return NextResponse.json({
         success: false,
         error: 'No autorizado'
       }, { status: 401 })
     }
 
-    let payload: JWTPayload
-    try {
-      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
-      payload = jwt.verify(authToken, secret) as JWTPayload
-    } catch {
-      return NextResponse.json({
-        success: false,
-        error: 'Token inválido'
-      }, { status: 401 })
-    }
-
-    const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '20')
+    const limit = parseInt(searchParams.get('limit') || '50')
     const status = searchParams.get('status') // 'active', 'completed', 'all'
     const kioskId = searchParams.get('kioskId')
     const visitorId = searchParams.get('visitorId')
@@ -49,7 +72,7 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit
 
     let whereClause = 'WHERE vl.companyid = $1'
-    const params: any[] = [payload.companyId]
+    const params: any[] = [companyId]
     let paramIndex = 2
 
     if (status && status !== 'all') {

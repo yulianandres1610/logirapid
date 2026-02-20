@@ -32,6 +32,21 @@ interface CountRequest {
   action?: 'save' | 'complete'
 }
 
+// Auto-migration: ensure recount_history column exists
+let _recountColumnMigrated = false
+async function ensureRecountHistoryColumn() {
+  if (_recountColumnMigrated) return
+  try {
+    await db.query(`
+      ALTER TABLE market_inventory_counts
+      ADD COLUMN IF NOT EXISTS recount_history JSONB DEFAULT '[]'::jsonb
+    `)
+    _recountColumnMigrated = true
+  } catch {
+    _recountColumnMigrated = true // Don't retry on error
+  }
+}
+
 /**
  * GET /api/market/pos/inventory-count
  * Obtiene un conteo existente por sessionId o countId
@@ -43,6 +58,7 @@ interface CountRequest {
  */
 export async function GET(request: NextRequest) {
   try {
+    await ensureRecountHistoryColumn()
     const cookieStore = await cookies()
     const authToken = cookieStore.get('auth-token')?.value
 
@@ -180,7 +196,19 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({
+    // Parse recount history
+    let recountHistory: unknown[] = []
+    try {
+      if (count.recount_history) {
+        recountHistory = typeof count.recount_history === 'string'
+          ? JSON.parse(count.recount_history)
+          : count.recount_history
+      }
+    } catch {
+      recountHistory = []
+    }
+
+    const response = NextResponse.json({
       success: true,
       data: {
         id: count.id,
@@ -201,9 +229,13 @@ export async function GET(request: NextRequest) {
         productsWithDifferences: recalcProductsWithDifferences,
         totalDifferenceValue: Math.round(recalcTotalDifferenceValue * 100) / 100,
         notes: count.notes,
+        recountHistory,
         lines
       }
     })
+    // Prevent browser caching - critical for recount flow
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+    return response
 
   } catch (error: unknown) {
     const err = error as Error
@@ -221,6 +253,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    await ensureRecountHistoryColumn()
     const cookieStore = await cookies()
     const authToken = cookieStore.get('auth-token')?.value
 
@@ -279,26 +312,46 @@ export async function POST(request: NextRequest) {
       }, { status: 403 })
     }
 
-    // Buscar conteo existente para esta sesión que esté EN PROGRESO
-    // Si ya hay un conteo completado, creamos uno nuevo
-    const existingCount = await db.query(`
+    // Buscar conteo existente para esta sesión
+    // Primero buscar in_progress, si no existe buscar completed (para recontar)
+    let existingCount = await db.query(`
       SELECT id, status FROM market_inventory_counts
       WHERE session_id = $1 AND status = 'in_progress'
       ORDER BY created_at DESC LIMIT 1
     `, [sessionId])
+
+    // Si no hay in_progress, buscar completed para permitir recontar
+    if (existingCount.rows.length === 0) {
+      existingCount = await db.query(`
+        SELECT id, status FROM market_inventory_counts
+        WHERE session_id = $1 AND status = 'completed'
+        ORDER BY created_at DESC LIMIT 1
+      `, [sessionId])
+    }
 
     let countId: number
     let countNumber: string
 
     if (existingCount.rows.length > 0) {
       countId = existingCount.rows[0].id
+      const existingStatus = existingCount.rows[0].status
 
-      // Actualizar conteo existente
-      await db.query(`
-        UPDATE market_inventory_counts
-        SET warehouse_id = $1, notes = $2, updated_at = NOW()
-        WHERE id = $3
-      `, [effectiveWarehouseId, notes, countId])
+      // Si el conteo estaba completado y se está recontando, volver a in_progress
+      if (existingStatus === 'completed') {
+        console.log(`[Inventory Count] Recontando conteo ${countId} - cambiando de completed a in_progress`)
+        await db.query(`
+          UPDATE market_inventory_counts
+          SET warehouse_id = $1, notes = $2, status = 'in_progress', updated_at = NOW()
+          WHERE id = $3
+        `, [effectiveWarehouseId, notes, countId])
+      } else {
+        // Actualizar conteo existente in_progress
+        await db.query(`
+          UPDATE market_inventory_counts
+          SET warehouse_id = $1, notes = $2, updated_at = NOW()
+          WHERE id = $3
+        `, [effectiveWarehouseId, notes, countId])
+      }
 
       const countData = await db.query(`SELECT count_number FROM market_inventory_counts WHERE id = $1`, [countId])
       countNumber = countData.rows[0].count_number
@@ -332,8 +385,83 @@ export async function POST(request: NextRequest) {
 
     // Procesar líneas si se proporcionan
     if (lines && lines.length > 0) {
-      // Eliminar líneas anteriores
-      await db.query(`DELETE FROM market_inventory_count_lines WHERE count_id = $1`, [countId])
+      // Dedup lines on the client side - keep only the last entry per product/variant
+      const deduped = new Map<string, CountLine>()
+      for (const line of lines) {
+        const key = `${line.productId}:${line.variantId || 'null'}`
+        deduped.set(key, line)
+      }
+      const uniqueLines = Array.from(deduped.values())
+
+      // Obtener líneas anteriores para detectar cambios (reconteo)
+      const oldLinesResult = await db.query(`
+        SELECT product_id, variant_id, product_name, counted_quantity
+        FROM market_inventory_count_lines
+        WHERE count_id = $1
+      `, [countId])
+
+      // Detectar productos con cantidades corregidas
+      const oldLinesMap: Record<string, { productName: string; countedQuantity: number }> = {}
+      for (const ol of oldLinesResult.rows) {
+        const key = `${ol.product_id}:${ol.variant_id || 'null'}`
+        oldLinesMap[key] = {
+          productName: ol.product_name,
+          countedQuantity: parseFloat(ol.counted_quantity) || 0
+        }
+      }
+
+      const correctedProducts: Array<{ productName: string; oldQuantity: number; newQuantity: number }> = []
+      for (const line of uniqueLines) {
+        const key = `${line.productId}:${line.variantId || 'null'}`
+        const oldLine = oldLinesMap[key]
+        if (oldLine && oldLine.countedQuantity !== (line.countedQuantity || 0)) {
+          correctedProducts.push({
+            productName: line.productName || oldLine.productName,
+            oldQuantity: oldLine.countedQuantity,
+            newQuantity: line.countedQuantity || 0
+          })
+        }
+      }
+
+      // Si hay correcciones, registrar el reconteo en el historial
+      if (correctedProducts.length > 0) {
+        // Obtener nombre del usuario
+        const userResult = await db.query(
+          `SELECT firstname || ' ' || lastname as fullname FROM users WHERE id = $1`,
+          [payload.userId]
+        )
+        const userName = userResult.rows[0]?.fullname || 'Usuario'
+
+        // Obtener historial existente
+        let existingHistory: unknown[] = []
+        try {
+          const histResult = await db.query(
+            `SELECT recount_history FROM market_inventory_counts WHERE id = $1`,
+            [countId]
+          )
+          if (histResult.rows[0]?.recount_history) {
+            existingHistory = typeof histResult.rows[0].recount_history === 'string'
+              ? JSON.parse(histResult.rows[0].recount_history)
+              : histResult.rows[0].recount_history
+          }
+        } catch { /* ignore */ }
+
+        const recountEntry = {
+          timestamp: new Date().toISOString(),
+          userId: payload.userId,
+          userName,
+          correctedProducts
+        }
+
+        const updatedHistory = [...(Array.isArray(existingHistory) ? existingHistory : []), recountEntry]
+
+        await db.query(
+          `UPDATE market_inventory_counts SET recount_history = $1::jsonb WHERE id = $2`,
+          [JSON.stringify(updatedHistory), countId]
+        )
+
+        console.log(`[Inventory Count] Reconteo registrado por ${userName}: ${correctedProducts.length} producto(s) corregido(s)`)
+      }
 
       // Obtener ventas del día agrupadas por producto Y variante
       const salesResult = await db.query(`
@@ -366,7 +494,7 @@ export async function POST(request: NextRequest) {
       })
 
       // Obtener stock actual del almacén (productos y variantes)
-      const productIds = lines.map(l => l.productId)
+      const productIds = uniqueLines.map(l => l.productId)
       const stockResult = await db.query(`
         SELECT product_id, variant_id, COALESCE(quantity_on_hand, 0) as stock
         FROM market_warehouse_stock
@@ -397,17 +525,10 @@ export async function POST(request: NextRequest) {
         }
       })
 
-      // Insertar nuevas líneas
-      // NUEVA FÓRMULA: difference = (Stock inicial - Vendido) - Contado
-      // Stock inicial ≈ Stock actual + Vendido hoy (si no hay otras operaciones)
-      // Entonces: difference = Stock actual - Contado
-      // Positivo = FALTANTE (hay menos de lo esperado)
-      // Negativo = SOBRANTE (hay más de lo esperado)
-
       // IMPORTANTE: Contar cuántas variantes de cada producto están siendo contadas
       // para evitar duplicar el stock a nivel producto
       const variantsPerProduct: Record<number, number[]> = {}
-      for (const line of lines) {
+      for (const line of uniqueLines) {
         if (line.variantId) {
           if (!variantsPerProduct[line.productId]) {
             variantsPerProduct[line.productId] = []
@@ -419,7 +540,15 @@ export async function POST(request: NextRequest) {
       // Track de productos cuyo stock a nivel producto ya fue asignado
       const productStockAssigned: Set<number> = new Set()
 
-      for (const line of lines) {
+      // Prepare all line data before the transaction
+      const lineInserts: Array<{
+        productId: number; variantId: number | null; displayName: string;
+        productSku: string; productBarcode: string; productImage: string | null;
+        unitPrice: number; expectedQuantity: number; countedQuantity: number;
+        difference: number; differenceValue: number; soldToday: number; notes: string | null;
+      }> = []
+
+      for (const line of uniqueLines) {
         const salesKey = `${line.productId}:${line.variantId || 'null'}`
         // Ventas del día: si no hay variant_id, usar suma de todas las variantes
         let soldToday = salesMap[salesKey] || 0
@@ -428,80 +557,69 @@ export async function POST(request: NextRequest) {
         }
 
         const stockKey = `${line.productId}:${line.variantId || 'null'}`
-
-        // Buscar stock según el tipo de línea:
-        // 1. Si la línea tiene variant_id específico, buscar stock de esa variante
-        // 2. Si la línea NO tiene variant_id (conteo agregado de producto):
-        //    a. Primero buscar registro de stock a nivel producto (variant_id IS NULL)
-        //    b. Si no existe, SUMAR todos los stocks de variantes del producto
         let currentStock = stockMap[stockKey] || 0
 
         if (line.variantId) {
-          // Contando una variante específica
-          // Solo sumar stock a nivel producto si:
-          // 1. Hay stock a nivel producto
-          // 2. Es la PRIMERA variante de este producto que procesamos (evitar duplicación)
-          // 3. Solo hay UNA variante siendo contada de este producto (si hay múltiples, no podemos saber a cuál asignar)
           const oldProductStock = productLevelStock[line.productId] || 0
           const variantsBeingCounted = variantsPerProduct[line.productId]?.length || 0
 
           if (oldProductStock > 0 && !productStockAssigned.has(line.productId)) {
             if (variantsBeingCounted === 1) {
-              // Solo una variante siendo contada, podemos sumar el stock huérfano
-              console.log(`[Inventory Count] Producto ${line.productId} variante ${line.variantId}: sumando stock nivel producto (${oldProductStock}) + stock variante (${currentStock})`)
               currentStock += oldProductStock
               productStockAssigned.add(line.productId)
-            } else {
-              // Múltiples variantes siendo contadas, NO sumar para evitar duplicación
-              console.warn(`[Inventory Count] ADVERTENCIA: Producto ${line.productId} tiene ${variantsBeingCounted} variantes siendo contadas Y stock huérfano (${oldProductStock}). No se suma para evitar duplicación. Use /api/market/stock-audit para corregir.`)
             }
           }
         } else if (currentStock === 0) {
-          // Contando producto sin variante y no hay stock a nivel producto
-          // Usar suma de todas las variantes
           currentStock = stockSumByProduct[line.productId] || 0
         }
-        // Stock esperado = Stock inicial del día - Vendido = (currentStock + soldToday) - soldToday = currentStock
+
         const expectedQuantity = currentStock
         const countedQuantity = line.countedQuantity || 0
-        // Fórmula: (Stock inicial - Vendido) - Contado = expectedQuantity - countedQuantity
-        // Positivo = FALTANTE, Negativo = SOBRANTE
-        // Redondear a 2 decimales para evitar errores de punto flotante
         const rawDifference = expectedQuantity - countedQuantity
         const difference = Math.round(rawDifference * 100) / 100
         const unitPrice = line.unitPrice || 0
-        // El valor de la diferencia: positivo = pérdida (faltante), negativo = ganancia (sobrante)
         const differenceValue = Math.round(difference * unitPrice * 100) / 100
-
-        // El nombre del producto ya viene formateado desde el cliente (incluye variante si aplica)
         const displayName = line.productName || ''
 
-        await db.query(`
-          INSERT INTO market_inventory_count_lines (
-            count_id, product_id, variant_id, product_name, product_sku,
-            product_barcode, product_image, unit_price, expected_quantity, counted_quantity,
-            difference, difference_value, sold_today, notes
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-        `, [
-          countId,
-          line.productId,
-          line.variantId || null,
+        lineInserts.push({
+          productId: line.productId,
+          variantId: line.variantId || null,
           displayName,
-          line.productSku || '',
-          line.productBarcode || '',
-          line.productImage || null,
+          productSku: line.productSku || '',
+          productBarcode: line.productBarcode || '',
+          productImage: line.productImage || null,
           unitPrice,
           expectedQuantity,
           countedQuantity,
           difference,
           differenceValue,
           soldToday,
-          line.notes || null
-        ])
+          notes: line.notes || null
+        })
       }
 
+      // Use a transaction for DELETE + INSERT to prevent duplicates from concurrent saves
+      await db.transaction(async (client) => {
+        // Delete old lines
+        await client.query(`DELETE FROM market_inventory_count_lines WHERE count_id = $1`, [countId])
+
+        // Insert new lines
+        for (const li of lineInserts) {
+          await client.query(`
+            INSERT INTO market_inventory_count_lines (
+              count_id, product_id, variant_id, product_name, product_sku,
+              product_barcode, product_image, unit_price, expected_quantity, counted_quantity,
+              difference, difference_value, sold_today, notes
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          `, [
+            countId, li.productId, li.variantId, li.displayName, li.productSku,
+            li.productBarcode, li.productImage, li.unitPrice, li.expectedQuantity,
+            li.countedQuantity, li.difference, li.differenceValue, li.soldToday, li.notes
+          ])
+        }
+      })
+
       // Actualizar totales en el conteo
-      // Usar tolerancia de 0.001 para ignorar errores de punto flotante
       const totals = await db.query(`
         SELECT
           COUNT(*) as total_products,
@@ -704,13 +822,116 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { countId, sessionId, action } = body as { countId?: number; sessionId?: number; action?: string }
+    const { countId, sessionId, action } = body as { countId?: number; sessionId?: number; action?: string; countNumber?: string; productNameSearch?: string; newCountedQuantity?: number }
 
-    if (action !== 'reevaluate') {
+    if (action !== 'reevaluate' && action !== 'update_line') {
       return NextResponse.json({
         success: false,
         error: 'Acción no válida'
       }, { status: 400 })
+    }
+
+    // ACTION: update_line - Directly fix a count line's counted quantity
+    if (action === 'update_line') {
+      const { countNumber: cn, productNameSearch: pns, newCountedQuantity: nq } = body as { countNumber?: string; productNameSearch?: string; newCountedQuantity?: number }
+
+      if (!cn || !pns || nq === undefined || nq === null) {
+        return NextResponse.json({
+          success: false,
+          error: 'countNumber, productNameSearch, y newCountedQuantity son requeridos'
+        }, { status: 400 })
+      }
+
+      // Find count by number
+      const countRes = await db.query(`
+        SELECT id, status, company_id, warehouse_id
+        FROM market_inventory_counts
+        WHERE count_number = $1
+      `, [cn])
+
+      if (countRes.rows.length === 0) {
+        return NextResponse.json({ success: false, error: `Conteo ${cn} no encontrado` }, { status: 404 })
+      }
+
+      const cnt = countRes.rows[0]
+
+      if (payload.role !== 'SUPER_ADMIN' && cnt.company_id !== payload.companyId) {
+        return NextResponse.json({ success: false, error: 'Sin permisos' }, { status: 403 })
+      }
+
+      // Find line by product name (partial match)
+      const lineRes = await db.query(`
+        SELECT id, product_name, counted_quantity, expected_quantity, unit_price
+        FROM market_inventory_count_lines
+        WHERE count_id = $1 AND LOWER(product_name) LIKE $2
+      `, [cnt.id, `%${pns.toLowerCase()}%`])
+
+      if (lineRes.rows.length === 0) {
+        return NextResponse.json({ success: false, error: `Producto "${pns}" no encontrado en el conteo` }, { status: 404 })
+      }
+
+      const line = lineRes.rows[0]
+      const oldQty = parseFloat(line.counted_quantity) || 0
+      const expectedQty = parseFloat(line.expected_quantity) || 0
+      const unitPrice = parseFloat(line.unit_price) || 0
+      const newDifference = Math.round((expectedQty - nq) * 100) / 100
+      const newDiffValue = Math.round(newDifference * unitPrice * 100) / 100
+
+      // Update the line
+      await db.query(`
+        UPDATE market_inventory_count_lines
+        SET counted_quantity = $1, difference = $2, difference_value = $3
+        WHERE id = $4
+      `, [nq, newDifference, newDiffValue, line.id])
+
+      // Recalculate count totals
+      const totals = await db.query(`
+        SELECT
+          COUNT(*) as total_products,
+          SUM(CASE WHEN ABS(difference) >= 0.01 THEN 1 ELSE 0 END) as products_with_differences,
+          SUM(CASE WHEN ABS(difference) >= 0.01 THEN difference_value ELSE 0 END) as total_difference_value
+        FROM market_inventory_count_lines
+        WHERE count_id = $1
+      `, [cnt.id])
+
+      await db.query(`
+        UPDATE market_inventory_counts
+        SET
+          total_products = $1,
+          products_with_differences = $2,
+          total_difference_value = $3,
+          updated_at = NOW()
+        WHERE id = $4
+      `, [
+        parseInt(totals.rows[0].total_products) || 0,
+        parseInt(totals.rows[0].products_with_differences) || 0,
+        parseFloat(totals.rows[0].total_difference_value) || 0,
+        cnt.id
+      ])
+
+      // If count was completed, reset to in_progress for re-review
+      if (cnt.status === 'completed') {
+        await db.query(`
+          UPDATE market_inventory_counts SET status = 'in_progress', updated_at = NOW() WHERE id = $1
+        `, [cnt.id])
+      }
+
+      console.log(`[Inventory Count] Line fixed: ${line.product_name} qty ${oldQty} → ${nq} (count ${cn})`)
+
+      return NextResponse.json({
+        success: true,
+        message: `Línea corregida: ${line.product_name} de ${oldQty} a ${nq}`,
+        data: {
+          countId: cnt.id,
+          countNumber: cn,
+          productName: line.product_name,
+          oldQuantity: oldQty,
+          newQuantity: nq,
+          expectedQuantity: expectedQty,
+          newDifference,
+          newDiffValue
+        }
+      })
     }
 
     // Buscar el conteo

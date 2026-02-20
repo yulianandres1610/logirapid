@@ -20,35 +20,63 @@ export async function POST(request: NextRequest) {
     const cookieStore = await cookies()
     const authToken = cookieStore.get('auth-token')?.value
 
-    if (!authToken) {
-      return NextResponse.json({
-        success: false,
-        error: 'No autorizado'
-      }, { status: 401 })
-    }
-
-    let payload: JWTPayload
-    try {
-      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
-      payload = jwt.verify(authToken, secret) as JWTPayload
-    } catch {
-      return NextResponse.json({
-        success: false,
-        error: 'Token inválido'
-      }, { status: 401 })
-    }
-
     const body = await request.json()
     const {
       visitorLogId,
-      documentType, // 'pos_receipt' or 'wholesale_invoice'
+      documentType, // 'pos_receipt', 'pos_order', or 'wholesale_invoice'
       documentId,
       documentNumber,
       totalAmount,
       currency,
       notes,
-      guardEmployeeId
+      guardEmployeeId,
+      kioskId,
+      guardId
     } = body
+
+    let companyId: number | null = null
+    let userId: number | null = null
+    let userRole: string | null = null
+    let isAuthenticated = false
+
+    // Try JWT authentication first
+    if (authToken) {
+      try {
+        const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+        const payload = jwt.verify(authToken, secret) as JWTPayload
+        companyId = payload.companyId
+        userId = payload.userId
+        userRole = payload.role
+        isAuthenticated = true
+      } catch {
+        // JWT invalid, will try kiosk auth
+      }
+    }
+
+    // Try kiosk authentication if JWT failed
+    if (!isAuthenticated && kioskId && guardId) {
+      const kioskResult = await db.query(
+        'SELECT companyid FROM market_door_kiosks WHERE id = $1 AND isactive = true',
+        [kioskId]
+      )
+      if (kioskResult.rows.length > 0) {
+        const guardResult = await db.query(
+          'SELECT id FROM market_door_guards WHERE id = $1 AND isactive = true',
+          [guardId]
+        )
+        if (guardResult.rows.length > 0) {
+          companyId = kioskResult.rows[0].companyid
+          isAuthenticated = true
+        }
+      }
+    }
+
+    if (!isAuthenticated || !companyId) {
+      return NextResponse.json({
+        success: false,
+        error: 'No autorizado'
+      }, { status: 401 })
+    }
 
     if (!visitorLogId || !documentType) {
       return NextResponse.json({
@@ -57,7 +85,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    if (!['pos_receipt', 'wholesale_invoice'].includes(documentType)) {
+    if (!['pos_receipt', 'pos_order', 'wholesale_invoice'].includes(documentType)) {
       return NextResponse.json({
         success: false,
         error: 'Tipo de documento inválido'
@@ -77,7 +105,7 @@ export async function POST(request: NextRequest) {
     }
 
     const log = logResult.rows[0]
-    if (payload.role !== 'SUPER_ADMIN' && log.companyid !== payload.companyId) {
+    if (userRole !== 'SUPER_ADMIN' && log.companyid !== companyId) {
       return NextResponse.json({
         success: false,
         error: 'No tiene acceso a este registro'
@@ -100,14 +128,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Get guard employee ID if not provided
-    let validatorId = guardEmployeeId
-    if (!validatorId) {
+    let validatorId = guardEmployeeId || guardId
+    if (!validatorId && userId) {
       // Try to find employee by user ID
       const employeeResult = await db.query(`
         SELECT id FROM market_employees
         WHERE user_id = $1 AND company_id = $2
         LIMIT 1
-      `, [payload.userId, payload.companyId])
+      `, [userId, companyId])
 
       if (employeeResult.rows.length > 0) {
         validatorId = employeeResult.rows[0].id

@@ -115,7 +115,11 @@ export default function InventoryCountReportPage() {
         const openSession = sessionsArray[0]
         setSessionId(openSession.id)
 
-        const countRes = await fetch(`/api/market/pos/inventory-count?sessionId=${openSession.id}`)
+        // Use cache: 'no-store' and timestamp to ensure fresh data (critical for recount flow)
+        const countRes = await fetch(
+          `/api/market/pos/inventory-count?sessionId=${openSession.id}&_t=${Date.now()}`,
+          { cache: 'no-store' }
+        )
         const countResult = await countRes.json()
 
         if (!countResult.success) {

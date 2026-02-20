@@ -149,6 +149,8 @@ export default function InventoryCountPage() {
   // Auto-save timer ref
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastSavedRef = useRef<string>('')
+  // Mutex to prevent concurrent saves (auto-save + manual save race condition)
+  const savingInProgressRef = useRef<boolean>(false)
 
   // Online status and theme
   useEffect(() => {
@@ -262,21 +264,26 @@ export default function InventoryCountPage() {
           }
         }
 
-        // Load existing count if any - but only if it's from today
-        const countRes = await fetch(`/api/market/pos/inventory-count?sessionId=${openSession.id}`)
-        const countData = await countRes.json()
+        // Load existing count if any - use cache: 'no-store' to ensure fresh data on recount
+        const cacheBuster = `&_t=${Date.now()}`
+        let countRes = await fetch(
+          `/api/market/pos/inventory-count?sessionId=${openSession.id}${cacheBuster}`,
+          { cache: 'no-store' }
+        )
+        let countData = await countRes.json()
 
-        // Helper to check if a date is today
-        const isToday = (dateStr: string) => {
-          if (!dateStr) return false
-          const countDate = new Date(dateStr)
-          const today = new Date()
-          return countDate.toDateString() === today.toDateString()
+        // If no in_progress count, try loading any count (including completed for recount)
+        if (countData.success && !countData.data) {
+          countRes = await fetch(
+            `/api/market/pos/inventory-count?sessionId=${openSession.id}&status=any${cacheBuster}`,
+            { cache: 'no-store' }
+          )
+          countData = await countRes.json()
         }
 
-        // Only load saved progress if the count was started today
+        // Load existing count data for this session (regardless of when it was started)
         let loadedCountedProducts: CountedProduct[] = []
-        if (countData.success && countData.data && countData.data.lines && isToday(countData.data.startedAt)) {
+        if (countData.success && countData.data && countData.data.lines) {
           loadedCountedProducts = countData.data.lines.map((l: {
             productId: number
             variantId?: number | null
@@ -301,9 +308,8 @@ export default function InventoryCountPage() {
           }))
         }
 
-        // Set counted products from loaded data (if any from today)
+        // Set counted products from loaded data
         // Note: Products with stock 0 are excluded from counting entirely
-        // They don't appear in pending list and don't affect progress percentage
         setCountedProducts(loadedCountedProducts)
         lastSavedRef.current = JSON.stringify(loadedCountedProducts)
 
@@ -406,7 +412,11 @@ export default function InventoryCountPage() {
 
     // Schedule auto-save after 2 seconds of inactivity
     autoSaveTimeoutRef.current = setTimeout(async () => {
+      // Skip if a manual save is already in progress
+      if (savingInProgressRef.current) return
+
       try {
+        savingInProgressRef.current = true
         const response = await fetch('/api/market/pos/inventory-count', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -425,6 +435,8 @@ export default function InventoryCountPage() {
         }
       } catch (err) {
         console.error('[AutoSave] Error:', err)
+      } finally {
+        savingInProgressRef.current = false
       }
     }, 2000)
 
@@ -502,11 +514,18 @@ export default function InventoryCountPage() {
         if (!isNaN(quantity) && quantity >= 0) {
           const variantId = selectedVariant?.id || null
 
-          const existingIndex = countedProducts.findIndex(p =>
-            p.productId === selectedProduct.id && p.variantId === variantId
-          )
+          // When editing an existing product, use the stored editingIndex directly
+          // This avoids issues with variant matching (variantId mismatch)
+          let existingIndex = editingIndex
+          if (existingIndex === null) {
+            // Not editing - search for existing product by id + variant
+            existingIndex = countedProducts.findIndex(p =>
+              p.productId === selectedProduct.id && p.variantId === variantId
+            )
+            if (existingIndex < 0) existingIndex = null
+          }
 
-          if (existingIndex >= 0) {
+          if (existingIndex !== null && existingIndex >= 0) {
             const updated = [...countedProducts]
             updated[existingIndex] = {
               ...updated[existingIndex],
@@ -551,32 +570,102 @@ export default function InventoryCountPage() {
     } else if (key !== '.') {
       setNumpadValue(prev => prev.length < 10 ? prev + key : prev)
     }
-  }, [selectedProduct, selectedVariant, numpadValue, countedProducts])
+  }, [selectedProduct, selectedVariant, numpadValue, countedProducts, editingIndex])
 
-  // Handle keyboard input
+  // Handle keyboard input - with barcode scanner filtering
+  // Barcode scanners emulate rapid keyboard input (< 50ms between keys).
+  // When the numpad is active, we buffer digit keystrokes and only apply them
+  // if they arrive at human typing speed. Rapid bursts are discarded.
+  const keyBufferRef = useRef<{ key: string; time: number }[]>([])
+  const keyFlushTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const handleNumpadRef = useRef(handleNumpad)
+  handleNumpadRef.current = handleNumpad
+
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (selectedProduct) {
-        if (e.key >= '0' && e.key <= '9') {
-          handleNumpad(e.key)
-        } else if (e.key === '.') {
-          handleNumpad('.')
-        } else if (e.key === 'Enter') {
-          handleNumpad('ENTER')
-        } else if (e.key === 'Backspace') {
-          handleNumpad('DEL')
-        } else if (e.key === 'Escape') {
-          setSelectedProduct(null)
-          setSelectedVariant(null)
-          setNumpadValue('')
-          setEditingIndex(null)
+    const flushKeyBuffer = () => {
+      const buffer = keyBufferRef.current
+      keyBufferRef.current = []
+
+      if (buffer.length === 0) return
+
+      // If 3+ rapid keys (avg gap < 70ms), it's a barcode scanner - discard
+      if (buffer.length >= 3) {
+        const totalTime = buffer[buffer.length - 1].time - buffer[0].time
+        const avgGap = totalTime / (buffer.length - 1)
+        if (avgGap < 70) {
+          console.log('[Numpad] Barcode scanner input discarded:', buffer.map(b => b.key).join(''))
+          return
         }
+      }
+
+      // Normal human typing - apply each key
+      for (const item of buffer) {
+        handleNumpadRef.current(item.key)
+      }
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!selectedProduct) return
+
+      // Ignore events from input/textarea elements
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+
+      if ((e.key >= '0' && e.key <= '9') || e.key === '.') {
+        e.preventDefault()
+        const now = Date.now()
+        keyBufferRef.current.push({ key: e.key, time: now })
+
+        // Reset flush timer
+        if (keyFlushTimeoutRef.current) clearTimeout(keyFlushTimeoutRef.current)
+
+        // Flush after 120ms of no more keys
+        // Barcode scanners complete within ~100ms for 10+ chars
+        // Human pause between digits is typically 150ms+
+        keyFlushTimeoutRef.current = setTimeout(flushKeyBuffer, 120)
+
+      } else if (e.key === 'Enter') {
+        // Flush pending buffer first
+        if (keyFlushTimeoutRef.current) clearTimeout(keyFlushTimeoutRef.current)
+        const buffer = keyBufferRef.current
+        keyBufferRef.current = []
+
+        // If buffer has rapid keys, it's a barcode ending with Enter - discard all
+        if (buffer.length >= 3) {
+          const totalTime = buffer[buffer.length - 1].time - buffer[0].time
+          const avgGap = totalTime / (buffer.length - 1)
+          if (avgGap < 70) {
+            console.log('[Numpad] Barcode+Enter discarded:', buffer.map(b => b.key).join(''))
+            e.preventDefault()
+            return
+          }
+        }
+
+        // Apply any buffered human-speed keys, then ENTER
+        for (const item of buffer) {
+          handleNumpadRef.current(item.key)
+        }
+        handleNumpadRef.current('ENTER')
+
+      } else if (e.key === 'Backspace') {
+        if (keyFlushTimeoutRef.current) clearTimeout(keyFlushTimeoutRef.current)
+        keyBufferRef.current = []
+        handleNumpadRef.current('DEL')
+      } else if (e.key === 'Escape') {
+        if (keyFlushTimeoutRef.current) clearTimeout(keyFlushTimeoutRef.current)
+        keyBufferRef.current = []
+        setSelectedProduct(null)
+        setSelectedVariant(null)
+        setNumpadValue('')
+        setEditingIndex(null)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedProduct, handleNumpad])
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      if (keyFlushTimeoutRef.current) clearTimeout(keyFlushTimeoutRef.current)
+    }
+  }, [selectedProduct])
 
   // Remove counted product
   const removeCountedProduct = useCallback(async (index: number) => {
@@ -623,6 +712,14 @@ export default function InventoryCountPage() {
       setSelectedProduct(fullProduct)
       setNumpadValue(product.countedQuantity.toString())
       setEditingIndex(index)
+
+      // Restore variant selection so the ENTER handler can find the correct entry
+      if (product.variantId && fullProduct.variants) {
+        const variant = fullProduct.variants.find(v => v.id === product.variantId)
+        setSelectedVariant(variant || null)
+      } else {
+        setSelectedVariant(null)
+      }
     }
   }, [countedProducts, products])
 
@@ -630,15 +727,65 @@ export default function InventoryCountPage() {
   const saveCount = useCallback(async () => {
     if (!session) return
 
+    // If a product is selected with a pending numpad value, apply it first
+    let finalProducts = countedProducts
+    if (selectedProduct && numpadValue) {
+      const quantity = parseFloat(numpadValue)
+      if (!isNaN(quantity) && quantity >= 0) {
+        const variantId = selectedVariant?.id || null
+        let targetIndex = editingIndex
+        if (targetIndex === null) {
+          targetIndex = finalProducts.findIndex(p =>
+            p.productId === selectedProduct.id && p.variantId === variantId
+          )
+          if (targetIndex < 0) targetIndex = null
+        }
+
+        if (targetIndex !== null && targetIndex >= 0) {
+          finalProducts = [...finalProducts]
+          finalProducts[targetIndex] = { ...finalProducts[targetIndex], countedQuantity: quantity }
+        } else {
+          const productName = selectedVariant
+            ? `${selectedProduct.name} - ${selectedVariant.name}`
+            : selectedProduct.name
+          finalProducts = [{
+            productId: selectedProduct.id,
+            variantId: variantId,
+            variantName: selectedVariant?.name || null,
+            productName: productName,
+            productSku: selectedVariant?.sku || selectedProduct.sku,
+            productBarcode: selectedVariant?.barcode || selectedProduct.barcode,
+            productImage: selectedVariant?.imageUrl || selectedProduct.imageUrl,
+            unitPrice: selectedVariant?.sellingPrice ?? selectedProduct.sellingPrice,
+            countedQuantity: quantity,
+            expectedQuantity: selectedVariant?.stock ?? selectedProduct.stock
+          }, ...finalProducts]
+        }
+
+        setCountedProducts(finalProducts)
+        setSelectedProduct(null)
+        setSelectedVariant(null)
+        setNumpadValue('')
+        setEditingIndex(null)
+      }
+    }
+
+    // Cancel any pending auto-save
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current)
+      autoSaveTimeoutRef.current = null
+    }
+
     try {
       setSaving(true)
+      savingInProgressRef.current = true
       const response = await fetch('/api/market/pos/inventory-count', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionId: session.id,
           warehouseId: session.warehouseId,
-          lines: countedProducts,
+          lines: finalProducts,
           action: 'save'
         })
       })
@@ -646,26 +793,90 @@ export default function InventoryCountPage() {
       const data = await response.json()
       if (!data.success) throw new Error(data.error)
 
+      // Update ref to prevent duplicate auto-save
+      lastSavedRef.current = JSON.stringify(finalProducts)
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar')
     } finally {
       setSaving(false)
+      savingInProgressRef.current = false
     }
-  }, [session, countedProducts])
+  }, [session, countedProducts, selectedProduct, selectedVariant, numpadValue, editingIndex])
 
   // Go to report
   const goToReport = useCallback(async () => {
-    if (!session || countedProducts.length === 0) return
+    if (!session) return
+
+    // If a product is selected with a pending numpad value, apply it first
+    let finalProducts = countedProducts
+    if (selectedProduct && numpadValue) {
+      const quantity = parseFloat(numpadValue)
+      if (!isNaN(quantity) && quantity >= 0) {
+        const variantId = selectedVariant?.id || null
+
+        // Use editingIndex if editing, otherwise search by id
+        let targetIndex = editingIndex
+        if (targetIndex === null) {
+          targetIndex = finalProducts.findIndex(p =>
+            p.productId === selectedProduct.id && p.variantId === variantId
+          )
+          if (targetIndex < 0) targetIndex = null
+        }
+
+        if (targetIndex !== null && targetIndex >= 0) {
+          // Update existing product
+          finalProducts = [...finalProducts]
+          finalProducts[targetIndex] = {
+            ...finalProducts[targetIndex],
+            countedQuantity: quantity
+          }
+        } else {
+          // Add new product
+          const productName = selectedVariant
+            ? `${selectedProduct.name} - ${selectedVariant.name}`
+            : selectedProduct.name
+          finalProducts = [{
+            productId: selectedProduct.id,
+            variantId: variantId,
+            variantName: selectedVariant?.name || null,
+            productName: productName,
+            productSku: selectedVariant?.sku || selectedProduct.sku,
+            productBarcode: selectedVariant?.barcode || selectedProduct.barcode,
+            productImage: selectedVariant?.imageUrl || selectedProduct.imageUrl,
+            unitPrice: selectedVariant?.sellingPrice ?? selectedProduct.sellingPrice,
+            countedQuantity: quantity,
+            expectedQuantity: selectedVariant?.stock ?? selectedProduct.stock
+          }, ...finalProducts]
+        }
+
+        // Update state
+        setCountedProducts(finalProducts)
+        setSelectedProduct(null)
+        setSelectedVariant(null)
+        setNumpadValue('')
+        setEditingIndex(null)
+      }
+    }
+
+    if (finalProducts.length === 0) return
+
+    // Cancel any pending auto-save to prevent race conditions
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current)
+      autoSaveTimeoutRef.current = null
+    }
 
     try {
       setSaving(true)
+      savingInProgressRef.current = true
       const response = await fetch('/api/market/pos/inventory-count', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionId: session.id,
           warehouseId: session.warehouseId,
-          lines: countedProducts,
+          lines: finalProducts,
           action: 'save'
         })
       })
@@ -673,14 +884,19 @@ export default function InventoryCountPage() {
       const data = await response.json()
       if (!data.success) throw new Error(data.error)
 
-      router.push(`/dashboard/market/pos/${terminalId}/count/report`)
+      // Update lastSavedRef to prevent auto-save from firing on unmount
+      lastSavedRef.current = JSON.stringify(finalProducts)
+
+      // Navigate with timestamp to bust Next.js router cache
+      router.push(`/dashboard/market/pos/${terminalId}/count/report?t=${Date.now()}`)
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar')
     } finally {
       setSaving(false)
+      savingInProgressRef.current = false
     }
-  }, [session, countedProducts, terminalId, router])
+  }, [session, countedProducts, selectedProduct, selectedVariant, numpadValue, editingIndex, terminalId, router])
 
   // Go back to POS
   const goBack = useCallback(() => {

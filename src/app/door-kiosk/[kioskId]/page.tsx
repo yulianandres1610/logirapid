@@ -29,8 +29,12 @@ import {
   Image as ImageIcon,
   Edit3,
   BookUser,
-  Car
+  Car,
+  ClipboardList,
+  ScanLine
 } from 'lucide-react'
+import { useBarcodeScan } from '@/hooks/useBarcodeScan'
+import CameraBarcodeScanner from '@/components/barcode-scanner/CameraBarcodeScanner'
 
 interface KioskInfo {
   id: number
@@ -82,6 +86,18 @@ interface PendingSale {
   alreadyValidated: boolean
 }
 
+interface ScannedDocument {
+  documentType: string
+  documentId: number
+  documentNumber: string
+  customerName: string | null
+  totalAmount: number
+  currency: string
+  createdAt: string
+  alreadyValidated: boolean
+  validated: boolean  // locally validated in this session
+}
+
 type KioskStep =
   | 'guard_pin'
   | 'idle'
@@ -97,7 +113,9 @@ type KioskStep =
   | 'entry_success'
   | 'check_sales'
   | 'validate_sales'
+  | 'scan_receipts'
   | 'exit_success'
+  | 'daily_log'
   | 'error'
 
 const VISIT_PURPOSES = [
@@ -126,6 +144,17 @@ interface Employee {
   id: number
   fullName: string
   department: string | null
+}
+
+interface DailyLogEntry {
+  id: number
+  visitorName: string
+  visitorIdNumber: string
+  entryTime: string
+  exitTime: string | null
+  visitPurpose: string | null
+  visitNotes: string | null
+  status: string
 }
 
 type KioskTheme = 'light' | 'dark'
@@ -186,6 +215,16 @@ export default function DoorKioskPage() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
   const [employeeSearch, setEmployeeSearch] = useState('')
   const [loadingEmployees, setLoadingEmployees] = useState(false)
+
+  // Daily log
+  const [dailyLogs, setDailyLogs] = useState<DailyLogEntry[]>([])
+  const [loadingDailyLog, setLoadingDailyLog] = useState(false)
+
+  // Receipt scanning state
+  const [scannerOpen, setScannerOpen] = useState(false)
+  const [scannedDocuments, setScannedDocuments] = useState<ScannedDocument[]>([])
+  const [scanLoading, setScanLoading] = useState(false)
+  const [scanError, setScanError] = useState<string | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -263,6 +302,8 @@ export default function DoorKioskPage() {
     // Only set timer if guard is logged in and not already locked
     if (guard && step !== 'guard_pin' && step !== 'locked') {
       inactivityTimerRef.current = setTimeout(() => {
+        setPin('')
+        setMessage('')
         setStep('locked')
       }, INACTIVITY_TIMEOUT)
     }
@@ -373,12 +414,21 @@ export default function DoorKioskPage() {
     }
   }, [kioskId])
 
-  // Focus PIN input
+  // Handle physical keyboard input for PIN
   useEffect(() => {
-    if ((step === 'guard_pin' || step === 'locked') && pinInputRef.current) {
-      pinInputRef.current.focus()
+    if (step !== 'guard_pin' && step !== 'locked') return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key >= '0' && e.key <= '9') {
+        handlePinChange(e.key)
+      } else if (e.key === 'Backspace') {
+        handlePinDelete()
+      }
     }
-  }, [step])
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [step, pin])
 
   // Stop camera when leaving scan_id step
   useEffect(() => {
@@ -527,12 +577,10 @@ export default function DoorKioskPage() {
   }
 
   const stopCamera = () => {
+    if (!streamRef.current && !cameraActive) return
     console.log('[Camera] Stopping camera...')
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => {
-        track.stop()
-        console.log('[Camera] Track stopped:', track.kind)
-      })
+      streamRef.current.getTracks().forEach(track => track.stop())
       streamRef.current = null
     }
     if (videoRef.current) {
@@ -812,32 +860,11 @@ export default function DoorKioskPage() {
   }
 
   const checkPendingSales = async (logId: number) => {
-    setLoading(true)
-    try {
-      const response = await fetch(`/api/market/door-security/logs/${logId}/pending-sales?kioskId=${kioskId}&guardId=${guard?.id}`)
-      const result = await response.json()
-
-      if (result.success) {
-        const allPending = [
-          ...result.data.pendingSales.posReceipts,
-          ...result.data.pendingSales.wholesaleInvoices
-        ]
-
-        if (allPending.length > 0) {
-          setPendingSales(allPending)
-          setStep('validate_sales')
-        } else {
-          await registerExit(logId)
-        }
-      } else {
-        await registerExit(logId)
-      }
-    } catch (error) {
-      console.error('Error checking sales:', error)
-      await registerExit(logId)
-    } finally {
-      setLoading(false)
-    }
+    // Always go to scan_receipts step for exit validation
+    // The guard scans tickets or clicks "No compro - Salir"
+    setScannedDocuments([])
+    setScanError(null)
+    setStep('scan_receipts')
   }
 
   const validateSale = async (sale: PendingSale) => {
@@ -872,6 +899,108 @@ export default function DoorKioskPage() {
       console.error('Error validating sale:', error)
     }
   }
+
+  const handleBarcodeScan = useCallback(async (code: string) => {
+    if (!code.trim()) return
+
+    // Check if already scanned in this session
+    const alreadyScanned = scannedDocuments.some(d => d.documentNumber === code.trim())
+    if (alreadyScanned) {
+      setScanError('Este codigo ya fue escaneado')
+      return
+    }
+
+    setScanLoading(true)
+    setScanError(null)
+
+    try {
+      const response = await fetch('/api/market/door-security/scan-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scannedCode: code.trim(),
+          visitorLogId: activeLogId,
+          kioskId: parseInt(kioskId),
+          guardId: guard?.id
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success && result.data.found) {
+        if (result.data.alreadyValidated) {
+          setScanError(`Ya fue validado anteriormente (${result.data.documentNumber})`)
+        } else {
+          setScannedDocuments(prev => [...prev, {
+            documentType: result.data.documentType,
+            documentId: result.data.documentId,
+            documentNumber: result.data.documentNumber,
+            customerName: result.data.customerName,
+            totalAmount: result.data.totalAmount,
+            currency: result.data.currency,
+            createdAt: result.data.createdAt,
+            alreadyValidated: false,
+            validated: false
+          }])
+        }
+      } else {
+        setScanError(`Documento no encontrado: ${code.trim()}`)
+      }
+    } catch (error) {
+      console.error('Error scanning document:', error)
+      setScanError('Error de conexion al buscar documento')
+    } finally {
+      setScanLoading(false)
+    }
+  }, [scannedDocuments, activeLogId, kioskId, guard?.id])
+
+  const validateScannedDocument = async (doc: ScannedDocument) => {
+    if (!activeLogId) return
+
+    setScanLoading(true)
+    try {
+      const response = await fetch('/api/market/door-security/validate-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          visitorLogId: activeLogId,
+          documentType: doc.documentType,
+          documentId: doc.documentId,
+          documentNumber: doc.documentNumber,
+          totalAmount: doc.totalAmount,
+          currency: doc.currency,
+          kioskId: parseInt(kioskId),
+          guardId: guard?.id
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setScannedDocuments(prev =>
+          prev.map(d =>
+            d.documentNumber === doc.documentNumber
+              ? { ...d, validated: true }
+              : d
+          )
+        )
+      } else {
+        setScanError(result.error || 'Error al validar documento')
+      }
+    } catch (error) {
+      console.error('Error validating document:', error)
+      setScanError('Error de conexion')
+    } finally {
+      setScanLoading(false)
+    }
+  }
+
+  // Barcode scanner hook - active only on scan_receipts step when camera scanner is closed
+  useBarcodeScan({
+    onScan: handleBarcodeScan,
+    enabled: step === 'scan_receipts' && !scannerOpen,
+    minLength: 3
+  })
 
   const registerEntry = async (purpose: string, notes?: string) => {
     if (!visitor) return
@@ -1046,6 +1175,11 @@ export default function DoorKioskPage() {
     setEmployees([])
     setEmployeeSearch('')
     setMessage('')
+    // Reset scanning state
+    setScannerOpen(false)
+    setScannedDocuments([])
+    setScanLoading(false)
+    setScanError(null)
   }
 
   const fetchEmployees = async (search?: string) => {
@@ -1068,33 +1202,83 @@ export default function DoorKioskPage() {
     }
   }
 
+  const fetchDailyLog = async () => {
+    setLoadingDailyLog(true)
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      const params = new URLSearchParams({
+        kioskId,
+        guardId: guard?.id?.toString() || '',
+        date: today
+      })
+      const res = await fetch(`/api/market/door-security/logs?${params}`)
+      const data = await res.json()
+      if (data.success) {
+        setDailyLogs(data.data.logs || [])
+      }
+    } catch (error) {
+      console.error('Error fetching daily log:', error)
+    } finally {
+      setLoadingDailyLog(false)
+    }
+  }
+
+  const openDailyLog = () => {
+    fetchDailyLog()
+    setStep('daily_log')
+  }
+
   const changeKiosk = () => {
     localStorage.removeItem('door-kiosk-id')
     router.push('/door-kiosk')
   }
 
-  const logoutGuard = () => {
-    // Clear guard session
-    setGuard(null)
-    setPin('')
-    // Cleanup without resetting to idle (which would override the step)
+  const logoutGuard = useCallback(() => {
+    console.log('[Kiosk] logoutGuard called')
+    // Clear inactivity timer first
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current)
+      inactivityTimerRef.current = null
+    }
+    // Cleanup
     stopCamera()
     setVisitor(null)
     setScannedData(null)
     setCapturedImage(null)
+    setCapturedImageReverse(null)
     setCameraError(null)
     setActiveLogId(null)
     setPendingSales([])
     setValidatedSales(new Set())
     setSelectedPurpose('')
+    setPurposeNotes('')
+    setSelectedEmployee(null)
+    setEmployees([])
+    setEmployeeSearch('')
     setMessage('')
-    // Set step to guard_pin LAST to ensure it takes effect
+    setPin('')
+    setDailyLogs([])
+    setFormName('')
+    setFormIdNumber('')
+    setFormIdType('cedula')
+    setFormAddress('')
+    setFormDateOfBirth('')
+    setFormGender('')
+    setIsOcrError(false)
+    setIsExistingVisitor(false)
+    // Clear scanning state
+    setScannerOpen(false)
+    setScannedDocuments([])
+    setScanLoading(false)
+    setScanError(null)
+    // Clear guard and go to PIN screen
+    setGuard(null)
     setStep('guard_pin')
-  }
+  }, [])
 
   const formatTime = (date: Date | null) => {
     if (!date) return '--:--:--'
-    return date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
   }
 
   const formatDate = (date: Date | null) => {
@@ -1207,14 +1391,25 @@ export default function DoorKioskPage() {
                 <p className={`${theme.textMuted} text-xs hidden sm:block`}>{guard.code}</p>
               </div>
             </div>
-            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <button
-                onClick={logoutGuard}
-                className={`${theme.textMuted} hover:text-orange-400 text-xs sm:text-sm transition-colors`}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  logoutGuard()
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  logoutGuard()
+                }}
+                className="px-3 py-1.5 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 active:bg-red-500/40 text-xs sm:text-sm font-semibold transition-colors"
               >
-                Salir
+                Cerrar Sesión
               </button>
               <button
+                type="button"
                 onClick={changeKiosk}
                 className={`${theme.textMuted} hover:text-orange-500 p-1 sm:p-1.5 transition-colors`}
                 title="Cambiar kiosco"
@@ -1430,6 +1625,23 @@ export default function DoorKioskPage() {
                   <span className="text-base sm:text-lg block">Escanear Documento</span>
                   <span className="text-xs sm:text-sm font-normal opacity-80">
                     Detecta automáticamente entrada o salida
+                  </span>
+                </div>
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={openDailyLog}
+                className="w-full flex items-center justify-center gap-3 py-4 sm:py-5 mt-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl sm:rounded-2xl font-bold transition-all shadow-lg shadow-emerald-500/30"
+              >
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <ClipboardList className="w-5 h-5 sm:w-6 sm:h-6" />
+                </div>
+                <div className="text-left">
+                  <span className="text-base sm:text-lg block">Registro del Día</span>
+                  <span className="text-xs sm:text-sm font-normal opacity-80">
+                    Ver quién está adentro ahora
                   </span>
                 </div>
               </motion.button>
@@ -2326,6 +2538,150 @@ export default function DoorKioskPage() {
             </motion.div>
           )}
 
+          {/* Scan Receipts - Exit Flow */}
+          {step === 'scan_receipts' && (
+            <motion.div
+              key="scan_receipts"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="p-4 sm:p-6"
+            >
+              <div className="text-center mb-3 sm:mb-4">
+                <ScanLine className="w-8 h-8 sm:w-10 sm:h-10 text-orange-400 mx-auto mb-2" />
+                <h2 className={`text-lg sm:text-xl font-bold ${theme.text}`}>
+                  Validar Comprobantes
+                </h2>
+                <p className={`${theme.textMuted} text-xs sm:text-sm`}>
+                  Escanee los tickets del visitante
+                </p>
+              </div>
+
+              {/* Scanner buttons */}
+              <div className="flex flex-col items-center gap-2 mb-3 sm:mb-4">
+                <button
+                  onClick={() => setScannerOpen(true)}
+                  disabled={scanLoading}
+                  className="flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-medium text-sm sm:text-base transition-colors disabled:opacity-50"
+                >
+                  <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
+                  Escanear con Camara
+                </button>
+                <p className={`text-xs ${theme.textMuted}`}>
+                  o apunte el lector de codigos al ticket
+                </p>
+              </div>
+
+              {/* Loading indicator */}
+              {scanLoading && (
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <RefreshCw className="w-4 h-4 text-orange-400 animate-spin" />
+                  <span className={`text-sm ${theme.textMuted}`}>Buscando...</span>
+                </div>
+              )}
+
+              {/* Error message */}
+              {scanError && (
+                <div className={`mb-3 p-2.5 sm:p-3 rounded-lg ${kioskTheme === 'dark' ? 'bg-red-900/30 border border-red-500/30' : 'bg-red-50 border border-red-200'} text-center`}>
+                  <p className="text-red-400 text-xs sm:text-sm">{scanError}</p>
+                  <button
+                    onClick={() => setScanError(null)}
+                    className={`text-xs ${theme.textMuted} mt-1 underline`}
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              )}
+
+              {/* Scanned documents list */}
+              {scannedDocuments.length > 0 && (
+                <div className="space-y-2 sm:space-y-3 max-h-48 sm:max-h-64 overflow-y-auto mb-3 sm:mb-4">
+                  {scannedDocuments.map((doc, idx) => (
+                    <div
+                      key={`${doc.documentType}-${doc.documentId}-${idx}`}
+                      className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border-2 transition-all ${
+                        doc.validated
+                          ? theme.saleCardValidated
+                          : theme.saleCard
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className={`font-medium text-sm sm:text-base ${theme.text}`}>
+                            {doc.documentType === 'pos_order' ? 'Ticket POS' :
+                             doc.documentType === 'pos_receipt' ? 'Ticket POS' : 'Factura'}
+                          </p>
+                          <p className={`text-xs sm:text-sm ${theme.textMuted} truncate`}>
+                            #{doc.documentNumber}
+                          </p>
+                          {doc.customerName && (
+                            <p className={`text-xs ${theme.textMuted}`}>{doc.customerName}</p>
+                          )}
+                          <p className="text-base sm:text-lg font-bold text-orange-400 mt-0.5 sm:mt-1">
+                            {doc.currency} {doc.totalAmount.toFixed(2)}
+                          </p>
+                        </div>
+                        {doc.validated ? (
+                          <div className="flex items-center gap-1 text-green-400 flex-shrink-0">
+                            <Check className="w-4 h-4 sm:w-5 sm:h-5" />
+                            <span className="text-xs sm:text-sm">Validado</span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => validateScannedDocument(doc)}
+                            disabled={scanLoading}
+                            className="px-3 sm:px-4 py-1.5 sm:py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-xs sm:text-sm font-medium transition-colors flex-shrink-0 disabled:opacity-50"
+                          >
+                            Validar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex flex-col gap-2 sm:gap-3">
+                {/* Allow exit - only when all scanned docs are validated */}
+                {scannedDocuments.length > 0 && (
+                  <button
+                    onClick={() => activeLogId && registerExit(activeLogId)}
+                    disabled={scannedDocuments.some(d => !d.validated)}
+                    className="w-full py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl sm:rounded-2xl font-medium text-sm sm:text-base transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Permitir Salida
+                  </button>
+                )}
+
+                {/* No purchase - direct exit */}
+                <button
+                  onClick={() => activeLogId && registerExit(activeLogId)}
+                  className={`w-full py-3 sm:py-4 ${kioskTheme === 'dark' ? 'bg-stone-700 hover:bg-stone-600' : 'bg-stone-200 hover:bg-stone-300'} ${theme.text} rounded-xl sm:rounded-2xl font-medium text-sm sm:text-base transition-colors`}
+                >
+                  No compro - Salir
+                </button>
+
+                <button
+                  onClick={resetToIdle}
+                  className={`w-full py-2.5 sm:py-3 ${theme.textMuted} hover:text-orange-400 transition-colors text-sm sm:text-base`}
+                >
+                  Cancelar
+                </button>
+              </div>
+
+              {/* Camera Scanner Modal */}
+              <CameraBarcodeScanner
+                isOpen={scannerOpen}
+                onClose={() => setScannerOpen(false)}
+                onScan={(code) => {
+                  setScannerOpen(false)
+                  handleBarcodeScan(code)
+                }}
+              />
+            </motion.div>
+          )}
+
           {/* Validate Sales - Exit Flow */}
           {step === 'validate_sales' && (
             <motion.div
@@ -2459,6 +2815,185 @@ export default function DoorKioskPage() {
               <p className="text-xs sm:text-sm text-orange-400 mt-3 sm:mt-4 font-medium">
                 Que tenga buen día
               </p>
+            </motion.div>
+          )}
+
+          {/* Daily Log - Registro del Día */}
+          {step === 'daily_log' && (
+            <motion.div
+              key="daily_log"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="p-3 sm:p-5"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <button
+                  onClick={() => setStep('idle')}
+                  className={`flex items-center gap-1.5 text-sm font-medium ${theme.textSecondary} hover:${theme.text} transition-colors`}
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Volver
+                </button>
+                <button
+                  onClick={fetchDailyLog}
+                  disabled={loadingDailyLog}
+                  className={`flex items-center gap-1.5 text-sm font-medium text-orange-400 hover:text-orange-300 transition-colors ${loadingDailyLog ? 'animate-spin' : ''}`}
+                >
+                  <RefreshCw className={`w-4 h-4 ${loadingDailyLog ? 'animate-spin' : ''}`} />
+                  Actualizar
+                </button>
+              </div>
+
+              <h2 className={`text-lg sm:text-xl font-bold ${theme.text} mb-1`}>
+                <ClipboardList className="w-5 h-5 inline-block mr-2 text-orange-400" />
+                Registro del Día
+              </h2>
+              <p className={`text-xs sm:text-sm ${theme.textSecondary} mb-3`}>
+                {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+
+              {/* Summary cards */}
+              {(() => {
+                const inside = dailyLogs.filter(l => l.status === 'active')
+                const exited = dailyLogs.filter(l => l.status === 'completed')
+                return (
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className={`${kioskTheme === 'dark' ? 'bg-stone-800/80' : 'bg-stone-100'} rounded-xl p-2 sm:p-3 text-center`}>
+                      <p className="text-lg sm:text-2xl font-bold text-orange-400">{dailyLogs.length}</p>
+                      <p className={`text-[10px] sm:text-xs ${theme.textSecondary}`}>Total</p>
+                    </div>
+                    <div className={`${kioskTheme === 'dark' ? 'bg-green-900/30' : 'bg-green-50'} rounded-xl p-2 sm:p-3 text-center`}>
+                      <p className="text-lg sm:text-2xl font-bold text-green-400">{inside.length}</p>
+                      <p className={`text-[10px] sm:text-xs ${theme.textSecondary}`}>Adentro</p>
+                    </div>
+                    <div className={`${kioskTheme === 'dark' ? 'bg-stone-800/80' : 'bg-stone-100'} rounded-xl p-2 sm:p-3 text-center`}>
+                      <p className={`text-lg sm:text-2xl font-bold ${theme.textSecondary}`}>{exited.length}</p>
+                      <p className={`text-[10px] sm:text-xs ${theme.textSecondary}`}>Salieron</p>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Log list */}
+              {loadingDailyLog ? (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="w-6 h-6 text-orange-400 animate-spin" />
+                </div>
+              ) : dailyLogs.length === 0 ? (
+                <div className="text-center py-8">
+                  <ClipboardList className={`w-10 h-10 ${theme.textMuted} mx-auto mb-2`} />
+                  <p className={`${theme.textSecondary} text-sm`}>No hay registros hoy</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                  {/* People currently inside first */}
+                  {dailyLogs
+                    .sort((a, b) => {
+                      // Active (inside) first, then by entry time desc
+                      if (a.status === 'active' && b.status !== 'active') return -1
+                      if (a.status !== 'active' && b.status === 'active') return 1
+                      return new Date(b.entryTime).getTime() - new Date(a.entryTime).getTime()
+                    })
+                    .map(log => {
+                      const isInside = log.status === 'active'
+                      const entryDate = new Date(log.entryTime)
+                      const exitDate = log.exitTime ? new Date(log.exitTime) : null
+
+                      // Calculate time inside (for active: elapsed, for completed: duration)
+                      let timeInside = ''
+                      const endTime = isInside ? new Date() : exitDate
+                      if (endTime) {
+                        const diffMs = endTime.getTime() - entryDate.getTime()
+                        const diffMins = Math.floor(diffMs / 60000)
+                        const hours = Math.floor(diffMins / 60)
+                        const mins = diffMins % 60
+                        timeInside = hours > 0 ? `${hours} h ${mins} min` : `${mins} min`
+                      }
+
+                      return (
+                        <div
+                          key={log.id}
+                          className={`rounded-xl p-3 sm:p-3.5 border transition-all ${
+                            isInside
+                              ? kioskTheme === 'dark'
+                                ? 'bg-green-900/20 border-green-500/40'
+                                : 'bg-green-50 border-green-300'
+                              : kioskTheme === 'dark'
+                                ? 'bg-stone-800/50 border-stone-700'
+                                : 'bg-stone-50 border-stone-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            {/* Left: visitor info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                {isInside && (
+                                  <span className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
+                                )}
+                                <p className={`text-sm font-bold ${theme.text} truncate`}>
+                                  {log.visitorName}
+                                </p>
+                              </div>
+                              <p className={`text-[11px] ${theme.textMuted} mt-0.5`}>
+                                {log.visitorIdNumber}
+                              </p>
+                            </div>
+
+                            {/* Center: purpose & notes */}
+                            <div className="flex-shrink-0 text-center max-w-[120px]">
+                              {log.visitPurpose && (
+                                <span className={`inline-block text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                  kioskTheme === 'dark'
+                                    ? 'bg-orange-500/20 text-orange-300'
+                                    : 'bg-orange-100 text-orange-600'
+                                }`}>
+                                  {log.visitPurpose}
+                                </span>
+                              )}
+                              {log.visitNotes && (
+                                <p className={`text-[10px] ${theme.textMuted} mt-0.5 truncate italic`}>
+                                  {log.visitNotes}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Right: time info */}
+                            <div className="text-right flex-shrink-0">
+                              {/* Duration in green */}
+                              {timeInside && (
+                                <p className="text-xs font-bold text-emerald-400">
+                                  <Clock className="w-3 h-3 inline mr-0.5" />
+                                  {timeInside}
+                                </p>
+                              )}
+                              {/* Status badge */}
+                              {isInside ? (
+                                <span className="text-[10px] font-semibold text-green-400">
+                                  Adentro
+                                </span>
+                              ) : (
+                                <span className={`text-[10px] font-medium ${theme.textMuted}`}>
+                                  Salió
+                                </span>
+                              )}
+                              {/* Entry/exit times darker */}
+                              <p className={`text-[10px] font-medium mt-0.5 ${
+                                kioskTheme === 'dark' ? 'text-stone-400' : 'text-stone-500'
+                              }`}>
+                                {entryDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                                {exitDate && (
+                                  <> → {exitDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+              )}
             </motion.div>
           )}
 

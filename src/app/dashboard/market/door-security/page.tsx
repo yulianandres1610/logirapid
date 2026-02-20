@@ -12,7 +12,10 @@ import {
   LogOut,
   AlertTriangle,
   CheckCircle,
-  Plus
+  Plus,
+  FileText,
+  CalendarDays,
+  Search
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -35,10 +38,21 @@ interface RecentLog {
   kioskName: string
 }
 
+interface InvoiceAudit {
+  date: string
+  posOrders: { created: number; validated: number; unvalidated: number; details: Array<{ id: number; orderNumber: string; customerName: string | null; total: number; currency: string; createdAt: string }> }
+  wholesaleInvoices: { created: number; validated: number; unvalidated: number; details: Array<{ id: number; invoiceNumber: string; customerName: string | null; total: number; currency: string; createdAt: string }> }
+  doorExits: { total: number; withValidation: number; withoutInvoice: number; skippedValidation: number }
+  validationRate: number
+}
+
 export default function DoorSecurityDashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [recentLogs, setRecentLogs] = useState<RecentLog[]>([])
   const [loading, setLoading] = useState(true)
+  const [invoiceAudit, setInvoiceAudit] = useState<InvoiceAudit | null>(null)
+  const [auditDate, setAuditDate] = useState(new Date().toISOString().split('T')[0])
+  const [auditLoading, setAuditLoading] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -78,6 +92,25 @@ export default function DoorSecurityDashboardPage() {
       setLoading(false)
     }
   }
+
+  const fetchAudit = async (date: string) => {
+    setAuditLoading(true)
+    try {
+      const res = await fetch(`/api/market/door-security/audit/invoices?date=${date}`)
+      const data = await res.json()
+      if (data.success) {
+        setInvoiceAudit(data.data)
+      }
+    } catch (error) {
+      console.error('Error fetching audit:', error)
+    } finally {
+      setAuditLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchAudit(auditDate)
+  }, [auditDate])
 
   const initializeTables = async () => {
     try {
@@ -279,6 +312,133 @@ export default function DoorSecurityDashboardPage() {
           <div className="p-12 text-center">
             <Clock className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
             <p className="text-gray-500 dark:text-gray-400">No hay actividad registrada hoy</p>
+          </div>
+        )}
+      </div>
+
+      {/* Invoice Audit Section */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="p-6 border-b border-gray-100 dark:border-gray-700">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <FileText className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Auditoria de Validaciones
+              </h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <CalendarDays className="w-4 h-4 text-gray-400" />
+              <input
+                type="date"
+                value={auditDate}
+                onChange={(e) => setAuditDate(e.target.value)}
+                className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+            </div>
+          </div>
+        </div>
+
+        {auditLoading ? (
+          <div className="p-8 text-center">
+            <div className="animate-spin w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full mx-auto"></div>
+          </div>
+        ) : invoiceAudit ? (
+          <div className="p-6 space-y-6">
+            {/* Validation Rate */}
+            <div className="flex items-center justify-center">
+              <div className={`px-6 py-3 rounded-full text-lg font-bold ${
+                invoiceAudit.validationRate >= 90
+                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                  : invoiceAudit.validationRate >= 70
+                  ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                  : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+              }`}>
+                Tasa de Validacion: {invoiceAudit.validationRate}%
+              </div>
+            </div>
+
+            {/* Stats cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {invoiceAudit.posOrders.created + invoiceAudit.wholesaleInvoices.created}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Facturas Creadas</p>
+              </div>
+              <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-green-700 dark:text-green-400">
+                  {invoiceAudit.posOrders.validated + invoiceAudit.wholesaleInvoices.validated}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Validadas</p>
+              </div>
+              <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-red-700 dark:text-red-400">
+                  {invoiceAudit.posOrders.unvalidated + invoiceAudit.wholesaleInvoices.unvalidated}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Sin Validar</p>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {invoiceAudit.doorExits.total}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Salidas del Dia</p>
+              </div>
+            </div>
+
+            {/* Unvalidated orders table */}
+            {(invoiceAudit.posOrders.details.length > 0 || invoiceAudit.wholesaleInvoices.details.length > 0) && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <Search className="w-4 h-4" />
+                  Documentos Sin Validar
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
+                        <th className="pb-2 font-medium">Tipo</th>
+                        <th className="pb-2 font-medium">Numero</th>
+                        <th className="pb-2 font-medium">Cliente</th>
+                        <th className="pb-2 font-medium text-right">Total</th>
+                        <th className="pb-2 font-medium">Hora</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
+                      {invoiceAudit.posOrders.details.map(order => (
+                        <tr key={`pos-${order.id}`} className="text-gray-700 dark:text-gray-300">
+                          <td className="py-2">
+                            <span className="px-2 py-0.5 rounded-full text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">POS</span>
+                          </td>
+                          <td className="py-2 font-mono text-xs">{order.orderNumber}</td>
+                          <td className="py-2">{order.customerName || '-'}</td>
+                          <td className="py-2 text-right font-medium">${order.total.toFixed(2)}</td>
+                          <td className="py-2 text-xs text-gray-500 dark:text-gray-400">
+                            {new Date(order.createdAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                        </tr>
+                      ))}
+                      {invoiceAudit.wholesaleInvoices.details.map(inv => (
+                        <tr key={`inv-${inv.id}`} className="text-gray-700 dark:text-gray-300">
+                          <td className="py-2">
+                            <span className="px-2 py-0.5 rounded-full text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">Factura</span>
+                          </td>
+                          <td className="py-2 font-mono text-xs">{inv.invoiceNumber}</td>
+                          <td className="py-2">{inv.customerName || '-'}</td>
+                          <td className="py-2 text-right font-medium">{inv.currency} {inv.total.toFixed(2)}</td>
+                          <td className="py-2 text-xs text-gray-500 dark:text-gray-400">
+                            {new Date(inv.createdAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+            No hay datos de auditoria
           </div>
         )}
       </div>
