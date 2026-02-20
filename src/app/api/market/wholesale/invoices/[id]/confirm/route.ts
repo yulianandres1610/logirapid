@@ -95,7 +95,47 @@ export async function POST(
     const { id } = await params
     const invoiceId = parseInt(id)
 
-    // Verify invoice exists and is in draft status
+    // Ensure required tables and columns exist (inline migrations)
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS market_invoice_deliveries (
+          id SERIAL PRIMARY KEY,
+          invoice_id INTEGER NOT NULL REFERENCES market_invoices(id),
+          delivery_number VARCHAR(30) NOT NULL,
+          warehouse_id INTEGER NOT NULL REFERENCES market_warehouses(id),
+          operation_id INTEGER,
+          status VARCHAR(20) DEFAULT 'pending',
+          delivery_date DATE,
+          delivery_address TEXT,
+          notes TEXT,
+          created_by INTEGER REFERENCES users(id),
+          created_at TIMESTAMP DEFAULT NOW(),
+          dispatched_at TIMESTAMP,
+          delivered_at TIMESTAMP
+        )
+      `)
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS market_invoice_delivery_lines (
+          id SERIAL PRIMARY KEY,
+          delivery_id INTEGER NOT NULL REFERENCES market_invoice_deliveries(id) ON DELETE CASCADE,
+          invoice_line_id INTEGER NOT NULL,
+          product_id INTEGER NOT NULL,
+          variant_id INTEGER,
+          quantity_to_deliver DECIMAL(12,3) NOT NULL,
+          quantity_delivered DECIMAL(12,3) DEFAULT 0,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `)
+      // Ensure columns exist on warehouse operations tables
+      await db.query(`ALTER TABLE market_warehouse_operations ADD COLUMN IF NOT EXISTS validation_status VARCHAR(50)`)
+      await db.query(`ALTER TABLE market_warehouse_operations ADD COLUMN IF NOT EXISTS reference_number VARCHAR(100)`)
+      await db.query(`ALTER TABLE market_warehouse_operations ADD COLUMN IF NOT EXISTS discrepancy_notes TEXT`)
+      await db.query(`ALTER TABLE market_warehouse_operation_lines ADD COLUMN IF NOT EXISTS quantity_validated DECIMAL(15,3) DEFAULT 0`)
+    } catch (migrationError) {
+      console.error('[Wholesale Confirm] Migration error (non-fatal):', migrationError)
+    }
+
+    // Verify invoice exists
     const checkResult = await db.query(`
       SELECT i.id, i.status, i.invoice_number, i.warehouse_id, i.customer_id,
              w.name as warehouse_name, c.business_name as customer_name, c.address as customer_address
