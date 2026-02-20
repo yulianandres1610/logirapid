@@ -213,7 +213,8 @@ export async function middleware(request: NextRequest) {
 
     // Allow door security API routes (for kiosk operations)
     if (pathname.startsWith('/api/market/door-security') ||
-        pathname.startsWith('/api/ai/scan-id-document')) {
+        pathname.startsWith('/api/ai/scan-id-document') ||
+        pathname.startsWith('/api/ai/scan-receipt')) {
       return NextResponse.next()
     }
 
