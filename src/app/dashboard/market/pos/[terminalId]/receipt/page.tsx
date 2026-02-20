@@ -1109,6 +1109,37 @@ ${order.payments.map(p => {
     }
   }
 
+  // Render barcode on receipt preview
+  useEffect(() => {
+    if (!order || !isClient) return
+    const el = document.getElementById('receipt-barcode-svg')
+    if (!el) return
+
+    // Dynamically load JsBarcode
+    const script = document.createElement('script')
+    script.src = 'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js'
+    script.onload = () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).JsBarcode('#receipt-barcode-svg', order.orderNumber, {
+          format: 'CODE128',
+          width: 1.5,
+          height: 40,
+          displayValue: false,
+          margin: 0,
+          background: 'transparent',
+          lineColor: theme === 'dark' ? '#9ca3af' : '#374151'
+        })
+      } catch (e) {
+        console.log('[Receipt] Barcode render error:', e)
+      }
+    }
+    document.head.appendChild(script)
+    return () => {
+      try { document.head.removeChild(script) } catch {}
+    }
+  }, [order, isClient, theme])
+
   // Navigate back to POS
   const newOrder = () => {
     // Clear payment data
@@ -1275,7 +1306,13 @@ ${order.payments.map(p => {
                 ))}
               </div>
 
-              <p className={`text-center ${tc.textMuted} mt-6`}>
+              {/* Barcode for scanning at door */}
+              <div className="flex flex-col items-center mt-6 pt-4 border-t border-dashed" style={{ borderColor: theme === 'dark' ? '#374151' : '#d1d5db' }}>
+                <svg id="receipt-barcode-svg" className="mb-1"></svg>
+                <p className={`text-xs ${tc.textMuted}`}>{order?.orderNumber}</p>
+              </div>
+
+              <p className={`text-center ${tc.textMuted} mt-4`}>
                 Gracias por su compra!
               </p>
             </div>

@@ -30,8 +30,11 @@ import {
   Edit3,
   BookUser,
   Car,
-  ClipboardList
+  ClipboardList,
+  ScanLine
 } from 'lucide-react'
+import { useBarcodeScan } from '@/hooks/useBarcodeScan'
+import CameraBarcodeScanner from '@/components/barcode-scanner/CameraBarcodeScanner'
 
 interface KioskInfo {
   id: number
@@ -83,6 +86,18 @@ interface PendingSale {
   alreadyValidated: boolean
 }
 
+interface ScannedDocument {
+  documentType: string
+  documentId: number
+  documentNumber: string
+  customerName: string | null
+  totalAmount: number
+  currency: string
+  createdAt: string
+  alreadyValidated: boolean
+  validated: boolean  // locally validated in this session
+}
+
 type KioskStep =
   | 'guard_pin'
   | 'idle'
@@ -98,6 +113,7 @@ type KioskStep =
   | 'entry_success'
   | 'check_sales'
   | 'validate_sales'
+  | 'scan_receipts'
   | 'exit_success'
   | 'daily_log'
   | 'error'
@@ -203,6 +219,12 @@ export default function DoorKioskPage() {
   // Daily log
   const [dailyLogs, setDailyLogs] = useState<DailyLogEntry[]>([])
   const [loadingDailyLog, setLoadingDailyLog] = useState(false)
+
+  // Receipt scanning state
+  const [scannerOpen, setScannerOpen] = useState(false)
+  const [scannedDocuments, setScannedDocuments] = useState<ScannedDocument[]>([])
+  const [scanLoading, setScanLoading] = useState(false)
+  const [scanError, setScanError] = useState<string | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -838,32 +860,11 @@ export default function DoorKioskPage() {
   }
 
   const checkPendingSales = async (logId: number) => {
-    setLoading(true)
-    try {
-      const response = await fetch(`/api/market/door-security/logs/${logId}/pending-sales?kioskId=${kioskId}&guardId=${guard?.id}`)
-      const result = await response.json()
-
-      if (result.success) {
-        const allPending = [
-          ...result.data.pendingSales.posReceipts,
-          ...result.data.pendingSales.wholesaleInvoices
-        ]
-
-        if (allPending.length > 0) {
-          setPendingSales(allPending)
-          setStep('validate_sales')
-        } else {
-          await registerExit(logId)
-        }
-      } else {
-        await registerExit(logId)
-      }
-    } catch (error) {
-      console.error('Error checking sales:', error)
-      await registerExit(logId)
-    } finally {
-      setLoading(false)
-    }
+    // Always go to scan_receipts step for exit validation
+    // The guard scans tickets or clicks "No compro - Salir"
+    setScannedDocuments([])
+    setScanError(null)
+    setStep('scan_receipts')
   }
 
   const validateSale = async (sale: PendingSale) => {
@@ -898,6 +899,108 @@ export default function DoorKioskPage() {
       console.error('Error validating sale:', error)
     }
   }
+
+  const handleBarcodeScan = useCallback(async (code: string) => {
+    if (!code.trim()) return
+
+    // Check if already scanned in this session
+    const alreadyScanned = scannedDocuments.some(d => d.documentNumber === code.trim())
+    if (alreadyScanned) {
+      setScanError('Este codigo ya fue escaneado')
+      return
+    }
+
+    setScanLoading(true)
+    setScanError(null)
+
+    try {
+      const response = await fetch('/api/market/door-security/scan-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scannedCode: code.trim(),
+          visitorLogId: activeLogId,
+          kioskId: parseInt(kioskId),
+          guardId: guard?.id
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success && result.data.found) {
+        if (result.data.alreadyValidated) {
+          setScanError(`Ya fue validado anteriormente (${result.data.documentNumber})`)
+        } else {
+          setScannedDocuments(prev => [...prev, {
+            documentType: result.data.documentType,
+            documentId: result.data.documentId,
+            documentNumber: result.data.documentNumber,
+            customerName: result.data.customerName,
+            totalAmount: result.data.totalAmount,
+            currency: result.data.currency,
+            createdAt: result.data.createdAt,
+            alreadyValidated: false,
+            validated: false
+          }])
+        }
+      } else {
+        setScanError(`Documento no encontrado: ${code.trim()}`)
+      }
+    } catch (error) {
+      console.error('Error scanning document:', error)
+      setScanError('Error de conexion al buscar documento')
+    } finally {
+      setScanLoading(false)
+    }
+  }, [scannedDocuments, activeLogId, kioskId, guard?.id])
+
+  const validateScannedDocument = async (doc: ScannedDocument) => {
+    if (!activeLogId) return
+
+    setScanLoading(true)
+    try {
+      const response = await fetch('/api/market/door-security/validate-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          visitorLogId: activeLogId,
+          documentType: doc.documentType,
+          documentId: doc.documentId,
+          documentNumber: doc.documentNumber,
+          totalAmount: doc.totalAmount,
+          currency: doc.currency,
+          kioskId: parseInt(kioskId),
+          guardId: guard?.id
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setScannedDocuments(prev =>
+          prev.map(d =>
+            d.documentNumber === doc.documentNumber
+              ? { ...d, validated: true }
+              : d
+          )
+        )
+      } else {
+        setScanError(result.error || 'Error al validar documento')
+      }
+    } catch (error) {
+      console.error('Error validating document:', error)
+      setScanError('Error de conexion')
+    } finally {
+      setScanLoading(false)
+    }
+  }
+
+  // Barcode scanner hook - active only on scan_receipts step when camera scanner is closed
+  useBarcodeScan({
+    onScan: handleBarcodeScan,
+    enabled: step === 'scan_receipts' && !scannerOpen,
+    minLength: 3
+  })
 
   const registerEntry = async (purpose: string, notes?: string) => {
     if (!visitor) return
@@ -1072,6 +1175,11 @@ export default function DoorKioskPage() {
     setEmployees([])
     setEmployeeSearch('')
     setMessage('')
+    // Reset scanning state
+    setScannerOpen(false)
+    setScannedDocuments([])
+    setScanLoading(false)
+    setScanError(null)
   }
 
   const fetchEmployees = async (search?: string) => {
@@ -1158,6 +1266,11 @@ export default function DoorKioskPage() {
     setFormGender('')
     setIsOcrError(false)
     setIsExistingVisitor(false)
+    // Clear scanning state
+    setScannerOpen(false)
+    setScannedDocuments([])
+    setScanLoading(false)
+    setScanError(null)
     // Clear guard and go to PIN screen
     setGuard(null)
     setStep('guard_pin')
@@ -2422,6 +2535,150 @@ export default function DoorKioskPage() {
               >
                 Cancelar
               </button>
+            </motion.div>
+          )}
+
+          {/* Scan Receipts - Exit Flow */}
+          {step === 'scan_receipts' && (
+            <motion.div
+              key="scan_receipts"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="p-4 sm:p-6"
+            >
+              <div className="text-center mb-3 sm:mb-4">
+                <ScanLine className="w-8 h-8 sm:w-10 sm:h-10 text-orange-400 mx-auto mb-2" />
+                <h2 className={`text-lg sm:text-xl font-bold ${theme.text}`}>
+                  Validar Comprobantes
+                </h2>
+                <p className={`${theme.textMuted} text-xs sm:text-sm`}>
+                  Escanee los tickets del visitante
+                </p>
+              </div>
+
+              {/* Scanner buttons */}
+              <div className="flex flex-col items-center gap-2 mb-3 sm:mb-4">
+                <button
+                  onClick={() => setScannerOpen(true)}
+                  disabled={scanLoading}
+                  className="flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-medium text-sm sm:text-base transition-colors disabled:opacity-50"
+                >
+                  <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
+                  Escanear con Camara
+                </button>
+                <p className={`text-xs ${theme.textMuted}`}>
+                  o apunte el lector de codigos al ticket
+                </p>
+              </div>
+
+              {/* Loading indicator */}
+              {scanLoading && (
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <RefreshCw className="w-4 h-4 text-orange-400 animate-spin" />
+                  <span className={`text-sm ${theme.textMuted}`}>Buscando...</span>
+                </div>
+              )}
+
+              {/* Error message */}
+              {scanError && (
+                <div className={`mb-3 p-2.5 sm:p-3 rounded-lg ${kioskTheme === 'dark' ? 'bg-red-900/30 border border-red-500/30' : 'bg-red-50 border border-red-200'} text-center`}>
+                  <p className="text-red-400 text-xs sm:text-sm">{scanError}</p>
+                  <button
+                    onClick={() => setScanError(null)}
+                    className={`text-xs ${theme.textMuted} mt-1 underline`}
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              )}
+
+              {/* Scanned documents list */}
+              {scannedDocuments.length > 0 && (
+                <div className="space-y-2 sm:space-y-3 max-h-48 sm:max-h-64 overflow-y-auto mb-3 sm:mb-4">
+                  {scannedDocuments.map((doc, idx) => (
+                    <div
+                      key={`${doc.documentType}-${doc.documentId}-${idx}`}
+                      className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border-2 transition-all ${
+                        doc.validated
+                          ? theme.saleCardValidated
+                          : theme.saleCard
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className={`font-medium text-sm sm:text-base ${theme.text}`}>
+                            {doc.documentType === 'pos_order' ? 'Ticket POS' :
+                             doc.documentType === 'pos_receipt' ? 'Ticket POS' : 'Factura'}
+                          </p>
+                          <p className={`text-xs sm:text-sm ${theme.textMuted} truncate`}>
+                            #{doc.documentNumber}
+                          </p>
+                          {doc.customerName && (
+                            <p className={`text-xs ${theme.textMuted}`}>{doc.customerName}</p>
+                          )}
+                          <p className="text-base sm:text-lg font-bold text-orange-400 mt-0.5 sm:mt-1">
+                            {doc.currency} {doc.totalAmount.toFixed(2)}
+                          </p>
+                        </div>
+                        {doc.validated ? (
+                          <div className="flex items-center gap-1 text-green-400 flex-shrink-0">
+                            <Check className="w-4 h-4 sm:w-5 sm:h-5" />
+                            <span className="text-xs sm:text-sm">Validado</span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => validateScannedDocument(doc)}
+                            disabled={scanLoading}
+                            className="px-3 sm:px-4 py-1.5 sm:py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-xs sm:text-sm font-medium transition-colors flex-shrink-0 disabled:opacity-50"
+                          >
+                            Validar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex flex-col gap-2 sm:gap-3">
+                {/* Allow exit - only when all scanned docs are validated */}
+                {scannedDocuments.length > 0 && (
+                  <button
+                    onClick={() => activeLogId && registerExit(activeLogId)}
+                    disabled={scannedDocuments.some(d => !d.validated)}
+                    className="w-full py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl sm:rounded-2xl font-medium text-sm sm:text-base transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Permitir Salida
+                  </button>
+                )}
+
+                {/* No purchase - direct exit */}
+                <button
+                  onClick={() => activeLogId && registerExit(activeLogId)}
+                  className={`w-full py-3 sm:py-4 ${kioskTheme === 'dark' ? 'bg-stone-700 hover:bg-stone-600' : 'bg-stone-200 hover:bg-stone-300'} ${theme.text} rounded-xl sm:rounded-2xl font-medium text-sm sm:text-base transition-colors`}
+                >
+                  No compro - Salir
+                </button>
+
+                <button
+                  onClick={resetToIdle}
+                  className={`w-full py-2.5 sm:py-3 ${theme.textMuted} hover:text-orange-400 transition-colors text-sm sm:text-base`}
+                >
+                  Cancelar
+                </button>
+              </div>
+
+              {/* Camera Scanner Modal */}
+              <CameraBarcodeScanner
+                isOpen={scannerOpen}
+                onClose={() => setScannerOpen(false)}
+                onScan={(code) => {
+                  setScannerOpen(false)
+                  handleBarcodeScan(code)
+                }}
+              />
             </motion.div>
           )}
 

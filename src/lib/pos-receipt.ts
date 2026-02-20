@@ -369,14 +369,29 @@ export function generateHTMLReceipt(data: ReceiptData): string {
 
       <div class="divider-bold"></div>
 
+      <div style="text-align:center;margin:10px 0;">
+        <canvas id="receipt-barcode"></canvas>
+        <p style="font-size:10px;color:#666;margin-top:4px;">${escapeHTML(data.orderNumber)}</p>
+      </div>
+
       <div class="footer">
         <p>¡Gracias por su compra!</p>
         ${data.footerMessage ? `<p>${escapeHTML(data.footerMessage)}</p>` : ''}
       </div>
 
+      <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
       <script>
         window.onload = function() {
-          window.print();
+          try {
+            JsBarcode("#receipt-barcode", "${escapeHTML(data.orderNumber)}", {
+              format: "CODE128",
+              width: 1.5,
+              height: 40,
+              displayValue: false,
+              margin: 0
+            });
+          } catch(e) { console.log('Barcode error:', e); }
+          setTimeout(function() { window.print(); }, 200);
         }
       </script>
     </body>
