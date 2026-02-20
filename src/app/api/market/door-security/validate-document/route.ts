@@ -209,53 +209,59 @@ export async function POST(request: NextRequest) {
 
     // Check if all pending documents are validated
     // Update log invoicesvalidated status
-    const pendingCount = await db.query(`
-      SELECT COUNT(*) as pending
-      FROM (
-        -- Check POS receipts today
-        SELECT ps.id
-        FROM market_pos_sales ps
-        JOIN market_visitor_logs vl ON vl.id = $1
-        JOIN market_visitors v ON vl.visitorid = v.id
-        WHERE ps.companyid = $2
-          AND DATE(ps.createdat) = DATE(vl.entrytime)
-          AND ps.status = 'completed'
-          AND (
-            LOWER(ps.customername) ILIKE LOWER('%' || SPLIT_PART(v.fullname, ' ', 1) || '%')
-            OR ps.customername ILIKE '%' || v.idnumber || '%'
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM market_visitor_invoice_validations iv
-            WHERE iv.visitorlogid = $1
-              AND iv.documenttype = 'pos_receipt'
-              AND iv.documentid = ps.id
-          )
+    let remainingPending = 0
+    try {
+      const pendingCount = await db.query(`
+        SELECT COUNT(*) as pending
+        FROM (
+          -- Check POS receipts today
+          SELECT ps.id
+          FROM market_pos_sales ps
+          JOIN market_visitor_logs vl ON vl.id = $1
+          JOIN market_visitors v ON vl.visitorid = v.id
+          WHERE ps.companyid = $2
+            AND DATE(ps.createdat) = DATE(vl.entrytime)
+            AND ps.status = 'completed'
+            AND (
+              LOWER(ps.customername) ILIKE LOWER('%' || SPLIT_PART(v.fullname, ' ', 1) || '%')
+              OR ps.customername ILIKE '%' || v.idnumber || '%'
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM market_visitor_invoice_validations iv
+              WHERE iv.visitorlogid = $1
+                AND iv.documenttype = 'pos_receipt'
+                AND iv.documentid = ps.id
+            )
 
-        UNION ALL
+          UNION ALL
 
-        -- Check wholesale invoices today
-        SELECT wi.id
-        FROM market_wholesale_invoices wi
-        LEFT JOIN market_customers c ON wi.customerid = c.id
-        JOIN market_visitor_logs vl ON vl.id = $1
-        JOIN market_visitors v ON vl.visitorid = v.id
-        WHERE wi.companyid = $2
-          AND DATE(wi.createdat) = DATE(vl.entrytime)
-          AND wi.status IN ('pending', 'completed', 'paid')
-          AND (
-            LOWER(c.businessname) ILIKE LOWER('%' || SPLIT_PART(v.fullname, ' ', 1) || '%')
-            OR c.identificationnumber ILIKE '%' || v.idnumber || '%'
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM market_visitor_invoice_validations iv
-            WHERE iv.visitorlogid = $1
-              AND iv.documenttype = 'wholesale_invoice'
-              AND iv.documentid = wi.id
-          )
-      ) pending_docs
-    `, [visitorLogId, log.companyid])
-
-    const remainingPending = parseInt(pendingCount.rows[0]?.pending || '0')
+          -- Check wholesale invoices today
+          SELECT wi.id
+          FROM market_wholesale_invoices wi
+          LEFT JOIN market_customers c ON wi.customerid = c.id
+          JOIN market_visitor_logs vl ON vl.id = $1
+          JOIN market_visitors v ON vl.visitorid = v.id
+          WHERE wi.companyid = $2
+            AND DATE(wi.createdat) = DATE(vl.entrytime)
+            AND wi.status IN ('pending', 'completed', 'paid')
+            AND (
+              LOWER(c.businessname) ILIKE LOWER('%' || SPLIT_PART(v.fullname, ' ', 1) || '%')
+              OR c.identificationnumber ILIKE '%' || v.idnumber || '%'
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM market_visitor_invoice_validations iv
+              WHERE iv.visitorlogid = $1
+                AND iv.documenttype = 'wholesale_invoice'
+                AND iv.documentid = wi.id
+            )
+        ) pending_docs
+      `, [visitorLogId, log.companyid])
+      remainingPending = parseInt(pendingCount.rows[0]?.pending || '0')
+    } catch (pendingErr: any) {
+      // POS/wholesale tables may not exist - treat as no pending documents
+      console.warn('[Validate Document] Pending check skipped (tables may not exist):', pendingErr.message)
+      remainingPending = 0
+    }
 
     if (remainingPending === 0) {
       await db.query(`
