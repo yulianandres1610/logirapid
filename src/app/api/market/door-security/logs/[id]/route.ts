@@ -4,6 +4,18 @@ import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
 import * as storageAdapter from '@/lib/storage-adapter'
 
+// Run photourl migration once per process
+let migrationRan = false
+async function ensurePhotoUrlColumn() {
+  if (migrationRan) return
+  try {
+    await db.query(`ALTER TABLE market_visitor_invoice_validations ADD COLUMN IF NOT EXISTS photourl TEXT`)
+    migrationRan = true
+  } catch {
+    migrationRan = true // Don't retry on error
+  }
+}
+
 interface JWTPayload {
   userId: number
   email: string
@@ -95,53 +107,29 @@ export async function GET(
       }, { status: 403 })
     }
 
-    // Get invoice validations for this log (try with photourl, fallback without)
-    let validationsResult
-    try {
-      validationsResult = await db.query(`
-        SELECT
-          iv.id,
-          iv.documenttype,
-          iv.documentid,
-          iv.documentnumber,
-          iv.totalamount,
-          iv.currency,
-          iv.validated,
-          iv.validatedat,
-          iv.notes,
-          iv.photourl,
-          COALESCE(u.firstname || ' ' || u.lastname, u.email) as validatedbyname
-        FROM market_visitor_invoice_validations iv
-        LEFT JOIN market_employees e ON iv.validatedby = e.id
-        LEFT JOIN users u ON e.user_id = u.id
-        WHERE iv.visitorlogid = $1
-        ORDER BY iv.createdat ASC
-      `, [id])
-    } catch (queryErr: any) {
-      if (queryErr.message?.includes('photourl')) {
-        validationsResult = await db.query(`
-          SELECT
-            iv.id,
-            iv.documenttype,
-            iv.documentid,
-            iv.documentnumber,
-            iv.totalamount,
-            iv.currency,
-            iv.validated,
-            iv.validatedat,
-            iv.notes,
-            NULL as photourl,
-            COALESCE(u.firstname || ' ' || u.lastname, u.email) as validatedbyname
-          FROM market_visitor_invoice_validations iv
-          LEFT JOIN market_employees e ON iv.validatedby = e.id
-          LEFT JOIN users u ON e.user_id = u.id
-          WHERE iv.visitorlogid = $1
-          ORDER BY iv.createdat ASC
-        `, [id])
-      } else {
-        throw queryErr
-      }
-    }
+    // Ensure photourl column exists
+    await ensurePhotoUrlColumn()
+
+    // Get invoice validations for this log
+    const validationsResult = await db.query(`
+      SELECT
+        iv.id,
+        iv.documenttype,
+        iv.documentid,
+        iv.documentnumber,
+        iv.totalamount,
+        iv.currency,
+        iv.validated,
+        iv.validatedat,
+        iv.notes,
+        iv.photourl,
+        COALESCE(u.firstname || ' ' || u.lastname, u.email) as validatedbyname
+      FROM market_visitor_invoice_validations iv
+      LEFT JOIN market_employees e ON iv.validatedby = e.id
+      LEFT JOIN users u ON e.user_id = u.id
+      WHERE iv.visitorlogid = $1
+      ORDER BY iv.createdat ASC
+    `, [id])
 
     // Generate signed URLs for validation photos
     const validations = await Promise.all(
