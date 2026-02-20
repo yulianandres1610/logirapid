@@ -302,6 +302,32 @@ export default function DoorKioskPage() {
     // Only set timer if guard is logged in and not already locked
     if (guard && step !== 'guard_pin' && step !== 'locked') {
       inactivityTimerRef.current = setTimeout(() => {
+        // Full state reset to prevent stale data on unlock
+        stopCamera()
+        setVisitor(null)
+        setScannedData(null)
+        setCapturedImage(null)
+        setCapturedImageReverse(null)
+        setCameraError(null)
+        setActiveLogId(null)
+        setPendingSales([])
+        setValidatedSales(new Set())
+        setSelectedPurpose('')
+        setPurposeNotes('')
+        setSelectedEmployee(null)
+        setEmployeeSearch('')
+        setFormName('')
+        setFormIdNumber('')
+        setFormIdType('cedula')
+        setFormAddress('')
+        setFormDateOfBirth('')
+        setFormGender('')
+        setIsOcrError(false)
+        setIsExistingVisitor(false)
+        setScannerOpen(false)
+        setScannedDocuments([])
+        setScanLoading(false)
+        setScanError(null)
         setPin('')
         setMessage('')
         setStep('locked')
@@ -1019,6 +1045,7 @@ export default function DoorKioskPage() {
           action: 'entry',
           visitorId: visitor.id,
           kioskId: parseInt(kioskId),
+          guardId: guard?.id,
           visitPurpose: purpose,
           visitNotes: notes || null
         })
@@ -1050,7 +1077,9 @@ export default function DoorKioskPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'exit',
-          logId: logId
+          logId: logId,
+          kioskId: parseInt(kioskId),
+          guardId: guard?.id
         })
       })
 
@@ -1210,7 +1239,8 @@ export default function DoorKioskPage() {
   const fetchDailyLog = async () => {
     setLoadingDailyLog(true)
     try {
-      const today = new Date().toISOString().split('T')[0]
+      const now = new Date()
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
       const params = new URLSearchParams({
         kioskId,
         guardId: guard?.id?.toString() || '',
@@ -1399,16 +1429,7 @@ export default function DoorKioskPage() {
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 type="button"
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  logoutGuard()
-                }}
-                onTouchEnd={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  logoutGuard()
-                }}
+                onClick={() => logoutGuard()}
                 className="px-3 py-1.5 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 active:bg-red-500/40 text-xs sm:text-sm font-semibold transition-colors"
               >
                 Cerrar Sesión
