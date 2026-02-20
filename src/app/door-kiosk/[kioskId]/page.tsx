@@ -827,6 +827,8 @@ export default function DoorKioskPage() {
     }
 
     setLoading(true)
+    setIsOcrError(false)
+    setMessage('')
 
     try {
       // Create data simulating OCR structure
@@ -856,6 +858,9 @@ export default function DoorKioskPage() {
     setManualName('')
     setManualIdNumber('')
     setManualIdType('cedula')
+    // Clear OCR error state so error step shows correct message if API fails
+    setIsOcrError(false)
+    setMessage('')
     setStep('manual_register')
   }
 
