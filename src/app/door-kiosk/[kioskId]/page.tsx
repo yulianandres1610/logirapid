@@ -242,16 +242,16 @@ export default function DoorKioskPage() {
 
   /**
    * Compress image on client side before sending to API
-   * This prevents 413 errors from large mobile photos
+   * Aggressive compression: 800px max + 0.60 quality = fast OCR
    */
   const compressImage = useCallback(async (dataUrl: string): Promise<string> => {
     return new Promise((resolve, reject) => {
       const img = new Image()
       img.onload = () => {
         try {
-          // Max dimensions for OCR - 1280px is sufficient for reading ID text
-          const MAX_SIZE = 1280
-          const QUALITY = 0.70
+          // 800px is sufficient for OCR text extraction (ID + receipts)
+          const MAX_SIZE = 800
+          const QUALITY = 0.60
 
           let { width, height } = img
 
@@ -285,9 +285,7 @@ export default function DoorKioskPage() {
           // Convert to JPEG with compression
           const compressedDataUrl = canvas.toDataURL('image/jpeg', QUALITY)
 
-          console.log('[Image Compress] Original size:', Math.round(dataUrl.length / 1024), 'KB')
-          console.log('[Image Compress] Compressed size:', Math.round(compressedDataUrl.length / 1024), 'KB')
-          console.log('[Image Compress] Dimensions:', width, 'x', height)
+          console.log('[Image Compress]', Math.round(dataUrl.length / 1024), 'KB →', Math.round(compressedDataUrl.length / 1024), 'KB |', width, 'x', height)
 
           resolve(compressedDataUrl)
         } catch (err) {

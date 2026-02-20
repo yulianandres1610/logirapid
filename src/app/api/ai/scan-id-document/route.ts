@@ -8,15 +8,23 @@ import { db } from '@/lib/database'
 // API Key para Gemini
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
 
-// Modelo para OCR de documentos de identificación
-// gemini-2.0-flash is fast and stable for OCR tasks
-const OCR_MODEL = process.env.GEMINI_OCR_MODEL || 'gemini-2.0-flash'
+// gemini-2.0-flash-lite is fastest for OCR, fallback to 2.0-flash
+const OCR_MODEL = process.env.GEMINI_OCR_MODEL || 'gemini-2.0-flash-lite'
 
-// Maximum retries for OCR processing
 const MAX_RETRIES = 2
 
-// Image processing settings - optimize for speed
-const GEMINI_TARGET_SIZE = 1600 // Max dimension for Gemini (smaller = faster)
+// 1024px max - client already compresses to 800px, only resize if still large
+const GEMINI_TARGET_SIZE = 1024
+
+// Cache Gemini model instance across requests
+let cachedModel: any = null
+function getModel() {
+  if (!cachedModel && GOOGLE_AI_API_KEY) {
+    const genAI = new GoogleGenerativeAI(GOOGLE_AI_API_KEY)
+    cachedModel = genAI.getGenerativeModel({ model: OCR_MODEL })
+  }
+  return cachedModel
+}
 
 interface JWTPayload {
   userId: number
@@ -42,8 +50,7 @@ interface IdDocumentData {
 }
 
 /**
- * Prepara la imagen para Gemini - sin límites de tamaño, solo optimiza orientación
- * Móviles modernos toman fotos de alta calidad que Gemini puede procesar
+ * Fast image prep - skip sharp if client already compressed to small size
  */
 async function prepareImageForGemini(base64Data: string): Promise<string> {
   const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '')
@@ -52,41 +59,37 @@ async function prepareImageForGemini(base64Data: string): Promise<string> {
     const inputBuffer = Buffer.from(cleanBase64, 'base64')
     const inputSizeKB = Math.round(inputBuffer.length / 1024)
 
-    // Auto-rotate based on EXIF orientation (important for mobile photos)
+    // If image is already small (<200KB), skip sharp entirely (client compressed it)
+    if (inputSizeKB < 200) {
+      console.log('[ID Scanner] Image already small:', inputSizeKB, 'KB - skipping sharp')
+      return cleanBase64
+    }
+
     const metadata = await sharp(inputBuffer).metadata()
     const maxDimension = Math.max(metadata.width || 0, metadata.height || 0)
 
-    console.log('[ID Scanner] Input image:', inputSizeKB, 'KB,', metadata.width, 'x', metadata.height)
+    console.log('[ID Scanner] Input:', inputSizeKB, 'KB,', metadata.width, 'x', metadata.height)
 
-    // Resize if image is large (>2000px) for faster Gemini processing
+    // Only resize if larger than target
     let processedBuffer: Buffer
-    if (maxDimension > 2000) {
+    if (maxDimension > GEMINI_TARGET_SIZE) {
       processedBuffer = await sharp(inputBuffer)
-        .rotate() // Auto-rotate based on EXIF
-        .resize({
-          width: GEMINI_TARGET_SIZE,
-          height: GEMINI_TARGET_SIZE,
-          fit: 'inside',
-          withoutEnlargement: true
-        })
-        .jpeg({ quality: 85, mozjpeg: true })
+        .rotate()
+        .resize(GEMINI_TARGET_SIZE, GEMINI_TARGET_SIZE, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 70 })
         .toBuffer()
-      console.log('[ID Scanner] Resized image to fit within', GEMINI_TARGET_SIZE, 'px')
     } else {
-      // Just auto-rotate, keep size
       processedBuffer = await sharp(inputBuffer)
-        .rotate() // Auto-rotate based on EXIF
-        .jpeg({ quality: 85, mozjpeg: true })
+        .rotate()
+        .jpeg({ quality: 70 })
         .toBuffer()
     }
 
     const outputBase64 = processedBuffer.toString('base64')
-    console.log('[ID Scanner] Output image:', Math.round(outputBase64.length / 1024), 'KB')
-
+    console.log('[ID Scanner] Output:', Math.round(outputBase64.length / 1024), 'KB')
     return outputBase64
   } catch (error) {
     console.error('[ID Scanner] Image processing error:', error)
-    // On error, return original
     return cleanBase64
   }
 }
@@ -121,23 +124,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check kiosk authentication (kioskId + guardId) with database validation
+    // Check kiosk authentication - single query for speed
     if (!isAuthenticated && kioskId && guardId) {
-      // Validate kiosk exists and is active
-      const kioskResult = await db.query(
-        'SELECT id FROM market_door_kiosks WHERE id = $1 AND isactive = true',
-        [kioskId]
+      const authResult = await db.query(
+        `SELECT k.id FROM market_door_kiosks k
+         WHERE k.id = $1 AND k.isactive = true
+         AND EXISTS (SELECT 1 FROM market_door_guards g WHERE g.employeeid = $2 AND g.isactive = true)`,
+        [kioskId, guardId]
       )
-      if (kioskResult.rows.length > 0) {
-        // Validate guard exists and is active
-        const guardResult = await db.query(
-          'SELECT id FROM market_door_guards WHERE employeeid = $1 AND isactive = true',
-          [guardId]
-        )
-        if (guardResult.rows.length > 0) {
-          isAuthenticated = true
-          console.log('[ID Scanner] Kiosk mode authentication - kioskId:', kioskId, 'guardId:', guardId)
-        }
+      if (authResult.rows.length > 0) {
+        isAuthenticated = true
       }
     }
 
@@ -155,98 +151,38 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Initialize Gemini
-    if (!GOOGLE_AI_API_KEY) {
-      console.error('[ID Scanner] GOOGLE_AI_API_KEY not configured')
+    const model = getModel()
+    if (!model) {
       return NextResponse.json({
         success: false,
-        error: 'API de IA no configurada. Configure GOOGLE_AI_API_KEY en las variables de entorno.'
+        error: 'API de IA no configurada. Configure GOOGLE_AI_API_KEY.'
       }, { status: 500 })
     }
 
-    const genAI = new GoogleGenerativeAI(GOOGLE_AI_API_KEY)
-    const model = genAI.getGenerativeModel({ model: OCR_MODEL })
+    // Prepare image + detect mime type in parallel
+    const [compressedBase64] = await Promise.all([
+      prepareImageForGemini(fileBase64)
+    ])
 
-    // Prepare image (auto-rotate, handle very large images)
-    const compressedBase64 = await prepareImageForGemini(fileBase64)
-
-    // Detect mimeType from data URL or use provided
     let mimeType = providedMimeType
     if (!mimeType && fileBase64.includes('data:')) {
       mimeType = fileBase64.split(';')[0].split(':')[1]
     }
-    if (!mimeType) {
-      mimeType = 'image/jpeg'
-    }
+    if (!mimeType) mimeType = 'image/jpeg'
 
-    console.log('[ID Scanner] Processing document:', { mimeType, documentType, model: OCR_MODEL })
+    console.log('[ID Scanner] Processing:', { model: OCR_MODEL })
 
-    // Prompt optimizado para extraer datos de documentos de identidad
-    // Especialmente entrenado para carnet de identidad cubano (frente y reverso)
-    const prompt = `Eres un experto en OCR de documentos de identidad cubanos. Extrae TODOS los datos visibles de esta imagen.
+    // Compact prompt - shorter = faster Gemini response
+    const prompt = `OCR de carnet de identidad cubano. Extrae datos de esta imagen.
 
-## CARNET DE IDENTIDAD CUBANO (CI):
-El carnet cubano tiene DOS lados con información diferente:
+FRENTE: NI (11 digitos AAMMDDXXXXXC), NOMBRE, APELLIDOS, SEXO, VENCIMIENTO
+REVERSO: RESIDENCIA, MUNICIPIO, PROVINCIA
 
-**FRENTE (lado con foto):**
-- NI: Número de Identidad (11 dígitos: AAMMDDXXXXXC)
-- NOMBRE: Primer nombre y segundo nombre (ej: "YULIAN ANDRES")
-- APELLIDOS: Dos apellidos (ej: "DIAZ PEREZ")
-- PADRE: Nombre del padre
-- MADRE: Nombre de la madre
-- SEXO: F (femenino) o M (masculino)
-- FECHA DE VENCIMIENTO: DD/MM/YYYY
+fullName = NOMBRE + APELLIDOS (nombre primero). Ej: NOMBRE:"YULIAN ANDRES" APELLIDOS:"DIAZ PEREZ" → "YULIAN ANDRES DIAZ PEREZ"
+dateOfBirth del NI: posiciones 0-1=año, 2-3=mes, 4-5=dia. AA>30→19XX, AA<=30→20XX
 
-**REVERSO (lado con código MRZ):**
-- RESIDENCIA: Dirección completa
-- MUNICIPIO, PROVINCIA: Ubicación
-
-## MUY IMPORTANTE - ORDEN DEL NOMBRE:
-En el carnet cubano, el campo "NOMBRE" contiene los nombres de pila y "APELLIDOS" contiene los apellidos.
-Para el campo fullName, SIEMPRE pon los NOMBRES PRIMERO, luego los APELLIDOS.
-Ejemplo: Si el carnet dice NOMBRE: "YULIAN ANDRES" y APELLIDOS: "DIAZ PEREZ"
-→ fullName debe ser: "YULIAN ANDRES DIAZ PEREZ" (nombre primero, apellido después)
-
-## EXTRACCIÓN DE FECHA DE NACIMIENTO DEL NI:
-El NI cubano tiene formato AAMMDDXXXXXC donde:
-- AA = año (2 dígitos)
-- MM = mes (2 dígitos)
-- DD = día (2 dígitos)
-- Posiciones: [0-1]=año, [2-3]=mes, [4-5]=día
-
-Ejemplo: NI "99101604195"
-- Año: 99 → 1999
-- Mes: 10 → octubre
-- Día: 16
-- Fecha: 1999-10-16
-
-Para el siglo: si AA > 30 → 19XX, si AA <= 30 → 20XX
-
-## DIRECCIÓN:
-- Lee la dirección EXACTAMENTE como aparece
-- Incluye E/ (entre), municipio y provincia
-
-Responde SOLO con JSON válido (sin markdown, sin backticks):
-{
-  "fullName": "NOMBRES APELLIDOS (ej: YULIAN ANDRES DIAZ PEREZ)",
-  "firstName": "solo nombres de pila",
-  "lastName": "solo apellidos",
-  "documentType": "cedula",
-  "documentNumber": "NI de 11 dígitos sin espacios",
-  "dateOfBirth": "YYYY-MM-DD (extraído del NI)",
-  "expiryDate": "YYYY-MM-DD si visible",
-  "nationality": "Cubana",
-  "address": "dirección completa con municipio y provincia",
-  "gender": "M o F",
-  "issuingCountry": "Cuba",
-  "confidence": 0.0-1.0
-}
-
-REGLAS CRÍTICAS:
-1. fullName = NOMBRES + APELLIDOS (en ese orden, nombre primero)
-2. dateOfBirth se extrae de los primeros 6 dígitos del NI: posiciones 4-5 son el DÍA
-3. Si es el reverso, busca RESIDENCIA para la dirección
-4. Responde SOLO el JSON, sin explicaciones`
+Responde SOLO JSON (sin markdown):
+{"fullName":"","firstName":"","lastName":"","documentType":"cedula","documentNumber":"","dateOfBirth":"YYYY-MM-DD","expiryDate":"","nationality":"Cubana","address":"","gender":"M/F","issuingCountry":"Cuba","confidence":0.0}`
 
     // Retry logic for OCR processing
     let lastError: Error | null = null
