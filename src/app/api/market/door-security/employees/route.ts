@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     // Validate guard
     const guardResult = await db.query(
-      'SELECT id FROM market_door_guards WHERE id = $1 AND isactive = true',
+      'SELECT id FROM market_door_guards WHERE employeeid = $1 AND isactive = true',
       [guardId]
     )
     if (guardResult.rows.length === 0) {
