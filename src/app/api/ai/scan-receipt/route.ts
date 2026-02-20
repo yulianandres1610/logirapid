@@ -6,9 +6,19 @@ import sharp from 'sharp'
 import { db } from '@/lib/database'
 
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
-const OCR_MODEL = process.env.GEMINI_OCR_MODEL || 'gemini-2.0-flash'
+const OCR_MODEL = process.env.GEMINI_OCR_MODEL || 'gemini-2.0-flash-lite'
 const MAX_RETRIES = 2
-const GEMINI_TARGET_SIZE = 1600
+const GEMINI_TARGET_SIZE = 1024
+
+// Cache model instance across requests
+let cachedModel: any = null
+function getModel() {
+  if (!cachedModel && GOOGLE_AI_API_KEY) {
+    const genAI = new GoogleGenerativeAI(GOOGLE_AI_API_KEY)
+    cachedModel = genAI.getGenerativeModel({ model: OCR_MODEL })
+  }
+  return cachedModel
+}
 
 interface JWTPayload {
   userId: number
@@ -28,37 +38,43 @@ interface ReceiptData {
   confidence: number
 }
 
+/**
+ * Fast image prep - skip sharp if client already compressed
+ */
 async function prepareImageForGemini(base64Data: string): Promise<string> {
   const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '')
 
   try {
     const inputBuffer = Buffer.from(cleanBase64, 'base64')
+    const inputSizeKB = Math.round(inputBuffer.length / 1024)
+
+    // If image is already small (<200KB), skip sharp entirely
+    if (inputSizeKB < 200) {
+      console.log('[Receipt Scanner] Already small:', inputSizeKB, 'KB - skip sharp')
+      return cleanBase64
+    }
+
     const metadata = await sharp(inputBuffer).metadata()
     const maxDimension = Math.max(metadata.width || 0, metadata.height || 0)
 
-    console.log('[Receipt Scanner] Input image:', Math.round(inputBuffer.length / 1024), 'KB,', metadata.width, 'x', metadata.height)
+    console.log('[Receipt Scanner] Input:', inputSizeKB, 'KB,', metadata.width, 'x', metadata.height)
 
     let processedBuffer: Buffer
-    if (maxDimension > 2000) {
+    if (maxDimension > GEMINI_TARGET_SIZE) {
       processedBuffer = await sharp(inputBuffer)
         .rotate()
-        .resize({
-          width: GEMINI_TARGET_SIZE,
-          height: GEMINI_TARGET_SIZE,
-          fit: 'inside',
-          withoutEnlargement: true
-        })
-        .jpeg({ quality: 85, mozjpeg: true })
+        .resize(GEMINI_TARGET_SIZE, GEMINI_TARGET_SIZE, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 70 })
         .toBuffer()
     } else {
       processedBuffer = await sharp(inputBuffer)
         .rotate()
-        .jpeg({ quality: 85, mozjpeg: true })
+        .jpeg({ quality: 70 })
         .toBuffer()
     }
 
     const outputBase64 = processedBuffer.toString('base64')
-    console.log('[Receipt Scanner] Output image:', Math.round(outputBase64.length / 1024), 'KB')
+    console.log('[Receipt Scanner] Output:', Math.round(outputBase64.length / 1024), 'KB')
     return outputBase64
   } catch (error) {
     console.error('[Receipt Scanner] Image processing error:', error)
@@ -68,11 +84,7 @@ async function prepareImageForGemini(base64Data: string): Promise<string> {
 
 /**
  * POST /api/ai/scan-receipt
- * Scan a POS receipt or invoice photo and extract data using Gemini Vision
- *
- * Supports two authentication modes:
- * 1. JWT auth-token cookie (standard dashboard users)
- * 2. Kiosk mode with kioskId + guardId (for door kiosks)
+ * Fast OCR for POS receipts/tickets using Gemini Vision
  */
 export async function POST(request: NextRequest) {
   try {
@@ -91,51 +103,35 @@ export async function POST(request: NextRequest) {
         jwt.verify(authToken, secret) as JWTPayload
         isAuthenticated = true
       } catch {
-        // JWT invalid, will check kiosk auth below
+        // JWT invalid, check kiosk auth
       }
     }
 
     if (!isAuthenticated && kioskId && guardId) {
-      const kioskResult = await db.query(
-        'SELECT id FROM market_door_kiosks WHERE id = $1 AND isactive = true',
-        [kioskId]
+      // Single query for both kiosk + guard validation
+      const authResult = await db.query(
+        `SELECT k.id FROM market_door_kiosks k
+         WHERE k.id = $1 AND k.isactive = true
+         AND EXISTS (SELECT 1 FROM market_door_guards g WHERE g.employeeid = $2 AND g.isactive = true)`,
+        [kioskId, guardId]
       )
-      if (kioskResult.rows.length > 0) {
-        const guardResult = await db.query(
-          'SELECT id FROM market_door_guards WHERE employeeid = $1 AND isactive = true',
-          [guardId]
-        )
-        if (guardResult.rows.length > 0) {
-          isAuthenticated = true
-          console.log('[Receipt Scanner] Kiosk mode authentication - kioskId:', kioskId, 'guardId:', guardId)
-        }
+      if (authResult.rows.length > 0) {
+        isAuthenticated = true
       }
     }
 
     if (!isAuthenticated) {
-      return NextResponse.json({
-        success: false,
-        error: 'No autorizado'
-      }, { status: 401 })
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
     }
 
     if (!fileBase64) {
-      return NextResponse.json({
-        success: false,
-        error: 'Imagen del ticket requerida'
-      }, { status: 400 })
+      return NextResponse.json({ success: false, error: 'Imagen del ticket requerida' }, { status: 400 })
     }
 
-    if (!GOOGLE_AI_API_KEY) {
-      console.error('[Receipt Scanner] GOOGLE_AI_API_KEY not configured')
-      return NextResponse.json({
-        success: false,
-        error: 'API de IA no configurada. Configure GOOGLE_AI_API_KEY en las variables de entorno.'
-      }, { status: 500 })
+    const model = getModel()
+    if (!model) {
+      return NextResponse.json({ success: false, error: 'API de IA no configurada.' }, { status: 500 })
     }
-
-    const genAI = new GoogleGenerativeAI(GOOGLE_AI_API_KEY)
-    const model = genAI.getGenerativeModel({ model: OCR_MODEL })
 
     const compressedBase64 = await prepareImageForGemini(fileBase64)
 
@@ -143,80 +139,39 @@ export async function POST(request: NextRequest) {
     if (!mimeType && fileBase64.includes('data:')) {
       mimeType = fileBase64.split(';')[0].split(':')[1]
     }
-    if (!mimeType) {
-      mimeType = 'image/jpeg'
-    }
+    if (!mimeType) mimeType = 'image/jpeg'
 
-    console.log('[Receipt Scanner] Processing receipt:', { mimeType, model: OCR_MODEL })
+    console.log('[Receipt Scanner] Processing:', { model: OCR_MODEL })
 
-    const prompt = `Eres un experto en OCR de tickets de venta POS y facturas. Extrae los datos de esta imagen de ticket/factura/recibo.
+    // Compact prompt for speed
+    const prompt = `OCR de ticket/recibo POS. Extrae datos de esta imagen.
 
-## TIPOS DE DOCUMENTOS:
-1. **Ticket POS termico** - recibo de punto de venta con papel termico
-2. **Factura cubana** - factura comercial
-3. **Recibo de compra** - comprobante de compra
+Busca: numero de orden (Recibo, No., POS-XXXX), TOTAL, moneda (CUP/USD/MLC), fecha, nombre tienda, items.
 
-## DATOS A EXTRAER:
-- Numero de orden/ticket/factura (busca "No.", "Orden", "#", "Ticket", "Factura")
-- Total de la compra (busca "TOTAL", "Total a Pagar", "IMPORTE")
-- Moneda (CUP, USD, MLC, EUR - si no se especifica, asume CUP)
-- Fecha del documento (cualquier formato)
-- Nombre del establecimiento/tienda (busca en el encabezado)
-- Items/productos comprados (nombre, cantidad, precio)
-
-## IMPORTANTE:
-- Si el ticket esta borroso o ilegible en partes, extrae lo que puedas
-- El numero de orden puede estar como "ORD-XXXX", "TKT-XXXX", "No. XXXX", etc.
-- Para el total, busca el monto mas grande o el que diga "TOTAL"
-- Los tickets termicos cubanos usan CUP como moneda principal
-
-Responde SOLO con JSON valido (sin markdown, sin backticks):
-{
-  "orderNumber": "numero de orden/ticket (string o null)",
-  "total": numero_decimal_o_null,
-  "currency": "CUP/USD/MLC/EUR o null",
-  "date": "YYYY-MM-DD o null",
-  "storeName": "nombre del establecimiento o null",
-  "items": [{"name": "nombre", "quantity": 1, "price": 0.00}],
-  "confidence": 0.0-1.0
-}
-
-REGLAS:
-1. Si no puedes leer un campo, pon null
-2. El total debe ser un numero decimal, no string
-3. items puede ser array vacio [] si no se distinguen productos
-4. confidence refleja que tan legible es el ticket (0.3 = muy borroso, 0.9 = nitido)`
+Responde SOLO JSON (sin markdown):
+{"orderNumber":"string o null","total":numero_o_null,"currency":"CUP","date":"YYYY-MM-DD o null","storeName":"string o null","items":[{"name":"","quantity":1,"price":0.00}],"confidence":0.0}`
 
     let lastError: Error | null = null
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
         const result = await model.generateContent([
           prompt,
-          {
-            inlineData: {
-              mimeType,
-              data: compressedBase64
-            }
-          }
+          { inlineData: { mimeType, data: compressedBase64 } }
         ])
 
         const response = await result.response
         let text = response.text()
-
         text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
 
-        console.log('[Receipt Scanner] Raw response (attempt', attempt, '):', text.substring(0, 200))
+        console.log('[Receipt Scanner] Response (attempt', attempt, '):', text.substring(0, 150))
 
         const extractedData = JSON.parse(text) as ReceiptData
 
         if (!extractedData.orderNumber && !extractedData.total && !extractedData.storeName) {
-          if (attempt < MAX_RETRIES) {
-            console.log('[Receipt Scanner] Missing essential fields, retrying...')
-            continue
-          }
+          if (attempt < MAX_RETRIES) continue
           return NextResponse.json({
             success: false,
-            error: 'No se pudo extraer informacion del ticket. Por favor tome una foto mas clara.'
+            error: 'No se pudo extraer informacion del ticket. Tome una foto mas clara.'
           }, { status: 422 })
         }
 
@@ -238,10 +193,9 @@ REGLAS:
       }
     }
 
-    console.error('[Receipt Scanner] All retries failed:', lastError)
     return NextResponse.json({
       success: false,
-      error: 'No se pudo interpretar el ticket. Intenta con una imagen mas clara.'
+      error: 'No se pudo interpretar el ticket. Intenta con mejor iluminacion.'
     }, { status: 422 })
 
   } catch (error) {
