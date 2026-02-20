@@ -114,10 +114,29 @@ export async function POST(
 
     const invoice = checkResult.rows[0]
 
-    if (invoice.status !== 'draft') {
+    if (invoice.status === 'cancelled') {
       return NextResponse.json({
         success: false,
-        error: 'Solo se pueden confirmar facturas en estado borrador'
+        error: 'No se pueden confirmar facturas canceladas'
+      }, { status: 400 })
+    }
+
+    if (invoice.status === 'delivered') {
+      return NextResponse.json({
+        success: false,
+        error: 'Esta factura ya fue entregada'
+      }, { status: 400 })
+    }
+
+    // Check if deliveries already exist (avoid duplicates)
+    const existingDeliveries = await db.query(
+      'SELECT id FROM market_invoice_deliveries WHERE invoice_id = $1',
+      [invoiceId]
+    )
+    if (existingDeliveries.rows.length > 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Esta factura ya tiene entregas creadas'
       }, { status: 400 })
     }
 
@@ -266,11 +285,11 @@ export async function POST(
     await db.query('BEGIN')
 
     try {
-      // 1. Confirm invoice
+      // 1. Confirm invoice (preserve confirmed_at if already set)
       await db.query(`
         UPDATE market_invoices SET
           status = 'confirmed',
-          confirmed_at = NOW(),
+          confirmed_at = COALESCE(confirmed_at, NOW()),
           updated_at = NOW()
         WHERE id = $1
       `, [invoiceId])

@@ -947,6 +947,20 @@ export default function CreateInvoicePage() {
         const result = await response.json()
         if (result.success) {
           clearStorage() // Clear saved draft on success
+
+          // Auto-confirm to create warehouse operations and delivery orders
+          try {
+            const confirmRes = await fetch(`/api/market/wholesale/invoices/${result.data.id}/confirm`, {
+              method: 'POST'
+            })
+            const confirmResult = await confirmRes.json()
+            if (!confirmResult.success) {
+              console.warn('[Invoice Create] Auto-confirm warning:', confirmResult.error)
+            }
+          } catch (confirmError) {
+            console.error('[Invoice Create] Auto-confirm failed:', confirmError)
+          }
+
           // Determine payment status
           const paymentStatus = isImmediatePayment
             ? 'paid'

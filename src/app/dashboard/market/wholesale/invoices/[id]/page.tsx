@@ -483,8 +483,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                   <span className="font-medium text-sm hidden sm:inline">Imprimir</span>
                 </motion.button>
 
-                {/* Confirm Button */}
-                {invoice.status === 'draft' && (
+                {/* Confirm Button - show when no deliveries exist and invoice not delivered/cancelled */}
+                {invoice.deliveries.length === 0 && invoice.status !== 'delivered' && invoice.status !== 'cancelled' && (
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
