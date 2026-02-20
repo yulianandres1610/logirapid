@@ -297,6 +297,7 @@ export async function POST(
       const createdDeliveries: Array<{
         deliveryId: number
         deliveryNumber: string
+        operationId: number
         warehouseId: number
         warehouseName: string
         operationNumber: string
@@ -434,6 +435,7 @@ export async function POST(
           createdDeliveries.push({
             deliveryId,
             deliveryNumber,
+            operationId,
             warehouseId,
             warehouseName: warehouseNames.get(warehouseId) || 'Almacén',
             operationNumber,
@@ -541,6 +543,7 @@ export async function POST(
         createdDeliveries.push({
           deliveryId,
           deliveryNumber,
+          operationId,
           warehouseId: invoice.warehouse_id,
           warehouseName: invoice.warehouse_name || 'Almacén',
           operationNumber,

@@ -954,7 +954,20 @@ export default function CreateInvoicePage() {
               method: 'POST'
             })
             const confirmResult = await confirmRes.json()
-            if (!confirmResult.success) {
+            if (confirmResult.success && confirmResult.data?.deliveries) {
+              // Auto-complete each delivery to deduct stock immediately
+              for (const delivery of confirmResult.data.deliveries) {
+                try {
+                  await fetch(`/api/market/warehouses/${delivery.warehouseId}/wholesale-deliveries/${delivery.operationId}/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                  })
+                } catch (completeError) {
+                  console.error('[Invoice Create] Auto-complete delivery failed:', completeError)
+                }
+              }
+            } else if (!confirmResult.success) {
               console.warn('[Invoice Create] Auto-confirm warning:', confirmResult.error)
             }
           } catch (confirmError) {

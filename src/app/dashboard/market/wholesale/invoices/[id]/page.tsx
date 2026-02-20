@@ -277,14 +277,29 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const handleConfirm = async () => {
-    if (!confirm('¿Confirmar esta factura?')) return
+    if (!confirm('¿Confirmar esta factura y crear entrega?')) return
 
     setConfirming(true)
     try {
       const response = await fetch(`/api/market/wholesale/invoices/${invoiceId}/confirm`, {
         method: 'POST'
       })
-      if (response.ok) {
+      const result = await response.json()
+      if (result.success && result.data?.deliveries) {
+        // Auto-complete each delivery to deduct stock immediately
+        for (const delivery of result.data.deliveries) {
+          try {
+            await fetch(`/api/market/warehouses/${delivery.warehouseId}/wholesale-deliveries/${delivery.operationId}/complete`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({})
+            })
+          } catch (completeError) {
+            console.error('Error completing delivery:', completeError)
+          }
+        }
+        fetchInvoice()
+      } else if (response.ok) {
         fetchInvoice()
       }
     } catch (error) {
