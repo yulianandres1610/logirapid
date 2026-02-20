@@ -611,10 +611,13 @@ function ReceiptContent() {
         console.log('[Receipt] Total services from API:', allServices.length)
 
         // FILTER BY TERMINAL'S CONFIGURED PRINT SERVICE
-        if (defaultPrintServiceId) {
+        // Only filter when printing from POS terminal (autoPrint), not when reprinting from history
+        if (defaultPrintServiceId && autoPrint) {
           console.log('[Receipt] Filtering by terminal print service ID:', defaultPrintServiceId)
           allServices = allServices.filter((s: { id: number }) => s.id === defaultPrintServiceId)
           console.log('[Receipt] Services after filtering by terminal config:', allServices.length)
+        } else if (!autoPrint) {
+          console.log('[Receipt] History reprint: showing all print services')
         }
 
         // Log each service for debugging
