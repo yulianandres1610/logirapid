@@ -968,7 +968,7 @@ export default function DoorKioskPage() {
         if (result.data.alreadyValidated) {
           setScanError(`Ya fue validado anteriormente (${result.data.documentNumber})`)
         } else {
-          setScannedDocuments(prev => [...prev, {
+          const newDoc: ScannedDocument = {
             documentType: result.data.documentType,
             documentId: result.data.documentId,
             documentNumber: result.data.documentNumber,
@@ -978,7 +978,10 @@ export default function DoorKioskPage() {
             createdAt: result.data.createdAt,
             alreadyValidated: false,
             validated: false
-          }])
+          }
+          setScannedDocuments(prev => [...prev, newDoc])
+          // Auto-validate immediately
+          autoValidateDocument(newDoc)
         }
       } else {
         setScanError(`Documento no encontrado: ${code.trim()}`)
@@ -991,10 +994,9 @@ export default function DoorKioskPage() {
     }
   }, [scannedDocuments, activeLogId, kioskId, guard?.id])
 
-  const validateScannedDocument = async (doc: ScannedDocument) => {
+  const autoValidateDocument = async (doc: ScannedDocument) => {
     if (!activeLogId) return
 
-    setScanLoading(true)
     try {
       const response = await fetch('/api/market/door-security/validate-document', {
         method: 'POST',
@@ -1028,8 +1030,6 @@ export default function DoorKioskPage() {
     } catch (error) {
       console.error('Error validating document:', error)
       setScanError('Error de conexion')
-    } finally {
-      setScanLoading(false)
     }
   }
 
@@ -1120,9 +1120,11 @@ export default function DoorKioskPage() {
 
         if (matchedDoc) {
           setScannedDocuments(prev => [...prev, matchedDoc!])
+          // Auto-validate immediately
+          autoValidateDocument(matchedDoc)
         } else {
           // Use AI-extracted data directly
-          setScannedDocuments(prev => [...prev, {
+          const newDoc: ScannedDocument = {
             documentType: 'pos_receipt',
             documentId: null,
             documentNumber: docNumber,
@@ -1133,7 +1135,10 @@ export default function DoorKioskPage() {
             alreadyValidated: false,
             validated: false,
             photoBase64: compressed
-          }])
+          }
+          setScannedDocuments(prev => [...prev, newDoc])
+          // Auto-validate immediately
+          autoValidateDocument(newDoc)
         }
 
         if (confidence && confidence < 0.5) {
@@ -2821,13 +2826,10 @@ export default function DoorKioskPage() {
                             <span className="text-xs sm:text-sm">Validado</span>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => validateScannedDocument(doc)}
-                            disabled={scanLoading}
-                            className="px-3 sm:px-4 py-1.5 sm:py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-xs sm:text-sm font-medium transition-colors flex-shrink-0 disabled:opacity-50"
-                          >
-                            Validar
-                          </button>
+                          <div className="flex items-center gap-1 text-orange-400 flex-shrink-0">
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span className="text-xs sm:text-sm">Validando...</span>
+                          </div>
                         )}
                       </div>
                     </div>

@@ -171,24 +171,49 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create validation record
-    const result = await db.query(`
-      INSERT INTO market_visitor_invoice_validations (
-        visitorlogid, documenttype, documentid, documentnumber,
-        totalamount, currency, validated, validatedat, validatedby, notes, photourl
-      ) VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), $7, $8, $9)
-      RETURNING *
-    `, [
-      visitorLogId,
-      documentType,
-      documentId || null,
-      documentNumber || null,
-      totalAmount || null,
-      currency || 'CUP',
-      validatorId || null,
-      notes || null,
-      photoPath
-    ])
+    // Create validation record (try with photourl, fall back without if column doesn't exist yet)
+    let result
+    try {
+      result = await db.query(`
+        INSERT INTO market_visitor_invoice_validations (
+          visitorlogid, documenttype, documentid, documentnumber,
+          totalamount, currency, validated, validatedat, validatedby, notes, photourl
+        ) VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), $7, $8, $9)
+        RETURNING *
+      `, [
+        visitorLogId,
+        documentType,
+        documentId || null,
+        documentNumber || null,
+        totalAmount || null,
+        currency || 'CUP',
+        validatorId || null,
+        notes || null,
+        photoPath
+      ])
+    } catch (insertErr: any) {
+      if (insertErr.message?.includes('photourl')) {
+        // Column doesn't exist yet, insert without it
+        result = await db.query(`
+          INSERT INTO market_visitor_invoice_validations (
+            visitorlogid, documenttype, documentid, documentnumber,
+            totalamount, currency, validated, validatedat, validatedby, notes
+          ) VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), $7, $8)
+          RETURNING *
+        `, [
+          visitorLogId,
+          documentType,
+          documentId || null,
+          documentNumber || null,
+          totalAmount || null,
+          currency || 'CUP',
+          validatorId || null,
+          notes || null
+        ])
+      } else {
+        throw insertErr
+      }
+    }
 
     const validation = result.rows[0]
 
