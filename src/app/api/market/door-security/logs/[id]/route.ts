@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
+import * as storageAdapter from '@/lib/storage-adapter'
 
 interface JWTPayload {
   userId: number
@@ -106,6 +107,7 @@ export async function GET(
         iv.validated,
         iv.validatedat,
         iv.notes,
+        iv.photourl,
         COALESCE(u.firstname || ' ' || u.lastname, u.email) as validatedbyname
       FROM market_visitor_invoice_validations iv
       LEFT JOIN market_employees e ON iv.validatedby = e.id
@@ -113,6 +115,38 @@ export async function GET(
       WHERE iv.visitorlogid = $1
       ORDER BY iv.createdat ASC
     `, [id])
+
+    // Generate signed URLs for validation photos
+    const validations = await Promise.all(
+      validationsResult.rows.map(async (v) => {
+        let photoUrl: string | null = null
+        if (v.photourl && storageAdapter.isConfigured()) {
+          try {
+            photoUrl = await storageAdapter.createSignedUrl(
+              'company-private-documents',
+              v.photourl,
+              3600 // 1 hour
+            )
+          } catch (err) {
+            console.warn('[Visitor Log GET] Could not create signed URL for photo:', err)
+          }
+        }
+
+        return {
+          id: v.id,
+          documentType: v.documenttype,
+          documentId: v.documentid,
+          documentNumber: v.documentnumber,
+          totalAmount: parseFloat(v.totalamount || '0'),
+          currency: v.currency,
+          validated: v.validated,
+          validatedAt: v.validatedat,
+          validatedByName: v.validatedbyname,
+          notes: v.notes,
+          photoUrl
+        }
+      })
+    )
 
     return NextResponse.json({
       success: true,
@@ -140,18 +174,7 @@ export async function GET(
           status: log.status,
           createdAt: log.createdat
         },
-        invoiceValidations: validationsResult.rows.map(v => ({
-          id: v.id,
-          documentType: v.documenttype,
-          documentId: v.documentid,
-          documentNumber: v.documentnumber,
-          totalAmount: parseFloat(v.totalamount || '0'),
-          currency: v.currency,
-          validated: v.validated,
-          validatedAt: v.validatedat,
-          validatedByName: v.validatedbyname,
-          notes: v.notes
-        }))
+        invoiceValidations: validations
       }
     })
 

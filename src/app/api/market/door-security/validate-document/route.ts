@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
+import * as storageAdapter from '@/lib/storage-adapter'
 
 interface JWTPayload {
   userId: number
@@ -31,7 +32,8 @@ export async function POST(request: NextRequest) {
       notes,
       guardEmployeeId,
       kioskId,
-      guardId
+      guardId,
+      photoBase64
     } = body
 
     let companyId: number | null = null
@@ -142,12 +144,39 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Upload receipt photo to S3 if provided (non-fatal)
+    let photoPath: string | null = null
+    if (photoBase64 && storageAdapter.isConfigured()) {
+      try {
+        const cleanBase64 = photoBase64.replace(/^data:image\/\w+;base64,/, '')
+        const buffer = Buffer.from(cleanBase64, 'base64')
+        const timestamp = Date.now()
+        const fileName = `visitor-documents/company-${log.companyid}/invoices/${visitorLogId}-${timestamp}.jpg`
+
+        const uploadResult = await storageAdapter.upload(
+          'company-private-documents',
+          fileName,
+          buffer,
+          { contentType: 'image/jpeg', upsert: true }
+        )
+
+        if (uploadResult.success) {
+          photoPath = fileName
+          console.log('[Validate Document] Photo uploaded:', fileName)
+        } else {
+          console.warn('[Validate Document] Photo upload failed:', uploadResult.error)
+        }
+      } catch (err) {
+        console.warn('[Validate Document] Photo upload error (non-fatal):', err)
+      }
+    }
+
     // Create validation record
     const result = await db.query(`
       INSERT INTO market_visitor_invoice_validations (
         visitorlogid, documenttype, documentid, documentnumber,
-        totalamount, currency, validated, validatedat, validatedby, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), $7, $8)
+        totalamount, currency, validated, validatedat, validatedby, notes, photourl
+      ) VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), $7, $8, $9)
       RETURNING *
     `, [
       visitorLogId,
@@ -157,7 +186,8 @@ export async function POST(request: NextRequest) {
       totalAmount || null,
       currency || 'CUP',
       validatorId || null,
-      notes || null
+      notes || null,
+      photoPath
     ])
 
     const validation = result.rows[0]
