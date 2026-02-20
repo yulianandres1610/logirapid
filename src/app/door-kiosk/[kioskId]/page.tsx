@@ -88,7 +88,7 @@ interface PendingSale {
 
 interface ScannedDocument {
   documentType: string
-  documentId: number
+  documentId: number | null
   documentNumber: string
   customerName: string | null
   totalAmount: number
@@ -96,6 +96,7 @@ interface ScannedDocument {
   createdAt: string
   alreadyValidated: boolean
   validated: boolean  // locally validated in this session
+  photoBase64?: string | null
 }
 
 type KioskStep =
@@ -225,6 +226,11 @@ export default function DoorKioskPage() {
   const [scannedDocuments, setScannedDocuments] = useState<ScannedDocument[]>([])
   const [scanLoading, setScanLoading] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
+
+  // Receipt photo + AI state
+  const [receiptPhotoMode, setReceiptPhotoMode] = useState(false)
+  const [receiptScanLoading, setReceiptScanLoading] = useState(false)
+  const receiptFileInputRef = useRef<HTMLInputElement>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -1001,7 +1007,8 @@ export default function DoorKioskPage() {
           totalAmount: doc.totalAmount,
           currency: doc.currency,
           kioskId: parseInt(kioskId),
-          guardId: guard?.id
+          guardId: guard?.id,
+          photoBase64: doc.photoBase64 || null
         })
       })
 
@@ -1025,6 +1032,124 @@ export default function DoorKioskPage() {
       setScanLoading(false)
     }
   }
+
+  // Handle receipt photo capture + AI OCR
+  const handleReceiptPhotoCapture = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Reset the input so same file can be selected again
+    e.target.value = ''
+
+    setReceiptScanLoading(true)
+    setScanError(null)
+
+    try {
+      // Read file as data URL
+      const reader = new FileReader()
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = () => reject(new Error('Error reading file'))
+        reader.readAsDataURL(file)
+      })
+
+      // Compress image
+      const compressed = await compressImage(dataUrl)
+      const base64Data = compressed.split(',')[1]
+
+      console.log('[Receipt Photo] Sending to AI for OCR...')
+
+      // Call AI scan-receipt API
+      const aiResponse = await fetch('/api/ai/scan-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileBase64: base64Data,
+          mimeType: 'image/jpeg',
+          kioskId: parseInt(kioskId),
+          guardId: guard?.id
+        })
+      })
+
+      const aiResult = await aiResponse.json()
+
+      if (aiResult.success && aiResult.data) {
+        const { orderNumber, total, currency, storeName, confidence } = aiResult.data
+        const docNumber = orderNumber || `FOTO-${Date.now()}`
+
+        // Check if already scanned
+        const alreadyScanned = scannedDocuments.some(d => d.documentNumber === docNumber)
+        if (alreadyScanned) {
+          setScanError('Este ticket ya fue escaneado')
+          return
+        }
+
+        // Also try to match with scan-document API if we got an order number
+        let matchedDoc: ScannedDocument | null = null
+        if (orderNumber) {
+          try {
+            const scanRes = await fetch('/api/market/door-security/scan-document', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                scannedCode: orderNumber.trim(),
+                visitorLogId: activeLogId,
+                kioskId: parseInt(kioskId),
+                guardId: guard?.id
+              })
+            })
+            const scanResult = await scanRes.json()
+            if (scanResult.success && scanResult.data.found && !scanResult.data.alreadyValidated) {
+              matchedDoc = {
+                documentType: scanResult.data.documentType,
+                documentId: scanResult.data.documentId,
+                documentNumber: scanResult.data.documentNumber,
+                customerName: scanResult.data.customerName,
+                totalAmount: scanResult.data.totalAmount,
+                currency: scanResult.data.currency,
+                createdAt: scanResult.data.createdAt,
+                alreadyValidated: false,
+                validated: false,
+                photoBase64: compressed
+              }
+            }
+          } catch {
+            console.log('[Receipt Photo] scan-document lookup failed, using AI data only')
+          }
+        }
+
+        if (matchedDoc) {
+          setScannedDocuments(prev => [...prev, matchedDoc!])
+        } else {
+          // Use AI-extracted data directly
+          setScannedDocuments(prev => [...prev, {
+            documentType: 'pos_receipt',
+            documentId: null,
+            documentNumber: docNumber,
+            customerName: storeName || null,
+            totalAmount: total || 0,
+            currency: currency || 'CUP',
+            createdAt: new Date().toISOString(),
+            alreadyValidated: false,
+            validated: false,
+            photoBase64: compressed
+          }])
+        }
+
+        if (confidence && confidence < 0.5) {
+          setScanError('La foto es poco legible. Verifique los datos manualmente.')
+        }
+      } else {
+        setScanError(aiResult.error || 'No se pudo leer el ticket. Intente con mejor iluminacion.')
+      }
+    } catch (error) {
+      console.error('[Receipt Photo] Error:', error)
+      setScanError('Error al procesar la foto del ticket')
+    } finally {
+      setReceiptScanLoading(false)
+      setReceiptPhotoMode(false)
+    }
+  }, [compressImage, scannedDocuments, activeLogId, kioskId, guard?.id])
 
   // Barcode scanner hook - active only on scan_receipts step when camera scanner is closed
   useBarcodeScan({
@@ -2579,19 +2704,48 @@ export default function DoorKioskPage() {
                   Validar Comprobantes
                 </h2>
                 <p className={`${theme.textMuted} text-xs sm:text-sm`}>
-                  Escanee los tickets del visitante
+                  Tome foto o escanee los tickets del visitante
                 </p>
               </div>
 
+              {/* Hidden file input for receipt photo */}
+              <input
+                type="file"
+                ref={receiptFileInputRef}
+                accept="image/*"
+                capture="environment"
+                onChange={handleReceiptPhotoCapture}
+                className="hidden"
+              />
+
               {/* Scanner buttons */}
               <div className="flex flex-col items-center gap-2 mb-3 sm:mb-4">
+                {/* Primary: Photo + AI */}
+                <button
+                  onClick={() => receiptFileInputRef.current?.click()}
+                  disabled={scanLoading || receiptScanLoading}
+                  className="flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-medium text-sm sm:text-base transition-colors disabled:opacity-50 w-full sm:w-auto justify-center"
+                >
+                  {receiptScanLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                      Analizando ticket...
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
+                      Foto del Ticket (IA)
+                    </>
+                  )}
+                </button>
+                {/* Secondary: Barcode scanner */}
                 <button
                   onClick={() => setScannerOpen(true)}
-                  disabled={scanLoading}
-                  className="flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-medium text-sm sm:text-base transition-colors disabled:opacity-50"
+                  disabled={scanLoading || receiptScanLoading}
+                  className={`flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 ${kioskTheme === 'dark' ? 'bg-stone-700 hover:bg-stone-600' : 'bg-stone-200 hover:bg-stone-300'} ${theme.text} rounded-xl font-medium text-xs sm:text-sm transition-colors disabled:opacity-50 w-full sm:w-auto justify-center`}
                 >
-                  <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
-                  Escanear con Camara
+                  <ScanLine className="w-4 h-4" />
+                  Lector de Codigos
                 </button>
                 <p className={`text-xs ${theme.textMuted}`}>
                   o apunte el lector de codigos al ticket
@@ -2599,7 +2753,7 @@ export default function DoorKioskPage() {
               </div>
 
               {/* Loading indicator */}
-              {scanLoading && (
+              {(scanLoading && !receiptScanLoading) && (
                 <div className="flex items-center justify-center gap-2 mb-3">
                   <RefreshCw className="w-4 h-4 text-orange-400 animate-spin" />
                   <span className={`text-sm ${theme.textMuted}`}>Buscando...</span>
@@ -2632,20 +2786,34 @@ export default function DoorKioskPage() {
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className={`font-medium text-sm sm:text-base ${theme.text}`}>
-                            {doc.documentType === 'pos_order' ? 'Ticket POS' :
-                             doc.documentType === 'pos_receipt' ? 'Ticket POS' : 'Factura'}
-                          </p>
-                          <p className={`text-xs sm:text-sm ${theme.textMuted} truncate`}>
-                            #{doc.documentNumber}
-                          </p>
-                          {doc.customerName && (
-                            <p className={`text-xs ${theme.textMuted}`}>{doc.customerName}</p>
+                        <div className="flex items-start gap-2 min-w-0">
+                          {doc.photoBase64 && (
+                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-700 shrink-0">
+                              <img
+                                src={doc.photoBase64}
+                                alt="Ticket"
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
                           )}
-                          <p className="text-base sm:text-lg font-bold text-orange-400 mt-0.5 sm:mt-1">
-                            {doc.currency} {doc.totalAmount.toFixed(2)}
-                          </p>
+                          <div className="min-w-0">
+                            <p className={`font-medium text-sm sm:text-base ${theme.text}`}>
+                              {doc.documentType === 'pos_order' ? 'Ticket POS' :
+                               doc.documentType === 'pos_receipt' ? 'Ticket POS' : 'Factura'}
+                              {doc.photoBase64 && (
+                                <span className="ml-1.5 text-xs text-orange-400">(Foto)</span>
+                              )}
+                            </p>
+                            <p className={`text-xs sm:text-sm ${theme.textMuted} truncate`}>
+                              #{doc.documentNumber}
+                            </p>
+                            {doc.customerName && (
+                              <p className={`text-xs ${theme.textMuted}`}>{doc.customerName}</p>
+                            )}
+                            <p className="text-base sm:text-lg font-bold text-orange-400 mt-0.5 sm:mt-1">
+                              {doc.currency} {doc.totalAmount.toFixed(2)}
+                            </p>
+                          </div>
                         </div>
                         {doc.validated ? (
                           <div className="flex items-center gap-1 text-green-400 flex-shrink-0">

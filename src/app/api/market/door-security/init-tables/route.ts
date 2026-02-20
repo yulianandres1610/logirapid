@@ -239,6 +239,21 @@ export async function POST(request: NextRequest) {
       results.push('invoice_validations index already exists or failed')
     }
 
+    // Add photourl column to invoice validations (migration for receipt photo proof)
+    try {
+      await db.query(`
+        ALTER TABLE market_visitor_invoice_validations
+        ADD COLUMN IF NOT EXISTS photourl TEXT
+      `)
+      results.push('photourl column added/verified')
+    } catch (error: any) {
+      if (error.message?.includes('already exists')) {
+        results.push('photourl column already exists')
+      } else {
+        results.push(`photourl migration: ${error.message}`)
+      }
+    }
+
     // Create market_door_guards table (no hard FK to market_employees)
     try {
       await db.query(`

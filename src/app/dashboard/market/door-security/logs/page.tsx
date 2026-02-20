@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import {
   Clock,
   Search,
@@ -14,7 +14,8 @@ import {
   FileText,
   AlertTriangle,
   CheckCircle,
-  User
+  User,
+  Eye
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -40,6 +41,7 @@ interface Log {
 
 export default function DoorLogsPage() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const initialStatus = searchParams.get('status') || 'all'
 
   const [logs, setLogs] = useState<Log[]>([])
@@ -233,11 +235,18 @@ export default function DoorLogsPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Estado
                     </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                   {logs.map(log => (
-                    <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <tr
+                      key={log.id}
+                      onClick={() => router.push(`/dashboard/market/door-security/logs/${log.id}`)}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
+                    >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
@@ -308,6 +317,9 @@ export default function DoorLogsPage() {
                             </span>
                           )}
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <Eye className="w-4 h-4 text-gray-400" />
                       </td>
                     </tr>
                   ))}
