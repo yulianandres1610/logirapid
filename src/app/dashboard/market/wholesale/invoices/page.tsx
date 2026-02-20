@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Receipt,
   Plus,
@@ -16,7 +16,10 @@ import {
   AlertTriangle,
   CreditCard,
   PackageCheck,
-  AlertCircle
+  AlertCircle,
+  Printer,
+  Loader2,
+  X
 } from 'lucide-react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
@@ -24,6 +27,28 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+
+interface PrintService {
+  id: number
+  serviceName: string
+  printers: Array<{
+    id: number
+    printerName: string
+    isOnline: boolean
+    isDefault: boolean
+    printerType: string
+  }>
+}
+
+interface InvoiceLine {
+  productName: string
+  productSku: string | null
+  quantity: number
+  unitPrice: number
+  discountPercent: number
+  discountAmount: number
+  subtotal: number
+}
 
 interface Invoice {
   id: number
@@ -87,6 +112,17 @@ export default function WholesaleInvoicesPage() {
     totalPending: 0
   })
 
+  // Print state
+  const [showPrintModal, setShowPrintModal] = useState(false)
+  const [printInvoice, setPrintInvoice] = useState<Invoice | null>(null)
+  const [printServices, setPrintServices] = useState<PrintService[]>([])
+  const [selectedPrinter, setSelectedPrinter] = useState<{ serviceId: number; printerId: number } | null>(null)
+  const [printingWithService, setPrintingWithService] = useState(false)
+  const [copies, setCopies] = useState(1)
+  const [loadingInvoiceLines, setLoadingInvoiceLines] = useState(false)
+  const [invoiceLines, setInvoiceLines] = useState<InvoiceLine[]>([])
+  const [invoiceDetail, setInvoiceDetail] = useState<Record<string, unknown> | null>(null)
+
   useEffect(() => {
     fetchInvoices()
   }, [statusFilter, paymentStatusFilter])
@@ -138,6 +174,132 @@ export default function WholesaleInvoicesPage() {
       month: 'short',
       year: 'numeric'
     })
+  }
+
+  // Print functions
+  const fetchPrintServices = async () => {
+    try {
+      const response = await fetch('/api/print/services?includeOffline=false')
+      const data = await response.json()
+      if (data.success && data.data?.services) {
+        const activeServices = data.data.services
+          .filter((s: { status: string; printers?: unknown[] }) => s.status === 'active' && s.printers && s.printers.length > 0)
+          .map((service: PrintService) => ({
+            ...service,
+            printers: service.printers.filter((p: { printerType: string }) =>
+              p.printerType === 'thermal_80mm' || p.printerType === 'standard'
+            )
+          }))
+          .filter((s: PrintService) => s.printers.length > 0)
+
+        setPrintServices(activeServices)
+
+        for (const service of activeServices) {
+          let availablePrinter = service.printers.find((p: { isOnline: boolean; printerType: string }) =>
+            p.isOnline && p.printerType === 'thermal_80mm'
+          )
+          if (!availablePrinter) {
+            availablePrinter = service.printers.find((p: { isOnline: boolean }) => p.isOnline)
+          }
+          if (availablePrinter) {
+            setSelectedPrinter({ serviceId: service.id, printerId: availablePrinter.id })
+            break
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Print] Error fetching print services:', err)
+    }
+  }
+
+  const fetchInvoiceLines = async (invoiceId: number) => {
+    setLoadingInvoiceLines(true)
+    try {
+      const response = await fetch(`/api/market/wholesale/invoices/${invoiceId}`)
+      const data = await response.json()
+      if (data.success && data.data) {
+        const detail = data.data
+        setInvoiceDetail(detail)
+        setInvoiceLines((detail.lines || []).map((l: { productName: string; productSku: string | null; quantity: number; unitPrice: number; discountPercent: number; discountAmount: number; subtotal: number }) => ({
+          productName: l.productName,
+          productSku: l.productSku,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          discountPercent: l.discountPercent || 0,
+          discountAmount: l.discountAmount || 0,
+          subtotal: l.subtotal
+        })))
+      }
+    } catch (err) {
+      console.error('[Print] Error fetching invoice lines:', err)
+    } finally {
+      setLoadingInvoiceLines(false)
+    }
+  }
+
+  const handlePrintInvoice = (invoice: Invoice) => {
+    setPrintInvoice(invoice)
+    setShowPrintModal(true)
+    setCopies(1)
+    setInvoiceDetail(null)
+    fetchPrintServices()
+    fetchInvoiceLines(invoice.id)
+  }
+
+  const printWithSilentService = async () => {
+    if (!printInvoice || !selectedPrinter || invoiceLines.length === 0) return
+
+    setPrintingWithService(true)
+    try {
+      const customer = invoiceDetail
+        ? { code: (invoiceDetail as Record<string, unknown>).customer ? ((invoiceDetail as Record<string, unknown>).customer as Record<string, string>).code : printInvoice.customerCode, name: (invoiceDetail as Record<string, unknown>).customer ? ((invoiceDetail as Record<string, unknown>).customer as Record<string, string>).businessName : printInvoice.customerName, taxId: (invoiceDetail as Record<string, unknown>).customer ? ((invoiceDetail as Record<string, unknown>).customer as Record<string, string>).taxId : undefined, address: (invoiceDetail as Record<string, unknown>).customer ? ((invoiceDetail as Record<string, unknown>).customer as Record<string, string>).address : undefined, phone: (invoiceDetail as Record<string, unknown>).customer ? ((invoiceDetail as Record<string, unknown>).customer as Record<string, string>).phone : undefined }
+        : { code: printInvoice.customerCode, name: printInvoice.customerName }
+
+      const response = await fetch('/api/print/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentType: 'wholesale_invoice',
+          documentData: {
+            invoiceNumber: printInvoice.invoiceNumber,
+            customer,
+            warehouseName: printInvoice.warehouseName,
+            lines: invoiceLines,
+            subtotal: printInvoice.subtotal,
+            discountPercent: printInvoice.discountPercent,
+            discountAmount: printInvoice.discountAmount,
+            totalAmount: printInvoice.totalAmount,
+            amountPaid: printInvoice.amountPaid,
+            amountDue: printInvoice.amountDue,
+            currency: printInvoice.currency,
+            status: printInvoice.status,
+            paymentStatus: printInvoice.paymentStatus,
+            dueDate: printInvoice.dueDate,
+            createdAt: printInvoice.createdAt,
+            notes: (invoiceDetail as Record<string, unknown>)?.notes || undefined
+          },
+          copies,
+          printServiceId: selectedPrinter.serviceId,
+          printerId: selectedPrinter.printerId,
+          sourceType: 'wholesale_invoice',
+          sourceId: printInvoice.id
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setShowPrintModal(false)
+        setPrintInvoice(null)
+        setInvoiceLines([])
+        setInvoiceDetail(null)
+      } else {
+        throw new Error(data.error)
+      }
+    } catch (err) {
+      console.error('[Print] Error printing:', err)
+    } finally {
+      setPrintingWithService(false)
+    }
   }
 
   return (
@@ -595,6 +757,15 @@ export default function WholesaleInvoicesPage() {
                             </td>
                             <td className="py-4 px-4 text-center">
                               <div className="flex items-center justify-center gap-1">
+                                <motion.button
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => handlePrintInvoice(invoice)}
+                                  className="p-2 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+                                  title="Imprimir factura"
+                                >
+                                  <Printer className="w-4 h-4 text-emerald-500" />
+                                </motion.button>
                                 <Link href={`/dashboard/market/wholesale/invoices/${invoice.id}`}>
                                   <motion.button
                                     whileHover={{ scale: 1.1 }}
@@ -628,6 +799,251 @@ export default function WholesaleInvoicesPage() {
               </div>
             </motion.div>
           </motion.div>
+
+          {/* Print Modal */}
+          <AnimatePresence>
+            {showPrintModal && printInvoice && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => {
+                    setShowPrintModal(false)
+                    setPrintInvoice(null)
+                    setInvoiceLines([])
+                    setInvoiceDetail(null)
+                  }}
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+                />
+
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                  transition={{ type: "spring", duration: 0.3 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                >
+                  <div
+                    className={cn(
+                      "w-full max-w-md rounded-2xl shadow-2xl border",
+                      theme === 'dark'
+                        ? 'bg-gray-800 border-gray-700'
+                        : 'bg-white border-gray-200'
+                    )}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className={cn(
+                      "px-6 py-4 border-b flex items-center justify-between",
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+                          <Printer className="w-5 h-5 text-emerald-600" />
+                        </div>
+                        <div>
+                          <h3 className={cn(
+                            "font-semibold",
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          )}>
+                            Imprimir Factura
+                          </h3>
+                          <p className="text-xs text-gray-500">#{printInvoice.invoiceNumber}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowPrintModal(false)
+                          setPrintInvoice(null)
+                          setInvoiceLines([])
+                          setInvoiceDetail(null)
+                        }}
+                        className={cn(
+                          "p-2 rounded-lg transition-colors",
+                          theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                        )}
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="p-6 space-y-6">
+                      {(printServices.length === 0 || loadingInvoiceLines) ? (
+                        <div className="text-center py-4">
+                          <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-4" />
+                          <p className="text-gray-500">
+                            {loadingInvoiceLines ? 'Cargando datos...' : 'Buscando impresoras...'}
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Invoice Summary */}
+                          <div className={cn(
+                            "p-4 rounded-xl",
+                            theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
+                          )}>
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-sm text-gray-500">Cliente</span>
+                              <span className="font-medium text-gray-900 dark:text-white">{printInvoice.customerName}</span>
+                            </div>
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-sm text-gray-500">Total</span>
+                              <span className="font-bold text-gray-900 dark:text-white">{formatCurrency(printInvoice.totalAmount)}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-500">Productos</span>
+                              <span className="font-medium text-gray-900 dark:text-white">{invoiceLines.length} items</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className={cn(
+                              "block text-sm font-medium mb-2",
+                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                            )}>
+                              Seleccionar Impresora
+                            </label>
+                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                              {printServices.map(service => (
+                                service.printers.map(printer => (
+                                  <button
+                                    key={`${service.id}-${printer.id}`}
+                                    onClick={() => setSelectedPrinter({ serviceId: service.id, printerId: printer.id })}
+                                    className={cn(
+                                      'w-full p-3 rounded-xl border-2 transition-all text-left flex items-center justify-between',
+                                      selectedPrinter?.printerId === printer.id
+                                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                                        : theme === 'dark'
+                                          ? 'border-gray-600 bg-gray-700/50 hover:border-gray-500'
+                                          : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Printer className={cn(
+                                        "w-5 h-5",
+                                        selectedPrinter?.printerId === printer.id ? 'text-emerald-600' : 'text-gray-400'
+                                      )} />
+                                      <div>
+                                        <p className={cn(
+                                          "font-medium",
+                                          theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                        )}>
+                                          {printer.printerName}
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                          {printer.printerType === 'thermal_80mm' ? 'Termica 80mm' : 'Estandar'}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    {printer.isOnline ? (
+                                      <span className="text-xs text-emerald-500 font-medium">Online</span>
+                                    ) : (
+                                      <span className="text-xs text-gray-400">Offline</span>
+                                    )}
+                                  </button>
+                                ))
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className={cn(
+                              "block text-sm font-medium mb-2",
+                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                            )}>
+                              Copias
+                            </label>
+                            <div className="flex items-center justify-center gap-4">
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setCopies(Math.max(1, copies - 1))}
+                                className={cn(
+                                  "w-10 h-10 rounded-xl flex items-center justify-center font-bold",
+                                  theme === 'dark'
+                                    ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                                    : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                                )}
+                              >
+                                -
+                              </motion.button>
+                              <span className={cn(
+                                "w-12 text-center text-xl font-bold",
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>
+                                {copies}
+                              </span>
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setCopies(Math.min(5, copies + 1))}
+                                className={cn(
+                                  "w-10 h-10 rounded-xl flex items-center justify-center font-bold",
+                                  theme === 'dark'
+                                    ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                                    : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                                )}
+                              >
+                                +
+                              </motion.button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {printServices.length > 0 && !loadingInvoiceLines && (
+                      <div className={cn(
+                        "flex gap-3 p-6 pt-4 border-t",
+                        theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                      )}>
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => {
+                            setShowPrintModal(false)
+                            setPrintInvoice(null)
+                            setInvoiceLines([])
+                            setInvoiceDetail(null)
+                          }}
+                          className={cn(
+                            "flex-1 py-3 rounded-xl font-medium transition-all",
+                            theme === 'dark'
+                              ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                          )}
+                        >
+                          Cancelar
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={printWithSilentService}
+                          disabled={printingWithService || !selectedPrinter || invoiceLines.length === 0}
+                          className={cn(
+                            "flex-1 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2",
+                            "bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50"
+                          )}
+                        >
+                          {printingWithService ? (
+                            <>
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                              Enviando...
+                            </>
+                          ) : (
+                            <>
+                              <Printer className="w-5 h-5" />
+                              Imprimir
+                            </>
+                          )}
+                        </motion.button>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
         </div>
       </DashboardLayout>
     </ProtectedRoute>

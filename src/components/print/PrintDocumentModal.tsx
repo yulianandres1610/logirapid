@@ -37,6 +37,7 @@ export type DocumentType =
   | 'unified_reception'
   | 'consignment_receipt'
   | 'warehouse_operation'
+  | 'wholesale_invoice'
 
 // Document types that should ONLY use label printers
 const LABEL_DOCUMENT_TYPES = ['product_label', 'shipping_label', 'lot_label']
@@ -50,7 +51,7 @@ const THERMAL_ONLY_DOCUMENT_TYPES = [
 // Document types that can use thermal OR standard printers (NOT label printers)
 // These have both ESC/POS and PDF templates in the print service
 const THERMAL_OR_STANDARD_INVOICE_TYPES = [
-  'purchase_invoice', 'invoice', 'consignment_receipt'
+  'purchase_invoice', 'invoice', 'consignment_receipt', 'wholesale_invoice'
 ]
 
 // Document types that should ONLY use STANDARD printers (NOT thermal, NOT label)
@@ -86,7 +87,8 @@ const DOCUMENT_LABELS: Record<DocumentType, { label: string; icon: typeof FileTe
   lot_label: { label: 'Etiqueta de Lote', icon: Package },
   unified_reception: { label: 'Comprobante de Recepción', icon: Receipt },
   consignment_receipt: { label: 'Recibo de Consignación', icon: Receipt },
-  warehouse_operation: { label: 'Operación de Almacén', icon: Package }
+  warehouse_operation: { label: 'Operación de Almacén', icon: Package },
+  wholesale_invoice: { label: 'Factura Mayorista', icon: FileText }
 }
 
 export function PrintDocumentModal({
