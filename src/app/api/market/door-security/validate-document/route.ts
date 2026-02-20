@@ -126,13 +126,12 @@ export async function POST(request: NextRequest) {
       }, { status: 403 })
     }
 
-    // Check if already validated
+    // Check if already validated globally (not just within this visitor log)
     const existingValidation = await db.query(`
       SELECT id FROM market_visitor_invoice_validations
-      WHERE visitorlogid = $1
-        AND documenttype = $2
-        AND (documentid = $3 OR documentnumber = $4)
-    `, [visitorLogId, documentType, documentId, documentNumber])
+      WHERE documenttype = $1
+        AND (documentid = $2 OR documentnumber = $3)
+    `, [documentType, documentId, documentNumber])
 
     if (existingValidation.rows.length > 0) {
       return NextResponse.json({

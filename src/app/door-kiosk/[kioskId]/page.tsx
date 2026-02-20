@@ -1082,61 +1082,53 @@ export default function DoorKioskPage() {
           return
         }
 
-        // Also try to match with scan-document API if we got an order number
-        let matchedDoc: ScannedDocument | null = null
-        if (orderNumber) {
-          try {
-            const scanRes = await fetch('/api/market/door-security/scan-document', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                scannedCode: orderNumber.trim(),
-                visitorLogId: activeLogId,
-                kioskId: parseInt(kioskId),
-                guardId: guard?.id
-              })
-            })
-            const scanResult = await scanRes.json()
-            if (scanResult.success && scanResult.data.found && !scanResult.data.alreadyValidated) {
-              matchedDoc = {
-                documentType: scanResult.data.documentType,
-                documentId: scanResult.data.documentId,
-                documentNumber: scanResult.data.documentNumber,
-                customerName: scanResult.data.customerName,
-                totalAmount: scanResult.data.totalAmount,
-                currency: scanResult.data.currency,
-                createdAt: scanResult.data.createdAt,
-                alreadyValidated: false,
-                validated: false,
-                photoBase64: compressed
-              }
-            }
-          } catch {
-            console.log('[Receipt Photo] scan-document lookup failed, using AI data only')
-          }
+        // Must match with scan-document API - ticket must exist in orders
+        if (!orderNumber) {
+          setScanError('No se pudo extraer el numero del ticket. Intente con mejor iluminacion.')
+          return
         }
 
-        if (matchedDoc) {
-          setScannedDocuments(prev => [...prev, matchedDoc!])
-          // Auto-validate immediately
-          autoValidateDocument(matchedDoc)
-        } else {
-          // Use AI-extracted data directly
-          const newDoc: ScannedDocument = {
-            documentType: 'pos_receipt',
-            documentId: null,
-            documentNumber: docNumber,
-            customerName: storeName || null,
-            totalAmount: total || 0,
-            currency: currency || 'CUP',
-            createdAt: new Date().toISOString(),
+        try {
+          const scanRes = await fetch('/api/market/door-security/scan-document', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              scannedCode: orderNumber.trim(),
+              visitorLogId: activeLogId,
+              kioskId: parseInt(kioskId),
+              guardId: guard?.id
+            })
+          })
+          const scanResult = await scanRes.json()
+
+          if (!scanResult.success || !scanResult.data.found) {
+            setScanError(`Ticket ${orderNumber} no encontrado en las ordenes del sistema.`)
+            return
+          }
+
+          if (scanResult.data.alreadyValidated) {
+            setScanError(`Ticket ${orderNumber} ya fue validado anteriormente.`)
+            return
+          }
+
+          const matchedDoc: ScannedDocument = {
+            documentType: scanResult.data.documentType,
+            documentId: scanResult.data.documentId,
+            documentNumber: scanResult.data.documentNumber,
+            customerName: scanResult.data.customerName,
+            totalAmount: scanResult.data.totalAmount,
+            currency: scanResult.data.currency,
+            createdAt: scanResult.data.createdAt,
             alreadyValidated: false,
             validated: false,
             photoBase64: compressed
           }
-          setScannedDocuments(prev => [...prev, newDoc])
-          // Auto-validate immediately
-          autoValidateDocument(newDoc)
+
+          setScannedDocuments(prev => [...prev, matchedDoc])
+          autoValidateDocument(matchedDoc)
+        } catch {
+          setScanError('Error al verificar el ticket en el sistema.')
+          return
         }
 
         if (confidence && confidence < 0.5) {

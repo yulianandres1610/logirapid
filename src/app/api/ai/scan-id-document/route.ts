@@ -8,7 +8,7 @@ import { db } from '@/lib/database'
 // API Key para Gemini
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
 
-const OCR_MODEL = process.env.GEMINI_OCR_MODEL || 'gemini-2.5-flash'
+const OCR_MODEL = process.env.GEMINI_OCR_MODEL || 'gemini-2.0-flash-lite'
 
 const MAX_RETRIES = 2
 
