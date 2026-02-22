@@ -220,6 +220,8 @@ export default function DoorKioskPage() {
   // Daily log
   const [dailyLogs, setDailyLogs] = useState<DailyLogEntry[]>([])
   const [loadingDailyLog, setLoadingDailyLog] = useState(false)
+  const [dailyLogFilter, setDailyLogFilter] = useState<'all' | 'inside' | 'exited'>('all')
+  const [dailyLogSearch, setDailyLogSearch] = useState('')
 
   // Receipt scanning state
   const [scannerOpen, setScannerOpen] = useState(false)
@@ -1360,19 +1362,22 @@ export default function DoorKioskPage() {
     }
   }
 
-  const fetchDailyLog = async () => {
+  const fetchDailyLog = async (dateOverride?: string) => {
     if (!kiosk?.id || !guard?.id) {
       console.error('Cannot fetch daily log: kiosk or guard not loaded')
       return
     }
     setLoadingDailyLog(true)
     try {
-      const now = new Date()
-      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      const targetDate = dateOverride || (() => {
+        const now = new Date()
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      })()
       const params = new URLSearchParams({
         kioskId: kiosk.id.toString(),
         guardId: guard.id.toString(),
-        date: today
+        date: targetDate,
+        limit: '500'
       })
       const res = await fetch(`/api/market/door-security/logs?${params}`)
       const data = await res.json()
@@ -1387,6 +1392,8 @@ export default function DoorKioskPage() {
   }
 
   const openDailyLog = () => {
+    setDailyLogFilter('all')
+    setDailyLogSearch('')
     fetchDailyLog()
     setStep('daily_log')
   }
@@ -3012,133 +3019,231 @@ export default function DoorKioskPage() {
             </motion.div>
           )}
 
-          {/* Daily Log - Registro del Día */}
-          {step === 'daily_log' && (
-            <motion.div
-              key="daily_log"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="p-3 sm:p-5"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between mb-3 sm:mb-4">
-                <button
-                  onClick={() => setStep('idle')}
-                  className={`flex items-center gap-1.5 text-sm font-medium ${theme.textSecondary} hover:${theme.text} transition-colors`}
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Volver
-                </button>
-                <button
-                  onClick={fetchDailyLog}
-                  disabled={loadingDailyLog}
-                  className={`flex items-center gap-1.5 text-sm font-medium text-orange-400 hover:text-orange-300 transition-colors ${loadingDailyLog ? 'animate-spin' : ''}`}
-                >
-                  <RefreshCw className={`w-4 h-4 ${loadingDailyLog ? 'animate-spin' : ''}`} />
-                  Actualizar
-                </button>
-              </div>
+          {/* Daily Log - Registro del Día - REDISEÑADO */}
+          {step === 'daily_log' && (() => {
+            const insideLogs = dailyLogs.filter(l => l.status === 'active')
+            const exitedLogs = dailyLogs.filter(l => l.status === 'completed')
 
-              <h2 className={`text-lg sm:text-xl font-bold ${theme.text} mb-1`}>
-                <ClipboardList className="w-5 h-5 inline-block mr-2 text-orange-400" />
-                Registro del Día
-              </h2>
-              <p className={`text-xs sm:text-sm ${theme.textSecondary} mb-3`}>
-                {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-              </p>
+            // Apply filters
+            let filteredLogs = dailyLogs
+            if (dailyLogFilter === 'inside') {
+              filteredLogs = insideLogs
+            } else if (dailyLogFilter === 'exited') {
+              filteredLogs = exitedLogs
+            }
 
-              {/* Summary cards */}
-              {(() => {
-                const inside = dailyLogs.filter(l => l.status === 'active')
-                const exited = dailyLogs.filter(l => l.status === 'completed')
-                return (
-                  <div className="grid grid-cols-3 gap-2 mb-3">
-                    <div className={`${kioskTheme === 'dark' ? 'bg-stone-800/80' : 'bg-stone-100'} rounded-xl p-2 sm:p-3 text-center`}>
-                      <p className="text-lg sm:text-2xl font-bold text-orange-400">{dailyLogs.length}</p>
-                      <p className={`text-[10px] sm:text-xs ${theme.textSecondary}`}>Total</p>
-                    </div>
-                    <div className={`${kioskTheme === 'dark' ? 'bg-green-900/30' : 'bg-green-50'} rounded-xl p-2 sm:p-3 text-center`}>
-                      <p className="text-lg sm:text-2xl font-bold text-green-400">{inside.length}</p>
-                      <p className={`text-[10px] sm:text-xs ${theme.textSecondary}`}>Adentro</p>
-                    </div>
-                    <div className={`${kioskTheme === 'dark' ? 'bg-stone-800/80' : 'bg-stone-100'} rounded-xl p-2 sm:p-3 text-center`}>
-                      <p className={`text-lg sm:text-2xl font-bold ${theme.textSecondary}`}>{exited.length}</p>
-                      <p className={`text-[10px] sm:text-xs ${theme.textSecondary}`}>Salieron</p>
-                    </div>
-                  </div>
-                )
-              })()}
+            // Apply search
+            if (dailyLogSearch.trim()) {
+              const search = dailyLogSearch.toLowerCase().trim()
+              filteredLogs = filteredLogs.filter(l =>
+                l.visitorName.toLowerCase().includes(search) ||
+                l.visitorIdNumber.toLowerCase().includes(search) ||
+                (l.visitPurpose && l.visitPurpose.toLowerCase().includes(search))
+              )
+            }
 
-              {/* Log list */}
-              {loadingDailyLog ? (
-                <div className="flex items-center justify-center py-8">
-                  <RefreshCw className="w-6 h-6 text-orange-400 animate-spin" />
+            // Sort: active first, then by entry time desc
+            filteredLogs = [...filteredLogs].sort((a, b) => {
+              if (a.status === 'active' && b.status !== 'active') return -1
+              if (a.status !== 'active' && b.status === 'active') return 1
+              return new Date(b.entryTime).getTime() - new Date(a.entryTime).getTime()
+            })
+
+            return (
+              <motion.div
+                key="daily_log"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="p-3 sm:p-4 flex flex-col h-full max-h-[85vh]"
+              >
+                {/* Header compacto */}
+                <div className="flex items-center justify-between mb-3">
+                  <button
+                    onClick={() => {
+                      setStep('idle')
+                      setDailyLogFilter('all')
+                      setDailyLogSearch('')
+                    }}
+                    className={`flex items-center gap-1 text-sm font-medium ${theme.textSecondary} hover:text-orange-400 transition-colors`}
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span className="hidden sm:inline">Volver</span>
+                  </button>
+
+                  <h2 className={`text-base sm:text-lg font-bold ${theme.text} flex items-center gap-2`}>
+                    <ClipboardList className="w-5 h-5 text-orange-400" />
+                    Historial
+                  </h2>
+
+                  <button
+                    onClick={() => fetchDailyLog()}
+                    disabled={loadingDailyLog}
+                    className="flex items-center gap-1 text-sm font-medium text-orange-400 hover:text-orange-300 transition-colors"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loadingDailyLog ? 'animate-spin' : ''}`} />
+                  </button>
                 </div>
-              ) : dailyLogs.length === 0 ? (
-                <div className="text-center py-8">
-                  <ClipboardList className={`w-10 h-10 ${theme.textMuted} mx-auto mb-2`} />
-                  <p className={`${theme.textSecondary} text-sm`}>No hay registros hoy</p>
+
+                {/* Fecha */}
+                <p className={`text-xs ${theme.textSecondary} text-center mb-3`}>
+                  {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </p>
+
+                {/* Stats en una fila */}
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  <button
+                    onClick={() => setDailyLogFilter('all')}
+                    className={`rounded-xl p-2 text-center transition-all ${
+                      dailyLogFilter === 'all'
+                        ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30'
+                        : kioskTheme === 'dark' ? 'bg-stone-800/80 hover:bg-stone-700/80' : 'bg-stone-100 hover:bg-stone-200'
+                    }`}
+                  >
+                    <p className={`text-xl sm:text-2xl font-bold ${dailyLogFilter === 'all' ? 'text-white' : 'text-orange-400'}`}>
+                      {dailyLogs.length}
+                    </p>
+                    <p className={`text-[10px] font-medium ${dailyLogFilter === 'all' ? 'text-orange-100' : theme.textSecondary}`}>
+                      Total
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={() => setDailyLogFilter('inside')}
+                    className={`rounded-xl p-2 text-center transition-all ${
+                      dailyLogFilter === 'inside'
+                        ? 'bg-green-500 text-white shadow-lg shadow-green-500/30'
+                        : kioskTheme === 'dark' ? 'bg-green-900/30 hover:bg-green-900/50' : 'bg-green-50 hover:bg-green-100'
+                    }`}
+                  >
+                    <p className={`text-xl sm:text-2xl font-bold ${dailyLogFilter === 'inside' ? 'text-white' : 'text-green-400'}`}>
+                      {insideLogs.length}
+                    </p>
+                    <p className={`text-[10px] font-medium ${dailyLogFilter === 'inside' ? 'text-green-100' : theme.textSecondary}`}>
+                      Adentro
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={() => setDailyLogFilter('exited')}
+                    className={`rounded-xl p-2 text-center transition-all ${
+                      dailyLogFilter === 'exited'
+                        ? 'bg-stone-500 text-white shadow-lg shadow-stone-500/30'
+                        : kioskTheme === 'dark' ? 'bg-stone-800/80 hover:bg-stone-700/80' : 'bg-stone-100 hover:bg-stone-200'
+                    }`}
+                  >
+                    <p className={`text-xl sm:text-2xl font-bold ${dailyLogFilter === 'exited' ? 'text-white' : theme.textSecondary}`}>
+                      {exitedLogs.length}
+                    </p>
+                    <p className={`text-[10px] font-medium ${dailyLogFilter === 'exited' ? 'text-stone-200' : theme.textSecondary}`}>
+                      Salieron
+                    </p>
+                  </button>
                 </div>
-              ) : (
-                <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
-                  {/* People currently inside first */}
-                  {dailyLogs
-                    .sort((a, b) => {
-                      // Active (inside) first, then by entry time desc
-                      if (a.status === 'active' && b.status !== 'active') return -1
-                      if (a.status !== 'active' && b.status === 'active') return 1
-                      return new Date(b.entryTime).getTime() - new Date(a.entryTime).getTime()
-                    })
-                    .map(log => {
-                      const isInside = log.status === 'active'
-                      const entryDate = new Date(log.entryTime)
-                      const exitDate = log.exitTime ? new Date(log.exitTime) : null
 
-                      // Calculate time inside (for active: elapsed, for completed: duration)
-                      let timeInside = ''
-                      const endTime = isInside ? new Date() : exitDate
-                      if (endTime) {
-                        const diffMs = endTime.getTime() - entryDate.getTime()
-                        const diffMins = Math.floor(diffMs / 60000)
-                        const hours = Math.floor(diffMins / 60)
-                        const mins = diffMins % 60
-                        timeInside = hours > 0 ? `${hours} h ${mins} min` : `${mins} min`
-                      }
+                {/* Buscador */}
+                <div className="relative mb-3">
+                  <input
+                    type="text"
+                    value={dailyLogSearch}
+                    onChange={(e) => setDailyLogSearch(e.target.value)}
+                    placeholder="Buscar por nombre o cédula..."
+                    className={`w-full px-3 py-2 pl-9 rounded-xl text-sm ${
+                      kioskTheme === 'dark'
+                        ? 'bg-stone-800 text-white placeholder-stone-500 border-stone-700'
+                        : 'bg-white text-stone-900 placeholder-stone-400 border-stone-200'
+                    } border focus:outline-none focus:ring-2 focus:ring-orange-500/50`}
+                  />
+                  <User className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${theme.textMuted}`} />
+                  {dailyLogSearch && (
+                    <button
+                      onClick={() => setDailyLogSearch('')}
+                      className={`absolute right-3 top-1/2 -translate-y-1/2 ${theme.textMuted} hover:text-orange-400`}
+                    >
+                      <XCircle className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
 
-                      return (
-                        <div
-                          key={log.id}
-                          className={`rounded-xl p-3 sm:p-3.5 border transition-all ${
-                            isInside
-                              ? kioskTheme === 'dark'
-                                ? 'bg-green-900/20 border-green-500/40'
-                                : 'bg-green-50 border-green-300'
-                              : kioskTheme === 'dark'
-                                ? 'bg-stone-800/50 border-stone-700'
-                                : 'bg-stone-50 border-stone-200'
-                          }`}
+                {/* Lista de registros */}
+                <div className="flex-1 overflow-y-auto min-h-0">
+                  {loadingDailyLog ? (
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <RefreshCw className="w-8 h-8 text-orange-400 animate-spin mb-3" />
+                      <p className={`${theme.textSecondary} text-sm`}>Cargando registros...</p>
+                    </div>
+                  ) : filteredLogs.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <ClipboardList className={`w-12 h-12 ${theme.textMuted} mb-3`} />
+                      <p className={`${theme.textSecondary} text-sm font-medium`}>
+                        {dailyLogSearch ? 'Sin resultados' : dailyLogFilter === 'inside' ? 'Nadie adentro' : dailyLogFilter === 'exited' ? 'Sin salidas' : 'Sin registros hoy'}
+                      </p>
+                      {dailyLogSearch && (
+                        <button
+                          onClick={() => setDailyLogSearch('')}
+                          className="mt-2 text-xs text-orange-400 hover:text-orange-300"
                         >
-                          <div className="flex items-center justify-between gap-3">
-                            {/* Left: visitor info */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
+                          Limpiar búsqueda
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {filteredLogs.map(log => {
+                        const isInside = log.status === 'active'
+                        const entryDate = new Date(log.entryTime)
+                        const exitDate = log.exitTime ? new Date(log.exitTime) : null
+
+                        // Calculate duration
+                        const endTime = isInside ? new Date() : exitDate
+                        let duration = ''
+                        if (endTime) {
+                          const diffMs = endTime.getTime() - entryDate.getTime()
+                          const diffMins = Math.floor(diffMs / 60000)
+                          const hours = Math.floor(diffMins / 60)
+                          const mins = diffMins % 60
+                          duration = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
+                        }
+
+                        return (
+                          <div
+                            key={log.id}
+                            className={`rounded-xl p-3 border transition-all ${
+                              isInside
+                                ? kioskTheme === 'dark'
+                                  ? 'bg-gradient-to-r from-green-900/30 to-green-900/10 border-green-500/50'
+                                  : 'bg-gradient-to-r from-green-50 to-green-100/50 border-green-300'
+                                : kioskTheme === 'dark'
+                                  ? 'bg-stone-800/50 border-stone-700/50'
+                                  : 'bg-white border-stone-200'
+                            }`}
+                          >
+                            {/* Row 1: Name + Status */}
+                            <div className="flex items-start justify-between gap-2 mb-1.5">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
                                 {isInside && (
-                                  <span className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
+                                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
                                 )}
                                 <p className={`text-sm font-bold ${theme.text} truncate`}>
                                   {log.visitorName}
                                 </p>
                               </div>
-                              <p className={`text-[11px] ${theme.textMuted} mt-0.5`}>
-                                {log.visitorIdNumber}
-                              </p>
+                              <div className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                isInside
+                                  ? 'bg-green-500 text-white'
+                                  : kioskTheme === 'dark' ? 'bg-stone-600 text-stone-300' : 'bg-stone-200 text-stone-600'
+                              }`}>
+                                {isInside ? 'ADENTRO' : 'SALIÓ'}
+                              </div>
                             </div>
 
-                            {/* Center: purpose & notes */}
-                            <div className="flex-shrink-0 text-center max-w-[120px]">
+                            {/* Row 2: ID + Purpose */}
+                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                              <p className={`text-xs ${theme.textMuted}`}>
+                                {log.visitorIdNumber}
+                              </p>
                               {log.visitPurpose && (
-                                <span className={`inline-block text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                                   kioskTheme === 'dark'
                                     ? 'bg-orange-500/20 text-orange-300'
                                     : 'bg-orange-100 text-orange-600'
@@ -3146,50 +3251,58 @@ export default function DoorKioskPage() {
                                   {log.visitPurpose}
                                 </span>
                               )}
-                              {log.visitNotes && (
-                                <p className={`text-[10px] ${theme.textMuted} mt-0.5 truncate italic`}>
-                                  {log.visitNotes}
-                                </p>
-                              )}
                             </div>
 
-                            {/* Right: time info */}
-                            <div className="text-right flex-shrink-0">
-                              {/* Duration in green */}
-                              {timeInside && (
-                                <p className="text-xs font-bold text-emerald-400">
-                                  <Clock className="w-3 h-3 inline mr-0.5" />
-                                  {timeInside}
-                                </p>
-                              )}
-                              {/* Status badge */}
-                              {isInside ? (
-                                <span className="text-[10px] font-semibold text-green-400">
-                                  Adentro
-                                </span>
-                              ) : (
-                                <span className={`text-[10px] font-medium ${theme.textMuted}`}>
-                                  Salió
-                                </span>
-                              )}
-                              {/* Entry/exit times darker */}
-                              <p className={`text-[10px] font-medium mt-0.5 ${
-                                kioskTheme === 'dark' ? 'text-stone-400' : 'text-stone-500'
-                              }`}>
-                                {entryDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            {/* Row 3: Times */}
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-1">
+                                  <LogIn className="w-3 h-3 text-green-400" />
+                                  <span className={`text-xs font-medium ${theme.textSecondary}`}>
+                                    {entryDate.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
                                 {exitDate && (
-                                  <> → {exitDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</>
+                                  <div className="flex items-center gap-1">
+                                    <LogOut className="w-3 h-3 text-red-400" />
+                                    <span className={`text-xs font-medium ${theme.textSecondary}`}>
+                                      {exitDate.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </div>
                                 )}
-                              </p>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-orange-400" />
+                                <span className={`text-xs font-bold ${isInside ? 'text-green-400' : theme.textSecondary}`}>
+                                  {duration}
+                                </span>
+                              </div>
                             </div>
+
+                            {/* Optional: Notes */}
+                            {log.visitNotes && (
+                              <p className={`text-[10px] ${theme.textMuted} mt-1.5 italic truncate`}>
+                                "{log.visitNotes}"
+                              </p>
+                            )}
                           </div>
-                        </div>
-                      )
-                    })}
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
-            </motion.div>
-          )}
+
+                {/* Footer con conteo */}
+                {!loadingDailyLog && filteredLogs.length > 0 && (
+                  <div className={`mt-3 pt-2 border-t ${kioskTheme === 'dark' ? 'border-stone-700' : 'border-stone-200'}`}>
+                    <p className={`text-xs text-center ${theme.textMuted}`}>
+                      Mostrando {filteredLogs.length} de {dailyLogs.length} registros
+                    </p>
+                  </div>
+                )}
+              </motion.div>
+            )
+          })()}
 
           {/* Error State */}
           {step === 'error' && (
