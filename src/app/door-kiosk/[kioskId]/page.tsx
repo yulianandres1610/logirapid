@@ -1886,42 +1886,32 @@ export default function DoorKioskPage() {
                   </div>
                 </motion.div>
 
-                {/* Orders Section */}
+                {/* Orders Section - Same design as Visitors */}
                 <motion.div
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.3 }}
                   className={`rounded-3xl p-6 ${kioskTheme === 'dark' ? 'bg-gradient-to-br from-stone-800/80 to-stone-800/40' : 'bg-gradient-to-br from-stone-50 to-white'} border ${kioskTheme === 'dark' ? 'border-stone-700/50' : 'border-stone-200'}`}
                 >
-                  <div className="flex items-center justify-between mb-5">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${kioskTheme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
-                        <FileText className="w-6 h-6 text-blue-500" />
-                      </div>
-                      <span className={`text-lg font-bold ${theme.text}`}>Órdenes del Día</span>
+                  <div className="flex items-center gap-3 mb-5">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${kioskTheme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
+                      <FileText className="w-6 h-6 text-blue-500" />
                     </div>
-                    {kioskStats && kioskStats.ordersCreatedToday > 0 && (
-                      <span className={`text-sm font-bold px-3 py-1.5 rounded-full ${kioskStats.validationRate >= 80 ? 'bg-green-500/20 text-green-500' : kioskStats.validationRate >= 50 ? 'bg-yellow-500/20 text-yellow-500' : 'bg-red-500/20 text-red-500'}`}>
-                        {kioskStats.validationRate}% validado
-                      </span>
-                    )}
+                    <span className={`text-lg font-bold ${theme.text}`}>Órdenes del Día</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className={`rounded-2xl p-4 text-center ${kioskTheme === 'dark' ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-blue-50 border border-blue-200'}`}>
-                      <span className="text-3xl sm:text-4xl font-bold text-blue-500">{kioskStats?.breakdown?.posOrders ?? 0}</span>
-                      <span className={`text-sm font-semibold block mt-2 ${theme.textSecondary}`}>POS</span>
+                  <div className="grid grid-cols-3 gap-4">
+                    {/* Total Orders (POS + Mayoreo) */}
+                    <div className={`rounded-2xl p-4 text-center transition-colors ${kioskTheme === 'dark' ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-blue-50 border border-blue-200'}`}>
+                      <span className="text-3xl sm:text-4xl font-bold text-blue-500">{kioskStats?.ordersCreatedToday ?? 0}</span>
+                      <span className={`text-sm font-semibold block mt-2 ${theme.textSecondary}`}>Creadas</span>
                     </div>
-                    <div className={`rounded-2xl p-4 text-center ${kioskTheme === 'dark' ? 'bg-purple-500/10 border border-purple-500/20' : 'bg-purple-50 border border-purple-200'}`}>
-                      <span className="text-3xl sm:text-4xl font-bold text-purple-500">{kioskStats?.breakdown?.wholesaleInvoices ?? 0}</span>
-                      <span className={`text-sm font-semibold block mt-2 ${theme.textSecondary}`}>Mayoreo</span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className={`rounded-2xl p-4 text-center ${kioskTheme === 'dark' ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-emerald-50 border border-emerald-200'}`}>
+                    {/* Validated */}
+                    <div className={`rounded-2xl p-4 text-center transition-colors ${kioskTheme === 'dark' ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-emerald-50 border border-emerald-200'}`}>
                       <span className="text-3xl sm:text-4xl font-bold text-emerald-500">{kioskStats?.ordersValidatedToday ?? 0}</span>
                       <span className={`text-sm font-semibold block mt-2 ${theme.textSecondary}`}>Validadas</span>
                     </div>
-                    <div className={`rounded-2xl p-4 text-center ${
+                    {/* Without Validation */}
+                    <div className={`rounded-2xl p-4 text-center transition-colors ${
                       (kioskStats?.exitsWithoutValidation ?? 0) > 0
                         ? kioskTheme === 'dark' ? 'bg-red-500/20 border-2 border-red-500/50' : 'bg-red-50 border-2 border-red-300'
                         : kioskTheme === 'dark' ? 'bg-stone-700/50' : 'bg-stone-100'
@@ -1931,7 +1921,7 @@ export default function DoorKioskPage() {
                           {kioskStats?.exitsWithoutValidation ?? 0}
                         </span>
                         {(kioskStats?.exitsWithoutValidation ?? 0) > 0 && (
-                          <AlertTriangle className="w-6 h-6 text-red-500" />
+                          <AlertTriangle className="w-5 h-5 text-red-500" />
                         )}
                       </div>
                       <span className={`text-sm font-semibold block mt-2 ${(kioskStats?.exitsWithoutValidation ?? 0) > 0 ? 'text-red-500' : theme.textSecondary}`}>Sin Validar</span>

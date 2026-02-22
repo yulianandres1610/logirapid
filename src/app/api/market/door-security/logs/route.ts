@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '50')
     const status = searchParams.get('status') // 'active', 'completed', 'all'
-    const kioskId = searchParams.get('kioskId')
+    const filterKioskId = searchParams.get('filterKioskId') // Use separate param for filtering (not auth)
     const visitorId = searchParams.get('visitorId')
     const date = searchParams.get('date') // YYYY-MM-DD
     const search = searchParams.get('search')
@@ -81,9 +81,10 @@ export async function GET(request: NextRequest) {
       paramIndex++
     }
 
-    if (kioskId) {
+    // Only filter by kiosk if explicitly requested via filterKioskId
+    if (filterKioskId) {
       whereClause += ` AND vl.kioskid = $${paramIndex}`
-      params.push(kioskId)
+      params.push(filterKioskId)
       paramIndex++
     }
 
