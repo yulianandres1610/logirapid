@@ -1624,16 +1624,9 @@ export default function DoorKioskPage() {
         </motion.div>
       )}
 
-      {/* Main Card */}
+      {/* Main Card - Fixed width for all views */}
       <motion.div
-        layout
-        className={`${theme.card} rounded-2xl sm:rounded-3xl shadow-2xl w-full ${
-          step === 'idle' || step === 'daily_log' || step === 'log_detail'
-            ? 'max-w-6xl'
-            : step === 'verify_data'
-              ? 'max-w-2xl'
-              : 'max-w-lg'
-        } overflow-hidden border relative mx-2 sm:mx-4 transition-all duration-300`}
+        className={`${theme.card} rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-6xl overflow-hidden border relative mx-2 sm:mx-4`}
       >
         <AnimatePresence mode="wait">
           {/* Guard PIN Entry */}
@@ -1643,8 +1636,10 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-4 sm:p-8"
+              transition={{ duration: 0.2 }}
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-md">
               <div className="text-center mb-4 sm:mb-8">
                 <div className="w-14 h-14 sm:w-20 sm:h-20 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4 shadow-lg shadow-orange-500/30">
                   <Shield className="w-7 h-7 sm:w-10 sm:h-10 text-white" />
@@ -1705,6 +1700,7 @@ export default function DoorKioskPage() {
                   <span className="text-sm sm:text-base">Verificando...</span>
                 </div>
               )}
+              </div>
             </motion.div>
           )}
 
@@ -1715,8 +1711,9 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-4 sm:p-8"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-md">
               <div className="text-center mb-4 sm:mb-8">
                 <motion.div
                   initial={{ scale: 0 }}
@@ -1790,6 +1787,7 @@ export default function DoorKioskPage() {
                   <span className="text-sm sm:text-base">Verificando...</span>
                 </div>
               )}
+              </div>
             </motion.div>
           )}
 
@@ -1988,8 +1986,9 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-3 sm:p-6"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-xl">
               <div className="text-center mb-3 sm:mb-4">
                 <CreditCard className="w-8 h-8 sm:w-10 sm:h-10 text-orange-400 mx-auto mb-2" />
                 <h2 className={`text-lg sm:text-xl font-bold ${theme.text}`}>
@@ -2158,6 +2157,7 @@ export default function DoorKioskPage() {
               >
                 Cancelar
               </button>
+              </div>
             </motion.div>
           )}
 
@@ -2168,8 +2168,9 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-3 sm:p-6"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-xl">
               <div className="text-center mb-3 sm:mb-4">
                 <CreditCard className="w-8 h-8 sm:w-10 sm:h-10 text-orange-400 mx-auto mb-2" />
                 <h2 className={`text-lg sm:text-xl font-bold ${theme.text}`}>
@@ -2262,6 +2263,7 @@ export default function DoorKioskPage() {
               >
                 Cancelar
               </button>
+              </div>
             </motion.div>
           )}
 
@@ -2272,15 +2274,17 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-6 sm:p-8 text-center"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
-              <RefreshCw className="w-12 h-12 sm:w-16 sm:h-16 text-orange-400 mx-auto mb-4 sm:mb-6 animate-spin" />
-              <h2 className={`text-lg sm:text-xl font-bold ${theme.text} mb-2`}>
-                Analizando Documento
-              </h2>
-              <p className={`${theme.textMuted} text-sm sm:text-base`}>
-                Por favor espere...
-              </p>
+              <div className="w-full max-w-md text-center">
+                <RefreshCw className="w-12 h-12 sm:w-16 sm:h-16 text-orange-400 mx-auto mb-4 sm:mb-6 animate-spin" />
+                <h2 className={`text-lg sm:text-xl font-bold ${theme.text} mb-2`}>
+                  Analizando Documento
+                </h2>
+                <p className={`${theme.textMuted} text-sm sm:text-base`}>
+                  Por favor espere...
+                </p>
+              </div>
             </motion.div>
           )}
 
@@ -2291,8 +2295,9 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-3 sm:p-5"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-3xl">
               {/* Compact Header */}
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -2525,6 +2530,7 @@ export default function DoorKioskPage() {
               {message && (
                 <p className="text-center text-red-400 text-xs mt-2">{message}</p>
               )}
+              </div>
             </motion.div>
           )}
 
@@ -2535,8 +2541,9 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-4 sm:p-6"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-lg">
               <div className="text-center mb-4 sm:mb-6">
                 <Edit3 className="w-8 h-8 sm:w-10 sm:h-10 text-orange-400 mx-auto mb-2" />
                 <h2 className={`text-lg sm:text-xl font-bold ${theme.text}`}>
@@ -2695,6 +2702,7 @@ export default function DoorKioskPage() {
               >
                 Cancelar
               </button>
+              </div>
             </motion.div>
           )}
 
@@ -2705,8 +2713,9 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-4 sm:p-6"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-lg">
               <div className="text-center mb-4 sm:mb-6">
                 <div className="w-14 h-14 sm:w-20 sm:h-20 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4 shadow-lg">
                   <User className="w-7 h-7 sm:w-10 sm:h-10 text-white" />
@@ -2868,6 +2877,7 @@ export default function DoorKioskPage() {
               >
                 Cancelar
               </button>
+              </div>
             </motion.div>
           )}
 
@@ -2878,8 +2888,9 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-4 sm:p-6"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-xl">
               <div className="text-center mb-3 sm:mb-4">
                 <ScanLine className="w-8 h-8 sm:w-10 sm:h-10 text-orange-400 mx-auto mb-2" />
                 <h2 className={`text-lg sm:text-xl font-bold ${theme.text}`}>
@@ -3052,6 +3063,7 @@ export default function DoorKioskPage() {
                   handleBarcodeScan(code)
                 }}
               />
+              </div>
             </motion.div>
           )}
 
@@ -3062,8 +3074,9 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-4 sm:p-6"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-xl">
               <div className="text-center mb-3 sm:mb-4">
                 <AlertTriangle className="w-8 h-8 sm:w-10 sm:h-10 text-yellow-400 mx-auto mb-2" />
                 <h2 className={`text-lg sm:text-xl font-bold ${theme.text}`}>
@@ -3134,6 +3147,7 @@ export default function DoorKioskPage() {
                   Permitir Salida
                 </button>
               </div>
+              </div>
             </motion.div>
           )}
 
@@ -3144,23 +3158,25 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="p-6 sm:p-8 text-center"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', bounce: 0.5 }}
-                className="w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-lg shadow-green-500/30"
-              >
-                <CheckCircle className="w-10 h-10 sm:w-14 sm:h-14 text-white" />
-              </motion.div>
-              <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-2`}>
-                Entrada Registrada
-              </h2>
-              <p className={`${theme.textSecondary} text-sm sm:text-base`}>{message}</p>
-              <p className="text-xs sm:text-sm text-green-400 mt-3 sm:mt-4 font-medium">
-                Puede pasar
-              </p>
+              <div className="w-full max-w-md text-center">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', bounce: 0.5 }}
+                  className="w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-lg shadow-green-500/30"
+                >
+                  <CheckCircle className="w-10 h-10 sm:w-14 sm:h-14 text-white" />
+                </motion.div>
+                <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-2`}>
+                  Entrada Registrada
+                </h2>
+                <p className={`${theme.textSecondary} text-sm sm:text-base`}>{message}</p>
+                <p className="text-xs sm:text-sm text-green-400 mt-3 sm:mt-4 font-medium">
+                  Puede pasar
+                </p>
+              </div>
             </motion.div>
           )}
 
@@ -3171,23 +3187,25 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="p-6 sm:p-8 text-center"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', bounce: 0.5 }}
-                className="w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-lg shadow-orange-500/30"
-              >
-                <LogOut className="w-10 h-10 sm:w-14 sm:h-14 text-white" />
-              </motion.div>
-              <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-2`}>
-                Salida Registrada
-              </h2>
-              <p className={`${theme.textSecondary} text-sm sm:text-base`}>{message}</p>
-              <p className="text-xs sm:text-sm text-orange-400 mt-3 sm:mt-4 font-medium">
-                Que tenga buen día
-              </p>
+              <div className="w-full max-w-md text-center">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', bounce: 0.5 }}
+                  className="w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-lg shadow-orange-500/30"
+                >
+                  <LogOut className="w-10 h-10 sm:w-14 sm:h-14 text-white" />
+                </motion.div>
+                <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-2`}>
+                  Salida Registrada
+                </h2>
+                <p className={`${theme.textSecondary} text-sm sm:text-base`}>{message}</p>
+                <p className="text-xs sm:text-sm text-orange-400 mt-3 sm:mt-4 font-medium">
+                  Que tenga buen día
+                </p>
+              </div>
             </motion.div>
           )}
 
@@ -3843,57 +3861,59 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="p-6 sm:p-8 text-center"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', bounce: 0.5 }}
-                className={`w-16 h-16 sm:w-24 sm:h-24 ${kioskTheme === 'dark' ? 'bg-red-500/20' : 'bg-red-100'} rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6`}
-              >
-                <XCircle className="w-10 h-10 sm:w-14 sm:h-14 text-red-400" />
-              </motion.div>
-              <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-2`}>
-                {isOcrError ? 'No se pudo leer el documento' : 'Error'}
-              </h2>
-              <p className={`${theme.textSecondary} text-sm sm:text-base mb-4 sm:mb-6`}>{message}</p>
+              <div className="w-full max-w-md text-center">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', bounce: 0.5 }}
+                  className={`w-16 h-16 sm:w-24 sm:h-24 ${kioskTheme === 'dark' ? 'bg-red-500/20' : 'bg-red-100'} rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6`}
+                >
+                  <XCircle className="w-10 h-10 sm:w-14 sm:h-14 text-red-400" />
+                </motion.div>
+                <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-2`}>
+                  {isOcrError ? 'No se pudo leer el documento' : 'Error'}
+                </h2>
+                <p className={`${theme.textSecondary} text-sm sm:text-base mb-4 sm:mb-6`}>{message}</p>
 
-              {/* OCR Error - Show retry and manual registration options */}
-              {isOcrError && capturedImage ? (
-                <div className="space-y-2 sm:space-y-3">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setStep('scan_id')}
-                    className={`w-full flex items-center justify-center gap-2 py-2.5 sm:py-3 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
-                  >
-                    <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
-                    Tomar otra foto
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={goToManualRegister}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 sm:py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-all shadow-lg"
-                  >
-                    <Edit3 className="w-4 h-4 sm:w-5 sm:h-5" />
-                    Registrar manualmente
-                  </motion.button>
+                {/* OCR Error - Show retry and manual registration options */}
+                {isOcrError && capturedImage ? (
+                  <div className="space-y-2 sm:space-y-3">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setStep('scan_id')}
+                      className={`w-full flex items-center justify-center gap-2 py-2.5 sm:py-3 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
+                    >
+                      <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
+                      Tomar otra foto
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={goToManualRegister}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 sm:py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-all shadow-lg"
+                    >
+                      <Edit3 className="w-4 h-4 sm:w-5 sm:h-5" />
+                      Registrar manualmente
+                    </motion.button>
+                    <button
+                      onClick={resetToIdle}
+                      className={`w-full py-2 ${theme.textMuted} hover:text-orange-400 transition-colors text-sm`}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
                   <button
                     onClick={resetToIdle}
-                    className={`w-full py-2 ${theme.textMuted} hover:text-orange-400 transition-colors text-sm`}
+                    className={`px-5 sm:px-6 py-2 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
                   >
-                    Cancelar
+                    Intentar de nuevo
                   </button>
-                </div>
-              ) : (
-                <button
-                  onClick={resetToIdle}
-                  className={`px-5 sm:px-6 py-2 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
-                >
-                  Intentar de nuevo
-                </button>
-              )}
+                )}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
