@@ -306,6 +306,21 @@ html.brand-servisumic.light input::placeholder {
   color: #a8a29e; /* stone-400 - only in light mode */
 }
 
+/* Door Kiosk inputs - ensure proper text color in dark theme */
+/* This fixes CSS specificity issues with dark mode inputs */
+.kiosk-input-dark {
+  color: white !important;
+}
+.kiosk-input-dark::placeholder {
+  color: #78716c !important; /* stone-500 */
+}
+.kiosk-input-light {
+  color: #1c1917 !important; /* stone-900 */
+}
+.kiosk-input-light::placeholder {
+  color: #a8a29e !important; /* stone-400 */
+}
+
 /* Servisumic brand colors override */
 html.brand-servisumic {
   --brand-primary: #eb5b0c;

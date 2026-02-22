@@ -2367,8 +2367,8 @@ export default function DoorKioskPage() {
                       disabled={isExistingVisitor}
                       className={`w-full px-2.5 py-2 rounded-lg border text-sm transition-all focus:outline-none focus:border-orange-500 ${
                         kioskTheme === 'dark'
-                          ? 'bg-stone-800 border-stone-600 text-white'
-                          : 'bg-white border-stone-300 text-stone-900'
+                          ? 'bg-stone-800 border-stone-600 kiosk-input-dark'
+                          : 'bg-white border-stone-300 kiosk-input-light'
                       } ${isExistingVisitor ? 'opacity-70' : ''}`}
                     />
                   </div>
@@ -2381,8 +2381,8 @@ export default function DoorKioskPage() {
                       disabled={isExistingVisitor}
                       className={`w-full px-2.5 py-2 rounded-lg border text-sm font-mono transition-all focus:outline-none focus:border-orange-500 ${
                         kioskTheme === 'dark'
-                          ? 'bg-stone-800 border-stone-600 text-white'
-                          : 'bg-white border-stone-300 text-stone-900'
+                          ? 'bg-stone-800 border-stone-600 kiosk-input-dark'
+                          : 'bg-white border-stone-300 kiosk-input-light'
                       } ${isExistingVisitor ? 'opacity-70' : ''}`}
                     />
                   </div>
@@ -2398,8 +2398,8 @@ export default function DoorKioskPage() {
                       disabled={isExistingVisitor}
                       className={`w-full px-2.5 py-2 rounded-lg border text-sm transition-all focus:outline-none focus:border-orange-500 ${
                         kioskTheme === 'dark'
-                          ? 'bg-stone-800 border-stone-600 text-white'
-                          : 'bg-white border-stone-300 text-stone-900'
+                          ? 'bg-stone-800 border-stone-600 kiosk-input-dark'
+                          : 'bg-white border-stone-300 kiosk-input-light'
                       } ${isExistingVisitor ? 'opacity-70' : ''}`}
                     >
                       <option value="cedula" className={kioskTheme === 'dark' ? 'bg-stone-800 text-white' : ''}>Carnet de Identidad</option>
@@ -2418,8 +2418,8 @@ export default function DoorKioskPage() {
                         placeholder="Opcional"
                         className={`w-full px-2.5 py-2 rounded-lg border text-sm transition-all focus:outline-none focus:border-orange-500 ${
                           kioskTheme === 'dark'
-                            ? 'bg-stone-800 border-stone-600 text-white placeholder-stone-500'
-                            : 'bg-white border-stone-300 text-stone-900 placeholder-stone-400'
+                            ? 'bg-stone-800 border-stone-600 kiosk-input-dark'
+                            : 'bg-white border-stone-300 kiosk-input-light'
                         } ${isExistingVisitor ? 'opacity-70' : ''}`}
                       />
                     </div>
@@ -2626,8 +2626,8 @@ export default function DoorKioskPage() {
                   placeholder="Ej: Juan Pérez García"
                   className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl border-2 text-sm sm:text-base transition-all focus:outline-none focus:border-orange-500 ${
                     kioskTheme === 'dark'
-                      ? 'bg-stone-800 border-stone-600 text-white placeholder-stone-500'
-                      : 'bg-stone-50 border-stone-300 text-stone-900 placeholder-stone-400'
+                      ? 'bg-stone-800 border-stone-600 kiosk-input-dark'
+                      : 'bg-stone-50 border-stone-300 kiosk-input-light'
                   }`}
                   autoFocus
                 />
@@ -2646,8 +2646,8 @@ export default function DoorKioskPage() {
                   placeholder="Ej: 12345678"
                   className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl border-2 text-sm sm:text-base transition-all focus:outline-none focus:border-orange-500 ${
                     kioskTheme === 'dark'
-                      ? 'bg-stone-800 border-stone-600 text-white placeholder-stone-500'
-                      : 'bg-stone-50 border-stone-300 text-stone-900 placeholder-stone-400'
+                      ? 'bg-stone-800 border-stone-600 kiosk-input-dark'
+                      : 'bg-stone-50 border-stone-300 kiosk-input-light'
                   }`}
                 />
               </div>
@@ -2777,8 +2777,8 @@ export default function DoorKioskPage() {
                       placeholder="Buscar empleado..."
                       className={`w-full px-3 py-2 rounded-lg border text-sm transition-all focus:outline-none focus:border-orange-500 ${
                         kioskTheme === 'dark'
-                          ? 'bg-stone-800 border-stone-600 text-white placeholder-stone-500'
-                          : 'bg-white border-stone-300 text-stone-900 placeholder-stone-400'
+                          ? 'bg-stone-800 border-stone-600 kiosk-input-dark'
+                          : 'bg-white border-stone-300 kiosk-input-light'
                       }`}
                     />
                     {selectedEmployee && (
@@ -2843,8 +2843,8 @@ export default function DoorKioskPage() {
                       rows={2}
                       className={`w-full px-3 py-2 rounded-lg border-2 text-sm transition-all focus:outline-none focus:border-orange-500 resize-none ${
                         kioskTheme === 'dark'
-                          ? 'bg-stone-800 border-stone-600 text-white placeholder-stone-500'
-                          : 'bg-stone-50 border-stone-300 text-stone-900 placeholder-stone-400'
+                          ? 'bg-stone-800 border-stone-600 kiosk-input-dark'
+                          : 'bg-stone-50 border-stone-300 kiosk-input-light'
                       }`}
                     />
                   </div>
@@ -3355,8 +3355,8 @@ export default function DoorKioskPage() {
                     placeholder="Buscar por nombre, cédula o motivo..."
                     className={`w-full px-5 py-4 pl-12 rounded-2xl text-base ${
                       kioskTheme === 'dark'
-                        ? 'bg-stone-800 text-white placeholder-stone-500 border-stone-700'
-                        : 'bg-white text-stone-900 placeholder-stone-400 border-stone-200'
+                        ? 'bg-stone-800 kiosk-input-dark border-stone-700'
+                        : 'bg-white kiosk-input-light border-stone-200'
                     } border-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50`}
                   />
                   <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 ${theme.textMuted}`} />
