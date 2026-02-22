@@ -708,7 +708,7 @@ export default function DoorKioskPage() {
           fileBase64: imageBase64.split(',')[1],
           mimeType: 'image/jpeg',
           // Pass kiosk credentials for authentication
-          kioskId: parseInt(kioskId),
+          kioskId: kiosk?.id,
           guardId: guard?.id
         })
       })
@@ -727,7 +727,7 @@ export default function DoorKioskPage() {
               body: JSON.stringify({
                 fileBase64: capturedImageReverse.split(',')[1],
                 mimeType: 'image/jpeg',
-                kioskId: parseInt(kioskId),
+                kioskId: kiosk?.id,
                 guardId: guard?.id
               })
             })
@@ -808,7 +808,7 @@ export default function DoorKioskPage() {
         address: data.address,
         gender: data.gender,
         // Pass kiosk credentials for authentication (when no JWT)
-        kioskId: parseInt(kioskId),
+        kioskId: kiosk?.id,
         guardId: guard?.id
       }
 
@@ -955,7 +955,7 @@ export default function DoorKioskPage() {
         body: JSON.stringify({
           scannedCode: code.trim(),
           visitorLogId: activeLogId,
-          kioskId: parseInt(kioskId),
+          kioskId: kiosk?.id,
           guardId: guard?.id
         })
       })
@@ -1006,7 +1006,7 @@ export default function DoorKioskPage() {
           documentNumber: doc.documentNumber,
           totalAmount: doc.totalAmount,
           currency: doc.currency,
-          kioskId: parseInt(kioskId),
+          kioskId: kiosk?.id,
           guardId: guard?.id,
           photoBase64: doc.photoBase64 || null
         })
@@ -1064,7 +1064,7 @@ export default function DoorKioskPage() {
         body: JSON.stringify({
           fileBase64: base64Data,
           mimeType: 'image/jpeg',
-          kioskId: parseInt(kioskId),
+          kioskId: kiosk?.id,
           guardId: guard?.id
         })
       })
@@ -1095,7 +1095,7 @@ export default function DoorKioskPage() {
             body: JSON.stringify({
               scannedCode: orderNumber.trim(),
               visitorLogId: activeLogId,
-              kioskId: parseInt(kioskId),
+              kioskId: kiosk?.id,
               guardId: guard?.id
             })
           })
@@ -1164,7 +1164,7 @@ export default function DoorKioskPage() {
         body: JSON.stringify({
           action: 'entry',
           visitorId: visitor.id,
-          kioskId: parseInt(kioskId),
+          kioskId: kiosk?.id,
           guardId: guard?.id,
           visitPurpose: purpose,
           visitNotes: notes || null
@@ -1198,7 +1198,7 @@ export default function DoorKioskPage() {
         body: JSON.stringify({
           action: 'exit',
           logId: logId,
-          kioskId: parseInt(kioskId),
+          kioskId: kiosk?.id,
           guardId: guard?.id
         })
       })
@@ -1337,11 +1337,15 @@ export default function DoorKioskPage() {
   }
 
   const fetchEmployees = async (search?: string) => {
+    if (!kiosk?.id || !guard?.id) {
+      console.error('Cannot fetch employees: kiosk or guard not loaded')
+      return
+    }
     setLoadingEmployees(true)
     try {
       const params = new URLSearchParams({
-        kioskId,
-        guardId: guard?.id?.toString() || '',
+        kioskId: kiosk.id.toString(),
+        guardId: guard.id.toString(),
         ...(search && { search })
       })
       const res = await fetch(`/api/market/door-security/employees?${params}`)
@@ -1357,13 +1361,17 @@ export default function DoorKioskPage() {
   }
 
   const fetchDailyLog = async () => {
+    if (!kiosk?.id || !guard?.id) {
+      console.error('Cannot fetch daily log: kiosk or guard not loaded')
+      return
+    }
     setLoadingDailyLog(true)
     try {
       const now = new Date()
       const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
       const params = new URLSearchParams({
-        kioskId,
-        guardId: guard?.id?.toString() || '',
+        kioskId: kiosk.id.toString(),
+        guardId: guard.id.toString(),
         date: today
       })
       const res = await fetch(`/api/market/door-security/logs?${params}`)
