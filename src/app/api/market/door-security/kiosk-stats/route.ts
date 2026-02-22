@@ -181,11 +181,11 @@ export async function GET(request: NextRequest) {
       console.log('[Kiosk Stats] Wholesale invoices table not available')
     }
 
-    // 4. Validations at door today
+    // 4. Validations at door today (count by id since documentid might be NULL)
     let validationsToday = 0
     try {
       const validationsResult = await db.query(`
-        SELECT COUNT(DISTINCT documentid) as count
+        SELECT COUNT(*) as count
         FROM market_visitor_invoice_validations
         WHERE companyid = $1
           AND DATE(createdat AT TIME ZONE 'UTC' AT TIME ZONE 'America/Havana') = $2
