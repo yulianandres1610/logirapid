@@ -95,8 +95,9 @@ export async function GET(request: NextRequest) {
     }
 
     if (date) {
-      // Use timezone-aware comparison to match entries by local date (Cuba = America/Havana)
-      whereClause += ` AND DATE(vl.entrytime AT TIME ZONE 'America/Havana') = $${paramIndex}`
+      // Convert UTC timestamp to Cuba timezone for date comparison
+      // entrytime is stored as TIMESTAMP WITHOUT TIMEZONE in UTC, so we need double AT TIME ZONE
+      whereClause += ` AND DATE(vl.entrytime AT TIME ZONE 'UTC' AT TIME ZONE 'America/Havana') = $${paramIndex}`
       params.push(date)
       paramIndex++
       console.log('[Visitor Logs GET] Filtering by date:', date)

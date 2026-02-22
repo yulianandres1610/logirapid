@@ -185,14 +185,15 @@ export async function POST(request: NextRequest) {
     // Ensure photourl column exists
     await ensurePhotoUrlColumn()
 
-    // Create validation record
+    // Create validation record (include companyid and createdat for stats queries)
     const result = await db.query(`
       INSERT INTO market_visitor_invoice_validations (
-        visitorlogid, documenttype, documentid, documentnumber,
-        totalamount, currency, validated, validatedat, validatedby, notes, photourl
-      ) VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), $7, $8, $9)
+        companyid, visitorlogid, documenttype, documentid, documentnumber,
+        totalamount, currency, validated, validatedat, validatedby, notes, photourl, createdat
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW(), $8, $9, $10, NOW())
       RETURNING *
     `, [
+      log.companyid, // Use company from the visitor log
       visitorLogId,
       documentType,
       documentId || null,

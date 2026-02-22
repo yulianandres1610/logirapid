@@ -69,12 +69,12 @@ export async function GET(request: NextRequest) {
       `, [companyId])
       visitorsInside = parseInt(insideResult.rows[0]?.count || '0')
 
-      // Count visitors who entered today
+      // Count visitors who entered today (UTC timestamp converted to Cuba timezone)
       const enteredTodayResult = await db.query(`
         SELECT COUNT(*) as count
         FROM market_visitor_logs
         WHERE companyid = $1
-          AND DATE(entrytime AT TIME ZONE 'America/Havana') = $2
+          AND DATE(entrytime AT TIME ZONE 'UTC' AT TIME ZONE 'America/Havana') = $2
       `, [companyId, today])
       totalVisitorsToday = parseInt(enteredTodayResult.rows[0]?.count || '0')
 
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
         FROM market_visitor_logs
         WHERE companyid = $1
           AND status = 'completed'
-          AND DATE(exittime AT TIME ZONE 'America/Havana') = $2
+          AND DATE(exittime AT TIME ZONE 'UTC' AT TIME ZONE 'America/Havana') = $2
       `, [companyId, today])
       visitorsExitedToday = parseInt(exitedTodayResult.rows[0]?.count || '0')
 
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
           AND status = 'completed'
           AND haspendinginvoices = true
           AND (invoicesvalidated = false OR invoicesvalidated IS NULL)
-          AND DATE(exittime AT TIME ZONE 'America/Havana') = $2
+          AND DATE(exittime AT TIME ZONE 'UTC' AT TIME ZONE 'America/Havana') = $2
       `, [companyId, today])
       exitsWithoutValidation = parseInt(withoutValidationResult.rows[0]?.count || '0')
 
@@ -105,14 +105,14 @@ export async function GET(request: NextRequest) {
       console.log('[Kiosk Stats] Visitor stats error:', e)
     }
 
-    // 2. POS orders created today
+    // 2. POS orders created today (UTC timestamp converted to Cuba timezone)
     let posOrdersToday = 0
     try {
       const posResult = await db.query(`
         SELECT COUNT(*) as count
         FROM market_pos_orders
         WHERE company_id = $1
-          AND DATE(created_at AT TIME ZONE 'America/Havana') = $2
+          AND DATE(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Havana') = $2
           AND status IN ('paid', 'completed', 'draft')
       `, [companyId, today])
 
@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
           SELECT COUNT(*) as count
           FROM market_pos_receipts
           WHERE company_id = $1
-            AND DATE(created_at AT TIME ZONE 'America/Havana') = $2
+            AND DATE(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Havana') = $2
         `, [companyId, today])
 
         posOrdersToday = parseInt(receiptsResult.rows[0]?.count || '0')
@@ -140,7 +140,7 @@ export async function GET(request: NextRequest) {
         SELECT COUNT(*) as count
         FROM market_wholesale_invoices
         WHERE companyid = $1
-          AND DATE(createdat AT TIME ZONE 'America/Havana') = $2
+          AND DATE(createdat AT TIME ZONE 'UTC' AT TIME ZONE 'America/Havana') = $2
           AND status IN ('pending', 'completed', 'paid')
       `, [companyId, today])
 
@@ -156,7 +156,7 @@ export async function GET(request: NextRequest) {
         SELECT COUNT(DISTINCT documentid) as count
         FROM market_visitor_invoice_validations
         WHERE companyid = $1
-          AND DATE(createdat AT TIME ZONE 'America/Havana') = $2
+          AND DATE(createdat AT TIME ZONE 'UTC' AT TIME ZONE 'America/Havana') = $2
           AND validated = true
       `, [companyId, today])
 
