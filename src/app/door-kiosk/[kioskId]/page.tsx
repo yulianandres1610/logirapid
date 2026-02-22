@@ -223,6 +223,19 @@ export default function DoorKioskPage() {
   const [dailyLogFilter, setDailyLogFilter] = useState<'all' | 'inside' | 'exited'>('all')
   const [dailyLogSearch, setDailyLogSearch] = useState('')
 
+  // Kiosk statistics for main dashboard
+  interface KioskStats {
+    visitorsInside: number
+    visitorsExitedToday: number
+    totalVisitorsToday: number
+    ordersCreatedToday: number
+    ordersValidatedToday: number
+    exitsWithoutValidation: number
+    validationRate: number
+  }
+  const [kioskStats, setKioskStats] = useState<KioskStats | null>(null)
+  const [loadingStats, setLoadingStats] = useState(false)
+
   // Receipt scanning state
   const [scannerOpen, setScannerOpen] = useState(false)
   const [scannedDocuments, setScannedDocuments] = useState<ScannedDocument[]>([])
@@ -380,6 +393,21 @@ export default function DoorKioskPage() {
       setKioskTheme(saved)
     }
   }, [kioskId])
+
+  // Auto-refresh kiosk stats when on idle screen
+  useEffect(() => {
+    if (step === 'idle' && guard && kiosk) {
+      // Fetch immediately
+      fetchKioskStats()
+
+      // Then refresh every 30 seconds
+      const interval = setInterval(() => {
+        fetchKioskStats()
+      }, 30000)
+
+      return () => clearInterval(interval)
+    }
+  }, [step, guard, kiosk])
 
   // Toggle theme function
   const toggleTheme = () => {
@@ -1398,19 +1426,40 @@ export default function DoorKioskPage() {
     setStep('daily_log')
   }
 
+  // Fetch kiosk statistics for dashboard
+  const fetchKioskStats = async () => {
+    if (!kiosk?.id || !guard?.id) return
+    setLoadingStats(true)
+    try {
+      const params = new URLSearchParams({
+        kioskId: kiosk.id.toString(),
+        guardId: guard.id.toString()
+      })
+      const res = await fetch(`/api/market/door-security/kiosk-stats?${params}`)
+      const data = await res.json()
+      if (data.success) {
+        setKioskStats(data.data)
+      }
+    } catch (error) {
+      console.error('Error fetching kiosk stats:', error)
+    } finally {
+      setLoadingStats(false)
+    }
+  }
+
   const changeKiosk = () => {
     localStorage.removeItem('door-kiosk-id')
     router.push('/door-kiosk')
   }
 
-  const logoutGuard = useCallback(() => {
+  const logoutGuard = () => {
     console.log('[Kiosk] logoutGuard called')
     // Clear inactivity timer first
     if (inactivityTimerRef.current) {
       clearTimeout(inactivityTimerRef.current)
       inactivityTimerRef.current = null
     }
-    // Cleanup
+    // Cleanup all state
     stopCamera()
     setVisitor(null)
     setScannedData(null)
@@ -1428,6 +1477,7 @@ export default function DoorKioskPage() {
     setMessage('')
     setPin('')
     setDailyLogs([])
+    setKioskStats(null)
     setFormName('')
     setFormIdNumber('')
     setFormIdType('cedula')
@@ -1444,7 +1494,7 @@ export default function DoorKioskPage() {
     // Clear guard and go to PIN screen
     setGuard(null)
     setStep('guard_pin')
-  }, [])
+  }
 
   const formatTime = (date: Date | null) => {
     if (!date) return '--:--:--'
@@ -1755,57 +1805,151 @@ export default function DoorKioskPage() {
             </motion.div>
           )}
 
-          {/* Idle State - Single scan button (auto-detects entry/exit) */}
+          {/* Idle State - Dashboard with statistics */}
           {step === 'idle' && (
             <motion.div
               key="idle"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-4 sm:p-8"
+              className="p-3 sm:p-6"
             >
-              <div className="text-center mb-4 sm:mb-8">
-                <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-1 sm:mb-2`}>
-                  Control de Acceso
-                </h2>
-                <p className={`${theme.textMuted} text-sm sm:text-base`}>
-                  Escanee el documento del visitante
-                </p>
+              {/* Header with guard info and logout */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full ${kioskTheme === 'dark' ? 'bg-orange-500/20' : 'bg-orange-100'} flex items-center justify-center flex-shrink-0`}>
+                    <User className="w-5 h-5 text-orange-500" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className={`text-sm font-bold ${theme.text} truncate`}>{guard?.name || 'Guardia'}</p>
+                    <p className={`text-[10px] ${theme.textMuted}`}>{kiosk?.name || 'Kiosk'}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={logoutGuard}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-400 hover:text-red-300 text-xs font-bold transition-all"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span className="hidden sm:inline">Cerrar</span>
+                </button>
               </div>
 
+              {/* Statistics Section */}
+              <div className="mb-4">
+                {/* Section: Visitors Today */}
+                <div className="flex items-center gap-2 mb-2">
+                  <User className="w-4 h-4 text-orange-400" />
+                  <span className={`text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Visitantes Hoy</span>
+                  {loadingStats && <RefreshCw className="w-3 h-3 text-orange-400 animate-spin" />}
+                </div>
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  {/* Inside */}
+                  <button
+                    onClick={() => { setDailyLogFilter('inside'); openDailyLog() }}
+                    className={`rounded-xl p-2.5 text-center transition-all ${kioskTheme === 'dark' ? 'bg-green-900/30 hover:bg-green-900/50' : 'bg-green-50 hover:bg-green-100'}`}
+                  >
+                    <div className="flex items-center justify-center gap-1 mb-0.5">
+                      <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                      <p className="text-xl sm:text-2xl font-bold text-green-400">
+                        {kioskStats?.visitorsInside ?? '-'}
+                      </p>
+                    </div>
+                    <p className={`text-[10px] font-medium ${theme.textSecondary}`}>Adentro</p>
+                  </button>
+                  {/* Exited */}
+                  <button
+                    onClick={() => { setDailyLogFilter('exited'); openDailyLog() }}
+                    className={`rounded-xl p-2.5 text-center transition-all ${kioskTheme === 'dark' ? 'bg-stone-800/80 hover:bg-stone-700/80' : 'bg-stone-100 hover:bg-stone-200'}`}
+                  >
+                    <p className={`text-xl sm:text-2xl font-bold ${theme.textSecondary}`}>
+                      {kioskStats?.visitorsExitedToday ?? '-'}
+                    </p>
+                    <p className={`text-[10px] font-medium ${theme.textSecondary}`}>Salieron</p>
+                  </button>
+                  {/* Total */}
+                  <button
+                    onClick={() => { setDailyLogFilter('all'); openDailyLog() }}
+                    className={`rounded-xl p-2.5 text-center transition-all ${kioskTheme === 'dark' ? 'bg-stone-800/80 hover:bg-stone-700/80' : 'bg-stone-100 hover:bg-stone-200'}`}
+                  >
+                    <p className="text-xl sm:text-2xl font-bold text-orange-400">
+                      {kioskStats?.totalVisitorsToday ?? '-'}
+                    </p>
+                    <p className={`text-[10px] font-medium ${theme.textSecondary}`}>Total</p>
+                  </button>
+                </div>
+
+                {/* Section: Orders & Validation */}
+                <div className="flex items-center gap-2 mb-2">
+                  <FileText className="w-4 h-4 text-orange-400" />
+                  <span className={`text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Validación de Facturas</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {/* Orders created */}
+                  <div className={`rounded-xl p-2.5 text-center ${kioskTheme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'}`}>
+                    <p className="text-xl sm:text-2xl font-bold text-blue-400">
+                      {kioskStats?.ordersCreatedToday ?? '-'}
+                    </p>
+                    <p className={`text-[10px] font-medium ${theme.textSecondary}`}>Órdenes Hoy</p>
+                  </div>
+                  {/* Validated */}
+                  <div className={`rounded-xl p-2.5 text-center ${kioskTheme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50'}`}>
+                    <p className="text-xl sm:text-2xl font-bold text-emerald-400">
+                      {kioskStats?.ordersValidatedToday ?? '-'}
+                    </p>
+                    <p className={`text-[10px] font-medium ${theme.textSecondary}`}>Validadas</p>
+                    {kioskStats && kioskStats.ordersCreatedToday > 0 && (
+                      <p className="text-[9px] text-emerald-400 font-bold">{kioskStats.validationRate}%</p>
+                    )}
+                  </div>
+                  {/* Without validation - Alert style if > 0 */}
+                  <div className={`rounded-xl p-2.5 text-center ${
+                    (kioskStats?.exitsWithoutValidation ?? 0) > 0
+                      ? kioskTheme === 'dark' ? 'bg-red-900/30 border border-red-500/30' : 'bg-red-50 border border-red-200'
+                      : kioskTheme === 'dark' ? 'bg-stone-800/80' : 'bg-stone-100'
+                  }`}>
+                    <p className={`text-xl sm:text-2xl font-bold ${(kioskStats?.exitsWithoutValidation ?? 0) > 0 ? 'text-red-400' : theme.textSecondary}`}>
+                      {kioskStats?.exitsWithoutValidation ?? '-'}
+                    </p>
+                    <p className={`text-[10px] font-medium ${(kioskStats?.exitsWithoutValidation ?? 0) > 0 ? 'text-red-400' : theme.textSecondary}`}>
+                      Sin Validar
+                    </p>
+                    {(kioskStats?.exitsWithoutValidation ?? 0) > 0 && (
+                      <AlertTriangle className="w-3 h-3 text-red-400 mx-auto mt-0.5" />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Main Action: Scan Document */}
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setStep('scan_id')}
-                className="w-full flex items-center justify-center gap-3 py-4 sm:py-5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl sm:rounded-2xl font-bold transition-all shadow-lg shadow-orange-500/30"
+                className="w-full flex items-center justify-center gap-3 py-4 sm:py-5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl sm:rounded-2xl font-bold transition-all shadow-lg shadow-orange-500/30 mb-3"
               >
                 <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <CreditCard className="w-5 h-5 sm:w-6 sm:h-6" />
+                  <Camera className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
                 <div className="text-left">
                   <span className="text-base sm:text-lg block">Escanear Documento</span>
                   <span className="text-xs sm:text-sm font-normal opacity-80">
-                    Detecta automáticamente entrada o salida
+                    Entrada o salida automática
                   </span>
                 </div>
               </motion.button>
 
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+              {/* Secondary Action: View History */}
+              <button
                 onClick={openDailyLog}
-                className="w-full flex items-center justify-center gap-3 py-4 sm:py-5 mt-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl sm:rounded-2xl font-bold transition-all shadow-lg shadow-emerald-500/30"
+                className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm transition-all ${
+                  kioskTheme === 'dark'
+                    ? 'bg-stone-800 hover:bg-stone-700 text-stone-300'
+                    : 'bg-stone-100 hover:bg-stone-200 text-stone-600'
+                }`}
               >
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <ClipboardList className="w-5 h-5 sm:w-6 sm:h-6" />
-                </div>
-                <div className="text-left">
-                  <span className="text-base sm:text-lg block">Registro del Día</span>
-                  <span className="text-xs sm:text-sm font-normal opacity-80">
-                    Ver quién está adentro ahora
-                  </span>
-                </div>
-              </motion.button>
+                <ClipboardList className="w-4 h-4" />
+                Ver Historial Completo
+              </button>
             </motion.div>
           )}
 
