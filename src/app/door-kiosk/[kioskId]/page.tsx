@@ -1627,7 +1627,13 @@ export default function DoorKioskPage() {
       {/* Main Card */}
       <motion.div
         layout
-        className={`${theme.card} rounded-2xl sm:rounded-3xl shadow-2xl w-full ${step === 'verify_data' ? 'max-w-2xl' : 'max-w-lg'} overflow-hidden border relative mx-1 transition-all duration-300`}
+        className={`${theme.card} rounded-2xl sm:rounded-3xl shadow-2xl w-full ${
+          step === 'idle' || step === 'daily_log' || step === 'log_detail'
+            ? 'max-w-6xl'
+            : step === 'verify_data'
+              ? 'max-w-2xl'
+              : 'max-w-lg'
+        } overflow-hidden border relative mx-2 sm:mx-4 transition-all duration-300`}
       >
         <AnimatePresence mode="wait">
           {/* Guard PIN Entry */}
@@ -1795,87 +1801,87 @@ export default function DoorKioskPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ type: 'spring', bounce: 0.3 }}
-              className="p-4 sm:p-6 lg:p-8"
+              className="p-6 sm:p-8 lg:p-10"
             >
               {/* Header: Guard Info + Actions */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-4">
                   <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ type: 'spring', bounce: 0.5, delay: 0.1 }}
-                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-orange-500/30"
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-orange-500/30"
                   >
                     {getGuardInitials(guard?.name || '')}
                   </motion.div>
                   <div>
-                    <p className={`text-base sm:text-lg font-bold ${theme.text}`}>{guard?.name || 'Guardia'}</p>
-                    <p className={`text-xs sm:text-sm ${theme.textMuted} flex items-center gap-1`}>
-                      <MapPin className="w-3 h-3" />
+                    <p className={`text-lg sm:text-xl font-bold ${theme.text}`}>{guard?.name || 'Guardia'}</p>
+                    <p className={`text-sm ${theme.textMuted} flex items-center gap-1.5`}>
+                      <MapPin className="w-4 h-4" />
                       {kiosk?.name}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <button
                     onClick={() => fetchKioskStats()}
                     disabled={loadingStats}
-                    className={`p-2.5 rounded-xl transition-all ${kioskTheme === 'dark' ? 'hover:bg-white/10' : 'hover:bg-stone-100'}`}
+                    className={`p-3 rounded-xl transition-all ${kioskTheme === 'dark' ? 'hover:bg-white/10' : 'hover:bg-stone-100'}`}
                     title="Actualizar"
                   >
-                    <RefreshCw className={`w-5 h-5 ${theme.textMuted} ${loadingStats ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`w-6 h-6 ${theme.textMuted} ${loadingStats ? 'animate-spin' : ''}`} />
                   </button>
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={logoutGuard}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-sm font-semibold transition-all"
+                    className="flex items-center gap-2 px-5 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 font-semibold transition-all"
                   >
-                    <LogOut className="w-4 h-4" />
-                    <span>Salir</span>
+                    <LogOut className="w-5 h-5" />
+                    <span>Cerrar Sesión</span>
                   </motion.button>
                 </div>
               </div>
 
-              {/* Stats Grid - Two Rows */}
-              <div className="grid grid-cols-2 gap-4 mb-6">
+              {/* Stats Grid - Two Columns */}
+              <div className="grid grid-cols-2 gap-6 mb-8">
                 {/* Visitors Section */}
                 <motion.div
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.2 }}
-                  className={`rounded-2xl p-4 ${kioskTheme === 'dark' ? 'bg-gradient-to-br from-stone-800/80 to-stone-800/40' : 'bg-gradient-to-br from-stone-50 to-white'} border ${kioskTheme === 'dark' ? 'border-stone-700/50' : 'border-stone-200'}`}
+                  className={`rounded-3xl p-6 ${kioskTheme === 'dark' ? 'bg-gradient-to-br from-stone-800/80 to-stone-800/40' : 'bg-gradient-to-br from-stone-50 to-white'} border ${kioskTheme === 'dark' ? 'border-stone-700/50' : 'border-stone-200'}`}
                 >
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${kioskTheme === 'dark' ? 'bg-orange-500/20' : 'bg-orange-100'}`}>
-                      <User className="w-4 h-4 text-orange-500" />
+                  <div className="flex items-center gap-3 mb-5">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${kioskTheme === 'dark' ? 'bg-orange-500/20' : 'bg-orange-100'}`}>
+                      <User className="w-6 h-6 text-orange-500" />
                     </div>
-                    <span className={`text-sm font-semibold ${theme.text}`}>Visitantes Hoy</span>
+                    <span className={`text-lg font-bold ${theme.text}`}>Visitantes Hoy</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-4">
                     <button
                       onClick={() => { setDailyLogFilter('inside'); openDailyLog() }}
-                      className={`rounded-xl p-3 text-center transition-all ${kioskTheme === 'dark' ? 'bg-green-500/10 hover:bg-green-500/20 border border-green-500/20' : 'bg-green-50 hover:bg-green-100 border border-green-200'}`}
+                      className={`rounded-2xl p-4 text-center transition-all ${kioskTheme === 'dark' ? 'bg-green-500/10 hover:bg-green-500/20 border border-green-500/20' : 'bg-green-50 hover:bg-green-100 border border-green-200'}`}
                     >
-                      <div className="flex items-center justify-center gap-1.5 mb-1">
-                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                        <span className="text-2xl sm:text-3xl font-bold text-green-500">{kioskStats?.visitorsInside ?? 0}</span>
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <span className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
+                        <span className="text-3xl sm:text-4xl font-bold text-green-500">{kioskStats?.visitorsInside ?? 0}</span>
                       </div>
-                      <span className={`text-xs font-medium ${theme.textSecondary}`}>Adentro</span>
+                      <span className={`text-sm font-semibold ${theme.textSecondary}`}>Adentro</span>
                     </button>
                     <button
                       onClick={() => { setDailyLogFilter('exited'); openDailyLog() }}
-                      className={`rounded-xl p-3 text-center transition-all ${kioskTheme === 'dark' ? 'bg-stone-700/50 hover:bg-stone-700/80' : 'bg-stone-100 hover:bg-stone-200'}`}
+                      className={`rounded-2xl p-4 text-center transition-all ${kioskTheme === 'dark' ? 'bg-stone-700/50 hover:bg-stone-700/80' : 'bg-stone-100 hover:bg-stone-200'}`}
                     >
-                      <span className={`text-2xl sm:text-3xl font-bold ${theme.textSecondary}`}>{kioskStats?.visitorsExitedToday ?? 0}</span>
-                      <span className={`text-xs font-medium block ${theme.textMuted}`}>Salieron</span>
+                      <span className={`text-3xl sm:text-4xl font-bold ${theme.textSecondary}`}>{kioskStats?.visitorsExitedToday ?? 0}</span>
+                      <span className={`text-sm font-semibold block mt-2 ${theme.textMuted}`}>Salieron</span>
                     </button>
                     <button
                       onClick={() => { setDailyLogFilter('all'); openDailyLog() }}
-                      className={`rounded-xl p-3 text-center transition-all ${kioskTheme === 'dark' ? 'bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20' : 'bg-orange-50 hover:bg-orange-100 border border-orange-200'}`}
+                      className={`rounded-2xl p-4 text-center transition-all ${kioskTheme === 'dark' ? 'bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20' : 'bg-orange-50 hover:bg-orange-100 border border-orange-200'}`}
                     >
-                      <span className="text-2xl sm:text-3xl font-bold text-orange-500">{kioskStats?.totalVisitorsToday ?? 0}</span>
-                      <span className={`text-xs font-medium block ${theme.textSecondary}`}>Total</span>
+                      <span className="text-3xl sm:text-4xl font-bold text-orange-500">{kioskStats?.totalVisitorsToday ?? 0}</span>
+                      <span className={`text-sm font-semibold block mt-2 ${theme.textSecondary}`}>Total</span>
                     </button>
                   </div>
                 </motion.div>
@@ -1885,100 +1891,103 @@ export default function DoorKioskPage() {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.3 }}
-                  className={`rounded-2xl p-4 ${kioskTheme === 'dark' ? 'bg-gradient-to-br from-stone-800/80 to-stone-800/40' : 'bg-gradient-to-br from-stone-50 to-white'} border ${kioskTheme === 'dark' ? 'border-stone-700/50' : 'border-stone-200'}`}
+                  className={`rounded-3xl p-6 ${kioskTheme === 'dark' ? 'bg-gradient-to-br from-stone-800/80 to-stone-800/40' : 'bg-gradient-to-br from-stone-50 to-white'} border ${kioskTheme === 'dark' ? 'border-stone-700/50' : 'border-stone-200'}`}
                 >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${kioskTheme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
-                        <FileText className="w-4 h-4 text-blue-500" />
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${kioskTheme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
+                        <FileText className="w-6 h-6 text-blue-500" />
                       </div>
-                      <span className={`text-sm font-semibold ${theme.text}`}>Órdenes del Día</span>
+                      <span className={`text-lg font-bold ${theme.text}`}>Órdenes del Día</span>
                     </div>
                     {kioskStats && kioskStats.ordersCreatedToday > 0 && (
-                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${kioskStats.validationRate >= 80 ? 'bg-green-500/20 text-green-500' : kioskStats.validationRate >= 50 ? 'bg-yellow-500/20 text-yellow-500' : 'bg-red-500/20 text-red-500'}`}>
+                      <span className={`text-sm font-bold px-3 py-1.5 rounded-full ${kioskStats.validationRate >= 80 ? 'bg-green-500/20 text-green-500' : kioskStats.validationRate >= 50 ? 'bg-yellow-500/20 text-yellow-500' : 'bg-red-500/20 text-red-500'}`}>
                         {kioskStats.validationRate}% validado
                       </span>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-2 mb-2">
-                    <div className={`rounded-xl p-3 text-center ${kioskTheme === 'dark' ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-blue-50 border border-blue-200'}`}>
-                      <span className="text-2xl sm:text-3xl font-bold text-blue-500">{kioskStats?.breakdown?.posOrders ?? 0}</span>
-                      <span className={`text-xs font-medium block ${theme.textSecondary}`}>POS</span>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className={`rounded-2xl p-4 text-center ${kioskTheme === 'dark' ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-blue-50 border border-blue-200'}`}>
+                      <span className="text-3xl sm:text-4xl font-bold text-blue-500">{kioskStats?.breakdown?.posOrders ?? 0}</span>
+                      <span className={`text-sm font-semibold block mt-2 ${theme.textSecondary}`}>POS</span>
                     </div>
-                    <div className={`rounded-xl p-3 text-center ${kioskTheme === 'dark' ? 'bg-purple-500/10 border border-purple-500/20' : 'bg-purple-50 border border-purple-200'}`}>
-                      <span className="text-2xl sm:text-3xl font-bold text-purple-500">{kioskStats?.breakdown?.wholesaleInvoices ?? 0}</span>
-                      <span className={`text-xs font-medium block ${theme.textSecondary}`}>Mayoreo</span>
+                    <div className={`rounded-2xl p-4 text-center ${kioskTheme === 'dark' ? 'bg-purple-500/10 border border-purple-500/20' : 'bg-purple-50 border border-purple-200'}`}>
+                      <span className="text-3xl sm:text-4xl font-bold text-purple-500">{kioskStats?.breakdown?.wholesaleInvoices ?? 0}</span>
+                      <span className={`text-sm font-semibold block mt-2 ${theme.textSecondary}`}>Mayoreo</span>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className={`rounded-xl p-3 text-center ${kioskTheme === 'dark' ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-emerald-50 border border-emerald-200'}`}>
-                      <span className="text-2xl sm:text-3xl font-bold text-emerald-500">{kioskStats?.ordersValidatedToday ?? 0}</span>
-                      <span className={`text-xs font-medium block ${theme.textSecondary}`}>Validadas</span>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className={`rounded-2xl p-4 text-center ${kioskTheme === 'dark' ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-emerald-50 border border-emerald-200'}`}>
+                      <span className="text-3xl sm:text-4xl font-bold text-emerald-500">{kioskStats?.ordersValidatedToday ?? 0}</span>
+                      <span className={`text-sm font-semibold block mt-2 ${theme.textSecondary}`}>Validadas</span>
                     </div>
-                    <div className={`rounded-xl p-3 text-center ${
+                    <div className={`rounded-2xl p-4 text-center ${
                       (kioskStats?.exitsWithoutValidation ?? 0) > 0
                         ? kioskTheme === 'dark' ? 'bg-red-500/20 border-2 border-red-500/50' : 'bg-red-50 border-2 border-red-300'
                         : kioskTheme === 'dark' ? 'bg-stone-700/50' : 'bg-stone-100'
                     }`}>
-                      <div className="flex items-center justify-center gap-1">
-                        <span className={`text-2xl sm:text-3xl font-bold ${(kioskStats?.exitsWithoutValidation ?? 0) > 0 ? 'text-red-500' : theme.textSecondary}`}>
+                      <div className="flex items-center justify-center gap-2">
+                        <span className={`text-3xl sm:text-4xl font-bold ${(kioskStats?.exitsWithoutValidation ?? 0) > 0 ? 'text-red-500' : theme.textSecondary}`}>
                           {kioskStats?.exitsWithoutValidation ?? 0}
                         </span>
                         {(kioskStats?.exitsWithoutValidation ?? 0) > 0 && (
-                          <AlertTriangle className="w-5 h-5 text-red-500" />
+                          <AlertTriangle className="w-6 h-6 text-red-500" />
                         )}
                       </div>
-                      <span className={`text-xs font-medium block ${(kioskStats?.exitsWithoutValidation ?? 0) > 0 ? 'text-red-500' : theme.textSecondary}`}>Sin Validar</span>
+                      <span className={`text-sm font-semibold block mt-2 ${(kioskStats?.exitsWithoutValidation ?? 0) > 0 ? 'text-red-500' : theme.textSecondary}`}>Sin Validar</span>
                     </div>
                   </div>
                 </motion.div>
               </div>
 
-              {/* Main Action: Scan Document */}
-              <motion.button
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                whileHover={{ scale: 1.02, y: -2 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setStep('scan_id')}
-                className="w-full flex items-center justify-center gap-4 py-5 sm:py-6 bg-gradient-to-r from-orange-500 via-orange-500 to-orange-600 text-white rounded-2xl font-bold transition-all shadow-xl shadow-orange-500/30 hover:shadow-orange-500/50 mb-4"
-              >
-                <motion.div
-                  animate={{ rotate: [0, -10, 10, -10, 0] }}
-                  transition={{ repeat: Infinity, duration: 2, repeatDelay: 3 }}
-                  className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center"
+              {/* Action Buttons Grid */}
+              <div className="grid grid-cols-2 gap-6">
+                {/* Main Action: Scan Document */}
+                <motion.button
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  whileHover={{ scale: 1.02, y: -3 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setStep('scan_id')}
+                  className="flex items-center justify-center gap-5 py-8 sm:py-10 bg-gradient-to-r from-orange-500 via-orange-500 to-orange-600 text-white rounded-3xl font-bold transition-all shadow-2xl shadow-orange-500/40 hover:shadow-orange-500/60"
                 >
-                  <Camera className="w-7 h-7" />
-                </motion.div>
-                <div className="text-left">
-                  <span className="text-lg sm:text-xl block">Escanear Documento</span>
-                  <span className="text-sm font-normal opacity-80">
-                    Detecta entrada o salida automáticamente
-                  </span>
-                </div>
-              </motion.button>
+                  <motion.div
+                    animate={{ rotate: [0, -10, 10, -10, 0] }}
+                    transition={{ repeat: Infinity, duration: 2, repeatDelay: 3 }}
+                    className="w-20 h-20 bg-white/20 rounded-3xl flex items-center justify-center"
+                  >
+                    <Camera className="w-10 h-10" />
+                  </motion.div>
+                  <div className="text-left">
+                    <span className="text-2xl sm:text-3xl block font-bold">Escanear Documento</span>
+                    <span className="text-base font-normal opacity-80 mt-1 block">
+                      Detecta entrada o salida automáticamente
+                    </span>
+                  </div>
+                </motion.button>
 
-              {/* Secondary Action: View History */}
-              <motion.button
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.5 }}
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-                onClick={openDailyLog}
-                className={`w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-medium transition-all ${
-                  kioskTheme === 'dark'
-                    ? 'bg-stone-800/80 hover:bg-stone-700/80 text-stone-200 border border-stone-700'
-                    : 'bg-white hover:bg-stone-50 text-stone-700 border border-stone-200 shadow-sm'
-                }`}
-              >
-                <ClipboardList className="w-5 h-5" />
-                <span>Ver Historial del Día</span>
-                <span className={`ml-auto px-2 py-0.5 rounded-full text-xs font-bold ${kioskTheme === 'dark' ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-600'}`}>
-                  {kioskStats?.totalVisitorsToday ?? 0}
-                </span>
-              </motion.button>
+                {/* Secondary Action: View History - GREEN */}
+                <motion.button
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                  whileHover={{ scale: 1.02, y: -3 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={openDailyLog}
+                  className="flex items-center justify-center gap-5 py-8 sm:py-10 bg-gradient-to-r from-emerald-500 via-emerald-500 to-emerald-600 text-white rounded-3xl font-bold transition-all shadow-2xl shadow-emerald-500/40 hover:shadow-emerald-500/60"
+                >
+                  <div className="w-20 h-20 bg-white/20 rounded-3xl flex items-center justify-center">
+                    <ClipboardList className="w-10 h-10" />
+                  </div>
+                  <div className="text-left">
+                    <span className="text-2xl sm:text-3xl block font-bold">Ver Historial</span>
+                    <span className="text-base font-normal opacity-80 mt-1 block">
+                      {kioskStats?.totalVisitorsToday ?? 0} registros del día
+                    </span>
+                  </div>
+                </motion.button>
+              </div>
             </motion.div>
           )}
 
@@ -3228,134 +3237,125 @@ export default function DoorKioskPage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="p-4 sm:p-6 flex flex-col h-full"
-                style={{ maxHeight: 'calc(100vh - 120px)' }}
+                transition={{ duration: 0.3 }}
+                className="p-6 sm:p-8 lg:p-10 flex flex-col h-full"
+                style={{ maxHeight: 'calc(100vh - 100px)' }}
               >
                 {/* Header con navegación */}
-                <div className="flex items-center justify-between mb-4">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                <div className="flex items-center justify-between mb-6">
+                  <button
                     onClick={() => {
                       setStep('idle')
                       setDailyLogFilter('all')
                       setDailyLogSearch('')
                     }}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${
+                    className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold transition-colors ${
                       kioskTheme === 'dark'
                         ? 'bg-stone-800 hover:bg-stone-700 text-stone-200'
                         : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
                     }`}
                   >
-                    <ArrowLeft className="w-4 h-4" />
+                    <ArrowLeft className="w-5 h-5" />
                     Volver
-                  </motion.button>
+                  </button>
 
-                  <div className="flex items-center gap-2">
-                    <h2 className={`text-lg sm:text-xl font-bold ${theme.text} flex items-center gap-2`}>
-                      <ClipboardList className="w-5 h-5 text-orange-400" />
+                  <div className="flex items-center gap-3">
+                    <ClipboardList className="w-7 h-7 text-emerald-500" />
+                    <h2 className={`text-xl sm:text-2xl font-bold ${theme.text}`}>
                       Historial del Día
                     </h2>
                   </div>
 
-                  <motion.button
-                    whileHover={{ scale: 1.1, rotate: 180 }}
-                    whileTap={{ scale: 0.9 }}
+                  <button
                     onClick={() => fetchDailyLog()}
                     disabled={loadingDailyLog}
-                    className={`p-2.5 rounded-xl transition-all ${
+                    className={`p-3 rounded-xl transition-colors ${
                       kioskTheme === 'dark'
                         ? 'bg-stone-800 hover:bg-stone-700'
                         : 'bg-stone-100 hover:bg-stone-200'
                     }`}
                   >
-                    <RefreshCw className={`w-5 h-5 text-orange-400 ${loadingDailyLog ? 'animate-spin' : ''}`} />
-                  </motion.button>
+                    <RefreshCw className={`w-6 h-6 text-emerald-500 ${loadingDailyLog ? 'animate-spin' : ''}`} />
+                  </button>
                 </div>
 
                 {/* Fecha */}
-                <p className={`text-sm ${theme.textSecondary} text-center mb-4`}>
+                <p className={`text-base ${theme.textSecondary} text-center mb-6`}>
                   {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>
 
                 {/* Stats en una fila */}
-                <div className="grid grid-cols-3 gap-3 mb-4">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <button
                     onClick={() => setDailyLogFilter('all')}
-                    className={`rounded-2xl p-3 text-center transition-all ${
+                    className={`rounded-2xl p-4 text-center transition-colors ${
                       dailyLogFilter === 'all'
                         ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/30'
                         : kioskTheme === 'dark' ? 'bg-stone-800/80 hover:bg-stone-700/80' : 'bg-white hover:bg-stone-50 border border-stone-200'
                     }`}
                   >
-                    <p className={`text-2xl sm:text-3xl font-bold ${dailyLogFilter === 'all' ? 'text-white' : 'text-orange-500'}`}>
+                    <p className={`text-3xl sm:text-4xl font-bold ${dailyLogFilter === 'all' ? 'text-white' : 'text-orange-500'}`}>
                       {dailyLogs.length}
                     </p>
-                    <p className={`text-xs font-semibold ${dailyLogFilter === 'all' ? 'text-orange-100' : theme.textSecondary}`}>
+                    <p className={`text-sm font-semibold mt-1 ${dailyLogFilter === 'all' ? 'text-orange-100' : theme.textSecondary}`}>
                       Todos
                     </p>
-                  </motion.button>
+                  </button>
 
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                  <button
                     onClick={() => setDailyLogFilter('inside')}
-                    className={`rounded-2xl p-3 text-center transition-all ${
+                    className={`rounded-2xl p-4 text-center transition-colors ${
                       dailyLogFilter === 'inside'
                         ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg shadow-green-500/30'
                         : kioskTheme === 'dark' ? 'bg-green-900/20 hover:bg-green-900/30 border border-green-500/30' : 'bg-green-50 hover:bg-green-100 border border-green-200'
                     }`}
                   >
-                    <div className="flex items-center justify-center gap-1.5">
-                      {dailyLogFilter !== 'inside' && <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />}
-                      <p className={`text-2xl sm:text-3xl font-bold ${dailyLogFilter === 'inside' ? 'text-white' : 'text-green-500'}`}>
+                    <div className="flex items-center justify-center gap-2">
+                      <span className={`w-3 h-3 rounded-full bg-green-500 ${dailyLogFilter !== 'inside' ? 'animate-pulse' : ''}`} />
+                      <p className={`text-3xl sm:text-4xl font-bold ${dailyLogFilter === 'inside' ? 'text-white' : 'text-green-500'}`}>
                         {insideLogs.length}
                       </p>
                     </div>
-                    <p className={`text-xs font-semibold ${dailyLogFilter === 'inside' ? 'text-green-100' : theme.textSecondary}`}>
+                    <p className={`text-sm font-semibold mt-1 ${dailyLogFilter === 'inside' ? 'text-green-100' : theme.textSecondary}`}>
                       Adentro
                     </p>
-                  </motion.button>
+                  </button>
 
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                  <button
                     onClick={() => setDailyLogFilter('exited')}
-                    className={`rounded-2xl p-3 text-center transition-all ${
+                    className={`rounded-2xl p-4 text-center transition-colors ${
                       dailyLogFilter === 'exited'
                         ? 'bg-gradient-to-br from-stone-500 to-stone-600 text-white shadow-lg shadow-stone-500/30'
                         : kioskTheme === 'dark' ? 'bg-stone-800/80 hover:bg-stone-700/80' : 'bg-stone-100 hover:bg-stone-200'
                     }`}
                   >
-                    <p className={`text-2xl sm:text-3xl font-bold ${dailyLogFilter === 'exited' ? 'text-white' : theme.textSecondary}`}>
+                    <p className={`text-3xl sm:text-4xl font-bold ${dailyLogFilter === 'exited' ? 'text-white' : theme.textSecondary}`}>
                       {exitedLogs.length}
                     </p>
-                    <p className={`text-xs font-semibold ${dailyLogFilter === 'exited' ? 'text-stone-200' : theme.textSecondary}`}>
+                    <p className={`text-sm font-semibold mt-1 ${dailyLogFilter === 'exited' ? 'text-stone-200' : theme.textSecondary}`}>
                       Salieron
                     </p>
-                  </motion.button>
+                  </button>
                 </div>
 
                 {/* Buscador */}
-                <div className="relative mb-4">
+                <div className="relative mb-6">
                   <input
                     type="text"
                     value={dailyLogSearch}
                     onChange={(e) => setDailyLogSearch(e.target.value)}
                     placeholder="Buscar por nombre, cédula o motivo..."
-                    className={`w-full px-4 py-3 pl-11 rounded-xl text-sm ${
+                    className={`w-full px-5 py-4 pl-12 rounded-2xl text-base ${
                       kioskTheme === 'dark'
                         ? 'bg-stone-800 text-white placeholder-stone-500 border-stone-700'
                         : 'bg-white text-stone-900 placeholder-stone-400 border-stone-200'
-                    } border-2 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50`}
+                    } border-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50`}
                   />
-                  <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 ${theme.textMuted}`} />
+                  <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 ${theme.textMuted}`} />
                   {dailyLogSearch && (
                     <button
                       onClick={() => setDailyLogSearch('')}
-                      className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg ${theme.textMuted} hover:text-orange-400 hover:bg-orange-500/10`}
+                      className={`absolute right-4 top-1/2 -translate-y-1/2 p-1.5 rounded-lg ${theme.textMuted} hover:text-emerald-500 hover:bg-emerald-500/10 transition-colors`}
                     >
                       <XCircle className="w-5 h-5" />
                     </button>
@@ -3363,30 +3363,25 @@ export default function DoorKioskPage() {
                 </div>
 
                 {/* Tabla de registros */}
-                <div className="flex-1 overflow-hidden rounded-2xl border ${kioskTheme === 'dark' ? 'border-stone-700' : 'border-stone-200'}">
+                <div className={`flex-1 overflow-hidden rounded-2xl border-2 ${kioskTheme === 'dark' ? 'border-stone-700 bg-stone-800/30' : 'border-stone-200 bg-white'}`}>
                   {loadingDailyLog ? (
-                    <div className="flex flex-col items-center justify-center h-full py-16">
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                      >
-                        <RefreshCw className="w-10 h-10 text-orange-400" />
-                      </motion.div>
-                      <p className={`${theme.textSecondary} text-sm mt-4`}>Cargando registros...</p>
+                    <div className="flex flex-col items-center justify-center h-full py-20">
+                      <RefreshCw className="w-12 h-12 text-emerald-500 animate-spin" />
+                      <p className={`${theme.textSecondary} text-base mt-4`}>Cargando registros...</p>
                     </div>
                   ) : filteredLogs.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full py-16">
-                      <ClipboardList className={`w-16 h-16 ${theme.textMuted} mb-4`} />
-                      <p className={`${theme.text} text-lg font-medium mb-1`}>
+                    <div className="flex flex-col items-center justify-center h-full py-20">
+                      <ClipboardList className={`w-20 h-20 ${theme.textMuted} mb-4`} />
+                      <p className={`${theme.text} text-xl font-semibold mb-2`}>
                         {dailyLogSearch ? 'Sin resultados' : dailyLogFilter === 'inside' ? 'Nadie adentro' : dailyLogFilter === 'exited' ? 'Sin salidas registradas' : 'Sin registros hoy'}
                       </p>
-                      <p className={`${theme.textMuted} text-sm`}>
+                      <p className={`${theme.textMuted} text-base`}>
                         {dailyLogSearch ? 'Intenta con otra búsqueda' : 'Los registros aparecerán aquí'}
                       </p>
                       {dailyLogSearch && (
                         <button
                           onClick={() => setDailyLogSearch('')}
-                          className="mt-4 px-4 py-2 text-sm font-medium text-orange-400 hover:text-orange-300 bg-orange-500/10 hover:bg-orange-500/20 rounded-xl transition-colors"
+                          className="mt-6 px-6 py-3 text-base font-medium text-emerald-500 hover:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-xl transition-colors"
                         >
                           Limpiar búsqueda
                         </button>
@@ -3395,22 +3390,22 @@ export default function DoorKioskPage() {
                   ) : (
                     <div className="h-full overflow-auto">
                       {/* Tabla Header */}
-                      <div className={`sticky top-0 z-10 grid grid-cols-12 gap-2 px-4 py-3 text-xs font-bold uppercase tracking-wider ${
+                      <div className={`sticky top-0 z-10 grid grid-cols-12 gap-3 px-6 py-4 text-sm font-bold uppercase tracking-wider ${
                         kioskTheme === 'dark'
-                          ? 'bg-stone-800 text-stone-400 border-b border-stone-700'
-                          : 'bg-stone-100 text-stone-500 border-b border-stone-200'
+                          ? 'bg-stone-800 text-stone-400 border-b-2 border-stone-700'
+                          : 'bg-stone-100 text-stone-500 border-b-2 border-stone-200'
                       }`}>
                         <div className="col-span-1 text-center">#</div>
                         <div className="col-span-3">Visitante</div>
                         <div className="col-span-2">Documento</div>
                         <div className="col-span-2 text-center">Entrada</div>
                         <div className="col-span-2 text-center">Salida</div>
-                        <div className="col-span-1 text-center">Estado</div>
+                        <div className="col-span-1 text-center">Tiempo</div>
                         <div className="col-span-1 text-center">Ver</div>
                       </div>
 
                       {/* Tabla Body */}
-                      <div className="divide-y divide-stone-200 dark:divide-stone-700">
+                      <div className={`divide-y ${kioskTheme === 'dark' ? 'divide-stone-700' : 'divide-stone-100'}`}>
                         {filteredLogs.map((log, index) => {
                           const isInside = log.status === 'active'
                           const entryDate = new Date(log.entryTime)
@@ -3428,12 +3423,9 @@ export default function DoorKioskPage() {
                           }
 
                           return (
-                            <motion.div
+                            <div
                               key={log.id}
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: index * 0.02 }}
-                              className={`grid grid-cols-12 gap-2 px-4 py-3 items-center cursor-pointer transition-all ${
+                              className={`grid grid-cols-12 gap-3 px-6 py-4 items-center cursor-pointer transition-colors ${
                                 isInside
                                   ? kioskTheme === 'dark'
                                     ? 'bg-green-500/5 hover:bg-green-500/10'
@@ -3448,22 +3440,22 @@ export default function DoorKioskPage() {
                               }}
                             >
                               {/* # */}
-                              <div className={`col-span-1 text-center text-sm font-medium ${theme.textMuted}`}>
+                              <div className={`col-span-1 text-center text-base font-medium ${theme.textMuted}`}>
                                 {index + 1}
                               </div>
 
                               {/* Visitante */}
                               <div className="col-span-3 min-w-0">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-3">
                                   {isInside && (
-                                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
+                                    <span className="w-3 h-3 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
                                   )}
                                   <div className="min-w-0">
-                                    <p className={`text-sm font-semibold ${theme.text} truncate`}>
+                                    <p className={`text-base font-semibold ${theme.text} truncate`}>
                                       {log.visitorName}
                                     </p>
                                     {log.visitPurpose && (
-                                      <p className={`text-xs ${theme.textMuted} truncate`}>
+                                      <p className={`text-sm ${theme.textMuted} truncate`}>
                                         {log.visitPurpose}
                                       </p>
                                     )}
@@ -3473,11 +3465,11 @@ export default function DoorKioskPage() {
 
                               {/* Documento */}
                               <div className="col-span-2">
-                                <p className={`text-xs font-mono ${theme.textSecondary}`}>
+                                <p className={`text-sm font-mono ${theme.textSecondary}`}>
                                   {log.visitorIdNumber}
                                 </p>
                                 {log.visitorIdType && (
-                                  <p className={`text-[10px] ${theme.textMuted} uppercase`}>
+                                  <p className={`text-xs ${theme.textMuted} uppercase`}>
                                     {log.visitorIdType}
                                   </p>
                                 )}
@@ -3485,9 +3477,9 @@ export default function DoorKioskPage() {
 
                               {/* Entrada */}
                               <div className="col-span-2 text-center">
-                                <div className="flex items-center justify-center gap-1">
-                                  <LogIn className="w-3.5 h-3.5 text-green-500" />
-                                  <span className={`text-sm font-medium ${theme.text}`}>
+                                <div className="flex items-center justify-center gap-2">
+                                  <LogIn className="w-4 h-4 text-green-500" />
+                                  <span className={`text-base font-medium ${theme.text}`}>
                                     {entryDate.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
                                   </span>
                                 </div>
@@ -3496,44 +3488,38 @@ export default function DoorKioskPage() {
                               {/* Salida */}
                               <div className="col-span-2 text-center">
                                 {exitDate ? (
-                                  <div className="flex items-center justify-center gap-1">
-                                    <LogOut className="w-3.5 h-3.5 text-red-400" />
-                                    <span className={`text-sm font-medium ${theme.text}`}>
+                                  <div className="flex items-center justify-center gap-2">
+                                    <LogOut className="w-4 h-4 text-red-400" />
+                                    <span className={`text-base font-medium ${theme.text}`}>
                                       {exitDate.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
                                     </span>
                                   </div>
                                 ) : (
-                                  <span className={`text-xs font-medium ${theme.textMuted}`}>—</span>
+                                  <span className={`text-base font-medium ${theme.textMuted}`}>—</span>
                                 )}
                               </div>
 
-                              {/* Estado */}
+                              {/* Estado/Tiempo */}
                               <div className="col-span-1 flex justify-center">
-                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${
                                   isInside
                                     ? 'bg-green-500/20 text-green-500'
                                     : kioskTheme === 'dark' ? 'bg-stone-700 text-stone-300' : 'bg-stone-200 text-stone-600'
                                 }`}>
-                                  {isInside ? (
-                                    <>
-                                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                                      {duration}
-                                    </>
-                                  ) : (
-                                    duration
+                                  {isInside && (
+                                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                                   )}
+                                  {duration}
                                 </span>
                               </div>
 
                               {/* Ver */}
                               <div className="col-span-1 flex justify-center">
-                                <motion.button
-                                  whileHover={{ scale: 1.1 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  className={`p-2 rounded-lg transition-colors ${
+                                <button
+                                  className={`p-2.5 rounded-xl transition-colors ${
                                     kioskTheme === 'dark'
-                                      ? 'hover:bg-orange-500/20 text-orange-400'
-                                      : 'hover:bg-orange-100 text-orange-500'
+                                      ? 'hover:bg-emerald-500/20 text-emerald-400'
+                                      : 'hover:bg-emerald-100 text-emerald-500'
                                   }`}
                                   onClick={(e) => {
                                     e.stopPropagation()
@@ -3541,10 +3527,10 @@ export default function DoorKioskPage() {
                                     setStep('log_detail')
                                   }}
                                 >
-                                  <FileText className="w-4 h-4" />
-                                </motion.button>
+                                  <FileText className="w-5 h-5" />
+                                </button>
                               </div>
-                            </motion.div>
+                            </div>
                           )
                         })}
                       </div>
@@ -3554,13 +3540,13 @@ export default function DoorKioskPage() {
 
                 {/* Footer con conteo */}
                 {!loadingDailyLog && filteredLogs.length > 0 && (
-                  <div className={`mt-4 pt-3 border-t flex items-center justify-between ${kioskTheme === 'dark' ? 'border-stone-700' : 'border-stone-200'}`}>
-                    <p className={`text-sm ${theme.textMuted}`}>
-                      Mostrando <span className="font-semibold text-orange-500">{filteredLogs.length}</span> de <span className="font-semibold">{dailyLogs.length}</span> registros
+                  <div className={`mt-6 pt-4 border-t-2 flex items-center justify-between ${kioskTheme === 'dark' ? 'border-stone-700' : 'border-stone-200'}`}>
+                    <p className={`text-base ${theme.textMuted}`}>
+                      Mostrando <span className="font-bold text-emerald-500">{filteredLogs.length}</span> de <span className="font-bold">{dailyLogs.length}</span> registros
                     </p>
                     <div className="flex items-center gap-2">
-                      <Clock className={`w-4 h-4 ${theme.textMuted}`} />
-                      <span className={`text-xs ${theme.textMuted}`}>
+                      <Clock className={`w-5 h-5 ${theme.textMuted}`} />
+                      <span className={`text-sm ${theme.textMuted}`}>
                         Actualizado: {new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
@@ -3592,46 +3578,42 @@ export default function DoorKioskPage() {
             return (
               <motion.div
                 key="log_detail"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="p-4 sm:p-6"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="p-6 sm:p-8 lg:p-10"
               >
                 {/* Header */}
-                <div className="flex items-center justify-between mb-6">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                <div className="flex items-center justify-between mb-8">
+                  <button
                     onClick={() => {
                       setStep('daily_log')
                       setSelectedLog(null)
                     }}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${
+                    className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold transition-colors ${
                       kioskTheme === 'dark'
                         ? 'bg-stone-800 hover:bg-stone-700 text-stone-200'
                         : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
                     }`}
                   >
-                    <ArrowLeft className="w-4 h-4" />
-                    Volver
-                  </motion.button>
+                    <ArrowLeft className="w-5 h-5" />
+                    Volver al Historial
+                  </button>
 
-                  <h2 className={`text-lg font-bold ${theme.text}`}>
+                  <h2 className={`text-xl sm:text-2xl font-bold ${theme.text}`}>
                     Detalle del Registro
                   </h2>
 
-                  <div className="w-24" /> {/* Spacer */}
+                  <div className="w-32" /> {/* Spacer */}
                 </div>
 
                 {/* Status Badge Grande */}
-                <div className="flex justify-center mb-6">
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: 'spring', bounce: 0.5 }}
-                    className={`inline-flex items-center gap-3 px-6 py-3 rounded-2xl text-lg font-bold ${
+                <div className="flex justify-center mb-8">
+                  <div
+                    className={`inline-flex items-center gap-4 px-8 py-4 rounded-2xl text-xl font-bold ${
                       isInside
-                        ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg shadow-green-500/30'
+                        ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-xl shadow-green-500/30'
                         : kioskTheme === 'dark'
                           ? 'bg-stone-700 text-stone-200'
                           : 'bg-stone-200 text-stone-700'
@@ -3639,7 +3621,7 @@ export default function DoorKioskPage() {
                   >
                     {isInside ? (
                       <>
-                        <span className="w-3 h-3 rounded-full bg-white animate-pulse" />
+                        <span className="w-4 h-4 rounded-full bg-white animate-pulse" />
                         ACTUALMENTE ADENTRO
                       </>
                     ) : (
@@ -3648,23 +3630,20 @@ export default function DoorKioskPage() {
                         VISITA COMPLETADA
                       </>
                     )}
-                  </motion.div>
+                  </div>
                 </div>
 
                 {/* Info Card */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className={`rounded-2xl p-6 mb-4 ${
+                <div
+                  className={`rounded-3xl p-8 mb-6 ${
                     kioskTheme === 'dark'
-                      ? 'bg-gradient-to-br from-stone-800/80 to-stone-800/40 border border-stone-700'
-                      : 'bg-white border border-stone-200 shadow-lg'
+                      ? 'bg-gradient-to-br from-stone-800/80 to-stone-800/40 border-2 border-stone-700'
+                      : 'bg-white border-2 border-stone-200 shadow-xl'
                   }`}
                 >
                   {/* Visitante */}
-                  <div className="flex items-start gap-4 mb-6 pb-6 border-b border-stone-200 dark:border-stone-700">
-                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold ${
+                  <div className={`flex items-start gap-5 mb-8 pb-8 border-b-2 ${kioskTheme === 'dark' ? 'border-stone-700' : 'border-stone-200'}`}>
+                    <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-3xl font-bold ${
                       kioskTheme === 'dark'
                         ? 'bg-orange-500/20 text-orange-400'
                         : 'bg-orange-100 text-orange-600'
@@ -3672,16 +3651,16 @@ export default function DoorKioskPage() {
                       {log.visitorName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
                     </div>
                     <div className="flex-1">
-                      <h3 className={`text-xl font-bold ${theme.text} mb-1`}>
+                      <h3 className={`text-2xl font-bold ${theme.text} mb-2`}>
                         {log.visitorName}
                       </h3>
-                      <div className="flex items-center gap-2">
-                        <CreditCard className={`w-4 h-4 ${theme.textMuted}`} />
-                        <span className={`text-sm font-mono ${theme.textSecondary}`}>
+                      <div className="flex items-center gap-3">
+                        <CreditCard className={`w-5 h-5 ${theme.textMuted}`} />
+                        <span className={`text-lg font-mono ${theme.textSecondary}`}>
                           {log.visitorIdNumber}
                         </span>
                         {log.visitorIdType && (
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          <span className={`text-sm px-3 py-1 rounded-full ${
                             kioskTheme === 'dark'
                               ? 'bg-stone-700 text-stone-300'
                               : 'bg-stone-100 text-stone-600'
@@ -3693,181 +3672,175 @@ export default function DoorKioskPage() {
                     </div>
                   </div>
 
-                  {/* Grid de Información */}
-                  <div className="grid grid-cols-2 gap-4">
+                  {/* Grid de Información - 4 columnas */}
+                  <div className="grid grid-cols-4 gap-5">
                     {/* Motivo de Visita */}
-                    <div className={`rounded-xl p-4 ${kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50'}`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Package className={`w-4 h-4 ${theme.textMuted}`} />
-                        <span className={`text-xs font-semibold uppercase ${theme.textMuted}`}>Motivo</span>
+                    <div className={`rounded-2xl p-5 ${kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50'}`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Package className={`w-5 h-5 ${theme.textMuted}`} />
+                        <span className={`text-sm font-bold uppercase ${theme.textMuted}`}>Motivo</span>
                       </div>
-                      <p className={`text-base font-medium ${theme.text}`}>
+                      <p className={`text-lg font-semibold ${theme.text}`}>
                         {log.visitPurpose || 'No especificado'}
                       </p>
                     </div>
 
                     {/* Duración */}
-                    <div className={`rounded-xl p-4 ${
+                    <div className={`rounded-2xl p-5 ${
                       isInside
                         ? kioskTheme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'
                         : kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50'
                     }`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Clock className={`w-4 h-4 ${isInside ? 'text-green-500' : theme.textMuted}`} />
-                        <span className={`text-xs font-semibold uppercase ${isInside ? 'text-green-500' : theme.textMuted}`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Clock className={`w-5 h-5 ${isInside ? 'text-green-500' : theme.textMuted}`} />
+                        <span className={`text-sm font-bold uppercase ${isInside ? 'text-green-500' : theme.textMuted}`}>
                           {isInside ? 'Tiempo adentro' : 'Duración'}
                         </span>
                       </div>
-                      <p className={`text-base font-bold ${isInside ? 'text-green-500' : theme.text}`}>
+                      <p className={`text-lg font-bold ${isInside ? 'text-green-500' : theme.text}`}>
                         {duration}
                       </p>
                     </div>
 
                     {/* Hora Entrada */}
-                    <div className={`rounded-xl p-4 ${kioskTheme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'}`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <LogIn className="w-4 h-4 text-green-500" />
-                        <span className="text-xs font-semibold uppercase text-green-500">Entrada</span>
+                    <div className={`rounded-2xl p-5 ${kioskTheme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'}`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <LogIn className="w-5 h-5 text-green-500" />
+                        <span className="text-sm font-bold uppercase text-green-500">Entrada</span>
                       </div>
-                      <p className={`text-base font-medium ${theme.text}`}>
+                      <p className={`text-lg font-semibold ${theme.text}`}>
                         {entryDate.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </p>
-                      <p className={`text-xs ${theme.textMuted}`}>
+                      <p className={`text-sm ${theme.textMuted} mt-1`}>
                         {entryDate.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}
                       </p>
                     </div>
 
                     {/* Hora Salida */}
-                    <div className={`rounded-xl p-4 ${
+                    <div className={`rounded-2xl p-5 ${
                       exitDate
                         ? kioskTheme === 'dark' ? 'bg-red-900/20' : 'bg-red-50'
                         : kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50'
                     }`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <LogOut className={`w-4 h-4 ${exitDate ? 'text-red-400' : theme.textMuted}`} />
-                        <span className={`text-xs font-semibold uppercase ${exitDate ? 'text-red-400' : theme.textMuted}`}>Salida</span>
+                      <div className="flex items-center gap-2 mb-3">
+                        <LogOut className={`w-5 h-5 ${exitDate ? 'text-red-400' : theme.textMuted}`} />
+                        <span className={`text-sm font-bold uppercase ${exitDate ? 'text-red-400' : theme.textMuted}`}>Salida</span>
                       </div>
                       {exitDate ? (
                         <>
-                          <p className={`text-base font-medium ${theme.text}`}>
+                          <p className={`text-lg font-semibold ${theme.text}`}>
                             {exitDate.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                           </p>
-                          <p className={`text-xs ${theme.textMuted}`}>
+                          <p className={`text-sm ${theme.textMuted} mt-1`}>
                             {exitDate.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}
                           </p>
                         </>
                       ) : (
-                        <p className={`text-base font-medium ${theme.textMuted}`}>
+                        <p className={`text-lg font-semibold ${theme.textMuted}`}>
                           Pendiente
                         </p>
                       )}
                     </div>
                   </div>
 
-                  {/* Notas */}
-                  {log.visitNotes && (
-                    <div className={`mt-4 rounded-xl p-4 ${kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50'}`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <FileText className={`w-4 h-4 ${theme.textMuted}`} />
-                        <span className={`text-xs font-semibold uppercase ${theme.textMuted}`}>Notas</span>
+                  {/* Segunda fila de información */}
+                  <div className="grid grid-cols-3 gap-5 mt-5">
+                    {/* Notas */}
+                    <div className={`rounded-2xl p-5 ${kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50'} ${log.visitNotes ? '' : 'opacity-50'}`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <FileText className={`w-5 h-5 ${theme.textMuted}`} />
+                        <span className={`text-sm font-bold uppercase ${theme.textMuted}`}>Notas</span>
                       </div>
-                      <p className={`text-sm ${theme.textSecondary} italic`}>
-                        "{log.visitNotes}"
+                      <p className={`text-base ${theme.textSecondary} ${log.visitNotes ? 'italic' : ''}`}>
+                        {log.visitNotes ? `"${log.visitNotes}"` : 'Sin notas'}
                       </p>
                     </div>
-                  )}
 
-                  {/* Host */}
-                  {log.hostName && (
-                    <div className={`mt-4 rounded-xl p-4 ${kioskTheme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'}`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <User className="w-4 h-4 text-blue-500" />
-                        <span className="text-xs font-semibold uppercase text-blue-500">Anfitrión</span>
+                    {/* Host */}
+                    <div className={`rounded-2xl p-5 ${log.hostName ? (kioskTheme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50') : (kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50')} ${log.hostName ? '' : 'opacity-50'}`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <User className={`w-5 h-5 ${log.hostName ? 'text-blue-500' : theme.textMuted}`} />
+                        <span className={`text-sm font-bold uppercase ${log.hostName ? 'text-blue-500' : theme.textMuted}`}>Anfitrión</span>
                       </div>
-                      <p className={`text-base font-medium ${theme.text}`}>
-                        {log.hostName}
+                      <p className={`text-base font-semibold ${theme.text}`}>
+                        {log.hostName || 'No asignado'}
                       </p>
                     </div>
-                  )}
 
-                  {/* Validación de facturas */}
-                  {log.hasPendingInvoices !== undefined && (
-                    <div className={`mt-4 rounded-xl p-4 ${
+                    {/* Validación de facturas */}
+                    <div className={`rounded-2xl p-5 ${
                       log.invoicesValidated
                         ? kioskTheme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'
                         : log.hasPendingInvoices
                           ? kioskTheme === 'dark' ? 'bg-yellow-900/20' : 'bg-yellow-50'
                           : kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50'
                     }`}>
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-2 mb-3">
                         {log.invoicesValidated ? (
-                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <CheckCircle className="w-5 h-5 text-green-500" />
                         ) : log.hasPendingInvoices ? (
-                          <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                          <AlertTriangle className="w-5 h-5 text-yellow-500" />
                         ) : (
-                          <FileText className={`w-4 h-4 ${theme.textMuted}`} />
+                          <FileText className={`w-5 h-5 ${theme.textMuted}`} />
                         )}
-                        <span className={`text-xs font-semibold uppercase ${
+                        <span className={`text-sm font-bold uppercase ${
                           log.invoicesValidated
                             ? 'text-green-500'
                             : log.hasPendingInvoices
                               ? 'text-yellow-500'
                               : theme.textMuted
                         }`}>
-                          Validación de Documentos
+                          Validación
                         </span>
                       </div>
-                      <p className={`text-base font-medium ${theme.text}`}>
+                      <p className={`text-base font-semibold ${theme.text}`}>
                         {log.invoicesValidated
-                          ? 'Documentos validados en salida'
+                          ? 'Documentos validados'
                           : log.hasPendingInvoices
                             ? 'Pendiente de validación'
-                            : 'Sin documentos para validar'}
+                            : 'Sin documentos'}
                       </p>
                       {log.validatedAt && (
-                        <p className={`text-xs ${theme.textMuted} mt-1`}>
-                          Validado: {new Date(log.validatedAt).toLocaleString('es')}
+                        <p className={`text-sm ${theme.textMuted} mt-1`}>
+                          {new Date(log.validatedAt).toLocaleString('es')}
                         </p>
                       )}
                     </div>
-                  )}
-                </motion.div>
+                  </div>
+                </div>
 
                 {/* Kiosk Info */}
                 {(log.kioskName || log.kioskLocation) && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                    className={`rounded-2xl p-4 ${
+                  <div
+                    className={`rounded-2xl p-5 ${
                       kioskTheme === 'dark'
-                        ? 'bg-stone-800/50 border border-stone-700'
-                        : 'bg-stone-50 border border-stone-200'
+                        ? 'bg-stone-800/50 border-2 border-stone-700'
+                        : 'bg-stone-50 border-2 border-stone-200'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                    <div className="flex items-center gap-4">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
                         kioskTheme === 'dark' ? 'bg-stone-700' : 'bg-white'
                       }`}>
-                        <MapPin className="w-5 h-5 text-orange-500" />
+                        <MapPin className="w-6 h-6 text-emerald-500" />
                       </div>
                       <div>
-                        <p className={`text-sm font-semibold ${theme.text}`}>
+                        <p className={`text-base font-semibold ${theme.text}`}>
                           {log.kioskName || 'Kiosk'}
                         </p>
                         {log.kioskLocation && (
-                          <p className={`text-xs ${theme.textMuted}`}>
+                          <p className={`text-sm ${theme.textMuted}`}>
                             {log.kioskLocation}
                           </p>
                         )}
                       </div>
                     </div>
-                  </motion.div>
+                  </div>
                 )}
 
                 {/* ID del registro */}
-                <p className={`text-xs text-center mt-4 ${theme.textMuted}`}>
-                  ID del registro: #{log.id}
+                <p className={`text-sm text-center mt-6 ${theme.textMuted}`}>
+                  Registro #{log.id}
                 </p>
               </motion.div>
             )
