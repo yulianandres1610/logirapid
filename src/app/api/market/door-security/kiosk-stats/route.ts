@@ -1,6 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 
+// Run migrations once per process to fix missing data
+let migrationRan = false
+async function runValidationsMigration() {
+  if (migrationRan) return
+  try {
+    // Add companyid column if missing
+    await db.query(`ALTER TABLE market_visitor_invoice_validations ADD COLUMN IF NOT EXISTS companyid INTEGER`)
+    // Add createdat column if missing
+    await db.query(`ALTER TABLE market_visitor_invoice_validations ADD COLUMN IF NOT EXISTS createdat TIMESTAMP`)
+    // Populate missing companyid from visitor_logs
+    await db.query(`
+      UPDATE market_visitor_invoice_validations v
+      SET companyid = vl.companyid
+      FROM market_visitor_logs vl
+      WHERE v.visitorlogid = vl.id AND v.companyid IS NULL
+    `)
+    // Populate missing createdat from validatedat
+    await db.query(`
+      UPDATE market_visitor_invoice_validations
+      SET createdat = validatedat
+      WHERE createdat IS NULL AND validatedat IS NOT NULL
+    `)
+    migrationRan = true
+    console.log('[Kiosk Stats] Validations migration completed')
+  } catch (err) {
+    console.warn('[Kiosk Stats] Migration error (non-fatal):', err)
+    migrationRan = true
+  }
+}
+
 /**
  * GET /api/market/door-security/kiosk-stats?kioskId=X&guardId=Y
  * Returns statistics for the kiosk dashboard (guard view)
@@ -8,6 +38,8 @@ import { db } from '@/lib/database'
  */
 export async function GET(request: NextRequest) {
   try {
+    // Run migrations on first request
+    await runValidationsMigration()
     const { searchParams } = new URL(request.url)
     const kioskIdParam = searchParams.get('kioskId')
     const guardIdParam = searchParams.get('guardId')
