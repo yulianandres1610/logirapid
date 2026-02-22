@@ -99,6 +99,7 @@ export async function GET(request: NextRequest) {
       whereClause += ` AND DATE(vl.entrytime AT TIME ZONE 'America/Havana') = $${paramIndex}`
       params.push(date)
       paramIndex++
+      console.log('[Visitor Logs GET] Filtering by date:', date)
     }
 
     if (search) {
@@ -116,6 +117,7 @@ export async function GET(request: NextRequest) {
     `, params)
 
     const total = parseInt(countResult.rows[0]?.total || '0')
+    console.log('[Visitor Logs GET] Total logs found:', total, 'companyId:', companyId, 'whereClause:', whereClause)
 
     // Get logs with visitor and kiosk info
     const result = await db.query(`

@@ -47,8 +47,12 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
-    // Get today's date in company timezone
-    const today = new Date().toISOString().split('T')[0]
+    // Get today's date in Cuba timezone (America/Havana)
+    // Use PostgreSQL to get the correct date - NOW() converted to Cuba timezone
+    const todayResult = await db.query(`SELECT (NOW() AT TIME ZONE 'America/Havana')::date as today`)
+    const today = todayResult.rows[0].today.toISOString().split('T')[0]
+
+    console.log('[Kiosk Stats] Today in Cuba timezone:', today, 'companyId:', companyId)
 
     // 1. Visitor statistics
     let visitorsInside = 0
@@ -57,29 +61,46 @@ export async function GET(request: NextRequest) {
     let exitsWithoutValidation = 0
 
     try {
-      const visitorStats = await db.query(`
-        SELECT
-          COUNT(*) FILTER (WHERE status = 'active') as inside,
-          COUNT(*) FILTER (WHERE status = 'completed' AND DATE(exittime AT TIME ZONE 'America/Havana') = $2) as exited_today,
-          COUNT(*) as total_today,
-          COUNT(*) FILTER (
-            WHERE status = 'completed'
-            AND haspendinginvoices = true
-            AND (invoicesvalidated = false OR invoicesvalidated IS NULL)
-            AND DATE(exittime AT TIME ZONE 'America/Havana') = $2
-          ) as without_validation
+      // Count visitors currently inside (ALL active, regardless of entry date)
+      const insideResult = await db.query(`
+        SELECT COUNT(*) as count
+        FROM market_visitor_logs
+        WHERE companyid = $1 AND status = 'active'
+      `, [companyId])
+      visitorsInside = parseInt(insideResult.rows[0]?.count || '0')
+
+      // Count visitors who entered today
+      const enteredTodayResult = await db.query(`
+        SELECT COUNT(*) as count
         FROM market_visitor_logs
         WHERE companyid = $1
           AND DATE(entrytime AT TIME ZONE 'America/Havana') = $2
       `, [companyId, today])
+      totalVisitorsToday = parseInt(enteredTodayResult.rows[0]?.count || '0')
 
-      if (visitorStats.rows.length > 0) {
-        const stats = visitorStats.rows[0]
-        visitorsInside = parseInt(stats.inside || '0')
-        visitorsExitedToday = parseInt(stats.exited_today || '0')
-        totalVisitorsToday = parseInt(stats.total_today || '0')
-        exitsWithoutValidation = parseInt(stats.without_validation || '0')
-      }
+      // Count visitors who exited today
+      const exitedTodayResult = await db.query(`
+        SELECT COUNT(*) as count
+        FROM market_visitor_logs
+        WHERE companyid = $1
+          AND status = 'completed'
+          AND DATE(exittime AT TIME ZONE 'America/Havana') = $2
+      `, [companyId, today])
+      visitorsExitedToday = parseInt(exitedTodayResult.rows[0]?.count || '0')
+
+      // Count exits without validation today
+      const withoutValidationResult = await db.query(`
+        SELECT COUNT(*) as count
+        FROM market_visitor_logs
+        WHERE companyid = $1
+          AND status = 'completed'
+          AND haspendinginvoices = true
+          AND (invoicesvalidated = false OR invoicesvalidated IS NULL)
+          AND DATE(exittime AT TIME ZONE 'America/Havana') = $2
+      `, [companyId, today])
+      exitsWithoutValidation = parseInt(withoutValidationResult.rows[0]?.count || '0')
+
+      console.log('[Kiosk Stats] Visitors - Inside:', visitorsInside, 'Entered today:', totalVisitorsToday, 'Exited today:', visitorsExitedToday)
     } catch (e) {
       console.log('[Kiosk Stats] Visitor stats error:', e)
     }
