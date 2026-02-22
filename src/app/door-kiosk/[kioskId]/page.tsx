@@ -107,7 +107,7 @@ type KioskStep =
   | 'scan_id'
   | 'scan_id_reverse'
   | 'processing_id'
-  | 'verify_data'      // NEW: Verify OCR data before registering
+  | 'verify_data'
   | 'manual_register'
   | 'visitor_info'
   | 'select_purpose'
@@ -117,6 +117,7 @@ type KioskStep =
   | 'scan_receipts'
   | 'exit_success'
   | 'daily_log'
+  | 'log_detail'
   | 'error'
 
 const VISIT_PURPOSES = [
@@ -149,13 +150,24 @@ interface Employee {
 
 interface DailyLogEntry {
   id: number
+  visitorId: number
   visitorName: string
   visitorIdNumber: string
+  visitorIdType: string | null
+  kioskId: number
+  kioskName: string | null
+  kioskLocation: string | null
   entryTime: string
   exitTime: string | null
   visitPurpose: string | null
   visitNotes: string | null
+  hostEmployeeId: number | null
+  hostName: string | null
+  hasPendingInvoices: boolean
+  invoicesValidated: boolean
+  validatedAt: string | null
   status: string
+  createdAt: string
 }
 
 type KioskTheme = 'light' | 'dark'
@@ -232,9 +244,14 @@ export default function DoorKioskPage() {
     ordersValidatedToday: number
     exitsWithoutValidation: number
     validationRate: number
+    breakdown: {
+      posOrders: number
+      wholesaleInvoices: number
+    }
   }
   const [kioskStats, setKioskStats] = useState<KioskStats | null>(null)
   const [loadingStats, setLoadingStats] = useState(false)
+  const [selectedLog, setSelectedLog] = useState<DailyLogEntry | null>(null)
 
   // Receipt scanning state
   const [scannerOpen, setScannerOpen] = useState(false)
@@ -1478,6 +1495,7 @@ export default function DoorKioskPage() {
     setPin('')
     setDailyLogs([])
     setKioskStats(null)
+    setSelectedLog(null)
     setFormName('')
     setFormIdNumber('')
     setFormIdType('cedula')
@@ -1594,53 +1612,17 @@ export default function DoorKioskPage() {
         </p>
       </motion.div>
 
-      {/* Guard Info Bar - When logged in */}
-      {guard && step !== 'guard_pin' && step !== 'locked' && (
+      {/* Kiosk Location Info - Only show when not on idle (idle has its own header) */}
+      {step !== 'idle' && step !== 'daily_log' && step !== 'log_detail' && (
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-lg mb-2 sm:mb-4 px-1"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className={`flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-4 ${theme.textMuted}`}
         >
-          <div className={`${theme.cardSolid} rounded-xl sm:rounded-2xl px-3 sm:px-5 py-2 sm:py-3 flex items-center justify-between border`}>
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-lg flex-shrink-0">
-                {getGuardInitials(guard.name)}
-              </div>
-              <div className="min-w-0">
-                <p className={`${theme.text} font-medium text-sm sm:text-base truncate`}>{guard.name}</p>
-                <p className={`${theme.textMuted} text-xs hidden sm:block`}>{guard.code}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => logoutGuard()}
-                className="px-3 py-1.5 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 active:bg-red-500/40 text-xs sm:text-sm font-semibold transition-colors"
-              >
-                Cerrar Sesión
-              </button>
-              <button
-                type="button"
-                onClick={changeKiosk}
-                className={`${theme.textMuted} hover:text-orange-500 p-1 sm:p-1.5 transition-colors`}
-                title="Cambiar kiosco"
-              >
-                <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
-            </div>
-          </div>
+          <MapPin className="w-3 h-3 sm:w-4 sm:h-4" />
+          <span className="text-xs sm:text-sm truncate max-w-[250px] sm:max-w-none">{kiosk?.name} • {kiosk?.location}</span>
         </motion.div>
       )}
-
-      {/* Kiosk Info */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className={`flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-4 ${theme.textMuted}`}
-      >
-        <MapPin className="w-3 h-3 sm:w-4 sm:h-4" />
-        <span className="text-xs sm:text-sm truncate max-w-[250px] sm:max-w-none">{kiosk?.name} • {kiosk?.location}</span>
-      </motion.div>
 
       {/* Main Card */}
       <motion.div
@@ -1805,151 +1787,198 @@ export default function DoorKioskPage() {
             </motion.div>
           )}
 
-          {/* Idle State - Dashboard with statistics */}
+          {/* Idle State - Modern Dashboard optimized for iPad 13" */}
           {step === 'idle' && (
             <motion.div
               key="idle"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="p-3 sm:p-6"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ type: 'spring', bounce: 0.3 }}
+              className="p-4 sm:p-6 lg:p-8"
             >
-              {/* Header with guard info and logout */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full ${kioskTheme === 'dark' ? 'bg-orange-500/20' : 'bg-orange-100'} flex items-center justify-center flex-shrink-0`}>
-                    <User className="w-5 h-5 text-orange-500" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className={`text-sm font-bold ${theme.text} truncate`}>{guard?.name || 'Guardia'}</p>
-                    <p className={`text-[10px] ${theme.textMuted}`}>{kiosk?.name || 'Kiosk'}</p>
+              {/* Header: Guard Info + Actions */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', bounce: 0.5, delay: 0.1 }}
+                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-orange-500/30"
+                  >
+                    {getGuardInitials(guard?.name || '')}
+                  </motion.div>
+                  <div>
+                    <p className={`text-base sm:text-lg font-bold ${theme.text}`}>{guard?.name || 'Guardia'}</p>
+                    <p className={`text-xs sm:text-sm ${theme.textMuted} flex items-center gap-1`}>
+                      <MapPin className="w-3 h-3" />
+                      {kiosk?.name}
+                    </p>
                   </div>
                 </div>
-                <button
-                  onClick={logoutGuard}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-400 hover:text-red-300 text-xs font-bold transition-all"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span className="hidden sm:inline">Cerrar</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => fetchKioskStats()}
+                    disabled={loadingStats}
+                    className={`p-2.5 rounded-xl transition-all ${kioskTheme === 'dark' ? 'hover:bg-white/10' : 'hover:bg-stone-100'}`}
+                    title="Actualizar"
+                  >
+                    <RefreshCw className={`w-5 h-5 ${theme.textMuted} ${loadingStats ? 'animate-spin' : ''}`} />
+                  </button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={logoutGuard}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-sm font-semibold transition-all"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Salir</span>
+                  </motion.button>
+                </div>
               </div>
 
-              {/* Statistics Section */}
-              <div className="mb-4">
-                {/* Section: Visitors Today */}
-                <div className="flex items-center gap-2 mb-2">
-                  <User className="w-4 h-4 text-orange-400" />
-                  <span className={`text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Visitantes Hoy</span>
-                  {loadingStats && <RefreshCw className="w-3 h-3 text-orange-400 animate-spin" />}
-                </div>
-                <div className="grid grid-cols-3 gap-2 mb-4">
-                  {/* Inside */}
-                  <button
-                    onClick={() => { setDailyLogFilter('inside'); openDailyLog() }}
-                    className={`rounded-xl p-2.5 text-center transition-all ${kioskTheme === 'dark' ? 'bg-green-900/30 hover:bg-green-900/50' : 'bg-green-50 hover:bg-green-100'}`}
-                  >
-                    <div className="flex items-center justify-center gap-1 mb-0.5">
-                      <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                      <p className="text-xl sm:text-2xl font-bold text-green-400">
-                        {kioskStats?.visitorsInside ?? '-'}
-                      </p>
+              {/* Stats Grid - Two Rows */}
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                {/* Visitors Section */}
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className={`rounded-2xl p-4 ${kioskTheme === 'dark' ? 'bg-gradient-to-br from-stone-800/80 to-stone-800/40' : 'bg-gradient-to-br from-stone-50 to-white'} border ${kioskTheme === 'dark' ? 'border-stone-700/50' : 'border-stone-200'}`}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${kioskTheme === 'dark' ? 'bg-orange-500/20' : 'bg-orange-100'}`}>
+                      <User className="w-4 h-4 text-orange-500" />
                     </div>
-                    <p className={`text-[10px] font-medium ${theme.textSecondary}`}>Adentro</p>
-                  </button>
-                  {/* Exited */}
-                  <button
-                    onClick={() => { setDailyLogFilter('exited'); openDailyLog() }}
-                    className={`rounded-xl p-2.5 text-center transition-all ${kioskTheme === 'dark' ? 'bg-stone-800/80 hover:bg-stone-700/80' : 'bg-stone-100 hover:bg-stone-200'}`}
-                  >
-                    <p className={`text-xl sm:text-2xl font-bold ${theme.textSecondary}`}>
-                      {kioskStats?.visitorsExitedToday ?? '-'}
-                    </p>
-                    <p className={`text-[10px] font-medium ${theme.textSecondary}`}>Salieron</p>
-                  </button>
-                  {/* Total */}
-                  <button
-                    onClick={() => { setDailyLogFilter('all'); openDailyLog() }}
-                    className={`rounded-xl p-2.5 text-center transition-all ${kioskTheme === 'dark' ? 'bg-stone-800/80 hover:bg-stone-700/80' : 'bg-stone-100 hover:bg-stone-200'}`}
-                  >
-                    <p className="text-xl sm:text-2xl font-bold text-orange-400">
-                      {kioskStats?.totalVisitorsToday ?? '-'}
-                    </p>
-                    <p className={`text-[10px] font-medium ${theme.textSecondary}`}>Total</p>
-                  </button>
-                </div>
+                    <span className={`text-sm font-semibold ${theme.text}`}>Visitantes Hoy</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => { setDailyLogFilter('inside'); openDailyLog() }}
+                      className={`rounded-xl p-3 text-center transition-all ${kioskTheme === 'dark' ? 'bg-green-500/10 hover:bg-green-500/20 border border-green-500/20' : 'bg-green-50 hover:bg-green-100 border border-green-200'}`}
+                    >
+                      <div className="flex items-center justify-center gap-1.5 mb-1">
+                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                        <span className="text-2xl sm:text-3xl font-bold text-green-500">{kioskStats?.visitorsInside ?? 0}</span>
+                      </div>
+                      <span className={`text-xs font-medium ${theme.textSecondary}`}>Adentro</span>
+                    </button>
+                    <button
+                      onClick={() => { setDailyLogFilter('exited'); openDailyLog() }}
+                      className={`rounded-xl p-3 text-center transition-all ${kioskTheme === 'dark' ? 'bg-stone-700/50 hover:bg-stone-700/80' : 'bg-stone-100 hover:bg-stone-200'}`}
+                    >
+                      <span className={`text-2xl sm:text-3xl font-bold ${theme.textSecondary}`}>{kioskStats?.visitorsExitedToday ?? 0}</span>
+                      <span className={`text-xs font-medium block ${theme.textMuted}`}>Salieron</span>
+                    </button>
+                    <button
+                      onClick={() => { setDailyLogFilter('all'); openDailyLog() }}
+                      className={`rounded-xl p-3 text-center transition-all ${kioskTheme === 'dark' ? 'bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20' : 'bg-orange-50 hover:bg-orange-100 border border-orange-200'}`}
+                    >
+                      <span className="text-2xl sm:text-3xl font-bold text-orange-500">{kioskStats?.totalVisitorsToday ?? 0}</span>
+                      <span className={`text-xs font-medium block ${theme.textSecondary}`}>Total</span>
+                    </button>
+                  </div>
+                </motion.div>
 
-                {/* Section: Orders & Validation */}
-                <div className="flex items-center gap-2 mb-2">
-                  <FileText className="w-4 h-4 text-orange-400" />
-                  <span className={`text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Validación de Facturas</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {/* Orders created */}
-                  <div className={`rounded-xl p-2.5 text-center ${kioskTheme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'}`}>
-                    <p className="text-xl sm:text-2xl font-bold text-blue-400">
-                      {kioskStats?.ordersCreatedToday ?? '-'}
-                    </p>
-                    <p className={`text-[10px] font-medium ${theme.textSecondary}`}>Órdenes Hoy</p>
-                  </div>
-                  {/* Validated */}
-                  <div className={`rounded-xl p-2.5 text-center ${kioskTheme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50'}`}>
-                    <p className="text-xl sm:text-2xl font-bold text-emerald-400">
-                      {kioskStats?.ordersValidatedToday ?? '-'}
-                    </p>
-                    <p className={`text-[10px] font-medium ${theme.textSecondary}`}>Validadas</p>
+                {/* Orders Section */}
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className={`rounded-2xl p-4 ${kioskTheme === 'dark' ? 'bg-gradient-to-br from-stone-800/80 to-stone-800/40' : 'bg-gradient-to-br from-stone-50 to-white'} border ${kioskTheme === 'dark' ? 'border-stone-700/50' : 'border-stone-200'}`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${kioskTheme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
+                        <FileText className="w-4 h-4 text-blue-500" />
+                      </div>
+                      <span className={`text-sm font-semibold ${theme.text}`}>Órdenes del Día</span>
+                    </div>
                     {kioskStats && kioskStats.ordersCreatedToday > 0 && (
-                      <p className="text-[9px] text-emerald-400 font-bold">{kioskStats.validationRate}%</p>
+                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${kioskStats.validationRate >= 80 ? 'bg-green-500/20 text-green-500' : kioskStats.validationRate >= 50 ? 'bg-yellow-500/20 text-yellow-500' : 'bg-red-500/20 text-red-500'}`}>
+                        {kioskStats.validationRate}% validado
+                      </span>
                     )}
                   </div>
-                  {/* Without validation - Alert style if > 0 */}
-                  <div className={`rounded-xl p-2.5 text-center ${
-                    (kioskStats?.exitsWithoutValidation ?? 0) > 0
-                      ? kioskTheme === 'dark' ? 'bg-red-900/30 border border-red-500/30' : 'bg-red-50 border border-red-200'
-                      : kioskTheme === 'dark' ? 'bg-stone-800/80' : 'bg-stone-100'
-                  }`}>
-                    <p className={`text-xl sm:text-2xl font-bold ${(kioskStats?.exitsWithoutValidation ?? 0) > 0 ? 'text-red-400' : theme.textSecondary}`}>
-                      {kioskStats?.exitsWithoutValidation ?? '-'}
-                    </p>
-                    <p className={`text-[10px] font-medium ${(kioskStats?.exitsWithoutValidation ?? 0) > 0 ? 'text-red-400' : theme.textSecondary}`}>
-                      Sin Validar
-                    </p>
-                    {(kioskStats?.exitsWithoutValidation ?? 0) > 0 && (
-                      <AlertTriangle className="w-3 h-3 text-red-400 mx-auto mt-0.5" />
-                    )}
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div className={`rounded-xl p-3 text-center ${kioskTheme === 'dark' ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-blue-50 border border-blue-200'}`}>
+                      <span className="text-2xl sm:text-3xl font-bold text-blue-500">{kioskStats?.breakdown?.posOrders ?? 0}</span>
+                      <span className={`text-xs font-medium block ${theme.textSecondary}`}>POS</span>
+                    </div>
+                    <div className={`rounded-xl p-3 text-center ${kioskTheme === 'dark' ? 'bg-purple-500/10 border border-purple-500/20' : 'bg-purple-50 border border-purple-200'}`}>
+                      <span className="text-2xl sm:text-3xl font-bold text-purple-500">{kioskStats?.breakdown?.wholesaleInvoices ?? 0}</span>
+                      <span className={`text-xs font-medium block ${theme.textSecondary}`}>Mayoreo</span>
+                    </div>
                   </div>
-                </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className={`rounded-xl p-3 text-center ${kioskTheme === 'dark' ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-emerald-50 border border-emerald-200'}`}>
+                      <span className="text-2xl sm:text-3xl font-bold text-emerald-500">{kioskStats?.ordersValidatedToday ?? 0}</span>
+                      <span className={`text-xs font-medium block ${theme.textSecondary}`}>Validadas</span>
+                    </div>
+                    <div className={`rounded-xl p-3 text-center ${
+                      (kioskStats?.exitsWithoutValidation ?? 0) > 0
+                        ? kioskTheme === 'dark' ? 'bg-red-500/20 border-2 border-red-500/50' : 'bg-red-50 border-2 border-red-300'
+                        : kioskTheme === 'dark' ? 'bg-stone-700/50' : 'bg-stone-100'
+                    }`}>
+                      <div className="flex items-center justify-center gap-1">
+                        <span className={`text-2xl sm:text-3xl font-bold ${(kioskStats?.exitsWithoutValidation ?? 0) > 0 ? 'text-red-500' : theme.textSecondary}`}>
+                          {kioskStats?.exitsWithoutValidation ?? 0}
+                        </span>
+                        {(kioskStats?.exitsWithoutValidation ?? 0) > 0 && (
+                          <AlertTriangle className="w-5 h-5 text-red-500" />
+                        )}
+                      </div>
+                      <span className={`text-xs font-medium block ${(kioskStats?.exitsWithoutValidation ?? 0) > 0 ? 'text-red-500' : theme.textSecondary}`}>Sin Validar</span>
+                    </div>
+                  </div>
+                </motion.div>
               </div>
 
               {/* Main Action: Scan Document */}
               <motion.button
-                whileHover={{ scale: 1.02 }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                whileHover={{ scale: 1.02, y: -2 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setStep('scan_id')}
-                className="w-full flex items-center justify-center gap-3 py-4 sm:py-5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl sm:rounded-2xl font-bold transition-all shadow-lg shadow-orange-500/30 mb-3"
+                className="w-full flex items-center justify-center gap-4 py-5 sm:py-6 bg-gradient-to-r from-orange-500 via-orange-500 to-orange-600 text-white rounded-2xl font-bold transition-all shadow-xl shadow-orange-500/30 hover:shadow-orange-500/50 mb-4"
               >
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <Camera className="w-5 h-5 sm:w-6 sm:h-6" />
-                </div>
+                <motion.div
+                  animate={{ rotate: [0, -10, 10, -10, 0] }}
+                  transition={{ repeat: Infinity, duration: 2, repeatDelay: 3 }}
+                  className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center"
+                >
+                  <Camera className="w-7 h-7" />
+                </motion.div>
                 <div className="text-left">
-                  <span className="text-base sm:text-lg block">Escanear Documento</span>
-                  <span className="text-xs sm:text-sm font-normal opacity-80">
-                    Entrada o salida automática
+                  <span className="text-lg sm:text-xl block">Escanear Documento</span>
+                  <span className="text-sm font-normal opacity-80">
+                    Detecta entrada o salida automáticamente
                   </span>
                 </div>
               </motion.button>
 
               {/* Secondary Action: View History */}
-              <button
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5 }}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
                 onClick={openDailyLog}
-                className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm transition-all ${
+                className={`w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-medium transition-all ${
                   kioskTheme === 'dark'
-                    ? 'bg-stone-800 hover:bg-stone-700 text-stone-300'
-                    : 'bg-stone-100 hover:bg-stone-200 text-stone-600'
+                    ? 'bg-stone-800/80 hover:bg-stone-700/80 text-stone-200 border border-stone-700'
+                    : 'bg-white hover:bg-stone-50 text-stone-700 border border-stone-200 shadow-sm'
                 }`}
               >
-                <ClipboardList className="w-4 h-4" />
-                Ver Historial Completo
-              </button>
+                <ClipboardList className="w-5 h-5" />
+                <span>Ver Historial del Día</span>
+                <span className={`ml-auto px-2 py-0.5 rounded-full text-xs font-bold ${kioskTheme === 'dark' ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-600'}`}>
+                  {kioskStats?.totalVisitorsToday ?? 0}
+                </span>
+              </motion.button>
             </motion.div>
           )}
 
@@ -3163,7 +3192,7 @@ export default function DoorKioskPage() {
             </motion.div>
           )}
 
-          {/* Daily Log - Registro del Día - REDISEÑADO */}
+          {/* Daily Log - Registro del Día - VISTA DE TABLA */}
           {step === 'daily_log' && (() => {
             const insideLogs = dailyLogs.filter(l => l.status === 'active')
             const exitedLogs = dailyLogs.filter(l => l.status === 'completed')
@@ -3199,251 +3228,647 @@ export default function DoorKioskPage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="p-3 sm:p-4 flex flex-col h-full max-h-[85vh]"
+                className="p-4 sm:p-6 flex flex-col h-full"
+                style={{ maxHeight: 'calc(100vh - 120px)' }}
               >
-                {/* Header compacto */}
-                <div className="flex items-center justify-between mb-3">
-                  <button
+                {/* Header con navegación */}
+                <div className="flex items-center justify-between mb-4">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={() => {
                       setStep('idle')
                       setDailyLogFilter('all')
                       setDailyLogSearch('')
                     }}
-                    className={`flex items-center gap-1 text-sm font-medium ${theme.textSecondary} hover:text-orange-400 transition-colors`}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${
+                      kioskTheme === 'dark'
+                        ? 'bg-stone-800 hover:bg-stone-700 text-stone-200'
+                        : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
+                    }`}
                   >
                     <ArrowLeft className="w-4 h-4" />
-                    <span className="hidden sm:inline">Volver</span>
-                  </button>
+                    Volver
+                  </motion.button>
 
-                  <h2 className={`text-base sm:text-lg font-bold ${theme.text} flex items-center gap-2`}>
-                    <ClipboardList className="w-5 h-5 text-orange-400" />
-                    Historial
-                  </h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className={`text-lg sm:text-xl font-bold ${theme.text} flex items-center gap-2`}>
+                      <ClipboardList className="w-5 h-5 text-orange-400" />
+                      Historial del Día
+                    </h2>
+                  </div>
 
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.1, rotate: 180 }}
+                    whileTap={{ scale: 0.9 }}
                     onClick={() => fetchDailyLog()}
                     disabled={loadingDailyLog}
-                    className="flex items-center gap-1 text-sm font-medium text-orange-400 hover:text-orange-300 transition-colors"
+                    className={`p-2.5 rounded-xl transition-all ${
+                      kioskTheme === 'dark'
+                        ? 'bg-stone-800 hover:bg-stone-700'
+                        : 'bg-stone-100 hover:bg-stone-200'
+                    }`}
                   >
-                    <RefreshCw className={`w-4 h-4 ${loadingDailyLog ? 'animate-spin' : ''}`} />
-                  </button>
+                    <RefreshCw className={`w-5 h-5 text-orange-400 ${loadingDailyLog ? 'animate-spin' : ''}`} />
+                  </motion.button>
                 </div>
 
                 {/* Fecha */}
-                <p className={`text-xs ${theme.textSecondary} text-center mb-3`}>
-                  {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+                <p className={`text-sm ${theme.textSecondary} text-center mb-4`}>
+                  {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>
 
                 {/* Stats en una fila */}
-                <div className="grid grid-cols-3 gap-2 mb-3">
-                  <button
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => setDailyLogFilter('all')}
-                    className={`rounded-xl p-2 text-center transition-all ${
+                    className={`rounded-2xl p-3 text-center transition-all ${
                       dailyLogFilter === 'all'
-                        ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30'
-                        : kioskTheme === 'dark' ? 'bg-stone-800/80 hover:bg-stone-700/80' : 'bg-stone-100 hover:bg-stone-200'
+                        ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/30'
+                        : kioskTheme === 'dark' ? 'bg-stone-800/80 hover:bg-stone-700/80' : 'bg-white hover:bg-stone-50 border border-stone-200'
                     }`}
                   >
-                    <p className={`text-xl sm:text-2xl font-bold ${dailyLogFilter === 'all' ? 'text-white' : 'text-orange-400'}`}>
+                    <p className={`text-2xl sm:text-3xl font-bold ${dailyLogFilter === 'all' ? 'text-white' : 'text-orange-500'}`}>
                       {dailyLogs.length}
                     </p>
-                    <p className={`text-[10px] font-medium ${dailyLogFilter === 'all' ? 'text-orange-100' : theme.textSecondary}`}>
-                      Total
+                    <p className={`text-xs font-semibold ${dailyLogFilter === 'all' ? 'text-orange-100' : theme.textSecondary}`}>
+                      Todos
                     </p>
-                  </button>
+                  </motion.button>
 
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => setDailyLogFilter('inside')}
-                    className={`rounded-xl p-2 text-center transition-all ${
+                    className={`rounded-2xl p-3 text-center transition-all ${
                       dailyLogFilter === 'inside'
-                        ? 'bg-green-500 text-white shadow-lg shadow-green-500/30'
-                        : kioskTheme === 'dark' ? 'bg-green-900/30 hover:bg-green-900/50' : 'bg-green-50 hover:bg-green-100'
+                        ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg shadow-green-500/30'
+                        : kioskTheme === 'dark' ? 'bg-green-900/20 hover:bg-green-900/30 border border-green-500/30' : 'bg-green-50 hover:bg-green-100 border border-green-200'
                     }`}
                   >
-                    <p className={`text-xl sm:text-2xl font-bold ${dailyLogFilter === 'inside' ? 'text-white' : 'text-green-400'}`}>
-                      {insideLogs.length}
-                    </p>
-                    <p className={`text-[10px] font-medium ${dailyLogFilter === 'inside' ? 'text-green-100' : theme.textSecondary}`}>
+                    <div className="flex items-center justify-center gap-1.5">
+                      {dailyLogFilter !== 'inside' && <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />}
+                      <p className={`text-2xl sm:text-3xl font-bold ${dailyLogFilter === 'inside' ? 'text-white' : 'text-green-500'}`}>
+                        {insideLogs.length}
+                      </p>
+                    </div>
+                    <p className={`text-xs font-semibold ${dailyLogFilter === 'inside' ? 'text-green-100' : theme.textSecondary}`}>
                       Adentro
                     </p>
-                  </button>
+                  </motion.button>
 
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => setDailyLogFilter('exited')}
-                    className={`rounded-xl p-2 text-center transition-all ${
+                    className={`rounded-2xl p-3 text-center transition-all ${
                       dailyLogFilter === 'exited'
-                        ? 'bg-stone-500 text-white shadow-lg shadow-stone-500/30'
+                        ? 'bg-gradient-to-br from-stone-500 to-stone-600 text-white shadow-lg shadow-stone-500/30'
                         : kioskTheme === 'dark' ? 'bg-stone-800/80 hover:bg-stone-700/80' : 'bg-stone-100 hover:bg-stone-200'
                     }`}
                   >
-                    <p className={`text-xl sm:text-2xl font-bold ${dailyLogFilter === 'exited' ? 'text-white' : theme.textSecondary}`}>
+                    <p className={`text-2xl sm:text-3xl font-bold ${dailyLogFilter === 'exited' ? 'text-white' : theme.textSecondary}`}>
                       {exitedLogs.length}
                     </p>
-                    <p className={`text-[10px] font-medium ${dailyLogFilter === 'exited' ? 'text-stone-200' : theme.textSecondary}`}>
+                    <p className={`text-xs font-semibold ${dailyLogFilter === 'exited' ? 'text-stone-200' : theme.textSecondary}`}>
                       Salieron
                     </p>
-                  </button>
+                  </motion.button>
                 </div>
 
                 {/* Buscador */}
-                <div className="relative mb-3">
+                <div className="relative mb-4">
                   <input
                     type="text"
                     value={dailyLogSearch}
                     onChange={(e) => setDailyLogSearch(e.target.value)}
-                    placeholder="Buscar por nombre o cédula..."
-                    className={`w-full px-3 py-2 pl-9 rounded-xl text-sm ${
+                    placeholder="Buscar por nombre, cédula o motivo..."
+                    className={`w-full px-4 py-3 pl-11 rounded-xl text-sm ${
                       kioskTheme === 'dark'
                         ? 'bg-stone-800 text-white placeholder-stone-500 border-stone-700'
                         : 'bg-white text-stone-900 placeholder-stone-400 border-stone-200'
-                    } border focus:outline-none focus:ring-2 focus:ring-orange-500/50`}
+                    } border-2 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50`}
                   />
-                  <User className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${theme.textMuted}`} />
+                  <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 ${theme.textMuted}`} />
                   {dailyLogSearch && (
                     <button
                       onClick={() => setDailyLogSearch('')}
-                      className={`absolute right-3 top-1/2 -translate-y-1/2 ${theme.textMuted} hover:text-orange-400`}
+                      className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg ${theme.textMuted} hover:text-orange-400 hover:bg-orange-500/10`}
                     >
-                      <XCircle className="w-4 h-4" />
+                      <XCircle className="w-5 h-5" />
                     </button>
                   )}
                 </div>
 
-                {/* Lista de registros */}
-                <div className="flex-1 overflow-y-auto min-h-0">
+                {/* Tabla de registros */}
+                <div className="flex-1 overflow-hidden rounded-2xl border ${kioskTheme === 'dark' ? 'border-stone-700' : 'border-stone-200'}">
                   {loadingDailyLog ? (
-                    <div className="flex flex-col items-center justify-center py-12">
-                      <RefreshCw className="w-8 h-8 text-orange-400 animate-spin mb-3" />
-                      <p className={`${theme.textSecondary} text-sm`}>Cargando registros...</p>
+                    <div className="flex flex-col items-center justify-center h-full py-16">
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                      >
+                        <RefreshCw className="w-10 h-10 text-orange-400" />
+                      </motion.div>
+                      <p className={`${theme.textSecondary} text-sm mt-4`}>Cargando registros...</p>
                     </div>
                   ) : filteredLogs.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12">
-                      <ClipboardList className={`w-12 h-12 ${theme.textMuted} mb-3`} />
-                      <p className={`${theme.textSecondary} text-sm font-medium`}>
-                        {dailyLogSearch ? 'Sin resultados' : dailyLogFilter === 'inside' ? 'Nadie adentro' : dailyLogFilter === 'exited' ? 'Sin salidas' : 'Sin registros hoy'}
+                    <div className="flex flex-col items-center justify-center h-full py-16">
+                      <ClipboardList className={`w-16 h-16 ${theme.textMuted} mb-4`} />
+                      <p className={`${theme.text} text-lg font-medium mb-1`}>
+                        {dailyLogSearch ? 'Sin resultados' : dailyLogFilter === 'inside' ? 'Nadie adentro' : dailyLogFilter === 'exited' ? 'Sin salidas registradas' : 'Sin registros hoy'}
+                      </p>
+                      <p className={`${theme.textMuted} text-sm`}>
+                        {dailyLogSearch ? 'Intenta con otra búsqueda' : 'Los registros aparecerán aquí'}
                       </p>
                       {dailyLogSearch && (
                         <button
                           onClick={() => setDailyLogSearch('')}
-                          className="mt-2 text-xs text-orange-400 hover:text-orange-300"
+                          className="mt-4 px-4 py-2 text-sm font-medium text-orange-400 hover:text-orange-300 bg-orange-500/10 hover:bg-orange-500/20 rounded-xl transition-colors"
                         >
                           Limpiar búsqueda
                         </button>
                       )}
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      {filteredLogs.map(log => {
-                        const isInside = log.status === 'active'
-                        const entryDate = new Date(log.entryTime)
-                        const exitDate = log.exitTime ? new Date(log.exitTime) : null
+                    <div className="h-full overflow-auto">
+                      {/* Tabla Header */}
+                      <div className={`sticky top-0 z-10 grid grid-cols-12 gap-2 px-4 py-3 text-xs font-bold uppercase tracking-wider ${
+                        kioskTheme === 'dark'
+                          ? 'bg-stone-800 text-stone-400 border-b border-stone-700'
+                          : 'bg-stone-100 text-stone-500 border-b border-stone-200'
+                      }`}>
+                        <div className="col-span-1 text-center">#</div>
+                        <div className="col-span-3">Visitante</div>
+                        <div className="col-span-2">Documento</div>
+                        <div className="col-span-2 text-center">Entrada</div>
+                        <div className="col-span-2 text-center">Salida</div>
+                        <div className="col-span-1 text-center">Estado</div>
+                        <div className="col-span-1 text-center">Ver</div>
+                      </div>
 
-                        // Calculate duration
-                        const endTime = isInside ? new Date() : exitDate
-                        let duration = ''
-                        if (endTime) {
-                          const diffMs = endTime.getTime() - entryDate.getTime()
-                          const diffMins = Math.floor(diffMs / 60000)
-                          const hours = Math.floor(diffMins / 60)
-                          const mins = diffMins % 60
-                          duration = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
-                        }
+                      {/* Tabla Body */}
+                      <div className="divide-y divide-stone-200 dark:divide-stone-700">
+                        {filteredLogs.map((log, index) => {
+                          const isInside = log.status === 'active'
+                          const entryDate = new Date(log.entryTime)
+                          const exitDate = log.exitTime ? new Date(log.exitTime) : null
 
-                        return (
-                          <div
-                            key={log.id}
-                            className={`rounded-xl p-3 border transition-all ${
-                              isInside
-                                ? kioskTheme === 'dark'
-                                  ? 'bg-gradient-to-r from-green-900/30 to-green-900/10 border-green-500/50'
-                                  : 'bg-gradient-to-r from-green-50 to-green-100/50 border-green-300'
-                                : kioskTheme === 'dark'
-                                  ? 'bg-stone-800/50 border-stone-700/50'
-                                  : 'bg-white border-stone-200'
-                            }`}
-                          >
-                            {/* Row 1: Name + Status */}
-                            <div className="flex items-start justify-between gap-2 mb-1.5">
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                {isInside && (
-                                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
-                                )}
-                                <p className={`text-sm font-bold ${theme.text} truncate`}>
-                                  {log.visitorName}
-                                </p>
-                              </div>
-                              <div className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          // Calculate duration
+                          const endTime = isInside ? new Date() : exitDate
+                          let duration = ''
+                          if (endTime) {
+                            const diffMs = endTime.getTime() - entryDate.getTime()
+                            const diffMins = Math.floor(diffMs / 60000)
+                            const hours = Math.floor(diffMins / 60)
+                            const mins = diffMins % 60
+                            duration = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
+                          }
+
+                          return (
+                            <motion.div
+                              key={log.id}
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: index * 0.02 }}
+                              className={`grid grid-cols-12 gap-2 px-4 py-3 items-center cursor-pointer transition-all ${
                                 isInside
-                                  ? 'bg-green-500 text-white'
-                                  : kioskTheme === 'dark' ? 'bg-stone-600 text-stone-300' : 'bg-stone-200 text-stone-600'
-                              }`}>
-                                {isInside ? 'ADENTRO' : 'SALIÓ'}
+                                  ? kioskTheme === 'dark'
+                                    ? 'bg-green-500/5 hover:bg-green-500/10'
+                                    : 'bg-green-50/50 hover:bg-green-50'
+                                  : kioskTheme === 'dark'
+                                    ? 'hover:bg-stone-800/50'
+                                    : 'hover:bg-stone-50'
+                              }`}
+                              onClick={() => {
+                                setSelectedLog(log)
+                                setStep('log_detail')
+                              }}
+                            >
+                              {/* # */}
+                              <div className={`col-span-1 text-center text-sm font-medium ${theme.textMuted}`}>
+                                {index + 1}
                               </div>
-                            </div>
 
-                            {/* Row 2: ID + Purpose */}
-                            <div className="flex items-center justify-between gap-2 mb-1.5">
-                              <p className={`text-xs ${theme.textMuted}`}>
-                                {log.visitorIdNumber}
-                              </p>
-                              {log.visitPurpose && (
-                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                                  kioskTheme === 'dark'
-                                    ? 'bg-orange-500/20 text-orange-300'
-                                    : 'bg-orange-100 text-orange-600'
-                                }`}>
-                                  {log.visitPurpose}
-                                </span>
-                              )}
-                            </div>
+                              {/* Visitante */}
+                              <div className="col-span-3 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  {isInside && (
+                                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
+                                  )}
+                                  <div className="min-w-0">
+                                    <p className={`text-sm font-semibold ${theme.text} truncate`}>
+                                      {log.visitorName}
+                                    </p>
+                                    {log.visitPurpose && (
+                                      <p className={`text-xs ${theme.textMuted} truncate`}>
+                                        {log.visitPurpose}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
 
-                            {/* Row 3: Times */}
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-3">
-                                <div className="flex items-center gap-1">
-                                  <LogIn className="w-3 h-3 text-green-400" />
-                                  <span className={`text-xs font-medium ${theme.textSecondary}`}>
+                              {/* Documento */}
+                              <div className="col-span-2">
+                                <p className={`text-xs font-mono ${theme.textSecondary}`}>
+                                  {log.visitorIdNumber}
+                                </p>
+                                {log.visitorIdType && (
+                                  <p className={`text-[10px] ${theme.textMuted} uppercase`}>
+                                    {log.visitorIdType}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Entrada */}
+                              <div className="col-span-2 text-center">
+                                <div className="flex items-center justify-center gap-1">
+                                  <LogIn className="w-3.5 h-3.5 text-green-500" />
+                                  <span className={`text-sm font-medium ${theme.text}`}>
                                     {entryDate.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
                                   </span>
                                 </div>
-                                {exitDate && (
-                                  <div className="flex items-center gap-1">
-                                    <LogOut className="w-3 h-3 text-red-400" />
-                                    <span className={`text-xs font-medium ${theme.textSecondary}`}>
+                              </div>
+
+                              {/* Salida */}
+                              <div className="col-span-2 text-center">
+                                {exitDate ? (
+                                  <div className="flex items-center justify-center gap-1">
+                                    <LogOut className="w-3.5 h-3.5 text-red-400" />
+                                    <span className={`text-sm font-medium ${theme.text}`}>
                                       {exitDate.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
                                     </span>
                                   </div>
+                                ) : (
+                                  <span className={`text-xs font-medium ${theme.textMuted}`}>—</span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-1">
-                                <Clock className="w-3 h-3 text-orange-400" />
-                                <span className={`text-xs font-bold ${isInside ? 'text-green-400' : theme.textSecondary}`}>
-                                  {duration}
+
+                              {/* Estado */}
+                              <div className="col-span-1 flex justify-center">
+                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
+                                  isInside
+                                    ? 'bg-green-500/20 text-green-500'
+                                    : kioskTheme === 'dark' ? 'bg-stone-700 text-stone-300' : 'bg-stone-200 text-stone-600'
+                                }`}>
+                                  {isInside ? (
+                                    <>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                                      {duration}
+                                    </>
+                                  ) : (
+                                    duration
+                                  )}
                                 </span>
                               </div>
-                            </div>
 
-                            {/* Optional: Notes */}
-                            {log.visitNotes && (
-                              <p className={`text-[10px] ${theme.textMuted} mt-1.5 italic truncate`}>
-                                "{log.visitNotes}"
-                              </p>
-                            )}
-                          </div>
-                        )
-                      })}
+                              {/* Ver */}
+                              <div className="col-span-1 flex justify-center">
+                                <motion.button
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  className={`p-2 rounded-lg transition-colors ${
+                                    kioskTheme === 'dark'
+                                      ? 'hover:bg-orange-500/20 text-orange-400'
+                                      : 'hover:bg-orange-100 text-orange-500'
+                                  }`}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setSelectedLog(log)
+                                    setStep('log_detail')
+                                  }}
+                                >
+                                  <FileText className="w-4 h-4" />
+                                </motion.button>
+                              </div>
+                            </motion.div>
+                          )
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
 
                 {/* Footer con conteo */}
                 {!loadingDailyLog && filteredLogs.length > 0 && (
-                  <div className={`mt-3 pt-2 border-t ${kioskTheme === 'dark' ? 'border-stone-700' : 'border-stone-200'}`}>
-                    <p className={`text-xs text-center ${theme.textMuted}`}>
-                      Mostrando {filteredLogs.length} de {dailyLogs.length} registros
+                  <div className={`mt-4 pt-3 border-t flex items-center justify-between ${kioskTheme === 'dark' ? 'border-stone-700' : 'border-stone-200'}`}>
+                    <p className={`text-sm ${theme.textMuted}`}>
+                      Mostrando <span className="font-semibold text-orange-500">{filteredLogs.length}</span> de <span className="font-semibold">{dailyLogs.length}</span> registros
                     </p>
+                    <div className="flex items-center gap-2">
+                      <Clock className={`w-4 h-4 ${theme.textMuted}`} />
+                      <span className={`text-xs ${theme.textMuted}`}>
+                        Actualizado: {new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
                   </div>
                 )}
+              </motion.div>
+            )
+          })()}
+
+          {/* Log Detail - Vista de Detalle del Registro */}
+          {step === 'log_detail' && selectedLog && (() => {
+            const log = selectedLog
+            const isInside = log.status === 'active'
+            const entryDate = new Date(log.entryTime)
+            const exitDate = log.exitTime ? new Date(log.exitTime) : null
+
+            // Calculate duration
+            const endTime = isInside ? new Date() : exitDate
+            let duration = ''
+            let durationMins = 0
+            if (endTime) {
+              const diffMs = endTime.getTime() - entryDate.getTime()
+              durationMins = Math.floor(diffMs / 60000)
+              const hours = Math.floor(durationMins / 60)
+              const mins = durationMins % 60
+              duration = hours > 0 ? `${hours}h ${mins}m` : `${mins} minutos`
+            }
+
+            return (
+              <motion.div
+                key="log_detail"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="p-4 sm:p-6"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      setStep('daily_log')
+                      setSelectedLog(null)
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${
+                      kioskTheme === 'dark'
+                        ? 'bg-stone-800 hover:bg-stone-700 text-stone-200'
+                        : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
+                    }`}
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Volver
+                  </motion.button>
+
+                  <h2 className={`text-lg font-bold ${theme.text}`}>
+                    Detalle del Registro
+                  </h2>
+
+                  <div className="w-24" /> {/* Spacer */}
+                </div>
+
+                {/* Status Badge Grande */}
+                <div className="flex justify-center mb-6">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', bounce: 0.5 }}
+                    className={`inline-flex items-center gap-3 px-6 py-3 rounded-2xl text-lg font-bold ${
+                      isInside
+                        ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg shadow-green-500/30'
+                        : kioskTheme === 'dark'
+                          ? 'bg-stone-700 text-stone-200'
+                          : 'bg-stone-200 text-stone-700'
+                    }`}
+                  >
+                    {isInside ? (
+                      <>
+                        <span className="w-3 h-3 rounded-full bg-white animate-pulse" />
+                        ACTUALMENTE ADENTRO
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-5 h-5" />
+                        VISITA COMPLETADA
+                      </>
+                    )}
+                  </motion.div>
+                </div>
+
+                {/* Info Card */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className={`rounded-2xl p-6 mb-4 ${
+                    kioskTheme === 'dark'
+                      ? 'bg-gradient-to-br from-stone-800/80 to-stone-800/40 border border-stone-700'
+                      : 'bg-white border border-stone-200 shadow-lg'
+                  }`}
+                >
+                  {/* Visitante */}
+                  <div className="flex items-start gap-4 mb-6 pb-6 border-b border-stone-200 dark:border-stone-700">
+                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold ${
+                      kioskTheme === 'dark'
+                        ? 'bg-orange-500/20 text-orange-400'
+                        : 'bg-orange-100 text-orange-600'
+                    }`}>
+                      {log.visitorName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1">
+                      <h3 className={`text-xl font-bold ${theme.text} mb-1`}>
+                        {log.visitorName}
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <CreditCard className={`w-4 h-4 ${theme.textMuted}`} />
+                        <span className={`text-sm font-mono ${theme.textSecondary}`}>
+                          {log.visitorIdNumber}
+                        </span>
+                        {log.visitorIdType && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            kioskTheme === 'dark'
+                              ? 'bg-stone-700 text-stone-300'
+                              : 'bg-stone-100 text-stone-600'
+                          }`}>
+                            {log.visitorIdType}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Grid de Información */}
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Motivo de Visita */}
+                    <div className={`rounded-xl p-4 ${kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50'}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Package className={`w-4 h-4 ${theme.textMuted}`} />
+                        <span className={`text-xs font-semibold uppercase ${theme.textMuted}`}>Motivo</span>
+                      </div>
+                      <p className={`text-base font-medium ${theme.text}`}>
+                        {log.visitPurpose || 'No especificado'}
+                      </p>
+                    </div>
+
+                    {/* Duración */}
+                    <div className={`rounded-xl p-4 ${
+                      isInside
+                        ? kioskTheme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'
+                        : kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Clock className={`w-4 h-4 ${isInside ? 'text-green-500' : theme.textMuted}`} />
+                        <span className={`text-xs font-semibold uppercase ${isInside ? 'text-green-500' : theme.textMuted}`}>
+                          {isInside ? 'Tiempo adentro' : 'Duración'}
+                        </span>
+                      </div>
+                      <p className={`text-base font-bold ${isInside ? 'text-green-500' : theme.text}`}>
+                        {duration}
+                      </p>
+                    </div>
+
+                    {/* Hora Entrada */}
+                    <div className={`rounded-xl p-4 ${kioskTheme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <LogIn className="w-4 h-4 text-green-500" />
+                        <span className="text-xs font-semibold uppercase text-green-500">Entrada</span>
+                      </div>
+                      <p className={`text-base font-medium ${theme.text}`}>
+                        {entryDate.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                      </p>
+                      <p className={`text-xs ${theme.textMuted}`}>
+                        {entryDate.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}
+                      </p>
+                    </div>
+
+                    {/* Hora Salida */}
+                    <div className={`rounded-xl p-4 ${
+                      exitDate
+                        ? kioskTheme === 'dark' ? 'bg-red-900/20' : 'bg-red-50'
+                        : kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <LogOut className={`w-4 h-4 ${exitDate ? 'text-red-400' : theme.textMuted}`} />
+                        <span className={`text-xs font-semibold uppercase ${exitDate ? 'text-red-400' : theme.textMuted}`}>Salida</span>
+                      </div>
+                      {exitDate ? (
+                        <>
+                          <p className={`text-base font-medium ${theme.text}`}>
+                            {exitDate.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </p>
+                          <p className={`text-xs ${theme.textMuted}`}>
+                            {exitDate.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}
+                          </p>
+                        </>
+                      ) : (
+                        <p className={`text-base font-medium ${theme.textMuted}`}>
+                          Pendiente
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Notas */}
+                  {log.visitNotes && (
+                    <div className={`mt-4 rounded-xl p-4 ${kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50'}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <FileText className={`w-4 h-4 ${theme.textMuted}`} />
+                        <span className={`text-xs font-semibold uppercase ${theme.textMuted}`}>Notas</span>
+                      </div>
+                      <p className={`text-sm ${theme.textSecondary} italic`}>
+                        "{log.visitNotes}"
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Host */}
+                  {log.hostName && (
+                    <div className={`mt-4 rounded-xl p-4 ${kioskTheme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <User className="w-4 h-4 text-blue-500" />
+                        <span className="text-xs font-semibold uppercase text-blue-500">Anfitrión</span>
+                      </div>
+                      <p className={`text-base font-medium ${theme.text}`}>
+                        {log.hostName}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Validación de facturas */}
+                  {log.hasPendingInvoices !== undefined && (
+                    <div className={`mt-4 rounded-xl p-4 ${
+                      log.invoicesValidated
+                        ? kioskTheme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'
+                        : log.hasPendingInvoices
+                          ? kioskTheme === 'dark' ? 'bg-yellow-900/20' : 'bg-yellow-50'
+                          : kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        {log.invoicesValidated ? (
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                        ) : log.hasPendingInvoices ? (
+                          <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                        ) : (
+                          <FileText className={`w-4 h-4 ${theme.textMuted}`} />
+                        )}
+                        <span className={`text-xs font-semibold uppercase ${
+                          log.invoicesValidated
+                            ? 'text-green-500'
+                            : log.hasPendingInvoices
+                              ? 'text-yellow-500'
+                              : theme.textMuted
+                        }`}>
+                          Validación de Documentos
+                        </span>
+                      </div>
+                      <p className={`text-base font-medium ${theme.text}`}>
+                        {log.invoicesValidated
+                          ? 'Documentos validados en salida'
+                          : log.hasPendingInvoices
+                            ? 'Pendiente de validación'
+                            : 'Sin documentos para validar'}
+                      </p>
+                      {log.validatedAt && (
+                        <p className={`text-xs ${theme.textMuted} mt-1`}>
+                          Validado: {new Date(log.validatedAt).toLocaleString('es')}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </motion.div>
+
+                {/* Kiosk Info */}
+                {(log.kioskName || log.kioskLocation) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className={`rounded-2xl p-4 ${
+                      kioskTheme === 'dark'
+                        ? 'bg-stone-800/50 border border-stone-700'
+                        : 'bg-stone-50 border border-stone-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                        kioskTheme === 'dark' ? 'bg-stone-700' : 'bg-white'
+                      }`}>
+                        <MapPin className="w-5 h-5 text-orange-500" />
+                      </div>
+                      <div>
+                        <p className={`text-sm font-semibold ${theme.text}`}>
+                          {log.kioskName || 'Kiosk'}
+                        </p>
+                        {log.kioskLocation && (
+                          <p className={`text-xs ${theme.textMuted}`}>
+                            {log.kioskLocation}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* ID del registro */}
+                <p className={`text-xs text-center mt-4 ${theme.textMuted}`}>
+                  ID del registro: #{log.id}
+                </p>
               </motion.div>
             )
           })()}
