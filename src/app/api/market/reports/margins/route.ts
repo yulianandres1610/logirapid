@@ -12,8 +12,8 @@ interface JWTPayload {
 
 /**
  * GET /api/market/reports/margins
- * Returns margin analysis by product and category
- * Query params: startDate, endDate, categoryId
+ * Returns margin analysis by product and category using HISTORICAL lot costs
+ * Query params: startDate, endDate, categoryId, page, limit
  */
 export async function GET(request: NextRequest) {
   try {
@@ -38,100 +38,220 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate') || new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0]
     const endDate = searchParams.get('endDate') || new Date().toISOString().split('T')[0]
     const categoryId = searchParams.get('categoryId')
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '25')
+    const offset = (page - 1) * limit
 
-    // Margin by product (using actual sales data with FIFO cost)
+    // Combined query for POS + Wholesale using HISTORICAL cost_price from order lines
     const byProductResult = await db.query(`
-      WITH product_sales AS (
+      WITH pos_sales AS (
         SELECT
           ol.product_id,
           COALESCE(ol.product_name, p.name, 'Producto') as product_name,
-          p.category,
-          p.cost_price,
-          p.selling_price,
-          SUM(ol.quantity) as quantity_sold,
-          SUM(ol.total) as total_revenue,
-          SUM(ol.quantity * COALESCE(p.cost_price, 0)) as total_cost
+          COALESCE(p.category, 'Sin categoría') as category,
+          ol.lot_id,
+          ol.cost_price as historical_cost,
+          ol.is_consignment,
+          ol.quantity,
+          ol.total as revenue,
+          ol.quantity * COALESCE(ol.cost_price, 0) as total_cost
         FROM market_pos_order_lines ol
         JOIN market_pos_orders o ON ol.order_id = o.id
         LEFT JOIN market_products p ON ol.product_id = p.id
         WHERE o.company_id = $1
           AND o.status IN ('paid', 'completed')
           AND DATE(o.created_at) BETWEEN $2 AND $3
-        GROUP BY ol.product_id, ol.product_name, p.name, p.category, p.cost_price, p.selling_price
+      ),
+      wholesale_sales AS (
+        SELECT
+          il.product_id,
+          COALESCE(il.product_name, p.name, 'Producto') as product_name,
+          COALESCE(p.category, 'Sin categoría') as category,
+          NULL::integer as lot_id,
+          il.cost_price as historical_cost,
+          false as is_consignment,
+          il.quantity,
+          il.subtotal as revenue,
+          il.quantity * COALESCE(il.cost_price, 0) as total_cost
+        FROM market_invoice_lines il
+        JOIN market_wholesale_invoices i ON il.invoice_id = i.id
+        LEFT JOIN market_products p ON il.product_id = p.id
+        WHERE i.companyid = $1
+          AND i.status NOT IN ('cancelled', 'draft')
+          AND DATE(i.createdat) BETWEEN $2 AND $3
+      ),
+      combined AS (
+        SELECT * FROM pos_sales
+        UNION ALL
+        SELECT * FROM wholesale_sales
+      ),
+      aggregated AS (
+        SELECT
+          product_id,
+          product_name,
+          category,
+          SUM(quantity) as quantity_sold,
+          SUM(revenue) as total_revenue,
+          SUM(total_cost) as total_cost,
+          SUM(revenue) - SUM(total_cost) as gross_profit,
+          CASE WHEN SUM(revenue) > 0
+            THEN ((SUM(revenue) - SUM(total_cost)) / SUM(revenue)) * 100
+            ELSE 0
+          END as margin_percent,
+          COUNT(DISTINCT lot_id) FILTER (WHERE lot_id IS NOT NULL) as lot_count,
+          COUNT(*) FILTER (WHERE is_consignment = true) as consignment_sales,
+          COUNT(*) FILTER (WHERE is_consignment = false OR is_consignment IS NULL) as own_sales
+        FROM combined
+        WHERE product_id IS NOT NULL
+        GROUP BY product_id, product_name, category
+      )
+      SELECT *, COUNT(*) OVER() as total_count
+      FROM aggregated
+      ORDER BY gross_profit DESC
+      LIMIT $4 OFFSET $5
+    `, [companyId, startDate, endDate, limit, offset])
+
+    const totalCount = parseInt(byProductResult.rows[0]?.total_count || '0')
+    const totalPages = Math.ceil(totalCount / limit)
+
+    // Summary totals (without pagination)
+    const summaryResult = await db.query(`
+      WITH pos_sales AS (
+        SELECT
+          ol.quantity,
+          ol.total as revenue,
+          ol.quantity * COALESCE(ol.cost_price, 0) as total_cost
+        FROM market_pos_order_lines ol
+        JOIN market_pos_orders o ON ol.order_id = o.id
+        WHERE o.company_id = $1
+          AND o.status IN ('paid', 'completed')
+          AND DATE(o.created_at) BETWEEN $2 AND $3
+      ),
+      wholesale_sales AS (
+        SELECT
+          il.quantity,
+          il.subtotal as revenue,
+          il.quantity * COALESCE(il.cost_price, 0) as total_cost
+        FROM market_invoice_lines il
+        JOIN market_wholesale_invoices i ON il.invoice_id = i.id
+        WHERE i.companyid = $1
+          AND i.status NOT IN ('cancelled', 'draft')
+          AND DATE(i.createdat) BETWEEN $2 AND $3
+      ),
+      combined AS (
+        SELECT * FROM pos_sales
+        UNION ALL
+        SELECT * FROM wholesale_sales
       )
       SELECT
-        product_id,
-        product_name,
-        category,
-        cost_price,
-        selling_price,
-        quantity_sold,
-        total_revenue,
-        total_cost,
-        (total_revenue - total_cost) as gross_profit,
-        CASE WHEN total_revenue > 0
-          THEN ((total_revenue - total_cost) / total_revenue) * 100
-          ELSE 0
-        END as margin_percent
-      FROM product_sales
-      ORDER BY gross_profit DESC
+        SUM(revenue) as total_revenue,
+        SUM(total_cost) as total_cost,
+        SUM(revenue) - SUM(total_cost) as gross_profit
+      FROM combined
     `, [companyId, startDate, endDate])
 
-    // Summary totals
-    const totalRevenue = byProductResult.rows.reduce((sum, row) => sum + parseFloat(row.total_revenue || 0), 0)
-    const totalCost = byProductResult.rows.reduce((sum, row) => sum + parseFloat(row.total_cost || 0), 0)
+    const totalRevenue = parseFloat(summaryResult.rows[0]?.total_revenue || 0)
+    const totalCost = parseFloat(summaryResult.rows[0]?.total_cost || 0)
     const grossProfit = totalRevenue - totalCost
     const averageMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0
 
-    // Margin by category
+    // Margin by category using historical costs
     const byCategoryResult = await db.query(`
+      WITH pos_sales AS (
+        SELECT
+          COALESCE(p.category, 'Sin categoría') as category,
+          ol.product_id,
+          ol.total as revenue,
+          ol.quantity * COALESCE(ol.cost_price, 0) as total_cost
+        FROM market_pos_order_lines ol
+        JOIN market_pos_orders o ON ol.order_id = o.id
+        LEFT JOIN market_products p ON ol.product_id = p.id
+        WHERE o.company_id = $1
+          AND o.status IN ('paid', 'completed')
+          AND DATE(o.created_at) BETWEEN $2 AND $3
+      ),
+      wholesale_sales AS (
+        SELECT
+          COALESCE(p.category, 'Sin categoría') as category,
+          il.product_id,
+          il.subtotal as revenue,
+          il.quantity * COALESCE(il.cost_price, 0) as total_cost
+        FROM market_invoice_lines il
+        JOIN market_wholesale_invoices i ON il.invoice_id = i.id
+        LEFT JOIN market_products p ON il.product_id = p.id
+        WHERE i.companyid = $1
+          AND i.status NOT IN ('cancelled', 'draft')
+          AND DATE(i.createdat) BETWEEN $2 AND $3
+      ),
+      combined AS (
+        SELECT * FROM pos_sales
+        UNION ALL
+        SELECT * FROM wholesale_sales
+      )
       SELECT
-        COALESCE(p.category, 'Sin categoría') as category_name,
-        SUM(ol.total) as total_revenue,
-        SUM(ol.quantity * COALESCE(p.cost_price, 0)) as total_cost,
-        SUM(ol.total) - SUM(ol.quantity * COALESCE(p.cost_price, 0)) as gross_profit,
-        CASE WHEN SUM(ol.total) > 0
-          THEN ((SUM(ol.total) - SUM(ol.quantity * COALESCE(p.cost_price, 0))) / SUM(ol.total)) * 100
+        category as category_name,
+        SUM(revenue) as total_revenue,
+        SUM(total_cost) as total_cost,
+        SUM(revenue) - SUM(total_cost) as gross_profit,
+        CASE WHEN SUM(revenue) > 0
+          THEN ((SUM(revenue) - SUM(total_cost)) / SUM(revenue)) * 100
           ELSE 0
         END as margin_percent,
-        COUNT(DISTINCT ol.product_id) as product_count
-      FROM market_pos_order_lines ol
-      JOIN market_pos_orders o ON ol.order_id = o.id
-      LEFT JOIN market_products p ON ol.product_id = p.id
-      WHERE o.company_id = $1
-        AND o.status IN ('paid', 'completed')
-        AND DATE(o.created_at) BETWEEN $2 AND $3
-      GROUP BY p.category
+        COUNT(DISTINCT product_id) as product_count
+      FROM combined
+      GROUP BY category
       ORDER BY gross_profit DESC
     `, [companyId, startDate, endDate])
 
-    // Margin trend by month
+    // Margin trend by month using historical costs
     const trendResult = await db.query(`
+      WITH pos_sales AS (
+        SELECT
+          DATE_TRUNC('month', o.created_at) as month,
+          ol.total as revenue,
+          ol.quantity * COALESCE(ol.cost_price, 0) as cost
+        FROM market_pos_order_lines ol
+        JOIN market_pos_orders o ON ol.order_id = o.id
+        WHERE o.company_id = $1
+          AND o.status IN ('paid', 'completed')
+          AND o.created_at >= CURRENT_DATE - INTERVAL '12 months'
+      ),
+      wholesale_sales AS (
+        SELECT
+          DATE_TRUNC('month', i.createdat) as month,
+          il.subtotal as revenue,
+          il.quantity * COALESCE(il.cost_price, 0) as cost
+        FROM market_invoice_lines il
+        JOIN market_wholesale_invoices i ON il.invoice_id = i.id
+        WHERE i.companyid = $1
+          AND i.status NOT IN ('cancelled', 'draft')
+          AND i.createdat >= CURRENT_DATE - INTERVAL '12 months'
+      ),
+      combined AS (
+        SELECT * FROM pos_sales
+        UNION ALL
+        SELECT * FROM wholesale_sales
+      )
       SELECT
-        TO_CHAR(DATE_TRUNC('month', o.created_at), 'YYYY-MM') as month,
-        SUM(ol.total) as revenue,
-        SUM(ol.quantity * COALESCE(p.cost_price, 0)) as cost,
-        SUM(ol.total) - SUM(ol.quantity * COALESCE(p.cost_price, 0)) as profit,
-        CASE WHEN SUM(ol.total) > 0
-          THEN ((SUM(ol.total) - SUM(ol.quantity * COALESCE(p.cost_price, 0))) / SUM(ol.total)) * 100
+        TO_CHAR(month, 'YYYY-MM') as month,
+        SUM(revenue) as revenue,
+        SUM(cost) as cost,
+        SUM(revenue) - SUM(cost) as profit,
+        CASE WHEN SUM(revenue) > 0
+          THEN ((SUM(revenue) - SUM(cost)) / SUM(revenue)) * 100
           ELSE 0
         END as margin_percent
-      FROM market_pos_order_lines ol
-      JOIN market_pos_orders o ON ol.order_id = o.id
-      LEFT JOIN market_products p ON ol.product_id = p.id
-      WHERE o.company_id = $1
-        AND o.status IN ('paid', 'completed')
-        AND o.created_at >= CURRENT_DATE - INTERVAL '12 months'
-      GROUP BY DATE_TRUNC('month', o.created_at)
+      FROM combined
+      GROUP BY month
       ORDER BY month ASC
     `, [companyId])
 
-    // Low margin products (below 15%)
+    // Low margin products (below 15%) - from current page results
     const lowMarginProducts = byProductResult.rows.filter(row =>
       parseFloat(row.margin_percent) < 15 && parseFloat(row.quantity_sold) > 0
     )
 
-    // High margin products (above 40%)
+    // High margin products (above 40%) - from current page results
     const highMarginProducts = byProductResult.rows.filter(row =>
       parseFloat(row.margin_percent) > 40 && parseFloat(row.quantity_sold) > 0
     )
@@ -149,7 +269,7 @@ export async function GET(request: NextRequest) {
           totalCost,
           grossProfit,
           averageMargin: Math.round(averageMargin * 100) / 100,
-          productCount: byProductResult.rows.length,
+          productCount: totalCount,
           lowMarginCount: lowMarginProducts.length,
           highMarginCount: highMarginProducts.length
         },
@@ -157,14 +277,21 @@ export async function GET(request: NextRequest) {
           productId: row.product_id,
           productName: row.product_name,
           category: row.category || 'Sin categoría',
-          costPrice: parseFloat(row.cost_price) || 0,
-          sellingPrice: parseFloat(row.selling_price) || 0,
           quantitySold: parseFloat(row.quantity_sold) || 0,
           totalRevenue: parseFloat(row.total_revenue) || 0,
           totalCost: parseFloat(row.total_cost) || 0,
           grossProfit: parseFloat(row.gross_profit) || 0,
-          marginPercent: Math.round(parseFloat(row.margin_percent) * 100) / 100
+          marginPercent: Math.round(parseFloat(row.margin_percent) * 100) / 100,
+          lotCount: parseInt(row.lot_count) || 0,
+          consignmentSales: parseInt(row.consignment_sales) || 0,
+          ownSales: parseInt(row.own_sales) || 0
         })),
+        pagination: {
+          page,
+          limit,
+          total: totalCount,
+          totalPages
+        },
         byCategory: byCategoryResult.rows.map(row => ({
           categoryName: row.category_name,
           totalRevenue: parseFloat(row.total_revenue) || 0,
