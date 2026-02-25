@@ -74,11 +74,11 @@ export async function GET(request: NextRequest) {
           il.subtotal as revenue,
           il.quantity * COALESCE(il.cost_price, 0) as total_cost
         FROM market_invoice_lines il
-        JOIN market_wholesale_invoices i ON il.invoice_id = i.id
+        JOIN market_invoices i ON il.invoice_id = i.id
         LEFT JOIN market_products p ON il.product_id = p.id
-        WHERE i.companyid = $1
+        WHERE i.company_id = $1
           AND i.status NOT IN ('cancelled', 'draft')
-          AND DATE(i.createdat) BETWEEN $2 AND $3
+          AND DATE(i.created_at) BETWEEN $2 AND $3
       ),
       combined AS (
         SELECT * FROM pos_sales
@@ -133,10 +133,10 @@ export async function GET(request: NextRequest) {
           il.subtotal as revenue,
           il.quantity * COALESCE(il.cost_price, 0) as total_cost
         FROM market_invoice_lines il
-        JOIN market_wholesale_invoices i ON il.invoice_id = i.id
-        WHERE i.companyid = $1
+        JOIN market_invoices i ON il.invoice_id = i.id
+        WHERE i.company_id = $1
           AND i.status NOT IN ('cancelled', 'draft')
-          AND DATE(i.createdat) BETWEEN $2 AND $3
+          AND DATE(i.created_at) BETWEEN $2 AND $3
       ),
       combined AS (
         SELECT * FROM pos_sales
@@ -177,11 +177,11 @@ export async function GET(request: NextRequest) {
           il.subtotal as revenue,
           il.quantity * COALESCE(il.cost_price, 0) as total_cost
         FROM market_invoice_lines il
-        JOIN market_wholesale_invoices i ON il.invoice_id = i.id
+        JOIN market_invoices i ON il.invoice_id = i.id
         LEFT JOIN market_products p ON il.product_id = p.id
-        WHERE i.companyid = $1
+        WHERE i.company_id = $1
           AND i.status NOT IN ('cancelled', 'draft')
-          AND DATE(i.createdat) BETWEEN $2 AND $3
+          AND DATE(i.created_at) BETWEEN $2 AND $3
       ),
       combined AS (
         SELECT * FROM pos_sales
@@ -218,14 +218,14 @@ export async function GET(request: NextRequest) {
       ),
       wholesale_sales AS (
         SELECT
-          DATE_TRUNC('month', i.createdat) as month,
+          DATE_TRUNC('month', i.created_at) as month,
           il.subtotal as revenue,
           il.quantity * COALESCE(il.cost_price, 0) as cost
         FROM market_invoice_lines il
-        JOIN market_wholesale_invoices i ON il.invoice_id = i.id
-        WHERE i.companyid = $1
+        JOIN market_invoices i ON il.invoice_id = i.id
+        WHERE i.company_id = $1
           AND i.status NOT IN ('cancelled', 'draft')
-          AND i.createdat >= CURRENT_DATE - INTERVAL '12 months'
+          AND i.created_at >= CURRENT_DATE - INTERVAL '12 months'
       ),
       combined AS (
         SELECT * FROM pos_sales

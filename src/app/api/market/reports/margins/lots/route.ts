@@ -120,11 +120,11 @@ export async function GET(request: NextRequest) {
         'wholesale' as lot_source,
         NULL as supplier_name
       FROM market_invoice_lines il
-      JOIN market_wholesale_invoices i ON il.invoice_id = i.id
-      WHERE i.companyid = $1
+      JOIN market_invoices i ON il.invoice_id = i.id
+      WHERE i.company_id = $1
         AND il.product_id = $2
         AND i.status NOT IN ('cancelled', 'draft')
-        AND DATE(i.createdat) BETWEEN $3 AND $4
+        AND DATE(i.created_at) BETWEEN $3 AND $4
       GROUP BY il.cost_price, il.unit_price
     `, [companyId, productId, startDate, endDate])
 
