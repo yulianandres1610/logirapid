@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
             THEN ((SUM(revenue) - SUM(total_cost)) / SUM(revenue)) * 100
             ELSE 0
           END as margin_percent,
-          COUNT(DISTINCT lot_id) FILTER (WHERE lot_id IS NOT NULL) as lot_count,
+          COUNT(DISTINCT COALESCE(lot_id::text, historical_cost::text)) as lot_count,
           COUNT(*) FILTER (WHERE is_consignment = true) as consignment_sales,
           COUNT(*) FILTER (WHERE is_consignment = false OR is_consignment IS NULL) as own_sales
         FROM combined
