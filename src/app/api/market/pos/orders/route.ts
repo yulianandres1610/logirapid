@@ -857,6 +857,17 @@ export async function POST(request: NextRequest) {
         })
       }
 
+      // IMPORTANT: If no cost was obtained from FIFO lots, get it from the product
+      // This ensures margin calculations are always accurate
+      if (costPrice === null && productId) {
+        const productCostResult = await db.query(
+          'SELECT cost_price FROM market_products WHERE id = $1',
+          [productId]
+        )
+        costPrice = parseFloat(productCostResult.rows[0]?.cost_price) || 0
+        console.log('[POS Orders] Using product cost_price as fallback:', { productId, costPrice })
+      }
+
       // Insert order line with traceability fields
       const originalPrice = line.originalPrice ? parseFloat(line.originalPrice) : null
       await db.query(`
