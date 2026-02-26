@@ -26,24 +26,19 @@ interface ProductMargin {
   totalCost: number
   grossProfit: number
   marginPercent: number
-  lotCount: number
-  consignmentSales: number
-  ownSales: number
+  costVariationCount: number
 }
 
-interface LotDetail {
-  lotId: number | null
-  lotNumber: string
-  lotSource: 'consignment' | 'purchase' | 'production' | 'direct' | 'wholesale' | 'unknown'
-  isConsignment: boolean
-  supplierName: string | null
+interface CostVariation {
   unitCost: number
-  unitPrice: number
+  label: string
   quantity: number
   revenue: number
   cost: number
   profit: number
   marginPercent: number
+  orderCount: number
+  channel: 'POS' | 'Mayoreo'
 }
 
 interface Pagination {
@@ -86,13 +81,9 @@ interface MarginsData {
   }
 }
 
-const LOT_SOURCE_LABELS: Record<string, { label: string; color: string }> = {
-  consignment: { label: 'Consignacion', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
-  purchase: { label: 'Compra', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
-  production: { label: 'Produccion', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
-  direct: { label: 'Directo', color: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300' },
-  wholesale: { label: 'Mayoreo', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' },
-  unknown: { label: 'Otro', color: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400' }
+const CHANNEL_COLORS: Record<string, string> = {
+  'POS': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  'Mayoreo': 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300'
 }
 
 export default function MarginsReportPage() {
@@ -107,8 +98,8 @@ export default function MarginsReportPage() {
 
   // Expandable rows state
   const [expandedProducts, setExpandedProducts] = useState<Set<number>>(new Set())
-  const [productLots, setProductLots] = useState<Record<number, LotDetail[]>>({})
-  const [loadingLots, setLoadingLots] = useState<Set<number>>(new Set())
+  const [productCostVariations, setProductCostVariations] = useState<Record<number, CostVariation[]>>({})
+  const [loadingVariations, setLoadingVariations] = useState<Set<number>>(new Set())
 
   const [startDate, setStartDate] = useState(() => {
     const d = new Date()
@@ -144,11 +135,11 @@ export default function MarginsReportPage() {
     fetchData(page)
   }, [page, fetchData])
 
-  // Fetch lot details for a product (lazy loading)
-  const fetchLotDetails = async (productId: number) => {
-    if (productLots[productId]) return // Already loaded
+  // Fetch cost variations for a product (lazy loading)
+  const fetchCostVariations = async (productId: number) => {
+    if (productCostVariations[productId]) return // Already loaded
 
-    setLoadingLots(prev => new Set(prev).add(productId))
+    setLoadingVariations(prev => new Set(prev).add(productId))
     try {
       const params = new URLSearchParams({
         productId: productId.toString(),
@@ -158,12 +149,12 @@ export default function MarginsReportPage() {
       const response = await fetch(`/api/market/reports/margins/lots?${params}`)
       const result = await response.json()
       if (result.success) {
-        setProductLots(prev => ({ ...prev, [productId]: result.data.lots }))
+        setProductCostVariations(prev => ({ ...prev, [productId]: result.data.costVariations }))
       }
     } catch (error) {
-      console.error('Error fetching lot details:', error)
+      console.error('Error fetching cost variations:', error)
     } finally {
-      setLoadingLots(prev => {
+      setLoadingVariations(prev => {
         const newSet = new Set(prev)
         newSet.delete(productId)
         return newSet
@@ -171,8 +162,8 @@ export default function MarginsReportPage() {
     }
   }
 
-  const toggleExpand = (productId: number, lotCount: number) => {
-    if (lotCount === 0) return // No lots to show
+  const toggleExpand = (productId: number, variationCount: number) => {
+    if (variationCount === 0) return // No variations to show
 
     setExpandedProducts(prev => {
       const newSet = new Set(prev)
@@ -180,8 +171,8 @@ export default function MarginsReportPage() {
         newSet.delete(productId)
       } else {
         newSet.add(productId)
-        // Fetch lot details if not already loaded
-        fetchLotDetails(productId)
+        // Fetch cost variations if not already loaded
+        fetchCostVariations(productId)
       }
       return newSet
     })
@@ -189,7 +180,7 @@ export default function MarginsReportPage() {
 
   const handleDateChange = () => {
     setPage(1)
-    setProductLots({})
+    setProductCostVariations({})
     setExpandedProducts(new Set())
   }
 
@@ -320,18 +311,18 @@ export default function MarginsReportPage() {
                     <TableBody>
                       {data.byProduct.map((item) => {
                         const isExpanded = expandedProducts.has(item.productId)
-                        const isLoadingLot = loadingLots.has(item.productId)
-                        const lots = productLots[item.productId] || []
-                        const hasLots = item.lotCount > 0 || item.consignmentSales > 0 || item.ownSales > 0
+                        const isLoadingVariation = loadingVariations.has(item.productId)
+                        const variations = productCostVariations[item.productId] || []
+                        const hasVariations = item.costVariationCount > 1
 
                         return (
                           <React.Fragment key={item.productId}>
                             <TableRow
-                              onClick={() => toggleExpand(item.productId, hasLots ? 1 : 0)}
-                              className={`${hasLots ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50' : ''} transition-colors`}
+                              onClick={() => hasVariations ? toggleExpand(item.productId, item.costVariationCount) : null}
+                              className={`${hasVariations ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50' : ''} transition-colors`}
                             >
                               <TableCell className="w-8 p-2">
-                                {hasLots && (
+                                {hasVariations && (
                                   isExpanded
                                     ? <ChevronDown className="w-4 h-4 text-gray-400" />
                                     : <ChevronRight className="w-4 h-4 text-gray-400" />
@@ -340,10 +331,10 @@ export default function MarginsReportPage() {
                               <TableCell className="font-medium">
                                 <div className="flex items-center gap-2">
                                   {item.productName}
-                                  {hasLots && (
+                                  {hasVariations && (
                                     <span className="text-xs text-gray-400 flex items-center gap-1">
                                       <Package className="w-3 h-3" />
-                                      {item.lotCount > 0 ? `${item.lotCount} lotes` : 'Ver detalle'}
+                                      {item.costVariationCount} costos
                                     </span>
                                   )}
                                 </div>
@@ -358,7 +349,7 @@ export default function MarginsReportPage() {
                               </TableCell>
                             </TableRow>
 
-                            {/* Expanded lot details */}
+                            {/* Expanded cost variations */}
                             <AnimatePresence>
                               {isExpanded && (
                                 <TableRow>
@@ -372,57 +363,53 @@ export default function MarginsReportPage() {
                                     >
                                       <div className="bg-gray-50 dark:bg-gray-900/50 px-8 py-4 border-l-4 border-blue-500">
                                         <h4 className="text-sm font-semibold mb-3 text-gray-700 dark:text-gray-300">
-                                          Desglose por Lote / Origen
+                                          Desglose por Costo de Compra
                                         </h4>
-                                        {isLoadingLot ? (
+                                        {isLoadingVariation ? (
                                           <div className="flex items-center gap-2 text-gray-500 py-4">
                                             <Loader2 className="w-4 h-4 animate-spin" />
                                             Cargando detalles...
                                           </div>
-                                        ) : lots.length === 0 ? (
-                                          <p className="text-gray-500 text-sm py-2">No hay detalles de lotes disponibles</p>
+                                        ) : variations.length === 0 ? (
+                                          <p className="text-gray-500 text-sm py-2">No hay variaciones de costo disponibles</p>
                                         ) : (
                                           <Table>
                                             <TableHeader>
                                               <TableRow className="hover:bg-transparent">
-                                                <TableHead className="text-xs">Lote</TableHead>
-                                                <TableHead className="text-xs">Origen</TableHead>
-                                                <TableHead className="text-xs">Proveedor</TableHead>
-                                                <TableHead className="text-xs text-right">Costo Unit.</TableHead>
-                                                <TableHead className="text-xs text-right">Precio Unit.</TableHead>
+                                                <TableHead className="text-xs">Costo Unit.</TableHead>
+                                                <TableHead className="text-xs">Canal</TableHead>
                                                 <TableHead className="text-xs text-right">Cantidad</TableHead>
+                                                <TableHead className="text-xs text-right">Ingresos</TableHead>
+                                                <TableHead className="text-xs text-right">Costo Total</TableHead>
                                                 <TableHead className="text-xs text-right">Ganancia</TableHead>
                                                 <TableHead className="text-xs text-right">Margen</TableHead>
                                               </TableRow>
                                             </TableHeader>
                                             <TableBody>
-                                              {lots.map((lot, idx) => (
+                                              {variations.map((variation, idx) => (
                                                 <TableRow key={idx} className="hover:bg-gray-100 dark:hover:bg-gray-800/50">
-                                                  <TableCell className="font-mono text-xs">
-                                                    {lot.lotNumber}
+                                                  <TableCell className="font-mono text-xs font-semibold">
+                                                    {variation.label}
                                                   </TableCell>
                                                   <TableCell>
-                                                    <Badge className={`text-xs ${LOT_SOURCE_LABELS[lot.lotSource]?.color || LOT_SOURCE_LABELS.unknown.color}`}>
-                                                      {LOT_SOURCE_LABELS[lot.lotSource]?.label || lot.lotSource}
+                                                    <Badge className={`text-xs ${CHANNEL_COLORS[variation.channel]}`}>
+                                                      {variation.channel}
                                                     </Badge>
                                                   </TableCell>
-                                                  <TableCell className="text-xs text-gray-600 dark:text-gray-400">
-                                                    {lot.supplierName || '-'}
+                                                  <TableCell className="text-right text-xs">
+                                                    {variation.quantity}
                                                   </TableCell>
                                                   <TableCell className="text-right text-xs">
-                                                    {formatCurrency(lot.unitCost)}
+                                                    {formatCurrency(variation.revenue)}
                                                   </TableCell>
                                                   <TableCell className="text-right text-xs">
-                                                    {formatCurrency(lot.unitPrice)}
+                                                    {formatCurrency(variation.cost)}
                                                   </TableCell>
                                                   <TableCell className="text-right text-xs">
-                                                    {lot.quantity}
+                                                    {formatCurrency(variation.profit)}
                                                   </TableCell>
-                                                  <TableCell className="text-right text-xs">
-                                                    {formatCurrency(lot.profit)}
-                                                  </TableCell>
-                                                  <TableCell className={`text-right text-xs font-medium ${getMarginColor(lot.marginPercent)}`}>
-                                                    {lot.marginPercent.toFixed(1)}%
+                                                  <TableCell className={`text-right text-xs font-medium ${getMarginColor(variation.marginPercent)}`}>
+                                                    {variation.marginPercent.toFixed(1)}%
                                                   </TableCell>
                                                 </TableRow>
                                               ))}

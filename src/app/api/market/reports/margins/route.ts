@@ -43,18 +43,17 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit
 
     // Combined query for POS + Wholesale using HISTORICAL cost_price from order lines
+    // Falls back to product.cost_price if order line cost is NULL
     const byProductResult = await db.query(`
       WITH pos_sales AS (
         SELECT
           ol.product_id,
           COALESCE(ol.product_name, p.name, 'Producto') as product_name,
           COALESCE(p.category, 'Sin categoría') as category,
-          ol.lot_id,
-          ol.cost_price as historical_cost,
-          ol.is_consignment,
+          COALESCE(ol.cost_price, p.cost_price) as historical_cost,
           ol.quantity,
           ol.total as revenue,
-          ol.quantity * COALESCE(ol.cost_price, 0) as total_cost
+          ol.quantity * COALESCE(ol.cost_price, p.cost_price, 0) as total_cost
         FROM market_pos_order_lines ol
         JOIN market_pos_orders o ON ol.order_id = o.id
         LEFT JOIN market_products p ON ol.product_id = p.id
@@ -67,12 +66,10 @@ export async function GET(request: NextRequest) {
           il.product_id,
           COALESCE(il.product_name, p.name, 'Producto') as product_name,
           COALESCE(p.category, 'Sin categoría') as category,
-          NULL::integer as lot_id,
-          il.cost_price as historical_cost,
-          false as is_consignment,
+          COALESCE(il.cost_price, p.cost_price) as historical_cost,
           il.quantity,
           il.subtotal as revenue,
-          il.quantity * COALESCE(il.cost_price, 0) as total_cost
+          il.quantity * COALESCE(il.cost_price, p.cost_price, 0) as total_cost
         FROM market_invoice_lines il
         JOIN market_invoices i ON il.invoice_id = i.id
         LEFT JOIN market_products p ON il.product_id = p.id
@@ -98,9 +95,7 @@ export async function GET(request: NextRequest) {
             THEN ((SUM(revenue) - SUM(total_cost)) / SUM(revenue)) * 100
             ELSE 0
           END as margin_percent,
-          COUNT(DISTINCT COALESCE(lot_id::text, historical_cost::text)) as lot_count,
-          COUNT(*) FILTER (WHERE is_consignment = true) as consignment_sales,
-          COUNT(*) FILTER (WHERE is_consignment = false OR is_consignment IS NULL) as own_sales
+          COUNT(DISTINCT historical_cost) as cost_variation_count
         FROM combined
         WHERE product_id IS NOT NULL
         GROUP BY product_id, product_name, category
@@ -120,9 +115,10 @@ export async function GET(request: NextRequest) {
         SELECT
           ol.quantity,
           ol.total as revenue,
-          ol.quantity * COALESCE(ol.cost_price, 0) as total_cost
+          ol.quantity * COALESCE(ol.cost_price, p.cost_price, 0) as total_cost
         FROM market_pos_order_lines ol
         JOIN market_pos_orders o ON ol.order_id = o.id
+        LEFT JOIN market_products p ON ol.product_id = p.id
         WHERE o.company_id = $1
           AND o.status IN ('paid', 'completed')
           AND DATE(o.created_at) BETWEEN $2 AND $3
@@ -131,9 +127,10 @@ export async function GET(request: NextRequest) {
         SELECT
           il.quantity,
           il.subtotal as revenue,
-          il.quantity * COALESCE(il.cost_price, 0) as total_cost
+          il.quantity * COALESCE(il.cost_price, p.cost_price, 0) as total_cost
         FROM market_invoice_lines il
         JOIN market_invoices i ON il.invoice_id = i.id
+        LEFT JOIN market_products p ON il.product_id = p.id
         WHERE i.company_id = $1
           AND i.status NOT IN ('cancelled', 'draft')
           AND DATE(i.created_at) BETWEEN $2 AND $3
@@ -162,7 +159,7 @@ export async function GET(request: NextRequest) {
           COALESCE(p.category, 'Sin categoría') as category,
           ol.product_id,
           ol.total as revenue,
-          ol.quantity * COALESCE(ol.cost_price, 0) as total_cost
+          ol.quantity * COALESCE(ol.cost_price, p.cost_price, 0) as total_cost
         FROM market_pos_order_lines ol
         JOIN market_pos_orders o ON ol.order_id = o.id
         LEFT JOIN market_products p ON ol.product_id = p.id
@@ -175,7 +172,7 @@ export async function GET(request: NextRequest) {
           COALESCE(p.category, 'Sin categoría') as category,
           il.product_id,
           il.subtotal as revenue,
-          il.quantity * COALESCE(il.cost_price, 0) as total_cost
+          il.quantity * COALESCE(il.cost_price, p.cost_price, 0) as total_cost
         FROM market_invoice_lines il
         JOIN market_invoices i ON il.invoice_id = i.id
         LEFT JOIN market_products p ON il.product_id = p.id
@@ -209,9 +206,10 @@ export async function GET(request: NextRequest) {
         SELECT
           DATE_TRUNC('month', o.created_at) as month,
           ol.total as revenue,
-          ol.quantity * COALESCE(ol.cost_price, 0) as cost
+          ol.quantity * COALESCE(ol.cost_price, p.cost_price, 0) as cost
         FROM market_pos_order_lines ol
         JOIN market_pos_orders o ON ol.order_id = o.id
+        LEFT JOIN market_products p ON ol.product_id = p.id
         WHERE o.company_id = $1
           AND o.status IN ('paid', 'completed')
           AND o.created_at >= CURRENT_DATE - INTERVAL '12 months'
@@ -220,9 +218,10 @@ export async function GET(request: NextRequest) {
         SELECT
           DATE_TRUNC('month', i.created_at) as month,
           il.subtotal as revenue,
-          il.quantity * COALESCE(il.cost_price, 0) as cost
+          il.quantity * COALESCE(il.cost_price, p.cost_price, 0) as cost
         FROM market_invoice_lines il
         JOIN market_invoices i ON il.invoice_id = i.id
+        LEFT JOIN market_products p ON il.product_id = p.id
         WHERE i.company_id = $1
           AND i.status NOT IN ('cancelled', 'draft')
           AND i.created_at >= CURRENT_DATE - INTERVAL '12 months'
@@ -282,9 +281,7 @@ export async function GET(request: NextRequest) {
           totalCost: parseFloat(row.total_cost) || 0,
           grossProfit: parseFloat(row.gross_profit) || 0,
           marginPercent: Math.round(parseFloat(row.margin_percent) * 100) / 100,
-          lotCount: parseInt(row.lot_count) || 0,
-          consignmentSales: parseInt(row.consignment_sales) || 0,
-          ownSales: parseInt(row.own_sales) || 0
+          costVariationCount: parseInt(row.cost_variation_count) || 0
         })),
         pagination: {
           page,

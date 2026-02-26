@@ -12,8 +12,9 @@ interface JWTPayload {
 
 /**
  * GET /api/market/reports/margins/lots
- * Returns cost-level breakdown for a specific product
- * Groups sales by cost_price to show different purchase prices
+ * Returns cost variations for a specific product
+ * Groups sales ONLY by cost_price to show different purchase costs
+ * If all sales have the same cost, returns 1 entry
  * Query params: productId, startDate, endDate
  */
 export async function GET(request: NextRequest) {
@@ -44,91 +45,62 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'productId es requerido' }, { status: 400 })
     }
 
-    // Get POS sales grouped by cost price (simpler approach - no inventory table joins)
+    // Get POS sales grouped ONLY by cost price (with fallback to product cost)
     const posResult = await db.query(`
       SELECT
-        ol.cost_price as unit_cost,
-        ol.unit_price,
-        ol.is_consignment,
-        ol.lot_id,
+        COALESCE(ol.cost_price, p.cost_price, 0) as unit_cost,
         SUM(ol.quantity) as quantity,
         SUM(ol.total) as revenue,
-        SUM(ol.quantity * COALESCE(ol.cost_price, 0)) as cost,
-        SUM(ol.total) - SUM(ol.quantity * COALESCE(ol.cost_price, 0)) as profit,
+        SUM(ol.quantity * COALESCE(ol.cost_price, p.cost_price, 0)) as cost,
+        SUM(ol.total) - SUM(ol.quantity * COALESCE(ol.cost_price, p.cost_price, 0)) as profit,
         CASE WHEN SUM(ol.total) > 0
-          THEN ((SUM(ol.total) - SUM(ol.quantity * COALESCE(ol.cost_price, 0))) / SUM(ol.total)) * 100
+          THEN ((SUM(ol.total) - SUM(ol.quantity * COALESCE(ol.cost_price, p.cost_price, 0))) / SUM(ol.total)) * 100
           ELSE 0
         END as margin_percent,
         COUNT(DISTINCT o.id) as order_count,
-        MIN(o.created_at) as first_sale,
-        MAX(o.created_at) as last_sale
+        SUM(ol.quantity) as units_sold
       FROM market_pos_order_lines ol
       JOIN market_pos_orders o ON ol.order_id = o.id
+      LEFT JOIN market_products p ON ol.product_id = p.id
       WHERE o.company_id = $1
         AND ol.product_id = $2
         AND o.status IN ('paid', 'completed')
         AND DATE(o.created_at) BETWEEN $3 AND $4
-      GROUP BY ol.cost_price, ol.unit_price, ol.is_consignment, ol.lot_id
+      GROUP BY COALESCE(ol.cost_price, p.cost_price, 0)
       ORDER BY SUM(ol.total) DESC
     `, [companyId, productId, startDate, endDate])
 
-    // Get wholesale sales grouped by cost price
+    // Get wholesale sales grouped ONLY by cost price
     const wholesaleResult = await db.query(`
       SELECT
-        il.cost_price as unit_cost,
-        il.unit_price,
-        false as is_consignment,
-        NULL::integer as lot_id,
+        COALESCE(il.cost_price, p.cost_price, 0) as unit_cost,
         SUM(il.quantity) as quantity,
         SUM(il.subtotal) as revenue,
-        SUM(il.quantity * COALESCE(il.cost_price, 0)) as cost,
-        SUM(il.subtotal) - SUM(il.quantity * COALESCE(il.cost_price, 0)) as profit,
+        SUM(il.quantity * COALESCE(il.cost_price, p.cost_price, 0)) as cost,
+        SUM(il.subtotal) - SUM(il.quantity * COALESCE(il.cost_price, p.cost_price, 0)) as profit,
         CASE WHEN SUM(il.subtotal) > 0
-          THEN ((SUM(il.subtotal) - SUM(il.quantity * COALESCE(il.cost_price, 0))) / SUM(il.subtotal)) * 100
+          THEN ((SUM(il.subtotal) - SUM(il.quantity * COALESCE(il.cost_price, p.cost_price, 0))) / SUM(il.subtotal)) * 100
           ELSE 0
         END as margin_percent,
         COUNT(DISTINCT i.id) as order_count,
-        MIN(i.created_at) as first_sale,
-        MAX(i.created_at) as last_sale
+        SUM(il.quantity) as units_sold
       FROM market_invoice_lines il
       JOIN market_invoices i ON il.invoice_id = i.id
+      LEFT JOIN market_products p ON il.product_id = p.id
       WHERE i.company_id = $1
         AND il.product_id = $2
         AND i.status NOT IN ('cancelled', 'draft')
         AND DATE(i.created_at) BETWEEN $3 AND $4
-      GROUP BY il.cost_price, il.unit_price
+      GROUP BY COALESCE(il.cost_price, p.cost_price, 0)
       ORDER BY SUM(il.subtotal) DESC
     `, [companyId, productId, startDate, endDate])
 
-    // Map results to a unified format
-    const posLots = posResult.rows.map((row, idx) => {
+    // Map results to a unified format - simple cost variations
+    const posCostVariations = posResult.rows.map((row) => {
       const unitCost = parseFloat(row.unit_cost) || 0
-      const isConsignment = row.is_consignment === true
-      const lotId = row.lot_id
-
-      // Determine source and label
-      let lotSource: string
-      let lotNumber: string
-
-      if (isConsignment) {
-        lotSource = 'consignment'
-        lotNumber = lotId ? `CONS-${lotId}` : `CONSIGNACION-${idx + 1}`
-      } else if (lotId) {
-        lotSource = 'purchase'
-        lotNumber = `COMPRA-${lotId}`
-      } else {
-        lotSource = 'direct'
-        lotNumber = unitCost > 0 ? `COSTO-$${unitCost.toFixed(2)}` : 'SIN-COSTO'
-      }
-
       return {
-        lotId,
-        lotNumber,
-        lotSource,
-        isConsignment,
-        supplierName: null,
         unitCost,
-        unitPrice: parseFloat(row.unit_price) || 0,
+        label: unitCost > 0 ? `$${unitCost.toFixed(2)}` : 'Sin costo',
         quantity: parseFloat(row.quantity) || 0,
         revenue: parseFloat(row.revenue) || 0,
         cost: parseFloat(row.cost) || 0,
@@ -139,33 +111,31 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    const wholesaleLots = wholesaleResult.rows.map((row, idx) => ({
-      lotId: null,
-      lotNumber: `MAYOREO-${idx + 1}`,
-      lotSource: 'wholesale',
-      isConsignment: false,
-      supplierName: null,
-      unitCost: parseFloat(row.unit_cost) || 0,
-      unitPrice: parseFloat(row.unit_price) || 0,
-      quantity: parseFloat(row.quantity) || 0,
-      revenue: parseFloat(row.revenue) || 0,
-      cost: parseFloat(row.cost) || 0,
-      profit: parseFloat(row.profit) || 0,
-      marginPercent: Math.round(parseFloat(row.margin_percent) * 100) / 100,
-      orderCount: parseInt(row.order_count) || 0,
-      channel: 'Mayoreo'
-    }))
+    const wholesaleCostVariations = wholesaleResult.rows.map((row) => {
+      const unitCost = parseFloat(row.unit_cost) || 0
+      return {
+        unitCost,
+        label: unitCost > 0 ? `$${unitCost.toFixed(2)}` : 'Sin costo',
+        quantity: parseFloat(row.quantity) || 0,
+        revenue: parseFloat(row.revenue) || 0,
+        cost: parseFloat(row.cost) || 0,
+        profit: parseFloat(row.profit) || 0,
+        marginPercent: Math.round(parseFloat(row.margin_percent) * 100) / 100,
+        orderCount: parseInt(row.order_count) || 0,
+        channel: 'Mayoreo'
+      }
+    })
 
     // Combine and sort by revenue
-    const allLots = [...posLots, ...wholesaleLots].sort((a, b) => b.revenue - a.revenue)
+    const allVariations = [...posCostVariations, ...wholesaleCostVariations].sort((a, b) => b.revenue - a.revenue)
 
     // Calculate totals
-    const totals = allLots.reduce((acc, lot) => ({
-      quantity: acc.quantity + lot.quantity,
-      revenue: acc.revenue + lot.revenue,
-      cost: acc.cost + lot.cost,
-      profit: acc.profit + lot.profit,
-      orderCount: acc.orderCount + lot.orderCount
+    const totals = allVariations.reduce((acc, v) => ({
+      quantity: acc.quantity + v.quantity,
+      revenue: acc.revenue + v.revenue,
+      cost: acc.cost + v.cost,
+      profit: acc.profit + v.profit,
+      orderCount: acc.orderCount + v.orderCount
     }), { quantity: 0, revenue: 0, cost: 0, profit: 0, orderCount: 0 })
 
     return NextResponse.json({
@@ -173,12 +143,12 @@ export async function GET(request: NextRequest) {
       data: {
         productId: parseInt(productId),
         filters: { startDate, endDate },
-        lots: allLots,
+        costVariations: allVariations,
         totals: {
           ...totals,
           marginPercent: totals.revenue > 0 ? Math.round((totals.profit / totals.revenue) * 10000) / 100 : 0
         },
-        lotCount: allLots.length
+        variationCount: allVariations.length
       }
     })
 
@@ -186,7 +156,7 @@ export async function GET(request: NextRequest) {
     console.error('[Margins Lots API] Error:', error)
     return NextResponse.json({
       success: false,
-      error: error instanceof Error ? error.message : 'Error al obtener detalle de lotes'
+      error: error instanceof Error ? error.message : 'Error al obtener variaciones de costo'
     }, { status: 500 })
   }
 }
