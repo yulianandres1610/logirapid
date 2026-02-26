@@ -41,7 +41,7 @@ interface ProductionPlan {
   warehouseName: string
   plannedDate: string
   plannedQuantity: number
-  yieldUnit: string
+  formulaUnit: string
   status: string
   lotNumber: string | null
   actualQuantity: number | null
@@ -433,7 +433,7 @@ export default function PlanningPage() {
               </span>
               <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
                 <Package className="w-3.5 h-3.5" />
-                {plan.actualQuantity || plan.plannedQuantity} {plan.yieldUnit || 'unidades'}
+                {plan.actualQuantity || plan.plannedQuantity} {plan.formulaUnit || 'unidades'}
               </span>
               {plan.lotNumber && (
                 <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
@@ -802,7 +802,7 @@ export default function PlanningPage() {
                                 {plan.formulaName}
                               </p>
                               <p className="text-sm text-gray-500 truncate">
-                                {plan.planNumber} • {plan.plannedQuantity} {plan.yieldUnit || 'unidades'}
+                                {plan.planNumber} • {plan.plannedQuantity} {plan.formulaUnit || 'unidades'}
                               </p>
                             </div>
                             <span className={cn(
