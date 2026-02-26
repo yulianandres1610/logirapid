@@ -330,6 +330,7 @@ export async function PATCH(
 /**
  * DELETE /api/market/production/plans/[id]
  * Cancel a production plan (only if draft or scheduled)
+ * Use ?force=true to permanently delete any plan (ADMIN only)
  */
 export async function DELETE(
   request: NextRequest,
@@ -338,6 +339,8 @@ export async function DELETE(
   try {
     const { id } = await params
     const planId = parseInt(id)
+    const { searchParams } = new URL(request.url)
+    const force = searchParams.get('force') === 'true'
 
     if (isNaN(planId)) {
       return NextResponse.json({
@@ -384,7 +387,28 @@ export async function DELETE(
 
     const plan = existingPlan.rows[0]
 
-    // Only allow cancellation of draft or scheduled plans
+    // Force delete - permanently removes the plan (ADMIN only)
+    if (force) {
+      if (payload.role !== 'ADMIN' && payload.role !== 'SUPER_ADMIN') {
+        return NextResponse.json({
+          success: false,
+          error: 'Solo administradores pueden eliminar permanentemente'
+        }, { status: 403 })
+      }
+
+      // Delete materials first, then the plan
+      await db.query('DELETE FROM market_production_plan_materials WHERE plan_id = $1', [planId])
+      await db.query('DELETE FROM market_production_plans WHERE id = $1', [planId])
+
+      console.log('[Production Plans API] Force deleted plan:', plan.plan_number)
+
+      return NextResponse.json({
+        success: true,
+        message: `Plan ${plan.plan_number} eliminado permanentemente`
+      })
+    }
+
+    // Normal cancellation - only allow draft or scheduled plans
     if (!['draft', 'scheduled'].includes(plan.status)) {
       return NextResponse.json({
         success: false,
