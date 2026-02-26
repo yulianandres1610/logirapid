@@ -58,29 +58,46 @@ export async function GET(
     // - scheduled: waiting for material issue
     // - materials_issued: waiting for production start
     // - in_production: waiting for completion
-    const result = await db.query(`
-      SELECT
-        COUNT(*) FILTER (WHERE status = 'scheduled') as pending_issue,
-        COUNT(*) FILTER (WHERE status = 'materials_issued') as pending_start,
-        COUNT(*) FILTER (WHERE status = 'in_production') as pending_complete,
-        COUNT(*) as total_pending
-      FROM market_production_plans
-      WHERE company_id = $1
-        AND warehouse_id = $2
-        AND status IN ('scheduled', 'materials_issued', 'in_production')
-    `, [companyId, warehouseId])
+    try {
+      const result = await db.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'scheduled') as pending_issue,
+          COUNT(*) FILTER (WHERE status = 'materials_issued') as pending_start,
+          COUNT(*) FILTER (WHERE status = 'in_production') as pending_complete,
+          COUNT(*) as total_pending
+        FROM market_production_plans
+        WHERE company_id = $1
+          AND warehouse_id = $2
+          AND status IN ('scheduled', 'materials_issued', 'in_production')
+      `, [companyId, warehouseId])
 
-    const counts = result.rows[0]
+      const counts = result.rows[0]
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        pendingCount: parseInt(counts.total_pending) || 0,
-        pendingIssue: parseInt(counts.pending_issue) || 0,
-        pendingStart: parseInt(counts.pending_start) || 0,
-        pendingComplete: parseInt(counts.pending_complete) || 0
+      return NextResponse.json({
+        success: true,
+        data: {
+          pendingCount: parseInt(counts.total_pending) || 0,
+          pendingIssue: parseInt(counts.pending_issue) || 0,
+          pendingStart: parseInt(counts.pending_start) || 0,
+          pendingComplete: parseInt(counts.pending_complete) || 0
+        }
+      })
+    } catch (dbError) {
+      // Table might not exist yet - return 0 counts instead of error
+      const errorMsg = dbError instanceof Error ? dbError.message : ''
+      if (errorMsg.includes('does not exist') || errorMsg.includes('relation')) {
+        return NextResponse.json({
+          success: true,
+          data: {
+            pendingCount: 0,
+            pendingIssue: 0,
+            pendingStart: 0,
+            pendingComplete: 0
+          }
+        })
       }
-    })
+      throw dbError
+    }
 
   } catch (error) {
     console.error('[Pending Production API] Error:', error)
