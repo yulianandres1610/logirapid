@@ -47,55 +47,55 @@ import { Label } from '@/components/ui/label'
 
 interface Material {
   id: number
-  raw_material_id: number
-  material_name: string
-  material_sku: string
-  unit_of_measure: string
-  quantity_required: number
-  quantity_issued: number
-  unit_cost: number
-  total_cost: number
+  rawMaterialId: number
+  materialName: string
+  materialSku: string
+  materialUnit: string
+  quantityRequired: number
+  quantityIssued: number
+  unitCost: number
+  totalCost: number
   status: string
-  available_stock: number
+  availableStock: number
 }
 
 interface Plan {
   id: number
-  plan_number: string
-  formula_id: number
-  formula_name: string
-  formula_code: string
-  target_product_id: number
-  target_product_name: string
-  target_product_sku: string
-  yield_unit: string
-  warehouse_id: number
-  warehouse_name: string
-  target_warehouse_id: number | null
-  target_warehouse_name: string | null
-  planned_date: string
-  planned_quantity: number
+  planNumber: string
+  formulaId: number
+  formulaName: string
+  formulaCode: string
+  targetProductId: number
+  targetProductName: string
+  targetProductSku: string
+  formulaUnit: string
+  warehouseId: number
+  warehouseName: string
+  targetWarehouseId: number | null
+  targetWarehouseName: string | null
+  plannedDate: string
+  plannedQuantity: number
   batches: number
   status: string
-  lot_number: string | null
+  lotNumber: string | null
   barcode: string | null
-  actual_quantity: number | null
-  waste_quantity: number | null
-  materials_cost: number
-  labor_cost: number
-  total_cost: number
-  cost_per_unit: number | null
+  actualQuantity: number | null
+  wasteQuantity: number | null
+  materialsCost: number
+  laborCost: number
+  totalCost: number
+  costPerUnit: number | null
   notes: string | null
-  created_at: string
-  scheduled_at: string | null
-  materials_issued_at: string | null
-  started_at: string | null
-  completed_at: string | null
-  created_by_name: string | null
-  scheduled_by_name: string | null
-  materials_issued_by_name: string | null
-  started_by_name: string | null
-  completed_by_name: string | null
+  createdAt: string
+  scheduledAt: string | null
+  materialsIssuedAt: string | null
+  startedAt: string | null
+  completedAt: string | null
+  createdByName: string | null
+  scheduledByName: string | null
+  materialsIssuedByName: string | null
+  startedByName: string | null
+  completedByName: string | null
   materials: Material[]
 }
 
@@ -140,7 +140,7 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
 
       if (data.success) {
         setPlan(data.data)
-        setActualQuantity(String(data.data.planned_quantity))
+        setActualQuantity(String(data.data.plannedQuantity))
       } else {
         setError(data.error || 'Error al cargar el plan')
         router.push('/dashboard/market/production/planning')
@@ -361,14 +361,14 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
           </Button>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold">{plan.plan_number}</h1>
+              <h1 className="text-2xl font-bold">{plan.planNumber}</h1>
               <Badge className={`${statusConfig[plan.status]?.color} text-white`}>
                 <StatusIcon className="h-3 w-3 mr-1" />
                 {statusConfig[plan.status]?.label}
               </Badge>
             </div>
             <p className="text-muted-foreground">
-              {plan.formula_name} • {plan.planned_quantity} {plan.yield_unit}
+              {plan.formulaName} • {plan.plannedQuantity} {plan.formulaUnit}
             </p>
           </div>
         </div>
@@ -438,7 +438,7 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
             </Button>
           )}
 
-          {isCompleted && plan.lot_number && (
+          {isCompleted && plan.lotNumber && (
             <Button variant="outline" asChild>
               <Link href={`/dashboard/market/production/planning/${plan.id}/labels`}>
                 <Printer className="h-4 w-4 mr-2" />
@@ -481,21 +481,21 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Fórmula</p>
-                  <p className="font-medium">{plan.formula_name}</p>
-                  <p className="text-xs text-muted-foreground">{plan.formula_code}</p>
+                  <p className="font-medium">{plan.formulaName}</p>
+                  <p className="text-xs text-muted-foreground">{plan.formulaCode}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Producto Final</p>
-                  <p className="font-medium">{plan.target_product_name}</p>
-                  <p className="text-xs text-muted-foreground">{plan.target_product_sku}</p>
+                  <p className="font-medium">{plan.targetProductName}</p>
+                  <p className="text-xs text-muted-foreground">{plan.targetProductSku}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Fecha Planificada</p>
-                  <p className="font-medium">{formatDate(plan.planned_date)}</p>
+                  <p className="font-medium">{formatDate(plan.plannedDate)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Cantidad Planificada</p>
-                  <p className="font-medium">{plan.planned_quantity} {plan.yield_unit}</p>
+                  <p className="font-medium">{plan.plannedQuantity} {plan.formulaUnit}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Lotes/Tandas</p>
@@ -503,12 +503,12 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Almacén Origen</p>
-                  <p className="font-medium">{plan.warehouse_name}</p>
+                  <p className="font-medium">{plan.warehouseName}</p>
                 </div>
-                {plan.target_warehouse_name && (
+                {plan.targetWarehouseName && (
                   <div>
                     <p className="text-sm text-muted-foreground">Almacén Destino</p>
-                    <p className="font-medium">{plan.target_warehouse_name}</p>
+                    <p className="font-medium">{plan.targetWarehouseName}</p>
                   </div>
                 )}
               </div>
@@ -524,16 +524,16 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
                     <div>
                       <p className="text-sm text-muted-foreground">Cantidad Real</p>
                       <p className="font-medium text-green-600">
-                        {plan.actual_quantity} {plan.yield_unit}
+                        {plan.actualQuantity} {plan.formulaUnit}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Merma</p>
-                      <p className="font-medium">{plan.waste_quantity || 0} {plan.yield_unit}</p>
+                      <p className="font-medium">{plan.wasteQuantity || 0} {plan.formulaUnit}</p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Número de Lote</p>
-                      <p className="font-medium font-mono">{plan.lot_number}</p>
+                      <p className="font-medium font-mono">{plan.lotNumber}</p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Código de Barras</p>
@@ -578,34 +578,34 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
                 </TableHeader>
                 <TableBody>
                   {plan.materials?.map((mat) => {
-                    const hasShortage = mat.available_stock < mat.quantity_required && mat.status === 'pending'
+                    const hasShortage = mat.availableStock < mat.quantityRequired && mat.status === 'pending'
                     return (
                       <TableRow key={mat.id}>
                         <TableCell>
                           <div>
-                            <p className="font-medium">{mat.material_name}</p>
-                            <p className="text-xs text-muted-foreground">{mat.material_sku}</p>
+                            <p className="font-medium">{mat.materialName}</p>
+                            <p className="text-xs text-muted-foreground">{mat.materialSku}</p>
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          {mat.quantity_required} {mat.unit_of_measure}
+                          {mat.quantityRequired} {mat.materialUnit}
                         </TableCell>
                         <TableCell className={`text-right ${hasShortage ? 'text-red-600' : ''}`}>
                           {hasShortage && <AlertTriangle className="h-3 w-3 inline mr-1" />}
-                          {mat.available_stock} {mat.unit_of_measure}
+                          {mat.availableStock} {mat.materialUnit}
                         </TableCell>
                         <TableCell className="text-right">
-                          {mat.quantity_issued > 0 ? (
-                            <span className="text-green-600">{mat.quantity_issued} {mat.unit_of_measure}</span>
+                          {mat.quantityIssued > 0 ? (
+                            <span className="text-green-600">{mat.quantityIssued} {mat.materialUnit}</span>
                           ) : (
                             '-'
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          {formatCurrency(mat.unit_cost)}
+                          {formatCurrency(mat.unitCost)}
                         </TableCell>
                         <TableCell className="text-right">
-                          {formatCurrency(mat.total_cost || mat.quantity_required * mat.unit_cost)}
+                          {formatCurrency(mat.totalCost || mat.quantityRequired * mat.unitCost)}
                         </TableCell>
                         <TableCell>
                           <Badge variant={mat.status === 'issued' ? 'default' : 'secondary'}>
@@ -634,20 +634,20 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
             <CardContent className="space-y-4">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Materiales</span>
-                <span className="font-medium">{formatCurrency(plan.materials_cost)}</span>
+                <span className="font-medium">{formatCurrency(plan.materialsCost)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Mano de Obra</span>
-                <span className="font-medium">{formatCurrency(plan.labor_cost)}</span>
+                <span className="font-medium">{formatCurrency(plan.laborCost)}</span>
               </div>
               <div className="border-t pt-4 flex justify-between">
                 <span className="font-medium">Total</span>
-                <span className="font-bold text-lg">{formatCurrency(plan.total_cost)}</span>
+                <span className="font-bold text-lg">{formatCurrency(plan.totalCost)}</span>
               </div>
-              {plan.cost_per_unit && (
+              {plan.costPerUnit && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Costo por unidad</span>
-                  <span>{formatCurrency(plan.cost_per_unit)}</span>
+                  <span>{formatCurrency(plan.costPerUnit)}</span>
                 </div>
               )}
             </CardContent>
@@ -666,36 +666,36 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
                 <TimelineItem
                   icon={FileText}
                   title="Creado"
-                  date={plan.created_at}
-                  user={plan.created_by_name}
+                  date={plan.createdAt}
+                  user={plan.createdByName}
                   active
                 />
                 <TimelineItem
                   icon={Calendar}
                   title="Programado"
-                  date={plan.scheduled_at}
-                  user={plan.scheduled_by_name}
+                  date={plan.scheduledAt}
+                  user={plan.scheduledByName}
                   active={['scheduled', 'materials_issued', 'in_production', 'completed'].includes(plan.status)}
                 />
                 <TimelineItem
                   icon={Truck}
                   title="Materiales Entregados"
-                  date={plan.materials_issued_at}
-                  user={plan.materials_issued_by_name}
+                  date={plan.materialsIssuedAt}
+                  user={plan.materialsIssuedByName}
                   active={['materials_issued', 'in_production', 'completed'].includes(plan.status)}
                 />
                 <TimelineItem
                   icon={PlayCircle}
                   title="Producción Iniciada"
-                  date={plan.started_at}
-                  user={plan.started_by_name}
+                  date={plan.startedAt}
+                  user={plan.startedByName}
                   active={['in_production', 'completed'].includes(plan.status)}
                 />
                 <TimelineItem
                   icon={CheckCircle}
                   title="Completado"
-                  date={plan.completed_at}
-                  user={plan.completed_by_name}
+                  date={plan.completedAt}
+                  user={plan.completedByName}
                   active={plan.status === 'completed'}
                   isLast
                 />
@@ -765,10 +765,10 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
                   onChange={(e) => setActualQuantity(e.target.value)}
                   placeholder="0"
                 />
-                <span className="text-muted-foreground">{plan.yield_unit}</span>
+                <span className="text-muted-foreground">{plan.formulaUnit}</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Planificado: {plan.planned_quantity} {plan.yield_unit}
+                Planificado: {plan.plannedQuantity} {plan.formulaUnit}
               </p>
             </div>
             <div className="space-y-2">
@@ -782,7 +782,7 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
                   onChange={(e) => setWasteQuantity(e.target.value)}
                   placeholder="0"
                 />
-                <span className="text-muted-foreground">{plan.yield_unit}</span>
+                <span className="text-muted-foreground">{plan.formulaUnit}</span>
               </div>
             </div>
             <div className="space-y-2">
