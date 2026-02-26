@@ -20,12 +20,14 @@ import {
   Factory,
   AlertCircle,
   Truck,
-  PackageCheck
+  PackageCheck,
+  TrendingUp,
+  Zap,
+  Target
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
-import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 
 interface ProductionPlan {
@@ -39,6 +41,7 @@ interface ProductionPlan {
   warehouseName: string
   plannedDate: string
   plannedQuantity: number
+  yieldUnit: string
   status: string
   lotNumber: string | null
   actualQuantity: number | null
@@ -58,18 +61,66 @@ interface Stats {
   thisWeek: number
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: any }> = {
-  draft: { label: 'Borrador', color: 'text-gray-600', bgColor: 'bg-gray-100 dark:bg-gray-700', icon: Clock },
-  scheduled: { label: 'Programado', color: 'text-blue-600', bgColor: 'bg-blue-100 dark:bg-blue-900/30', icon: CalendarIcon },
-  materials_issued: { label: 'Mat. Entregados', color: 'text-amber-600', bgColor: 'bg-amber-100 dark:bg-amber-900/30', icon: Truck },
-  in_production: { label: 'En Producción', color: 'text-purple-600', bgColor: 'bg-purple-100 dark:bg-purple-900/30', icon: Play },
-  completed: { label: 'Completado', color: 'text-green-600', bgColor: 'bg-green-100 dark:bg-green-900/30', icon: CheckCircle },
-  cancelled: { label: 'Cancelado', color: 'text-red-600', bgColor: 'bg-red-100 dark:bg-red-900/30', icon: X }
+const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: any; gradient: string }> = {
+  draft: {
+    label: 'Borrador',
+    color: 'text-gray-600 dark:text-gray-400',
+    bgColor: 'bg-gray-100 dark:bg-gray-700',
+    icon: Clock,
+    gradient: 'from-gray-400 to-gray-500'
+  },
+  scheduled: {
+    label: 'Programado',
+    color: 'text-blue-600',
+    bgColor: 'bg-blue-100 dark:bg-blue-900/30',
+    icon: CalendarIcon,
+    gradient: 'from-blue-500 to-blue-600'
+  },
+  materials_issued: {
+    label: 'Mat. Entregados',
+    color: 'text-amber-600',
+    bgColor: 'bg-amber-100 dark:bg-amber-900/30',
+    icon: Truck,
+    gradient: 'from-amber-500 to-orange-500'
+  },
+  in_production: {
+    label: 'En Producción',
+    color: 'text-purple-600',
+    bgColor: 'bg-purple-100 dark:bg-purple-900/30',
+    icon: Play,
+    gradient: 'from-purple-500 to-violet-600'
+  },
+  completed: {
+    label: 'Completado',
+    color: 'text-green-600',
+    bgColor: 'bg-green-100 dark:bg-green-900/30',
+    icon: CheckCircle,
+    gradient: 'from-green-500 to-emerald-600'
+  },
+  cancelled: {
+    label: 'Cancelado',
+    color: 'text-red-600',
+    bgColor: 'bg-red-100 dark:bg-red-900/30',
+    icon: X,
+    gradient: 'from-red-500 to-red-600'
+  }
+}
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.05 }
+  }
+}
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0 }
 }
 
 export default function PlanningPage() {
   const router = useRouter()
-  const { theme } = useTheme()
   const [plans, setPlans] = useState<ProductionPlan[]>([])
   const [stats, setStats] = useState<Stats>({
     total: 0, draft: 0, scheduled: 0, materialsIssued: 0,
@@ -82,7 +133,6 @@ export default function PlanningPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [filterStatus, setFilterStatus] = useState<string>('')
 
-  // Get current month string
   const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
 
   useEffect(() => {
@@ -116,7 +166,6 @@ export default function PlanningPage() {
     }
   }
 
-  // Calendar helpers
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear()
     const month = date.getMonth()
@@ -127,7 +176,6 @@ export default function PlanningPage() {
 
     const days: { date: Date; isCurrentMonth: boolean }[] = []
 
-    // Previous month days
     const prevMonthLastDay = new Date(year, month, 0).getDate()
     for (let i = startDayOfWeek - 1; i >= 0; i--) {
       days.push({
@@ -136,7 +184,6 @@ export default function PlanningPage() {
       })
     }
 
-    // Current month days
     for (let i = 1; i <= daysInMonth; i++) {
       days.push({
         date: new Date(year, month, i),
@@ -144,7 +191,6 @@ export default function PlanningPage() {
       })
     }
 
-    // Next month days
     const remainingDays = 42 - days.length
     for (let i = 1; i <= remainingDays; i++) {
       days.push({
@@ -193,169 +239,420 @@ export default function PlanningPage() {
   const today = formatDateKey(new Date())
   const calendarDays = getDaysInMonth(currentDate)
 
+  // Stats Cards Component
+  const StatsCards = () => (
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6"
+    >
+      {[
+        { label: 'Total', value: stats.total, icon: Factory, color: 'blue', gradient: 'from-blue-500 to-blue-600' },
+        { label: 'Borradores', value: stats.draft, icon: Clock, color: 'gray', gradient: 'from-gray-400 to-gray-500' },
+        { label: 'Programados', value: stats.scheduled, icon: CalendarIcon, color: 'sky', gradient: 'from-sky-500 to-cyan-500' },
+        { label: 'Mat. Entregados', value: stats.materialsIssued, icon: Truck, color: 'amber', gradient: 'from-amber-500 to-orange-500' },
+        { label: 'En Producción', value: stats.inProduction, icon: Play, color: 'purple', gradient: 'from-purple-500 to-violet-600' },
+        { label: 'Completados', value: stats.completed, icon: CheckCircle, color: 'green', gradient: 'from-green-500 to-emerald-600' },
+      ].map((stat, index) => {
+        const Icon = stat.icon
+        return (
+          <motion.div
+            key={stat.label}
+            variants={itemVariants}
+            whileHover={{ scale: 1.02, y: -2 }}
+            className={cn(
+              "relative overflow-hidden rounded-xl p-4",
+              "bg-white dark:bg-gray-800",
+              "border border-gray-200 dark:border-gray-700",
+              "shadow-sm hover:shadow-md transition-shadow"
+            )}
+          >
+            <div className={cn(
+              "absolute top-0 right-0 w-20 h-20 opacity-10",
+              `bg-gradient-to-br ${stat.gradient}`,
+              "rounded-bl-full"
+            )} />
+            <div className="relative">
+              <div className={cn(
+                "w-8 h-8 rounded-lg flex items-center justify-center mb-2",
+                `bg-gradient-to-br ${stat.gradient}`
+              )}>
+                <Icon className="w-4 h-4 text-white" />
+              </div>
+              <motion.p
+                key={stat.value}
+                initial={{ scale: 1.2, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="text-2xl font-bold text-gray-900 dark:text-white"
+              >
+                {stat.value}
+              </motion.p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{stat.label}</p>
+            </div>
+          </motion.div>
+        )
+      })}
+    </motion.div>
+  )
+
+  // Calendar Day Component
+  const CalendarDay = ({ day, dateKey, dayPlans, isToday, isSelected, index }: any) => (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ delay: index * 0.01 }}
+      onClick={() => setSelectedDate(dateKey === selectedDate ? null : dateKey)}
+      className={cn(
+        "min-h-[110px] p-2 border-b border-r border-gray-200 dark:border-gray-700",
+        "cursor-pointer transition-all duration-200",
+        !day.isCurrentMonth && "bg-gray-50/50 dark:bg-gray-900/30",
+        isToday && "bg-gradient-to-br from-blue-50 to-sky-50 dark:from-blue-900/20 dark:to-sky-900/20",
+        isSelected && "ring-2 ring-blue-500 ring-inset bg-blue-50/50 dark:bg-blue-900/10",
+        "hover:bg-gray-50 dark:hover:bg-gray-700/30"
+      )}
+    >
+      <div className="flex items-center justify-between mb-1">
+        <span className={cn(
+          "text-sm font-medium",
+          !day.isCurrentMonth && "text-gray-400 dark:text-gray-600",
+          isToday && "text-blue-600 font-bold"
+        )}>
+          {day.date.getDate()}
+        </span>
+        {isToday && (
+          <motion.span
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="px-1.5 py-0.5 text-[10px] font-bold bg-blue-600 text-white rounded"
+          >
+            HOY
+          </motion.span>
+        )}
+      </div>
+      <div className="space-y-1">
+        <AnimatePresence>
+          {dayPlans.slice(0, 3).map((plan: ProductionPlan, idx: number) => {
+            const config = STATUS_CONFIG[plan.status] || STATUS_CONFIG.draft
+            return (
+              <motion.div
+                key={plan.id}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ delay: idx * 0.05 }}
+              >
+                <Link
+                  href={`/dashboard/market/production/planning/${plan.id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn(
+                    "block px-2 py-1 rounded-md text-xs font-medium truncate",
+                    "transition-all hover:scale-[1.02]",
+                    config.bgColor, config.color
+                  )}
+                >
+                  <span className="flex items-center gap-1">
+                    <span className={cn(
+                      "w-1.5 h-1.5 rounded-full",
+                      `bg-gradient-to-r ${config.gradient}`
+                    )} />
+                    {plan.formulaName}
+                  </span>
+                </Link>
+              </motion.div>
+            )
+          })}
+        </AnimatePresence>
+        {dayPlans.length > 3 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-[10px] text-gray-500 dark:text-gray-400 font-medium px-1"
+          >
+            +{dayPlans.length - 3} más
+          </motion.div>
+        )}
+      </div>
+    </motion.div>
+  )
+
+  // Plan Card for List View
+  const PlanCard = ({ plan, index }: { plan: ProductionPlan; index: number }) => {
+    const config = STATUS_CONFIG[plan.status] || STATUS_CONFIG.draft
+    const StatusIcon = config.icon
+
+    return (
+      <motion.div
+        variants={itemVariants}
+        whileHover={{ scale: 1.01, y: -2 }}
+        className={cn(
+          "p-4 rounded-xl border transition-all",
+          "bg-white dark:bg-gray-800",
+          "border-gray-200 dark:border-gray-700",
+          "hover:shadow-lg hover:border-blue-200 dark:hover:border-blue-800"
+        )}
+      >
+        <div className="flex items-start gap-4">
+          {/* Status Badge */}
+          <div className={cn(
+            "w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0",
+            `bg-gradient-to-br ${config.gradient}`
+          )}>
+            <StatusIcon className="w-6 h-6 text-white" />
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div>
+                <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+                  {plan.formulaName}
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                  {plan.targetProductName}
+                </p>
+              </div>
+              <span className={cn(
+                "px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0",
+                config.bgColor, config.color
+              )}>
+                {config.label}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <span className="font-mono text-blue-600 dark:text-blue-400 font-medium">
+                {plan.planNumber}
+              </span>
+              <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                <CalendarIcon className="w-3.5 h-3.5" />
+                {new Date(plan.plannedDate).toLocaleDateString('es-ES', {
+                  day: 'numeric',
+                  month: 'short'
+                })}
+              </span>
+              <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                <Package className="w-3.5 h-3.5" />
+                {plan.actualQuantity || plan.plannedQuantity} {plan.yieldUnit || 'unidades'}
+              </span>
+              {plan.lotNumber && (
+                <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                  <Target className="w-3.5 h-3.5" />
+                  {plan.lotNumber}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Action */}
+          <Link
+            href={`/dashboard/market/production/planning/${plan.id}`}
+            className={cn(
+              "p-2 rounded-lg transition-colors flex-shrink-0",
+              "hover:bg-blue-50 dark:hover:bg-blue-900/30",
+              "text-gray-400 hover:text-blue-600"
+            )}
+          >
+            <ChevronRight className="w-5 h-5" />
+          </Link>
+        </div>
+      </motion.div>
+    )
+  }
+
   return (
     <ProtectedRoute>
       <DashboardLayout>
         <div className="p-4 md:p-6 max-w-7xl mx-auto">
           {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6"
+          >
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <CalendarIcon className="w-7 h-7 text-blue-600" />
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                  <CalendarIcon className="w-5 h-5 text-white" />
+                </div>
                 Planificación de Producción
               </h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
+              <p className="text-gray-600 dark:text-gray-400 mt-1 ml-[52px]">
                 Programa y gestiona las órdenes de producción
               </p>
             </div>
             <div className="flex items-center gap-3">
               {/* View Toggle */}
               <div className={cn(
-                "flex rounded-lg border",
-                "border-gray-200 dark:border-gray-700"
+                "flex rounded-xl overflow-hidden border",
+                "border-gray-200 dark:border-gray-700",
+                "bg-gray-100 dark:bg-gray-800 p-1"
               )}>
-                <button
-                  onClick={() => setViewMode('calendar')}
-                  className={cn(
-                    "p-2 transition-colors",
-                    viewMode === 'calendar'
-                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600"
-                      : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                  )}
-                >
-                  <LayoutGrid className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={cn(
-                    "p-2 transition-colors",
-                    viewMode === 'list'
-                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600"
-                      : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                  )}
-                >
-                  <List className="w-5 h-5" />
-                </button>
+                {[
+                  { mode: 'calendar' as const, icon: LayoutGrid, label: 'Calendario' },
+                  { mode: 'list' as const, icon: List, label: 'Lista' }
+                ].map(({ mode, icon: Icon, label }) => (
+                  <motion.button
+                    key={mode}
+                    onClick={() => setViewMode(mode)}
+                    whileTap={{ scale: 0.95 }}
+                    className={cn(
+                      "p-2 rounded-lg transition-all flex items-center gap-2",
+                      viewMode === mode
+                        ? "bg-white dark:bg-gray-700 shadow-sm text-blue-600"
+                        : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    )}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="text-sm font-medium hidden sm:inline">{label}</span>
+                  </motion.button>
+                ))}
               </div>
-              <button
+
+              <motion.button
+                whileTap={{ scale: 0.95 }}
                 onClick={() => fetchPlans(true)}
                 disabled={isRefreshing}
                 className={cn(
-                  "p-2 rounded-lg border transition-colors",
+                  "p-2.5 rounded-xl border transition-colors",
                   "border-gray-200 dark:border-gray-700",
-                  "hover:bg-gray-100 dark:hover:bg-gray-800",
-                  isRefreshing && "animate-spin"
+                  "hover:bg-gray-100 dark:hover:bg-gray-800"
                 )}
               >
-                <RefreshCw className="w-5 h-5" />
-              </button>
-              <Link
-                href="/dashboard/market/production/planning/create"
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors",
-                  "bg-blue-600 hover:bg-blue-700 text-white"
-                )}
-              >
-                <Plus className="w-5 h-5" />
-                Nueva Planificación
-              </Link>
+                <RefreshCw className={cn("w-5 h-5", isRefreshing && "animate-spin")} />
+              </motion.button>
+
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Link
+                  href="/dashboard/market/production/planning/create"
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all",
+                    "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800",
+                    "text-white shadow-lg shadow-blue-500/25"
+                  )}
+                >
+                  <Plus className="w-5 h-5" />
+                  <span className="hidden sm:inline">Nueva Planificación</span>
+                </Link>
+              </motion.div>
             </div>
-          </div>
+          </motion.div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
-            <div className={cn("p-3 rounded-lg border", "bg-white dark:bg-gray-800", "border-gray-200 dark:border-gray-700")}>
-              <p className="text-xs text-gray-500">Total</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white">{stats.total}</p>
-            </div>
-            <div className={cn("p-3 rounded-lg border", "bg-gray-50 dark:bg-gray-800", "border-gray-200 dark:border-gray-700")}>
-              <p className="text-xs text-gray-500">Borradores</p>
-              <p className="text-xl font-bold text-gray-600">{stats.draft}</p>
-            </div>
-            <div className={cn("p-3 rounded-lg border", "bg-blue-50 dark:bg-blue-900/20", "border-blue-200 dark:border-blue-800")}>
-              <p className="text-xs text-blue-600">Programados</p>
-              <p className="text-xl font-bold text-blue-600">{stats.scheduled}</p>
-            </div>
-            <div className={cn("p-3 rounded-lg border", "bg-amber-50 dark:bg-amber-900/20", "border-amber-200 dark:border-amber-800")}>
-              <p className="text-xs text-amber-600">Mat. Entregados</p>
-              <p className="text-xl font-bold text-amber-600">{stats.materialsIssued}</p>
-            </div>
-            <div className={cn("p-3 rounded-lg border", "bg-purple-50 dark:bg-purple-900/20", "border-purple-200 dark:border-purple-800")}>
-              <p className="text-xs text-purple-600">En Producción</p>
-              <p className="text-xl font-bold text-purple-600">{stats.inProduction}</p>
-            </div>
-            <div className={cn("p-3 rounded-lg border", "bg-green-50 dark:bg-green-900/20", "border-green-200 dark:border-green-800")}>
-              <p className="text-xs text-green-600">Completados</p>
-              <p className="text-xl font-bold text-green-600">{stats.completed}</p>
-            </div>
-          </div>
+          <StatsCards />
 
           {/* Filters */}
-          <div className="flex items-center gap-3 mb-6">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className={cn(
-                "px-4 py-2 rounded-lg border",
-                "bg-white dark:bg-gray-800",
-                "border-gray-200 dark:border-gray-700"
-              )}
-            >
-              <option value="">Todos los estados</option>
-              <option value="draft">Borradores</option>
-              <option value="scheduled">Programados</option>
-              <option value="materials_issued">Mat. Entregados</option>
-              <option value="in_production">En Producción</option>
-              <option value="completed">Completados</option>
-            </select>
-          </div>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-wrap items-center gap-3 mb-6"
+          >
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setFilterStatus('')}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
+                  filterStatus === ''
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                )}
+              >
+                Todos
+              </button>
+              {Object.entries(STATUS_CONFIG).slice(0, -1).map(([key, config]) => {
+                const Icon = config.icon
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setFilterStatus(filterStatus === key ? '' : key)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5",
+                      filterStatus === key
+                        ? cn(config.bgColor, config.color)
+                        : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                    )}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {config.label}
+                  </button>
+                )
+              })}
+            </div>
+          </motion.div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <RefreshCw className="w-8 h-8 animate-spin text-blue-600" />
-            </div>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex flex-col items-center justify-center py-20"
+            >
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              >
+                <RefreshCw className="w-10 h-10 text-blue-600" />
+              </motion.div>
+              <p className="mt-4 text-gray-500">Cargando planificaciones...</p>
+            </motion.div>
           ) : viewMode === 'calendar' ? (
             /* Calendar View */
-            <div className={cn(
-              "rounded-xl border overflow-hidden",
-              "bg-white dark:bg-gray-800",
-              "border-gray-200 dark:border-gray-700"
-            )}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                "rounded-2xl border overflow-hidden",
+                "bg-white dark:bg-gray-800",
+                "border-gray-200 dark:border-gray-700",
+                "shadow-sm"
+              )}
+            >
               {/* Calendar Header */}
-              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex items-center gap-3">
-                  <button
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-800">
+                <div className="flex items-center gap-2">
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
                     onClick={prevMonth}
-                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   >
                     <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white min-w-[200px] text-center">
+                  </motion.button>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white min-w-[220px] text-center">
                     {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
                   </h2>
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
                     onClick={nextMonth}
-                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   >
                     <ChevronRight className="w-5 h-5" />
-                  </button>
+                  </motion.button>
                 </div>
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={goToToday}
                   className={cn(
-                    "px-3 py-1 rounded-lg text-sm font-medium",
-                    "border border-gray-200 dark:border-gray-700",
-                    "hover:bg-gray-100 dark:hover:bg-gray-700"
+                    "px-4 py-2 rounded-lg text-sm font-medium",
+                    "bg-blue-50 dark:bg-blue-900/30 text-blue-600",
+                    "hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
                   )}
                 >
                   Hoy
-                </button>
+                </motion.button>
               </div>
 
               {/* Week Days Header */}
-              <div className="grid grid-cols-7 border-b border-gray-200 dark:border-gray-700">
-                {weekDays.map(day => (
-                  <div key={day} className="p-2 text-center text-sm font-medium text-gray-600 dark:text-gray-400">
+              <div className="grid grid-cols-7 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                {weekDays.map((day, i) => (
+                  <div
+                    key={day}
+                    className={cn(
+                      "p-3 text-center text-sm font-semibold",
+                      i === 0 || i === 6 ? "text-gray-400" : "text-gray-600 dark:text-gray-400"
+                    )}
+                  >
                     {day}
                   </div>
                 ))}
@@ -370,240 +667,176 @@ export default function PlanningPage() {
                   const isSelected = dateKey === selectedDate
 
                   return (
-                    <div
+                    <CalendarDay
                       key={index}
-                      onClick={() => setSelectedDate(dateKey === selectedDate ? null : dateKey)}
-                      className={cn(
-                        "min-h-[100px] p-2 border-b border-r border-gray-200 dark:border-gray-700 cursor-pointer transition-colors",
-                        !day.isCurrentMonth && "bg-gray-50 dark:bg-gray-900/50",
-                        isToday && "bg-blue-50 dark:bg-blue-900/20",
-                        isSelected && "ring-2 ring-blue-500 ring-inset",
-                        "hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                      )}
-                    >
-                      <div className={cn(
-                        "text-sm font-medium mb-1",
-                        !day.isCurrentMonth && "text-gray-400",
-                        isToday && "text-blue-600 font-bold"
-                      )}>
-                        {day.date.getDate()}
-                      </div>
-                      <div className="space-y-1">
-                        {dayPlans.slice(0, 3).map(plan => {
-                          const config = STATUS_CONFIG[plan.status] || STATUS_CONFIG.draft
-                          return (
-                            <Link
-                              key={plan.id}
-                              href={`/dashboard/market/production/planning/${plan.id}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className={cn(
-                                "block px-1.5 py-0.5 rounded text-xs truncate",
-                                config.bgColor, config.color
-                              )}
-                            >
-                              {plan.formulaName}
-                            </Link>
-                          )
-                        })}
-                        {dayPlans.length > 3 && (
-                          <div className="text-xs text-gray-500 px-1">
-                            +{dayPlans.length - 3} más
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                      day={day}
+                      dateKey={dateKey}
+                      dayPlans={dayPlans}
+                      isToday={isToday}
+                      isSelected={isSelected}
+                      index={index}
+                    />
                   )
                 })}
               </div>
-            </div>
+            </motion.div>
           ) : (
             /* List View */
-            <div className={cn(
-              "rounded-xl border overflow-hidden",
-              "bg-white dark:bg-gray-800",
-              "border-gray-200 dark:border-gray-700"
-            )}>
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              className="space-y-3"
+            >
               {plans.length === 0 ? (
-                <div className="text-center py-12">
-                  <CalendarIcon className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className={cn(
+                    "text-center py-16 rounded-2xl border",
+                    "bg-white dark:bg-gray-800",
+                    "border-gray-200 dark:border-gray-700"
+                  )}
+                >
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", delay: 0.2 }}
+                  >
+                    <CalendarIcon className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
+                  </motion.div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                     No hay planes este mes
                   </h3>
-                  <p className="text-gray-600 dark:text-gray-400 mb-4">
+                  <p className="text-gray-500 dark:text-gray-400 mb-6">
                     Crea tu primera planificación de producción
                   </p>
-                  <Link
-                    href="/dashboard/market/production/planning/create"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    <Plus className="w-5 h-5" />
-                    Nueva Planificación
-                  </Link>
-                </div>
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                    <Link
+                      href="/dashboard/market/production/planning/create"
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-medium hover:from-blue-700 hover:to-blue-800 shadow-lg shadow-blue-500/25"
+                    >
+                      <Plus className="w-5 h-5" />
+                      Nueva Planificación
+                    </Link>
+                  </motion.div>
+                </motion.div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                        <th className="text-left px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400">Plan</th>
-                        <th className="text-left px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400">Fórmula</th>
-                        <th className="text-left px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400 hidden md:table-cell">Fecha</th>
-                        <th className="text-center px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400 hidden sm:table-cell">Cantidad</th>
-                        <th className="text-center px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400">Estado</th>
-                        <th className="text-center px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                      {plans.map((plan, index) => {
-                        const config = STATUS_CONFIG[plan.status] || STATUS_CONFIG.draft
-                        const StatusIcon = config.icon
-
-                        return (
-                          <motion.tr
-                            key={plan.id}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.02 }}
-                            className="hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                          >
-                            <td className="px-4 py-3">
-                              <p className="font-mono text-sm text-blue-600 dark:text-blue-400 font-medium">
-                                {plan.planNumber}
-                              </p>
-                              {plan.lotNumber && (
-                                <p className="text-xs text-gray-500">Lote: {plan.lotNumber}</p>
-                              )}
-                            </td>
-                            <td className="px-4 py-3">
-                              <p className="font-medium text-gray-900 dark:text-white">{plan.formulaName}</p>
-                              <p className="text-sm text-gray-500 truncate max-w-[200px]">{plan.targetProductName}</p>
-                            </td>
-                            <td className="px-4 py-3 hidden md:table-cell">
-                              <p className="text-sm text-gray-700 dark:text-gray-300">
-                                {new Date(plan.plannedDate).toLocaleDateString('es-ES', {
-                                  weekday: 'short',
-                                  day: 'numeric',
-                                  month: 'short'
-                                })}
-                              </p>
-                            </td>
-                            <td className="px-4 py-3 text-center hidden sm:table-cell">
-                              <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                {plan.actualQuantity || plan.plannedQuantity}
-                              </p>
-                              {plan.actualQuantity && plan.actualQuantity !== plan.plannedQuantity && (
-                                <p className="text-xs text-gray-500">
-                                  Plan: {plan.plannedQuantity}
-                                </p>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <span className={cn(
-                                "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium",
-                                config.bgColor, config.color
-                              )}>
-                                <StatusIcon className="w-3 h-3" />
-                                {config.label}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center justify-center gap-1">
-                                <Link
-                                  href={`/dashboard/market/production/planning/${plan.id}`}
-                                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                  title="Ver detalle"
-                                >
-                                  <Eye className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                                </Link>
-                              </div>
-                            </td>
-                          </motion.tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                plans.map((plan, index) => (
+                  <PlanCard key={plan.id} plan={plan} index={index} />
+                ))
               )}
-            </div>
+            </motion.div>
           )}
 
           {/* Selected Date Panel */}
           <AnimatePresence>
             {selectedDate && viewMode === 'calendar' && (
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 100 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
+                exit={{ opacity: 0, y: 100 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
                 className={cn(
-                  "fixed bottom-4 left-1/2 -translate-x-1/2 w-full max-w-2xl p-4 rounded-xl shadow-lg border",
+                  "fixed bottom-4 left-1/2 -translate-x-1/2 w-full max-w-2xl p-5 rounded-2xl shadow-2xl border",
                   "bg-white dark:bg-gray-800",
                   "border-gray-200 dark:border-gray-700"
                 )}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-gray-900 dark:text-white">
-                    {new Date(selectedDate).toLocaleDateString('es-ES', {
-                      weekday: 'long',
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric'
-                    })}
-                  </h3>
-                  <button onClick={() => setSelectedDate(null)}>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">
+                      {new Date(selectedDate).toLocaleDateString('es-ES', {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'long'
+                      })}
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      {getPlansForDate(selectedDate).length} produccion(es) planificada(s)
+                    </p>
+                  </div>
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => setSelectedDate(null)}
+                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
                     <X className="w-5 h-5 text-gray-400" />
-                  </button>
+                  </motion.button>
                 </div>
+
                 <div className="space-y-2 max-h-60 overflow-auto">
                   {getPlansForDate(selectedDate).length === 0 ? (
-                    <p className="text-gray-500 text-center py-4">
-                      No hay producciones planificadas
-                    </p>
+                    <div className="text-center py-8">
+                      <CalendarIcon className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                      <p className="text-gray-500">No hay producciones planificadas</p>
+                    </div>
                   ) : (
-                    getPlansForDate(selectedDate).map(plan => {
+                    getPlansForDate(selectedDate).map((plan, index) => {
                       const config = STATUS_CONFIG[plan.status] || STATUS_CONFIG.draft
+                      const Icon = config.icon
                       return (
-                        <Link
+                        <motion.div
                           key={plan.id}
-                          href={`/dashboard/market/production/planning/${plan.id}`}
-                          className={cn(
-                            "flex items-center gap-3 p-3 rounded-lg transition-colors",
-                            "hover:bg-gray-50 dark:hover:bg-gray-700"
-                          )}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
                         >
-                          <div className={cn("p-2 rounded-lg", config.bgColor)}>
-                            <Factory className={cn("w-5 h-5", config.color)} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-gray-900 dark:text-white">
-                              {plan.formulaName}
-                            </p>
-                            <p className="text-sm text-gray-500 truncate">
-                              {plan.planNumber} • {plan.plannedQuantity} unidades
-                            </p>
-                          </div>
-                          <span className={cn(
-                            "px-2 py-1 rounded-full text-xs font-medium",
-                            config.bgColor, config.color
-                          )}>
-                            {config.label}
-                          </span>
-                        </Link>
+                          <Link
+                            href={`/dashboard/market/production/planning/${plan.id}`}
+                            className={cn(
+                              "flex items-center gap-4 p-4 rounded-xl transition-all",
+                              "hover:bg-gray-50 dark:hover:bg-gray-700/50",
+                              "border border-transparent hover:border-gray-200 dark:hover:border-gray-600"
+                            )}
+                          >
+                            <div className={cn(
+                              "w-10 h-10 rounded-xl flex items-center justify-center",
+                              `bg-gradient-to-br ${config.gradient}`
+                            )}>
+                              <Icon className="w-5 h-5 text-white" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-gray-900 dark:text-white truncate">
+                                {plan.formulaName}
+                              </p>
+                              <p className="text-sm text-gray-500 truncate">
+                                {plan.planNumber} • {plan.plannedQuantity} {plan.yieldUnit || 'unidades'}
+                              </p>
+                            </div>
+                            <span className={cn(
+                              "px-3 py-1 rounded-full text-xs font-medium",
+                              config.bgColor, config.color
+                            )}>
+                              {config.label}
+                            </span>
+                          </Link>
+                        </motion.div>
                       )
                     })
                   )}
                 </div>
-                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700"
+                >
                   <Link
                     href={`/dashboard/market/production/planning/create?date=${selectedDate}`}
                     className={cn(
-                      "flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium w-full",
-                      "bg-blue-600 hover:bg-blue-700 text-white"
+                      "flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium w-full",
+                      "bg-gradient-to-r from-blue-600 to-blue-700 text-white",
+                      "hover:from-blue-700 hover:to-blue-800 transition-all",
+                      "shadow-lg shadow-blue-500/25"
                     )}
                   >
                     <Plus className="w-5 h-5" />
                     Planificar para este día
                   </Link>
-                </div>
+                </motion.div>
               </motion.div>
             )}
           </AnimatePresence>

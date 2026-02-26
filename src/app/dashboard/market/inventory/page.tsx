@@ -631,21 +631,20 @@ export default function MarketInventoryPage() {
               )}
             >
               <div className="overflow-x-auto rounded-t-2xl">
-                <table className="w-full min-w-[640px]">
+                <table className="w-full">
                   <thead>
                     <tr className={cn(
                       'border-b',
                       theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
                     )}>
-                      <th className="text-left py-3 px-2 sm:px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
-                      <th className="text-left py-3 px-2 sm:px-4 text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">SKU</th>
-                      <th className="text-left py-3 px-2 sm:px-4 text-xs font-medium text-gray-500 uppercase tracking-wider hidden xl:table-cell">Código</th>
-                      <th className="text-right py-3 px-2 sm:px-4 text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Costo</th>
-                      <th className="text-right py-3 px-2 sm:px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Venta</th>
-                      <th className="text-right py-3 px-2 sm:px-4 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Margen</th>
-                      <th className="text-center py-3 px-2 sm:px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
-                      <th className="text-center py-3 px-2 sm:px-4 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Estado</th>
-                      <th className="text-center py-3 px-2 sm:px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                      <th className="text-left py-3 px-2 sm:px-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
+                      <th className="text-left py-3 px-2 sm:px-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden xl:table-cell">SKU</th>
+                      <th className="text-right py-3 px-2 sm:px-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Costo</th>
+                      <th className="text-right py-3 px-2 sm:px-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Venta</th>
+                      <th className="text-right py-3 px-2 sm:px-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Margen</th>
+                      <th className="text-center py-3 px-2 sm:px-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                      <th className="text-center py-3 px-2 sm:px-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Estado</th>
+                      <th className="text-center py-3 px-2 sm:px-3 text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -693,29 +692,29 @@ export default function MarketInventoryPage() {
                               theme === 'dark' ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'
                             )}
                           >
-                            <td className="py-3 px-2 sm:px-4">
+                            <td className="py-3 px-2 sm:px-3">
                               <div className="flex items-center gap-2 sm:gap-3">
                                 <ProductImage
                                   src={product.imageUrl}
                                   alt={product.name}
                                   size="md"
                                   theme={theme}
-                                  containerClassName="hidden sm:block"
+                                  containerClassName="hidden sm:block flex-shrink-0"
                                 />
                                 <ProductImage
                                   src={product.imageUrl}
                                   alt={product.name}
                                   size="sm"
                                   theme={theme}
-                                  containerClassName="sm:hidden"
+                                  containerClassName="sm:hidden flex-shrink-0"
                                 />
-                                <div className="min-w-0">
-                                  <p className="font-medium text-gray-900 dark:text-white text-sm sm:text-base truncate">{product.name}</p>
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{product.name}</p>
                                   {product.category && (
                                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{product.category}</p>
                                   )}
-                                  {/* Show SKU on mobile since column is hidden */}
-                                  <p className="text-xs text-gray-400 font-mono lg:hidden">{product.sku}</p>
+                                  {/* Show SKU on smaller screens since column is hidden */}
+                                  <p className="text-xs text-gray-400 font-mono xl:hidden truncate">{product.sku}</p>
                                   {product.matchedVariant && (
                                     <p className="text-xs text-purple-600 dark:text-purple-400 mt-0.5 truncate">
                                       📦 {product.matchedVariant.name}
@@ -724,20 +723,10 @@ export default function MarketInventoryPage() {
                                 </div>
                               </div>
                             </td>
-                            <td className="py-3 px-2 sm:px-4 hidden lg:table-cell">
+                            <td className="py-3 px-2 sm:px-3 hidden xl:table-cell">
                               <span className="text-sm text-gray-600 dark:text-gray-300 font-mono">{product.sku}</span>
                             </td>
-                            <td className="py-3 px-2 sm:px-4 hidden xl:table-cell">
-                              {product.barcode ? (
-                                <div className="flex items-center gap-2">
-                                  <Barcode className="w-4 h-4 text-gray-400" />
-                                  <span className="text-sm text-gray-600 dark:text-gray-300 font-mono">{product.barcode}</span>
-                                </div>
-                              ) : (
-                                <span className="text-xs text-gray-400">-</span>
-                              )}
-                            </td>
-                            <td className="py-3 px-2 sm:px-4 text-right hidden md:table-cell">
+                            <td className="py-3 px-2 sm:px-3 text-right hidden lg:table-cell">
                               <div>
                                 <span className="text-sm text-gray-600 dark:text-gray-300">
                                   {symbol}{product.costPrice}
@@ -747,17 +736,17 @@ export default function MarketInventoryPage() {
                                 </div>
                               </div>
                             </td>
-                            <td className="py-3 px-2 sm:px-4 text-right">
+                            <td className="py-3 px-2 sm:px-3 text-right">
                               <div>
                                 <span className="text-sm font-medium text-gray-900 dark:text-white">
                                   {symbol}{product.sellingPrice}
                                 </span>
-                                <div className="text-[10px] mt-0.5 space-y-0">
+                                <div className="text-[10px] mt-0.5">
                                   <p className="text-green-600 font-medium">${Math.round(product.sellingPrice * USD_CUP).toLocaleString('es-ES')}</p>
                                 </div>
                               </div>
                             </td>
-                            <td className="py-3 px-2 sm:px-4 text-right hidden sm:table-cell">
+                            <td className="py-3 px-2 sm:px-3 text-right hidden md:table-cell">
                               <span className={cn(
                                 'text-sm font-bold',
                                 margin >= 30 ? 'text-green-600' : margin >= 15 ? 'text-amber-600' : 'text-red-600'
@@ -765,14 +754,14 @@ export default function MarketInventoryPage() {
                                 {margin}%
                               </span>
                             </td>
-                            <td className="py-3 px-2 sm:px-4 text-center">
+                            <td className="py-3 px-2 sm:px-3 text-center">
                               <span className="text-sm font-bold text-gray-900 dark:text-white">
                                 {Number(product.quantityOnHand) % 1 === 0
                                   ? product.quantityOnHand
                                   : Number(product.quantityOnHand).toFixed(2)}
                               </span>
                             </td>
-                            <td className="py-3 px-2 sm:px-4 text-center hidden sm:table-cell">
+                            <td className="py-3 px-2 sm:px-3 text-center hidden lg:table-cell">
                               <span className={cn(
                                 'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium',
                                 status.color === 'green' && 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
@@ -780,10 +769,10 @@ export default function MarketInventoryPage() {
                                 status.color === 'red' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                               )}>
                                 <status.icon className="w-3 h-3" />
-                                <span className="hidden md:inline">{status.label}</span>
+                                <span className="hidden xl:inline">{status.label}</span>
                               </span>
                             </td>
-                            <td className="py-3 px-2 sm:px-4 text-center">
+                            <td className="py-3 px-2 sm:px-3 text-center">
                               <div className="flex items-center justify-center gap-0.5 sm:gap-1">
                                 <motion.button
                                   whileHover={{ scale: 1.1 }}
