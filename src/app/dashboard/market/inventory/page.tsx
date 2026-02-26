@@ -639,6 +639,7 @@ export default function MarketInventoryPage() {
                     )}>
                       <th className="text-left py-3 px-2 sm:px-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
                       <th className="text-left py-3 px-2 sm:px-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden xl:table-cell">SKU</th>
+                      <th className="text-left py-3 px-2 sm:px-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden xl:table-cell">Código</th>
                       <th className="text-right py-3 px-2 sm:px-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Costo</th>
                       <th className="text-right py-3 px-2 sm:px-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Venta</th>
                       <th className="text-right py-3 px-2 sm:px-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Margen</th>
@@ -651,7 +652,7 @@ export default function MarketInventoryPage() {
                     {loading ? (
                       [...Array(5)].map((_, i) => (
                         <tr key={i}>
-                          <td colSpan={9} className="py-4 px-4">
+                          <td colSpan={10} className="py-4 px-4">
                             <div className="animate-pulse flex items-center gap-3">
                               <div className="w-14 h-14 bg-gray-200 dark:bg-gray-700 rounded-xl" />
                               <div className="flex-1">
@@ -664,7 +665,7 @@ export default function MarketInventoryPage() {
                       ))
                     ) : products.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="py-12 text-center">
+                        <td colSpan={10} className="py-12 text-center">
                           <Package className="w-12 h-12 mx-auto mb-3 text-gray-400" />
                           <p className="text-gray-500 dark:text-gray-400">No hay productos</p>
                           <Link href="/dashboard/market/inventory/create">
@@ -725,6 +726,9 @@ export default function MarketInventoryPage() {
                             </td>
                             <td className="py-3 px-2 sm:px-3 hidden xl:table-cell">
                               <span className="text-sm text-gray-600 dark:text-gray-300 font-mono">{product.sku}</span>
+                            </td>
+                            <td className="py-3 px-2 sm:px-3 hidden xl:table-cell">
+                              <span className="text-sm text-gray-600 dark:text-gray-300 font-mono">{product.barcode || '—'}</span>
                             </td>
                             <td className="py-3 px-2 sm:px-3 text-right hidden lg:table-cell">
                               <div>
