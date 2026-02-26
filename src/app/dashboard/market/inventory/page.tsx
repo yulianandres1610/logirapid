@@ -230,14 +230,14 @@ export default function MarketInventoryPage() {
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="min-h-screen p-6">
+        <div className="min-h-screen p-3 sm:p-4 md:p-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
             {/* Stats Cards - Estilo Pickup Orders */}
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
               {/* Total Productos */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -624,14 +624,14 @@ export default function MarketInventoryPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
               className={cn(
-                'rounded-2xl border shadow-xl overflow-hidden',
+                'rounded-2xl border shadow-xl',
                 theme === 'dark'
                   ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
                   : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
               )}
             >
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="overflow-x-auto rounded-t-2xl">
+                <table className="w-full min-w-[640px]">
                   <thead>
                     <tr className={cn(
                       'border-b',
