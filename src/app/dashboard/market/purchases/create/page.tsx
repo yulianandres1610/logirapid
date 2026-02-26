@@ -1485,7 +1485,9 @@ export default function CreatePurchasePage() {
   // Add product to purchase (with optional variant)
   const addProductToPurchase = (product: Product, variant?: ProductVariant | null) => {
     const variantId = variant?.id ?? null
-    const unitPrice = variant?.costPrice ?? variant?.price ?? product.costPrice
+    // IMPORTANT: Use costPrice only, never fall back to selling price (variant?.price)
+    // This ensures purchase orders always use the cost, not the selling price
+    const unitPrice = variant?.costPrice || product.costPrice
 
     // Find existing line by product.id + variant.id combination
     const existing = purchaseLines.find(l =>
