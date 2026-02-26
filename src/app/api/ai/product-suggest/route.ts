@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 // Gemini Configuration - Optimizado para descripciones de productos
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
-const GEMINI_MODEL = 'gemini-2.5-flash' // Modelo rápido para generación de texto
+const GEMINI_MODEL = process.env.GEMINI_OCR_MODEL || 'gemini-2.0-flash'
 
 // Available categories (must match the ones in the create form)
 const CATEGORIES = [
@@ -19,6 +19,12 @@ const CATEGORIES = [
   'Electrónica',
   'Ropa',
   'Hogar',
+  'Químicos',
+  'Materias Primas',
+  'Insumos Industriales',
+  'Ferretería',
+  'Pinturas y Recubrimientos',
+  'Envases y Embalajes',
   'Otros'
 ]
 
@@ -45,7 +51,13 @@ function fallbackCategorization(productName: string): ProductSuggestion {
     'Panadería': ['pan', 'panetela', 'cake', 'torta', 'pastel', 'bizcocho', 'rosquita', 'tostada', 'croissant', 'panaderia'],
     'Higiene Personal': ['champú', 'champu', 'shampoo', 'acondicionador', 'dental', 'desodorante', 'perfume', 'colonia', 'pañal', 'panal', 'sanitaria', 'higienico', 'higiénico', 'cepillo', 'rasuradora', 'afeitadora', 'crema'],
     'Ropa': ['camisa', 'pantalón', 'pantalon', 'vestido', 'falda', 'blusa', 'camiseta', 't-shirt', 'tshirt', 'zapato', 'tenis', 'sandalia', 'medias', 'calcetín', 'calcetin', 'interior', 'short', 'jean', 'jeans', 'polo', 'nike', 'adidas', 'puma'],
-    'Hogar': ['sábana', 'sabana', 'almohada', 'toalla', 'cortina', 'alfombra', 'lámpara', 'lampara', 'vela', 'florero', 'cuadro', 'espejo', 'colchón', 'colchon', 'silla', 'mesa', 'mueble']
+    'Hogar': ['sábana', 'sabana', 'almohada', 'toalla', 'cortina', 'alfombra', 'lámpara', 'lampara', 'vela', 'florero', 'cuadro', 'espejo', 'colchón', 'colchon', 'silla', 'mesa', 'mueble'],
+    'Químicos': ['dioxido', 'dióxido', 'titanio', 'titanium', 'acido', 'ácido', 'sulfato', 'carbonato', 'cloruro', 'hidróxido', 'hidroxido', 'soda', 'caustica', 'caústica', 'solvente', 'reactivo', 'químico', 'quimico', 'formaldehido', 'formaldehído', 'peróxido', 'peroxido', 'glicerina', 'metanol', 'etanol', 'acetona', 'amoníaco', 'amoniaco', 'silicato', 'fosfato', 'nitrato', 'benzoato', 'sorbitol', 'propilenglicol', 'resina', 'polímero', 'polimero', 'catalizador', 'emulsificante', 'surfactante', 'tensoactivo', 'alcali', 'álcali'],
+    'Materias Primas': ['materia', 'prima', 'pigmento', 'colorante', 'aditivo', 'espesante', 'estabilizante', 'conservante', 'almidón', 'almidon', 'celulosa', 'gelatina', 'cera', 'parafina', 'talco', 'caolín', 'caolin', 'bentonita', 'calcita', 'feldespato', 'cuarzo', 'mica', 'yeso', 'cal', 'mineral', 'extracto', 'esencia', 'fragancia'],
+    'Insumos Industriales': ['industrial', 'insumo', 'lubricante', 'grasa', 'sellador', 'adhesivo', 'pegamento', 'soldadura', 'abrasivo', 'lija', 'filtro', 'manguera', 'válvula', 'valvula', 'bomba', 'compresor', 'motor', 'rodamiento', 'correa', 'empaque', 'junta', 'tornillo', 'tuerca', 'arandela', 'remache'],
+    'Ferretería': ['ferretería', 'ferreteria', 'herramienta', 'martillo', 'destornillador', 'alicate', 'llave', 'taladro', 'sierra', 'broca', 'clavo', 'cemento', 'arena', 'grava', 'bloque', 'varilla', 'alambre', 'cable', 'tubo', 'tubería', 'tuberia', 'pintura', 'brocha', 'rodillo'],
+    'Pinturas y Recubrimientos': ['pintura', 'esmalte', 'barniz', 'laca', 'imprimante', 'primer', 'recubrimiento', 'anticorrosivo', 'epóxico', 'epoxico', 'poliuretano', 'acrílico', 'acrilico', 'vinílica', 'vinilica', 'thinner', 'diluyente', 'disolvente'],
+    'Envases y Embalajes': ['envase', 'botella', 'frasco', 'tarro', 'lata', 'bidón', 'bidon', 'tambor', 'tanque', 'contenedor', 'bolsa', 'saco', 'caja', 'cartón', 'carton', 'embalaje', 'empaque', 'etiqueta', 'tapa', 'cierre']
   }
 
   for (const [category, keywords] of Object.entries(categoryKeywords)) {
@@ -68,7 +80,13 @@ function fallbackCategorization(productName: string): ProductSuggestion {
           'Electrodomésticos': 'Electrodoméstico de alta calidad y tecnología avanzada. Diseñado para facilitar tu vida diaria con máximo rendimiento.',
           'Electrónica': 'Dispositivo electrónico con tecnología de punta. Rendimiento superior y durabilidad garantizada para tu satisfacción.',
           'Ropa': 'Prenda de vestir cómoda y moderna. Confeccionada con materiales de calidad para un estilo único y duradero.',
-          'Hogar': 'Artículo para el hogar funcional y elegante. Diseñado para complementar tus espacios con estilo y practicidad.'
+          'Hogar': 'Artículo para el hogar funcional y elegante. Diseñado para complementar tus espacios con estilo y practicidad.',
+          'Químicos': 'Producto químico de grado industrial con alta pureza y rendimiento. Cumple con estándares de calidad para uso en procesos industriales y formulaciones.',
+          'Materias Primas': 'Materia prima de calidad superior para la industria. Seleccionada por su pureza y consistencia para garantizar resultados óptimos en la producción.',
+          'Insumos Industriales': 'Insumo industrial de alto rendimiento y durabilidad. Diseñado para optimizar procesos productivos con máxima eficiencia y seguridad.',
+          'Ferretería': 'Producto de ferretería resistente y confiable. Fabricado con materiales de primera para garantizar durabilidad en cada proyecto.',
+          'Pinturas y Recubrimientos': 'Producto de recubrimiento de alta calidad con excelente cobertura y acabado. Formulado para ofrecer protección duradera y resultados profesionales.',
+          'Envases y Embalajes': 'Envase resistente y funcional para almacenamiento y transporte seguro. Diseñado para proteger el contenido y facilitar su manejo.'
         }
         const unitOfMeasures: Record<string, string> = {
           'Alimentos': 'unidad',
@@ -82,7 +100,13 @@ function fallbackCategorization(productName: string): ProductSuggestion {
           'Electrodomésticos': 'unidad',
           'Electrónica': 'unidad',
           'Ropa': 'unidad',
-          'Hogar': 'unidad'
+          'Hogar': 'unidad',
+          'Químicos': 'kg',
+          'Materias Primas': 'kg',
+          'Insumos Industriales': 'unidad',
+          'Ferretería': 'unidad',
+          'Pinturas y Recubrimientos': 'galón',
+          'Envases y Embalajes': 'unidad'
         }
         return {
           category,

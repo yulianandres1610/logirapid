@@ -65,6 +65,12 @@ const CATEGORIES = [
   'Electrónica',
   'Ropa',
   'Hogar',
+  'Químicos',
+  'Materias Primas',
+  'Insumos Industriales',
+  'Ferretería',
+  'Pinturas y Recubrimientos',
+  'Envases y Embalajes',
   'Otros'
 ]
 
