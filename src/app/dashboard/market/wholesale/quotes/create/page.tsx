@@ -460,32 +460,28 @@ function CreateQuotePage() {
   const globalDiscount = subtotal * discountPercent / 100
   const total = subtotal - globalDiscount
 
-  const validateStep = (step: string): boolean => {
-    setError('')
+  // Pure check — safe to call during render (no side effects)
+  const isStepValid = (step: string): boolean => {
     switch (step) {
       case 'customer':
-        if (!selectedCustomer) {
-          setError('Debe seleccionar un cliente')
-          return false
-        }
-        return true
+        return !!selectedCustomer
       case 'products':
-        if (lines.length === 0) {
-          setError('Debe agregar al menos un producto')
-          return false
-        }
-        return true
+        return lines.length > 0
       default:
         return true
     }
   }
 
   const nextStep = () => {
-    if (validateStep(currentStep)) {
-      const nextIndex = currentStepIndex + 1
-      if (nextIndex < STEPS.length) {
-        setCurrentStep(STEPS[nextIndex].id)
-      }
+    setError('')
+    if (!isStepValid(currentStep)) {
+      if (currentStep === 'customer') setError('Debe seleccionar un cliente')
+      if (currentStep === 'products') setError('Debe agregar al menos un producto')
+      return
+    }
+    const nextIndex = currentStepIndex + 1
+    if (nextIndex < STEPS.length) {
+      setCurrentStep(STEPS[nextIndex].id)
     }
   }
 
@@ -1302,12 +1298,9 @@ function CreateQuotePage() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={nextStep}
-              disabled={!validateStep(currentStep)}
               className={cn(
                 "px-6 py-3 rounded-xl font-semibold flex items-center gap-2 transition-all",
-                validateStep(currentStep)
-                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg shadow-blue-500/25'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg shadow-blue-500/25'
               )}
             >
               Siguiente
