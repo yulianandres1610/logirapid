@@ -144,6 +144,17 @@ function CreateQuotePage() {
 
   const [isRestoring, setIsRestoring] = useState(true)
 
+  // Quick create customer
+  const [showCreateCustomer, setShowCreateCustomer] = useState(false)
+  const [creatingCustomer, setCreatingCustomer] = useState(false)
+  const [newCustomer, setNewCustomer] = useState({
+    businessName: '',
+    contactName: '',
+    phone: '',
+    email: '',
+    taxId: ''
+  })
+
   // Update URL with current step
   const updateURL = useCallback((step: string, customerId?: number) => {
     const params = new URLSearchParams()
@@ -387,6 +398,50 @@ function CreateQuotePage() {
     setLines([])
     if (customer.pricelistId) {
       fetchPricelistItems(customer.pricelistId)
+    }
+  }
+
+  const handleCreateCustomer = async () => {
+    if (!newCustomer.businessName.trim()) {
+      setError('El nombre comercial es requerido')
+      return
+    }
+    setCreatingCustomer(true)
+    setError('')
+    try {
+      const response = await fetch('/api/market/wholesale/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessName: newCustomer.businessName.trim(),
+          contactName: newCustomer.contactName.trim() || null,
+          phone: newCustomer.phone.trim() || null,
+          email: newCustomer.email.trim() || null,
+          taxId: newCustomer.taxId.trim() || null
+        })
+      })
+      const result = await response.json()
+      if (result.success) {
+        // Refresh customer list and select the new one
+        const refreshRes = await fetch('/api/market/wholesale/customers?status=active&limit=200')
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json()
+          if (refreshData.success) {
+            setCustomers(refreshData.data.customers)
+            const created = refreshData.data.customers.find((c: Customer) => c.id === result.data.id)
+            if (created) handleSelectCustomer(created)
+          }
+        }
+        setShowCreateCustomer(false)
+        setNewCustomer({ businessName: '', contactName: '', phone: '', email: '', taxId: '' })
+      } else {
+        setError(result.error || 'Error al crear cliente')
+      }
+    } catch (err) {
+      console.error('Error creating customer:', err)
+      setError('Error de conexión al crear cliente')
+    } finally {
+      setCreatingCustomer(false)
     }
   }
 
@@ -732,9 +787,20 @@ function CreateQuotePage() {
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                  Seleccionar Cliente
-                </h2>
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                    Seleccionar Cliente
+                  </h2>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowCreateCustomer(true)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium bg-blue-600 hover:bg-blue-700 text-white text-sm transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Nuevo Cliente
+                  </motion.button>
+                </div>
 
                 <div className="relative">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -758,6 +824,25 @@ function CreateQuotePage() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2">
+                    {filteredCustomers.length === 0 && (
+                      <div className="col-span-full text-center py-8">
+                        <Users className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+                        <p className="text-gray-500 mb-1">
+                          {customerSearch ? 'No se encontraron clientes' : 'No hay clientes registrados'}
+                        </p>
+                        <button
+                          onClick={() => {
+                            setShowCreateCustomer(true)
+                            if (customerSearch) {
+                              setNewCustomer(prev => ({ ...prev, businessName: customerSearch }))
+                            }
+                          }}
+                          className="text-sm text-blue-600 hover:text-blue-700 font-medium mt-2"
+                        >
+                          + Crear nuevo cliente
+                        </button>
+                      </div>
+                    )}
                     {filteredCustomers.map(customer => (
                       <div
                         key={customer.id}
@@ -1309,6 +1394,180 @@ function CreateQuotePage() {
           )}
         </div>
       </div>
+
+      {/* Create Customer Modal */}
+      <AnimatePresence>
+        {showCreateCustomer && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            onClick={() => setShowCreateCustomer(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                'w-full max-w-lg p-6 rounded-2xl shadow-2xl',
+                theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+              )}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className={cn(
+                  'text-xl font-bold',
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                )}>
+                  Nuevo Cliente Mayorista
+                </h3>
+                <button
+                  onClick={() => setShowCreateCustomer(false)}
+                  className={cn(
+                    'p-2 rounded-lg transition-colors',
+                    theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                  )}
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                    Nombre Comercial *
+                  </label>
+                  <input
+                    type="text"
+                    value={newCustomer.businessName}
+                    onChange={(e) => setNewCustomer(prev => ({ ...prev, businessName: e.target.value }))}
+                    placeholder="Ej: Distribuidora XYZ"
+                    autoFocus
+                    className={cn(
+                      'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2',
+                      theme === 'dark'
+                        ? 'bg-gray-900 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                        : 'bg-white border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                      Contacto
+                    </label>
+                    <input
+                      type="text"
+                      value={newCustomer.contactName}
+                      onChange={(e) => setNewCustomer(prev => ({ ...prev, contactName: e.target.value }))}
+                      placeholder="Nombre del contacto"
+                      className={cn(
+                        'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2',
+                        theme === 'dark'
+                          ? 'bg-gray-900 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                          : 'bg-white border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                      )}
+                    />
+                  </div>
+                  <div>
+                    <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                      RUC/NIT
+                    </label>
+                    <input
+                      type="text"
+                      value={newCustomer.taxId}
+                      onChange={(e) => setNewCustomer(prev => ({ ...prev, taxId: e.target.value }))}
+                      placeholder="Identificación fiscal"
+                      className={cn(
+                        'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2',
+                        theme === 'dark'
+                          ? 'bg-gray-900 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                          : 'bg-white border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                      )}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                      Teléfono
+                    </label>
+                    <input
+                      type="tel"
+                      value={newCustomer.phone}
+                      onChange={(e) => setNewCustomer(prev => ({ ...prev, phone: e.target.value }))}
+                      placeholder="+53 5..."
+                      className={cn(
+                        'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2',
+                        theme === 'dark'
+                          ? 'bg-gray-900 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                          : 'bg-white border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                      )}
+                    />
+                  </div>
+                  <div>
+                    <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={newCustomer.email}
+                      onChange={(e) => setNewCustomer(prev => ({ ...prev, email: e.target.value }))}
+                      placeholder="correo@ejemplo.com"
+                      className={cn(
+                        'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2',
+                        theme === 'dark'
+                          ? 'bg-gray-900 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                          : 'bg-white border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                      )}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowCreateCustomer(false)}
+                  className={cn(
+                    'flex-1 px-4 py-2.5 rounded-xl font-medium transition-colors',
+                    theme === 'dark'
+                      ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                      : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                  )}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCreateCustomer}
+                  disabled={creatingCustomer || !newCustomer.businessName.trim()}
+                  className={cn(
+                    'flex-1 px-4 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2',
+                    creatingCustomer || !newCustomer.businessName.trim()
+                      ? 'bg-blue-400 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700',
+                    'text-white'
+                  )}
+                >
+                  {creatingCustomer ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Creando...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      Crear Cliente
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Cancel Modal */}
       <AnimatePresence>
