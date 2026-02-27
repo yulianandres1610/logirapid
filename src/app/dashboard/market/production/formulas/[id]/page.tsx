@@ -18,9 +18,13 @@ import {
   Clock,
   Layers,
   Edit,
-  Eye,
   Calendar,
-  BarChart3
+  BarChart3,
+  TrendingUp,
+  Target,
+  Loader2,
+  CheckCircle,
+  Activity
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -95,11 +99,9 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
   const router = useRouter()
   const { theme } = useTheme()
 
-  // Mode
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  // Form state
   const [formula, setFormula] = useState<Formula | null>(null)
   const [name, setName] = useState('')
   const [targetProductId, setTargetProductId] = useState<number | null>(null)
@@ -111,11 +113,9 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<FormulaLine[]>([])
 
-  // UI state
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Product search state
   const [productSearch, setProductSearch] = useState('')
   const [products, setProducts] = useState<Product[]>([])
   const [loadingProducts, setLoadingProducts] = useState(false)
@@ -218,13 +218,11 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
       setTimeout(() => setError(null), 3000)
       return
     }
-
     if (product.id === targetProductId) {
       setError('No puedes agregar el producto final como materia prima')
       setTimeout(() => setError(null), 3000)
       return
     }
-
     setLines([...lines, {
       rawMaterialId: product.id,
       materialName: product.name,
@@ -262,25 +260,12 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
     e.preventDefault()
     setError(null)
 
-    if (!name.trim()) {
-      setError('El nombre es requerido')
-      return
-    }
-    if (!targetProductId) {
-      setError('Selecciona el producto final')
-      return
-    }
-    if (lines.length === 0) {
-      setError('Agrega al menos una materia prima')
-      return
-    }
-    if (yieldQuantity <= 0) {
-      setError('El rendimiento debe ser mayor a 0')
-      return
-    }
+    if (!name.trim()) { setError('El nombre es requerido'); return }
+    if (!targetProductId) { setError('Selecciona el producto final'); return }
+    if (lines.length === 0) { setError('Agrega al menos una materia prima'); return }
+    if (yieldQuantity <= 0) { setError('El rendimiento debe ser mayor a 0'); return }
 
     setSaving(true)
-
     try {
       const response = await fetch(`/api/market/production/formulas/${resolvedParams.id}`, {
         method: 'PATCH',
@@ -301,9 +286,7 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
           }))
         })
       })
-
       const data = await response.json()
-
       if (data.success) {
         setIsEditing(false)
         fetchFormula()
@@ -368,19 +351,30 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
     if (!dateString) return '-'
     return new Date(dateString).toLocaleDateString('es-ES', {
       day: '2-digit',
-      month: 'short',
+      month: 'long',
       year: 'numeric'
     })
   }
 
   const totals = calculateTotals()
+  const margin = targetProduct && targetProduct.sellingPrice > 0
+    ? ((targetProduct.sellingPrice - totals.costPerUnit) / targetProduct.sellingPrice * 100)
+    : 0
 
   if (loading) {
     return (
       <ProtectedRoute>
         <DashboardLayout>
-          <div className="flex items-center justify-center min-h-[400px]">
-            <RefreshCw className="w-8 h-8 animate-spin text-gray-400" />
+          <div className="min-h-screen p-6 flex items-center justify-center">
+            <div className="text-center">
+              <div className={cn(
+                'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4',
+                theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+              )}>
+                <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+              </div>
+              <p className="text-gray-500">Cargando fórmula...</p>
+            </div>
           </div>
         </DashboardLayout>
       </ProtectedRoute>
@@ -391,14 +385,35 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
     return (
       <ProtectedRoute>
         <DashboardLayout>
-          <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
-            <p className="text-gray-500">Fórmula no encontrada</p>
-            <Link
-              href="/dashboard/market/production/formulas"
-              className="text-purple-600 hover:underline"
-            >
-              Volver a Fórmulas
-            </Link>
+          <div className="min-h-screen p-6">
+            <div className={cn(
+              'max-w-xl mx-auto text-center p-8 rounded-2xl',
+              theme === 'dark' ? 'bg-gray-800' : 'bg-white shadow-lg'
+            )}>
+              <div className={cn(
+                'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4',
+                theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
+              )}>
+                <FlaskConical className="w-8 h-8 text-red-500" />
+              </div>
+              <h2 className={cn(
+                'text-xl font-bold mb-2',
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>
+                Fórmula no encontrada
+              </h2>
+              <p className="text-gray-500 mb-6">No pudimos cargar los detalles de esta fórmula.</p>
+              <Link href="/dashboard/market/production/formulas">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Volver a fórmulas
+                </motion.button>
+              </Link>
+            </div>
           </div>
         </DashboardLayout>
       </ProtectedRoute>
@@ -408,74 +423,145 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="p-4 md:p-6 max-w-5xl mx-auto">
+        <div className="min-h-screen p-6">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <Link
-                href="/dashboard/market/production/formulas"
-                className={cn(
-                  "p-2 rounded-lg border transition-colors",
-                  "border-gray-200 dark:border-gray-700",
-                  "hover:bg-gray-100 dark:hover:bg-gray-800"
-                )}
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <FlaskConical className="w-7 h-7 text-purple-600" />
-                  {formula.code}
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400 mt-1">
-                  {formula.name}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {!isEditing ? (
-                <button
-                  onClick={() => setIsEditing(true)}
+          <div className="max-w-6xl mx-auto mb-8">
+            <div className="flex items-center justify-between mb-6">
+              <Link href="/dashboard/market/production/formulas">
+                <motion.button
+                  whileHover={{ scale: 1.02, x: -2 }}
+                  whileTap={{ scale: 0.98 }}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors",
-                    "bg-purple-600 hover:bg-purple-700 text-white"
+                    'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
+                    theme === 'dark'
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   )}
                 >
-                  <Edit className="w-4 h-4" />
-                  Editar
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={cancelEdit}
-                    className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors",
-                      "border border-gray-200 dark:border-gray-700",
-                      "hover:bg-gray-100 dark:hover:bg-gray-700",
-                      "text-gray-700 dark:text-gray-300"
-                    )}
+                  <ArrowLeft className="w-4 h-4" />
+                  <span className="font-medium">Volver</span>
+                </motion.button>
+              </Link>
+
+              <div className="flex items-center gap-2">
+                {!isEditing ? (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setIsEditing(true)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors"
                   >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleSubmit}
-                    disabled={saving}
-                    className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors",
-                      "bg-purple-600 hover:bg-purple-700 text-white",
-                      saving && "opacity-50 cursor-not-allowed"
-                    )}
-                  >
-                    {saving ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Save className="w-4 h-4" />
-                    )}
-                    Guardar
-                  </button>
-                </>
-              )}
+                    <Edit className="w-4 h-4" />
+                    <span className="hidden sm:inline">Editar</span>
+                  </motion.button>
+                ) : (
+                  <>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={cancelEdit}
+                      className={cn(
+                        'flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-colors',
+                        theme === 'dark'
+                          ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      )}
+                    >
+                      Cancelar
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleSubmit}
+                      disabled={saving}
+                      className={cn(
+                        'flex items-center gap-2 px-4 py-2 rounded-xl font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors',
+                        saving && 'opacity-50 cursor-not-allowed'
+                      )}
+                    >
+                      {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      {saving ? 'Guardando...' : 'Guardar'}
+                    </motion.button>
+                  </>
+                )}
+              </div>
             </div>
+
+            {/* Hero Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                'p-6 rounded-2xl border',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 bg-gradient-to-br from-purple-500 to-violet-600">
+                    <FlaskConical className="w-7 h-7 text-white" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-3 mb-1 flex-wrap">
+                      <h1 className={cn(
+                        'text-2xl md:text-3xl font-bold font-mono',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        {formula.code}
+                      </h1>
+                      <span className={cn(
+                        'inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium',
+                        formula.isActive
+                          ? theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                          : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+                      )}>
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        {formula.isActive ? 'Activa' : 'Inactiva'}
+                      </span>
+                    </div>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className={cn(
+                          'text-sm px-3 py-1.5 rounded-lg border w-full max-w-md mt-1',
+                          theme === 'dark'
+                            ? 'bg-gray-900 border-gray-700 text-white'
+                            : 'bg-white border-gray-200 text-gray-900',
+                          'focus:ring-2 focus:ring-purple-500 focus:border-transparent'
+                        )}
+                      />
+                    ) : (
+                      <p className="text-sm text-gray-500 mb-2">{formula.name}</p>
+                    )}
+                    <div className="flex items-center gap-4 text-sm text-gray-500 flex-wrap">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4" />
+                        {formatDate(formula.createdAt)}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Layers className="w-4 h-4" />
+                        {lines.length} materiales
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={cn(
+                  'p-4 rounded-xl',
+                  theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                )}>
+                  <p className="text-sm text-gray-500 mb-1">Costo por Unidad</p>
+                  <p className={cn(
+                    'text-3xl font-bold',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>
+                    {formatCurrency(totals.costPerUnit)}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
           </div>
 
           {/* Error Alert */}
@@ -485,7 +571,7 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="mb-6 p-4 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 flex items-center gap-3"
+                className="max-w-6xl mx-auto mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 flex items-center gap-3"
               >
                 <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
                 <p className="text-red-700 dark:text-red-300">{error}</p>
@@ -496,479 +582,620 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
             )}
           </AnimatePresence>
 
-          {/* Usage Stats */}
-          {formula.usageStats && !isEditing && (
-            <div className={cn(
-              "mb-6 p-4 rounded-xl border grid grid-cols-4 gap-4",
-              "bg-white dark:bg-gray-800",
-              "border-gray-200 dark:border-gray-700"
-            )}>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {formula.usageStats.totalPlans}
-                </p>
-                <p className="text-sm text-gray-500">Planes Totales</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-green-600">
-                  {formula.usageStats.completedPlans}
-                </p>
-                <p className="text-sm text-gray-500">Completados</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-purple-600">
-                  {formula.usageStats.totalProduced}
-                </p>
-                <p className="text-sm text-gray-500">Unidades Producidas</p>
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {formatDate(formula.usageStats.lastUsed)}
-                </p>
-                <p className="text-sm text-gray-500">Último Uso</p>
-              </div>
+          <div className="max-w-6xl mx-auto space-y-6">
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                {
+                  label: 'Materiales',
+                  value: lines.length,
+                  icon: Layers,
+                  color: 'blue',
+                  suffix: 'items'
+                },
+                {
+                  label: 'Rendimiento',
+                  value: yieldQuantity,
+                  icon: Target,
+                  color: 'purple',
+                  suffix: yieldUnit
+                },
+                {
+                  label: 'Costo Lote',
+                  value: formatCurrency(totals.totalCost),
+                  icon: DollarSign,
+                  color: 'emerald',
+                  isFormatted: true
+                },
+                {
+                  label: 'Margen Est.',
+                  value: `${margin.toFixed(0)}%`,
+                  icon: TrendingUp,
+                  color: 'amber',
+                  isFormatted: true,
+                  highlight: margin >= 30
+                }
+              ].map((stat, idx) => (
+                <motion.div
+                  key={stat.label}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.1 }}
+                  className={cn(
+                    'p-5 rounded-2xl border relative overflow-hidden group',
+                    theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm',
+                    stat.highlight && 'ring-2 ring-emerald-500/30'
+                  )}
+                >
+                  <div className={cn(
+                    'absolute -right-4 -top-4 w-20 h-20 rounded-full opacity-10 group-hover:opacity-20 transition-opacity',
+                    stat.color === 'blue' && 'bg-blue-500',
+                    stat.color === 'purple' && 'bg-purple-500',
+                    stat.color === 'emerald' && 'bg-emerald-500',
+                    stat.color === 'amber' && 'bg-amber-500'
+                  )} />
+                  <div className="relative">
+                    <div className={cn(
+                      'w-10 h-10 rounded-xl flex items-center justify-center mb-3',
+                      stat.color === 'blue' && (theme === 'dark' ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'),
+                      stat.color === 'purple' && (theme === 'dark' ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600'),
+                      stat.color === 'emerald' && (theme === 'dark' ? 'bg-emerald-900/50 text-emerald-400' : 'bg-emerald-100 text-emerald-600'),
+                      stat.color === 'amber' && (theme === 'dark' ? 'bg-amber-900/50 text-amber-400' : 'bg-amber-100 text-amber-600')
+                    )}>
+                      <stat.icon className="w-5 h-5" />
+                    </div>
+                    <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
+                    <p className={cn(
+                      'text-2xl font-bold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      {stat.isFormatted ? stat.value : stat.value}
+                      {stat.suffix && !stat.isFormatted && (
+                        <span className="text-sm font-normal text-gray-500 ml-1">{stat.suffix}</span>
+                      )}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
             </div>
-          )}
 
-          <form onSubmit={handleSubmit}>
+            {/* Info Cards Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Main Form */}
-              <div className="lg:col-span-2 space-y-6">
-                {/* Basic Info */}
-                <div className={cn(
-                  "p-6 rounded-xl border",
-                  "bg-white dark:bg-gray-800",
-                  "border-gray-200 dark:border-gray-700"
-                )}>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                    Información Básica
-                  </h2>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Nombre de la Fórmula *
-                      </label>
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          placeholder="Ej: Pintura Blanca Mate 1GL"
-                          className={cn(
-                            "w-full px-4 py-2 rounded-lg border",
-                            "bg-white dark:bg-gray-900",
-                            "border-gray-200 dark:border-gray-700",
-                            "focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          )}
-                        />
-                      ) : (
-                        <p className="text-gray-900 dark:text-white font-medium">{name}</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Producto Final *
-                      </label>
-                      {targetProduct && (
-                        <div className={cn(
-                          "flex items-center gap-3 p-3 rounded-lg border",
-                          "bg-purple-50 dark:bg-purple-900/20",
-                          "border-purple-200 dark:border-purple-800"
-                        )}>
-                          {targetProduct.imageUrl ? (
-                            <img
-                              src={targetProduct.imageUrl}
-                              alt={targetProduct.name}
-                              className="w-12 h-12 rounded object-cover"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                              <Package className="w-6 h-6 text-gray-400" />
-                            </div>
-                          )}
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-900 dark:text-white">{targetProduct.name}</p>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                              {targetProduct.sku && `SKU: ${targetProduct.sku} • `}
-                              {targetProduct.unitOfMeasure} • {formatCurrency(targetProduct.sellingPrice)}
-                            </p>
-                          </div>
-                          {isEditing && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setTargetProductId(null)
-                                setTargetProduct(null)
-                              }}
-                              className="p-2 hover:bg-purple-100 dark:hover:bg-purple-800 rounded-lg"
-                            >
-                              <X className="w-4 h-4 text-purple-600" />
-                            </button>
-                          )}
-                        </div>
-                      )}
-                      {isEditing && !targetProduct && (
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                          <input
-                            type="text"
-                            value={showProductSearch === 'target' ? productSearch : ''}
-                            onChange={(e) => setProductSearch(e.target.value)}
-                            onFocus={() => setShowProductSearch('target')}
-                            placeholder="Buscar producto final..."
-                            className={cn(
-                              "w-full pl-10 pr-4 py-2 rounded-lg border",
-                              "bg-white dark:bg-gray-900",
-                              "border-gray-200 dark:border-gray-700",
-                              "focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                            )}
-                          />
-                          {showProductSearch === 'target' && products.length > 0 && (
-                            <div className={cn(
-                              "absolute z-10 w-full mt-1 max-h-60 overflow-auto rounded-lg border shadow-lg",
-                              "bg-white dark:bg-gray-800",
-                              "border-gray-200 dark:border-gray-700"
-                            )}>
-                              {products.map(product => (
-                                <button
-                                  key={product.id}
-                                  type="button"
-                                  onClick={() => selectTargetProduct(product)}
-                                  className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-left"
-                                >
-                                  {product.imageUrl ? (
-                                    <img src={product.imageUrl} alt={product.name} className="w-10 h-10 rounded object-cover" />
-                                  ) : (
-                                    <div className="w-10 h-10 rounded bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                                      <Package className="w-5 h-5 text-gray-400" />
-                                    </div>
-                                  )}
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-medium text-gray-900 dark:text-white truncate">{product.name}</p>
-                                    <p className="text-sm text-gray-500 truncate">
-                                      {product.sku || product.barcode || 'Sin código'} • {product.unitOfMeasure}
-                                    </p>
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Rendimiento por Lote *
-                        </label>
-                        {isEditing ? (
-                          <div className="flex gap-2">
-                            <input
-                              type="number"
-                              value={yieldQuantity}
-                              onChange={(e) => setYieldQuantity(parseFloat(e.target.value) || 0)}
-                              min="0.001"
-                              step="0.001"
-                              className={cn(
-                                "flex-1 px-4 py-2 rounded-lg border",
-                                "bg-white dark:bg-gray-900",
-                                "border-gray-200 dark:border-gray-700",
-                                "focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                              )}
-                            />
-                            <input
-                              type="text"
-                              value={yieldUnit}
-                              onChange={(e) => setYieldUnit(e.target.value)}
-                              className={cn(
-                                "w-24 px-4 py-2 rounded-lg border",
-                                "bg-white dark:bg-gray-900",
-                                "border-gray-200 dark:border-gray-700",
-                                "focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                              )}
-                            />
-                          </div>
-                        ) : (
-                          <p className="text-gray-900 dark:text-white font-medium">
-                            {yieldQuantity} {yieldUnit}
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Costo de Mano de Obra
-                        </label>
-                        {isEditing ? (
-                          <div className="relative">
-                            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                            <input
-                              type="number"
-                              value={laborCostPerBatch}
-                              onChange={(e) => setLaborCostPerBatch(parseFloat(e.target.value) || 0)}
-                              min="0"
-                              step="0.01"
-                              className={cn(
-                                "w-full pl-10 pr-4 py-2 rounded-lg border",
-                                "bg-white dark:bg-gray-900",
-                                "border-gray-200 dark:border-gray-700",
-                                "focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                              )}
-                            />
-                          </div>
-                        ) : (
-                          <p className="text-gray-900 dark:text-white font-medium">
-                            {formatCurrency(laborCostPerBatch)}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Notas
-                      </label>
-                      {isEditing ? (
-                        <textarea
-                          value={notes}
-                          onChange={(e) => setNotes(e.target.value)}
-                          rows={2}
-                          placeholder="Instrucciones o notas adicionales..."
-                          className={cn(
-                            "w-full px-4 py-2 rounded-lg border resize-none",
-                            "bg-white dark:bg-gray-900",
-                            "border-gray-200 dark:border-gray-700",
-                            "focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          )}
-                        />
-                      ) : (
-                        <p className="text-gray-600 dark:text-gray-400">
-                          {notes || 'Sin notas'}
-                        </p>
-                      )}
-                    </div>
+              {/* Target Product Card */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={cn(
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'
+                  )}>
+                    <Target className="w-5 h-5 text-purple-500" />
                   </div>
+                  <h3 className={cn(
+                    'font-semibold',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>Producto Final</h3>
                 </div>
 
-                {/* Materials */}
-                <div className={cn(
-                  "p-6 rounded-xl border",
-                  "bg-white dark:bg-gray-800",
-                  "border-gray-200 dark:border-gray-700"
-                )}>
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                      <Layers className="w-5 h-5 text-purple-600" />
-                      Materias Primas
-                    </h2>
-                    <span className="text-sm text-gray-500">{lines.length} material(es)</span>
+                {targetProduct && !isEditing && (
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className={cn(
+                      'w-14 h-14 rounded-2xl overflow-hidden shrink-0',
+                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                    )}>
+                      {targetProduct.imageUrl ? (
+                        <img src={targetProduct.imageUrl} alt={targetProduct.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Package className="w-6 h-6 text-gray-400" />
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <p className={cn(
+                        'font-semibold',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>{targetProduct.name}</p>
+                      {targetProduct.sku && (
+                        <p className="text-xs text-gray-500 font-mono mt-0.5">SKU: {targetProduct.sku}</p>
+                      )}
+                    </div>
                   </div>
+                )}
 
-                  {/* Add Material Search (only in edit mode) */}
-                  {isEditing && (
-                    <div className="relative mb-4">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <input
-                        type="text"
-                        value={showProductSearch === 'material' ? productSearch : ''}
-                        onChange={(e) => setProductSearch(e.target.value)}
-                        onFocus={() => setShowProductSearch('material')}
-                        placeholder="Buscar materia prima para agregar..."
-                        className={cn(
-                          "w-full pl-10 pr-4 py-2 rounded-lg border",
-                          "bg-white dark:bg-gray-900",
-                          "border-gray-200 dark:border-gray-700",
-                          "focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                        )}
-                      />
-                      {showProductSearch === 'material' && products.length > 0 && (
-                        <div className={cn(
-                          "absolute z-10 w-full mt-1 max-h-60 overflow-auto rounded-lg border shadow-lg",
-                          "bg-white dark:bg-gray-800",
-                          "border-gray-200 dark:border-gray-700"
-                        )}>
-                          {products.filter(p => p.id !== targetProductId).map(product => (
-                            <button
-                              key={product.id}
-                              type="button"
-                              onClick={() => addMaterial(product)}
-                              disabled={lines.some(l => l.rawMaterialId === product.id)}
-                              className={cn(
-                                "w-full flex items-center gap-3 p-3 text-left",
-                                lines.some(l => l.rawMaterialId === product.id)
-                                  ? "opacity-50 cursor-not-allowed bg-gray-50 dark:bg-gray-700"
-                                  : "hover:bg-gray-50 dark:hover:bg-gray-700"
-                              )}
-                            >
-                              {product.imageUrl ? (
-                                <img src={product.imageUrl} alt={product.name} className="w-10 h-10 rounded object-cover" />
-                              ) : (
-                                <div className="w-10 h-10 rounded bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                                  <Package className="w-5 h-5 text-gray-400" />
-                                </div>
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium text-gray-900 dark:text-white truncate">{product.name}</p>
-                                <p className="text-sm text-gray-500 truncate">
-                                  {product.unitOfMeasure} • {formatCurrency(product.costPrice)} • Stock: {product.quantityOnHand}
-                                </p>
+                {isEditing && targetProduct && (
+                  <div className={cn(
+                    'flex items-center gap-3 p-3 rounded-xl border mb-4',
+                    theme === 'dark' ? 'bg-purple-900/20 border-purple-800' : 'bg-purple-50 border-purple-200'
+                  )}>
+                    {targetProduct.imageUrl ? (
+                      <img src={targetProduct.imageUrl} alt={targetProduct.name} className="w-12 h-12 rounded-lg object-cover" />
+                    ) : (
+                      <div className={cn('w-12 h-12 rounded-lg flex items-center justify-center', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100')}>
+                        <Package className="w-6 h-6 text-gray-400" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className={cn('font-medium truncate', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{targetProduct.name}</p>
+                      <p className="text-sm text-gray-500">{targetProduct.unitOfMeasure}</p>
+                    </div>
+                    <button type="button" onClick={() => { setTargetProductId(null); setTargetProduct(null) }} className="p-1.5 hover:bg-purple-100 dark:hover:bg-purple-800 rounded-lg">
+                      <X className="w-4 h-4 text-purple-600" />
+                    </button>
+                  </div>
+                )}
+
+                {isEditing && !targetProduct && (
+                  <div className="relative mb-4">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      value={showProductSearch === 'target' ? productSearch : ''}
+                      onChange={(e) => setProductSearch(e.target.value)}
+                      onFocus={() => setShowProductSearch('target')}
+                      placeholder="Buscar producto final..."
+                      className={cn(
+                        'w-full pl-10 pr-4 py-2.5 rounded-xl border',
+                        theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-200',
+                        'focus:ring-2 focus:ring-purple-500 focus:border-transparent'
+                      )}
+                    />
+                    {showProductSearch === 'target' && products.length > 0 && (
+                      <div className={cn(
+                        'absolute z-10 w-full mt-1 max-h-60 overflow-auto rounded-xl border shadow-lg',
+                        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                      )}>
+                        {products.map(product => (
+                          <button key={product.id} type="button" onClick={() => selectTargetProduct(product)}
+                            className={cn('w-full flex items-center gap-3 p-3 text-left', theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50')}>
+                            {product.imageUrl ? (
+                              <img src={product.imageUrl} alt={product.name} className="w-10 h-10 rounded-lg object-cover" />
+                            ) : (
+                              <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100')}>
+                                <Package className="w-5 h-5 text-gray-400" />
                               </div>
-                              <Plus className="w-5 h-5 text-purple-600" />
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className={cn('font-medium truncate', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{product.name}</p>
+                              <p className="text-sm text-gray-500 truncate">{product.sku || product.barcode || 'Sin código'} &middot; {product.unitOfMeasure}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
-                  {/* Materials Table */}
-                  {lines.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <Layers className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                      <p>No hay materias primas</p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-gray-200 dark:border-gray-700">
-                            <th className="text-left py-2 text-sm font-medium text-gray-600 dark:text-gray-400">Material</th>
-                            <th className="text-center py-2 text-sm font-medium text-gray-600 dark:text-gray-400 w-24">Unidad</th>
-                            <th className="text-center py-2 text-sm font-medium text-gray-600 dark:text-gray-400 w-28">Cantidad</th>
-                            <th className="text-right py-2 text-sm font-medium text-gray-600 dark:text-gray-400 w-24">Costo</th>
-                            <th className="text-right py-2 text-sm font-medium text-gray-600 dark:text-gray-400 w-24">Subtotal</th>
-                            {isEditing && <th className="w-10"></th>}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                          {lines.map((line, index) => (
-                            <tr key={line.rawMaterialId}>
-                              <td className="py-3">
-                                <p className="font-medium text-gray-900 dark:text-white">{line.materialName}</p>
-                                {line.materialSku && (
-                                  <p className="text-xs text-gray-500">{line.materialSku}</p>
-                                )}
-                              </td>
-                              <td className="py-3 text-center text-sm text-gray-600 dark:text-gray-400">
-                                {line.materialUnit}
-                              </td>
-                              <td className="py-3">
-                                {isEditing ? (
-                                  <input
-                                    type="number"
-                                    value={line.quantity}
-                                    onChange={(e) => updateLineQuantity(index, parseFloat(e.target.value) || 0)}
-                                    min="0.0001"
-                                    step="0.0001"
-                                    className={cn(
-                                      "w-full px-2 py-1 rounded border text-center",
-                                      "bg-white dark:bg-gray-900",
-                                      "border-gray-200 dark:border-gray-700",
-                                      "focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                    )}
-                                  />
-                                ) : (
-                                  <p className="text-center text-gray-900 dark:text-white">{line.quantity}</p>
-                                )}
-                              </td>
-                              <td className="py-3 text-right text-sm text-gray-600 dark:text-gray-400">
-                                {formatCurrency(line.materialCost)}
-                              </td>
-                              <td className="py-3 text-right font-medium text-gray-900 dark:text-white">
-                                {formatCurrency(line.quantity * line.materialCost)}
-                              </td>
-                              {isEditing && (
-                                <td className="py-3">
-                                  <button
-                                    type="button"
-                                    onClick={() => removeLine(index)}
-                                    className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-600"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </td>
-                              )}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Summary Sidebar */}
-              <div className="lg:col-span-1">
                 <div className={cn(
-                  "p-6 rounded-xl border sticky top-6",
-                  "bg-white dark:bg-gray-800",
-                  "border-gray-200 dark:border-gray-700"
+                  'pt-4 border-t space-y-2',
+                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                 )}>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                    Resumen de Costos
-                  </h2>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Precio venta:</span>
+                    <span className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      {formatCurrency(targetProduct?.sellingPrice || 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Unidad:</span>
+                    <span className="text-gray-600">{yieldUnit}</span>
+                  </div>
+                </div>
+              </motion.div>
 
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">Materias primas:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">
-                        {formatCurrency(totals.materialsCost)}
-                      </span>
+              {/* Cost Summary Card */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-2 rounded-xl',
+                      theme === 'dark' ? 'bg-emerald-900/30' : 'bg-emerald-100'
+                    )}>
+                      <DollarSign className="w-5 h-5 text-emerald-500" />
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">Mano de obra:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">
+                    <h3 className={cn(
+                      'font-semibold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>Desglose de Costos</h3>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">Materias primas</span>
+                    <span className={cn('text-sm font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      {formatCurrency(totals.materialsCost)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">Mano de obra</span>
+                    {isEditing ? (
+                      <div className="relative w-32">
+                        <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input type="number" value={laborCostPerBatch} onChange={(e) => setLaborCostPerBatch(parseFloat(e.target.value) || 0)} min="0" step="0.01"
+                          className={cn('w-full pl-7 pr-2 py-1.5 rounded-lg border text-sm text-right', theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-200', 'focus:ring-2 focus:ring-purple-500')} />
+                      </div>
+                    ) : (
+                      <span className={cn('text-sm font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
                         {formatCurrency(laborCostPerBatch)}
                       </span>
+                    )}
+                  </div>
+
+                  <div className={cn('pt-3 border-t', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                    <div className="flex items-center justify-between">
+                      <span className={cn('font-medium', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>Total por lote</span>
+                      <span className={cn('font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        {formatCurrency(totals.totalCost)}
+                      </span>
                     </div>
-                    <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-700 dark:text-gray-300">Total por lote:</span>
-                        <span className="font-bold text-gray-900 dark:text-white">
-                          {formatCurrency(totals.totalCost)}
+                  </div>
+
+                  <div className={cn('pt-3 border-t', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-500">Rendimiento</span>
+                      {isEditing ? (
+                        <div className="flex gap-1.5 w-40">
+                          <input type="number" value={yieldQuantity} onChange={(e) => setYieldQuantity(parseFloat(e.target.value) || 0)} min="0.001" step="0.001"
+                            className={cn('flex-1 px-2 py-1.5 rounded-lg border text-sm text-right', theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-200', 'focus:ring-2 focus:ring-purple-500')} />
+                          <input type="text" value={yieldUnit} onChange={(e) => setYieldUnit(e.target.value)}
+                            className={cn('w-16 px-2 py-1.5 rounded-lg border text-sm', theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-200', 'focus:ring-2 focus:ring-purple-500')} />
+                        </div>
+                      ) : (
+                        <span className={cn('text-sm font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          {yieldQuantity} {yieldUnit}
                         </span>
-                      </div>
-                    </div>
-                    <div className={cn(
-                      "p-3 rounded-lg",
-                      "bg-purple-50 dark:bg-purple-900/20"
-                    )}>
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium text-purple-700 dark:text-purple-300">Costo por unidad:</span>
-                        <span className="text-xl font-bold text-purple-600">
-                          {formatCurrency(totals.costPerUnit)}
-                        </span>
-                      </div>
-                      {targetProduct && (
-                        <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                          Precio venta: {formatCurrency(targetProduct.sellingPrice)} •
-                          Margen: {((targetProduct.sellingPrice - totals.costPerUnit) / targetProduct.sellingPrice * 100).toFixed(1)}%
-                        </p>
                       )}
                     </div>
                   </div>
 
-                  {/* Quick Actions */}
-                  {!isEditing && (
-                    <div className="mt-6 space-y-3">
-                      <Link
-                        href={`/dashboard/market/production/planning/create?formulaId=${formula.id}`}
-                        className={cn(
-                          "w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-colors",
-                          "bg-green-600 hover:bg-green-700 text-white"
-                        )}
+                  {/* Margin visual */}
+                  <div className={cn(
+                    'p-3 rounded-xl mt-2',
+                    margin >= 30
+                      ? theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50'
+                      : margin >= 15
+                        ? theme === 'dark' ? 'bg-amber-900/20' : 'bg-amber-50'
+                        : theme === 'dark' ? 'bg-red-900/20' : 'bg-red-50'
+                  )}>
+                    <div className="flex items-center justify-between">
+                      <span className={cn(
+                        'text-sm font-medium',
+                        margin >= 30 ? 'text-emerald-600' : margin >= 15 ? 'text-amber-600' : 'text-red-600'
+                      )}>Margen estimado</span>
+                      <span className={cn(
+                        'text-lg font-bold',
+                        margin >= 30 ? 'text-emerald-600' : margin >= 15 ? 'text-amber-600' : 'text-red-600'
+                      )}>{margin.toFixed(1)}%</span>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Usage & Details Card */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={cn(
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
+                  )}>
+                    <Activity className="w-5 h-5 text-blue-500" />
+                  </div>
+                  <h3 className={cn(
+                    'font-semibold',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>Uso y Estadísticas</h3>
+                </div>
+
+                {formula.usageStats ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Planes totales</span>
+                      <span className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        {formula.usageStats.totalPlans}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Completados</span>
+                      <span className="text-sm font-semibold text-emerald-500">{formula.usageStats.completedPlans}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Unidades producidas</span>
+                      <span className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        {formula.usageStats.totalProduced}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Último uso</span>
+                      <span className="text-gray-600">{formatDate(formula.usageStats.lastUsed)}</span>
+                    </div>
+
+                    {/* Progress bar */}
+                    {formula.usageStats.totalPlans > 0 && (
+                      <div className="pt-2">
+                        <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                          <span>Tasa de completación</span>
+                          <span>{((formula.usageStats.completedPlans / formula.usageStats.totalPlans) * 100).toFixed(0)}%</span>
+                        </div>
+                        <div className={cn('h-2 rounded-full overflow-hidden', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200')}>
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${(formula.usageStats.completedPlans / formula.usageStats.totalPlans) * 100}%` }}
+                            transition={{ duration: 1, ease: 'easeOut' }}
+                            className="h-full bg-gradient-to-r from-purple-500 to-violet-500 rounded-full"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <BarChart3 className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm text-gray-500">Sin datos de uso aún</p>
+                  </div>
+                )}
+
+                {/* Quick Action */}
+                {!isEditing && (
+                  <div className={cn('mt-6 pt-4 border-t', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                    <Link href={`/dashboard/market/production/planning/create?formulaId=${formula.id}`}>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white transition-all"
                       >
                         <Calendar className="w-5 h-5" />
                         Planificar Producción
-                      </Link>
-                    </div>
-                  )}
+                      </motion.button>
+                    </Link>
+                  </div>
+                )}
+              </motion.div>
+            </div>
+
+            {/* Materials Table */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className={cn(
+                'rounded-2xl border overflow-hidden',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <div className={cn(
+                'px-6 py-4 border-b flex items-center justify-between',
+                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+              )}>
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    'p-2 rounded-xl',
+                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                  )}>
+                    <Layers className="w-5 h-5 text-gray-500" />
+                  </div>
+                  <div>
+                    <h3 className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      Materias Primas
+                    </h3>
+                    <p className="text-sm text-gray-500">{lines.length} materiales en esta fórmula</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </form>
+
+              {/* Add Material Search (edit mode) */}
+              {isEditing && (
+                <div className={cn('px-6 py-3 border-b', theme === 'dark' ? 'border-gray-700 bg-gray-900/30' : 'border-gray-100 bg-gray-50')}>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      value={showProductSearch === 'material' ? productSearch : ''}
+                      onChange={(e) => setProductSearch(e.target.value)}
+                      onFocus={() => setShowProductSearch('material')}
+                      placeholder="Buscar materia prima para agregar..."
+                      className={cn(
+                        'w-full pl-10 pr-4 py-2.5 rounded-xl border',
+                        theme === 'dark' ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-200',
+                        'focus:ring-2 focus:ring-purple-500 focus:border-transparent'
+                      )}
+                    />
+                    {showProductSearch === 'material' && products.length > 0 && (
+                      <div className={cn(
+                        'absolute z-10 w-full mt-1 max-h-60 overflow-auto rounded-xl border shadow-lg',
+                        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                      )}>
+                        {products.filter(p => p.id !== targetProductId).map(product => (
+                          <button key={product.id} type="button" onClick={() => addMaterial(product)}
+                            disabled={lines.some(l => l.rawMaterialId === product.id)}
+                            className={cn(
+                              'w-full flex items-center gap-3 p-3 text-left',
+                              lines.some(l => l.rawMaterialId === product.id)
+                                ? 'opacity-50 cursor-not-allowed'
+                                : theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
+                            )}>
+                            {product.imageUrl ? (
+                              <img src={product.imageUrl} alt={product.name} className="w-10 h-10 rounded-lg object-cover" />
+                            ) : (
+                              <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100')}>
+                                <Package className="w-5 h-5 text-gray-400" />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className={cn('font-medium truncate', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{product.name}</p>
+                              <p className="text-sm text-gray-500 truncate">{product.unitOfMeasure} &middot; {formatCurrency(product.costPrice)} &middot; Stock: {product.quantityOnHand}</p>
+                            </div>
+                            <Plus className="w-5 h-5 text-purple-600 shrink-0" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {lines.length === 0 ? (
+                <div className="text-center py-12">
+                  <Layers className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                  <p className="text-gray-500">No hay materias primas</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className={cn(theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50')}>
+                      <tr>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Material</th>
+                        <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Unidad</th>
+                        <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cantidad</th>
+                        <th className="text-right py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Costo Unit.</th>
+                        <th className="text-right py-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Subtotal</th>
+                        {isEditing && <th className="w-12"></th>}
+                      </tr>
+                    </thead>
+                    <tbody className={cn('divide-y', theme === 'dark' ? 'divide-gray-700' : 'divide-gray-100')}>
+                      {lines.map((line, idx) => (
+                        <motion.tr
+                          key={line.rawMaterialId}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.05 * idx }}
+                          className={cn('group transition-colors', theme === 'dark' ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50')}
+                        >
+                          <td className="py-4 px-6">
+                            <div className="min-w-0">
+                              <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                {line.materialName}
+                              </p>
+                              {line.materialSku && (
+                                <p className="text-xs text-gray-500 font-mono">SKU: {line.materialSku}</p>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <span className="text-sm text-gray-500">{line.materialUnit}</span>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                value={line.quantity}
+                                onChange={(e) => updateLineQuantity(idx, parseFloat(e.target.value) || 0)}
+                                min="0.0001"
+                                step="0.0001"
+                                className={cn(
+                                  'w-24 mx-auto px-2 py-1.5 rounded-lg border text-center text-sm',
+                                  theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-200',
+                                  'focus:ring-2 focus:ring-purple-500'
+                                )}
+                              />
+                            ) : (
+                              <span className={cn('text-lg font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                {line.quantity}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <span className="text-gray-500">{formatCurrency(line.materialCost)}</span>
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <span className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                              {formatCurrency(line.quantity * line.materialCost)}
+                            </span>
+                          </td>
+                          {isEditing && (
+                            <td className="py-4 px-2">
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                type="button"
+                                onClick={() => removeLine(idx)}
+                                className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg text-red-500"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </motion.button>
+                            </td>
+                          )}
+                        </motion.tr>
+                      ))}
+                    </tbody>
+                    <tfoot className={cn('border-t-2', theme === 'dark' ? 'border-gray-600 bg-gray-900/50' : 'border-gray-200 bg-gray-50')}>
+                      <tr>
+                        <td colSpan={4} className="py-4 px-6 text-right font-semibold text-gray-500">
+                          Total Materiales:
+                        </td>
+                        <td className="py-4 px-4 text-right">
+                          <span className={cn('text-xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                            {formatCurrency(totals.materialsCost)}
+                          </span>
+                        </td>
+                        {isEditing && <td></td>}
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </motion.div>
+
+            {/* Notes */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className={cn(
+                'p-6 rounded-2xl border',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className={cn('p-2 rounded-xl', theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100')}>
+                  <FlaskConical className="w-5 h-5 text-amber-500" />
+                </div>
+                <h3 className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                  Notas e Instrucciones
+                </h3>
+              </div>
+              {isEditing ? (
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Instrucciones de preparación, notas adicionales..."
+                  className={cn(
+                    'w-full px-4 py-3 rounded-xl border resize-none',
+                    theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-200',
+                    'focus:ring-2 focus:ring-purple-500 focus:border-transparent'
+                  )}
+                />
+              ) : (
+                <p className={cn('text-sm leading-relaxed', theme === 'dark' ? 'text-gray-300' : 'text-gray-600')}>
+                  {notes || 'Sin notas adicionales'}
+                </p>
+              )}
+            </motion.div>
+          </div>
         </div>
 
         {/* Click outside to close product search */}
