@@ -1612,6 +1612,20 @@ export async function POST() {
       console.log('[Migration] Note: print queue cleanup - ', e.message)
     }
 
+    // Add signature columns to market_quotes for digital signature feature
+    console.log('[Migration] Adding signature columns to market_quotes...')
+    try {
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signature_token UUID`)
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signature_data TEXT`)
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signed_at TIMESTAMP`)
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signer_name VARCHAR(255)`)
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signer_ip VARCHAR(45)`)
+      await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_quotes_signature_token ON market_quotes(signature_token) WHERE signature_token IS NOT NULL`)
+      console.log('[Migration] Added signature columns to market_quotes')
+    } catch (e: any) {
+      console.log('[Migration] Note: signature columns -', e.message)
+    }
+
     // Get table stats
     const tables = [
       'market_products',

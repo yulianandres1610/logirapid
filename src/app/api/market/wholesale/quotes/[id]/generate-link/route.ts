@@ -43,7 +43,7 @@ export async function POST(
 
     // Verify quote exists
     const checkResult = await db.query(
-      'SELECT id, status, signature_token, quote_number FROM market_quotes WHERE id = $1 AND company_id = $2',
+      'SELECT id, status, quote_number FROM market_quotes WHERE id = $1 AND company_id = $2',
       [quoteId, payload.companyId]
     )
 
@@ -56,15 +56,38 @@ export async function POST(
 
     const quote = checkResult.rows[0]
 
-    // If already has a token, return existing one
-    if (quote.signature_token) {
+    // Ensure signature columns exist
+    try {
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signature_token UUID`)
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signature_data TEXT`)
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signed_at TIMESTAMP`)
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signer_name VARCHAR(255)`)
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signer_ip VARCHAR(45)`)
+      await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_quotes_signature_token ON market_quotes(signature_token) WHERE signature_token IS NOT NULL`)
+    } catch {
+      // Columns may already exist
+    }
+
+    // Check if already has a token
+    let existingToken: string | null = null
+    try {
+      const sigResult = await db.query(
+        'SELECT signature_token FROM market_quotes WHERE id = $1',
+        [quoteId]
+      )
+      existingToken = sigResult.rows[0]?.signature_token || null
+    } catch {
+      // Column doesn't exist yet - ignore
+    }
+
+    if (existingToken) {
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://mercado.logirapid.com'
       return NextResponse.json({
         success: true,
         message: 'Enlace de firma ya existente',
         data: {
-          token: quote.signature_token,
-          url: `${baseUrl}/quote-sign/${quote.signature_token}`
+          token: existingToken,
+          url: `${baseUrl}/quote-sign/${existingToken}`
         }
       })
     }
