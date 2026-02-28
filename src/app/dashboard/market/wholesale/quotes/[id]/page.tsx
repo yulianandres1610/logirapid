@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useState, useRef, use } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft,
   FileText,
@@ -11,14 +11,51 @@ import {
   Clock,
   Printer,
   Download,
-  X
+  X,
+  Package,
+  Calendar,
+  User,
+  Building2,
+  MapPin,
+  Tag,
+  DollarSign,
+  ChevronDown,
+  Copy,
+  Check,
+  Link2,
+  PenTool,
+  Loader2,
+  Mail,
+  ExternalLink,
+  ShoppingCart,
+  History,
+  AlertCircle,
+  Image as ImageIcon
 } from 'lucide-react'
+import jsPDF from 'jspdf'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
+import { useNotifications } from '@/contexts/NotificationContext'
 import { cn } from '@/lib/utils'
+
+interface QuoteLine {
+  id: number
+  productId: number
+  variantId: number | null
+  productName: string
+  productSku: string | null
+  productImage: string | null
+  quantity: number
+  unitPrice: number
+  originalPrice: number | null
+  discountPercent: number
+  discountAmount: number
+  subtotal: number
+  notes: string | null
+}
 
 interface Quote {
   id: number
@@ -35,6 +72,8 @@ interface Quote {
   }
   warehouseId: number | null
   warehouseName: string | null
+  pricelistId: number | null
+  pricelistName: string | null
   status: string
   subtotal: number
   discountPercent: number
@@ -47,38 +86,117 @@ interface Quote {
   convertedToInvoiceId: number | null
   createdBy: string
   createdAt: string
+  updatedAt: string
   sentAt: string | null
   acceptedAt: string | null
-  lines: Array<{
-    id: number
-    productId: number
-    productName: string
-    productSku: string | null
-    quantity: number
-    unitPrice: number
-    originalPrice: number | null
-    discountPercent: number
-    discountAmount: number
-    subtotal: number
-  }>
+  signatureToken: string | null
+  signatureData: string | null
+  signedAt: string | null
+  signerName: string | null
+  lines: QuoteLine[]
 }
+
+const STATUS_CONFIG: Record<string, {
+  label: string
+  color: string
+  bgGradient: string
+  icon: React.ElementType
+  step: number
+}> = {
+  draft: {
+    label: 'Borrador',
+    color: 'gray',
+    bgGradient: 'from-gray-500 to-slate-500',
+    icon: FileText,
+    step: 0
+  },
+  sent: {
+    label: 'Enviada',
+    color: 'blue',
+    bgGradient: 'from-blue-500 to-cyan-500',
+    icon: Send,
+    step: 1
+  },
+  accepted: {
+    label: 'Aceptada',
+    color: 'emerald',
+    bgGradient: 'from-emerald-500 to-teal-500',
+    icon: CheckCircle,
+    step: 2
+  },
+  rejected: {
+    label: 'Rechazada',
+    color: 'red',
+    bgGradient: 'from-red-500 to-rose-500',
+    icon: X,
+    step: 1
+  },
+  expired: {
+    label: 'Vencida',
+    color: 'amber',
+    bgGradient: 'from-amber-500 to-orange-500',
+    icon: Clock,
+    step: 1
+  },
+  converted: {
+    label: 'Convertida',
+    color: 'purple',
+    bgGradient: 'from-purple-500 to-indigo-500',
+    icon: Receipt,
+    step: 3
+  }
+}
+
+const LIFECYCLE_STEPS = [
+  { key: 'draft', label: 'Borrador', icon: FileText },
+  { key: 'sent', label: 'Enviada', icon: Send },
+  { key: 'accepted', label: 'Aceptada', icon: CheckCircle },
+  { key: 'converted', label: 'Facturada', icon: Receipt }
+]
 
 export default function QuoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { theme } = useTheme()
+  const { showNotification } = useNotifications()
   const router = useRouter()
-  const searchParams = useSearchParams()
   const resolvedParams = use(params)
   const quoteId = resolvedParams.id
 
   const [quote, setQuote] = useState<Quote | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'details')
+  const [exchangeRate, setExchangeRate] = useState(411)
+
+  // Modals
   const [showConvertModal, setShowConvertModal] = useState(false)
   const [converting, setConverting] = useState(false)
+  const [showSendModal, setShowSendModal] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [showPdfDropdown, setShowPdfDropdown] = useState(false)
+  const [generatingLink, setGeneratingLink] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
+
+  // Send modal fields
+  const [sendEmail, setSendEmail] = useState('')
+  const [sendMessage, setSendMessage] = useState('')
+  const [attachPdf, setAttachPdf] = useState(true)
+  const [pdfCurrency, setPdfCurrency] = useState<'usd' | 'cup' | 'dual'>('usd')
+
+  const pdfDropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetchQuote()
+    fetchExchangeRates()
   }, [quoteId])
+
+  // Close PDF dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (pdfDropdownRef.current && !pdfDropdownRef.current.contains(e.target as Node)) {
+        setShowPdfDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const fetchQuote = async () => {
     try {
@@ -87,6 +205,9 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
         const result = await response.json()
         if (result.success) {
           setQuote(result.data)
+          if (result.data.customer?.email) {
+            setSendEmail(result.data.customer.email)
+          }
         }
       }
     } catch (error) {
@@ -96,18 +217,65 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     }
   }
 
-  const handleSend = async () => {
-    if (!confirm('¿Enviar esta cotización al cliente?')) return
+  const fetchExchangeRates = async () => {
+    try {
+      const response = await fetch('/api/market/pos/exchange-rates')
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && result.rates) {
+          setExchangeRate(result.rates.CUP || 411)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching exchange rates:', error)
+    }
+  }
+
+  // ===================== ACTIONS =====================
+
+  const handleSendEmail = async () => {
+    if (!quote) return
+    setSending(true)
 
     try {
+      let pdfBase64: string | undefined
+      if (attachPdf) {
+        const pdfDoc = buildPdf(pdfCurrency)
+        const pdfArrayBuffer = pdfDoc.output('arraybuffer')
+        const bytes = new Uint8Array(pdfArrayBuffer)
+        let binary = ''
+        bytes.forEach(b => binary += String.fromCharCode(b))
+        pdfBase64 = btoa(binary)
+      }
+
+      const signatureUrl = quote.signatureToken
+        ? `${window.location.origin}/quote-sign/${quote.signatureToken}`
+        : undefined
+
       const response = await fetch(`/api/market/wholesale/quotes/${quoteId}/send`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: sendEmail || undefined,
+          message: sendMessage || undefined,
+          pdfBase64,
+          signatureUrl
+        })
       })
-      if (response.ok) {
+
+      const result = await response.json()
+      if (result.success) {
+        showNotification('success', 'Cotización enviada', result.message || 'Cotización enviada exitosamente')
+        setShowSendModal(false)
         fetchQuote()
+      } else {
+        showNotification('error', 'Error', result.error || 'Error al enviar cotización')
       }
     } catch (error) {
       console.error('Error sending quote:', error)
+      showNotification('error', 'Error', 'Error de conexión al enviar')
+    } finally {
+      setSending(false)
     }
   }
 
@@ -120,48 +288,479 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
+          showNotification('success', 'Convertida', 'Cotización convertida a factura exitosamente')
           router.push(`/dashboard/market/wholesale/invoices/${result.data.invoiceId}`)
+        } else {
+          showNotification('error', 'Error', result.error || 'Error al convertir')
         }
       }
     } catch (error) {
       console.error('Error converting quote:', error)
+      showNotification('error', 'Error', 'Error de conexión')
     } finally {
       setConverting(false)
       setShowConvertModal(false)
     }
   }
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2
-    }).format(value)
+  const handleGenerateLink = async () => {
+    if (!quote) return
+    setGeneratingLink(true)
+    try {
+      const response = await fetch(`/api/market/wholesale/quotes/${quoteId}/generate-link`, {
+        method: 'POST'
+      })
+      const result = await response.json()
+      if (result.success) {
+        showNotification('success', 'Enlace generado', 'Enlace de firma generado exitosamente')
+        fetchQuote()
+        // Copy to clipboard
+        if (result.data?.url) {
+          await navigator.clipboard.writeText(result.data.url)
+          setCopiedLink(true)
+          setTimeout(() => setCopiedLink(false), 3000)
+        }
+      } else {
+        showNotification('error', 'Error', result.error || 'Error al generar enlace')
+      }
+    } catch (error) {
+      console.error('Error generating link:', error)
+      showNotification('error', 'Error', 'Error de conexión')
+    } finally {
+      setGeneratingLink(false)
+    }
   }
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
+  const copySignatureLink = async () => {
+    if (!quote?.signatureToken) return
+    const url = `${window.location.origin}/quote-sign/${quote.signatureToken}`
+    await navigator.clipboard.writeText(url)
+    setCopiedLink(true)
+    showNotification('success', 'Copiado', 'Enlace copiado al portapapeles')
+    setTimeout(() => setCopiedLink(false), 3000)
+  }
+
+  // ===================== PDF GENERATION =====================
+
+  const buildPdf = (mode: 'usd' | 'cup' | 'dual'): jsPDF => {
+    if (!quote) throw new Error('No quote data')
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
+    const pageWidth = 215.9
+    const margin = 20
+    const contentWidth = pageWidth - margin * 2
+    let y = 25
+
+    // Header
+    doc.setFontSize(24)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(26, 54, 93)
+    doc.text('COTIZACIÓN', pageWidth / 2, y, { align: 'center' })
+    y += 12
+
+    doc.setFontSize(14)
+    doc.setTextColor(0, 0, 0)
+    doc.text(quote.quoteNumber, pageWidth / 2, y, { align: 'center' })
+    y += 8
+
+    const statusLabel = STATUS_CONFIG[quote.status]?.label || quote.status
+    doc.setFontSize(10)
+    doc.setTextColor(100, 100, 100)
+    doc.text(`Estado: ${statusLabel}`, pageWidth / 2, y, { align: 'center' })
+    y += 15
+
+    doc.setDrawColor(200, 200, 200)
+    doc.setLineWidth(0.5)
+    doc.line(margin, y, pageWidth - margin, y)
+    y += 12
+
+    // Client info
+    doc.setTextColor(0, 0, 0)
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'bold')
+    doc.text('CLIENTE', margin, y)
+    y += 6
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    doc.text(quote.customer.businessName, margin, y)
+    y += 5
+
+    if (quote.customer.taxId) {
+      doc.setTextColor(100, 100, 100)
+      doc.text(`RUC/NIT: ${quote.customer.taxId}`, margin, y)
+      y += 5
+    }
+    if (quote.customer.address) {
+      doc.setTextColor(100, 100, 100)
+      doc.text(quote.customer.address, margin, y)
+      y += 5
+    }
+
+    // Right side - Quote info
+    const rightX = pageWidth / 2 + 10
+    let rightY = y - (quote.customer.taxId ? 16 : 11) - (quote.customer.address ? 5 : 0)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11)
+    doc.setTextColor(0, 0, 0)
+    doc.text('INFORMACIÓN', rightX, rightY)
+    rightY += 6
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    doc.text(`Fecha: ${formatDate(quote.createdAt)}`, rightX, rightY)
+    rightY += 5
+
+    if (quote.validUntil) {
+      doc.text(`Válida hasta: ${formatDate(quote.validUntil)}`, rightX, rightY)
+      rightY += 5
+    }
+    if (quote.warehouseName) {
+      doc.text(`Almacén: ${quote.warehouseName}`, rightX, rightY)
+      rightY += 5
+    }
+
+    y = Math.max(y, rightY) + 15
+
+    doc.setDrawColor(200, 200, 200)
+    doc.line(margin, y, pageWidth - margin, y)
+    y += 10
+
+    // Table header
+    doc.setFillColor(245, 247, 250)
+    doc.rect(margin, y - 5, contentWidth, 10, 'F')
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(60, 60, 60)
+
+    if (mode === 'dual') {
+      doc.text('PRODUCTO', margin + 5, y)
+      doc.text('CANT', margin + 75, y, { align: 'center' })
+      doc.text('P.UNIT USD', margin + 100, y, { align: 'right' })
+      doc.text('P.UNIT CUP', margin + 130, y, { align: 'right' })
+      doc.text('TOTAL USD', margin + 155, y, { align: 'right' })
+      doc.text('TOTAL CUP', pageWidth - margin - 5, y, { align: 'right' })
+    } else if (mode === 'cup') {
+      doc.text('PRODUCTO', margin + 5, y)
+      doc.text('SKU', margin + 85, y)
+      doc.text('CANT', margin + 115, y, { align: 'center' })
+      doc.text('P.UNIT CUP', margin + 145, y, { align: 'right' })
+      doc.text('TOTAL CUP', pageWidth - margin - 5, y, { align: 'right' })
+    } else {
+      doc.text('PRODUCTO', margin + 5, y)
+      doc.text('SKU', margin + 85, y)
+      doc.text('CANT', margin + 115, y, { align: 'center' })
+      doc.text('P.UNIT', margin + 140, y, { align: 'right' })
+      doc.text('TOTAL', pageWidth - margin - 5, y, { align: 'right' })
+    }
+    y += 8
+
+    // Products
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(0, 0, 0)
+    const pageHeight = 279.4
+
+    for (const line of quote.lines) {
+      if (y > pageHeight - 60) {
+        doc.addPage()
+        y = 25
+      }
+
+      const productName = line.productName.length > 35
+        ? line.productName.substring(0, 35) + '...'
+        : line.productName
+
+      if (mode === 'dual') {
+        doc.text(productName, margin + 5, y)
+        doc.text(String(line.quantity), margin + 75, y, { align: 'center' })
+        doc.text(`$${line.unitPrice.toFixed(2)}`, margin + 100, y, { align: 'right' })
+        doc.text(`${Math.round(line.unitPrice * exchangeRate).toLocaleString()}`, margin + 130, y, { align: 'right' })
+        doc.text(`$${line.subtotal.toFixed(2)}`, margin + 155, y, { align: 'right' })
+        doc.text(`${Math.round(line.subtotal * exchangeRate).toLocaleString()}`, pageWidth - margin - 5, y, { align: 'right' })
+      } else if (mode === 'cup') {
+        doc.text(productName, margin + 5, y)
+        doc.text(line.productSku || '', margin + 85, y)
+        doc.text(String(line.quantity), margin + 115, y, { align: 'center' })
+        doc.text(`${Math.round(line.unitPrice * exchangeRate).toLocaleString()}`, margin + 145, y, { align: 'right' })
+        doc.text(`${Math.round(line.subtotal * exchangeRate).toLocaleString()}`, pageWidth - margin - 5, y, { align: 'right' })
+      } else {
+        doc.text(productName, margin + 5, y)
+        doc.text((line.productSku || '').substring(0, 15), margin + 85, y)
+        doc.text(String(line.quantity), margin + 115, y, { align: 'center' })
+        doc.text(`$${line.unitPrice.toFixed(2)}`, margin + 140, y, { align: 'right' })
+        doc.text(`$${line.subtotal.toFixed(2)}`, pageWidth - margin - 5, y, { align: 'right' })
+      }
+      y += 6
+    }
+
+    y += 5
+    doc.setDrawColor(200, 200, 200)
+    doc.line(margin + 100, y, pageWidth - margin, y)
+    y += 8
+
+    // Totals
+    doc.setFontSize(10)
+    if (mode === 'cup') {
+      doc.text('Subtotal CUP:', margin + 120, y)
+      doc.text(`${Math.round(quote.subtotal * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 5, y, { align: 'right' })
+      y += 6
+
+      if (quote.discountPercent > 0) {
+        doc.setTextColor(220, 38, 38)
+        doc.text(`Descuento (${quote.discountPercent}%):`, margin + 120, y)
+        doc.text(`-${Math.round(quote.discountAmount * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 5, y, { align: 'right' })
+        doc.setTextColor(0, 0, 0)
+        y += 6
+      }
+
+      y += 3
+      doc.setFillColor(26, 54, 93)
+      doc.rect(margin + 100, y - 5, contentWidth - 100, 12, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(12)
+      doc.setTextColor(255, 255, 255)
+      doc.text('TOTAL CUP:', margin + 120, y + 2)
+      doc.text(`${Math.round(quote.totalAmount * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 5, y + 2, { align: 'right' })
+    } else if (mode === 'dual') {
+      doc.text('Subtotal:', margin + 100, y)
+      doc.text(`$${quote.subtotal.toFixed(2)} / ${Math.round(quote.subtotal * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 5, y, { align: 'right' })
+      y += 6
+
+      if (quote.discountPercent > 0) {
+        doc.setTextColor(220, 38, 38)
+        doc.text(`Descuento (${quote.discountPercent}%):`, margin + 100, y)
+        doc.text(`-$${quote.discountAmount.toFixed(2)}`, pageWidth - margin - 5, y, { align: 'right' })
+        doc.setTextColor(0, 0, 0)
+        y += 6
+      }
+
+      y += 3
+      doc.setFillColor(26, 54, 93)
+      doc.rect(margin + 80, y - 5, contentWidth - 80, 12, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(12)
+      doc.setTextColor(255, 255, 255)
+      doc.text('TOTAL:', margin + 100, y + 2)
+      doc.text(`$${quote.totalAmount.toFixed(2)} USD / ${Math.round(quote.totalAmount * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 5, y + 2, { align: 'right' })
+    } else {
+      doc.text('Subtotal:', margin + 120, y)
+      doc.text(`$${quote.subtotal.toFixed(2)}`, pageWidth - margin - 5, y, { align: 'right' })
+      y += 6
+
+      if (quote.discountPercent > 0) {
+        doc.setTextColor(220, 38, 38)
+        doc.text(`Descuento (${quote.discountPercent}%):`, margin + 120, y)
+        doc.text(`-$${quote.discountAmount.toFixed(2)}`, pageWidth - margin - 5, y, { align: 'right' })
+        doc.setTextColor(0, 0, 0)
+        y += 6
+      }
+
+      y += 3
+      doc.setFillColor(26, 54, 93)
+      doc.rect(margin + 100, y - 5, contentWidth - 100, 12, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(12)
+      doc.setTextColor(255, 255, 255)
+      doc.text('TOTAL:', margin + 120, y + 2)
+      doc.text(`$${quote.totalAmount.toFixed(2)} USD`, pageWidth - margin - 5, y + 2, { align: 'right' })
+    }
+
+    y += 20
+
+    // Exchange rate note
+    if (mode !== 'usd') {
+      doc.setTextColor(100, 100, 100)
+      doc.setFont('helvetica', 'italic')
+      doc.setFontSize(8)
+      doc.text(`Tasa de cambio: 1 USD = ${exchangeRate.toLocaleString()} CUP`, margin, y)
+      y += 10
+    }
+
+    // Notes
+    if (quote.notes) {
+      doc.setTextColor(0, 0, 0)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.text('NOTAS:', margin, y)
+      y += 6
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      const splitNotes = doc.splitTextToSize(quote.notes, contentWidth)
+      doc.text(splitNotes, margin, y)
+      y += splitNotes.length * 5 + 10
+    }
+
+    // Valid until
+    if (quote.validUntil) {
+      doc.setTextColor(100, 100, 100)
+      doc.setFontSize(9)
+      doc.text(`Válida hasta: ${formatDate(quote.validUntil)}`, margin, y)
+      y += 10
+    }
+
+    // Footer
+    doc.setTextColor(150, 150, 150)
+    doc.setFontSize(8)
+    doc.text('Documento generado por LogiRapid', pageWidth / 2, pageHeight - 15, { align: 'center' })
+    doc.text(new Date().toLocaleString('es-ES'), pageWidth / 2, pageHeight - 10, { align: 'center' })
+
+    return doc
+  }
+
+  const buildReceipt = (mode: 'usd' | 'cup'): jsPDF => {
+    if (!quote) throw new Error('No quote data')
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [80, 200] })
+    const pageWidth = 80
+    const m = 5
+    let y = 10
+
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'bold')
+    doc.text('COTIZACIÓN', pageWidth / 2, y, { align: 'center' })
+    y += 6
+
+    doc.setFontSize(10)
+    doc.text(quote.quoteNumber, pageWidth / 2, y, { align: 'center' })
+    y += 8
+
+    doc.setLineWidth(0.3)
+    doc.line(m, y, pageWidth - m, y)
+    y += 6
+
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.text('Cliente:', m, y)
+    y += 4
+    doc.setFont('helvetica', 'bold')
+    doc.text(quote.customer.businessName.substring(0, 30), m, y)
+    y += 4
+
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Fecha: ${formatDate(quote.createdAt)}`, m, y)
+    y += 6
+
+    doc.line(m, y, pageWidth - m, y)
+    y += 5
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
+    doc.text('Producto', m, y)
+    doc.text('Cant', pageWidth - m - 20, y)
+    doc.text('Total', pageWidth - m - 5, y, { align: 'right' })
+    y += 4
+
+    doc.setFont('helvetica', 'normal')
+    for (const line of quote.lines) {
+      const name = line.productName.substring(0, 25)
+      doc.text(name, m, y)
+      doc.text(String(line.quantity), pageWidth - m - 18, y)
+      if (mode === 'cup') {
+        doc.text(`${Math.round(line.subtotal * exchangeRate).toLocaleString()}`, pageWidth - m, y, { align: 'right' })
+      } else {
+        doc.text(`$${line.subtotal.toFixed(2)}`, pageWidth - m, y, { align: 'right' })
+      }
+      y += 4
+    }
+    y += 2
+
+    doc.line(m, y, pageWidth - m, y)
+    y += 5
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.text('TOTAL:', m, y)
+    if (mode === 'cup') {
+      doc.text(`${Math.round(quote.totalAmount * exchangeRate).toLocaleString()} CUP`, pageWidth - m, y, { align: 'right' })
+    } else {
+      doc.text(`$${quote.totalAmount.toFixed(2)} USD`, pageWidth - m, y, { align: 'right' })
+    }
+    y += 8
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6)
+    doc.text('--- Generado por LogiRapid ---', pageWidth / 2, y, { align: 'center' })
+
+    doc.internal.pageSize.height = y + 10
+    return doc
+  }
+
+  const downloadPdf = (mode: 'usd' | 'cup' | 'dual') => {
+    if (!quote) return
+    try {
+      const doc = buildPdf(mode)
+      doc.save(`${quote.quoteNumber}-${mode}.pdf`)
+      showNotification('success', 'PDF descargado', `Cotización en formato ${mode.toUpperCase()} descargada`)
+    } catch (error) {
+      console.error('Error generating PDF:', error)
+      showNotification('error', 'Error', 'No se pudo generar el PDF')
+    }
+    setShowPdfDropdown(false)
+  }
+
+  const downloadReceipt = (mode: 'usd' | 'cup') => {
+    if (!quote) return
+    try {
+      const doc = buildReceipt(mode)
+      doc.save(`${quote.quoteNumber}-recibo-${mode}.pdf`)
+      showNotification('success', 'Recibo descargado', `Recibo en ${mode.toUpperCase()} descargado`)
+    } catch (error) {
+      console.error('Error generating receipt:', error)
+      showNotification('error', 'Error', 'No se pudo generar el recibo')
+    }
+    setShowPdfDropdown(false)
+  }
+
+  // ===================== FORMATTERS =====================
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(value)
+
+  const formatCUP = (value: number) =>
+    Math.round(value).toLocaleString() + ' CUP'
+
+  const formatDate = (date: string | null | undefined) => {
+    if (!date) return ''
+    let d: Date
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      const [year, month, day] = date.split('-').map(Number)
+      d = new Date(year, month - 1, day)
+    } else {
+      d = new Date(date)
+    }
+    if (isNaN(d.getTime())) return ''
+    return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })
+  }
+
+  const formatDateTime = (date: string | null | undefined) => {
+    if (!date) return ''
+    const d = new Date(date)
+    if (isNaN(d.getTime())) return ''
+    return d.toLocaleString('es-ES', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
     })
   }
 
-  const statusConfig: Record<string, { label: string; color: string }> = {
-    draft: { label: 'Borrador', color: 'gray' },
-    sent: { label: 'Enviada', color: 'blue' },
-    accepted: { label: 'Aceptada', color: 'green' },
-    rejected: { label: 'Rechazada', color: 'red' },
-    expired: { label: 'Vencida', color: 'orange' },
-    converted: { label: 'Convertida', color: 'purple' }
-  }
+  // ===================== LOADING / ERROR =====================
 
   if (loading) {
     return (
       <ProtectedRoute>
         <DashboardLayout>
           <div className="min-h-screen p-6 flex items-center justify-center">
-            <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full" />
+            <div className="text-center">
+              <div className={cn(
+                'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4',
+                theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+              )}>
+                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+              </div>
+              <p className="text-gray-500">Cargando cotización...</p>
+            </div>
           </div>
         </DashboardLayout>
       </ProtectedRoute>
@@ -173,9 +772,14 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       <ProtectedRoute>
         <DashboardLayout>
           <div className="min-h-screen p-6 flex flex-col items-center justify-center">
-            <FileText className="w-16 h-16 text-gray-400 mb-4" />
-            <p className="text-xl font-medium">Cotización no encontrada</p>
-            <Link href="/dashboard/market/wholesale/quotes" className="mt-4 text-blue-500">
+            <div className={cn(
+              'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4',
+              theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+            )}>
+              <FileText className="w-8 h-8 text-gray-400" />
+            </div>
+            <p className="text-xl font-medium mb-2">Cotización no encontrada</p>
+            <Link href="/dashboard/market/wholesale/quotes" className="text-blue-500 hover:underline">
               Volver a cotizaciones
             </Link>
           </div>
@@ -184,423 +788,956 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     )
   }
 
-  const sConfig = statusConfig[quote.status] || statusConfig.draft
+  const statusConfig = STATUS_CONFIG[quote.status] || STATUS_CONFIG.draft
+  const StatusIcon = statusConfig.icon
+  const totalProducts = quote.lines.length
+  const totalUnits = quote.lines.reduce((sum, l) => sum + l.quantity, 0)
+
+  // ===================== RENDER =====================
 
   return (
     <ProtectedRoute>
       <DashboardLayout>
         <div className="min-h-screen p-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <Link href="/dashboard/market/wholesale/quotes">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className={cn(
-                      'p-2 rounded-lg transition-colors',
-                      theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
-                    )}
-                  >
-                    <ArrowLeft className="w-5 h-5" />
-                  </motion.button>
-                </Link>
-                <div>
-                  <div className="flex items-center gap-3">
-                    <h1 className={cn(
-                      'text-2xl font-bold',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>
-                      Cotización {quote.quoteNumber}
-                    </h1>
-                    <span className={cn(
-                      'px-3 py-1 rounded-full text-sm font-medium',
-                      sConfig.color === 'green'
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                        : sConfig.color === 'blue'
-                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                          : sConfig.color === 'purple'
-                            ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-                            : sConfig.color === 'orange'
-                              ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
-                              : sConfig.color === 'red'
-                                ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-400'
-                    )}>
-                      {sConfig.label}
-                    </span>
-                  </div>
-                  <p className={cn(
-                    'text-sm mt-1',
-                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                  )}>
-                    {quote.customer.businessName}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
+          {/* ========== HEADER SECTION ========== */}
+          <div className="max-w-6xl mx-auto mb-8">
+            {/* Navigation Bar */}
+            <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+              <Link href="/dashboard/market/wholesale/quotes">
                 <motion.button
-                  whileHover={{ scale: 1.02 }}
+                  whileHover={{ scale: 1.02, x: -2 }}
                   whileTap={{ scale: 0.98 }}
                   className={cn(
-                    'flex items-center gap-2 px-4 py-2 rounded-lg border',
+                    'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
                     theme === 'dark'
-                      ? 'border-gray-700 text-gray-300 hover:bg-gray-800'
-                      : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   )}
                 >
-                  <Printer className="w-4 h-4" />
-                  Imprimir
+                  <ArrowLeft className="w-4 h-4" />
+                  <span className="font-medium">Volver</span>
                 </motion.button>
-                {quote.status === 'draft' && (
+              </Link>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* PDF Dropdown */}
+                <div className="relative" ref={pdfDropdownRef}>
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={handleSend}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg"
+                    onClick={() => setShowPdfDropdown(!showPdfDropdown)}
+                    className={cn(
+                      'flex items-center gap-2 px-3 py-2 rounded-xl transition-colors',
+                      theme === 'dark'
+                        ? 'bg-emerald-900/30 text-emerald-400 hover:bg-emerald-900/50'
+                        : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                    )}
+                  >
+                    <Download className="w-4 h-4" />
+                    <span className="font-medium text-sm hidden sm:inline">PDF</span>
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </motion.button>
+
+                  <AnimatePresence>
+                    {showPdfDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -5 }}
+                        className={cn(
+                          'absolute right-0 top-full mt-2 w-52 rounded-xl border shadow-xl z-50 overflow-hidden',
+                          theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                        )}
+                      >
+                        <div className="p-1.5">
+                          <p className="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase">Carta</p>
+                          {(['usd', 'cup', 'dual'] as const).map(m => (
+                            <button
+                              key={m}
+                              onClick={() => downloadPdf(m)}
+                              className={cn(
+                                'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors',
+                                theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                              )}
+                            >
+                              PDF {m === 'dual' ? 'USD + CUP' : m.toUpperCase()}
+                            </button>
+                          ))}
+                          <div className={cn('my-1.5 border-t', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')} />
+                          <p className="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase">Recibo 80mm</p>
+                          {(['usd', 'cup'] as const).map(m => (
+                            <button
+                              key={`receipt-${m}`}
+                              onClick={() => downloadReceipt(m)}
+                              className={cn(
+                                'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors',
+                                theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                              )}
+                            >
+                              Recibo {m.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Print */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => window.print()}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-2 rounded-xl transition-colors',
+                    theme === 'dark'
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  )}
+                >
+                  <Printer className="w-4 h-4" />
+                  <span className="font-medium text-sm hidden sm:inline">Imprimir</span>
+                </motion.button>
+
+                {/* Send */}
+                {(quote.status === 'draft' || quote.status === 'sent') && (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowSendModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition-colors"
                   >
                     <Send className="w-4 h-4" />
-                    Enviar
+                    <span className="hidden sm:inline">Enviar</span>
                   </motion.button>
                 )}
+
+                {/* Generate Signature Link */}
+                {quote.status !== 'converted' && !quote.signedAt && (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={quote.signatureToken ? copySignatureLink : handleGenerateLink}
+                    disabled={generatingLink}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors',
+                      theme === 'dark'
+                        ? 'bg-purple-900/30 text-purple-400 hover:bg-purple-900/50'
+                        : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                    )}
+                  >
+                    {generatingLink ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : quote.signatureToken ? (
+                      copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />
+                    ) : (
+                      <Link2 className="w-4 h-4" />
+                    )}
+                    <span className="hidden sm:inline">
+                      {quote.signatureToken ? (copiedLink ? 'Copiado' : 'Copiar Enlace') : 'Generar Enlace'}
+                    </span>
+                  </motion.button>
+                )}
+
+                {/* Convert */}
                 {(quote.status === 'sent' || quote.status === 'accepted') && !quote.convertedToInvoiceId && (
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => setShowConvertModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg"
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium text-sm transition-colors"
                   >
                     <Receipt className="w-4 h-4" />
-                    Convertir a Factura
+                    <span className="hidden sm:inline">Convertir a Factura</span>
                   </motion.button>
                 )}
               </div>
             </div>
 
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className={cn(
-                'p-4 rounded-xl border',
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-              )}>
-                <p className="text-sm text-gray-500">Total</p>
-                <p className={cn(
-                  'text-2xl font-bold',
-                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                )}>{formatCurrency(quote.totalAmount)}</p>
-              </div>
-              <div className={cn(
-                'p-4 rounded-xl border',
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-              )}>
-                <p className="text-sm text-gray-500">Productos</p>
-                <p className={cn(
-                  'text-2xl font-bold',
-                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                )}>{quote.lines.length}</p>
-              </div>
-              <div className={cn(
-                'p-4 rounded-xl border',
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-              )}>
-                <p className="text-sm text-gray-500">Descuento</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {quote.discountPercent > 0 ? `${quote.discountPercent}%` : '-'}
-                </p>
-              </div>
-              <div className={cn(
-                'p-4 rounded-xl border',
-                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-              )}>
-                <p className="text-sm text-gray-500">Válida Hasta</p>
-                <p className={cn(
-                  'text-lg font-bold',
-                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                )}>
-                  {quote.validUntil ? formatDate(quote.validUntil) : 'Sin fecha'}
-                </p>
-              </div>
-            </div>
-
-            {/* Tabs */}
-            <div className={cn(
-              'rounded-2xl border shadow-xl overflow-hidden',
-              theme === 'dark'
-                ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
-                : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
-            )}>
-              <div className={cn(
-                'flex border-b',
-                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-              )}>
-                {[
-                  { id: 'details', label: 'Detalles', icon: FileText },
-                  { id: 'history', label: 'Historial', icon: Clock }
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={cn(
-                      'flex items-center gap-2 px-6 py-4 font-medium transition-colors',
-                      activeTab === tab.id
-                        ? 'text-blue-500 border-b-2 border-blue-500'
-                        : theme === 'dark'
-                          ? 'text-gray-400 hover:text-white'
-                          : 'text-gray-500 hover:text-gray-900'
-                    )}
-                  >
-                    <tab.icon className="w-4 h-4" />
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="p-6">
-                {activeTab === 'details' && (
-                  <div className="space-y-6">
-                    {/* Customer Info */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div>
-                        <h3 className="font-medium mb-3">Información del Cliente</h3>
-                        <div className={cn(
-                          'p-4 rounded-lg',
-                          theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-50'
-                        )}>
-                          <p className="font-semibold">{quote.customer.businessName}</p>
-                          <p className="text-sm text-gray-500">{quote.customer.code}</p>
-                          {quote.customer.taxId && (
-                            <p className="text-sm mt-2">RUC: {quote.customer.taxId}</p>
-                          )}
-                          {quote.customer.address && (
-                            <p className="text-sm text-gray-500 mt-1">{quote.customer.address}</p>
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        <h3 className="font-medium mb-3">Información de la Cotización</h3>
-                        <div className={cn(
-                          'p-4 rounded-lg',
-                          theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-50'
-                        )}>
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <p className="text-gray-500">Fecha:</p>
-                            <p>{formatDate(quote.createdAt)}</p>
-                            {quote.validUntil && (
-                              <>
-                                <p className="text-gray-500">Válida hasta:</p>
-                                <p>{formatDate(quote.validUntil)}</p>
-                              </>
-                            )}
-                            {quote.warehouseName && (
-                              <>
-                                <p className="text-gray-500">Almacén:</p>
-                                <p>{quote.warehouseName}</p>
-                              </>
-                            )}
-                            {quote.convertedToInvoiceId && (
-                              <>
-                                <p className="text-gray-500">Factura:</p>
-                                <Link
-                                  href={`/dashboard/market/wholesale/invoices/${quote.convertedToInvoiceId}`}
-                                  className="text-blue-500 hover:underline"
-                                >
-                                  Ver factura
-                                </Link>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Products */}
-                    <div>
-                      <h3 className="font-medium mb-3">Productos</h3>
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead>
-                            <tr className={cn(
-                              'border-b text-left',
-                              theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                            )}>
-                              <th className="py-3 px-4 text-sm font-medium text-gray-500">Producto</th>
-                              <th className="py-3 px-4 text-sm font-medium text-gray-500 text-center">Cantidad</th>
-                              <th className="py-3 px-4 text-sm font-medium text-gray-500 text-right">P. Unit</th>
-                              <th className="py-3 px-4 text-sm font-medium text-gray-500 text-center">Desc.</th>
-                              <th className="py-3 px-4 text-sm font-medium text-gray-500 text-right">Subtotal</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {quote.lines.map(line => (
-                              <tr key={line.id} className={cn(
-                                'border-b',
-                                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                              )}>
-                                <td className="py-3 px-4">
-                                  <p className="font-medium">{line.productName}</p>
-                                  {line.productSku && (
-                                    <p className="text-xs text-gray-500">{line.productSku}</p>
-                                  )}
-                                </td>
-                                <td className="py-3 px-4 text-center">{line.quantity}</td>
-                                <td className="py-3 px-4 text-right">{formatCurrency(line.unitPrice)}</td>
-                                <td className="py-3 px-4 text-center">
-                                  {line.discountPercent > 0 && (
-                                    <span className="text-green-600">-{line.discountPercent}%</span>
-                                  )}
-                                </td>
-                                <td className="py-3 px-4 text-right font-medium">{formatCurrency(line.subtotal)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                          <tfoot>
-                            <tr className={cn(
-                              'border-t-2',
-                              theme === 'dark' ? 'border-gray-600' : 'border-gray-300'
-                            )}>
-                              <td colSpan={4} className="py-3 px-4 text-right font-medium">Subtotal:</td>
-                              <td className="py-3 px-4 text-right font-medium">{formatCurrency(quote.subtotal)}</td>
-                            </tr>
-                            {quote.discountPercent > 0 && (
-                              <tr>
-                                <td colSpan={4} className="py-2 px-4 text-right text-green-600">
-                                  Descuento ({quote.discountPercent}%):
-                                </td>
-                                <td className="py-2 px-4 text-right text-green-600">
-                                  -{formatCurrency(quote.discountAmount)}
-                                </td>
-                              </tr>
-                            )}
-                            <tr className="text-lg font-bold">
-                              <td colSpan={4} className="py-3 px-4 text-right">Total:</td>
-                              <td className="py-3 px-4 text-right text-green-600">{formatCurrency(quote.totalAmount)}</td>
-                            </tr>
-                          </tfoot>
-                        </table>
-                      </div>
-                    </div>
-
-                    {/* Notes */}
-                    {(quote.notes || quote.internalNotes) && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {quote.notes && (
-                          <div>
-                            <h3 className="font-medium mb-2">Notas</h3>
-                            <p className="text-sm text-gray-500">{quote.notes}</p>
-                          </div>
-                        )}
-                        {quote.internalNotes && (
-                          <div>
-                            <h3 className="font-medium mb-2">Notas Internas</h3>
-                            <p className="text-sm text-gray-500">{quote.internalNotes}</p>
-                          </div>
-                        )}
-                      </div>
-                    )}
+            {/* Hero Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                'p-6 rounded-2xl border',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                <div className="flex items-start gap-4">
+                  <div className={cn(
+                    'w-14 h-14 rounded-2xl flex items-center justify-center shrink-0',
+                    `bg-gradient-to-br ${statusConfig.bgGradient}`
+                  )}>
+                    <FileText className="w-7 h-7 text-white" />
                   </div>
-                )}
-
-                {activeTab === 'history' && (
-                  <div className="space-y-4">
-                    <h3 className="font-medium">Historial de la Cotización</h3>
-                    <div className="space-y-3">
-                      <div className={cn(
-                        'p-3 rounded-lg',
-                        theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-50'
+                  <div>
+                    <div className="flex items-center gap-3 mb-1 flex-wrap">
+                      <h1 className={cn(
+                        'text-2xl md:text-3xl font-bold font-mono',
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
                       )}>
-                        <p className="text-sm">Cotización creada</p>
-                        <p className="text-xs text-gray-500">{formatDate(quote.createdAt)} por {quote.createdBy}</p>
-                      </div>
-                      {quote.sentAt && (
-                        <div className={cn(
-                          'p-3 rounded-lg',
-                          theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50'
-                        )}>
-                          <p className="text-sm text-blue-600">Cotización enviada al cliente</p>
-                          <p className="text-xs text-gray-500">{formatDate(quote.sentAt)}</p>
-                        </div>
-                      )}
-                      {quote.acceptedAt && (
-                        <div className={cn(
-                          'p-3 rounded-lg',
-                          theme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'
-                        )}>
-                          <p className="text-sm text-green-600">Cotización aceptada</p>
-                          <p className="text-xs text-gray-500">{formatDate(quote.acceptedAt)}</p>
-                        </div>
-                      )}
-                      {quote.convertedToInvoiceId && (
-                        <div className={cn(
-                          'p-3 rounded-lg',
-                          theme === 'dark' ? 'bg-purple-900/20' : 'bg-purple-50'
-                        )}>
-                          <p className="text-sm text-purple-600">Convertida a factura</p>
-                          <Link
-                            href={`/dashboard/market/wholesale/invoices/${quote.convertedToInvoiceId}`}
-                            className="text-xs text-purple-500 hover:underline"
-                          >
-                            Ver factura
-                          </Link>
-                        </div>
-                      )}
+                        {quote.quoteNumber}
+                      </h1>
+                      <span className={cn(
+                        'inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium',
+                        statusConfig.color === 'gray' && 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+                        statusConfig.color === 'blue' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                        statusConfig.color === 'emerald' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                        statusConfig.color === 'purple' && 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+                        statusConfig.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                        statusConfig.color === 'red' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                      )}>
+                        <StatusIcon className="w-3.5 h-3.5" />
+                        {statusConfig.label}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-500 mb-2">Cotización Mayorista</p>
+                    <div className="flex items-center gap-4 text-sm text-gray-500 flex-wrap">
+                      <span className="flex items-center gap-1.5">
+                        <Building2 className="w-4 h-4" />
+                        {quote.customer.businessName}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4" />
+                        {formatDate(quote.createdAt)}
+                      </span>
                     </div>
                   </div>
-                )}
-              </div>
-            </div>
-          </motion.div>
+                </div>
 
-          {/* Convert Modal */}
-          {showConvertModal && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className={cn(
+                  'p-4 rounded-xl',
+                  theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
+                )}>
+                  <p className="text-sm text-gray-500 mb-1">Total</p>
+                  <p className={cn(
+                    'text-3xl font-bold',
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>
+                    {formatCurrency(quote.totalAmount)}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* ========== CONTENT ========== */}
+          <div className="max-w-6xl mx-auto space-y-6">
+
+            {/* Lifecycle Progress */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                'p-6 rounded-2xl border',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <h3 className={cn(
+                'text-sm font-medium mb-6',
+                theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+              )}>Ciclo de Vida</h3>
+
+              <div className="relative">
+                <div className={cn(
+                  'absolute top-6 left-0 right-0 h-1 rounded-full',
+                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                )} />
+                <div
+                  className={cn('absolute top-6 left-0 h-1 rounded-full transition-all duration-500', `bg-gradient-to-r ${statusConfig.bgGradient}`)}
+                  style={{ width: `${Math.max(0, (statusConfig.step / (LIFECYCLE_STEPS.length - 1)) * 100)}%` }}
+                />
+
+                <div className="relative flex justify-between">
+                  {LIFECYCLE_STEPS.map((step, index) => {
+                    const isActive = statusConfig.step >= index
+                    const isCurrent = statusConfig.step === index
+                    const StepIcon = step.icon
+
+                    return (
+                      <div key={step.key} className="flex flex-col items-center">
+                        <motion.div
+                          initial={false}
+                          animate={{ scale: isCurrent ? 1.1 : 1 }}
+                          className={cn(
+                            'w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 z-10',
+                            isActive
+                              ? `bg-gradient-to-br ${statusConfig.bgGradient} text-white shadow-lg`
+                              : theme === 'dark'
+                                ? 'bg-gray-700 text-gray-500'
+                                : 'bg-gray-100 text-gray-400'
+                          )}
+                        >
+                          <StepIcon className="w-5 h-5" />
+                        </motion.div>
+                        <span className={cn(
+                          'mt-3 text-xs font-medium',
+                          isActive
+                            ? theme === 'dark' ? 'text-white' : 'text-gray-900'
+                            : 'text-gray-500'
+                        )}>
+                          {step.label}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { label: 'Total USD', value: formatCurrency(quote.totalAmount), icon: DollarSign, color: 'blue' },
+                { label: 'Total CUP', value: formatCUP(quote.totalAmount * exchangeRate), icon: DollarSign, color: 'purple' },
+                { label: 'Productos', value: `${totalProducts}`, icon: Package, color: 'emerald', suffix: `${totalUnits} uds` },
+                { label: 'Válida hasta', value: quote.validUntil ? formatDate(quote.validUntil) : 'Sin fecha', icon: Calendar, color: 'amber' }
+              ].map((stat, idx) => (
+                <motion.div
+                  key={stat.label}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className={cn(
+                    'p-5 rounded-2xl border relative overflow-hidden group',
+                    theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                  )}
+                >
+                  <div className={cn(
+                    'absolute -right-4 -top-4 w-20 h-20 rounded-full opacity-10 group-hover:opacity-20 transition-opacity',
+                    stat.color === 'blue' && 'bg-blue-500',
+                    stat.color === 'purple' && 'bg-purple-500',
+                    stat.color === 'emerald' && 'bg-emerald-500',
+                    stat.color === 'amber' && 'bg-amber-500'
+                  )} />
+                  <div className="relative">
+                    <div className={cn(
+                      'w-10 h-10 rounded-xl flex items-center justify-center mb-3',
+                      stat.color === 'blue' && (theme === 'dark' ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'),
+                      stat.color === 'purple' && (theme === 'dark' ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600'),
+                      stat.color === 'emerald' && (theme === 'dark' ? 'bg-emerald-900/50 text-emerald-400' : 'bg-emerald-100 text-emerald-600'),
+                      stat.color === 'amber' && (theme === 'dark' ? 'bg-amber-900/50 text-amber-400' : 'bg-amber-100 text-amber-600')
+                    )}>
+                      <stat.icon className="w-5 h-5" />
+                    </div>
+                    <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
+                    <p className={cn(
+                      'text-xl font-bold',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      {stat.value}
+                    </p>
+                    {stat.suffix && <p className="text-xs text-gray-500 mt-0.5">{stat.suffix}</p>}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Info Cards */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Customer Info */}
               <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
                 className={cn(
-                  'rounded-2xl shadow-2xl max-w-md w-full',
-                  theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
                 )}
               >
-                <div className={cn(
-                  'p-6 border-b flex items-center justify-between',
-                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                )}>
-                  <h2 className={cn(
-                    'text-xl font-bold',
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  )}>Convertir a Factura</h2>
-                  <button
-                    onClick={() => setShowConvertModal(false)}
-                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <div className="p-6 space-y-4">
-                  <p className={cn(
-                    'text-sm',
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-                  )}>
-                    ¿Estás seguro de que deseas convertir esta cotización en factura?
-                  </p>
-                  <div className={cn(
-                    'p-4 rounded-lg',
-                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
-                  )}>
-                    <p className="text-sm"><strong>Cliente:</strong> {quote.customer.businessName}</p>
-                    <p className="text-sm"><strong>Total:</strong> {formatCurrency(quote.totalAmount)}</p>
-                    <p className="text-sm"><strong>Productos:</strong> {quote.lines.length} items</p>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className={cn('p-2 rounded-xl', theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100')}>
+                    <Building2 className="w-5 h-5 text-blue-500" />
                   </div>
-                  <div className="flex gap-3 pt-4">
+                  <h3 className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Cliente</h3>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      {quote.customer.businessName}
+                    </p>
+                    <p className="text-sm text-gray-500">{quote.customer.code}</p>
+                  </div>
+                  {quote.customer.taxId && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Tag className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-500">RUC: {quote.customer.taxId}</span>
+                    </div>
+                  )}
+                  {quote.customer.address && (
+                    <div className="flex items-start gap-2 text-sm">
+                      <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
+                      <span className="text-gray-500">{quote.customer.address}{quote.customer.city ? `, ${quote.customer.city}` : ''}</span>
+                    </div>
+                  )}
+                  {quote.customer.email && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Mail className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-500">{quote.customer.email}</span>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+
+              {/* Quote Info */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <div className="flex items-center gap-3 mb-5">
+                  <div className={cn('p-2 rounded-xl', theme === 'dark' ? 'bg-indigo-900/30' : 'bg-indigo-100')}>
+                    <FileText className="w-5 h-5 text-indigo-500" />
+                  </div>
+                  <h3 className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Cotización</h3>
+                </div>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Fecha:</span>
+                    <span className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{formatDate(quote.createdAt)}</span>
+                  </div>
+                  {quote.validUntil && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Válida hasta:</span>
+                      <span className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{formatDate(quote.validUntil)}</span>
+                    </div>
+                  )}
+                  {quote.warehouseName && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Almacén:</span>
+                      <span className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{quote.warehouseName}</span>
+                    </div>
+                  )}
+                  {quote.pricelistName && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Lista precios:</span>
+                      <span className="text-blue-600 font-medium">{quote.pricelistName}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Creado por:</span>
+                    <span className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{quote.createdBy}</span>
+                  </div>
+                  {quote.convertedToInvoiceId && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Factura:</span>
+                      <Link
+                        href={`/dashboard/market/wholesale/invoices/${quote.convertedToInvoiceId}`}
+                        className="text-blue-500 hover:underline flex items-center gap-1"
+                      >
+                        Ver factura <ExternalLink className="w-3 h-3" />
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+
+              {/* Signature Status */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className={cn(
+                  'p-6 rounded-2xl border',
+                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                )}
+              >
+                <div className="flex items-center gap-3 mb-5">
+                  <div className={cn('p-2 rounded-xl',
+                    quote.signedAt
+                      ? theme === 'dark' ? 'bg-emerald-900/30' : 'bg-emerald-100'
+                      : theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'
+                  )}>
+                    <PenTool className={cn('w-5 h-5', quote.signedAt ? 'text-emerald-500' : 'text-purple-500')} />
+                  </div>
+                  <h3 className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Firma Digital</h3>
+                </div>
+
+                {quote.signedAt ? (
+                  <div className="space-y-3">
+                    <div className={cn(
+                      'p-3 rounded-xl text-center',
+                      theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50'
+                    )}>
+                      <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                      <p className={cn('font-medium text-sm', theme === 'dark' ? 'text-emerald-300' : 'text-emerald-700')}>
+                        Firmada
+                      </p>
+                    </div>
+                    {quote.signerName && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Firmante:</span>
+                        <span className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{quote.signerName}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Fecha:</span>
+                      <span className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{formatDateTime(quote.signedAt)}</span>
+                    </div>
+                    {quote.signatureData && (
+                      <div className={cn('p-2 rounded-lg border', theme === 'dark' ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white')}>
+                        <img src={quote.signatureData} alt="Firma" className="w-full h-20 object-contain" />
+                      </div>
+                    )}
+                  </div>
+                ) : quote.signatureToken ? (
+                  <div className="space-y-3">
+                    <div className={cn(
+                      'p-3 rounded-xl text-center',
+                      theme === 'dark' ? 'bg-amber-900/20' : 'bg-amber-50'
+                    )}>
+                      <Clock className="w-8 h-8 text-amber-500 mx-auto mb-2" />
+                      <p className={cn('font-medium text-sm', theme === 'dark' ? 'text-amber-300' : 'text-amber-700')}>
+                        Enlace generado - Pendiente de firma
+                      </p>
+                    </div>
                     <button
-                      onClick={() => setShowConvertModal(false)}
+                      onClick={copySignatureLink}
                       className={cn(
-                        'flex-1 py-2.5 px-4 rounded-lg font-medium border',
+                        'w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors',
+                        theme === 'dark'
+                          ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      )}
+                    >
+                      {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                      {copiedLink ? 'Copiado' : 'Copiar enlace de firma'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className={cn(
+                      'p-3 rounded-xl text-center',
+                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                    )}>
+                      <Link2 className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-gray-500">Sin enlace de firma</p>
+                    </div>
+                    <button
+                      onClick={handleGenerateLink}
+                      disabled={generatingLink}
+                      className={cn(
+                        'w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors',
+                        'bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50'
+                      )}
+                    >
+                      {generatingLink ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+                      Generar Enlace de Firma
+                    </button>
+                  </div>
+                )}
+              </motion.div>
+            </div>
+
+            {/* Products Table */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+              className={cn(
+                'rounded-2xl border overflow-hidden',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <div className="p-6 pb-0">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className={cn('p-2 rounded-xl', theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100')}>
+                    <Package className="w-5 h-5 text-blue-500" />
+                  </div>
+                  <h3 className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                    Productos ({totalProducts})
+                  </h3>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className={cn(
+                      'border-b text-left',
+                      theme === 'dark' ? 'border-gray-700 bg-gray-900/50' : 'border-gray-200 bg-gray-50'
+                    )}>
+                      <th className="py-3 px-6 text-xs font-semibold uppercase tracking-wider text-gray-500">Producto</th>
+                      <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-gray-500 text-center">Cant</th>
+                      <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-gray-500 text-right">P. Unit USD</th>
+                      <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-gray-500 text-right">P. Unit CUP</th>
+                      <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-gray-500 text-center">Desc.</th>
+                      <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-gray-500 text-right">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {quote.lines.map(line => (
+                      <tr key={line.id} className={cn(
+                        'border-b transition-colors',
+                        theme === 'dark' ? 'border-gray-700 hover:bg-gray-800/50' : 'border-gray-100 hover:bg-gray-50'
+                      )}>
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              'w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0',
+                              theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                            )}>
+                              {line.productImage ? (
+                                <img src={line.productImage} alt={line.productName} className="w-full h-full object-cover" />
+                              ) : (
+                                <Package className="w-5 h-5 text-gray-400" />
+                              )}
+                            </div>
+                            <div>
+                              <p className={cn('font-medium text-sm', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                {line.productName}
+                              </p>
+                              {line.productSku && (
+                                <p className="text-xs text-gray-500">{line.productSku}</p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 text-center font-medium">{line.quantity}</td>
+                        <td className="py-4 px-4 text-right">
+                          {line.originalPrice && line.originalPrice !== line.unitPrice ? (
+                            <div>
+                              <span className="text-xs text-gray-400 line-through block">{formatCurrency(line.originalPrice)}</span>
+                              <span className="text-sm font-medium text-blue-600">{formatCurrency(line.unitPrice)}</span>
+                            </div>
+                          ) : (
+                            <span className="text-sm font-medium">{formatCurrency(line.unitPrice)}</span>
+                          )}
+                        </td>
+                        <td className="py-4 px-4 text-right text-sm text-gray-500">
+                          {formatCUP(line.unitPrice * exchangeRate)}
+                        </td>
+                        <td className="py-4 px-4 text-center">
+                          {line.discountPercent > 0 && (
+                            <span className="text-green-600 text-sm font-medium">-{line.discountPercent}%</span>
+                          )}
+                        </td>
+                        <td className="py-4 px-4 text-right">
+                          <p className="font-bold text-blue-600">{formatCurrency(line.subtotal)}</p>
+                          <p className="text-xs text-gray-500">{formatCUP(line.subtotal * exchangeRate)}</p>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Totals Footer */}
+              <div className={cn(
+                'p-6 border-t',
+                theme === 'dark' ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'
+              )}>
+                <div className="flex justify-end">
+                  <div className="w-80 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Subtotal USD:</span>
+                      <span className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        {formatCurrency(quote.subtotal)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Subtotal CUP:</span>
+                      <span className="text-gray-500">{formatCUP(quote.subtotal * exchangeRate)}</span>
+                    </div>
+                    {quote.discountPercent > 0 && (
+                      <div className="flex justify-between text-sm text-green-600">
+                        <span>Descuento ({quote.discountPercent}%):</span>
+                        <span>-{formatCurrency(quote.discountAmount)}</span>
+                      </div>
+                    )}
+                    <div className={cn(
+                      'flex justify-between text-xl font-bold pt-3 border-t',
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-300'
+                    )}>
+                      <span>Total USD:</span>
+                      <span className="text-blue-600">{formatCurrency(quote.totalAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-lg font-semibold">
+                      <span className="text-gray-500">Total CUP:</span>
+                      <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                        {formatCUP(quote.totalAmount * exchangeRate)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Notes */}
+            {(quote.notes || quote.internalNotes) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {quote.notes && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={cn(
+                      'p-6 rounded-2xl border',
+                      theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                    )}
+                  >
+                    <h3 className={cn('font-semibold mb-3', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      Notas para el Cliente
+                    </h3>
+                    <p className="text-sm text-gray-500 whitespace-pre-wrap">{quote.notes}</p>
+                  </motion.div>
+                )}
+                {quote.internalNotes && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={cn(
+                      'p-6 rounded-2xl border',
+                      theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                    )}
+                  >
+                    <h3 className={cn('font-semibold mb-3', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      Notas Internas
+                    </h3>
+                    <p className="text-sm text-gray-500 whitespace-pre-wrap">{quote.internalNotes}</p>
+                  </motion.div>
+                )}
+              </div>
+            )}
+
+            {/* Timeline */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className={cn(
+                'p-6 rounded-2xl border',
+                theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              )}
+            >
+              <div className="flex items-center gap-3 mb-5">
+                <div className={cn('p-2 rounded-xl', theme === 'dark' ? 'bg-indigo-900/30' : 'bg-indigo-100')}>
+                  <History className="w-5 h-5 text-indigo-500" />
+                </div>
+                <h3 className={cn('font-semibold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                  Historial de Actividad
+                </h3>
+              </div>
+
+              <div className="relative">
+                <div className={cn(
+                  'absolute left-[17px] top-2 bottom-2 w-0.5',
+                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                )} />
+
+                <div className="space-y-4">
+                  {/* Created */}
+                  <div className="flex items-start gap-4 relative">
+                    <div className={cn(
+                      'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                      theme === 'dark' ? 'bg-blue-900/50 ring-4 ring-gray-800' : 'bg-blue-100 ring-4 ring-white'
+                    )}>
+                      <FileText className="w-4 h-4 text-blue-500" />
+                    </div>
+                    <div className="pt-1">
+                      <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        Cotización creada
+                      </p>
+                      <p className="text-xs text-gray-500">por {quote.createdBy}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(quote.createdAt)}</p>
+                    </div>
+                  </div>
+
+                  {/* Sent */}
+                  {quote.sentAt && (
+                    <div className="flex items-start gap-4 relative">
+                      <div className={cn(
+                        'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                        theme === 'dark' ? 'bg-cyan-900/50 ring-4 ring-gray-800' : 'bg-cyan-100 ring-4 ring-white'
+                      )}>
+                        <Send className="w-4 h-4 text-cyan-500" />
+                      </div>
+                      <div className="pt-1">
+                        <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          Cotización enviada al cliente
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(quote.sentAt)}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Signed */}
+                  {quote.signedAt && (
+                    <div className="flex items-start gap-4 relative">
+                      <div className={cn(
+                        'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                        theme === 'dark' ? 'bg-emerald-900/50 ring-4 ring-gray-800' : 'bg-emerald-100 ring-4 ring-white'
+                      )}>
+                        <PenTool className="w-4 h-4 text-emerald-500" />
+                      </div>
+                      <div className="pt-1">
+                        <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          Cotización firmada
+                        </p>
+                        {quote.signerName && <p className="text-xs text-gray-500">por {quote.signerName}</p>}
+                        <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(quote.signedAt)}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Accepted */}
+                  {quote.acceptedAt && (
+                    <div className="flex items-start gap-4 relative">
+                      <div className={cn(
+                        'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                        theme === 'dark' ? 'bg-green-900/50 ring-4 ring-gray-800' : 'bg-green-100 ring-4 ring-white'
+                      )}>
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                      </div>
+                      <div className="pt-1">
+                        <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          Cotización aceptada
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(quote.acceptedAt)}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Converted */}
+                  {quote.convertedToInvoiceId && (
+                    <div className="flex items-start gap-4 relative">
+                      <div className={cn(
+                        'w-[35px] h-[35px] rounded-full flex items-center justify-center shrink-0 z-10',
+                        theme === 'dark' ? 'bg-purple-900/50 ring-4 ring-gray-800' : 'bg-purple-100 ring-4 ring-white'
+                      )}>
+                        <Receipt className="w-4 h-4 text-purple-500" />
+                      </div>
+                      <div className="pt-1">
+                        <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          Convertida a factura
+                        </p>
+                        <Link
+                          href={`/dashboard/market/wholesale/invoices/${quote.convertedToInvoiceId}`}
+                          className="text-xs text-purple-500 hover:underline"
+                        >
+                          Ver factura
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* ========== MODALS ========== */}
+
+          {/* Send Email Modal */}
+          <AnimatePresence>
+            {showSendModal && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+                onClick={() => setShowSendModal(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.95, opacity: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn(
+                    'rounded-2xl shadow-2xl max-w-lg w-full',
+                    theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                  )}
+                >
+                  <div className={cn(
+                    'p-6 border-b flex items-center justify-between',
+                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                  )}>
+                    <h2 className={cn('text-xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      Enviar Cotización
+                    </h2>
+                    <button onClick={() => setShowSendModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="p-6 space-y-4">
+                    <div>
+                      <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                        Email del destinatario
+                      </label>
+                      <input
+                        type="email"
+                        value={sendEmail}
+                        onChange={(e) => setSendEmail(e.target.value)}
+                        placeholder="correo@ejemplo.com"
+                        className={cn(
+                          'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2',
+                          theme === 'dark'
+                            ? 'bg-gray-900 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                            : 'bg-white border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                        )}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                        Mensaje personalizado (opcional)
+                      </label>
+                      <textarea
+                        value={sendMessage}
+                        onChange={(e) => setSendMessage(e.target.value)}
+                        rows={3}
+                        placeholder="Mensaje adicional para el cliente..."
+                        className={cn(
+                          'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 resize-none',
+                          theme === 'dark'
+                            ? 'bg-gray-900 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                            : 'bg-white border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                        )}
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={attachPdf}
+                          onChange={(e) => setAttachPdf(e.target.checked)}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm">Adjuntar PDF</span>
+                      </label>
+
+                      {attachPdf && (
+                        <select
+                          value={pdfCurrency}
+                          onChange={(e) => setPdfCurrency(e.target.value as 'usd' | 'cup' | 'dual')}
+                          className={cn(
+                            'px-3 py-1.5 rounded-lg border text-sm',
+                            theme === 'dark'
+                              ? 'bg-gray-900 border-gray-700 text-white'
+                              : 'bg-white border-gray-200 text-gray-900'
+                          )}
+                        >
+                          <option value="usd">USD</option>
+                          <option value="cup">CUP</option>
+                          <option value="dual">USD + CUP</option>
+                        </select>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className={cn(
+                    'p-6 border-t flex gap-3',
+                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                  )}>
+                    <button
+                      onClick={() => setShowSendModal(false)}
+                      className={cn(
+                        'flex-1 py-2.5 px-4 rounded-xl font-medium border transition-colors',
                         theme === 'dark'
                           ? 'border-gray-600 text-gray-300 hover:bg-gray-700'
                           : 'border-gray-300 text-gray-700 hover:bg-gray-50'
@@ -609,17 +1746,103 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                       Cancelar
                     </button>
                     <button
-                      onClick={handleConvert}
-                      disabled={converting}
-                      className="flex-1 py-2.5 px-4 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:opacity-50"
+                      onClick={handleSendEmail}
+                      disabled={sending || !sendEmail}
+                      className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                     >
-                      {converting ? 'Convirtiendo...' : 'Convertir'}
+                      {sending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Enviando...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          Enviar
+                        </>
+                      )}
                     </button>
                   </div>
-                </div>
+                </motion.div>
               </motion.div>
-            </div>
-          )}
+            )}
+          </AnimatePresence>
+
+          {/* Convert Modal */}
+          <AnimatePresence>
+            {showConvertModal && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+                onClick={() => setShowConvertModal(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.95, opacity: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn(
+                    'rounded-2xl shadow-2xl max-w-md w-full',
+                    theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                  )}
+                >
+                  <div className={cn(
+                    'p-6 border-b flex items-center justify-between',
+                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                  )}>
+                    <h2 className={cn('text-xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      Convertir a Factura
+                    </h2>
+                    <button onClick={() => setShowConvertModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <p className={cn('text-sm', theme === 'dark' ? 'text-gray-300' : 'text-gray-600')}>
+                      ¿Estás seguro de que deseas convertir esta cotización en factura?
+                    </p>
+                    <div className={cn(
+                      'p-4 rounded-xl',
+                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                    )}>
+                      <p className="text-sm"><strong>Cliente:</strong> {quote.customer.businessName}</p>
+                      <p className="text-sm"><strong>Total:</strong> {formatCurrency(quote.totalAmount)}</p>
+                      <p className="text-sm"><strong>Productos:</strong> {quote.lines.length} items</p>
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                      <button
+                        onClick={() => setShowConvertModal(false)}
+                        className={cn(
+                          'flex-1 py-2.5 px-4 rounded-xl font-medium border transition-colors',
+                          theme === 'dark'
+                            ? 'border-gray-600 text-gray-300 hover:bg-gray-700'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                        )}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={handleConvert}
+                        disabled={converting}
+                        className="flex-1 py-2.5 px-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {converting ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Convirtiendo...
+                          </>
+                        ) : (
+                          'Convertir'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </DashboardLayout>
     </ProtectedRoute>

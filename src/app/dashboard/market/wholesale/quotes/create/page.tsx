@@ -152,8 +152,11 @@ function CreateQuotePage() {
     contactName: '',
     phone: '',
     email: '',
-    taxId: ''
+    taxId: '',
+    pricelistId: ''
   })
+  const [availablePricelists, setAvailablePricelists] = useState<Array<{ id: number; name: string }>>([])
+  const [loadingPricelists, setLoadingPricelists] = useState(false)
 
   // Update URL with current step
   const updateURL = useCallback((step: string, customerId?: number) => {
@@ -256,6 +259,27 @@ function CreateQuotePage() {
   useEffect(() => {
     updateURL(currentStep, selectedCustomer?.id)
   }, [currentStep, selectedCustomer?.id, updateURL])
+
+  const fetchAvailablePricelists = async () => {
+    setLoadingPricelists(true)
+    try {
+      const response = await fetch('/api/market/pricelists')
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          setAvailablePricelists(
+            (result.data.pricelists || [])
+              .filter((p: { isActive: boolean }) => p.isActive)
+              .map((p: { id: number; name: string }) => ({ id: p.id, name: p.name }))
+          )
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching pricelists:', error)
+    } finally {
+      setLoadingPricelists(false)
+    }
+  }
 
   useEffect(() => {
     fetchCustomers()
@@ -417,7 +441,8 @@ function CreateQuotePage() {
           contactName: newCustomer.contactName.trim() || null,
           phone: newCustomer.phone.trim() || null,
           email: newCustomer.email.trim() || null,
-          taxId: newCustomer.taxId.trim() || null
+          taxId: newCustomer.taxId.trim() || null,
+          pricelistId: newCustomer.pricelistId ? parseInt(newCustomer.pricelistId) : null
         })
       })
       const result = await response.json()
@@ -433,7 +458,7 @@ function CreateQuotePage() {
           }
         }
         setShowCreateCustomer(false)
-        setNewCustomer({ businessName: '', contactName: '', phone: '', email: '', taxId: '' })
+        setNewCustomer({ businessName: '', contactName: '', phone: '', email: '', taxId: '', pricelistId: '' })
       } else {
         setError(result.error || 'Error al crear cliente')
       }
@@ -794,7 +819,10 @@ function CreateQuotePage() {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowCreateCustomer(true)}
+                    onClick={() => {
+                      setShowCreateCustomer(true)
+                      if (availablePricelists.length === 0) fetchAvailablePricelists()
+                    }}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium bg-blue-600 hover:bg-blue-700 text-white text-sm transition-colors"
                   >
                     <Plus className="w-4 h-4" />
@@ -833,6 +861,7 @@ function CreateQuotePage() {
                         <button
                           onClick={() => {
                             setShowCreateCustomer(true)
+                            if (availablePricelists.length === 0) fetchAvailablePricelists()
                             if (customerSearch) {
                               setNewCustomer(prev => ({ ...prev, businessName: customerSearch }))
                             }
@@ -1525,6 +1554,31 @@ function CreateQuotePage() {
                       )}
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                    Lista de Precios
+                  </label>
+                  <select
+                    value={newCustomer.pricelistId}
+                    onChange={(e) => setNewCustomer(prev => ({ ...prev, pricelistId: e.target.value }))}
+                    className={cn(
+                      'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2',
+                      theme === 'dark'
+                        ? 'bg-gray-900 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                        : 'bg-white border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                    )}
+                  >
+                    <option value="">Sin lista de precios</option>
+                    {loadingPricelists ? (
+                      <option disabled>Cargando...</option>
+                    ) : (
+                      availablePricelists.map(pl => (
+                        <option key={pl.id} value={pl.id}>{pl.name}</option>
+                      ))
+                    )}
+                  </select>
                 </div>
               </div>
 

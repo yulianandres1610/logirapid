@@ -215,6 +215,19 @@ export async function initializeWholesaleTables() {
   `)
   console.log('[Wholesale] Created market_invoice_payments table')
 
+  // Add signature columns to market_quotes for digital signature feature
+  try {
+    await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signature_token UUID`)
+    await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signature_data TEXT`)
+    await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signed_at TIMESTAMP`)
+    await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signer_name VARCHAR(255)`)
+    await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signer_ip VARCHAR(45)`)
+    await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_quotes_signature_token ON market_quotes(signature_token) WHERE signature_token IS NOT NULL`)
+    console.log('[Wholesale] Added signature columns to market_quotes')
+  } catch {
+    // Columns may already exist
+  }
+
   // Create indexes for better performance
   try {
     await db.query(`CREATE INDEX IF NOT EXISTS idx_wholesale_customers_company ON market_wholesale_customers(company_id)`)

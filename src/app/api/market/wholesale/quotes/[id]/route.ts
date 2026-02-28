@@ -113,6 +113,10 @@ export async function GET(
       updatedAt: row.updated_at,
       sentAt: row.sent_at,
       acceptedAt: row.accepted_at,
+      signatureToken: row.signature_token || null,
+      signatureData: row.signature_data || null,
+      signedAt: row.signed_at || null,
+      signerName: row.signer_name || null,
       lines: linesResult.rows.map(line => ({
         id: line.id,
         productId: line.product_id,
