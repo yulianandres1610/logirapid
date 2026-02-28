@@ -277,16 +277,18 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const handleConfirm = async () => {
-    if (!confirm('¿Confirmar esta factura?')) return
+    if (!confirm('¿Confirmar esta factura y crear entrega?')) return
 
     setConfirming(true)
     try {
       const response = await fetch(`/api/market/wholesale/invoices/${invoiceId}/confirm`, {
         method: 'POST'
       })
-      if (response.ok) {
-        fetchInvoice()
+      const result = await response.json()
+      if (!response.ok) {
+        alert(result.error || 'Error al confirmar factura')
       }
+      fetchInvoice()
     } catch (error) {
       console.error('Error confirming invoice:', error)
     } finally {
@@ -483,8 +485,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                   <span className="font-medium text-sm hidden sm:inline">Imprimir</span>
                 </motion.button>
 
-                {/* Confirm Button */}
-                {invoice.status === 'draft' && (
+                {/* Confirm Button - show when no deliveries exist and invoice not delivered/cancelled */}
+                {invoice.deliveries.length === 0 && invoice.status !== 'delivered' && invoice.status !== 'cancelled' && (
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}

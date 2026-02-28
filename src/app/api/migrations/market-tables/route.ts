@@ -1419,6 +1419,153 @@ export async function POST() {
     `)
 
     // ========================================
+    // PRODUCTION FORMULAS & PLANNING
+    // ========================================
+
+    // 40. Create market_production_formulas table (Recipe definitions)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_production_formulas (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        code VARCHAR(20) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        target_product_id INTEGER REFERENCES market_products(id),
+        yield_quantity DECIMAL(15,3) NOT NULL DEFAULT 1,
+        yield_unit VARCHAR(20) DEFAULT 'unidad',
+        labor_cost_per_batch DECIMAL(10,2) DEFAULT 0,
+        estimated_time_minutes INTEGER,
+        notes TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(company_id, code)
+      )
+    `)
+    console.log('[Migration] Created market_production_formulas table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_production_formulas_company
+      ON market_production_formulas(company_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_production_formulas_product
+      ON market_production_formulas(target_product_id)
+    `)
+
+    // 41. Create market_production_formula_lines table (Formula ingredients)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_production_formula_lines (
+        id SERIAL PRIMARY KEY,
+        formula_id INTEGER NOT NULL REFERENCES market_production_formulas(id) ON DELETE CASCADE,
+        raw_material_id INTEGER NOT NULL REFERENCES market_products(id),
+        quantity DECIMAL(15,4) NOT NULL,
+        is_critical BOOLEAN DEFAULT true,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_production_formula_lines table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_formula_lines_formula
+      ON market_production_formula_lines(formula_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_formula_lines_material
+      ON market_production_formula_lines(raw_material_id)
+    `)
+
+    // 42. Create market_production_plans table (Production planning)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_production_plans (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        plan_number VARCHAR(30) NOT NULL,
+        formula_id INTEGER NOT NULL REFERENCES market_production_formulas(id),
+        warehouse_id INTEGER NOT NULL REFERENCES market_warehouses(id),
+        target_warehouse_id INTEGER REFERENCES market_warehouses(id),
+        planned_date DATE NOT NULL,
+        planned_quantity DECIMAL(15,3) NOT NULL,
+        batches INTEGER DEFAULT 1,
+        status VARCHAR(30) DEFAULT 'draft',
+        lot_number VARCHAR(50),
+        barcode VARCHAR(50),
+        actual_quantity DECIMAL(15,3),
+        waste_quantity DECIMAL(15,3) DEFAULT 0,
+        materials_cost DECIMAL(12,2) DEFAULT 0,
+        labor_cost DECIMAL(12,2) DEFAULT 0,
+        total_cost DECIMAL(12,2) DEFAULT 0,
+        cost_per_unit DECIMAL(12,4),
+        notes TEXT,
+        created_by INTEGER REFERENCES users(id),
+        scheduled_by INTEGER REFERENCES users(id),
+        materials_issued_by INTEGER REFERENCES users(id),
+        materials_issued_at TIMESTAMP,
+        started_by INTEGER REFERENCES users(id),
+        started_at TIMESTAMP,
+        completed_by INTEGER REFERENCES users(id),
+        completed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(company_id, plan_number)
+      )
+    `)
+    console.log('[Migration] Created market_production_plans table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_production_plans_company
+      ON market_production_plans(company_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_production_plans_formula
+      ON market_production_plans(formula_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_production_plans_status
+      ON market_production_plans(status)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_production_plans_date
+      ON market_production_plans(planned_date)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_production_plans_warehouse
+      ON market_production_plans(warehouse_id)
+    `)
+
+    // 43. Create market_production_plan_materials table (Materials for each plan)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS market_production_plan_materials (
+        id SERIAL PRIMARY KEY,
+        plan_id INTEGER NOT NULL REFERENCES market_production_plans(id) ON DELETE CASCADE,
+        raw_material_id INTEGER NOT NULL REFERENCES market_products(id),
+        quantity_required DECIMAL(15,4) NOT NULL,
+        quantity_issued DECIMAL(15,4) DEFAULT 0,
+        unit_cost DECIMAL(10,4),
+        total_cost DECIMAL(12,2),
+        status VARCHAR(20) DEFAULT 'pending',
+        issued_at TIMESTAMP,
+        issued_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created market_production_plan_materials table')
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_plan_materials_plan
+      ON market_production_plan_materials(plan_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_plan_materials_material
+      ON market_production_plan_materials(raw_material_id)
+    `)
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_plan_materials_status
+      ON market_production_plan_materials(status)
+    `)
+
+    // ========================================
     // CONSIGNMENT DATA SYNC
     // ========================================
     // Sync consignment_orders.total_sold from line items (fix for historical data)
@@ -1498,7 +1645,11 @@ export async function POST() {
       'market_production_materials',
       'market_production_log',
       'production_lot_inventory',
-      'market_production_material_validations'
+      'market_production_material_validations',
+      'market_production_formulas',
+      'market_production_formula_lines',
+      'market_production_plans',
+      'market_production_plan_materials'
     ]
     const tableStats = []
 
@@ -1562,7 +1713,11 @@ export async function GET() {
       'market_production_materials',
       'market_production_log',
       'production_lot_inventory',
-      'market_production_material_validations'
+      'market_production_material_validations',
+      'market_production_formulas',
+      'market_production_formula_lines',
+      'market_production_plans',
+      'market_production_plan_materials'
     ]
     const tableStatus = []
 

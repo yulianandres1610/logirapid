@@ -1510,7 +1510,9 @@ export default function CreateConsignmentOrderPage() {
   // Add product to order (with optional variant)
   const addProductToOrder = (product: Product, variant?: ProductVariant | null) => {
     const variantId = variant?.id ?? null
-    const unitCost = variant?.costPrice ?? variant?.price ?? product.costPrice
+    // IMPORTANT: Use costPrice only, never fall back to selling price (variant?.price)
+    // This ensures consignment orders always use the cost, not the selling price
+    const unitCost = variant?.costPrice || product.costPrice
     const unitPrice = variant?.price ?? product.sellingPrice
 
     // Find existing line by product.id + variant.id combination

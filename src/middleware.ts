@@ -124,9 +124,15 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
 
+    // Allow public quote signing page (no auth required)
+    if (pathname.startsWith('/quote-sign')) {
+      return NextResponse.next()
+    }
+
     // Allow market API routes (including consignments, purchases, order-invoices, uploads, migrations, ai, print, users, audit)
     if (pathname.startsWith('/api/market') ||
         pathname.startsWith('/api/auth') ||
+        pathname.startsWith('/api/public') ||
         pathname.startsWith('/api/consignments') ||
         pathname.startsWith('/api/order-invoices') ||
         pathname.startsWith('/api/upload') ||
@@ -267,9 +273,15 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
 
+    // Allow public quote signing page (no auth required)
+    if (pathname.startsWith('/quote-sign')) {
+      return NextResponse.next()
+    }
+
     // Allow market API routes (same as market subdomain - factory uses market dashboard)
     if (pathname.startsWith('/api/market') ||
         pathname.startsWith('/api/auth') ||
+        pathname.startsWith('/api/public') ||
         pathname.startsWith('/api/consignments') ||
         pathname.startsWith('/api/order-invoices') ||
         pathname.startsWith('/api/upload') ||

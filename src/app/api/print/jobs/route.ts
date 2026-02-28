@@ -205,7 +205,8 @@ export async function POST(request: NextRequest) {
       'transfer_receipt',      // Recibo de transferencia
       'production_materials_receipt',  // Orden de entrega de materiales para producción
       'production_reception_receipt',  // Recepción de productos terminados de producción
-      'asset_label'                    // Etiqueta de activo fijo
+      'asset_label',                   // Etiqueta de activo fijo
+      'wholesale_invoice'              // Factura de venta mayorista
     ]
     if (!validDocTypes.includes(documentType)) {
       return NextResponse.json({

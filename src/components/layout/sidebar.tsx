@@ -55,7 +55,8 @@ import {
   Briefcase,
   Scale,
   Factory,
-  Shield
+  Shield,
+  FlaskConical
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -586,6 +587,8 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       href: "/dashboard/market/production",
       hasSubmenu: true,
       submenuItems: [
+        { icon: FlaskConical, label: "Fórmulas", href: "/dashboard/market/production/formulas" },
+        { icon: Calendar, label: "Planificación", href: "/dashboard/market/production/planning" },
         { icon: Scale, label: "Etiquetas de Peso", href: "/dashboard/market/weight-labels" },
         { icon: Scale, label: "Dosificación", href: "/dashboard/market/production/dosification" },
       ]

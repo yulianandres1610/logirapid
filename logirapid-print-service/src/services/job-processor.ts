@@ -42,6 +42,7 @@ import { generateProductionOrderPdf, ProductionOrderPdfData } from '../documents
 import { generateSessionCloseReport, SessionCloseReportData } from '../documents/session-close-report'
 import { generateAssetLabelTspl, AssetLabelData } from '../documents/asset-label-tspl'
 import { generateAssetLabelZpl } from '../documents/asset-label-zpl'
+import { generateWholesaleInvoiceEscpos, WholesaleInvoiceData } from '../documents/wholesale-invoice-escpos'
 
 const execAsync = promisify(exec)
 
@@ -299,6 +300,7 @@ class JobProcessor {
       case 'purchase_invoice':
       case 'invoice':
       case 'consignment_receipt':
+      case 'wholesale_invoice':
       case 'production_materials_receipt':
       case 'production_reception_receipt':
         // For invoices, consignments, and production receipts, prefer thermal printers (ESC/POS format)
@@ -484,6 +486,15 @@ class JobProcessor {
         // Fallback to PDF for standard printers
         return generateConsignmentReceipt(data as unknown as ConsignmentReceiptData)
 
+      case 'wholesale_invoice':
+        // Use ESC/POS for thermal printers (80mm ticket format)
+        if (printer.printerType === 'thermal_80mm' || printer.supportsEscpos) {
+          console.log(`[Job Processor] Using ESC/POS format for wholesale invoice on thermal printer`)
+          return generateWholesaleInvoiceEscpos(data as unknown as WholesaleInvoiceData)
+        }
+        // Fallback to consignment receipt PDF format for standard printers
+        return generateConsignmentReceipt(data as unknown as ConsignmentReceiptData)
+
       case 'unified_reception':
         // Use ESC/POS for thermal printers (80mm ticket format with barcodes)
         // Use PDF only for standard printers
@@ -552,8 +563,8 @@ class JobProcessor {
     // ESC/POS documents that should always use raw printing on thermal printers
     const escposDocuments = [
       'pos_receipt', 'unified_reception', 'purchase_invoice', 'invoice',
-      'consignment_receipt', 'production_order', 'production_materials_receipt',
-      'production_reception_receipt'
+      'consignment_receipt', 'wholesale_invoice', 'production_order',
+      'production_materials_receipt', 'production_reception_receipt'
     ]
     const useEscPos = printer.supportsEscpos &&
                       printer.printerType !== 'standard' &&
@@ -561,7 +572,7 @@ class JobProcessor {
     const isReceiptOrReport = ['purchase_invoice', 'invoice', 'sales_report',
                                'inventory_count_report', 'audit_count_report', 'cash_register_report',
                                'session_close_report', 'warehouse_operation', 'unified_reception', 'consignment_receipt',
-                               'production_order', 'production_materials_receipt', 'production_reception_receipt'].includes(job.documentType)
+                               'wholesale_invoice', 'production_order', 'production_materials_receipt', 'production_reception_receipt'].includes(job.documentType)
     const isPdfOnly = ['transfer_receipt'].includes(job.documentType)
 
     console.log(`[Job Processor] Print method selection:`)

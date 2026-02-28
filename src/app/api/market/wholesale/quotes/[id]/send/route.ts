@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
+import { sendEmail } from '@/lib/email'
+import { generateQuoteProposalHtml } from '@/lib/email-templates/quote-proposal'
 
 interface JWTPayload {
   userId: number
@@ -26,6 +28,7 @@ async function getPayload(): Promise<JWTPayload | null> {
 /**
  * POST /api/market/wholesale/quotes/[id]/send
  * Send a quote to the customer (changes status from draft to sent)
+ * Optionally sends an email with PDF attachment
  */
 export async function POST(
   request: NextRequest,
@@ -40,11 +43,30 @@ export async function POST(
     const { id } = await params
     const quoteId = parseInt(id)
 
-    // Verify quote exists and is in draft status
+    // Parse optional body
+    let body: {
+      email?: string
+      message?: string
+      pdfBase64?: string
+      signatureUrl?: string
+    } = {}
+
+    try {
+      body = await request.json()
+    } catch {
+      // Body is optional
+    }
+
+    // Verify quote exists and get details
     const checkResult = await db.query(`
-      SELECT q.id, q.status, q.quote_number, c.email as customer_email, c.business_name
+      SELECT q.id, q.status, q.quote_number, q.subtotal, q.discount_percent,
+             q.discount_amount, q.total_amount, q.currency, q.valid_until, q.notes,
+             q.signature_token,
+             c.email as customer_email, c.business_name,
+             comp.name as company_name
       FROM market_quotes q
       JOIN market_wholesale_customers c ON c.id = q.customer_id
+      JOIN companies comp ON comp.id = q.company_id
       WHERE q.id = $1 AND q.company_id = $2
     `, [quoteId, payload.companyId])
 
@@ -57,31 +79,97 @@ export async function POST(
 
     const quote = checkResult.rows[0]
 
-    if (quote.status !== 'draft') {
+    if (quote.status !== 'draft' && quote.status !== 'sent') {
       return NextResponse.json({
         success: false,
-        error: 'Solo se pueden enviar cotizaciones en estado borrador'
+        error: 'Solo se pueden enviar cotizaciones en estado borrador o enviada'
       }, { status: 400 })
     }
 
-    // Update status to sent
-    await db.query(`
-      UPDATE market_quotes SET
-        status = 'sent',
-        sent_at = NOW(),
-        updated_at = NOW()
-      WHERE id = $1
+    // Get quote lines for email
+    const linesResult = await db.query(`
+      SELECT product_name, quantity, unit_price, subtotal
+      FROM market_quote_lines
+      WHERE quote_id = $1
+      ORDER BY id
     `, [quoteId])
 
-    // TODO: Send email notification to customer
-    // This would integrate with an email service
+    // Update status to sent (only if draft)
+    if (quote.status === 'draft') {
+      await db.query(`
+        UPDATE market_quotes SET
+          status = 'sent',
+          sent_at = NOW(),
+          updated_at = NOW()
+        WHERE id = $1
+      `, [quoteId])
+    }
+
+    // Try to send email (non-fatal if it fails)
+    let emailSent = false
+    const recipientEmail = body.email || quote.customer_email
+
+    if (recipientEmail && process.env.RESEND_API_KEY) {
+      try {
+        // Build signature URL
+        const signatureUrl = body.signatureUrl ||
+          (quote.signature_token
+            ? `${process.env.NEXT_PUBLIC_BASE_URL || 'https://mercado.logirapid.com'}/quote-sign/${quote.signature_token}`
+            : undefined)
+
+        const html = generateQuoteProposalHtml({
+          quoteNumber: quote.quote_number,
+          customerName: quote.business_name,
+          totalAmount: parseFloat(quote.total_amount),
+          currency: quote.currency,
+          validUntil: quote.valid_until,
+          lines: linesResult.rows.map(l => ({
+            productName: l.product_name,
+            quantity: parseFloat(l.quantity),
+            unitPrice: parseFloat(l.unit_price),
+            subtotal: parseFloat(l.subtotal)
+          })),
+          notes: quote.notes,
+          companyName: quote.company_name || 'LogiRapid',
+          customMessage: body.message,
+          signatureUrl
+        })
+
+        // Build attachments
+        const attachments: Array<{ filename: string; content: Buffer; contentType?: string }> = []
+        if (body.pdfBase64) {
+          attachments.push({
+            filename: `${quote.quote_number}.pdf`,
+            content: Buffer.from(body.pdfBase64, 'base64'),
+            contentType: 'application/pdf'
+          })
+        }
+
+        const emailResult = await sendEmail({
+          to: recipientEmail,
+          subject: `Cotización ${quote.quote_number} - ${quote.company_name || 'LogiRapid'}`,
+          html,
+          attachments: attachments.length > 0 ? attachments : undefined
+        })
+
+        emailSent = emailResult.success
+        if (!emailResult.success) {
+          console.error('[Quote Send] Email failed:', emailResult.error)
+        }
+      } catch (emailError) {
+        console.error('[Quote Send] Email error:', emailError)
+      }
+    }
 
     return NextResponse.json({
       success: true,
-      message: `Cotización ${quote.quote_number} enviada a ${quote.business_name}`,
+      message: emailSent
+        ? `Cotización ${quote.quote_number} enviada por email a ${recipientEmail}`
+        : `Cotización ${quote.quote_number} marcada como enviada${recipientEmail ? ' (email no enviado - configurar RESEND_API_KEY)' : ''}`,
       data: {
         quoteNumber: quote.quote_number,
-        customerEmail: quote.customer_email
+        customerEmail: recipientEmail,
+        emailSent
       }
     })
 

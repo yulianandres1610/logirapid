@@ -107,7 +107,7 @@ type KioskStep =
   | 'scan_id'
   | 'scan_id_reverse'
   | 'processing_id'
-  | 'verify_data'      // NEW: Verify OCR data before registering
+  | 'verify_data'
   | 'manual_register'
   | 'visitor_info'
   | 'select_purpose'
@@ -117,6 +117,7 @@ type KioskStep =
   | 'scan_receipts'
   | 'exit_success'
   | 'daily_log'
+  | 'log_detail'
   | 'error'
 
 const VISIT_PURPOSES = [
@@ -149,13 +150,24 @@ interface Employee {
 
 interface DailyLogEntry {
   id: number
+  visitorId: number
   visitorName: string
   visitorIdNumber: string
+  visitorIdType: string | null
+  kioskId: number
+  kioskName: string | null
+  kioskLocation: string | null
   entryTime: string
   exitTime: string | null
   visitPurpose: string | null
   visitNotes: string | null
+  hostEmployeeId: number | null
+  hostName: string | null
+  hasPendingInvoices: boolean
+  invoicesValidated: boolean
+  validatedAt: string | null
   status: string
+  createdAt: string
 }
 
 type KioskTheme = 'light' | 'dark'
@@ -220,6 +232,26 @@ export default function DoorKioskPage() {
   // Daily log
   const [dailyLogs, setDailyLogs] = useState<DailyLogEntry[]>([])
   const [loadingDailyLog, setLoadingDailyLog] = useState(false)
+  const [dailyLogFilter, setDailyLogFilter] = useState<'all' | 'inside' | 'exited'>('all')
+  const [dailyLogSearch, setDailyLogSearch] = useState('')
+
+  // Kiosk statistics for main dashboard
+  interface KioskStats {
+    visitorsInside: number
+    visitorsExitedToday: number
+    totalVisitorsToday: number
+    ordersCreatedToday: number
+    ordersValidatedToday: number
+    exitsWithoutValidation: number
+    validationRate: number
+    breakdown: {
+      posOrders: number
+      wholesaleInvoices: number
+    }
+  }
+  const [kioskStats, setKioskStats] = useState<KioskStats | null>(null)
+  const [loadingStats, setLoadingStats] = useState(false)
+  const [selectedLog, setSelectedLog] = useState<DailyLogEntry | null>(null)
 
   // Receipt scanning state
   const [scannerOpen, setScannerOpen] = useState(false)
@@ -378,6 +410,21 @@ export default function DoorKioskPage() {
       setKioskTheme(saved)
     }
   }, [kioskId])
+
+  // Auto-refresh kiosk stats when on idle screen
+  useEffect(() => {
+    if (step === 'idle' && guard && kiosk) {
+      // Fetch immediately
+      fetchKioskStats()
+
+      // Then refresh every 30 seconds
+      const interval = setInterval(() => {
+        fetchKioskStats()
+      }, 30000)
+
+      return () => clearInterval(interval)
+    }
+  }, [step, guard, kiosk])
 
   // Toggle theme function
   const toggleTheme = () => {
@@ -708,7 +755,7 @@ export default function DoorKioskPage() {
           fileBase64: imageBase64.split(',')[1],
           mimeType: 'image/jpeg',
           // Pass kiosk credentials for authentication
-          kioskId: parseInt(kioskId),
+          kioskId: kiosk?.id,
           guardId: guard?.id
         })
       })
@@ -727,7 +774,7 @@ export default function DoorKioskPage() {
               body: JSON.stringify({
                 fileBase64: capturedImageReverse.split(',')[1],
                 mimeType: 'image/jpeg',
-                kioskId: parseInt(kioskId),
+                kioskId: kiosk?.id,
                 guardId: guard?.id
               })
             })
@@ -808,7 +855,7 @@ export default function DoorKioskPage() {
         address: data.address,
         gender: data.gender,
         // Pass kiosk credentials for authentication (when no JWT)
-        kioskId: parseInt(kioskId),
+        kioskId: kiosk?.id,
         guardId: guard?.id
       }
 
@@ -955,7 +1002,7 @@ export default function DoorKioskPage() {
         body: JSON.stringify({
           scannedCode: code.trim(),
           visitorLogId: activeLogId,
-          kioskId: parseInt(kioskId),
+          kioskId: kiosk?.id,
           guardId: guard?.id
         })
       })
@@ -1006,7 +1053,7 @@ export default function DoorKioskPage() {
           documentNumber: doc.documentNumber,
           totalAmount: doc.totalAmount,
           currency: doc.currency,
-          kioskId: parseInt(kioskId),
+          kioskId: kiosk?.id,
           guardId: guard?.id,
           photoBase64: doc.photoBase64 || null
         })
@@ -1064,7 +1111,7 @@ export default function DoorKioskPage() {
         body: JSON.stringify({
           fileBase64: base64Data,
           mimeType: 'image/jpeg',
-          kioskId: parseInt(kioskId),
+          kioskId: kiosk?.id,
           guardId: guard?.id
         })
       })
@@ -1082,61 +1129,53 @@ export default function DoorKioskPage() {
           return
         }
 
-        // Also try to match with scan-document API if we got an order number
-        let matchedDoc: ScannedDocument | null = null
-        if (orderNumber) {
-          try {
-            const scanRes = await fetch('/api/market/door-security/scan-document', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                scannedCode: orderNumber.trim(),
-                visitorLogId: activeLogId,
-                kioskId: parseInt(kioskId),
-                guardId: guard?.id
-              })
-            })
-            const scanResult = await scanRes.json()
-            if (scanResult.success && scanResult.data.found && !scanResult.data.alreadyValidated) {
-              matchedDoc = {
-                documentType: scanResult.data.documentType,
-                documentId: scanResult.data.documentId,
-                documentNumber: scanResult.data.documentNumber,
-                customerName: scanResult.data.customerName,
-                totalAmount: scanResult.data.totalAmount,
-                currency: scanResult.data.currency,
-                createdAt: scanResult.data.createdAt,
-                alreadyValidated: false,
-                validated: false,
-                photoBase64: compressed
-              }
-            }
-          } catch {
-            console.log('[Receipt Photo] scan-document lookup failed, using AI data only')
-          }
+        // Must match with scan-document API - ticket must exist in orders
+        if (!orderNumber) {
+          setScanError('No se pudo extraer el numero del ticket. Intente con mejor iluminacion.')
+          return
         }
 
-        if (matchedDoc) {
-          setScannedDocuments(prev => [...prev, matchedDoc!])
-          // Auto-validate immediately
-          autoValidateDocument(matchedDoc)
-        } else {
-          // Use AI-extracted data directly
-          const newDoc: ScannedDocument = {
-            documentType: 'pos_receipt',
-            documentId: null,
-            documentNumber: docNumber,
-            customerName: storeName || null,
-            totalAmount: total || 0,
-            currency: currency || 'CUP',
-            createdAt: new Date().toISOString(),
+        try {
+          const scanRes = await fetch('/api/market/door-security/scan-document', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              scannedCode: orderNumber.trim(),
+              visitorLogId: activeLogId,
+              kioskId: kiosk?.id,
+              guardId: guard?.id
+            })
+          })
+          const scanResult = await scanRes.json()
+
+          if (!scanResult.success || !scanResult.data.found) {
+            setScanError(`Ticket ${orderNumber} no encontrado en las ordenes del sistema.`)
+            return
+          }
+
+          if (scanResult.data.alreadyValidated) {
+            setScanError(`Ticket ${orderNumber} ya fue validado anteriormente.`)
+            return
+          }
+
+          const matchedDoc: ScannedDocument = {
+            documentType: scanResult.data.documentType,
+            documentId: scanResult.data.documentId,
+            documentNumber: scanResult.data.documentNumber,
+            customerName: scanResult.data.customerName,
+            totalAmount: scanResult.data.totalAmount,
+            currency: scanResult.data.currency,
+            createdAt: scanResult.data.createdAt,
             alreadyValidated: false,
             validated: false,
             photoBase64: compressed
           }
-          setScannedDocuments(prev => [...prev, newDoc])
-          // Auto-validate immediately
-          autoValidateDocument(newDoc)
+
+          setScannedDocuments(prev => [...prev, matchedDoc])
+          autoValidateDocument(matchedDoc)
+        } catch {
+          setScanError('Error al verificar el ticket en el sistema.')
+          return
         }
 
         if (confidence && confidence < 0.5) {
@@ -1172,7 +1211,7 @@ export default function DoorKioskPage() {
         body: JSON.stringify({
           action: 'entry',
           visitorId: visitor.id,
-          kioskId: parseInt(kioskId),
+          kioskId: kiosk?.id,
           guardId: guard?.id,
           visitPurpose: purpose,
           visitNotes: notes || null
@@ -1206,7 +1245,7 @@ export default function DoorKioskPage() {
         body: JSON.stringify({
           action: 'exit',
           logId: logId,
-          kioskId: parseInt(kioskId),
+          kioskId: kiosk?.id,
           guardId: guard?.id
         })
       })
@@ -1345,11 +1384,15 @@ export default function DoorKioskPage() {
   }
 
   const fetchEmployees = async (search?: string) => {
+    if (!kiosk?.id || !guard?.id) {
+      console.error('Cannot fetch employees: kiosk or guard not loaded')
+      return
+    }
     setLoadingEmployees(true)
     try {
       const params = new URLSearchParams({
-        kioskId,
-        guardId: guard?.id?.toString() || '',
+        kioskId: kiosk.id.toString(),
+        guardId: guard.id.toString(),
         ...(search && { search })
       })
       const res = await fetch(`/api/market/door-security/employees?${params}`)
@@ -1364,15 +1407,22 @@ export default function DoorKioskPage() {
     }
   }
 
-  const fetchDailyLog = async () => {
+  const fetchDailyLog = async (dateOverride?: string) => {
+    if (!kiosk?.id || !guard?.id) {
+      console.error('Cannot fetch daily log: kiosk or guard not loaded')
+      return
+    }
     setLoadingDailyLog(true)
     try {
-      const now = new Date()
-      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      const targetDate = dateOverride || (() => {
+        const now = new Date()
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      })()
       const params = new URLSearchParams({
-        kioskId,
-        guardId: guard?.id?.toString() || '',
-        date: today
+        kioskId: kiosk.id.toString(),
+        guardId: guard.id.toString(),
+        date: targetDate,
+        limit: '500'
       })
       const res = await fetch(`/api/market/door-security/logs?${params}`)
       const data = await res.json()
@@ -1387,8 +1437,31 @@ export default function DoorKioskPage() {
   }
 
   const openDailyLog = () => {
+    setDailyLogFilter('all')
+    setDailyLogSearch('')
     fetchDailyLog()
     setStep('daily_log')
+  }
+
+  // Fetch kiosk statistics for dashboard
+  const fetchKioskStats = async () => {
+    if (!kiosk?.id || !guard?.id) return
+    setLoadingStats(true)
+    try {
+      const params = new URLSearchParams({
+        kioskId: kiosk.id.toString(),
+        guardId: guard.id.toString()
+      })
+      const res = await fetch(`/api/market/door-security/kiosk-stats?${params}`)
+      const data = await res.json()
+      if (data.success) {
+        setKioskStats(data.data)
+      }
+    } catch (error) {
+      console.error('Error fetching kiosk stats:', error)
+    } finally {
+      setLoadingStats(false)
+    }
   }
 
   const changeKiosk = () => {
@@ -1396,14 +1469,14 @@ export default function DoorKioskPage() {
     router.push('/door-kiosk')
   }
 
-  const logoutGuard = useCallback(() => {
+  const logoutGuard = () => {
     console.log('[Kiosk] logoutGuard called')
     // Clear inactivity timer first
     if (inactivityTimerRef.current) {
       clearTimeout(inactivityTimerRef.current)
       inactivityTimerRef.current = null
     }
-    // Cleanup
+    // Cleanup all state
     stopCamera()
     setVisitor(null)
     setScannedData(null)
@@ -1421,6 +1494,8 @@ export default function DoorKioskPage() {
     setMessage('')
     setPin('')
     setDailyLogs([])
+    setKioskStats(null)
+    setSelectedLog(null)
     setFormName('')
     setFormIdNumber('')
     setFormIdType('cedula')
@@ -1437,7 +1512,7 @@ export default function DoorKioskPage() {
     // Clear guard and go to PIN screen
     setGuard(null)
     setStep('guard_pin')
-  }, [])
+  }
 
   const formatTime = (date: Date | null) => {
     if (!date) return '--:--:--'
@@ -1537,58 +1612,21 @@ export default function DoorKioskPage() {
         </p>
       </motion.div>
 
-      {/* Guard Info Bar - When logged in */}
-      {guard && step !== 'guard_pin' && step !== 'locked' && (
+      {/* Kiosk Location Info - Only show when not on idle (idle has its own header) */}
+      {step !== 'idle' && step !== 'daily_log' && step !== 'log_detail' && (
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-lg mb-2 sm:mb-4 px-1"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className={`flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-4 ${theme.textMuted}`}
         >
-          <div className={`${theme.cardSolid} rounded-xl sm:rounded-2xl px-3 sm:px-5 py-2 sm:py-3 flex items-center justify-between border`}>
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-lg flex-shrink-0">
-                {getGuardInitials(guard.name)}
-              </div>
-              <div className="min-w-0">
-                <p className={`${theme.text} font-medium text-sm sm:text-base truncate`}>{guard.name}</p>
-                <p className={`${theme.textMuted} text-xs hidden sm:block`}>{guard.code}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => logoutGuard()}
-                className="px-3 py-1.5 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 active:bg-red-500/40 text-xs sm:text-sm font-semibold transition-colors"
-              >
-                Cerrar Sesión
-              </button>
-              <button
-                type="button"
-                onClick={changeKiosk}
-                className={`${theme.textMuted} hover:text-orange-500 p-1 sm:p-1.5 transition-colors`}
-                title="Cambiar kiosco"
-              >
-                <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
-            </div>
-          </div>
+          <MapPin className="w-3 h-3 sm:w-4 sm:h-4" />
+          <span className="text-xs sm:text-sm truncate max-w-[250px] sm:max-w-none">{kiosk?.name} • {kiosk?.location}</span>
         </motion.div>
       )}
 
-      {/* Kiosk Info */}
+      {/* Main Card - Fixed width for all views */}
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className={`flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-4 ${theme.textMuted}`}
-      >
-        <MapPin className="w-3 h-3 sm:w-4 sm:h-4" />
-        <span className="text-xs sm:text-sm truncate max-w-[250px] sm:max-w-none">{kiosk?.name} • {kiosk?.location}</span>
-      </motion.div>
-
-      {/* Main Card */}
-      <motion.div
-        layout
-        className={`${theme.card} rounded-2xl sm:rounded-3xl shadow-2xl w-full ${step === 'verify_data' ? 'max-w-2xl' : 'max-w-lg'} overflow-hidden border relative mx-1 transition-all duration-300`}
+        className={`${theme.card} rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-6xl overflow-hidden border relative mx-2 sm:mx-4`}
       >
         <AnimatePresence mode="wait">
           {/* Guard PIN Entry */}
@@ -1598,8 +1636,10 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-4 sm:p-8"
+              transition={{ duration: 0.2 }}
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-md">
               <div className="text-center mb-4 sm:mb-8">
                 <div className="w-14 h-14 sm:w-20 sm:h-20 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4 shadow-lg shadow-orange-500/30">
                   <Shield className="w-7 h-7 sm:w-10 sm:h-10 text-white" />
@@ -1660,6 +1700,7 @@ export default function DoorKioskPage() {
                   <span className="text-sm sm:text-base">Verificando...</span>
                 </div>
               )}
+              </div>
             </motion.div>
           )}
 
@@ -1670,8 +1711,9 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-4 sm:p-8"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-md">
               <div className="text-center mb-4 sm:mb-8">
                 <motion.div
                   initial={{ scale: 0 }}
@@ -1745,60 +1787,195 @@ export default function DoorKioskPage() {
                   <span className="text-sm sm:text-base">Verificando...</span>
                 </div>
               )}
+              </div>
             </motion.div>
           )}
 
-          {/* Idle State - Single scan button (auto-detects entry/exit) */}
+          {/* Idle State - Modern Dashboard optimized for iPad 13" */}
           {step === 'idle' && (
             <motion.div
               key="idle"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="p-4 sm:p-8"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ type: 'spring', bounce: 0.3 }}
+              className="p-6 sm:p-8 lg:p-10"
             >
-              <div className="text-center mb-4 sm:mb-8">
-                <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-1 sm:mb-2`}>
-                  Control de Acceso
-                </h2>
-                <p className={`${theme.textMuted} text-sm sm:text-base`}>
-                  Escanee el documento del visitante
-                </p>
+              {/* Header: Guard Info + Actions */}
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-4">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', bounce: 0.5, delay: 0.1 }}
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-orange-500/30"
+                  >
+                    {getGuardInitials(guard?.name || '')}
+                  </motion.div>
+                  <div>
+                    <p className={`text-lg sm:text-xl font-bold ${theme.text}`}>{guard?.name || 'Guardia'}</p>
+                    <p className={`text-sm ${theme.textMuted} flex items-center gap-1.5`}>
+                      <MapPin className="w-4 h-4" />
+                      {kiosk?.name}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => fetchKioskStats()}
+                    disabled={loadingStats}
+                    className={`p-3 rounded-xl transition-all ${kioskTheme === 'dark' ? 'hover:bg-white/10' : 'hover:bg-stone-100'}`}
+                    title="Actualizar"
+                  >
+                    <RefreshCw className={`w-6 h-6 ${theme.textMuted} ${loadingStats ? 'animate-spin' : ''}`} />
+                  </button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={logoutGuard}
+                    className="flex items-center gap-2 px-5 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 font-semibold transition-all"
+                  >
+                    <LogOut className="w-5 h-5" />
+                    <span>Cerrar Sesión</span>
+                  </motion.button>
+                </div>
               </div>
 
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setStep('scan_id')}
-                className="w-full flex items-center justify-center gap-3 py-4 sm:py-5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl sm:rounded-2xl font-bold transition-all shadow-lg shadow-orange-500/30"
-              >
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <CreditCard className="w-5 h-5 sm:w-6 sm:h-6" />
-                </div>
-                <div className="text-left">
-                  <span className="text-base sm:text-lg block">Escanear Documento</span>
-                  <span className="text-xs sm:text-sm font-normal opacity-80">
-                    Detecta automáticamente entrada o salida
-                  </span>
-                </div>
-              </motion.button>
+              {/* Stats Grid - Two Columns */}
+              <div className="grid grid-cols-2 gap-6 mb-8">
+                {/* Visitors Section */}
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className={`rounded-3xl p-6 ${kioskTheme === 'dark' ? 'bg-gradient-to-br from-stone-800/80 to-stone-800/40' : 'bg-gradient-to-br from-stone-50 to-white'} border ${kioskTheme === 'dark' ? 'border-stone-700/50' : 'border-stone-200'}`}
+                >
+                  <div className="flex items-center gap-3 mb-5">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${kioskTheme === 'dark' ? 'bg-orange-500/20' : 'bg-orange-100'}`}>
+                      <User className="w-6 h-6 text-orange-500" />
+                    </div>
+                    <span className={`text-lg font-bold ${theme.text}`}>Visitantes Hoy</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <button
+                      onClick={() => { setDailyLogFilter('inside'); openDailyLog() }}
+                      className={`rounded-2xl p-4 text-center transition-all ${kioskTheme === 'dark' ? 'bg-green-500/10 hover:bg-green-500/20 border border-green-500/20' : 'bg-green-50 hover:bg-green-100 border border-green-200'}`}
+                    >
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <span className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
+                        <span className="text-3xl sm:text-4xl font-bold text-green-500">{kioskStats?.visitorsInside ?? 0}</span>
+                      </div>
+                      <span className={`text-sm font-semibold ${theme.textSecondary}`}>Adentro</span>
+                    </button>
+                    <button
+                      onClick={() => { setDailyLogFilter('exited'); openDailyLog() }}
+                      className={`rounded-2xl p-4 text-center transition-all ${kioskTheme === 'dark' ? 'bg-stone-700/50 hover:bg-stone-700/80' : 'bg-stone-100 hover:bg-stone-200'}`}
+                    >
+                      <span className={`text-3xl sm:text-4xl font-bold ${theme.textSecondary}`}>{kioskStats?.visitorsExitedToday ?? 0}</span>
+                      <span className={`text-sm font-semibold block mt-2 ${theme.textMuted}`}>Salieron</span>
+                    </button>
+                    <button
+                      onClick={() => { setDailyLogFilter('all'); openDailyLog() }}
+                      className={`rounded-2xl p-4 text-center transition-all ${kioskTheme === 'dark' ? 'bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20' : 'bg-orange-50 hover:bg-orange-100 border border-orange-200'}`}
+                    >
+                      <span className="text-3xl sm:text-4xl font-bold text-orange-500">{kioskStats?.totalVisitorsToday ?? 0}</span>
+                      <span className={`text-sm font-semibold block mt-2 ${theme.textSecondary}`}>Total</span>
+                    </button>
+                  </div>
+                </motion.div>
 
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={openDailyLog}
-                className="w-full flex items-center justify-center gap-3 py-4 sm:py-5 mt-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl sm:rounded-2xl font-bold transition-all shadow-lg shadow-emerald-500/30"
-              >
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <ClipboardList className="w-5 h-5 sm:w-6 sm:h-6" />
-                </div>
-                <div className="text-left">
-                  <span className="text-base sm:text-lg block">Registro del Día</span>
-                  <span className="text-xs sm:text-sm font-normal opacity-80">
-                    Ver quién está adentro ahora
-                  </span>
-                </div>
-              </motion.button>
+                {/* Orders Section - Same design as Visitors */}
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className={`rounded-3xl p-6 ${kioskTheme === 'dark' ? 'bg-gradient-to-br from-stone-800/80 to-stone-800/40' : 'bg-gradient-to-br from-stone-50 to-white'} border ${kioskTheme === 'dark' ? 'border-stone-700/50' : 'border-stone-200'}`}
+                >
+                  <div className="flex items-center gap-3 mb-5">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${kioskTheme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
+                      <FileText className="w-6 h-6 text-blue-500" />
+                    </div>
+                    <span className={`text-lg font-bold ${theme.text}`}>Órdenes del Día</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    {/* Total Orders (POS + Mayoreo) */}
+                    <div className={`rounded-2xl p-4 text-center transition-colors ${kioskTheme === 'dark' ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-blue-50 border border-blue-200'}`}>
+                      <span className="text-3xl sm:text-4xl font-bold text-blue-500">{kioskStats?.ordersCreatedToday ?? 0}</span>
+                      <span className={`text-sm font-semibold block mt-2 ${theme.textSecondary}`}>Creadas</span>
+                    </div>
+                    {/* Validated */}
+                    <div className={`rounded-2xl p-4 text-center transition-colors ${kioskTheme === 'dark' ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-emerald-50 border border-emerald-200'}`}>
+                      <span className="text-3xl sm:text-4xl font-bold text-emerald-500">{kioskStats?.ordersValidatedToday ?? 0}</span>
+                      <span className={`text-sm font-semibold block mt-2 ${theme.textSecondary}`}>Validadas</span>
+                    </div>
+                    {/* Without Validation */}
+                    <div className={`rounded-2xl p-4 text-center transition-colors ${
+                      (kioskStats?.exitsWithoutValidation ?? 0) > 0
+                        ? kioskTheme === 'dark' ? 'bg-red-500/20 border-2 border-red-500/50' : 'bg-red-50 border-2 border-red-300'
+                        : kioskTheme === 'dark' ? 'bg-stone-700/50' : 'bg-stone-100'
+                    }`}>
+                      <div className="flex items-center justify-center gap-2">
+                        <span className={`text-3xl sm:text-4xl font-bold ${(kioskStats?.exitsWithoutValidation ?? 0) > 0 ? 'text-red-500' : theme.textSecondary}`}>
+                          {kioskStats?.exitsWithoutValidation ?? 0}
+                        </span>
+                        {(kioskStats?.exitsWithoutValidation ?? 0) > 0 && (
+                          <AlertTriangle className="w-5 h-5 text-red-500" />
+                        )}
+                      </div>
+                      <span className={`text-sm font-semibold block mt-2 ${(kioskStats?.exitsWithoutValidation ?? 0) > 0 ? 'text-red-500' : theme.textSecondary}`}>Sin Validar</span>
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* Action Buttons Grid */}
+              <div className="grid grid-cols-2 gap-6">
+                {/* Main Action: Scan Document */}
+                <motion.button
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  whileHover={{ scale: 1.02, y: -3 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setStep('scan_id')}
+                  className="flex items-center justify-center gap-5 py-8 sm:py-10 bg-gradient-to-r from-orange-500 via-orange-500 to-orange-600 text-white rounded-3xl font-bold transition-all shadow-2xl shadow-orange-500/40 hover:shadow-orange-500/60"
+                >
+                  <motion.div
+                    animate={{ rotate: [0, -10, 10, -10, 0] }}
+                    transition={{ repeat: Infinity, duration: 2, repeatDelay: 3 }}
+                    className="w-20 h-20 bg-white/20 rounded-3xl flex items-center justify-center"
+                  >
+                    <Camera className="w-10 h-10" />
+                  </motion.div>
+                  <div className="text-left">
+                    <span className="text-2xl sm:text-3xl block font-bold">Escanear Documento</span>
+                    <span className="text-base font-normal opacity-80 mt-1 block">
+                      Detecta entrada o salida automáticamente
+                    </span>
+                  </div>
+                </motion.button>
+
+                {/* Secondary Action: View History - GREEN */}
+                <motion.button
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                  whileHover={{ scale: 1.02, y: -3 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={openDailyLog}
+                  className="flex items-center justify-center gap-5 py-8 sm:py-10 bg-gradient-to-r from-emerald-500 via-emerald-500 to-emerald-600 text-white rounded-3xl font-bold transition-all shadow-2xl shadow-emerald-500/40 hover:shadow-emerald-500/60"
+                >
+                  <div className="w-20 h-20 bg-white/20 rounded-3xl flex items-center justify-center">
+                    <ClipboardList className="w-10 h-10" />
+                  </div>
+                  <div className="text-left">
+                    <span className="text-2xl sm:text-3xl block font-bold">Ver Historial</span>
+                    <span className="text-base font-normal opacity-80 mt-1 block">
+                      {kioskStats?.totalVisitorsToday ?? 0} registros del día
+                    </span>
+                  </div>
+                </motion.button>
+              </div>
             </motion.div>
           )}
 
@@ -1809,8 +1986,9 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-3 sm:p-6"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-xl">
               <div className="text-center mb-3 sm:mb-4">
                 <CreditCard className="w-8 h-8 sm:w-10 sm:h-10 text-orange-400 mx-auto mb-2" />
                 <h2 className={`text-lg sm:text-xl font-bold ${theme.text}`}>
@@ -1979,6 +2157,7 @@ export default function DoorKioskPage() {
               >
                 Cancelar
               </button>
+              </div>
             </motion.div>
           )}
 
@@ -1989,8 +2168,9 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-3 sm:p-6"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-xl">
               <div className="text-center mb-3 sm:mb-4">
                 <CreditCard className="w-8 h-8 sm:w-10 sm:h-10 text-orange-400 mx-auto mb-2" />
                 <h2 className={`text-lg sm:text-xl font-bold ${theme.text}`}>
@@ -2083,6 +2263,7 @@ export default function DoorKioskPage() {
               >
                 Cancelar
               </button>
+              </div>
             </motion.div>
           )}
 
@@ -2093,15 +2274,17 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-6 sm:p-8 text-center"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
-              <RefreshCw className="w-12 h-12 sm:w-16 sm:h-16 text-orange-400 mx-auto mb-4 sm:mb-6 animate-spin" />
-              <h2 className={`text-lg sm:text-xl font-bold ${theme.text} mb-2`}>
-                Analizando Documento
-              </h2>
-              <p className={`${theme.textMuted} text-sm sm:text-base`}>
-                Por favor espere...
-              </p>
+              <div className="w-full max-w-md text-center">
+                <RefreshCw className="w-12 h-12 sm:w-16 sm:h-16 text-orange-400 mx-auto mb-4 sm:mb-6 animate-spin" />
+                <h2 className={`text-lg sm:text-xl font-bold ${theme.text} mb-2`}>
+                  Analizando Documento
+                </h2>
+                <p className={`${theme.textMuted} text-sm sm:text-base`}>
+                  Por favor espere...
+                </p>
+              </div>
             </motion.div>
           )}
 
@@ -2112,8 +2295,9 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-3 sm:p-5"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-3xl">
               {/* Compact Header */}
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -2183,8 +2367,8 @@ export default function DoorKioskPage() {
                       disabled={isExistingVisitor}
                       className={`w-full px-2.5 py-2 rounded-lg border text-sm transition-all focus:outline-none focus:border-orange-500 ${
                         kioskTheme === 'dark'
-                          ? 'bg-stone-800 border-stone-600 text-white'
-                          : 'bg-white border-stone-300 text-stone-900'
+                          ? 'bg-stone-800 border-stone-600 kiosk-input-dark'
+                          : 'bg-white border-stone-300 kiosk-input-light'
                       } ${isExistingVisitor ? 'opacity-70' : ''}`}
                     />
                   </div>
@@ -2197,8 +2381,8 @@ export default function DoorKioskPage() {
                       disabled={isExistingVisitor}
                       className={`w-full px-2.5 py-2 rounded-lg border text-sm font-mono transition-all focus:outline-none focus:border-orange-500 ${
                         kioskTheme === 'dark'
-                          ? 'bg-stone-800 border-stone-600 text-white'
-                          : 'bg-white border-stone-300 text-stone-900'
+                          ? 'bg-stone-800 border-stone-600 kiosk-input-dark'
+                          : 'bg-white border-stone-300 kiosk-input-light'
                       } ${isExistingVisitor ? 'opacity-70' : ''}`}
                     />
                   </div>
@@ -2214,8 +2398,8 @@ export default function DoorKioskPage() {
                       disabled={isExistingVisitor}
                       className={`w-full px-2.5 py-2 rounded-lg border text-sm transition-all focus:outline-none focus:border-orange-500 ${
                         kioskTheme === 'dark'
-                          ? 'bg-stone-800 border-stone-600 text-white'
-                          : 'bg-white border-stone-300 text-stone-900'
+                          ? 'bg-stone-800 border-stone-600 kiosk-input-dark'
+                          : 'bg-white border-stone-300 kiosk-input-light'
                       } ${isExistingVisitor ? 'opacity-70' : ''}`}
                     >
                       <option value="cedula" className={kioskTheme === 'dark' ? 'bg-stone-800 text-white' : ''}>Carnet de Identidad</option>
@@ -2234,8 +2418,8 @@ export default function DoorKioskPage() {
                         placeholder="Opcional"
                         className={`w-full px-2.5 py-2 rounded-lg border text-sm transition-all focus:outline-none focus:border-orange-500 ${
                           kioskTheme === 'dark'
-                            ? 'bg-stone-800 border-stone-600 text-white placeholder-stone-500'
-                            : 'bg-white border-stone-300 text-stone-900 placeholder-stone-400'
+                            ? 'bg-stone-800 border-stone-600 kiosk-input-dark'
+                            : 'bg-white border-stone-300 kiosk-input-light'
                         } ${isExistingVisitor ? 'opacity-70' : ''}`}
                       />
                     </div>
@@ -2346,6 +2530,7 @@ export default function DoorKioskPage() {
               {message && (
                 <p className="text-center text-red-400 text-xs mt-2">{message}</p>
               )}
+              </div>
             </motion.div>
           )}
 
@@ -2356,8 +2541,9 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-4 sm:p-6"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-lg">
               <div className="text-center mb-4 sm:mb-6">
                 <Edit3 className="w-8 h-8 sm:w-10 sm:h-10 text-orange-400 mx-auto mb-2" />
                 <h2 className={`text-lg sm:text-xl font-bold ${theme.text}`}>
@@ -2440,8 +2626,8 @@ export default function DoorKioskPage() {
                   placeholder="Ej: Juan Pérez García"
                   className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl border-2 text-sm sm:text-base transition-all focus:outline-none focus:border-orange-500 ${
                     kioskTheme === 'dark'
-                      ? 'bg-stone-800 border-stone-600 text-white placeholder-stone-500'
-                      : 'bg-stone-50 border-stone-300 text-stone-900 placeholder-stone-400'
+                      ? 'bg-stone-800 border-stone-600 kiosk-input-dark'
+                      : 'bg-stone-50 border-stone-300 kiosk-input-light'
                   }`}
                   autoFocus
                 />
@@ -2460,8 +2646,8 @@ export default function DoorKioskPage() {
                   placeholder="Ej: 12345678"
                   className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl border-2 text-sm sm:text-base transition-all focus:outline-none focus:border-orange-500 ${
                     kioskTheme === 'dark'
-                      ? 'bg-stone-800 border-stone-600 text-white placeholder-stone-500'
-                      : 'bg-stone-50 border-stone-300 text-stone-900 placeholder-stone-400'
+                      ? 'bg-stone-800 border-stone-600 kiosk-input-dark'
+                      : 'bg-stone-50 border-stone-300 kiosk-input-light'
                   }`}
                 />
               </div>
@@ -2516,6 +2702,7 @@ export default function DoorKioskPage() {
               >
                 Cancelar
               </button>
+              </div>
             </motion.div>
           )}
 
@@ -2526,8 +2713,9 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-4 sm:p-6"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-lg">
               <div className="text-center mb-4 sm:mb-6">
                 <div className="w-14 h-14 sm:w-20 sm:h-20 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4 shadow-lg">
                   <User className="w-7 h-7 sm:w-10 sm:h-10 text-white" />
@@ -2589,8 +2777,8 @@ export default function DoorKioskPage() {
                       placeholder="Buscar empleado..."
                       className={`w-full px-3 py-2 rounded-lg border text-sm transition-all focus:outline-none focus:border-orange-500 ${
                         kioskTheme === 'dark'
-                          ? 'bg-stone-800 border-stone-600 text-white placeholder-stone-500'
-                          : 'bg-white border-stone-300 text-stone-900 placeholder-stone-400'
+                          ? 'bg-stone-800 border-stone-600 kiosk-input-dark'
+                          : 'bg-white border-stone-300 kiosk-input-light'
                       }`}
                     />
                     {selectedEmployee && (
@@ -2655,8 +2843,8 @@ export default function DoorKioskPage() {
                       rows={2}
                       className={`w-full px-3 py-2 rounded-lg border-2 text-sm transition-all focus:outline-none focus:border-orange-500 resize-none ${
                         kioskTheme === 'dark'
-                          ? 'bg-stone-800 border-stone-600 text-white placeholder-stone-500'
-                          : 'bg-stone-50 border-stone-300 text-stone-900 placeholder-stone-400'
+                          ? 'bg-stone-800 border-stone-600 kiosk-input-dark'
+                          : 'bg-stone-50 border-stone-300 kiosk-input-light'
                       }`}
                     />
                   </div>
@@ -2689,6 +2877,7 @@ export default function DoorKioskPage() {
               >
                 Cancelar
               </button>
+              </div>
             </motion.div>
           )}
 
@@ -2699,8 +2888,9 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-4 sm:p-6"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-xl">
               <div className="text-center mb-3 sm:mb-4">
                 <ScanLine className="w-8 h-8 sm:w-10 sm:h-10 text-orange-400 mx-auto mb-2" />
                 <h2 className={`text-lg sm:text-xl font-bold ${theme.text}`}>
@@ -2873,6 +3063,7 @@ export default function DoorKioskPage() {
                   handleBarcodeScan(code)
                 }}
               />
+              </div>
             </motion.div>
           )}
 
@@ -2883,8 +3074,9 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-4 sm:p-6"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
+              <div className="w-full max-w-xl">
               <div className="text-center mb-3 sm:mb-4">
                 <AlertTriangle className="w-8 h-8 sm:w-10 sm:h-10 text-yellow-400 mx-auto mb-2" />
                 <h2 className={`text-lg sm:text-xl font-bold ${theme.text}`}>
@@ -2955,6 +3147,7 @@ export default function DoorKioskPage() {
                   Permitir Salida
                 </button>
               </div>
+              </div>
             </motion.div>
           )}
 
@@ -2965,23 +3158,25 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="p-6 sm:p-8 text-center"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', bounce: 0.5 }}
-                className="w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-lg shadow-green-500/30"
-              >
-                <CheckCircle className="w-10 h-10 sm:w-14 sm:h-14 text-white" />
-              </motion.div>
-              <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-2`}>
-                Entrada Registrada
-              </h2>
-              <p className={`${theme.textSecondary} text-sm sm:text-base`}>{message}</p>
-              <p className="text-xs sm:text-sm text-green-400 mt-3 sm:mt-4 font-medium">
-                Puede pasar
-              </p>
+              <div className="w-full max-w-md text-center">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', bounce: 0.5 }}
+                  className="w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-lg shadow-green-500/30"
+                >
+                  <CheckCircle className="w-10 h-10 sm:w-14 sm:h-14 text-white" />
+                </motion.div>
+                <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-2`}>
+                  Entrada Registrada
+                </h2>
+                <p className={`${theme.textSecondary} text-sm sm:text-base`}>{message}</p>
+                <p className="text-xs sm:text-sm text-green-400 mt-3 sm:mt-4 font-medium">
+                  Puede pasar
+                </p>
+              </div>
             </motion.div>
           )}
 
@@ -2992,204 +3187,672 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="p-6 sm:p-8 text-center"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', bounce: 0.5 }}
-                className="w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-lg shadow-orange-500/30"
-              >
-                <LogOut className="w-10 h-10 sm:w-14 sm:h-14 text-white" />
-              </motion.div>
-              <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-2`}>
-                Salida Registrada
-              </h2>
-              <p className={`${theme.textSecondary} text-sm sm:text-base`}>{message}</p>
-              <p className="text-xs sm:text-sm text-orange-400 mt-3 sm:mt-4 font-medium">
-                Que tenga buen día
-              </p>
+              <div className="w-full max-w-md text-center">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', bounce: 0.5 }}
+                  className="w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-lg shadow-orange-500/30"
+                >
+                  <LogOut className="w-10 h-10 sm:w-14 sm:h-14 text-white" />
+                </motion.div>
+                <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-2`}>
+                  Salida Registrada
+                </h2>
+                <p className={`${theme.textSecondary} text-sm sm:text-base`}>{message}</p>
+                <p className="text-xs sm:text-sm text-orange-400 mt-3 sm:mt-4 font-medium">
+                  Que tenga buen día
+                </p>
+              </div>
             </motion.div>
           )}
 
-          {/* Daily Log - Registro del Día */}
-          {step === 'daily_log' && (
-            <motion.div
-              key="daily_log"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="p-3 sm:p-5"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between mb-3 sm:mb-4">
-                <button
-                  onClick={() => setStep('idle')}
-                  className={`flex items-center gap-1.5 text-sm font-medium ${theme.textSecondary} hover:${theme.text} transition-colors`}
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Volver
-                </button>
-                <button
-                  onClick={fetchDailyLog}
-                  disabled={loadingDailyLog}
-                  className={`flex items-center gap-1.5 text-sm font-medium text-orange-400 hover:text-orange-300 transition-colors ${loadingDailyLog ? 'animate-spin' : ''}`}
-                >
-                  <RefreshCw className={`w-4 h-4 ${loadingDailyLog ? 'animate-spin' : ''}`} />
-                  Actualizar
-                </button>
-              </div>
+          {/* Daily Log - Registro del Día - VISTA DE TABLA */}
+          {step === 'daily_log' && (() => {
+            const insideLogs = dailyLogs.filter(l => l.status === 'active')
+            const exitedLogs = dailyLogs.filter(l => l.status === 'completed')
 
-              <h2 className={`text-lg sm:text-xl font-bold ${theme.text} mb-1`}>
-                <ClipboardList className="w-5 h-5 inline-block mr-2 text-orange-400" />
-                Registro del Día
-              </h2>
-              <p className={`text-xs sm:text-sm ${theme.textSecondary} mb-3`}>
-                {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-              </p>
+            // Apply filters
+            let filteredLogs = dailyLogs
+            if (dailyLogFilter === 'inside') {
+              filteredLogs = insideLogs
+            } else if (dailyLogFilter === 'exited') {
+              filteredLogs = exitedLogs
+            }
 
-              {/* Summary cards */}
-              {(() => {
-                const inside = dailyLogs.filter(l => l.status === 'active')
-                const exited = dailyLogs.filter(l => l.status === 'completed')
-                return (
-                  <div className="grid grid-cols-3 gap-2 mb-3">
-                    <div className={`${kioskTheme === 'dark' ? 'bg-stone-800/80' : 'bg-stone-100'} rounded-xl p-2 sm:p-3 text-center`}>
-                      <p className="text-lg sm:text-2xl font-bold text-orange-400">{dailyLogs.length}</p>
-                      <p className={`text-[10px] sm:text-xs ${theme.textSecondary}`}>Total</p>
+            // Apply search
+            if (dailyLogSearch.trim()) {
+              const search = dailyLogSearch.toLowerCase().trim()
+              filteredLogs = filteredLogs.filter(l =>
+                l.visitorName.toLowerCase().includes(search) ||
+                l.visitorIdNumber.toLowerCase().includes(search) ||
+                (l.visitPurpose && l.visitPurpose.toLowerCase().includes(search))
+              )
+            }
+
+            // Sort: active first, then by entry time desc
+            filteredLogs = [...filteredLogs].sort((a, b) => {
+              if (a.status === 'active' && b.status !== 'active') return -1
+              if (a.status !== 'active' && b.status === 'active') return 1
+              return new Date(b.entryTime).getTime() - new Date(a.entryTime).getTime()
+            })
+
+            return (
+              <motion.div
+                key="daily_log"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="p-6 sm:p-8 lg:p-10 flex flex-col h-full"
+                style={{ maxHeight: 'calc(100vh - 100px)' }}
+              >
+                {/* Header con navegación */}
+                <div className="flex items-center justify-between mb-6">
+                  <button
+                    onClick={() => {
+                      setStep('idle')
+                      setDailyLogFilter('all')
+                      setDailyLogSearch('')
+                    }}
+                    className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold transition-colors ${
+                      kioskTheme === 'dark'
+                        ? 'bg-stone-800 hover:bg-stone-700 text-stone-200'
+                        : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
+                    }`}
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                    Volver
+                  </button>
+
+                  <div className="flex items-center gap-3">
+                    <ClipboardList className="w-7 h-7 text-emerald-500" />
+                    <h2 className={`text-xl sm:text-2xl font-bold ${theme.text}`}>
+                      Historial del Día
+                    </h2>
+                  </div>
+
+                  <button
+                    onClick={() => fetchDailyLog()}
+                    disabled={loadingDailyLog}
+                    className={`p-3 rounded-xl transition-colors ${
+                      kioskTheme === 'dark'
+                        ? 'bg-stone-800 hover:bg-stone-700'
+                        : 'bg-stone-100 hover:bg-stone-200'
+                    }`}
+                  >
+                    <RefreshCw className={`w-6 h-6 text-emerald-500 ${loadingDailyLog ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+
+                {/* Fecha */}
+                <p className={`text-base ${theme.textSecondary} text-center mb-6`}>
+                  {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                </p>
+
+                {/* Stats en una fila */}
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <button
+                    onClick={() => setDailyLogFilter('all')}
+                    className={`rounded-2xl p-4 text-center transition-colors ${
+                      dailyLogFilter === 'all'
+                        ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/30'
+                        : kioskTheme === 'dark' ? 'bg-stone-800/80 hover:bg-stone-700/80' : 'bg-white hover:bg-stone-50 border border-stone-200'
+                    }`}
+                  >
+                    <p className={`text-3xl sm:text-4xl font-bold ${dailyLogFilter === 'all' ? 'text-white' : 'text-orange-500'}`}>
+                      {dailyLogs.length}
+                    </p>
+                    <p className={`text-sm font-semibold mt-1 ${dailyLogFilter === 'all' ? 'text-orange-100' : theme.textSecondary}`}>
+                      Todos
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={() => setDailyLogFilter('inside')}
+                    className={`rounded-2xl p-4 text-center transition-colors ${
+                      dailyLogFilter === 'inside'
+                        ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg shadow-green-500/30'
+                        : kioskTheme === 'dark' ? 'bg-green-900/20 hover:bg-green-900/30 border border-green-500/30' : 'bg-green-50 hover:bg-green-100 border border-green-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <span className={`w-3 h-3 rounded-full bg-green-500 ${dailyLogFilter !== 'inside' ? 'animate-pulse' : ''}`} />
+                      <p className={`text-3xl sm:text-4xl font-bold ${dailyLogFilter === 'inside' ? 'text-white' : 'text-green-500'}`}>
+                        {insideLogs.length}
+                      </p>
                     </div>
-                    <div className={`${kioskTheme === 'dark' ? 'bg-green-900/30' : 'bg-green-50'} rounded-xl p-2 sm:p-3 text-center`}>
-                      <p className="text-lg sm:text-2xl font-bold text-green-400">{inside.length}</p>
-                      <p className={`text-[10px] sm:text-xs ${theme.textSecondary}`}>Adentro</p>
+                    <p className={`text-sm font-semibold mt-1 ${dailyLogFilter === 'inside' ? 'text-green-100' : theme.textSecondary}`}>
+                      Adentro
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={() => setDailyLogFilter('exited')}
+                    className={`rounded-2xl p-4 text-center transition-colors ${
+                      dailyLogFilter === 'exited'
+                        ? 'bg-gradient-to-br from-stone-500 to-stone-600 text-white shadow-lg shadow-stone-500/30'
+                        : kioskTheme === 'dark' ? 'bg-stone-800/80 hover:bg-stone-700/80' : 'bg-stone-100 hover:bg-stone-200'
+                    }`}
+                  >
+                    <p className={`text-3xl sm:text-4xl font-bold ${dailyLogFilter === 'exited' ? 'text-white' : theme.textSecondary}`}>
+                      {exitedLogs.length}
+                    </p>
+                    <p className={`text-sm font-semibold mt-1 ${dailyLogFilter === 'exited' ? 'text-stone-200' : theme.textSecondary}`}>
+                      Salieron
+                    </p>
+                  </button>
+                </div>
+
+                {/* Buscador */}
+                <div className="relative mb-6">
+                  <input
+                    type="text"
+                    value={dailyLogSearch}
+                    onChange={(e) => setDailyLogSearch(e.target.value)}
+                    placeholder="Buscar por nombre, cédula o motivo..."
+                    className={`w-full px-5 py-4 pl-12 rounded-2xl text-base ${
+                      kioskTheme === 'dark'
+                        ? 'bg-stone-800 kiosk-input-dark border-stone-700'
+                        : 'bg-white kiosk-input-light border-stone-200'
+                    } border-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50`}
+                  />
+                  <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 ${theme.textMuted}`} />
+                  {dailyLogSearch && (
+                    <button
+                      onClick={() => setDailyLogSearch('')}
+                      className={`absolute right-4 top-1/2 -translate-y-1/2 p-1.5 rounded-lg ${theme.textMuted} hover:text-emerald-500 hover:bg-emerald-500/10 transition-colors`}
+                    >
+                      <XCircle className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Tabla de registros */}
+                <div className={`flex-1 overflow-hidden rounded-2xl border-2 ${kioskTheme === 'dark' ? 'border-stone-700 bg-stone-800/30' : 'border-stone-200 bg-white'}`}>
+                  {loadingDailyLog ? (
+                    <div className="flex flex-col items-center justify-center h-full py-20">
+                      <RefreshCw className="w-12 h-12 text-emerald-500 animate-spin" />
+                      <p className={`${theme.textSecondary} text-base mt-4`}>Cargando registros...</p>
                     </div>
-                    <div className={`${kioskTheme === 'dark' ? 'bg-stone-800/80' : 'bg-stone-100'} rounded-xl p-2 sm:p-3 text-center`}>
-                      <p className={`text-lg sm:text-2xl font-bold ${theme.textSecondary}`}>{exited.length}</p>
-                      <p className={`text-[10px] sm:text-xs ${theme.textSecondary}`}>Salieron</p>
+                  ) : filteredLogs.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full py-20">
+                      <ClipboardList className={`w-20 h-20 ${theme.textMuted} mb-4`} />
+                      <p className={`${theme.text} text-xl font-semibold mb-2`}>
+                        {dailyLogSearch ? 'Sin resultados' : dailyLogFilter === 'inside' ? 'Nadie adentro' : dailyLogFilter === 'exited' ? 'Sin salidas registradas' : 'Sin registros hoy'}
+                      </p>
+                      <p className={`${theme.textMuted} text-base`}>
+                        {dailyLogSearch ? 'Intenta con otra búsqueda' : 'Los registros aparecerán aquí'}
+                      </p>
+                      {dailyLogSearch && (
+                        <button
+                          onClick={() => setDailyLogSearch('')}
+                          className="mt-6 px-6 py-3 text-base font-medium text-emerald-500 hover:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-xl transition-colors"
+                        >
+                          Limpiar búsqueda
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="h-full overflow-auto">
+                      {/* Tabla Header */}
+                      <div className={`sticky top-0 z-10 grid grid-cols-12 gap-3 px-6 py-4 text-sm font-bold uppercase tracking-wider ${
+                        kioskTheme === 'dark'
+                          ? 'bg-stone-800 text-stone-400 border-b-2 border-stone-700'
+                          : 'bg-stone-100 text-stone-500 border-b-2 border-stone-200'
+                      }`}>
+                        <div className="col-span-1 text-center">#</div>
+                        <div className="col-span-3">Visitante</div>
+                        <div className="col-span-2">Documento</div>
+                        <div className="col-span-2 text-center">Entrada</div>
+                        <div className="col-span-2 text-center">Salida</div>
+                        <div className="col-span-1 text-center">Tiempo</div>
+                        <div className="col-span-1 text-center">Ver</div>
+                      </div>
+
+                      {/* Tabla Body */}
+                      <div className={`divide-y ${kioskTheme === 'dark' ? 'divide-stone-700' : 'divide-stone-100'}`}>
+                        {filteredLogs.map((log, index) => {
+                          const isInside = log.status === 'active'
+                          const entryDate = new Date(log.entryTime)
+                          const exitDate = log.exitTime ? new Date(log.exitTime) : null
+
+                          // Calculate duration
+                          const endTime = isInside ? new Date() : exitDate
+                          let duration = ''
+                          if (endTime) {
+                            const diffMs = endTime.getTime() - entryDate.getTime()
+                            const diffMins = Math.floor(diffMs / 60000)
+                            const hours = Math.floor(diffMins / 60)
+                            const mins = diffMins % 60
+                            duration = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
+                          }
+
+                          return (
+                            <div
+                              key={log.id}
+                              className={`grid grid-cols-12 gap-3 px-6 py-4 items-center cursor-pointer transition-colors ${
+                                isInside
+                                  ? kioskTheme === 'dark'
+                                    ? 'bg-green-500/5 hover:bg-green-500/10'
+                                    : 'bg-green-50/50 hover:bg-green-50'
+                                  : kioskTheme === 'dark'
+                                    ? 'hover:bg-stone-800/50'
+                                    : 'hover:bg-stone-50'
+                              }`}
+                              onClick={() => {
+                                setSelectedLog(log)
+                                setStep('log_detail')
+                              }}
+                            >
+                              {/* # */}
+                              <div className={`col-span-1 text-center text-base font-medium ${theme.textMuted}`}>
+                                {index + 1}
+                              </div>
+
+                              {/* Visitante */}
+                              <div className="col-span-3 min-w-0">
+                                <div className="flex items-center gap-3">
+                                  {isInside && (
+                                    <span className="w-3 h-3 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
+                                  )}
+                                  <div className="min-w-0">
+                                    <p className={`text-base font-semibold ${theme.text} truncate`}>
+                                      {log.visitorName}
+                                    </p>
+                                    {log.visitPurpose && (
+                                      <p className={`text-sm ${theme.textMuted} truncate`}>
+                                        {log.visitPurpose}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Documento */}
+                              <div className="col-span-2">
+                                <p className={`text-sm font-mono ${theme.textSecondary}`}>
+                                  {log.visitorIdNumber}
+                                </p>
+                                {log.visitorIdType && (
+                                  <p className={`text-xs ${theme.textMuted} uppercase`}>
+                                    {log.visitorIdType}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Entrada */}
+                              <div className="col-span-2 text-center">
+                                <div className="flex items-center justify-center gap-2">
+                                  <LogIn className="w-4 h-4 text-green-500" />
+                                  <span className={`text-base font-medium ${theme.text}`}>
+                                    {entryDate.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Salida */}
+                              <div className="col-span-2 text-center">
+                                {exitDate ? (
+                                  <div className="flex items-center justify-center gap-2">
+                                    <LogOut className="w-4 h-4 text-red-400" />
+                                    <span className={`text-base font-medium ${theme.text}`}>
+                                      {exitDate.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className={`text-base font-medium ${theme.textMuted}`}>—</span>
+                                )}
+                              </div>
+
+                              {/* Estado/Tiempo */}
+                              <div className="col-span-1 flex justify-center">
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${
+                                  isInside
+                                    ? 'bg-green-500/20 text-green-500'
+                                    : kioskTheme === 'dark' ? 'bg-stone-700 text-stone-300' : 'bg-stone-200 text-stone-600'
+                                }`}>
+                                  {isInside && (
+                                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                                  )}
+                                  {duration}
+                                </span>
+                              </div>
+
+                              {/* Ver */}
+                              <div className="col-span-1 flex justify-center">
+                                <button
+                                  className={`p-2.5 rounded-xl transition-colors ${
+                                    kioskTheme === 'dark'
+                                      ? 'hover:bg-emerald-500/20 text-emerald-400'
+                                      : 'hover:bg-emerald-100 text-emerald-500'
+                                  }`}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setSelectedLog(log)
+                                    setStep('log_detail')
+                                  }}
+                                >
+                                  <FileText className="w-5 h-5" />
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer con conteo */}
+                {!loadingDailyLog && filteredLogs.length > 0 && (
+                  <div className={`mt-6 pt-4 border-t-2 flex items-center justify-between ${kioskTheme === 'dark' ? 'border-stone-700' : 'border-stone-200'}`}>
+                    <p className={`text-base ${theme.textMuted}`}>
+                      Mostrando <span className="font-bold text-emerald-500">{filteredLogs.length}</span> de <span className="font-bold">{dailyLogs.length}</span> registros
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Clock className={`w-5 h-5 ${theme.textMuted}`} />
+                      <span className={`text-sm ${theme.textMuted}`}>
+                        Actualizado: {new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
                     </div>
                   </div>
-                )
-              })()}
+                )}
+              </motion.div>
+            )
+          })()}
 
-              {/* Log list */}
-              {loadingDailyLog ? (
-                <div className="flex items-center justify-center py-8">
-                  <RefreshCw className="w-6 h-6 text-orange-400 animate-spin" />
+          {/* Log Detail - Vista de Detalle del Registro */}
+          {step === 'log_detail' && selectedLog && (() => {
+            const log = selectedLog
+            const isInside = log.status === 'active'
+            const entryDate = new Date(log.entryTime)
+            const exitDate = log.exitTime ? new Date(log.exitTime) : null
+
+            // Calculate duration
+            const endTime = isInside ? new Date() : exitDate
+            let duration = ''
+            let durationMins = 0
+            if (endTime) {
+              const diffMs = endTime.getTime() - entryDate.getTime()
+              durationMins = Math.floor(diffMs / 60000)
+              const hours = Math.floor(durationMins / 60)
+              const mins = durationMins % 60
+              duration = hours > 0 ? `${hours}h ${mins}m` : `${mins} minutos`
+            }
+
+            return (
+              <motion.div
+                key="log_detail"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="p-6 sm:p-8 lg:p-10"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between mb-8">
+                  <button
+                    onClick={() => {
+                      setStep('daily_log')
+                      setSelectedLog(null)
+                    }}
+                    className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold transition-colors ${
+                      kioskTheme === 'dark'
+                        ? 'bg-stone-800 hover:bg-stone-700 text-stone-200'
+                        : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
+                    }`}
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                    Volver al Historial
+                  </button>
+
+                  <h2 className={`text-xl sm:text-2xl font-bold ${theme.text}`}>
+                    Detalle del Registro
+                  </h2>
+
+                  <div className="w-32" /> {/* Spacer */}
                 </div>
-              ) : dailyLogs.length === 0 ? (
-                <div className="text-center py-8">
-                  <ClipboardList className={`w-10 h-10 ${theme.textMuted} mx-auto mb-2`} />
-                  <p className={`${theme.textSecondary} text-sm`}>No hay registros hoy</p>
+
+                {/* Status Badge Grande */}
+                <div className="flex justify-center mb-8">
+                  <div
+                    className={`inline-flex items-center gap-4 px-8 py-4 rounded-2xl text-xl font-bold ${
+                      isInside
+                        ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-xl shadow-green-500/30'
+                        : kioskTheme === 'dark'
+                          ? 'bg-stone-700 text-stone-200'
+                          : 'bg-stone-200 text-stone-700'
+                    }`}
+                  >
+                    {isInside ? (
+                      <>
+                        <span className="w-4 h-4 rounded-full bg-white animate-pulse" />
+                        ACTUALMENTE ADENTRO
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-5 h-5" />
+                        VISITA COMPLETADA
+                      </>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
-                  {/* People currently inside first */}
-                  {dailyLogs
-                    .sort((a, b) => {
-                      // Active (inside) first, then by entry time desc
-                      if (a.status === 'active' && b.status !== 'active') return -1
-                      if (a.status !== 'active' && b.status === 'active') return 1
-                      return new Date(b.entryTime).getTime() - new Date(a.entryTime).getTime()
-                    })
-                    .map(log => {
-                      const isInside = log.status === 'active'
-                      const entryDate = new Date(log.entryTime)
-                      const exitDate = log.exitTime ? new Date(log.exitTime) : null
 
-                      // Calculate time inside (for active: elapsed, for completed: duration)
-                      let timeInside = ''
-                      const endTime = isInside ? new Date() : exitDate
-                      if (endTime) {
-                        const diffMs = endTime.getTime() - entryDate.getTime()
-                        const diffMins = Math.floor(diffMs / 60000)
-                        const hours = Math.floor(diffMins / 60)
-                        const mins = diffMins % 60
-                        timeInside = hours > 0 ? `${hours} h ${mins} min` : `${mins} min`
-                      }
+                {/* Info Card */}
+                <div
+                  className={`rounded-3xl p-8 mb-6 ${
+                    kioskTheme === 'dark'
+                      ? 'bg-gradient-to-br from-stone-800/80 to-stone-800/40 border-2 border-stone-700'
+                      : 'bg-white border-2 border-stone-200 shadow-xl'
+                  }`}
+                >
+                  {/* Visitante */}
+                  <div className={`flex items-start gap-5 mb-8 pb-8 border-b-2 ${kioskTheme === 'dark' ? 'border-stone-700' : 'border-stone-200'}`}>
+                    <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-3xl font-bold ${
+                      kioskTheme === 'dark'
+                        ? 'bg-orange-500/20 text-orange-400'
+                        : 'bg-orange-100 text-orange-600'
+                    }`}>
+                      {log.visitorName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1">
+                      <h3 className={`text-2xl font-bold ${theme.text} mb-2`}>
+                        {log.visitorName}
+                      </h3>
+                      <div className="flex items-center gap-3">
+                        <CreditCard className={`w-5 h-5 ${theme.textMuted}`} />
+                        <span className={`text-lg font-mono ${theme.textSecondary}`}>
+                          {log.visitorIdNumber}
+                        </span>
+                        {log.visitorIdType && (
+                          <span className={`text-sm px-3 py-1 rounded-full ${
+                            kioskTheme === 'dark'
+                              ? 'bg-stone-700 text-stone-300'
+                              : 'bg-stone-100 text-stone-600'
+                          }`}>
+                            {log.visitorIdType}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
 
-                      return (
-                        <div
-                          key={log.id}
-                          className={`rounded-xl p-3 sm:p-3.5 border transition-all ${
-                            isInside
-                              ? kioskTheme === 'dark'
-                                ? 'bg-green-900/20 border-green-500/40'
-                                : 'bg-green-50 border-green-300'
-                              : kioskTheme === 'dark'
-                                ? 'bg-stone-800/50 border-stone-700'
-                                : 'bg-stone-50 border-stone-200'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            {/* Left: visitor info */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                {isInside && (
-                                  <span className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
-                                )}
-                                <p className={`text-sm font-bold ${theme.text} truncate`}>
-                                  {log.visitorName}
-                                </p>
-                              </div>
-                              <p className={`text-[11px] ${theme.textMuted} mt-0.5`}>
-                                {log.visitorIdNumber}
-                              </p>
-                            </div>
+                  {/* Grid de Información - 4 columnas */}
+                  <div className="grid grid-cols-4 gap-5">
+                    {/* Motivo de Visita */}
+                    <div className={`rounded-2xl p-5 ${kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50'}`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Package className={`w-5 h-5 ${theme.textMuted}`} />
+                        <span className={`text-sm font-bold uppercase ${theme.textMuted}`}>Motivo</span>
+                      </div>
+                      <p className={`text-lg font-semibold ${theme.text}`}>
+                        {log.visitPurpose || 'No especificado'}
+                      </p>
+                    </div>
 
-                            {/* Center: purpose & notes */}
-                            <div className="flex-shrink-0 text-center max-w-[120px]">
-                              {log.visitPurpose && (
-                                <span className={`inline-block text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full ${
-                                  kioskTheme === 'dark'
-                                    ? 'bg-orange-500/20 text-orange-300'
-                                    : 'bg-orange-100 text-orange-600'
-                                }`}>
-                                  {log.visitPurpose}
-                                </span>
-                              )}
-                              {log.visitNotes && (
-                                <p className={`text-[10px] ${theme.textMuted} mt-0.5 truncate italic`}>
-                                  {log.visitNotes}
-                                </p>
-                              )}
-                            </div>
+                    {/* Duración */}
+                    <div className={`rounded-2xl p-5 ${
+                      isInside
+                        ? kioskTheme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'
+                        : kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Clock className={`w-5 h-5 ${isInside ? 'text-green-500' : theme.textMuted}`} />
+                        <span className={`text-sm font-bold uppercase ${isInside ? 'text-green-500' : theme.textMuted}`}>
+                          {isInside ? 'Tiempo adentro' : 'Duración'}
+                        </span>
+                      </div>
+                      <p className={`text-lg font-bold ${isInside ? 'text-green-500' : theme.text}`}>
+                        {duration}
+                      </p>
+                    </div>
 
-                            {/* Right: time info */}
-                            <div className="text-right flex-shrink-0">
-                              {/* Duration in green */}
-                              {timeInside && (
-                                <p className="text-xs font-bold text-emerald-400">
-                                  <Clock className="w-3 h-3 inline mr-0.5" />
-                                  {timeInside}
-                                </p>
-                              )}
-                              {/* Status badge */}
-                              {isInside ? (
-                                <span className="text-[10px] font-semibold text-green-400">
-                                  Adentro
-                                </span>
-                              ) : (
-                                <span className={`text-[10px] font-medium ${theme.textMuted}`}>
-                                  Salió
-                                </span>
-                              )}
-                              {/* Entry/exit times darker */}
-                              <p className={`text-[10px] font-medium mt-0.5 ${
-                                kioskTheme === 'dark' ? 'text-stone-400' : 'text-stone-500'
-                              }`}>
-                                {entryDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                                {exitDate && (
-                                  <> → {exitDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</>
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
+                    {/* Hora Entrada */}
+                    <div className={`rounded-2xl p-5 ${kioskTheme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'}`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <LogIn className="w-5 h-5 text-green-500" />
+                        <span className="text-sm font-bold uppercase text-green-500">Entrada</span>
+                      </div>
+                      <p className={`text-lg font-semibold ${theme.text}`}>
+                        {entryDate.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                      </p>
+                      <p className={`text-sm ${theme.textMuted} mt-1`}>
+                        {entryDate.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}
+                      </p>
+                    </div>
+
+                    {/* Hora Salida */}
+                    <div className={`rounded-2xl p-5 ${
+                      exitDate
+                        ? kioskTheme === 'dark' ? 'bg-red-900/20' : 'bg-red-50'
+                        : kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <LogOut className={`w-5 h-5 ${exitDate ? 'text-red-400' : theme.textMuted}`} />
+                        <span className={`text-sm font-bold uppercase ${exitDate ? 'text-red-400' : theme.textMuted}`}>Salida</span>
+                      </div>
+                      {exitDate ? (
+                        <>
+                          <p className={`text-lg font-semibold ${theme.text}`}>
+                            {exitDate.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </p>
+                          <p className={`text-sm ${theme.textMuted} mt-1`}>
+                            {exitDate.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}
+                          </p>
+                        </>
+                      ) : (
+                        <p className={`text-lg font-semibold ${theme.textMuted}`}>
+                          Pendiente
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Segunda fila de información */}
+                  <div className="grid grid-cols-3 gap-5 mt-5">
+                    {/* Notas */}
+                    <div className={`rounded-2xl p-5 ${kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50'} ${log.visitNotes ? '' : 'opacity-50'}`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <FileText className={`w-5 h-5 ${theme.textMuted}`} />
+                        <span className={`text-sm font-bold uppercase ${theme.textMuted}`}>Notas</span>
+                      </div>
+                      <p className={`text-base ${theme.textSecondary} ${log.visitNotes ? 'italic' : ''}`}>
+                        {log.visitNotes ? `"${log.visitNotes}"` : 'Sin notas'}
+                      </p>
+                    </div>
+
+                    {/* Host */}
+                    <div className={`rounded-2xl p-5 ${log.hostName ? (kioskTheme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50') : (kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50')} ${log.hostName ? '' : 'opacity-50'}`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <User className={`w-5 h-5 ${log.hostName ? 'text-blue-500' : theme.textMuted}`} />
+                        <span className={`text-sm font-bold uppercase ${log.hostName ? 'text-blue-500' : theme.textMuted}`}>Anfitrión</span>
+                      </div>
+                      <p className={`text-base font-semibold ${theme.text}`}>
+                        {log.hostName || 'No asignado'}
+                      </p>
+                    </div>
+
+                    {/* Validación de facturas */}
+                    <div className={`rounded-2xl p-5 ${
+                      log.invoicesValidated
+                        ? kioskTheme === 'dark' ? 'bg-green-900/20' : 'bg-green-50'
+                        : log.hasPendingInvoices
+                          ? kioskTheme === 'dark' ? 'bg-yellow-900/20' : 'bg-yellow-50'
+                          : kioskTheme === 'dark' ? 'bg-stone-900/50' : 'bg-stone-50'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        {log.invoicesValidated ? (
+                          <CheckCircle className="w-5 h-5 text-green-500" />
+                        ) : log.hasPendingInvoices ? (
+                          <AlertTriangle className="w-5 h-5 text-yellow-500" />
+                        ) : (
+                          <FileText className={`w-5 h-5 ${theme.textMuted}`} />
+                        )}
+                        <span className={`text-sm font-bold uppercase ${
+                          log.invoicesValidated
+                            ? 'text-green-500'
+                            : log.hasPendingInvoices
+                              ? 'text-yellow-500'
+                              : theme.textMuted
+                        }`}>
+                          Validación
+                        </span>
+                      </div>
+                      <p className={`text-base font-semibold ${theme.text}`}>
+                        {log.invoicesValidated
+                          ? 'Documentos validados'
+                          : log.hasPendingInvoices
+                            ? 'Pendiente de validación'
+                            : 'Sin documentos'}
+                      </p>
+                      {log.validatedAt && (
+                        <p className={`text-sm ${theme.textMuted} mt-1`}>
+                          {new Date(log.validatedAt).toLocaleString('es')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              )}
-            </motion.div>
-          )}
+
+                {/* Kiosk Info */}
+                {(log.kioskName || log.kioskLocation) && (
+                  <div
+                    className={`rounded-2xl p-5 ${
+                      kioskTheme === 'dark'
+                        ? 'bg-stone-800/50 border-2 border-stone-700'
+                        : 'bg-stone-50 border-2 border-stone-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                        kioskTheme === 'dark' ? 'bg-stone-700' : 'bg-white'
+                      }`}>
+                        <MapPin className="w-6 h-6 text-emerald-500" />
+                      </div>
+                      <div>
+                        <p className={`text-base font-semibold ${theme.text}`}>
+                          {log.kioskName || 'Kiosk'}
+                        </p>
+                        {log.kioskLocation && (
+                          <p className={`text-sm ${theme.textMuted}`}>
+                            {log.kioskLocation}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ID del registro */}
+                <p className={`text-sm text-center mt-6 ${theme.textMuted}`}>
+                  Registro #{log.id}
+                </p>
+              </motion.div>
+            )
+          })()}
 
           {/* Error State */}
           {step === 'error' && (
@@ -3198,57 +3861,59 @@ export default function DoorKioskPage() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="p-6 sm:p-8 text-center"
+              className="p-6 sm:p-10 flex items-center justify-center min-h-[500px]"
             >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', bounce: 0.5 }}
-                className={`w-16 h-16 sm:w-24 sm:h-24 ${kioskTheme === 'dark' ? 'bg-red-500/20' : 'bg-red-100'} rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6`}
-              >
-                <XCircle className="w-10 h-10 sm:w-14 sm:h-14 text-red-400" />
-              </motion.div>
-              <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-2`}>
-                {isOcrError ? 'No se pudo leer el documento' : 'Error'}
-              </h2>
-              <p className={`${theme.textSecondary} text-sm sm:text-base mb-4 sm:mb-6`}>{message}</p>
+              <div className="w-full max-w-md text-center">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', bounce: 0.5 }}
+                  className={`w-16 h-16 sm:w-24 sm:h-24 ${kioskTheme === 'dark' ? 'bg-red-500/20' : 'bg-red-100'} rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6`}
+                >
+                  <XCircle className="w-10 h-10 sm:w-14 sm:h-14 text-red-400" />
+                </motion.div>
+                <h2 className={`text-xl sm:text-2xl font-bold ${theme.text} mb-2`}>
+                  {isOcrError ? 'No se pudo leer el documento' : 'Error'}
+                </h2>
+                <p className={`${theme.textSecondary} text-sm sm:text-base mb-4 sm:mb-6`}>{message}</p>
 
-              {/* OCR Error - Show retry and manual registration options */}
-              {isOcrError && capturedImage ? (
-                <div className="space-y-2 sm:space-y-3">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setStep('scan_id')}
-                    className={`w-full flex items-center justify-center gap-2 py-2.5 sm:py-3 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
-                  >
-                    <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
-                    Tomar otra foto
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={goToManualRegister}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 sm:py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-all shadow-lg"
-                  >
-                    <Edit3 className="w-4 h-4 sm:w-5 sm:h-5" />
-                    Registrar manualmente
-                  </motion.button>
+                {/* OCR Error - Show retry and manual registration options */}
+                {isOcrError && capturedImage ? (
+                  <div className="space-y-2 sm:space-y-3">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setStep('scan_id')}
+                      className={`w-full flex items-center justify-center gap-2 py-2.5 sm:py-3 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
+                    >
+                      <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
+                      Tomar otra foto
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={goToManualRegister}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 sm:py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-all shadow-lg"
+                    >
+                      <Edit3 className="w-4 h-4 sm:w-5 sm:h-5" />
+                      Registrar manualmente
+                    </motion.button>
+                    <button
+                      onClick={resetToIdle}
+                      className={`w-full py-2 ${theme.textMuted} hover:text-orange-400 transition-colors text-sm`}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
                   <button
                     onClick={resetToIdle}
-                    className={`w-full py-2 ${theme.textMuted} hover:text-orange-400 transition-colors text-sm`}
+                    className={`px-5 sm:px-6 py-2 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
                   >
-                    Cancelar
+                    Intentar de nuevo
                   </button>
-                </div>
-              ) : (
-                <button
-                  onClick={resetToIdle}
-                  className={`px-5 sm:px-6 py-2 ${theme.cancelBtn} rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-colors`}
-                >
-                  Intentar de nuevo
-                </button>
-              )}
+                )}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

@@ -4,14 +4,39 @@ import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
 import * as storageAdapter from '@/lib/storage-adapter'
 
-// Run photourl migration once per process
+// Run migrations once per process
 let migrationRan = false
-async function ensurePhotoUrlColumn() {
+async function runMigrations() {
   if (migrationRan) return
   try {
+    // Add photourl column if missing
     await db.query(`ALTER TABLE market_visitor_invoice_validations ADD COLUMN IF NOT EXISTS photourl TEXT`)
+
+    // Add companyid column if missing
+    await db.query(`ALTER TABLE market_visitor_invoice_validations ADD COLUMN IF NOT EXISTS companyid INTEGER`)
+
+    // Add createdat column if missing
+    await db.query(`ALTER TABLE market_visitor_invoice_validations ADD COLUMN IF NOT EXISTS createdat TIMESTAMP`)
+
+    // Populate missing companyid from visitor_logs
+    await db.query(`
+      UPDATE market_visitor_invoice_validations v
+      SET companyid = vl.companyid
+      FROM market_visitor_logs vl
+      WHERE v.visitorlogid = vl.id
+        AND v.companyid IS NULL
+    `)
+
+    // Populate missing createdat from validatedat
+    await db.query(`
+      UPDATE market_visitor_invoice_validations
+      SET createdat = validatedat
+      WHERE createdat IS NULL AND validatedat IS NOT NULL
+    `)
+
     migrationRan = true
-  } catch {
+  } catch (err) {
+    console.warn('[Validate Document] Migration error (non-fatal):', err)
     migrationRan = true
   }
 }
@@ -126,13 +151,12 @@ export async function POST(request: NextRequest) {
       }, { status: 403 })
     }
 
-    // Check if already validated
+    // Check if already validated globally (not just within this visitor log)
     const existingValidation = await db.query(`
       SELECT id FROM market_visitor_invoice_validations
-      WHERE visitorlogid = $1
-        AND documenttype = $2
-        AND (documentid = $3 OR documentnumber = $4)
-    `, [visitorLogId, documentType, documentId, documentNumber])
+      WHERE documenttype = $1
+        AND (documentid = $2 OR documentnumber = $3)
+    `, [documentType, documentId, documentNumber])
 
     if (existingValidation.rows.length > 0) {
       return NextResponse.json({
@@ -183,17 +207,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Ensure photourl column exists
-    await ensurePhotoUrlColumn()
+    // Run migrations (adds columns and populates missing data)
+    await runMigrations()
 
-    // Create validation record
+    // Create validation record (include companyid and createdat for stats queries)
     const result = await db.query(`
       INSERT INTO market_visitor_invoice_validations (
-        visitorlogid, documenttype, documentid, documentnumber,
-        totalamount, currency, validated, validatedat, validatedby, notes, photourl
-      ) VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), $7, $8, $9)
+        companyid, visitorlogid, documenttype, documentid, documentnumber,
+        totalamount, currency, validated, validatedat, validatedby, notes, photourl, createdat
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW(), $8, $9, $10, NOW())
       RETURNING *
     `, [
+      log.companyid, // Use company from the visitor log
       visitorLogId,
       documentType,
       documentId || null,

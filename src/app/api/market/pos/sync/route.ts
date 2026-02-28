@@ -263,6 +263,16 @@ export async function POST(request: NextRequest) {
           const lineDiscount = line.discountAmount || (lineSubtotal * (line.discountPercent || 0) / 100)
           const lineTotal = lineSubtotal - lineDiscount + (line.taxAmount || 0)
 
+          // Get cost_price from product for accurate margin calculation
+          let costPrice = 0
+          if (line.productId) {
+            const costResult = await db.query(
+              'SELECT cost_price FROM market_products WHERE id = $1',
+              [line.productId]
+            )
+            costPrice = parseFloat(costResult.rows[0]?.cost_price) || 0
+          }
+
           await db.query(`
             INSERT INTO market_pos_order_lines (
               order_id, product_id, product_name, product_sku,
@@ -270,8 +280,9 @@ export async function POST(request: NextRequest) {
               discount_percent, discount_amount,
               subtotal, tax_amount, total,
               promotion_id, promotion_name,
+              cost_price, is_consignment,
               created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
           `, [
             orderId,
             line.productId,
@@ -285,7 +296,9 @@ export async function POST(request: NextRequest) {
             line.taxAmount || 0,
             lineTotal,
             line.promotionId || null,
-            line.promotionName || null
+            line.promotionName || null,
+            costPrice,
+            false // is_consignment - offline orders assumed direct sales
           ])
 
           // Update inventory - deduct from the POS terminal's warehouse stock

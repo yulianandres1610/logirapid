@@ -6,7 +6,7 @@ import sharp from 'sharp'
 import { db } from '@/lib/database'
 
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
-const OCR_MODEL = process.env.GEMINI_OCR_MODEL || 'gemini-2.0-flash-lite'
+const OCR_MODEL = process.env.GEMINI_OCR_MODEL || 'gemini-2.0-flash'
 const MAX_RETRIES = 2
 const GEMINI_TARGET_SIZE = 1024
 

@@ -37,6 +37,7 @@ import PrintLabelsView from '@/components/warehouse/PrintLabelsView'
 import StockReportView from '@/components/warehouse/StockReportView'
 import TransferHistoryView from '@/components/warehouse/TransferHistoryView'
 import AdjustmentsHistoryView from '@/components/warehouse/AdjustmentsHistoryView'
+import ProductionOrdersView from '@/components/warehouse/ProductionOrdersView'
 import { PasswordConfirmModal } from '@/components/auth/PasswordConfirmModal'
 
 interface WarehouseData {
@@ -581,6 +582,8 @@ export default function WarehouseOperationsPage() {
     } else if (type === 'adjustments_history') {
       setOperation({ ...initialOperationState, operationType: type })
       setHistoryOperationId(null)
+    } else if (type === 'production') {
+      setOperation({ ...initialOperationState, operationType: type })
     } else {
       setOperation({ ...initialOperationState, operationType: type })
     }
@@ -1110,7 +1113,8 @@ export default function WarehouseOperationsPage() {
                         operation.operationType === 'print_labels' ? 'Imprimir Etiquetas' :
                         operation.operationType === 'stock_report' ? 'Reporte de Stock' :
                         operation.operationType === 'transfer_history' ? 'Historial de Transferencias' :
-                        operation.operationType === 'adjustments_history' ? 'Historial de Ajustes y Scrap' : 'Operacion'}`
+                        operation.operationType === 'adjustments_history' ? 'Historial de Ajustes y Scrap' :
+                        operation.operationType === 'production' ? 'Órdenes de Producción' : 'Operacion'}`
                     : 'Operaciones'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">{warehouse.name}</p>
@@ -1312,6 +1316,13 @@ export default function WarehouseOperationsPage() {
               setHistoryOperationId(opId || null)
               updateURL('adjustments_history', opId || null)
             }}
+          />
+        ) : operation.operationType === 'production' ? (
+          /* Production Orders View */
+          <ProductionOrdersView
+            warehouseId={warehouseId}
+            warehouseName={warehouse.name}
+            onBack={handleBack}
           />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

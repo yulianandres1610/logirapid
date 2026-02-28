@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '50')
     const status = searchParams.get('status') // 'active', 'completed', 'all'
-    const kioskId = searchParams.get('kioskId')
+    const filterKioskId = searchParams.get('filterKioskId') // Use separate param for filtering (not auth)
     const visitorId = searchParams.get('visitorId')
     const date = searchParams.get('date') // YYYY-MM-DD
     const search = searchParams.get('search')
@@ -81,9 +81,10 @@ export async function GET(request: NextRequest) {
       paramIndex++
     }
 
-    if (kioskId) {
+    // Only filter by kiosk if explicitly requested via filterKioskId
+    if (filterKioskId) {
       whereClause += ` AND vl.kioskid = $${paramIndex}`
-      params.push(kioskId)
+      params.push(filterKioskId)
       paramIndex++
     }
 
@@ -94,10 +95,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (date) {
-      // Use timezone-aware comparison to match entries by local date (Cuba = America/Havana)
-      whereClause += ` AND DATE(vl.entrytime AT TIME ZONE 'America/Havana') = $${paramIndex}`
+      // Convert UTC timestamp to Cuba timezone for date comparison
+      // entrytime is stored as TIMESTAMP WITHOUT TIMEZONE in UTC, so we need double AT TIME ZONE
+      whereClause += ` AND DATE(vl.entrytime AT TIME ZONE 'UTC' AT TIME ZONE 'America/Havana') = $${paramIndex}`
       params.push(date)
       paramIndex++
+      console.log('[Visitor Logs GET] Filtering by date:', date)
     }
 
     if (search) {
@@ -115,6 +118,7 @@ export async function GET(request: NextRequest) {
     `, params)
 
     const total = parseInt(countResult.rows[0]?.total || '0')
+    console.log('[Visitor Logs GET] Total logs found:', total, 'companyId:', companyId, 'whereClause:', whereClause)
 
     // Get logs with visitor and kiosk info
     const result = await db.query(`

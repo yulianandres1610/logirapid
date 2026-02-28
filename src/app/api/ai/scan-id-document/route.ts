@@ -8,8 +8,7 @@ import { db } from '@/lib/database'
 // API Key para Gemini
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
 
-// gemini-2.0-flash-lite is fastest for OCR, fallback to 2.0-flash
-const OCR_MODEL = process.env.GEMINI_OCR_MODEL || 'gemini-2.0-flash-lite'
+const OCR_MODEL = process.env.GEMINI_OCR_MODEL || 'gemini-2.0-flash'
 
 const MAX_RETRIES = 2
 
