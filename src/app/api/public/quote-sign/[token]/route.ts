@@ -20,7 +20,7 @@ export async function GET(
       SELECT
         q.id, q.quote_number, q.status, q.subtotal, q.discount_percent,
         q.discount_amount, q.total_amount, q.currency, q.valid_until,
-        q.notes, q.created_at, q.signature_data, q.signed_at, q.signer_name,
+        q.notes, q.created_at,
         c.business_name as customer_name, c.code as customer_code,
         c.tax_id as customer_tax_id,
         comp.name as company_name, comp.logo_url as company_logo
@@ -29,6 +29,24 @@ export async function GET(
       JOIN companies comp ON comp.id = q.company_id
       WHERE q.signature_token = $1
     `, [token])
+
+    // Get signature data separately (columns may not exist yet)
+    let signatureData: string | null = null
+    let signedAt: string | null = null
+    let signerName: string | null = null
+    if (result.rows.length > 0) {
+      try {
+        const sigResult = await db.query(
+          'SELECT signature_data, signed_at, signer_name FROM market_quotes WHERE id = $1',
+          [result.rows[0].id]
+        )
+        signatureData = sigResult.rows[0]?.signature_data || null
+        signedAt = sigResult.rows[0]?.signed_at || null
+        signerName = sigResult.rows[0]?.signer_name || null
+      } catch {
+        // Columns don't exist yet - ignore
+      }
+    }
 
     if (result.rows.length === 0) {
       return NextResponse.json({
@@ -65,9 +83,9 @@ export async function GET(
         validUntil: row.valid_until,
         notes: row.notes,
         createdAt: row.created_at,
-        signatureData: row.signature_data || null,
-        signedAt: row.signed_at || null,
-        signerName: row.signer_name || null,
+        signatureData,
+        signedAt,
+        signerName,
         customer: {
           businessName: row.customer_name,
           code: row.customer_code,
@@ -130,7 +148,7 @@ export async function POST(
 
     // Find quote by token
     const result = await db.query(
-      'SELECT id, status, signed_at FROM market_quotes WHERE signature_token = $1',
+      'SELECT id, status FROM market_quotes WHERE signature_token = $1',
       [token]
     )
 
@@ -143,11 +161,20 @@ export async function POST(
 
     const quote = result.rows[0]
 
-    if (quote.signed_at) {
-      return NextResponse.json({
-        success: false,
-        error: 'Esta cotización ya fue firmada'
-      }, { status: 400 })
+    // Check if already signed
+    try {
+      const sigCheck = await db.query(
+        'SELECT signed_at FROM market_quotes WHERE id = $1',
+        [quote.id]
+      )
+      if (sigCheck.rows[0]?.signed_at) {
+        return NextResponse.json({
+          success: false,
+          error: 'Esta cotización ya fue firmada'
+        }, { status: 400 })
+      }
+    } catch {
+      // Column doesn't exist - not signed
     }
 
     // Get client IP

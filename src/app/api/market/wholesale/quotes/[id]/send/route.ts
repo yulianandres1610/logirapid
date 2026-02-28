@@ -61,7 +61,6 @@ export async function POST(
     const checkResult = await db.query(`
       SELECT q.id, q.status, q.quote_number, q.subtotal, q.discount_percent,
              q.discount_amount, q.total_amount, q.currency, q.valid_until, q.notes,
-             q.signature_token,
              c.email as customer_email, c.business_name,
              comp.name as company_name
       FROM market_quotes q
@@ -69,6 +68,18 @@ export async function POST(
       JOIN companies comp ON comp.id = q.company_id
       WHERE q.id = $1 AND q.company_id = $2
     `, [quoteId, payload.companyId])
+
+    // Try to get signature token separately (column may not exist yet)
+    let signatureToken: string | null = null
+    try {
+      const sigResult = await db.query(
+        'SELECT signature_token FROM market_quotes WHERE id = $1',
+        [quoteId]
+      )
+      signatureToken = sigResult.rows[0]?.signature_token || null
+    } catch {
+      // Column doesn't exist yet - ignore
+    }
 
     if (checkResult.rows.length === 0) {
       return NextResponse.json({
@@ -113,8 +124,8 @@ export async function POST(
       try {
         // Build signature URL
         const signatureUrl = body.signatureUrl ||
-          (quote.signature_token
-            ? `${process.env.NEXT_PUBLIC_BASE_URL || 'https://mercado.logirapid.com'}/quote-sign/${quote.signature_token}`
+          (signatureToken
+            ? `${process.env.NEXT_PUBLIC_BASE_URL || 'https://mercado.logirapid.com'}/quote-sign/${signatureToken}`
             : undefined)
 
         const html = generateQuoteProposalHtml({
