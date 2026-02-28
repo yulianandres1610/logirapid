@@ -15,7 +15,8 @@ import {
   XCircle,
   DollarSign,
   FileClock,
-  FileCheck
+  FileCheck,
+  Trash2
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -121,6 +122,24 @@ export default function WholesaleQuotesPage() {
       }
     } catch (error) {
       console.error('Error sending quote:', error)
+    }
+  }
+
+  const handleDeleteQuote = async (quoteId: number) => {
+    if (!confirm('¿Estás seguro de eliminar esta cotización? Esta acción no se puede deshacer.')) return
+
+    try {
+      const response = await fetch(`/api/market/wholesale/quotes/${quoteId}`, {
+        method: 'DELETE'
+      })
+      if (response.ok) {
+        fetchQuotes(true)
+      } else {
+        const result = await response.json()
+        alert(result.error || 'Error al eliminar cotización')
+      }
+    } catch (error) {
+      console.error('Error deleting quote:', error)
     }
   }
 
@@ -589,15 +608,26 @@ export default function WholesaleQuotesPage() {
                                   </motion.button>
                                 </Link>
                                 {quote.status === 'draft' && (
-                                  <motion.button
-                                    whileHover={{ scale: 1.1 }}
-                                    whileTap={{ scale: 0.9 }}
-                                    onClick={() => handleSendQuote(quote.id)}
-                                    className="p-2 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
-                                    title="Enviar al cliente"
-                                  >
-                                    <Send className="w-4 h-4 text-green-500" />
-                                  </motion.button>
+                                  <>
+                                    <motion.button
+                                      whileHover={{ scale: 1.1 }}
+                                      whileTap={{ scale: 0.9 }}
+                                      onClick={() => handleSendQuote(quote.id)}
+                                      className="p-2 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                                      title="Enviar al cliente"
+                                    >
+                                      <Send className="w-4 h-4 text-green-500" />
+                                    </motion.button>
+                                    <motion.button
+                                      whileHover={{ scale: 1.1 }}
+                                      whileTap={{ scale: 0.9 }}
+                                      onClick={() => handleDeleteQuote(quote.id)}
+                                      className="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                                      title="Eliminar cotización"
+                                    >
+                                      <Trash2 className="w-4 h-4 text-red-500" />
+                                    </motion.button>
+                                  </>
                                 )}
                                 {['sent', 'accepted'].includes(quote.status) && !quote.convertedToInvoiceId && (
                                   <motion.button
