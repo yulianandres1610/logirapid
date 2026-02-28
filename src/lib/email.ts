@@ -1,6 +1,17 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY || '')
+let resendInstance: Resend | null = null
+
+function getResend(): Resend {
+  if (!resendInstance) {
+    const apiKey = process.env.RESEND_API_KEY
+    if (!apiKey) {
+      throw new Error('RESEND_API_KEY no configurada')
+    }
+    resendInstance = new Resend(apiKey)
+  }
+  return resendInstance
+}
 
 interface SendEmailOptions {
   to: string
@@ -18,6 +29,7 @@ export async function sendEmail({ to, subject, html, attachments, from }: SendEm
   const fromAddress = from || process.env.EMAIL_FROM || 'LogiRapid <noreply@logirapid.com>'
 
   try {
+    const resend = getResend()
     const result = await resend.emails.send({
       from: fromAddress,
       to,
