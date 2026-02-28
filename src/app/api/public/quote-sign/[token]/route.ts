@@ -16,36 +16,43 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Token requerido' }, { status: 400 })
     }
 
-    const result = await db.query(`
-      SELECT
-        q.id, q.quote_number, q.status, q.subtotal, q.discount_percent,
-        q.discount_amount, q.total_amount, q.currency, q.valid_until,
-        q.notes, q.created_at,
-        c.business_name as customer_name, c.code as customer_code,
-        c.tax_id as customer_tax_id,
-        comp.name as company_name, comp.logo_url as company_logo
-      FROM market_quotes q
-      JOIN market_wholesale_customers c ON c.id = q.customer_id
-      JOIN companies comp ON comp.id = q.company_id
-      WHERE q.signature_token = $1
-    `, [token])
-
-    // Get signature data separately (columns may not exist yet)
-    let signatureData: string | null = null
-    let signedAt: string | null = null
-    let signerName: string | null = null
-    if (result.rows.length > 0) {
+    // First find the quote by signature_token
+    // Use q.* to avoid failing on missing columns
+    let result
+    try {
+      result = await db.query(`
+        SELECT q.*,
+          c.business_name as customer_name, c.code as customer_code,
+          c.tax_id as customer_tax_id,
+          comp.name as company_name
+        FROM market_quotes q
+        JOIN market_wholesale_customers c ON c.id = q.customer_id
+        JOIN companies comp ON comp.id = q.company_id
+        WHERE q.signature_token = $1
+      `, [token])
+    } catch (queryError) {
+      // If signature_token column doesn't exist, try to create it
+      console.error('[Public Quote Sign] Main query failed, trying to create columns:', queryError)
       try {
-        const sigResult = await db.query(
-          'SELECT signature_data, signed_at, signer_name FROM market_quotes WHERE id = $1',
-          [result.rows[0].id]
-        )
-        signatureData = sigResult.rows[0]?.signature_data || null
-        signedAt = sigResult.rows[0]?.signed_at || null
-        signerName = sigResult.rows[0]?.signer_name || null
+        await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signature_token UUID`)
+        await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signature_data TEXT`)
+        await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signed_at TIMESTAMP`)
+        await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signer_name VARCHAR(255)`)
+        await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signer_ip VARCHAR(45)`)
       } catch {
-        // Columns don't exist yet - ignore
+        // ignore
       }
+      // Retry the query
+      result = await db.query(`
+        SELECT q.*,
+          c.business_name as customer_name, c.code as customer_code,
+          c.tax_id as customer_tax_id,
+          comp.name as company_name
+        FROM market_quotes q
+        JOIN market_wholesale_customers c ON c.id = q.customer_id
+        JOIN companies comp ON comp.id = q.company_id
+        WHERE q.signature_token = $1
+      `, [token])
     }
 
     if (result.rows.length === 0) {
@@ -56,6 +63,23 @@ export async function GET(
     }
 
     const row = result.rows[0]
+
+    // Get company logo separately (column may not exist)
+    let companyLogo: string | null = null
+    try {
+      const logoResult = await db.query(
+        'SELECT logo_url FROM companies WHERE id = $1',
+        [row.company_id]
+      )
+      companyLogo = logoResult.rows[0]?.logo_url || null
+    } catch {
+      // logo_url column doesn't exist - ignore
+    }
+
+    // Get signature data from q.* result (safe - undefined becomes null)
+    const signatureData = row.signature_data || null
+    const signedAt = row.signed_at || null
+    const signerName = row.signer_name || null
 
     // Get quote lines
     const linesResult = await db.query(`
@@ -93,7 +117,7 @@ export async function GET(
         },
         company: {
           name: row.company_name,
-          logoUrl: row.company_logo
+          logoUrl: companyLogo
         },
         lines: linesResult.rows.map(line => ({
           id: line.id,
@@ -147,10 +171,19 @@ export async function POST(
     }
 
     // Find quote by token
-    const result = await db.query(
-      'SELECT id, status FROM market_quotes WHERE signature_token = $1',
-      [token]
-    )
+    let result
+    try {
+      result = await db.query(
+        'SELECT id, status FROM market_quotes WHERE signature_token = $1',
+        [token]
+      )
+    } catch {
+      // Column might not exist
+      return NextResponse.json({
+        success: false,
+        error: 'Cotización no encontrada o enlace inválido'
+      }, { status: 404 })
+    }
 
     if (result.rows.length === 0) {
       return NextResponse.json({
