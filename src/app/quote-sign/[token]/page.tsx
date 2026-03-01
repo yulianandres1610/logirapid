@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, use, Suspense } from 'react'
+import { useEffect, useState, useRef, use, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
@@ -80,6 +80,21 @@ function QuoteSignContent({ token }: { token: string }) {
   const [signatureData, setSignatureData] = useState<string | null>(null)
   const [signing, setSigning] = useState(false)
   const [signed, setSigned] = useState(false)
+  const [sigPadWidth, setSigPadWidth] = useState(350)
+  const sigContainerRef = useRef<HTMLDivElement>(null)
+
+  // Measure container for responsive SignaturePad
+  useEffect(() => {
+    const measure = () => {
+      if (sigContainerRef.current) {
+        const w = sigContainerRef.current.clientWidth - 4
+        setSigPadWidth(Math.min(w, 600))
+      }
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [loading, quote])
 
   // Dynamic brand detection
   const [brandConfig, setBrandConfig] = useState(() => brands.servisumic)
@@ -245,21 +260,21 @@ function QuoteSignContent({ token }: { token: string }) {
       {/* Top bar */}
       <div className="w-full h-1" style={{ background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.secondary})` }} />
 
-      <div className="max-w-[850px] mx-auto py-8 px-4">
+      <div className="max-w-[850px] mx-auto py-4 sm:py-8 px-0 sm:px-4">
         {/* Invoice document */}
-        <div className="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
+        <div className="bg-white sm:rounded-lg shadow-lg sm:border border-gray-200 overflow-hidden">
 
           {/* Header */}
-          <div className="px-8 pt-8 pb-6">
-            <div className="flex items-start justify-between">
+          <div className="px-4 sm:px-8 pt-5 sm:pt-8 pb-4 sm:pb-6">
+            <div className="flex items-start justify-between gap-3">
               {/* Logo */}
-              <div>
+              <div className="shrink-0">
                 <img
                   src={quote.company.logoUrl || BRAND.logo}
                   alt={quote.company.name || BRAND.displayName}
-                  className="h-12 object-contain"
+                  className="h-9 sm:h-12 object-contain"
                 />
-                <p className="text-xs mt-2" style={{ color: BRAND.secondaryLight }}>
+                <p className="text-[10px] sm:text-xs mt-1.5" style={{ color: BRAND.secondaryLight }}>
                   {quote.company.name || BRAND.displayName}
                 </p>
               </div>
@@ -267,27 +282,27 @@ function QuoteSignContent({ token }: { token: string }) {
               {/* Quote label */}
               <div className="text-right">
                 <div
-                  className="inline-block px-4 py-1.5 rounded-md text-white text-sm font-bold tracking-wider"
+                  className="inline-block px-3 sm:px-4 py-1 sm:py-1.5 rounded-md text-white text-xs sm:text-sm font-bold tracking-wider"
                   style={{ backgroundColor: BRAND.primary }}
                 >
                   OFERTA
                 </div>
-                <p className="text-lg font-mono font-bold mt-2" style={{ color: BRAND.secondary }}>
+                <p className="text-sm sm:text-lg font-mono font-bold mt-1.5" style={{ color: BRAND.secondary }}>
                   {quote.quoteNumber}
                 </p>
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">
                   {formatDate(quote.createdAt)}
                 </p>
               </div>
             </div>
 
             {/* Divider */}
-            <div className="mt-6 h-px" style={{ background: `linear-gradient(90deg, ${BRAND.primary}, transparent)` }} />
+            <div className="mt-4 sm:mt-6 h-px" style={{ background: `linear-gradient(90deg, ${BRAND.primary}, transparent)` }} />
 
             {/* Customer & Quote info */}
-            <div className="grid grid-cols-2 gap-8 mt-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8 mt-4 sm:mt-6">
               <div>
-                <p className="text-[10px] uppercase tracking-widest font-bold mb-2" style={{ color: BRAND.primary }}>
+                <p className="text-[10px] uppercase tracking-widest font-bold mb-1.5" style={{ color: BRAND.primary }}>
                   Cliente
                 </p>
                 <p className="font-semibold text-sm" style={{ color: BRAND.secondary }}>
@@ -300,8 +315,8 @@ function QuoteSignContent({ token }: { token: string }) {
                   <p className="text-xs text-gray-500">RUC/NIT: {quote.customer.taxId}</p>
                 )}
               </div>
-              <div className="text-right">
-                <p className="text-[10px] uppercase tracking-widest font-bold mb-2" style={{ color: BRAND.primary }}>
+              <div className="sm:text-right">
+                <p className="text-[10px] uppercase tracking-widest font-bold mb-1.5" style={{ color: BRAND.primary }}>
                   Detalles
                 </p>
                 {quote.validUntil && (
@@ -316,24 +331,24 @@ function QuoteSignContent({ token }: { token: string }) {
             </div>
           </div>
 
-          {/* Products table */}
-          <div className="px-8">
+          {/* Products - Desktop table */}
+          <div className="hidden sm:block px-4 sm:px-8">
             <table className="w-full">
               <thead>
                 <tr style={{ backgroundColor: BRAND.secondary }}>
-                  <th className="py-2.5 px-4 text-left text-[11px] font-bold uppercase tracking-wider text-white">#</th>
-                  <th className="py-2.5 px-4 text-left text-[11px] font-bold uppercase tracking-wider text-white">Producto</th>
-                  <th className="py-2.5 px-4 text-center text-[11px] font-bold uppercase tracking-wider text-white">Cant.</th>
+                  <th className="py-2.5 px-3 text-left text-[11px] font-bold uppercase tracking-wider text-white">#</th>
+                  <th className="py-2.5 px-3 text-left text-[11px] font-bold uppercase tracking-wider text-white">Producto</th>
+                  <th className="py-2.5 px-3 text-center text-[11px] font-bold uppercase tracking-wider text-white">Cant.</th>
                   {showUSD && (
                     <>
-                      <th className="py-2.5 px-4 text-right text-[11px] font-bold uppercase tracking-wider text-white">P. Unit USD</th>
-                      <th className="py-2.5 px-4 text-right text-[11px] font-bold uppercase tracking-wider text-white">Subtotal USD</th>
+                      <th className="py-2.5 px-3 text-right text-[11px] font-bold uppercase tracking-wider text-white">P. Unit</th>
+                      <th className="py-2.5 px-3 text-right text-[11px] font-bold uppercase tracking-wider text-white">Subtotal</th>
                     </>
                   )}
                   {showCUP && (
                     <>
-                      <th className="py-2.5 px-4 text-right text-[11px] font-bold uppercase tracking-wider text-white">P. Unit CUP</th>
-                      <th className="py-2.5 px-4 text-right text-[11px] font-bold uppercase tracking-wider text-white">Subtotal CUP</th>
+                      <th className="py-2.5 px-3 text-right text-[11px] font-bold uppercase tracking-wider text-white">P. Unit CUP</th>
+                      <th className="py-2.5 px-3 text-right text-[11px] font-bold uppercase tracking-wider text-white">Subtotal CUP</th>
                     </>
                   )}
                 </tr>
@@ -341,22 +356,22 @@ function QuoteSignContent({ token }: { token: string }) {
               <tbody>
                 {quote.lines.map((line, idx) => (
                   <tr key={line.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="py-3 px-4 text-xs text-gray-400">{idx + 1}</td>
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-3 text-xs text-gray-400">{idx + 1}</td>
+                    <td className="py-3 px-3">
                       <p className="text-sm font-medium" style={{ color: BRAND.secondary }}>{line.productName}</p>
                       {line.productSku && <p className="text-[11px] text-gray-400">{line.productSku}</p>}
                     </td>
-                    <td className="py-3 px-4 text-center text-sm">{line.quantity}</td>
+                    <td className="py-3 px-3 text-center text-sm">{line.quantity}</td>
                     {showUSD && (
                       <>
-                        <td className="py-3 px-4 text-right text-sm">{fmtUSD(line.unitPrice)}</td>
-                        <td className="py-3 px-4 text-right text-sm font-medium">{fmtUSD(line.subtotal)}</td>
+                        <td className="py-3 px-3 text-right text-sm">{fmtUSD(line.unitPrice)}</td>
+                        <td className="py-3 px-3 text-right text-sm font-medium">{fmtUSD(line.subtotal)}</td>
                       </>
                     )}
                     {showCUP && (
                       <>
-                        <td className="py-3 px-4 text-right text-sm">{fmtCUP(line.unitPrice)}</td>
-                        <td className="py-3 px-4 text-right text-sm font-medium">{fmtCUP(line.subtotal)}</td>
+                        <td className="py-3 px-3 text-right text-sm">{fmtCUP(line.unitPrice)}</td>
+                        <td className="py-3 px-3 text-right text-sm font-medium">{fmtCUP(line.subtotal)}</td>
                       </>
                     )}
                   </tr>
@@ -365,10 +380,38 @@ function QuoteSignContent({ token }: { token: string }) {
             </table>
           </div>
 
+          {/* Products - Mobile cards */}
+          <div className="sm:hidden px-4">
+            <div className="rounded-lg overflow-hidden border border-gray-200">
+              <div className="py-2 px-3 text-[11px] font-bold uppercase tracking-wider text-white" style={{ backgroundColor: BRAND.secondary }}>
+                Productos
+              </div>
+              {quote.lines.map((line, idx) => (
+                <div key={line.id} className={`px-3 py-3 border-b border-gray-100 last:border-b-0 ${idx % 2 !== 0 ? 'bg-gray-50' : ''}`}>
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate" style={{ color: BRAND.secondary }}>{line.productName}</p>
+                      {line.productSku && <p className="text-[10px] text-gray-400">{line.productSku}</p>}
+                    </div>
+                    <span className="text-xs text-gray-400 shrink-0">x{line.quantity}</span>
+                  </div>
+                  <div className="flex justify-end gap-4 mt-1.5">
+                    {showUSD && (
+                      <span className="text-sm font-semibold" style={{ color: BRAND.secondary }}>{fmtUSD(line.subtotal)}</span>
+                    )}
+                    {showCUP && (
+                      <span className="text-sm font-semibold" style={{ color: BRAND.primary }}>{fmtCUP(line.subtotal)}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Totals */}
-          <div className="px-8 py-6">
+          <div className="px-4 sm:px-8 py-5 sm:py-6">
             <div className="flex justify-end">
-              <div className="w-80">
+              <div className="w-full sm:w-80">
                 <div className="space-y-1.5">
                   {showUSD && (
                     <div className="flex justify-between text-sm">
@@ -410,8 +453,8 @@ function QuoteSignContent({ token }: { token: string }) {
 
           {/* Notes */}
           {quote.notes && (
-            <div className="px-8 pb-6">
-              <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+            <div className="px-4 sm:px-8 pb-4 sm:pb-6">
+              <div className="bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-100">
                 <p className="text-[10px] uppercase tracking-widest font-bold mb-1" style={{ color: BRAND.primary }}>Notas</p>
                 <p className="text-sm text-gray-600 whitespace-pre-wrap">{quote.notes}</p>
               </div>
@@ -420,7 +463,7 @@ function QuoteSignContent({ token }: { token: string }) {
 
           {/* Valid Until warning */}
           {quote.validUntil && (
-            <div className="mx-8 mb-6 rounded-lg p-3 text-center" style={{ backgroundColor: `${BRAND.primary}08`, border: `1px solid ${BRAND.primary}20` }}>
+            <div className="mx-4 sm:mx-8 mb-4 sm:mb-6 rounded-lg p-3 text-center" style={{ backgroundColor: `${BRAND.primary}08`, border: `1px solid ${BRAND.primary}20` }}>
               <p className="text-xs" style={{ color: BRAND.primary }}>
                 Esta oferta es válida hasta el <strong>{formatDate(quote.validUntil)}</strong>
               </p>
@@ -428,9 +471,9 @@ function QuoteSignContent({ token }: { token: string }) {
           )}
 
           {/* Signature Section */}
-          <div className="px-8 pb-8">
-            <div className="border-t border-gray-200 pt-6">
-              <div className="flex items-center gap-2 mb-5">
+          <div className="px-4 sm:px-8 pb-6 sm:pb-8">
+            <div className="border-t border-gray-200 pt-5 sm:pt-6">
+              <div className="flex items-center gap-2 mb-4 sm:mb-5">
                 <PenTool className="w-4 h-4" style={{ color: BRAND.primary }} />
                 <h3 className="font-bold text-sm uppercase tracking-wider" style={{ color: BRAND.secondary }}>
                   {quote.signedAt ? 'Firma Digital' : 'Firmar Oferta'}
@@ -481,22 +524,22 @@ function QuoteSignContent({ token }: { token: string }) {
                       value={signerName}
                       onChange={(e) => setSignerName(e.target.value)}
                       placeholder="Nombre completo"
-                      className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 transition-all"
+                      className="w-full px-4 py-3 sm:py-2.5 rounded-lg border border-gray-200 text-base sm:text-sm focus:outline-none focus:ring-2 transition-all"
                       style={{ '--tw-ring-color': `${BRAND.primary}30` } as React.CSSProperties}
                       onFocus={(e) => { e.target.style.borderColor = BRAND.primary }}
                       onBlur={(e) => { e.target.style.borderColor = '#e5e7eb' }}
                     />
                   </div>
 
-                  <div>
+                  <div ref={sigContainerRef}>
                     <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: BRAND.secondary }}>
                       Firma *
                     </label>
                     <SignaturePad
                       onSave={(dataUrl) => setSignatureData(dataUrl)}
                       onClear={() => setSignatureData(null)}
-                      width={600}
-                      height={180}
+                      width={sigPadWidth}
+                      height={160}
                       label=""
                     />
                   </div>
@@ -512,7 +555,7 @@ function QuoteSignContent({ token }: { token: string }) {
                   <button
                     onClick={handleSign}
                     disabled={signing || !signatureData || !signerName.trim()}
-                    className="w-full py-3 px-6 text-white rounded-lg font-semibold text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all"
+                    className="w-full py-3.5 sm:py-3 px-6 text-white rounded-lg font-semibold text-base sm:text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
                     style={{ backgroundColor: signing ? BRAND.primaryHover : BRAND.primary }}
                     onMouseEnter={(e) => { if (!signing) (e.target as HTMLElement).style.backgroundColor = BRAND.primaryHover }}
                     onMouseLeave={(e) => { if (!signing) (e.target as HTMLElement).style.backgroundColor = BRAND.primary }}
@@ -535,10 +578,10 @@ function QuoteSignContent({ token }: { token: string }) {
           </div>
 
           {/* Footer */}
-          <div className="px-8 py-4 border-t border-gray-100" style={{ backgroundColor: `${BRAND.secondary}08` }}>
+          <div className="px-4 sm:px-8 py-3 sm:py-4 border-t border-gray-100" style={{ backgroundColor: `${BRAND.secondary}08` }}>
             <div className="flex items-center justify-between">
-              <img src={BRAND.logo} alt={BRAND.displayName} className="h-5 object-contain opacity-60" />
-              <p className="text-[10px] text-gray-400">
+              <img src={BRAND.logo} alt={BRAND.displayName} className="h-4 sm:h-5 object-contain opacity-60" />
+              <p className="text-[9px] sm:text-[10px] text-gray-400">
                 Documento generado por {BRAND.displayName}
               </p>
             </div>
