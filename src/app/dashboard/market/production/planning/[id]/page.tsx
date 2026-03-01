@@ -86,6 +86,8 @@ interface Plan {
   totalCost: number
   costPerUnit: number | null
   notes: string | null
+  cancellationReason: string | null
+  cancelledAt: string | null
   createdAt: string
   scheduledAt: string | null
   materialsIssuedAt: string | null
@@ -123,6 +125,9 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [forceSchedule, setForceSchedule] = useState(false)
   const [shortages, setShortages] = useState<any[]>([])
+
+  // Cancel form
+  const [cancelReason, setCancelReason] = useState('')
 
   // Complete form
   const [actualQuantity, setActualQuantity] = useState('')
@@ -272,16 +277,23 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
 
   const handleCancel = async () => {
     if (!plan) return
+    if (!cancelReason.trim()) {
+      setError('Debe indicar un motivo de cancelación')
+      return
+    }
     setActionLoading('cancel')
 
     try {
       const response = await fetch(`/api/market/production/plans/${plan.id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cancellationReason: cancelReason.trim() })
       })
       const data = await response.json()
 
       if (data.success) {
         setSuccess('Plan cancelado')
+        setCancelReason('')
         router.push('/dashboard/market/production/planning')
       } else {
         setError(data.error)
@@ -464,6 +476,30 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
           <CheckCircle className="h-5 w-5 text-green-600" />
           <span className="text-green-700 dark:text-green-300">{success}</span>
         </div>
+      )}
+
+      {/* Cancellation Banner */}
+      {plan.status === 'cancelled' && (
+        <Card className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold text-red-700 dark:text-red-400">Plan Cancelado</p>
+                {plan.cancellationReason && (
+                  <p className="text-sm text-red-600 dark:text-red-300">
+                    <span className="font-medium">Motivo:</span> {plan.cancellationReason}
+                  </p>
+                )}
+                {plan.cancelledAt && (
+                  <p className="text-xs text-red-500 dark:text-red-400">
+                    Cancelado el {new Date(plan.cancelledAt).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -814,7 +850,7 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
       </Dialog>
 
       {/* Cancel Dialog */}
-      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+      <Dialog open={showCancelDialog} onOpenChange={(open) => { setShowCancelDialog(open); if (!open) setCancelReason('') }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Cancelar Plan</DialogTitle>
@@ -822,11 +858,22 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
               ¿Está seguro de cancelar este plan de producción? Esta acción no se puede deshacer.
             </DialogDescription>
           </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label htmlFor="cancel-reason">Motivo de cancelación *</Label>
+            <textarea
+              id="cancel-reason"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Indique el motivo por el cual se cancela este plan..."
+              rows={3}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+            />
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCancelDialog(false)}>
+            <Button variant="outline" onClick={() => { setShowCancelDialog(false); setCancelReason('') }}>
               No, Mantener
             </Button>
-            <Button variant="destructive" onClick={handleCancel} disabled={actionLoading === 'cancel'}>
+            <Button variant="destructive" onClick={handleCancel} disabled={actionLoading === 'cancel' || !cancelReason.trim()}>
               {actionLoading === 'cancel' ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (

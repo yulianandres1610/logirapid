@@ -182,6 +182,8 @@ export async function GET(
         totalCost: parseFloat(plan.total_cost) || 0,
         costPerUnit: plan.cost_per_unit ? parseFloat(plan.cost_per_unit) : null,
         notes: plan.notes,
+        cancellationReason: plan.cancellation_reason || null,
+        cancelledAt: plan.cancelled_at || null,
         createdAt: plan.created_at,
         createdByName: plan.created_by_name,
         scheduledByName: plan.scheduled_by_name,
@@ -416,14 +418,28 @@ export async function DELETE(
       }, { status: 400 })
     }
 
-    // Update status to cancelled
+    // Read cancellation reason from body
+    let cancellationReason: string | null = null
+    try {
+      const body = await request.json()
+      cancellationReason = body.cancellationReason || null
+    } catch { /* no body or invalid JSON */ }
+
+    // Ensure cancellation columns exist
+    try {
+      await db.query(`ALTER TABLE market_production_plans ADD COLUMN IF NOT EXISTS cancellation_reason TEXT`)
+      await db.query(`ALTER TABLE market_production_plans ADD COLUMN IF NOT EXISTS cancelled_by INTEGER`)
+      await db.query(`ALTER TABLE market_production_plans ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMP`)
+    } catch { /* columns may already exist */ }
+
+    // Update status to cancelled with reason
     await db.query(`
       UPDATE market_production_plans
-      SET status = 'cancelled', updated_at = NOW()
+      SET status = 'cancelled', cancellation_reason = $2, cancelled_by = $3, cancelled_at = NOW(), updated_at = NOW()
       WHERE id = $1
-    `, [planId])
+    `, [planId, cancellationReason, payload.userId])
 
-    console.log('[Production Plans API] Cancelled plan:', plan.plan_number)
+    console.log('[Production Plans API] Cancelled plan:', plan.plan_number, 'Reason:', cancellationReason)
 
     return NextResponse.json({
       success: true,
