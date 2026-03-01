@@ -10,7 +10,8 @@ import {
   Building2,
   PenTool,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Download
 } from 'lucide-react'
 import SignaturePad from '@/components/ui/SignaturePad'
 import { detectBrandFromHost, brands } from '@/lib/brand-config'
@@ -82,6 +83,7 @@ function QuoteSignContent({ token }: { token: string }) {
   const [signing, setSigning] = useState(false)
   const [signed, setSigned] = useState(false)
   const [sigPadWidth, setSigPadWidth] = useState(350)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
   const sigContainerRef = useRef<HTMLDivElement>(null)
 
   // Measure container for responsive SignaturePad
@@ -224,7 +226,7 @@ function QuoteSignContent({ token }: { token: string }) {
 
   if (!quote) return null
 
-  // Success (just signed)
+  // Success (just signed) — reload to show the full signed document
   if (signed && !quote.signedAt) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center p-4">
@@ -233,7 +235,7 @@ function QuoteSignContent({ token }: { token: string }) {
           animate={{ scale: 1, opacity: 1 }}
           className="text-center max-w-md"
         >
-          <img src={BRAND.logo} alt={BRAND.displayName} className="h-10 mx-auto mb-8 object-contain" />
+          <img src={quote.company.logoUrl || BRAND.logo} alt={BRAND.displayName} className="h-16 sm:h-20 mx-auto mb-8 object-contain" />
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
@@ -247,7 +249,22 @@ function QuoteSignContent({ token }: { token: string }) {
           <p className="text-gray-500 mb-2">
             La oferta <strong>{quote.quoteNumber}</strong> ha sido firmada exitosamente.
           </p>
-          <p className="text-sm text-gray-400">Puede cerrar esta página.</p>
+          <p className="text-sm text-gray-400 mb-6">Puede cerrar esta página o descargar el PDF.</p>
+          <button
+            onClick={() => {
+              // Reload to show full signed document with download option
+              window.location.reload()
+            }}
+            className="py-3 px-6 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 mx-auto transition-all active:scale-[0.98] border-2"
+            style={{
+              borderColor: BRAND.primary,
+              color: BRAND.primary,
+              backgroundColor: `${BRAND.primary}08`
+            }}
+          >
+            <Download className="w-4 h-4" />
+            Ver y Descargar PDF
+          </button>
         </motion.div>
       </div>
     )
@@ -265,6 +282,21 @@ function QuoteSignContent({ token }: { token: string }) {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Print styles */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .min-h-screen { min-height: auto !important; }
+          .bg-gray-50 { background: white !important; }
+          .shadow-lg { box-shadow: none !important; }
+          .sm\\:rounded-lg { border-radius: 0 !important; }
+          .sm\\:border { border: none !important; }
+          .no-print { display: none !important; }
+          .sm\\:px-4 { padding-left: 0 !important; padding-right: 0 !important; }
+          .py-4, .sm\\:py-8 { padding-top: 0 !important; padding-bottom: 0 !important; }
+        }
+      `}} />
+
       {/* Top bar */}
       <div className="w-full h-1" style={{ background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.secondary})` }} />
 
@@ -280,7 +312,7 @@ function QuoteSignContent({ token }: { token: string }) {
                 <img
                   src={quote.company.logoUrl || BRAND.logo}
                   alt={quote.company.name || BRAND.displayName}
-                  className="h-9 sm:h-12 object-contain"
+                  className="h-14 sm:h-20 object-contain"
                 />
                 <p className="text-[10px] sm:text-xs mt-1.5" style={{ color: BRAND.secondaryLight }}>
                   {quote.company.name || BRAND.displayName}
@@ -542,6 +574,38 @@ function QuoteSignContent({ token }: { token: string }) {
                       <img src={quote.signatureData} alt="Firma" className="w-full h-20 object-contain" />
                     </div>
                   )}
+
+                  {/* Download PDF Button */}
+                  <button
+                    onClick={() => {
+                      setDownloadingPdf(true)
+                      setTimeout(() => {
+                        window.print()
+                        setDownloadingPdf(false)
+                      }, 100)
+                    }}
+                    disabled={downloadingPdf}
+                    className="no-print w-full py-3 px-6 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] border-2"
+                    style={{
+                      borderColor: BRAND.primary,
+                      color: BRAND.primary,
+                      backgroundColor: `${BRAND.primary}08`
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget).style.backgroundColor = `${BRAND.primary}15` }}
+                    onMouseLeave={(e) => { (e.currentTarget).style.backgroundColor = `${BRAND.primary}08` }}
+                  >
+                    {downloadingPdf ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Preparando...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        Descargar PDF de la Oferta Firmada
+                      </>
+                    )}
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-4">
