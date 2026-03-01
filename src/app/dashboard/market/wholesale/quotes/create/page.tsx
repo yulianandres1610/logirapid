@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useCallback, Suspense } from 'react'
+import React, { useEffect, useState, useCallback, useRef, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft,
@@ -22,7 +22,8 @@ import {
   CheckCircle,
   DollarSign,
   Eye,
-  AlertCircle
+  AlertCircle,
+  Warehouse
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
@@ -79,6 +80,12 @@ interface QuoteLine {
   profitMargin: number
   hasPricelistPrice: boolean
   pricelistDiscountInfo: string | null
+  estimatedDelivery: string | null
+}
+
+interface WarehouseOption {
+  id: number
+  name: string
 }
 
 interface PricelistItem {
@@ -141,6 +148,14 @@ function CreateQuotePage() {
   const [discountPercent, setDiscountPercent] = useState(0)
   const [notes, setNotes] = useState('')
   const [internalNotes, setInternalNotes] = useState('')
+
+  // Warehouse & Delivery Estimates
+  const [warehouses, setWarehouses] = useState<WarehouseOption[]>([])
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | null>(null)
+  const [loadingWarehouses, setLoadingWarehouses] = useState(false)
+  const [deliveryEstimates, setDeliveryEstimates] = useState<Record<number, string>>({})
+  const [loadingEstimates, setLoadingEstimates] = useState(false)
+  const estimateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const [isRestoring, setIsRestoring] = useState(true)
 
@@ -285,6 +300,7 @@ function CreateQuotePage() {
     fetchCustomers()
     fetchProducts()
     fetchExchangeRates()
+    fetchWarehouses()
   }, [])
 
   const fetchExchangeRates = async () => {
@@ -300,6 +316,72 @@ function CreateQuotePage() {
       console.error('Error fetching exchange rates:', error)
     }
   }
+
+  const fetchWarehouses = async () => {
+    setLoadingWarehouses(true)
+    try {
+      const response = await fetch('/api/market/warehouses?isActive=true')
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          setWarehouses((result.data.warehouses || result.data || []).map((w: { id: number; name: string }) => ({
+            id: w.id,
+            name: w.name
+          })))
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching warehouses:', error)
+    } finally {
+      setLoadingWarehouses(false)
+    }
+  }
+
+  const fetchDeliveryEstimates = useCallback(async (whId: number, currentLines: QuoteLine[]) => {
+    if (!whId || currentLines.length === 0) return
+    setLoadingEstimates(true)
+    try {
+      const response = await fetch('/api/market/wholesale/quotes/delivery-estimate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          warehouseId: whId,
+          items: currentLines.map(l => ({ productId: l.productId, quantity: l.quantity }))
+        })
+      })
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && result.data?.estimates) {
+          const newEstimates: Record<number, string> = {}
+          for (const est of result.data.estimates) {
+            newEstimates[est.productId] = est.estimatedDelivery
+          }
+          setDeliveryEstimates(newEstimates)
+          // Update lines with delivery estimates
+          setLines(prev => prev.map(l => ({
+            ...l,
+            estimatedDelivery: newEstimates[l.productId] || null
+          })))
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching delivery estimates:', error)
+    } finally {
+      setLoadingEstimates(false)
+    }
+  }, [])
+
+  // Debounced delivery estimate fetch when lines or warehouse change
+  useEffect(() => {
+    if (!selectedWarehouseId || lines.length === 0) return
+    if (estimateTimeoutRef.current) clearTimeout(estimateTimeoutRef.current)
+    estimateTimeoutRef.current = setTimeout(() => {
+      fetchDeliveryEstimates(selectedWarehouseId, lines)
+    }, 500)
+    return () => {
+      if (estimateTimeoutRef.current) clearTimeout(estimateTimeoutRef.current)
+    }
+  }, [selectedWarehouseId, lines.map(l => `${l.productId}:${l.quantity}`).join(','), fetchDeliveryEstimates])
 
   useEffect(() => {
     if (preselectedCustomerId && customers.length > 0) {
@@ -502,7 +584,8 @@ function CreateQuotePage() {
       costPrice: product.costPrice,
       profitMargin,
       hasPricelistPrice: hasDiscount,
-      pricelistDiscountInfo: discountInfo
+      pricelistDiscountInfo: discountInfo,
+      estimatedDelivery: deliveryEstimates[product.id] || null
     }])
   }
 
@@ -584,6 +667,7 @@ function CreateQuotePage() {
         body: JSON.stringify({
           customerId: selectedCustomer.id,
           pricelistId: selectedCustomer.pricelistId,
+          warehouseId: selectedWarehouseId || null,
           validUntil: validUntil || null,
           discountPercent,
           notes,
@@ -595,7 +679,8 @@ function CreateQuotePage() {
             productSku: l.productSku,
             quantity: l.quantity,
             unitPrice: l.unitPrice,
-            originalPrice: l.originalPrice
+            originalPrice: l.originalPrice,
+            estimatedDelivery: l.estimatedDelivery || null
           }))
         })
       })
@@ -646,6 +731,25 @@ function CreateQuotePage() {
     (p.sku && p.sku.toLowerCase().includes(productSearch.toLowerCase())) ||
     (p.barcode && p.barcode.includes(productSearch))
   )
+
+  const DeliveryBadge = ({ estimate }: { estimate: string | null }) => {
+    if (!estimate) return null
+    const config: Record<string, { label: string; bg: string; text: string; darkBg: string; darkText: string }> = {
+      '1-24h': { label: '1-24 h', bg: 'bg-green-100', text: 'text-green-700', darkBg: 'bg-green-900/30', darkText: 'text-green-400' },
+      '1-3d': { label: '1-3 días', bg: 'bg-amber-100', text: 'text-amber-700', darkBg: 'bg-amber-900/30', darkText: 'text-amber-400' },
+      '1-30d': { label: '1-30 días', bg: 'bg-red-100', text: 'text-red-700', darkBg: 'bg-red-900/30', darkText: 'text-red-400' }
+    }
+    const c = config[estimate]
+    if (!c) return null
+    return (
+      <span className={cn(
+        'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium',
+        theme === 'dark' ? `${c.darkBg} ${c.darkText}` : `${c.bg} ${c.text}`
+      )}>
+        {c.label}
+      </span>
+    )
+  }
 
   return (
     <div className={cn(
@@ -1060,10 +1164,13 @@ function CreateQuotePage() {
                         >
                           <div className="col-span-1 text-sm text-gray-500">{index + 1}</div>
                           <div className="col-span-4">
-                            <p className={cn(
-                              'font-medium text-sm truncate',
-                              theme === 'dark' ? 'text-white' : 'text-gray-900'
-                            )}>{line.productName}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className={cn(
+                                'font-medium text-sm truncate',
+                                theme === 'dark' ? 'text-white' : 'text-gray-900'
+                              )}>{line.productName}</p>
+                              <DeliveryBadge estimate={line.estimatedDelivery} />
+                            </div>
                             <p className="text-xs text-gray-500">{line.productSku}</p>
                             {line.hasPricelistPrice && line.pricelistDiscountInfo && (
                               <span className="text-[10px] text-blue-500">{line.pricelistDiscountInfo}</span>
@@ -1185,6 +1292,42 @@ function CreateQuotePage() {
                 </h2>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Warehouse Selector */}
+                  <div className={cn(
+                    'md:col-span-2 p-4 rounded-xl border',
+                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                  )}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Warehouse className="w-4 h-4 text-blue-600" />
+                      <label className="font-medium">Almacén de Despacho</label>
+                      {loadingEstimates && (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 ml-auto" />
+                      )}
+                    </div>
+                    <select
+                      value={selectedWarehouseId || ''}
+                      onChange={(e) => setSelectedWarehouseId(e.target.value ? parseInt(e.target.value) : null)}
+                      className={cn(
+                        'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
+                        theme === 'dark'
+                          ? 'bg-gray-900 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                          : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                      )}
+                    >
+                      <option value="">Seleccionar almacén...</option>
+                      {loadingWarehouses ? (
+                        <option disabled>Cargando...</option>
+                      ) : (
+                        warehouses.map(w => (
+                          <option key={w.id} value={w.id}>{w.name}</option>
+                        ))
+                      )}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Selecciona un almacén para calcular tiempos de entrega estimados por producto.
+                    </p>
+                  </div>
+
                   <div className={cn(
                     'p-4 rounded-xl border',
                     theme === 'dark' ? 'border-gray-700' : 'border-gray-200'

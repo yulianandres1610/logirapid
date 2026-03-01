@@ -57,6 +57,7 @@ interface QuoteLine {
   discountAmount: number
   subtotal: number
   notes: string | null
+  estimatedDelivery: string | null
 }
 
 interface Quote {
@@ -547,24 +548,30 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     doc.setFontSize(8)
     doc.setTextColor(255, 255, 255)
 
+    // Check if any line has delivery estimate
+    const hasDeliveryEstimates = quote.lines.some(l => l.estimatedDelivery)
+
     if (mode === 'dual') {
       doc.text('PRODUCTO', margin + 4, y)
-      doc.text('CANT', margin + 75, y, { align: 'center' })
-      doc.text('P.UNIT USD', margin + 100, y, { align: 'right' })
-      doc.text('P.UNIT CUP', margin + 130, y, { align: 'right' })
+      doc.text('CANT', margin + 65, y, { align: 'center' })
+      if (hasDeliveryEstimates) doc.text('ENTREGA', margin + 85, y, { align: 'center' })
+      doc.text('P.UNIT USD', margin + 110, y, { align: 'right' })
+      doc.text('P.UNIT CUP', margin + 135, y, { align: 'right' })
       doc.text('TOTAL USD', margin + 155, y, { align: 'right' })
       doc.text('TOTAL CUP', pageWidth - margin - 4, y, { align: 'right' })
     } else if (mode === 'cup') {
       doc.text('PRODUCTO', margin + 4, y)
-      doc.text('SKU', margin + 85, y)
-      doc.text('CANT', margin + 115, y, { align: 'center' })
-      doc.text('P.UNIT CUP', margin + 145, y, { align: 'right' })
+      doc.text('SKU', margin + 80, y)
+      doc.text('CANT', margin + 105, y, { align: 'center' })
+      if (hasDeliveryEstimates) doc.text('ENTREGA', margin + 125, y, { align: 'center' })
+      doc.text('P.UNIT CUP', margin + 150, y, { align: 'right' })
       doc.text('TOTAL CUP', pageWidth - margin - 4, y, { align: 'right' })
     } else {
       doc.text('PRODUCTO', margin + 4, y)
-      doc.text('SKU', margin + 85, y)
-      doc.text('CANT', margin + 115, y, { align: 'center' })
-      doc.text('P.UNIT', margin + 140, y, { align: 'right' })
+      doc.text('SKU', margin + 80, y)
+      doc.text('CANT', margin + 105, y, { align: 'center' })
+      if (hasDeliveryEstimates) doc.text('ENTREGA', margin + 128, y, { align: 'center' })
+      doc.text('P.UNIT', margin + 150, y, { align: 'right' })
       doc.text('TOTAL', pageWidth - margin - 4, y, { align: 'right' })
     }
     y += 8
@@ -593,24 +600,34 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
         ? line.productName.substring(0, 35) + '...'
         : line.productName
 
+      // Delivery text helper
+      const deliveryText = (est: string | null | undefined) => {
+        if (!est) return ''
+        const map: Record<string, string> = { '1-24h': '1-24 h', '1-3d': '1-3 días', '1-30d': '1-30 días' }
+        return map[est] || ''
+      }
+
       if (mode === 'dual') {
         doc.text(productName, margin + 4, y)
-        doc.text(String(line.quantity), margin + 75, y, { align: 'center' })
-        doc.text(`$${line.unitPrice.toFixed(2)}`, margin + 100, y, { align: 'right' })
-        doc.text(`${Math.round(line.unitPrice * exchangeRate).toLocaleString()}`, margin + 130, y, { align: 'right' })
+        doc.text(String(line.quantity), margin + 65, y, { align: 'center' })
+        if (hasDeliveryEstimates) doc.text(deliveryText(line.estimatedDelivery), margin + 85, y, { align: 'center' })
+        doc.text(`$${line.unitPrice.toFixed(2)}`, margin + 110, y, { align: 'right' })
+        doc.text(`${Math.round(line.unitPrice * exchangeRate).toLocaleString()}`, margin + 135, y, { align: 'right' })
         doc.text(`$${line.subtotal.toFixed(2)}`, margin + 155, y, { align: 'right' })
         doc.text(`${Math.round(line.subtotal * exchangeRate).toLocaleString()}`, pageWidth - margin - 4, y, { align: 'right' })
       } else if (mode === 'cup') {
         doc.text(productName, margin + 4, y)
-        doc.text(line.productSku || '', margin + 85, y)
-        doc.text(String(line.quantity), margin + 115, y, { align: 'center' })
-        doc.text(`${Math.round(line.unitPrice * exchangeRate).toLocaleString()}`, margin + 145, y, { align: 'right' })
+        doc.text(line.productSku || '', margin + 80, y)
+        doc.text(String(line.quantity), margin + 105, y, { align: 'center' })
+        if (hasDeliveryEstimates) doc.text(deliveryText(line.estimatedDelivery), margin + 125, y, { align: 'center' })
+        doc.text(`${Math.round(line.unitPrice * exchangeRate).toLocaleString()}`, margin + 150, y, { align: 'right' })
         doc.text(`${Math.round(line.subtotal * exchangeRate).toLocaleString()}`, pageWidth - margin - 4, y, { align: 'right' })
       } else {
         doc.text(productName, margin + 4, y)
-        doc.text((line.productSku || '').substring(0, 15), margin + 85, y)
-        doc.text(String(line.quantity), margin + 115, y, { align: 'center' })
-        doc.text(`$${line.unitPrice.toFixed(2)}`, margin + 140, y, { align: 'right' })
+        doc.text((line.productSku || '').substring(0, 15), margin + 80, y)
+        doc.text(String(line.quantity), margin + 105, y, { align: 'center' })
+        if (hasDeliveryEstimates) doc.text(deliveryText(line.estimatedDelivery), margin + 128, y, { align: 'center' })
+        doc.text(`$${line.unitPrice.toFixed(2)}`, margin + 150, y, { align: 'right' })
         doc.text(`$${line.subtotal.toFixed(2)}`, pageWidth - margin - 4, y, { align: 'right' })
       }
       y += 7
@@ -1597,6 +1614,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                       <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-gray-500 text-right">P. Unit USD</th>
                       <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-gray-500 text-right">P. Unit CUP</th>
                       <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-gray-500 text-center">Desc.</th>
+                      <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-gray-500 text-center">Entrega</th>
                       <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-gray-500 text-right">Subtotal</th>
                     </tr>
                   </thead>
@@ -1646,6 +1664,25 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                           {line.discountPercent > 0 && (
                             <span className="text-green-600 text-sm font-medium">-{line.discountPercent}%</span>
                           )}
+                        </td>
+                        <td className="py-4 px-4 text-center">
+                          {line.estimatedDelivery && (() => {
+                            const cfg: Record<string, { label: string; bg: string; text: string; darkBg: string; darkText: string }> = {
+                              '1-24h': { label: '1-24 h', bg: 'bg-green-100', text: 'text-green-700', darkBg: 'bg-green-900/30', darkText: 'text-green-400' },
+                              '1-3d': { label: '1-3 días', bg: 'bg-amber-100', text: 'text-amber-700', darkBg: 'bg-amber-900/30', darkText: 'text-amber-400' },
+                              '1-30d': { label: '1-30 días', bg: 'bg-red-100', text: 'text-red-700', darkBg: 'bg-red-900/30', darkText: 'text-red-400' }
+                            }
+                            const c = cfg[line.estimatedDelivery!]
+                            if (!c) return null
+                            return (
+                              <span className={cn(
+                                'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                                theme === 'dark' ? `${c.darkBg} ${c.darkText}` : `${c.bg} ${c.text}`
+                              )}>
+                                {c.label}
+                              </span>
+                            )
+                          })()}
                         </td>
                         <td className="py-4 px-4 text-right">
                           <p className="font-bold text-blue-600">{formatCurrency(line.subtotal)}</p>

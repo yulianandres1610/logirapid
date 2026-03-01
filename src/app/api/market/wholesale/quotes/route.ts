@@ -249,6 +249,11 @@ export async function POST(request: NextRequest) {
     const discountAmount = discountPercent ? (subtotal * discountPercent / 100) : 0
     const totalAmount = subtotal - discountAmount
 
+    // Ensure estimated_delivery column exists
+    try {
+      await db.query('ALTER TABLE market_quote_lines ADD COLUMN IF NOT EXISTS estimated_delivery VARCHAR(20)')
+    } catch { /* column may already exist */ }
+
     // Create quote using transaction
     const result = await db.transaction(async (client) => {
       // Insert quote
@@ -289,8 +294,9 @@ export async function POST(request: NextRequest) {
         await client.query(`
           INSERT INTO market_quote_lines (
             quote_id, product_id, variant_id, product_name, product_sku,
-            quantity, unit_price, original_price, discount_percent, discount_amount, subtotal, notes
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            quantity, unit_price, original_price, discount_percent, discount_amount, subtotal, notes,
+            estimated_delivery
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         `, [
           quoteId,
           line.productId,
@@ -303,7 +309,8 @@ export async function POST(request: NextRequest) {
           line.discountPercent || 0,
           lineDiscountAmount,
           lineSubtotal,
-          line.notes || null
+          line.notes || null,
+          line.estimatedDelivery || null
         ])
       }
 

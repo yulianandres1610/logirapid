@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
+import { createProductionPlansForQuote } from '@/lib/quote-production-helper'
 
 /**
  * GET /api/public/quote-sign/[token]
@@ -102,6 +103,7 @@ export async function GET(
     // Step 4: Get quote lines
     let lines: Array<{
       id: number
+      productId: number
       productName: string
       productSku: string | null
       productImage: string | null
@@ -111,13 +113,14 @@ export async function GET(
       discountPercent: number
       discountAmount: number
       subtotal: number
+      estimatedDelivery: string | null
     }> = []
     try {
       const linesResult = await db.query(`
         SELECT
-          ql.id, ql.product_name, ql.product_sku, ql.quantity,
+          ql.id, ql.product_id, ql.product_name, ql.product_sku, ql.quantity,
           ql.unit_price, ql.original_price, ql.discount_percent,
-          ql.discount_amount, ql.subtotal,
+          ql.discount_amount, ql.subtotal, ql.estimated_delivery,
           p.image_url as product_image
         FROM market_quote_lines ql
         LEFT JOIN market_products p ON p.id = ql.product_id
@@ -127,6 +130,7 @@ export async function GET(
 
       lines = linesResult.rows.map(line => ({
         id: line.id,
+        productId: line.product_id,
         productName: line.product_name,
         productSku: line.product_sku || null,
         productImage: line.product_image || null,
@@ -135,13 +139,14 @@ export async function GET(
         originalPrice: parseFloat(line.original_price) || 0,
         discountPercent: parseFloat(line.discount_percent) || 0,
         discountAmount: parseFloat(line.discount_amount) || 0,
-        subtotal: parseFloat(line.subtotal) || 0
+        subtotal: parseFloat(line.subtotal) || 0,
+        estimatedDelivery: line.estimated_delivery || null
       }))
     } catch {
       // Try simpler query without JOIN
       try {
         const linesResult2 = await db.query(`
-          SELECT id, product_name, product_sku, quantity, unit_price, subtotal
+          SELECT id, product_id, product_name, product_sku, quantity, unit_price, subtotal
           FROM market_quote_lines
           WHERE quote_id = $1
           ORDER BY id
@@ -149,6 +154,7 @@ export async function GET(
 
         lines = linesResult2.rows.map(line => ({
           id: line.id,
+          productId: line.product_id,
           productName: line.product_name,
           productSku: line.product_sku || null,
           productImage: null,
@@ -157,7 +163,8 @@ export async function GET(
           originalPrice: 0,
           discountPercent: 0,
           discountAmount: 0,
-          subtotal: parseFloat(line.subtotal) || 0
+          subtotal: parseFloat(line.subtotal) || 0,
+          estimatedDelivery: null
         }))
       } catch {
         // ignore - return empty lines
@@ -297,6 +304,46 @@ export async function POST(
     try {
       await db.query(`UPDATE market_quotes SET updated_at = NOW() WHERE id = $1`, [quote.id])
     } catch { /* column may not exist */ }
+
+    // Auto-create production plans for items that can be manufactured
+    if (newStatus === 'accepted') {
+      try {
+        const quoteData = await db.query(
+          'SELECT company_id, warehouse_id, quote_number FROM market_quotes WHERE id = $1',
+          [quote.id]
+        )
+        if (quoteData.rows.length > 0) {
+          const q = quoteData.rows[0]
+          // Get lines with estimated_delivery
+          let quoteLines: Array<{ productId: number; productName: string; quantity: number; estimatedDelivery: string | null }> = []
+          try {
+            const qlResult = await db.query(
+              'SELECT product_id, product_name, quantity, estimated_delivery FROM market_quote_lines WHERE quote_id = $1',
+              [quote.id]
+            )
+            quoteLines = qlResult.rows.map(r => ({
+              productId: r.product_id,
+              productName: r.product_name,
+              quantity: parseFloat(r.quantity) || 0,
+              estimatedDelivery: r.estimated_delivery || null
+            }))
+          } catch { /* estimated_delivery column might not exist */ }
+
+          if (quoteLines.some(l => l.estimatedDelivery === '1-3d')) {
+            await createProductionPlansForQuote(
+              q.company_id,
+              q.warehouse_id,
+              q.quote_number,
+              quote.id,
+              quoteLines
+            )
+          }
+        }
+      } catch (planError) {
+        console.error('[Public Quote Sign] Error creating production plans:', planError)
+        // Don't fail the signature because of plan creation errors
+      }
+    }
 
     return NextResponse.json({
       success: true,
