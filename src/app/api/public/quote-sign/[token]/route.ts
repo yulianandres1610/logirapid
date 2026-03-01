@@ -282,9 +282,9 @@ export async function POST(
         signed_at = NOW(),
         signer_name = $2,
         signer_ip = $3,
-        status = $4::text
+        status = $4
       WHERE id = $5
-    `, [signatureData, signerName.trim(), ip, newStatus, quote.id])
+    `, [signatureData, signerName.trim(), ip, String(newStatus), quote.id])
 
     // Try updating accepted_at if column exists
     if (newStatus === 'accepted') {
