@@ -88,7 +88,7 @@ export async function GET(
       // Try without logo_url
       try {
         const compResult2 = await db.query(
-          'SELECT name FROM companies WHERE id = $1',
+          'SELECT legalname as name FROM companies WHERE id = $1',
           [q.company_id]
         )
         if (compResult2.rows.length > 0) {

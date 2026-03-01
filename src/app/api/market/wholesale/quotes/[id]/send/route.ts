@@ -62,7 +62,7 @@ export async function POST(
       SELECT q.id, q.status, q.quote_number, q.subtotal, q.discount_percent,
              q.discount_amount, q.total_amount, q.currency, q.valid_until, q.notes,
              c.email as customer_email, c.business_name,
-             comp.name as company_name
+             comp.legalname as company_name
       FROM market_quotes q
       JOIN market_wholesale_customers c ON c.id = q.customer_id
       JOIN companies comp ON comp.id = q.company_id
