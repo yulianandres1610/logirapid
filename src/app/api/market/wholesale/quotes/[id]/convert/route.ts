@@ -190,22 +190,21 @@ export async function POST(
         [`%${quote.quote_number}%`]
       )
       if (existingPlans.rows.length === 0) {
-        // Get lines with estimated_delivery
         let quoteLines: Array<{ productId: number; productName: string; quantity: number; estimatedDelivery: string | null }> = []
         try {
           const qlResult = await db.query(
-            'SELECT product_id, product_name, quantity, estimated_delivery FROM market_quote_lines WHERE quote_id = $1',
+            'SELECT product_id, product_name, quantity FROM market_quote_lines WHERE quote_id = $1',
             [quoteId]
           )
           quoteLines = qlResult.rows.map(r => ({
             productId: r.product_id,
             productName: r.product_name,
             quantity: parseFloat(r.quantity) || 0,
-            estimatedDelivery: r.estimated_delivery || null
+            estimatedDelivery: null
           }))
-        } catch { /* estimated_delivery column might not exist */ }
+        } catch { /* ignore */ }
 
-        if (quoteLines.some(l => l.estimatedDelivery === '1-3d')) {
+        if (quoteLines.length > 0) {
           await createProductionPlansForQuote(
             payload.companyId,
             quote.warehouse_id,
