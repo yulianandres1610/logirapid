@@ -33,6 +33,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react'
 import jsPDF from 'jspdf'
+import JsBarcode from 'jsbarcode'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -40,6 +41,7 @@ import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { cn } from '@/lib/utils'
+import { detectBrandFromHost, brands } from '@/lib/brand-config'
 
 interface QuoteLine {
   id: number
@@ -245,7 +247,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     try {
       let pdfBase64: string | undefined
       if (attachPdf) {
-        const pdfDoc = buildPdf(pdfCurrency)
+        const pdfDoc = await buildPdf(pdfCurrency)
         const pdfArrayBuffer = pdfDoc.output('arraybuffer')
         const bytes = new Uint8Array(pdfArrayBuffer)
         let binary = ''
@@ -362,160 +364,252 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     setShowLinkDropdown(false)
   }
 
+  // ===================== PDF HELPERS =====================
+
+  const generateBarcodeDataUrl = (code: string): string => {
+    try {
+      const canvas = document.createElement('canvas')
+      JsBarcode(canvas, code, {
+        format: 'CODE128',
+        width: 2,
+        height: 60,
+        displayValue: false,
+        margin: 5,
+        background: '#ffffff',
+        lineColor: '#000000'
+      })
+      return canvas.toDataURL('image/png')
+    } catch (error) {
+      console.error('Error generating barcode:', error)
+      return ''
+    }
+  }
+
+  const loadImageAsDataUrl = (src: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.naturalWidth
+        canvas.height = img.naturalHeight
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          ctx.drawImage(img, 0, 0)
+          resolve(canvas.toDataURL('image/png'))
+        } else {
+          resolve('')
+        }
+      }
+      img.onerror = () => resolve('')
+      img.src = src
+    })
+  }
+
   // ===================== PDF GENERATION =====================
 
-  const buildPdf = (mode: 'usd' | 'cup' | 'dual'): jsPDF => {
+  const buildPdf = async (mode: 'usd' | 'cup' | 'dual'): Promise<jsPDF> => {
     if (!quote) throw new Error('No quote data')
+
+    // Brand detection
+    const brandName = detectBrandFromHost(window.location.hostname)
+    const brand = brands[brandName]
+    const primaryRgb = brandName === 'servisumic' ? [235, 91, 12] : [204, 10, 70]
+    const secondaryRgb = brandName === 'servisumic' ? [63, 59, 57] : [3, 96, 229]
 
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
     const pageWidth = 215.9
+    const pageHeight = 279.4
     const margin = 20
     const contentWidth = pageWidth - margin * 2
-    let y = 25
+    let y = 20
 
-    // Header
-    doc.setFontSize(24)
+    // Load logo
+    const logoDataUrl = await loadImageAsDataUrl(brand.logos.light)
+
+    // ---- HEADER: Logo + Title + Barcode ----
+    if (logoDataUrl) {
+      try {
+        doc.addImage(logoDataUrl, 'PNG', margin, y, 40, 20, undefined, 'FAST')
+      } catch { /* skip logo if error */ }
+    }
+
+    // Title "OFERTA" on the right side
+    doc.setFontSize(28)
     doc.setFont('helvetica', 'bold')
-    doc.setTextColor(26, 54, 93)
-    doc.text('COTIZACIÓN', pageWidth / 2, y, { align: 'center' })
-    y += 12
+    doc.setTextColor(secondaryRgb[0], secondaryRgb[1], secondaryRgb[2])
+    doc.text('OFERTA', pageWidth - margin, y + 6, { align: 'right' })
 
-    doc.setFontSize(14)
-    doc.setTextColor(0, 0, 0)
-    doc.text(quote.quoteNumber, pageWidth / 2, y, { align: 'center' })
-    y += 8
-
-    const statusLabel = STATUS_CONFIG[quote.status]?.label || quote.status
-    doc.setFontSize(10)
+    // Quote number
+    doc.setFontSize(12)
     doc.setTextColor(100, 100, 100)
-    doc.text(`Estado: ${statusLabel}`, pageWidth / 2, y, { align: 'center' })
-    y += 15
+    doc.setFont('helvetica', 'normal')
+    doc.text(quote.quoteNumber, pageWidth - margin, y + 14, { align: 'right' })
 
-    doc.setDrawColor(200, 200, 200)
-    doc.setLineWidth(0.5)
-    doc.line(margin, y, pageWidth - margin, y)
-    y += 12
+    // Barcode
+    const barcodeCode = quote.quoteNumber.replace(/-/g, '')
+    const barcodeDataUrl = generateBarcodeDataUrl(barcodeCode)
+    if (barcodeDataUrl) {
+      try {
+        doc.addImage(barcodeDataUrl, 'PNG', pageWidth - margin - 55, y + 17, 55, 12, undefined, 'FAST')
+      } catch { /* skip barcode if error */ }
+      // Barcode text
+      doc.setFontSize(7)
+      doc.setTextColor(120, 120, 120)
+      doc.text(barcodeCode, pageWidth - margin - 27.5, y + 32, { align: 'center' })
+    }
 
-    // Client info
-    doc.setTextColor(0, 0, 0)
-    doc.setFontSize(11)
+    y += 38
+
+    // ---- Orange accent bar ----
+    doc.setFillColor(primaryRgb[0], primaryRgb[1], primaryRgb[2])
+    doc.rect(margin, y, contentWidth, 2, 'F')
+    y += 10
+
+    // ---- CLIENT INFO + QUOTE INFO side by side ----
+    const leftStartY = y
+    const rightX = pageWidth / 2 + 10
+
+    // Client section
+    doc.setFontSize(10)
     doc.setFont('helvetica', 'bold')
+    doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2])
     doc.text('CLIENTE', margin, y)
     y += 6
 
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(10)
+    doc.setTextColor(40, 40, 40)
     doc.text(quote.customer.businessName, margin, y)
     y += 5
 
     if (quote.customer.taxId) {
       doc.setTextColor(100, 100, 100)
+      doc.setFontSize(9)
       doc.text(`RUC/NIT: ${quote.customer.taxId}`, margin, y)
       y += 5
     }
     if (quote.customer.address) {
       doc.setTextColor(100, 100, 100)
-      doc.text(quote.customer.address, margin, y)
+      doc.setFontSize(9)
+      const addrLines = doc.splitTextToSize(quote.customer.address, contentWidth / 2 - 10)
+      doc.text(addrLines, margin, y)
+      y += addrLines.length * 4 + 1
+    }
+    if (quote.customer.phone) {
+      doc.setTextColor(100, 100, 100)
+      doc.setFontSize(9)
+      doc.text(`Tel: ${quote.customer.phone}`, margin, y)
       y += 5
     }
 
     // Right side - Quote info
-    const rightX = pageWidth / 2 + 10
-    let rightY = y - (quote.customer.taxId ? 16 : 11) - (quote.customer.address ? 5 : 0)
+    let rightY = leftStartY
 
+    doc.setFontSize(10)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(11)
-    doc.setTextColor(0, 0, 0)
-    doc.text('INFORMACIÓN', rightX, rightY)
+    doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2])
+    doc.text('INFORMACI\u00D3N', rightX, rightY)
     rightY += 6
 
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(10)
+    doc.setFontSize(9)
+    doc.setTextColor(40, 40, 40)
     doc.text(`Fecha: ${formatDate(quote.createdAt)}`, rightX, rightY)
     rightY += 5
 
     if (quote.validUntil) {
-      doc.text(`Válida hasta: ${formatDate(quote.validUntil)}`, rightX, rightY)
+      doc.text(`V\u00E1lida hasta: ${formatDate(quote.validUntil)}`, rightX, rightY)
       rightY += 5
     }
     if (quote.warehouseName) {
-      doc.text(`Almacén: ${quote.warehouseName}`, rightX, rightY)
+      doc.text(`Almac\u00E9n: ${quote.warehouseName}`, rightX, rightY)
       rightY += 5
     }
 
-    y = Math.max(y, rightY) + 15
+    const statusLabel = STATUS_CONFIG[quote.status]?.label || quote.status
+    doc.text(`Estado: ${statusLabel}`, rightX, rightY)
+    rightY += 5
 
-    doc.setDrawColor(200, 200, 200)
-    doc.line(margin, y, pageWidth - margin, y)
-    y += 10
+    y = Math.max(y, rightY) + 12
 
-    // Table header
-    doc.setFillColor(245, 247, 250)
-    doc.rect(margin, y - 5, contentWidth, 10, 'F')
+    // ---- TABLE ----
+    // Table header with dark background
+    const tableHeaderH = 10
+    doc.setFillColor(secondaryRgb[0], secondaryRgb[1], secondaryRgb[2])
+    doc.rect(margin, y - 6, contentWidth, tableHeaderH, 'F')
 
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.setTextColor(60, 60, 60)
+    doc.setFontSize(8)
+    doc.setTextColor(255, 255, 255)
 
     if (mode === 'dual') {
-      doc.text('PRODUCTO', margin + 5, y)
+      doc.text('PRODUCTO', margin + 4, y)
       doc.text('CANT', margin + 75, y, { align: 'center' })
       doc.text('P.UNIT USD', margin + 100, y, { align: 'right' })
       doc.text('P.UNIT CUP', margin + 130, y, { align: 'right' })
       doc.text('TOTAL USD', margin + 155, y, { align: 'right' })
-      doc.text('TOTAL CUP', pageWidth - margin - 5, y, { align: 'right' })
+      doc.text('TOTAL CUP', pageWidth - margin - 4, y, { align: 'right' })
     } else if (mode === 'cup') {
-      doc.text('PRODUCTO', margin + 5, y)
+      doc.text('PRODUCTO', margin + 4, y)
       doc.text('SKU', margin + 85, y)
       doc.text('CANT', margin + 115, y, { align: 'center' })
       doc.text('P.UNIT CUP', margin + 145, y, { align: 'right' })
-      doc.text('TOTAL CUP', pageWidth - margin - 5, y, { align: 'right' })
+      doc.text('TOTAL CUP', pageWidth - margin - 4, y, { align: 'right' })
     } else {
-      doc.text('PRODUCTO', margin + 5, y)
+      doc.text('PRODUCTO', margin + 4, y)
       doc.text('SKU', margin + 85, y)
       doc.text('CANT', margin + 115, y, { align: 'center' })
       doc.text('P.UNIT', margin + 140, y, { align: 'right' })
-      doc.text('TOTAL', pageWidth - margin - 5, y, { align: 'right' })
+      doc.text('TOTAL', pageWidth - margin - 4, y, { align: 'right' })
     }
     y += 8
 
-    // Products
+    // Table rows
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
-    doc.setTextColor(0, 0, 0)
-    const pageHeight = 279.4
+    doc.setTextColor(40, 40, 40)
 
-    for (const line of quote.lines) {
+    for (let i = 0; i < quote.lines.length; i++) {
       if (y > pageHeight - 60) {
         doc.addPage()
         y = 25
       }
 
+      const line = quote.lines[i]
+
+      // Alternating row background
+      if (i % 2 === 0) {
+        doc.setFillColor(248, 248, 248)
+        doc.rect(margin, y - 4, contentWidth, 7, 'F')
+      }
+
+      doc.setTextColor(40, 40, 40)
       const productName = line.productName.length > 35
         ? line.productName.substring(0, 35) + '...'
         : line.productName
 
       if (mode === 'dual') {
-        doc.text(productName, margin + 5, y)
+        doc.text(productName, margin + 4, y)
         doc.text(String(line.quantity), margin + 75, y, { align: 'center' })
         doc.text(`$${line.unitPrice.toFixed(2)}`, margin + 100, y, { align: 'right' })
         doc.text(`${Math.round(line.unitPrice * exchangeRate).toLocaleString()}`, margin + 130, y, { align: 'right' })
         doc.text(`$${line.subtotal.toFixed(2)}`, margin + 155, y, { align: 'right' })
-        doc.text(`${Math.round(line.subtotal * exchangeRate).toLocaleString()}`, pageWidth - margin - 5, y, { align: 'right' })
+        doc.text(`${Math.round(line.subtotal * exchangeRate).toLocaleString()}`, pageWidth - margin - 4, y, { align: 'right' })
       } else if (mode === 'cup') {
-        doc.text(productName, margin + 5, y)
+        doc.text(productName, margin + 4, y)
         doc.text(line.productSku || '', margin + 85, y)
         doc.text(String(line.quantity), margin + 115, y, { align: 'center' })
         doc.text(`${Math.round(line.unitPrice * exchangeRate).toLocaleString()}`, margin + 145, y, { align: 'right' })
-        doc.text(`${Math.round(line.subtotal * exchangeRate).toLocaleString()}`, pageWidth - margin - 5, y, { align: 'right' })
+        doc.text(`${Math.round(line.subtotal * exchangeRate).toLocaleString()}`, pageWidth - margin - 4, y, { align: 'right' })
       } else {
-        doc.text(productName, margin + 5, y)
+        doc.text(productName, margin + 4, y)
         doc.text((line.productSku || '').substring(0, 15), margin + 85, y)
         doc.text(String(line.quantity), margin + 115, y, { align: 'center' })
         doc.text(`$${line.unitPrice.toFixed(2)}`, margin + 140, y, { align: 'right' })
-        doc.text(`$${line.subtotal.toFixed(2)}`, pageWidth - margin - 5, y, { align: 'right' })
+        doc.text(`$${line.subtotal.toFixed(2)}`, pageWidth - margin - 4, y, { align: 'right' })
       }
-      y += 6
+      y += 7
     }
 
     y += 5
@@ -523,71 +617,76 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     doc.line(margin + 100, y, pageWidth - margin, y)
     y += 8
 
-    // Totals
+    // ---- TOTALS ----
     doc.setFontSize(10)
+    doc.setTextColor(40, 40, 40)
+
     if (mode === 'cup') {
+      doc.setFont('helvetica', 'normal')
       doc.text('Subtotal CUP:', margin + 120, y)
-      doc.text(`${Math.round(quote.subtotal * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 5, y, { align: 'right' })
+      doc.text(`${Math.round(quote.subtotal * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
       y += 6
 
       if (quote.discountPercent > 0) {
         doc.setTextColor(220, 38, 38)
         doc.text(`Descuento (${quote.discountPercent}%):`, margin + 120, y)
-        doc.text(`-${Math.round(quote.discountAmount * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 5, y, { align: 'right' })
-        doc.setTextColor(0, 0, 0)
+        doc.text(`-${Math.round(quote.discountAmount * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
+        doc.setTextColor(40, 40, 40)
         y += 6
       }
 
       y += 3
-      doc.setFillColor(26, 54, 93)
+      doc.setFillColor(primaryRgb[0], primaryRgb[1], primaryRgb[2])
       doc.rect(margin + 100, y - 5, contentWidth - 100, 12, 'F')
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(12)
       doc.setTextColor(255, 255, 255)
-      doc.text('TOTAL CUP:', margin + 120, y + 2)
-      doc.text(`${Math.round(quote.totalAmount * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 5, y + 2, { align: 'right' })
+      doc.text('TOTAL CUP:', margin + 105, y + 2)
+      doc.text(`${Math.round(quote.totalAmount * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 4, y + 2, { align: 'right' })
     } else if (mode === 'dual') {
+      doc.setFont('helvetica', 'normal')
       doc.text('Subtotal:', margin + 100, y)
-      doc.text(`$${quote.subtotal.toFixed(2)} / ${Math.round(quote.subtotal * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 5, y, { align: 'right' })
+      doc.text(`$${quote.subtotal.toFixed(2)} / ${Math.round(quote.subtotal * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
       y += 6
 
       if (quote.discountPercent > 0) {
         doc.setTextColor(220, 38, 38)
         doc.text(`Descuento (${quote.discountPercent}%):`, margin + 100, y)
-        doc.text(`-$${quote.discountAmount.toFixed(2)}`, pageWidth - margin - 5, y, { align: 'right' })
-        doc.setTextColor(0, 0, 0)
+        doc.text(`-$${quote.discountAmount.toFixed(2)}`, pageWidth - margin - 4, y, { align: 'right' })
+        doc.setTextColor(40, 40, 40)
         y += 6
       }
 
       y += 3
-      doc.setFillColor(26, 54, 93)
+      doc.setFillColor(primaryRgb[0], primaryRgb[1], primaryRgb[2])
       doc.rect(margin + 80, y - 5, contentWidth - 80, 12, 'F')
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(12)
       doc.setTextColor(255, 255, 255)
-      doc.text('TOTAL:', margin + 100, y + 2)
-      doc.text(`$${quote.totalAmount.toFixed(2)} USD / ${Math.round(quote.totalAmount * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 5, y + 2, { align: 'right' })
+      doc.text('TOTAL:', margin + 85, y + 2)
+      doc.text(`$${quote.totalAmount.toFixed(2)} USD / ${Math.round(quote.totalAmount * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 4, y + 2, { align: 'right' })
     } else {
+      doc.setFont('helvetica', 'normal')
       doc.text('Subtotal:', margin + 120, y)
-      doc.text(`$${quote.subtotal.toFixed(2)}`, pageWidth - margin - 5, y, { align: 'right' })
+      doc.text(`$${quote.subtotal.toFixed(2)}`, pageWidth - margin - 4, y, { align: 'right' })
       y += 6
 
       if (quote.discountPercent > 0) {
         doc.setTextColor(220, 38, 38)
         doc.text(`Descuento (${quote.discountPercent}%):`, margin + 120, y)
-        doc.text(`-$${quote.discountAmount.toFixed(2)}`, pageWidth - margin - 5, y, { align: 'right' })
-        doc.setTextColor(0, 0, 0)
+        doc.text(`-$${quote.discountAmount.toFixed(2)}`, pageWidth - margin - 4, y, { align: 'right' })
+        doc.setTextColor(40, 40, 40)
         y += 6
       }
 
       y += 3
-      doc.setFillColor(26, 54, 93)
+      doc.setFillColor(primaryRgb[0], primaryRgb[1], primaryRgb[2])
       doc.rect(margin + 100, y - 5, contentWidth - 100, 12, 'F')
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(12)
       doc.setTextColor(255, 255, 255)
-      doc.text('TOTAL:', margin + 120, y + 2)
-      doc.text(`$${quote.totalAmount.toFixed(2)} USD`, pageWidth - margin - 5, y + 2, { align: 'right' })
+      doc.text('TOTAL:', margin + 105, y + 2)
+      doc.text(`$${quote.totalAmount.toFixed(2)} USD`, pageWidth - margin - 4, y + 2, { align: 'right' })
     }
 
     y += 20
@@ -601,81 +700,110 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       y += 10
     }
 
-    // Notes
+    // Notes with orange left border
     if (quote.notes) {
-      doc.setTextColor(0, 0, 0)
+      doc.setFillColor(primaryRgb[0], primaryRgb[1], primaryRgb[2])
+      doc.rect(margin, y - 2, 2, 20, 'F')
+
+      doc.setTextColor(40, 40, 40)
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(10)
-      doc.text('NOTAS:', margin, y)
-      y += 6
-      doc.setFont('helvetica', 'normal')
       doc.setFontSize(9)
-      const splitNotes = doc.splitTextToSize(quote.notes, contentWidth)
-      doc.text(splitNotes, margin, y)
-      y += splitNotes.length * 5 + 10
+      doc.text('Notas:', margin + 6, y + 2)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8)
+      const splitNotes = doc.splitTextToSize(quote.notes, contentWidth - 10)
+      doc.text(splitNotes, margin + 6, y + 7)
+      y += Math.max(20, splitNotes.length * 4 + 12)
     }
 
     // Valid until
     if (quote.validUntil) {
+      y += 3
       doc.setTextColor(100, 100, 100)
       doc.setFontSize(9)
-      doc.text(`Válida hasta: ${formatDate(quote.validUntil)}`, margin, y)
-      y += 10
+      doc.setFont('helvetica', 'normal')
+      doc.text(`V\u00E1lida hasta: ${formatDate(quote.validUntil)}`, margin, y)
+      y += 5
+      doc.setDrawColor(200, 200, 200)
+      doc.line(margin, y, pageWidth - margin, y)
     }
 
     // Footer
     doc.setTextColor(150, 150, 150)
     doc.setFontSize(8)
-    doc.text('Documento generado por LogiRapid', pageWidth / 2, pageHeight - 15, { align: 'center' })
-    doc.text(new Date().toLocaleString('es-ES'), pageWidth / 2, pageHeight - 10, { align: 'center' })
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Generado por ${brand.displayName} \u00B7 ${new Date().toLocaleDateString('es-ES')}`, pageWidth / 2, pageHeight - 12, { align: 'center' })
 
     return doc
   }
 
-  const buildReceipt = (mode: 'usd' | 'cup'): jsPDF => {
+  const buildReceipt = async (mode: 'usd' | 'cup'): Promise<jsPDF> => {
     if (!quote) throw new Error('No quote data')
 
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [80, 200] })
+    const brandName = detectBrandFromHost(window.location.hostname)
+    const brand = brands[brandName]
+    const primaryRgb = brandName === 'servisumic' ? [235, 91, 12] : [204, 10, 70]
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [80, 250] })
     const pageWidth = 80
     const m = 5
-    let y = 10
+    let y = 8
 
+    // Logo
+    const logoDataUrl = await loadImageAsDataUrl(brand.logos.light)
+    if (logoDataUrl) {
+      try {
+        doc.addImage(logoDataUrl, 'PNG', pageWidth / 2 - 15, y, 30, 15, undefined, 'FAST')
+        y += 18
+      } catch { y += 2 }
+    }
+
+    // Title
     doc.setFontSize(12)
     doc.setFont('helvetica', 'bold')
-    doc.text('COTIZACIÓN', pageWidth / 2, y, { align: 'center' })
+    doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2])
+    doc.text('OFERTA', pageWidth / 2, y, { align: 'center' })
     y += 6
 
-    doc.setFontSize(10)
+    doc.setFontSize(9)
+    doc.setTextColor(60, 60, 60)
     doc.text(quote.quoteNumber, pageWidth / 2, y, { align: 'center' })
-    y += 8
+    y += 6
 
     doc.setLineWidth(0.3)
+    doc.setDrawColor(primaryRgb[0], primaryRgb[1], primaryRgb[2])
     doc.line(m, y, pageWidth - m, y)
-    y += 6
+    y += 5
 
-    doc.setFontSize(8)
+    doc.setFontSize(7)
     doc.setFont('helvetica', 'normal')
+    doc.setTextColor(80, 80, 80)
     doc.text('Cliente:', m, y)
     y += 4
     doc.setFont('helvetica', 'bold')
+    doc.setTextColor(40, 40, 40)
     doc.text(quote.customer.businessName.substring(0, 30), m, y)
     y += 4
 
     doc.setFont('helvetica', 'normal')
+    doc.setTextColor(80, 80, 80)
     doc.text(`Fecha: ${formatDate(quote.createdAt)}`, m, y)
     y += 6
 
+    doc.setDrawColor(200, 200, 200)
     doc.line(m, y, pageWidth - m, y)
     y += 5
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(7)
+    doc.setTextColor(40, 40, 40)
     doc.text('Producto', m, y)
     doc.text('Cant', pageWidth - m - 20, y)
-    doc.text('Total', pageWidth - m - 5, y, { align: 'right' })
+    doc.text('Total', pageWidth - m - 2, y, { align: 'right' })
     y += 4
 
     doc.setFont('helvetica', 'normal')
+    doc.setTextColor(40, 40, 40)
     for (const line of quote.lines) {
       const name = line.productName.substring(0, 25)
       doc.text(name, m, y)
@@ -689,11 +817,13 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     }
     y += 2
 
+    doc.setDrawColor(200, 200, 200)
     doc.line(m, y, pageWidth - m, y)
     y += 5
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(9)
+    doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2])
     doc.text('TOTAL:', m, y)
     if (mode === 'cup') {
       doc.text(`${Math.round(quote.totalAmount * exchangeRate).toLocaleString()} CUP`, pageWidth - m, y, { align: 'right' })
@@ -702,18 +832,35 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     }
     y += 8
 
+    // Barcode
+    const barcodeCode = quote.quoteNumber.replace(/-/g, '')
+    const barcodeDataUrl = generateBarcodeDataUrl(barcodeCode)
+    if (barcodeDataUrl) {
+      try {
+        doc.addImage(barcodeDataUrl, 'PNG', pageWidth / 2 - 30, y, 60, 12, undefined, 'FAST')
+        y += 13
+        doc.setFontSize(6)
+        doc.setTextColor(120, 120, 120)
+        doc.setFont('helvetica', 'normal')
+        doc.text(barcodeCode, pageWidth / 2, y, { align: 'center' })
+        y += 6
+      } catch { y += 2 }
+    }
+
+    // Footer
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(6)
-    doc.text('--- Generado por LogiRapid ---', pageWidth / 2, y, { align: 'center' })
+    doc.setTextColor(150, 150, 150)
+    doc.text(`--- Generado por ${brand.displayName} ---`, pageWidth / 2, y, { align: 'center' })
 
     doc.internal.pageSize.height = y + 10
     return doc
   }
 
-  const downloadPdf = (mode: 'usd' | 'cup' | 'dual') => {
+  const downloadPdf = async (mode: 'usd' | 'cup' | 'dual') => {
     if (!quote) return
     try {
-      const doc = buildPdf(mode)
+      const doc = await buildPdf(mode)
       doc.save(`${quote.quoteNumber}-${mode}.pdf`)
       showNotification('success', 'PDF descargado', `Cotización en formato ${mode.toUpperCase()} descargada`)
     } catch (error) {
@@ -723,10 +870,10 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     setShowPdfDropdown(false)
   }
 
-  const downloadReceipt = (mode: 'usd' | 'cup') => {
+  const downloadReceipt = async (mode: 'usd' | 'cup') => {
     if (!quote) return
     try {
-      const doc = buildReceipt(mode)
+      const doc = await buildReceipt(mode)
       doc.save(`${quote.quoteNumber}-recibo-${mode}.pdf`)
       showNotification('success', 'Recibo descargado', `Recibo en ${mode.toUpperCase()} descargado`)
     } catch (error) {
