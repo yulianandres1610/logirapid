@@ -280,7 +280,7 @@ export async function POST(
     const ip = forwarded ? forwarded.split(',')[0].trim() : request.headers.get('x-real-ip') || 'unknown'
 
     // Update quote with signature - use resilient approach for optional columns
-    const newStatus = quote.status === 'sent' ? 'accepted' : quote.status
+    const newStatus = (quote.status === 'draft' || quote.status === 'sent') ? 'accepted' : quote.status
 
     // Core update (columns guaranteed to exist from GET migration)
     await db.query(`
