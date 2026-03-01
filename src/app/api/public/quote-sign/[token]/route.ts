@@ -171,6 +171,26 @@ export async function GET(
       }
     }
 
+    // Auto-mark as "sent" when a draft quote link is opened
+    if (q.status === 'draft') {
+      try {
+        await db.query(
+          `UPDATE market_quotes SET status = 'sent', sent_at = NOW(), updated_at = NOW() WHERE id = $1`,
+          [q.id]
+        )
+        q.status = 'sent'
+      } catch {
+        // sent_at column might not exist, try without it
+        try {
+          await db.query(
+            `UPDATE market_quotes SET status = 'sent', updated_at = NOW() WHERE id = $1`,
+            [q.id]
+          )
+          q.status = 'sent'
+        } catch { /* ignore */ }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: {
