@@ -421,9 +421,9 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
     const pageWidth = 215.9
     const pageHeight = 279.4
-    const margin = 20
+    const margin = 14
     const contentWidth = pageWidth - margin * 2
-    let y = 20
+    let y = 14
 
     // Load logo
     const logoImg = await loadImageAsDataUrl(brand.logos.light)
@@ -712,8 +712,8 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
 
     y += 20
 
-    // Exchange rate note
-    if (mode !== 'usd') {
+    // Exchange rate note - only show when document contains USD (dual mode)
+    if (mode === 'dual') {
       doc.setTextColor(100, 100, 100)
       doc.setFont('helvetica', 'italic')
       doc.setFontSize(8)
