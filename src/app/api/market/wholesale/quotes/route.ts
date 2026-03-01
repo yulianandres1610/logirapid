@@ -48,9 +48,26 @@ export async function GET(request: NextRequest) {
     let paramIndex = 2
 
     if (status && status !== 'all') {
-      whereClause += ` AND q.status = $${paramIndex}`
-      params.push(status)
-      paramIndex++
+      // Support comma-separated statuses: ?status=draft,sent,accepted
+      const statuses = status.split(',').map(s => s.trim()).filter(Boolean)
+      if (statuses.length === 1) {
+        whereClause += ` AND q.status = $${paramIndex}`
+        params.push(statuses[0])
+        paramIndex++
+      } else if (statuses.length > 1) {
+        const placeholders = statuses.map((_, i) => `$${paramIndex + i}`).join(', ')
+        whereClause += ` AND q.status IN (${placeholders})`
+        for (const s of statuses) {
+          params.push(s)
+          paramIndex++
+        }
+      }
+    }
+
+    // Filter out already-converted quotes
+    const notConverted = searchParams.get('notConverted')
+    if (notConverted === 'true') {
+      whereClause += ` AND q.converted_to_invoice_id IS NULL`
     }
 
     if (search) {

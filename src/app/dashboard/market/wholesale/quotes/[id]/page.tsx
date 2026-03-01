@@ -1175,7 +1175,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                 )}
 
                 {/* Convert */}
-                {(quote.status === 'sent' || quote.status === 'accepted') && !quote.convertedToInvoiceId && (
+                {(quote.status === 'draft' || quote.status === 'sent' || quote.status === 'accepted') && !quote.convertedToInvoiceId && (
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}

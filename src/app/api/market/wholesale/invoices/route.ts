@@ -222,7 +222,8 @@ export async function POST(request: NextRequest) {
       // New downpayment fields
       downpaymentType, // 'percentage' | 'fixed_amount' | null
       downpaymentValue, // number (percentage or amount)
-      wholesaleExchangeRate // Store the exchange rate used for this invoice
+      wholesaleExchangeRate, // Store the exchange rate used for this invoice
+      fromQuoteId // Optional: if created from a quote, mark it as converted
     } = body
 
     if (!customerId) {
@@ -451,6 +452,22 @@ export async function POST(request: NextRequest) {
 
       return { invoiceId, invoiceNumber }
     })
+
+    // If created from a quote, mark the quote as converted
+    if (fromQuoteId) {
+      try {
+        await db.query(`
+          UPDATE market_quotes SET
+            status = 'converted',
+            converted_to_invoice_id = $1,
+            accepted_at = COALESCE(accepted_at, NOW()),
+            updated_at = NOW()
+          WHERE id = $2 AND company_id = $3
+        `, [result.invoiceId, fromQuoteId, payload.companyId])
+      } catch (quoteError) {
+        console.error('[Wholesale Invoices POST] Error marking quote as converted:', quoteError)
+      }
+    }
 
     return NextResponse.json({
       success: true,

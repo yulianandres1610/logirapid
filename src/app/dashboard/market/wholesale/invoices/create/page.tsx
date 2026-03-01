@@ -130,7 +130,19 @@ interface PricelistItem {
   minQuantity: number
 }
 
+interface QuoteSummary {
+  id: number
+  quoteNumber: string
+  customerName: string
+  customerId: number
+  totalAmount: number
+  status: string
+  createdAt: string
+  linesCount: number
+}
+
 const STEPS = [
+  { id: 'type', title: 'Tipo', icon: FileText },
   { id: 'customer', title: 'Cliente', icon: Users },
   { id: 'products', title: 'Productos', icon: Package },
   { id: 'terms', title: 'Términos', icon: Calendar },
@@ -173,15 +185,23 @@ export default function CreateInvoicePage() {
   const preselectedCustomerId = searchParams.get('customerId')
 
   // Read initial step from URL
-  const initialStep = searchParams.get('step') || 'customer'
+  const initialStep = searchParams.get('step') || 'type'
   const validSteps = STEPS.map(s => s.id)
   const [currentStep, setCurrentStep] = useState<string>(
-    validSteps.includes(initialStep) ? initialStep : 'customer'
+    validSteps.includes(initialStep) ? initialStep : 'type'
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [showCreateCustomerModal, setShowCreateCustomerModal] = useState(false)
+
+  // Step 0: Invoice Type
+  const [invoiceType, setInvoiceType] = useState<'direct' | 'from_quote' | null>(null)
+  const [availableQuotes, setAvailableQuotes] = useState<QuoteSummary[]>([])
+  const [selectedQuote, setSelectedQuote] = useState<QuoteSummary | null>(null)
+  const [loadingQuotes, setLoadingQuotes] = useState(false)
+  const [quoteSearch, setQuoteSearch] = useState('')
+  const [fromQuoteId, setFromQuoteId] = useState<number | null>(null)
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
 
@@ -389,9 +409,21 @@ export default function CreateInvoicePage() {
       const customer = customers.find(c => c.id === parseInt(preselectedCustomerId))
       if (customer) {
         handleSelectCustomer(customer)
+        // Auto-set to direct mode when customerId is in URL
+        setInvoiceType('direct')
+        if (currentStep === 'type') {
+          setCurrentStep('customer')
+        }
       }
     }
   }, [preselectedCustomerId, customers])
+
+  // If URL has step=customer, auto-set to direct mode
+  useEffect(() => {
+    if (initialStep === 'customer' || initialStep === 'products') {
+      setInvoiceType('direct')
+    }
+  }, [initialStep])
 
   // Handle customer selection - also fetch pricelist items
   const handleSelectCustomer = (customer: Customer) => {
@@ -502,6 +534,146 @@ export default function CreateInvoicePage() {
       console.error('Error fetching pricelist items:', error)
     } finally {
       setLoadingPricelist(false)
+    }
+  }
+
+  // Fetch available quotes for "from quote" flow
+  const fetchAvailableQuotes = async () => {
+    setLoadingQuotes(true)
+    try {
+      const response = await fetch('/api/market/wholesale/quotes?status=draft,sent,accepted&notConverted=true&limit=100')
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          setAvailableQuotes(result.data.quotes.map((q: {
+            id: number
+            quoteNumber: string
+            customerName: string
+            customerId: number
+            totalAmount: number
+            status: string
+            createdAt: string
+            linesCount: number
+          }) => ({
+            id: q.id,
+            quoteNumber: q.quoteNumber,
+            customerName: q.customerName,
+            customerId: q.customerId,
+            totalAmount: q.totalAmount,
+            status: q.status,
+            createdAt: q.createdAt,
+            linesCount: q.linesCount
+          })))
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching quotes:', error)
+    } finally {
+      setLoadingQuotes(false)
+    }
+  }
+
+  // Handle selecting a quote — fetch full details and pre-populate invoice data
+  const handleSelectQuoteForInvoice = async (quote: QuoteSummary) => {
+    setSelectedQuote(quote)
+    setError('')
+
+    try {
+      // Fetch full quote details
+      const response = await fetch(`/api/market/wholesale/quotes/${quote.id}`)
+      if (!response.ok) {
+        setError('Error al cargar los datos de la cotización')
+        return
+      }
+      const result = await response.json()
+      if (!result.success) {
+        setError(result.error || 'Error al cargar cotización')
+        return
+      }
+
+      const quoteData = result.data
+
+      // Find and set customer
+      const customer = customers.find(c => c.id === quoteData.customerId)
+      if (customer) {
+        setSelectedCustomer(customer)
+        if (customer.pricelistId) {
+          await fetchPricelistItems(customer.pricelistId)
+        }
+      }
+
+      // Map quote lines to invoice lines
+      if (quoteData.lines && quoteData.lines.length > 0) {
+        const invoiceLines: InvoiceLine[] = quoteData.lines.map((ql: {
+          productId: number
+          productName: string
+          productSku: string
+          quantity: number
+          unitPrice: number
+          originalPrice: number
+          costPrice?: number
+          subtotal: number
+        }) => {
+          const product = products.find(p => p.id === ql.productId)
+          const costPrice = product?.costPrice || ql.costPrice || 0
+          const unitPrice = ql.unitPrice
+          const costPriceCup = costPrice * exchangeRate
+          const profitMargin = costPrice > 0 ? ((unitPrice - costPrice) / costPrice) * 100 : 0
+
+          return {
+            productId: ql.productId,
+            variantId: null,
+            productName: ql.productName,
+            productSku: ql.productSku || '',
+            quantity: ql.quantity,
+            unitPrice,
+            unitPriceCup: unitPrice * exchangeRateWholesale,
+            previousUnitPrice: unitPrice,
+            costPrice,
+            originalPrice: ql.originalPrice || unitPrice,
+            subtotal: ql.subtotal || ql.quantity * unitPrice,
+            subtotalCup: (ql.subtotal || ql.quantity * unitPrice) * exchangeRateWholesale,
+            warehouseQuantities: {},
+            warehouseStock: product?.warehouseStock || [],
+            profitMargin,
+            costPriceCup,
+            hasPricelistPrice: false,
+            pricelistDiscountInfo: null,
+            currentTierMinQty: 1,
+            priceJustChanged: false
+          }
+        })
+        setLines(invoiceLines)
+      }
+
+      // Set notes from quote
+      if (quoteData.notes) {
+        setNotes(`Desde cotización ${quoteData.quoteNumber}. ${quoteData.notes}`)
+      } else {
+        setNotes(`Desde cotización ${quoteData.quoteNumber}`)
+      }
+
+      // Set payment terms based on customer credit days
+      if (customer && customer.creditDays > 0) {
+        if (customer.creditDays === 15) setPaymentTerms('15')
+        else if (customer.creditDays === 30) setPaymentTerms('30')
+        else if (customer.creditDays === 40) setPaymentTerms('40')
+        else {
+          setPaymentTerms('custom')
+          const dueDate = new Date()
+          dueDate.setDate(dueDate.getDate() + customer.creditDays)
+          setCustomDueDate(dueDate.toISOString().split('T')[0])
+        }
+      }
+
+      // Save quote reference
+      setFromQuoteId(quote.id)
+
+      // Jump to review step
+      setCurrentStep('review')
+    } catch (error) {
+      console.error('Error loading quote data:', error)
+      setError('Error al cargar los datos de la cotización')
     }
   }
 
@@ -761,6 +933,17 @@ export default function CreateInvoicePage() {
     setError('')
 
     switch (step) {
+      case 'type':
+        if (!invoiceType) {
+          setError('Debe seleccionar un tipo de factura')
+          return false
+        }
+        if (invoiceType === 'from_quote' && !selectedQuote) {
+          setError('Debe seleccionar una cotización')
+          return false
+        }
+        return true
+
       case 'customer':
         if (!selectedCustomer) {
           setError('Debe seleccionar un cliente')
@@ -823,6 +1006,12 @@ export default function CreateInvoicePage() {
   }
 
   const prevStep = () => {
+    // If on review step and came from a quote, go back to type selection
+    if (currentStep === 'review' && invoiceType === 'from_quote') {
+      setCurrentStep('type')
+      setError('')
+      return
+    }
     const prevIndex = currentStepIndex - 1
     if (prevIndex >= 0) {
       setCurrentStep(STEPS[prevIndex].id)
@@ -932,6 +1121,8 @@ export default function CreateInvoicePage() {
           downpaymentType: hasDownpayment ? downpaymentType : null,
           downpaymentValue: hasDownpayment ? parseFloat(downpaymentValue || '0') : null,
           wholesaleExchangeRate: exchangeRateWholesale,
+          // Quote reference if created from a quote
+          fromQuoteId: fromQuoteId || null,
           // Payment data for immediate payment or downpayment
           payment: needsPayment ? {
             method: paymentMethod,
@@ -1166,6 +1357,253 @@ export default function CreateInvoicePage() {
           theme === 'dark' ? 'bg-gray-800' : 'bg-white'
         )}>
           <AnimatePresence mode="wait">
+            {/* Step 0: Invoice Type */}
+            {currentStep === 'type' && (
+              <motion.div
+                key="step-type"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-6"
+              >
+                <div className="text-center">
+                  <h2 className={cn(
+                    "text-xl font-bold",
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  )}>
+                    Tipo de Factura
+                  </h2>
+                  <p className={cn(
+                    "text-sm mt-1",
+                    theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                  )}>
+                    Selecciona cómo deseas crear la factura
+                  </p>
+                </div>
+
+                {/* Type Selection Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+                  {/* Direct Invoice */}
+                  <motion.div
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => {
+                      setInvoiceType('direct')
+                      setSelectedQuote(null)
+                      setFromQuoteId(null)
+                      setError('')
+                    }}
+                    className={cn(
+                      "p-6 border-2 rounded-2xl cursor-pointer transition-all text-center",
+                      invoiceType === 'direct'
+                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                        : theme === 'dark'
+                          ? 'border-gray-700 hover:border-gray-500'
+                          : 'border-gray-200 hover:border-gray-400'
+                    )}
+                  >
+                    <div className={cn(
+                      'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4',
+                      invoiceType === 'direct'
+                        ? 'bg-green-100 dark:bg-green-800/50'
+                        : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                    )}>
+                      <FileText className={cn(
+                        'w-8 h-8',
+                        invoiceType === 'direct' ? 'text-green-600' : 'text-gray-400'
+                      )} />
+                    </div>
+                    <h3 className={cn(
+                      'font-bold text-lg mb-2',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      Factura Directa
+                    </h3>
+                    <p className={cn(
+                      'text-sm',
+                      theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                    )}>
+                      Crear una factura manual sin cotización previa
+                    </p>
+                    {invoiceType === 'direct' && (
+                      <div className="mt-3">
+                        <CheckCircle className="w-6 h-6 text-green-500 mx-auto" />
+                      </div>
+                    )}
+                  </motion.div>
+
+                  {/* From Quote */}
+                  <motion.div
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => {
+                      setInvoiceType('from_quote')
+                      setError('')
+                      if (availableQuotes.length === 0) {
+                        fetchAvailableQuotes()
+                      }
+                    }}
+                    className={cn(
+                      "p-6 border-2 rounded-2xl cursor-pointer transition-all text-center",
+                      invoiceType === 'from_quote'
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                        : theme === 'dark'
+                          ? 'border-gray-700 hover:border-gray-500'
+                          : 'border-gray-200 hover:border-gray-400'
+                    )}
+                  >
+                    <div className={cn(
+                      'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4',
+                      invoiceType === 'from_quote'
+                        ? 'bg-blue-100 dark:bg-blue-800/50'
+                        : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                    )}>
+                      <Receipt className={cn(
+                        'w-8 h-8',
+                        invoiceType === 'from_quote' ? 'text-blue-600' : 'text-gray-400'
+                      )} />
+                    </div>
+                    <h3 className={cn(
+                      'font-bold text-lg mb-2',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      Desde Cotización
+                    </h3>
+                    <p className={cn(
+                      'text-sm',
+                      theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                    )}>
+                      Crear factura a partir de una cotización existente
+                    </p>
+                    {invoiceType === 'from_quote' && (
+                      <div className="mt-3">
+                        <CheckCircle className="w-6 h-6 text-blue-500 mx-auto" />
+                      </div>
+                    )}
+                  </motion.div>
+                </div>
+
+                {/* Quote Selection (shown when "from_quote" is selected) */}
+                {invoiceType === 'from_quote' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-4 mt-6"
+                  >
+                    <h3 className={cn(
+                      'font-semibold text-lg',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      Seleccionar Cotización
+                    </h3>
+
+                    {/* Search */}
+                    <div className="relative">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Buscar por número o cliente..."
+                        value={quoteSearch}
+                        onChange={(e) => setQuoteSearch(e.target.value)}
+                        className={cn(
+                          "w-full pl-12 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all",
+                          theme === 'dark'
+                            ? 'bg-gray-900 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                            : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                        )}
+                      />
+                    </div>
+
+                    {loadingQuotes ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                      </div>
+                    ) : availableQuotes.length === 0 ? (
+                      <div className="text-center py-8">
+                        <Receipt className={cn('w-12 h-12 mx-auto mb-3', theme === 'dark' ? 'text-gray-600' : 'text-gray-300')} />
+                        <p className={cn('text-sm', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                          No hay cotizaciones disponibles para convertir
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2">
+                        {availableQuotes
+                          .filter(q =>
+                            q.quoteNumber.toLowerCase().includes(quoteSearch.toLowerCase()) ||
+                            q.customerName.toLowerCase().includes(quoteSearch.toLowerCase())
+                          )
+                          .map(quote => {
+                            const statusLabels: Record<string, { label: string, color: string }> = {
+                              draft: { label: 'Borrador', color: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' },
+                              sent: { label: 'Enviada', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+                              accepted: { label: 'Aceptada', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' }
+                            }
+                            const statusInfo = statusLabels[quote.status] || statusLabels.draft
+
+                            return (
+                              <motion.div
+                                key={quote.id}
+                                whileHover={{ scale: 1.01 }}
+                                onClick={() => handleSelectQuoteForInvoice(quote)}
+                                className={cn(
+                                  "p-4 border-2 rounded-xl cursor-pointer transition-all",
+                                  selectedQuote?.id === quote.id
+                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                    : theme === 'dark'
+                                      ? 'border-gray-700 hover:border-gray-500'
+                                      : 'border-gray-200 hover:border-gray-300'
+                                )}
+                              >
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className={cn(
+                                    'font-bold text-sm',
+                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                  )}>
+                                    {quote.quoteNumber}
+                                  </span>
+                                  <span className={cn(
+                                    'text-xs px-2 py-0.5 rounded-full font-medium',
+                                    statusInfo.color
+                                  )}>
+                                    {statusInfo.label}
+                                  </span>
+                                </div>
+                                <p className={cn(
+                                  'text-sm mb-1',
+                                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                                )}>
+                                  {quote.customerName}
+                                </p>
+                                <div className="flex items-center justify-between mt-2">
+                                  <span className={cn(
+                                    'text-xs',
+                                    theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                                  )}>
+                                    {quote.linesCount} producto{quote.linesCount !== 1 ? 's' : ''} &middot; {new Date(quote.createdAt).toLocaleDateString('es-ES')}
+                                  </span>
+                                  <span className={cn(
+                                    'font-bold text-sm',
+                                    theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                                  )}>
+                                    ${quote.totalAmount.toFixed(2)}
+                                  </span>
+                                </div>
+                                {selectedQuote?.id === quote.id && (
+                                  <div className="mt-2 flex items-center gap-1 text-blue-600">
+                                    <CheckCircle className="w-4 h-4" />
+                                    <span className="text-xs font-medium">Seleccionada</span>
+                                  </div>
+                                )}
+                              </motion.div>
+                            )
+                          })}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </motion.div>
+            )}
+
             {/* Step 1: Customer */}
             {currentStep === 'customer' && (
               <motion.div

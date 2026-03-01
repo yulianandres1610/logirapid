@@ -60,10 +60,10 @@ export async function POST(
 
     const quote = checkResult.rows[0]
 
-    if (!['sent', 'accepted'].includes(quote.status)) {
+    if (!['draft', 'sent', 'accepted'].includes(quote.status)) {
       return NextResponse.json({
         success: false,
-        error: 'Solo se pueden convertir cotizaciones enviadas o aceptadas'
+        error: 'Solo se pueden convertir cotizaciones en borrador, enviadas o aceptadas'
       }, { status: 400 })
     }
 
