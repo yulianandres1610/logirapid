@@ -122,6 +122,8 @@ export async function GET(
       signatureData: row.signature_data || null,
       signedAt: row.signed_at || null,
       signerName: row.signer_name || null,
+      cancellationReason: row.cancellation_reason || null,
+      cancelledAt: row.cancelled_at || null,
       lines: linesResult.rows.map(line => ({
         id: line.id,
         productId: line.product_id,
@@ -302,7 +304,9 @@ export async function PUT(
 
 /**
  * DELETE /api/market/wholesale/quotes/[id]
- * Delete a quote (only if in draft status)
+ * Cancel a quote (sets status to 'cancelled') or permanently delete with ?force=true
+ * Supports cancelling from: draft, sent, accepted
+ * Force delete removes the quote permanently (any status except converted)
  */
 export async function DELETE(
   request: NextRequest,
@@ -316,10 +320,12 @@ export async function DELETE(
 
     const { id } = await params
     const quoteId = parseInt(id)
+    const { searchParams } = new URL(request.url)
+    const force = searchParams.get('force') === 'true'
 
-    // Verify quote exists and is in draft status
+    // Verify quote exists
     const checkResult = await db.query(
-      'SELECT id, status FROM market_quotes WHERE id = $1 AND company_id = $2',
+      'SELECT id, status, quote_number, converted_to_invoice_id FROM market_quotes WHERE id = $1 AND company_id = $2',
       [quoteId, payload.companyId]
     )
 
@@ -330,26 +336,72 @@ export async function DELETE(
       }, { status: 404 })
     }
 
-    if (checkResult.rows[0].status !== 'draft') {
+    const quote = checkResult.rows[0]
+
+    // Cannot cancel/delete converted quotes
+    if (quote.status === 'converted' || quote.converted_to_invoice_id) {
       return NextResponse.json({
         success: false,
-        error: 'Solo se pueden eliminar cotizaciones en estado borrador'
+        error: 'No se puede cancelar una cotización que ya fue convertida a factura'
       }, { status: 400 })
     }
 
-    // Delete quote (cascade will delete lines)
-    await db.query('DELETE FROM market_quotes WHERE id = $1', [quoteId])
+    // Read cancellation reason from body
+    let cancellationReason: string | null = null
+    try {
+      const body = await request.json()
+      cancellationReason = body.cancellationReason || null
+    } catch { /* no body or invalid JSON */ }
+
+    // Ensure cancellation columns exist
+    try {
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS cancellation_reason TEXT`)
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS cancelled_by INTEGER`)
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMP`)
+    } catch { /* columns may already exist */ }
+
+    // Force delete - permanently remove (only draft or cancelled)
+    if (force) {
+      if (!['draft', 'cancelled'].includes(quote.status)) {
+        return NextResponse.json({
+          success: false,
+          error: 'Solo se pueden eliminar permanentemente cotizaciones en estado borrador o cancelada'
+        }, { status: 400 })
+      }
+
+      await db.query('DELETE FROM market_quote_lines WHERE quote_id = $1', [quoteId])
+      await db.query('DELETE FROM market_quotes WHERE id = $1', [quoteId])
+
+      return NextResponse.json({
+        success: true,
+        message: `Cotización ${quote.quote_number} eliminada permanentemente`
+      })
+    }
+
+    // Normal cancellation
+    if (!['draft', 'sent', 'accepted'].includes(quote.status)) {
+      return NextResponse.json({
+        success: false,
+        error: 'Solo se pueden cancelar cotizaciones en estado borrador, enviada o aceptada'
+      }, { status: 400 })
+    }
+
+    await db.query(`
+      UPDATE market_quotes
+      SET status = 'cancelled', cancellation_reason = $2, cancelled_by = $3, cancelled_at = NOW(), updated_at = NOW()
+      WHERE id = $1
+    `, [quoteId, cancellationReason, payload.userId])
 
     return NextResponse.json({
       success: true,
-      message: 'Cotización eliminada exitosamente'
+      message: `Cotización ${quote.quote_number} cancelada exitosamente`
     })
 
   } catch (error) {
     console.error('[Wholesale Quote DELETE] Error:', error)
     return NextResponse.json({
       success: false,
-      error: error instanceof Error ? error.message : 'Error al eliminar cotización'
+      error: error instanceof Error ? error.message : 'Error al procesar cotización'
     }, { status: 500 })
   }
 }

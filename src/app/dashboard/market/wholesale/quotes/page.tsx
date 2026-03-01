@@ -54,7 +54,8 @@ const statusConfig: Record<string, { label: string; color: string; icon: typeof 
   accepted: { label: 'Aceptada', color: 'green', icon: CheckCircle },
   rejected: { label: 'Rechazada', color: 'red', icon: XCircle },
   expired: { label: 'Expirada', color: 'orange', icon: Clock },
-  converted: { label: 'Convertida', color: 'purple', icon: ArrowRightLeft }
+  converted: { label: 'Convertida', color: 'purple', icon: ArrowRightLeft },
+  cancelled: { label: 'Cancelada', color: 'red', icon: XCircle }
 }
 
 export default function WholesaleQuotesPage() {
@@ -422,6 +423,7 @@ export default function WholesaleQuotesPage() {
                   <option value="accepted">Aceptadas</option>
                   <option value="converted">Convertidas</option>
                   <option value="rejected">Rechazadas</option>
+                  <option value="cancelled">Canceladas</option>
                   <option value="expired">Expiradas</option>
                 </select>
 
