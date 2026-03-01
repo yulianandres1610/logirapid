@@ -385,7 +385,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     }
   }
 
-  const loadImageAsDataUrl = (src: string): Promise<string> => {
+  const loadImageAsDataUrl = (src: string): Promise<{ dataUrl: string; width: number; height: number }> => {
     return new Promise((resolve) => {
       const img = new Image()
       img.crossOrigin = 'anonymous'
@@ -396,12 +396,12 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
         const ctx = canvas.getContext('2d')
         if (ctx) {
           ctx.drawImage(img, 0, 0)
-          resolve(canvas.toDataURL('image/png'))
+          resolve({ dataUrl: canvas.toDataURL('image/png'), width: img.naturalWidth, height: img.naturalHeight })
         } else {
-          resolve('')
+          resolve({ dataUrl: '', width: 0, height: 0 })
         }
       }
-      img.onerror = () => resolve('')
+      img.onerror = () => resolve({ dataUrl: '', width: 0, height: 0 })
       img.src = src
     })
   }
@@ -425,12 +425,16 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     let y = 20
 
     // Load logo
-    const logoDataUrl = await loadImageAsDataUrl(brand.logos.light)
+    const logoImg = await loadImageAsDataUrl(brand.logos.light)
 
     // ---- HEADER: Logo + Title + Barcode ----
-    if (logoDataUrl) {
+    if (logoImg.dataUrl) {
       try {
-        doc.addImage(logoDataUrl, 'PNG', margin, y, 40, 20, undefined, 'FAST')
+        const maxH = 18
+        const aspect = logoImg.width / logoImg.height
+        const logoH = maxH
+        const logoW = logoH * aspect
+        doc.addImage(logoImg.dataUrl, 'PNG', margin, y, logoW, logoH, undefined, 'FAST')
       } catch { /* skip logo if error */ }
     }
 
@@ -750,11 +754,15 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     let y = 8
 
     // Logo
-    const logoDataUrl = await loadImageAsDataUrl(brand.logos.light)
-    if (logoDataUrl) {
+    const logoImg = await loadImageAsDataUrl(brand.logos.light)
+    if (logoImg.dataUrl) {
       try {
-        doc.addImage(logoDataUrl, 'PNG', pageWidth / 2 - 15, y, 30, 15, undefined, 'FAST')
-        y += 18
+        const maxH = 12
+        const aspect = logoImg.width / logoImg.height
+        const logoH = maxH
+        const logoW = logoH * aspect
+        doc.addImage(logoImg.dataUrl, 'PNG', pageWidth / 2 - logoW / 2, y, logoW, logoH, undefined, 'FAST')
+        y += logoH + 4
       } catch { y += 2 }
     }
 
