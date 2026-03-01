@@ -173,6 +173,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
   const [showPdfDropdown, setShowPdfDropdown] = useState(false)
   const [generatingLink, setGeneratingLink] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
+  const [showLinkDropdown, setShowLinkDropdown] = useState(false)
 
   // Send modal fields
   const [sendEmail, setSendEmail] = useState('')
@@ -181,17 +182,21 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
   const [pdfCurrency, setPdfCurrency] = useState<'usd' | 'cup' | 'dual'>('usd')
 
   const pdfDropdownRef = useRef<HTMLDivElement>(null)
+  const linkDropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetchQuote()
     fetchExchangeRates()
   }, [quoteId])
 
-  // Close PDF dropdown on click outside
+  // Close dropdowns on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (pdfDropdownRef.current && !pdfDropdownRef.current.contains(e.target as Node)) {
         setShowPdfDropdown(false)
+      }
+      if (linkDropdownRef.current && !linkDropdownRef.current.contains(e.target as Node)) {
+        setShowLinkDropdown(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -303,12 +308,17 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     }
   }
 
-  const handleGenerateLink = async () => {
+  const handleGenerateLink = async (mode: 'usd' | 'cup' | 'dual' = 'usd') => {
     if (!quote) return
     setGeneratingLink(true)
     try {
       const response = await fetch(`/api/market/wholesale/quotes/${quoteId}/generate-link`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode,
+          rate: mode !== 'usd' ? exchangeRate : undefined
+        })
       })
       const result = await response.json()
       if (result.success) {
@@ -328,16 +338,28 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       showNotification('error', 'Error', 'Error de conexión')
     } finally {
       setGeneratingLink(false)
+      setShowLinkDropdown(false)
     }
   }
 
-  const copySignatureLink = async () => {
+  const copySignatureLink = async (mode: 'usd' | 'cup' | 'dual' = 'usd') => {
     if (!quote?.signatureToken) return
-    const url = `${window.location.origin}/quote-sign/${quote.signatureToken}`
+    let url = `${window.location.origin}/quote-sign/${quote.signatureToken}`
+    const urlParams = new URLSearchParams()
+    if (mode && mode !== 'usd') {
+      urlParams.set('mode', mode)
+    }
+    if (exchangeRate && mode !== 'usd') {
+      urlParams.set('r', exchangeRate.toString())
+    }
+    if (urlParams.toString()) {
+      url += `?${urlParams.toString()}`
+    }
     await navigator.clipboard.writeText(url)
     setCopiedLink(true)
-    showNotification('success', 'Copiado', 'Enlace copiado al portapapeles')
+    showNotification('success', 'Copiado', `Enlace ${mode.toUpperCase()} copiado al portapapeles`)
     setTimeout(() => setCopiedLink(false), 3000)
+    setShowLinkDropdown(false)
   }
 
   // ===================== PDF GENERATION =====================
@@ -912,31 +934,72 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                   </motion.button>
                 )}
 
-                {/* Generate Signature Link */}
+                {/* Generate/Copy Signature Link Dropdown */}
                 {quote.status !== 'converted' && !quote.signedAt && (
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={quote.signatureToken ? copySignatureLink : handleGenerateLink}
-                    disabled={generatingLink}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors',
-                      theme === 'dark'
-                        ? 'bg-purple-900/30 text-purple-400 hover:bg-purple-900/50'
-                        : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                    )}
-                  >
-                    {generatingLink ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : quote.signatureToken ? (
-                      copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />
-                    ) : (
-                      <Link2 className="w-4 h-4" />
-                    )}
-                    <span className="hidden sm:inline">
-                      {quote.signatureToken ? (copiedLink ? 'Copiado' : 'Copiar Enlace') : 'Generar Enlace'}
-                    </span>
-                  </motion.button>
+                  <div className="relative" ref={linkDropdownRef}>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setShowLinkDropdown(!showLinkDropdown)}
+                      disabled={generatingLink}
+                      className={cn(
+                        'flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors',
+                        theme === 'dark'
+                          ? 'bg-purple-900/30 text-purple-400 hover:bg-purple-900/50'
+                          : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                      )}
+                    >
+                      {generatingLink ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : copiedLink ? (
+                        <Check className="w-4 h-4" />
+                      ) : quote.signatureToken ? (
+                        <Copy className="w-4 h-4" />
+                      ) : (
+                        <Link2 className="w-4 h-4" />
+                      )}
+                      <span className="hidden sm:inline">
+                        {copiedLink ? 'Copiado' : quote.signatureToken ? 'Copiar Enlace' : 'Generar Enlace'}
+                      </span>
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </motion.button>
+
+                    <AnimatePresence>
+                      {showLinkDropdown && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -5 }}
+                          className={cn(
+                            'absolute right-0 top-full mt-2 w-52 rounded-xl border shadow-xl z-50 overflow-hidden',
+                            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                          )}
+                        >
+                          <div className="p-1.5">
+                            <p className="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase">
+                              {quote.signatureToken ? 'Copiar enlace' : 'Generar enlace'}
+                            </p>
+                            {([
+                              { mode: 'usd' as const, label: 'Enlace USD' },
+                              { mode: 'cup' as const, label: 'Enlace CUP' },
+                              { mode: 'dual' as const, label: 'Enlace USD + CUP' }
+                            ]).map(opt => (
+                              <button
+                                key={opt.mode}
+                                onClick={() => quote.signatureToken ? copySignatureLink(opt.mode) : handleGenerateLink(opt.mode)}
+                                className={cn(
+                                  'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors',
+                                  theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                                )}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 )}
 
                 {/* Convert */}
@@ -1296,18 +1359,24 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                         Enlace generado - Pendiente de firma
                       </p>
                     </div>
-                    <button
-                      onClick={copySignatureLink}
-                      className={cn(
-                        'w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors',
-                        theme === 'dark'
-                          ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      )}
-                    >
-                      {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                      {copiedLink ? 'Copiado' : 'Copiar enlace de firma'}
-                    </button>
+                    <p className="text-xs text-gray-500 text-center">Copiar enlace en:</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['usd', 'cup', 'dual'] as const).map(m => (
+                        <button
+                          key={m}
+                          onClick={() => copySignatureLink(m)}
+                          className={cn(
+                            'flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-xs font-medium transition-colors',
+                            theme === 'dark'
+                              ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          )}
+                        >
+                          <Copy className="w-3 h-3" />
+                          {m === 'dual' ? 'Ambos' : m.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -1318,17 +1387,23 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                       <Link2 className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                       <p className="text-sm text-gray-500">Sin enlace de firma</p>
                     </div>
-                    <button
-                      onClick={handleGenerateLink}
-                      disabled={generatingLink}
-                      className={cn(
-                        'w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors',
-                        'bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50'
-                      )}
-                    >
-                      {generatingLink ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
-                      Generar Enlace de Firma
-                    </button>
+                    <p className="text-xs text-gray-500 text-center">Generar enlace en:</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['usd', 'cup', 'dual'] as const).map(m => (
+                        <button
+                          key={m}
+                          onClick={() => handleGenerateLink(m)}
+                          disabled={generatingLink}
+                          className={cn(
+                            'flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-xs font-medium transition-colors',
+                            'bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50'
+                          )}
+                        >
+                          {generatingLink ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link2 className="w-3 h-3" />}
+                          {m === 'dual' ? 'Ambos' : m.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </motion.div>
