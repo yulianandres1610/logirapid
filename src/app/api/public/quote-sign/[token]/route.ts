@@ -272,20 +272,31 @@ export async function POST(
     const forwarded = request.headers.get('x-forwarded-for')
     const ip = forwarded ? forwarded.split(',')[0].trim() : request.headers.get('x-real-ip') || 'unknown'
 
-    // Update quote with signature
+    // Update quote with signature - use resilient approach for optional columns
     const newStatus = quote.status === 'sent' ? 'accepted' : quote.status
 
+    // Core update (columns guaranteed to exist from GET migration)
     await db.query(`
       UPDATE market_quotes SET
         signature_data = $1,
         signed_at = NOW(),
         signer_name = $2,
         signer_ip = $3,
-        status = $4,
-        accepted_at = CASE WHEN $4 = 'accepted' THEN NOW() ELSE accepted_at END,
-        updated_at = NOW()
+        status = $4::text
       WHERE id = $5
     `, [signatureData, signerName.trim(), ip, newStatus, quote.id])
+
+    // Try updating accepted_at if column exists
+    if (newStatus === 'accepted') {
+      try {
+        await db.query(`UPDATE market_quotes SET accepted_at = NOW() WHERE id = $1`, [quote.id])
+      } catch { /* column may not exist */ }
+    }
+
+    // Try updating updated_at if column exists
+    try {
+      await db.query(`UPDATE market_quotes SET updated_at = NOW() WHERE id = $1`, [quote.id])
+    } catch { /* column may not exist */ }
 
     return NextResponse.json({
       success: true,
