@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
+import { createProductionPlansForQuote } from '@/lib/quote-production-helper'
 
 interface JWTPayload {
   userId: number
@@ -180,6 +181,44 @@ export async function POST(
 
       return { invoiceId, invoiceNumber }
     })
+
+    // Auto-create production plans if not already created
+    try {
+      // Check if plans already exist for this quote
+      const existingPlans = await db.query(
+        "SELECT id FROM market_production_plans WHERE notes LIKE $1 LIMIT 1",
+        [`%${quote.quote_number}%`]
+      )
+      if (existingPlans.rows.length === 0) {
+        // Get lines with estimated_delivery
+        let quoteLines: Array<{ productId: number; productName: string; quantity: number; estimatedDelivery: string | null }> = []
+        try {
+          const qlResult = await db.query(
+            'SELECT product_id, product_name, quantity, estimated_delivery FROM market_quote_lines WHERE quote_id = $1',
+            [quoteId]
+          )
+          quoteLines = qlResult.rows.map(r => ({
+            productId: r.product_id,
+            productName: r.product_name,
+            quantity: parseFloat(r.quantity) || 0,
+            estimatedDelivery: r.estimated_delivery || null
+          }))
+        } catch { /* estimated_delivery column might not exist */ }
+
+        if (quoteLines.some(l => l.estimatedDelivery === '1-3d')) {
+          await createProductionPlansForQuote(
+            payload.companyId,
+            quote.warehouse_id,
+            quote.quote_number,
+            quoteId,
+            quoteLines
+          )
+        }
+      }
+    } catch (planError) {
+      console.error('[Wholesale Quote Convert] Error creating production plans:', planError)
+      // Don't fail the conversion because of plan creation errors
+    }
 
     return NextResponse.json({
       success: true,

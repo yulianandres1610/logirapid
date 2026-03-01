@@ -46,6 +46,7 @@ interface QuoteData {
     quantity: number
     unitPrice: number
     subtotal: number
+    estimatedDelivery: string | null
   }>
 }
 
@@ -254,6 +255,13 @@ function QuoteSignContent({ token }: { token: string }) {
 
   const showUSD = mode === 'usd' || mode === 'dual'
   const showCUP = (mode === 'cup' || mode === 'dual') && exchangeRate > 1
+  const hasDeliveryEstimates = quote.lines.some(l => l.estimatedDelivery)
+
+  const deliveryBadgeConfig: Record<string, { label: string; bg: string; text: string }> = {
+    '1-24h': { label: '1-24 h', bg: '#dcfce7', text: '#15803d' },
+    '1-3d': { label: '1-3 días', bg: '#fef3c7', text: '#b45309' },
+    '1-30d': { label: '1-30 días', bg: '#fee2e2', text: '#b91c1c' }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -339,6 +347,9 @@ function QuoteSignContent({ token }: { token: string }) {
                   <th className="py-2.5 px-3 text-left text-[11px] font-bold uppercase tracking-wider text-white">#</th>
                   <th className="py-2.5 px-3 text-left text-[11px] font-bold uppercase tracking-wider text-white">Producto</th>
                   <th className="py-2.5 px-3 text-center text-[11px] font-bold uppercase tracking-wider text-white">Cant.</th>
+                  {hasDeliveryEstimates && (
+                    <th className="py-2.5 px-3 text-center text-[11px] font-bold uppercase tracking-wider text-white">Entrega Est.</th>
+                  )}
                   {showUSD && (
                     <>
                       <th className="py-2.5 px-3 text-right text-[11px] font-bold uppercase tracking-wider text-white">P. Unit</th>
@@ -362,6 +373,21 @@ function QuoteSignContent({ token }: { token: string }) {
                       {line.productSku && <p className="text-[11px] text-gray-400">{line.productSku}</p>}
                     </td>
                     <td className="py-3 px-3 text-center text-sm">{line.quantity}</td>
+                    {hasDeliveryEstimates && (
+                      <td className="py-3 px-3 text-center">
+                        {line.estimatedDelivery && deliveryBadgeConfig[line.estimatedDelivery] && (
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium"
+                            style={{
+                              backgroundColor: deliveryBadgeConfig[line.estimatedDelivery].bg,
+                              color: deliveryBadgeConfig[line.estimatedDelivery].text
+                            }}
+                          >
+                            {deliveryBadgeConfig[line.estimatedDelivery].label}
+                          </span>
+                        )}
+                      </td>
+                    )}
                     {showUSD && (
                       <>
                         <td className="py-3 px-3 text-right text-sm">{fmtUSD(line.unitPrice)}</td>
@@ -392,6 +418,17 @@ function QuoteSignContent({ token }: { token: string }) {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate" style={{ color: BRAND.secondary }}>{line.productName}</p>
                       {line.productSku && <p className="text-[10px] text-gray-400">{line.productSku}</p>}
+                      {line.estimatedDelivery && deliveryBadgeConfig[line.estimatedDelivery] && (
+                        <span
+                          className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5"
+                          style={{
+                            backgroundColor: deliveryBadgeConfig[line.estimatedDelivery].bg,
+                            color: deliveryBadgeConfig[line.estimatedDelivery].text
+                          }}
+                        >
+                          {deliveryBadgeConfig[line.estimatedDelivery].label}
+                        </span>
+                      )}
                     </div>
                     <span className="text-xs text-gray-400 shrink-0">x{line.quantity}</span>
                   </div>

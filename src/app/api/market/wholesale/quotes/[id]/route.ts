@@ -40,6 +40,11 @@ export async function GET(
     const { id } = await params
     const quoteId = parseInt(id)
 
+    // Ensure estimated_delivery column exists
+    try {
+      await db.query('ALTER TABLE market_quote_lines ADD COLUMN IF NOT EXISTS estimated_delivery VARCHAR(20)')
+    } catch { /* column may already exist */ }
+
     const result = await db.query(`
       SELECT
         q.*,
@@ -130,7 +135,8 @@ export async function GET(
         discountPercent: parseFloat(line.discount_percent) || 0,
         discountAmount: parseFloat(line.discount_amount) || 0,
         subtotal: parseFloat(line.subtotal) || 0,
-        notes: line.notes
+        notes: line.notes,
+        estimatedDelivery: line.estimated_delivery || null
       }))
     }
 
@@ -258,8 +264,9 @@ export async function PUT(
           await client.query(`
             INSERT INTO market_quote_lines (
               quote_id, product_id, variant_id, product_name, product_sku,
-              quantity, unit_price, original_price, discount_percent, discount_amount, subtotal, notes
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+              quantity, unit_price, original_price, discount_percent, discount_amount, subtotal, notes,
+              estimated_delivery
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           `, [
             quoteId,
             line.productId,
@@ -272,7 +279,8 @@ export async function PUT(
             line.discountPercent || 0,
             lineDiscountAmount,
             lineSubtotal,
-            line.notes || null
+            line.notes || null,
+            line.estimatedDelivery || null
           ])
         }
       }
