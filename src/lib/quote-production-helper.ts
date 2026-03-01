@@ -9,10 +9,10 @@ interface QuoteLine {
 
 /**
  * Auto-create production plans in draft status for quote lines
- * that have estimated_delivery = '1-3d' (can be manufactured).
+ * that have an active formula and insufficient stock.
  *
  * - warehouse_id of plan = central warehouse (raw materials source)
- * - target_warehouse_id of plan = quote's selected warehouse (finished product destination)
+ * - target_warehouse_id of plan = quote's selected warehouse or central warehouse
  */
 export async function createProductionPlansForQuote(
   companyId: number,
@@ -21,10 +21,6 @@ export async function createProductionPlansForQuote(
   quoteId: number,
   lines: QuoteLine[]
 ): Promise<{ plansCreated: number; planNumbers: string[] }> {
-  if (!warehouseId) {
-    return { plansCreated: 0, planNumbers: [] }
-  }
-
   // Find central warehouse
   const centralResult = await db.query(
     'SELECT id FROM market_warehouses WHERE company_id = $1 AND is_central = true LIMIT 1',
@@ -36,21 +32,31 @@ export async function createProductionPlansForQuote(
     return { plansCreated: 0, planNumbers: [] }
   }
 
+  // Use quote warehouse or fallback to central warehouse for stock check and target
+  const targetWarehouseId = warehouseId || centralWarehouseId
+
   const planNumbers: string[] = []
 
   for (const line of lines) {
-    if (line.estimatedDelivery !== '1-3d') continue
-
     try {
-      // Check current stock to calculate deficit
+      // Check current stock to calculate deficit (check across all warehouses)
       let stockOnHand = 0
       try {
         const stockResult = await db.query(
-          'SELECT quantity_on_hand FROM market_warehouse_stock WHERE product_id = $1 AND warehouse_id = $2',
-          [line.productId, warehouseId]
+          'SELECT COALESCE(SUM(quantity_on_hand), 0) as total_stock FROM market_warehouse_stock WHERE product_id = $1 AND company_id = $2',
+          [line.productId, companyId]
         )
-        stockOnHand = parseFloat(stockResult.rows[0]?.quantity_on_hand) || 0
-      } catch { /* no stock record */ }
+        stockOnHand = parseFloat(stockResult.rows[0]?.total_stock) || 0
+      } catch {
+        // Try without company_id filter (older schema)
+        try {
+          const stockResult2 = await db.query(
+            'SELECT quantity_on_hand FROM market_warehouse_stock WHERE product_id = $1 AND warehouse_id = $2',
+            [line.productId, targetWarehouseId]
+          )
+          stockOnHand = parseFloat(stockResult2.rows[0]?.quantity_on_hand) || 0
+        } catch { /* no stock record */ }
+      }
 
       const deficit = line.quantity - stockOnHand
       if (deficit <= 0) continue
@@ -102,7 +108,7 @@ export async function createProductionPlansForQuote(
         planNumber,
         formula.id,
         centralWarehouseId,
-        warehouseId,
+        targetWarehouseId,
         plannedDateStr,
         deficit,
         1,

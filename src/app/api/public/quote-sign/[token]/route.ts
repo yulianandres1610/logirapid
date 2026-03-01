@@ -325,7 +325,7 @@ export async function POST(
       await db.query(`UPDATE market_quotes SET updated_at = NOW() WHERE id = $1`, [quote.id])
     } catch { /* column may not exist */ }
 
-    // Auto-create production plans for items that can be manufactured
+    // Auto-create production plans for items that have active formulas and insufficient stock
     if (newStatus === 'accepted') {
       try {
         const quoteData = await db.query(
@@ -334,22 +334,21 @@ export async function POST(
         )
         if (quoteData.rows.length > 0) {
           const q = quoteData.rows[0]
-          // Get lines with estimated_delivery
           let quoteLines: Array<{ productId: number; productName: string; quantity: number; estimatedDelivery: string | null }> = []
           try {
             const qlResult = await db.query(
-              'SELECT product_id, product_name, quantity, estimated_delivery FROM market_quote_lines WHERE quote_id = $1',
+              'SELECT product_id, product_name, quantity FROM market_quote_lines WHERE quote_id = $1',
               [quote.id]
             )
             quoteLines = qlResult.rows.map(r => ({
               productId: r.product_id,
               productName: r.product_name,
               quantity: parseFloat(r.quantity) || 0,
-              estimatedDelivery: r.estimated_delivery || null
+              estimatedDelivery: null
             }))
-          } catch { /* estimated_delivery column might not exist */ }
+          } catch { /* ignore */ }
 
-          if (quoteLines.some(l => l.estimatedDelivery === '1-3d')) {
+          if (quoteLines.length > 0) {
             await createProductionPlansForQuote(
               q.company_id,
               q.warehouse_id,
