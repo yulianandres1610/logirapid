@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { useEffect, useState, use, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
@@ -52,6 +52,22 @@ interface QuoteData {
 export default function QuoteSignPage({ params }: { params: Promise<{ token: string }> }) {
   const resolvedParams = use(params)
   const token = resolvedParams.token
+
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-white flex items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-orange-500" />
+          <p className="text-gray-500 text-sm">Cargando...</p>
+        </div>
+      </div>
+    }>
+      <QuoteSignContent token={token} />
+    </Suspense>
+  )
+}
+
+function QuoteSignContent({ token }: { token: string }) {
   const searchParams = useSearchParams()
 
   const mode = (searchParams.get('mode') || 'usd') as 'usd' | 'cup' | 'dual'
