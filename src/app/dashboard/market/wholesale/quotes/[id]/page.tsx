@@ -30,7 +30,10 @@ import {
   ShoppingCart,
   History,
   AlertCircle,
-  Image as ImageIcon
+  Image as ImageIcon,
+  XCircle,
+  Trash2,
+  Ban
 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import JsBarcode from 'jsbarcode'
@@ -96,6 +99,8 @@ interface Quote {
   signatureData: string | null
   signedAt: string | null
   signerName: string | null
+  cancellationReason: string | null
+  cancelledAt: string | null
   lines: QuoteLine[]
 }
 
@@ -147,6 +152,13 @@ const STATUS_CONFIG: Record<string, {
     bgGradient: 'from-purple-500 to-indigo-500',
     icon: Receipt,
     step: 3
+  },
+  cancelled: {
+    label: 'Cancelada',
+    color: 'red',
+    bgGradient: 'from-red-500 to-rose-500',
+    icon: XCircle,
+    step: 0
   }
 }
 
@@ -173,6 +185,11 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
   const [converting, setConverting] = useState(false)
   const [showSendModal, setShowSendModal] = useState(false)
   const [sending, setSending] = useState(false)
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [showPdfDropdown, setShowPdfDropdown] = useState(false)
   const [generatingLink, setGeneratingLink] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
@@ -308,6 +325,57 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     } finally {
       setConverting(false)
       setShowConvertModal(false)
+    }
+  }
+
+  const handleCancel = async () => {
+    if (!cancelReason.trim()) {
+      showNotification('error', 'Error', 'Debes indicar un motivo de cancelación')
+      return
+    }
+    setCancelling(true)
+    try {
+      const response = await fetch(`/api/market/wholesale/quotes/${quoteId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cancellationReason: cancelReason.trim() })
+      })
+      const result = await response.json()
+      if (result.success) {
+        showNotification('success', 'Cancelada', result.message || 'Cotización cancelada exitosamente')
+        setShowCancelModal(false)
+        setCancelReason('')
+        fetchQuote()
+      } else {
+        showNotification('error', 'Error', result.error || 'Error al cancelar')
+      }
+    } catch (error) {
+      console.error('Error cancelling quote:', error)
+      showNotification('error', 'Error', 'Error de conexión')
+    } finally {
+      setCancelling(false)
+    }
+  }
+
+  const handleForceDelete = async () => {
+    setDeleting(true)
+    try {
+      const response = await fetch(`/api/market/wholesale/quotes/${quoteId}?force=true`, {
+        method: 'DELETE'
+      })
+      const result = await response.json()
+      if (result.success) {
+        showNotification('success', 'Eliminada', result.message || 'Cotización eliminada permanentemente')
+        router.push('/dashboard/market/wholesale/quotes')
+      } else {
+        showNotification('error', 'Error', result.error || 'Error al eliminar')
+      }
+    } catch (error) {
+      console.error('Error deleting quote:', error)
+      showNotification('error', 'Error', 'Error de conexión')
+    } finally {
+      setDeleting(false)
+      setShowDeleteModal(false)
     }
   }
 
@@ -1186,8 +1254,73 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                     <span className="hidden sm:inline">Convertir a Factura</span>
                   </motion.button>
                 )}
+
+                {/* Cancel Quote */}
+                {['draft', 'sent', 'accepted'].includes(quote.status) && !quote.convertedToInvoiceId && (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowCancelModal(true)}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors',
+                      theme === 'dark'
+                        ? 'bg-red-900/30 text-red-400 hover:bg-red-900/50'
+                        : 'bg-red-100 text-red-700 hover:bg-red-200'
+                    )}
+                  >
+                    <Ban className="w-4 h-4" />
+                    <span className="hidden sm:inline">Cancelar</span>
+                  </motion.button>
+                )}
+
+                {/* Delete Quote (only draft or cancelled) */}
+                {['draft', 'cancelled'].includes(quote.status) && (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowDeleteModal(true)}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors',
+                      theme === 'dark'
+                        ? 'bg-gray-700 text-red-400 hover:bg-gray-600'
+                        : 'bg-gray-100 text-red-600 hover:bg-gray-200'
+                    )}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span className="hidden sm:inline">Eliminar</span>
+                  </motion.button>
+                )}
               </div>
             </div>
+
+            {/* Cancellation Banner */}
+            {quote.status === 'cancelled' && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={cn(
+                  'p-4 rounded-xl border flex items-start gap-3',
+                  theme === 'dark' ? 'bg-red-900/20 border-red-800' : 'bg-red-50 border-red-200'
+                )}
+              >
+                <XCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className={cn('font-semibold', theme === 'dark' ? 'text-red-300' : 'text-red-800')}>
+                    Cotización Cancelada
+                  </p>
+                  {quote.cancellationReason && (
+                    <p className={cn('text-sm mt-1', theme === 'dark' ? 'text-red-400' : 'text-red-600')}>
+                      Motivo: {quote.cancellationReason}
+                    </p>
+                  )}
+                  {quote.cancelledAt && (
+                    <p className={cn('text-xs mt-1', theme === 'dark' ? 'text-red-500' : 'text-red-500')}>
+                      Cancelada el {new Date(quote.cancelledAt).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  )}
+                </div>
+              </motion.div>
+            )}
 
             {/* Hero Card */}
             <motion.div
@@ -2102,6 +2235,197 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                           </>
                         ) : (
                           'Convertir'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Cancel Modal */}
+          <AnimatePresence>
+            {showCancelModal && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+                onClick={() => setShowCancelModal(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.95, opacity: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn(
+                    'rounded-2xl shadow-2xl max-w-md w-full',
+                    theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                  )}
+                >
+                  <div className={cn(
+                    'p-6 border-b flex items-center justify-between',
+                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                  )}>
+                    <h2 className={cn('text-xl font-bold flex items-center gap-2', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      <Ban className="w-5 h-5 text-red-600" />
+                      Cancelar Cotización
+                    </h2>
+                    <button onClick={() => setShowCancelModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <p className={cn('text-sm', theme === 'dark' ? 'text-gray-300' : 'text-gray-600')}>
+                      ¿Estás seguro de que deseas cancelar esta cotización? Esta acción cambiará su estado a "Cancelada".
+                    </p>
+                    <div className={cn(
+                      'p-4 rounded-xl',
+                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                    )}>
+                      <p className="text-sm"><strong>{quote.quoteNumber}</strong></p>
+                      <p className="text-sm">Cliente: {quote.customer.businessName}</p>
+                      <p className="text-sm">Total: {formatCurrency(quote.totalAmount)}</p>
+                    </div>
+                    <div>
+                      <label className={cn('block text-sm font-medium mb-1.5', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                        Motivo de cancelación *
+                      </label>
+                      <textarea
+                        value={cancelReason}
+                        onChange={(e) => setCancelReason(e.target.value)}
+                        rows={3}
+                        placeholder="Indica por qué se cancela esta cotización..."
+                        autoFocus
+                        className={cn(
+                          'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 resize-none',
+                          theme === 'dark'
+                            ? 'bg-gray-900 border-gray-700 text-white focus:border-red-500 focus:ring-red-500/20'
+                            : 'bg-white border-gray-200 text-gray-900 focus:border-red-500 focus:ring-red-500/20'
+                        )}
+                      />
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                      <button
+                        onClick={() => { setShowCancelModal(false); setCancelReason('') }}
+                        className={cn(
+                          'flex-1 py-2.5 px-4 rounded-xl font-medium border transition-colors',
+                          theme === 'dark'
+                            ? 'border-gray-600 text-gray-300 hover:bg-gray-700'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                        )}
+                      >
+                        Volver
+                      </button>
+                      <button
+                        onClick={handleCancel}
+                        disabled={cancelling || !cancelReason.trim()}
+                        className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {cancelling ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Cancelando...
+                          </>
+                        ) : (
+                          <>
+                            <Ban className="w-4 h-4" />
+                            Cancelar Cotización
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Delete Modal */}
+          <AnimatePresence>
+            {showDeleteModal && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+                onClick={() => setShowDeleteModal(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.95, opacity: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn(
+                    'rounded-2xl shadow-2xl max-w-md w-full',
+                    theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+                  )}
+                >
+                  <div className={cn(
+                    'p-6 border-b flex items-center justify-between',
+                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                  )}>
+                    <h2 className={cn('text-xl font-bold flex items-center gap-2', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      <Trash2 className="w-5 h-5 text-red-600" />
+                      Eliminar Cotización
+                    </h2>
+                    <button onClick={() => setShowDeleteModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <div className={cn(
+                      'p-4 rounded-xl border',
+                      theme === 'dark' ? 'bg-red-900/20 border-red-800' : 'bg-red-50 border-red-200'
+                    )}>
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className={cn('font-medium text-sm', theme === 'dark' ? 'text-red-300' : 'text-red-800')}>
+                            Esta acción es irreversible
+                          </p>
+                          <p className={cn('text-xs mt-1', theme === 'dark' ? 'text-red-400' : 'text-red-600')}>
+                            La cotización y todos sus datos serán eliminados permanentemente.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className={cn(
+                      'p-4 rounded-xl',
+                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                    )}>
+                      <p className="text-sm"><strong>{quote.quoteNumber}</strong></p>
+                      <p className="text-sm">Cliente: {quote.customer.businessName}</p>
+                      <p className="text-sm">Total: {formatCurrency(quote.totalAmount)}</p>
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                      <button
+                        onClick={() => setShowDeleteModal(false)}
+                        className={cn(
+                          'flex-1 py-2.5 px-4 rounded-xl font-medium border transition-colors',
+                          theme === 'dark'
+                            ? 'border-gray-600 text-gray-300 hover:bg-gray-700'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                        )}
+                      >
+                        Volver
+                      </button>
+                      <button
+                        onClick={handleForceDelete}
+                        disabled={deleting}
+                        className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {deleting ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Eliminando...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="w-4 h-4" />
+                            Eliminar Permanentemente
+                          </>
                         )}
                       </button>
                     </div>
