@@ -16,121 +16,180 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Token requerido' }, { status: 400 })
     }
 
-    // First find the quote by signature_token
-    // Use q.* to avoid failing on missing columns
-    let result
+    // Ensure signature columns exist
     try {
-      result = await db.query(`
-        SELECT q.*,
-          c.business_name as customer_name, c.code as customer_code,
-          c.tax_id as customer_tax_id,
-          comp.name as company_name
-        FROM market_quotes q
-        JOIN market_wholesale_customers c ON c.id = q.customer_id
-        JOIN companies comp ON comp.id = q.company_id
-        WHERE q.signature_token = $1
-      `, [token])
-    } catch (queryError) {
-      // If signature_token column doesn't exist, try to create it
-      console.error('[Public Quote Sign] Main query failed, trying to create columns:', queryError)
-      try {
-        await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signature_token UUID`)
-        await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signature_data TEXT`)
-        await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signed_at TIMESTAMP`)
-        await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signer_name VARCHAR(255)`)
-        await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signer_ip VARCHAR(45)`)
-      } catch {
-        // ignore
-      }
-      // Retry the query
-      result = await db.query(`
-        SELECT q.*,
-          c.business_name as customer_name, c.code as customer_code,
-          c.tax_id as customer_tax_id,
-          comp.name as company_name
-        FROM market_quotes q
-        JOIN market_wholesale_customers c ON c.id = q.customer_id
-        JOIN companies comp ON comp.id = q.company_id
-        WHERE q.signature_token = $1
-      `, [token])
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signature_token UUID`)
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signature_data TEXT`)
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signed_at TIMESTAMP`)
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signer_name VARCHAR(255)`)
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signer_ip VARCHAR(45)`)
+    } catch {
+      // ignore - columns may already exist
     }
 
-    if (result.rows.length === 0) {
+    // Step 1: Find the quote by signature_token (minimal query)
+    const quoteResult = await db.query(
+      'SELECT * FROM market_quotes WHERE signature_token = $1',
+      [token]
+    )
+
+    if (quoteResult.rows.length === 0) {
       return NextResponse.json({
         success: false,
         error: 'Cotización no encontrada o enlace inválido'
       }, { status: 404 })
     }
 
-    const row = result.rows[0]
+    const q = quoteResult.rows[0]
 
-    // Get company logo separately (column may not exist)
-    let companyLogo: string | null = null
+    // Step 2: Get customer info separately
+    let customerName = ''
+    let customerCode = ''
+    let customerTaxId: string | null = null
     try {
-      const logoResult = await db.query(
-        'SELECT logo_url FROM companies WHERE id = $1',
-        [row.company_id]
+      const custResult = await db.query(
+        'SELECT business_name, code, tax_id FROM market_wholesale_customers WHERE id = $1',
+        [q.customer_id]
       )
-      companyLogo = logoResult.rows[0]?.logo_url || null
+      if (custResult.rows.length > 0) {
+        customerName = custResult.rows[0].business_name || ''
+        customerCode = custResult.rows[0].code || ''
+        customerTaxId = custResult.rows[0].tax_id || null
+      }
     } catch {
-      // logo_url column doesn't exist - ignore
+      // Try without tax_id
+      try {
+        const custResult2 = await db.query(
+          'SELECT business_name, code FROM market_wholesale_customers WHERE id = $1',
+          [q.customer_id]
+        )
+        if (custResult2.rows.length > 0) {
+          customerName = custResult2.rows[0].business_name || ''
+          customerCode = custResult2.rows[0].code || ''
+        }
+      } catch {
+        // ignore
+      }
     }
 
-    // Get signature data from q.* result (safe - undefined becomes null)
-    const signatureData = row.signature_data || null
-    const signedAt = row.signed_at || null
-    const signerName = row.signer_name || null
+    // Step 3: Get company info separately
+    let companyName = ''
+    let companyLogo: string | null = null
+    try {
+      const compResult = await db.query(
+        'SELECT name, logo_url FROM companies WHERE id = $1',
+        [q.company_id]
+      )
+      if (compResult.rows.length > 0) {
+        companyName = compResult.rows[0].name || ''
+        companyLogo = compResult.rows[0].logo_url || null
+      }
+    } catch {
+      // Try without logo_url
+      try {
+        const compResult2 = await db.query(
+          'SELECT name FROM companies WHERE id = $1',
+          [q.company_id]
+        )
+        if (compResult2.rows.length > 0) {
+          companyName = compResult2.rows[0].name || ''
+        }
+      } catch {
+        // ignore
+      }
+    }
 
-    // Get quote lines
-    const linesResult = await db.query(`
-      SELECT
-        ql.id, ql.product_name, ql.product_sku, ql.quantity,
-        ql.unit_price, ql.original_price, ql.discount_percent,
-        ql.discount_amount, ql.subtotal,
-        p.image_url as product_image
-      FROM market_quote_lines ql
-      LEFT JOIN market_products p ON p.id = ql.product_id
-      WHERE ql.quote_id = $1
-      ORDER BY ql.id
-    `, [row.id])
+    // Step 4: Get quote lines
+    let lines: Array<{
+      id: number
+      productName: string
+      productSku: string | null
+      productImage: string | null
+      quantity: number
+      unitPrice: number
+      originalPrice: number
+      discountPercent: number
+      discountAmount: number
+      subtotal: number
+    }> = []
+    try {
+      const linesResult = await db.query(`
+        SELECT
+          ql.id, ql.product_name, ql.product_sku, ql.quantity,
+          ql.unit_price, ql.original_price, ql.discount_percent,
+          ql.discount_amount, ql.subtotal,
+          p.image_url as product_image
+        FROM market_quote_lines ql
+        LEFT JOIN market_products p ON p.id = ql.product_id
+        WHERE ql.quote_id = $1
+        ORDER BY ql.id
+      `, [q.id])
+
+      lines = linesResult.rows.map(line => ({
+        id: line.id,
+        productName: line.product_name,
+        productSku: line.product_sku || null,
+        productImage: line.product_image || null,
+        quantity: parseFloat(line.quantity) || 0,
+        unitPrice: parseFloat(line.unit_price) || 0,
+        originalPrice: parseFloat(line.original_price) || 0,
+        discountPercent: parseFloat(line.discount_percent) || 0,
+        discountAmount: parseFloat(line.discount_amount) || 0,
+        subtotal: parseFloat(line.subtotal) || 0
+      }))
+    } catch {
+      // Try simpler query without JOIN
+      try {
+        const linesResult2 = await db.query(`
+          SELECT id, product_name, product_sku, quantity, unit_price, subtotal
+          FROM market_quote_lines
+          WHERE quote_id = $1
+          ORDER BY id
+        `, [q.id])
+
+        lines = linesResult2.rows.map(line => ({
+          id: line.id,
+          productName: line.product_name,
+          productSku: line.product_sku || null,
+          productImage: null,
+          quantity: parseFloat(line.quantity) || 0,
+          unitPrice: parseFloat(line.unit_price) || 0,
+          originalPrice: 0,
+          discountPercent: 0,
+          discountAmount: 0,
+          subtotal: parseFloat(line.subtotal) || 0
+        }))
+      } catch {
+        // ignore - return empty lines
+      }
+    }
 
     return NextResponse.json({
       success: true,
       data: {
-        quoteNumber: row.quote_number,
-        status: row.status,
-        subtotal: parseFloat(row.subtotal) || 0,
-        discountPercent: parseFloat(row.discount_percent) || 0,
-        discountAmount: parseFloat(row.discount_amount) || 0,
-        totalAmount: parseFloat(row.total_amount) || 0,
-        currency: row.currency,
-        validUntil: row.valid_until,
-        notes: row.notes,
-        createdAt: row.created_at,
-        signatureData,
-        signedAt,
-        signerName,
+        quoteNumber: q.quote_number,
+        status: q.status,
+        subtotal: parseFloat(q.subtotal) || 0,
+        discountPercent: parseFloat(q.discount_percent) || 0,
+        discountAmount: parseFloat(q.discount_amount) || 0,
+        totalAmount: parseFloat(q.total_amount) || 0,
+        currency: q.currency,
+        validUntil: q.valid_until,
+        notes: q.notes,
+        createdAt: q.created_at,
+        signatureData: q.signature_data || null,
+        signedAt: q.signed_at || null,
+        signerName: q.signer_name || null,
         customer: {
-          businessName: row.customer_name,
-          code: row.customer_code,
-          taxId: row.customer_tax_id
+          businessName: customerName,
+          code: customerCode,
+          taxId: customerTaxId
         },
         company: {
-          name: row.company_name,
+          name: companyName,
           logoUrl: companyLogo
         },
-        lines: linesResult.rows.map(line => ({
-          id: line.id,
-          productName: line.product_name,
-          productSku: line.product_sku,
-          productImage: line.product_image,
-          quantity: parseFloat(line.quantity) || 0,
-          unitPrice: parseFloat(line.unit_price) || 0,
-          originalPrice: parseFloat(line.original_price) || 0,
-          discountPercent: parseFloat(line.discount_percent) || 0,
-          discountAmount: parseFloat(line.discount_amount) || 0,
-          subtotal: parseFloat(line.subtotal) || 0
-        }))
+        lines
       }
     })
 
@@ -138,7 +197,7 @@ export async function GET(
     console.error('[Public Quote Sign GET] Error:', error)
     return NextResponse.json({
       success: false,
-      error: 'Error al obtener cotización'
+      error: error instanceof Error ? error.message : 'Error al obtener cotización'
     }, { status: 500 })
   }
 }
@@ -178,7 +237,6 @@ export async function POST(
         [token]
       )
     } catch {
-      // Column might not exist
       return NextResponse.json({
         success: false,
         error: 'Cotización no encontrada o enlace inválido'
@@ -238,7 +296,7 @@ export async function POST(
     console.error('[Public Quote Sign POST] Error:', error)
     return NextResponse.json({
       success: false,
-      error: 'Error al firmar cotización'
+      error: error instanceof Error ? error.message : 'Error al firmar cotización'
     }, { status: 500 })
   }
 }
