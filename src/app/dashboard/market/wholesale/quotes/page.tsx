@@ -629,7 +629,7 @@ export default function WholesaleQuotesPage() {
                                     </motion.button>
                                   </>
                                 )}
-                                {['sent', 'accepted'].includes(quote.status) && !quote.convertedToInvoiceId && (
+                                {['draft', 'sent', 'accepted'].includes(quote.status) && !quote.convertedToInvoiceId && (
                                   <motion.button
                                     whileHover={{ scale: 1.1 }}
                                     whileTap={{ scale: 0.9 }}
