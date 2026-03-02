@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -12,7 +12,14 @@ import {
   MapPin,
   DollarSign,
   Barcode,
-  AlertTriangle
+  AlertTriangle,
+  Camera,
+  Upload,
+  Smartphone,
+  X,
+  Image as ImageIcon,
+  Trash2,
+  Receipt
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -20,6 +27,7 @@ import { ProtectedRoute } from '@/components/protected-route'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
+import { PhoneUploadModal } from '@/components/uploads/PhoneUploadModal'
 
 interface Category {
   id: number
@@ -46,7 +54,7 @@ interface Supplier {
   name: string
 }
 
-type Step = 'basic' | 'location' | 'financial' | 'technical'
+type Step = 'basic' | 'photo' | 'location' | 'financial' | 'technical'
 
 interface WizardStep {
   id: Step
@@ -57,6 +65,7 @@ interface WizardStep {
 
 const STEPS: WizardStep[] = [
   { id: 'basic', title: 'Básico', description: 'Nombre y tipo', icon: Box },
+  { id: 'photo', title: 'Foto', description: 'Imagen del activo', icon: Camera },
   { id: 'location', title: 'Ubicación', description: 'Almacén y responsable', icon: MapPin },
   { id: 'financial', title: 'Financiero', description: 'Costos y fechas', icon: DollarSign },
   { id: 'technical', title: 'Técnico', description: 'Detalles y revisión', icon: Barcode }
@@ -81,6 +90,8 @@ export default function NewFixedAssetPage() {
   const router = useRouter()
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const invoiceFileInputRef = useRef<HTMLInputElement>(null)
 
   const [currentStep, setCurrentStep] = useState<Step>('basic')
   const [loading, setLoading] = useState(false)
@@ -89,6 +100,18 @@ export default function NewFixedAssetPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+
+  // Photo state
+  const [uploading, setUploading] = useState(false)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [showPhoneUpload, setShowPhoneUpload] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+
+  // Invoice image state
+  const [uploadingInvoice, setUploadingInvoice] = useState(false)
+  const [invoiceImagePreview, setInvoiceImagePreview] = useState<string | null>(null)
+  const [showPhoneUploadInvoice, setShowPhoneUploadInvoice] = useState(false)
+  const [dragOverInvoice, setDragOverInvoice] = useState(false)
 
   // Form state
   const [form, setForm] = useState({
@@ -110,7 +133,8 @@ export default function NewFixedAssetPage() {
     model: '',
     condition: 'good',
     notes: '',
-    imageUrl: ''
+    imageUrl: '',
+    invoiceImageUrl: ''
   })
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
@@ -144,6 +168,146 @@ export default function NewFixedAssetPage() {
     fetchData()
   }, [])
 
+  // Upload image file
+  const handleFileUpload = async (file: File) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      showNotification('error', 'Formato no válido', 'Solo se permiten imágenes JPG, PNG y WebP')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showNotification('error', 'Archivo muy grande', 'La imagen no puede superar los 10MB')
+      return
+    }
+
+    setUploading(true)
+    try {
+      // Show preview immediately
+      const reader = new FileReader()
+      reader.onload = (e) => setImagePreview(e.target?.result as string)
+      reader.readAsDataURL(file)
+
+      const formData = new FormData()
+      formData.append('image', file)
+      if (form.imageUrl) {
+        formData.append('oldImageUrl', form.imageUrl)
+      }
+
+      const res = await fetch('/api/market/fixed-assets/upload-image', {
+        method: 'POST',
+        body: formData
+      })
+
+      const data = await res.json()
+      if (data.success) {
+        setForm(prev => ({ ...prev, imageUrl: data.data.imageUrl }))
+        showNotification('success', 'Imagen subida', 'La foto del activo se guardó correctamente')
+      } else {
+        setImagePreview(null)
+        showNotification('error', 'Error', data.error || 'Error al subir la imagen')
+      }
+    } catch {
+      setImagePreview(null)
+      showNotification('error', 'Error de conexión', 'No se pudo subir la imagen')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) handleFileUpload(file)
+    // Reset input so same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) handleFileUpload(file)
+  }
+
+  const handlePhoneUploadComplete = (fileUrl: string) => {
+    setForm(prev => ({ ...prev, imageUrl: fileUrl }))
+    setImagePreview(fileUrl)
+    showNotification('success', 'Foto recibida', 'La foto del activo se subió desde el teléfono')
+  }
+
+  const removeImage = () => {
+    setForm(prev => ({ ...prev, imageUrl: '' }))
+    setImagePreview(null)
+  }
+
+  // Upload invoice image file
+  const handleInvoiceFileUpload = async (file: File) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      showNotification('error', 'Formato no válido', 'Solo se permiten imágenes JPG, PNG y WebP')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showNotification('error', 'Archivo muy grande', 'La imagen no puede superar los 10MB')
+      return
+    }
+
+    setUploadingInvoice(true)
+    try {
+      const reader = new FileReader()
+      reader.onload = (e) => setInvoiceImagePreview(e.target?.result as string)
+      reader.readAsDataURL(file)
+
+      const formData = new FormData()
+      formData.append('image', file)
+      if (form.invoiceImageUrl) {
+        formData.append('oldImageUrl', form.invoiceImageUrl)
+      }
+
+      const res = await fetch('/api/market/fixed-assets/upload-image', {
+        method: 'POST',
+        body: formData
+      })
+
+      const data = await res.json()
+      if (data.success) {
+        setForm(prev => ({ ...prev, invoiceImageUrl: data.data.imageUrl }))
+        showNotification('success', 'Imagen subida', 'La foto de la factura se guardó correctamente')
+      } else {
+        setInvoiceImagePreview(null)
+        showNotification('error', 'Error', data.error || 'Error al subir la imagen')
+      }
+    } catch {
+      setInvoiceImagePreview(null)
+      showNotification('error', 'Error de conexión', 'No se pudo subir la imagen')
+    } finally {
+      setUploadingInvoice(false)
+    }
+  }
+
+  const handleInvoiceFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) handleInvoiceFileUpload(file)
+    if (invoiceFileInputRef.current) invoiceFileInputRef.current.value = ''
+  }
+
+  const handleInvoiceDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOverInvoice(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) handleInvoiceFileUpload(file)
+  }
+
+  const handlePhoneUploadInvoiceComplete = (fileUrl: string) => {
+    setForm(prev => ({ ...prev, invoiceImageUrl: fileUrl }))
+    setInvoiceImagePreview(fileUrl)
+    showNotification('success', 'Foto recibida', 'La foto de la factura se subió desde el teléfono')
+  }
+
+  const removeInvoiceImage = () => {
+    setForm(prev => ({ ...prev, invoiceImageUrl: '' }))
+    setInvoiceImagePreview(null)
+  }
+
   // Validate step
   const validateStep = (step: Step): boolean => {
     const newErrors: Record<string, string> = {}
@@ -151,14 +315,10 @@ export default function NewFixedAssetPage() {
       case 'basic':
         if (!form.name.trim()) newErrors.name = 'El nombre del activo es requerido'
         break
+      case 'photo':
       case 'location':
-        // Location is optional
-        break
       case 'financial':
-        // Financial info is optional
-        break
       case 'technical':
-        // Technical info is optional, this is the final step
         break
     }
     setErrors(newErrors)
@@ -211,7 +371,8 @@ export default function NewFixedAssetPage() {
           model: form.model || null,
           condition: form.condition,
           notes: form.notes || null,
-          imageUrl: form.imageUrl || null
+          imageUrl: form.imageUrl || null,
+          invoiceImageUrl: form.invoiceImageUrl || null
         })
       })
 
@@ -306,8 +467,7 @@ export default function NewFixedAssetPage() {
                 {STEPS.map((step, index) => (
                   <React.Fragment key={step.id}>
                     <div className="flex flex-col items-center">
-                      <div className="relative w-14 h-14">
-                        {/* Pulsing ring for active step */}
+                      <div className="relative w-12 h-12 sm:w-14 sm:h-14">
                         {currentStep === step.id && (
                           <motion.div
                             className="absolute inset-0 rounded-full"
@@ -344,7 +504,7 @@ export default function NewFixedAssetPage() {
                           }}
                           whileHover={{ scale: currentStepIndex >= index ? 1.15 : 1.05 }}
                           className={cn(
-                            "w-14 h-14 rounded-full flex items-center justify-center relative z-10",
+                            "w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center relative z-10",
                             "transition-shadow duration-300",
                             currentStep === step.id && (
                               theme === 'dark'
@@ -364,11 +524,11 @@ export default function NewFixedAssetPage() {
                               animate={{ scale: 1 }}
                               transition={{ type: "spring", stiffness: 200, damping: 15 }}
                             >
-                              <Check className="w-7 h-7 text-white" />
+                              <Check className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
                             </motion.div>
                           ) : (
                             <step.icon className={cn(
-                              "w-7 h-7",
+                              "w-6 h-6 sm:w-7 sm:h-7",
                               currentStep === step.id ? 'text-white' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
                             )} />
                           )}
@@ -377,7 +537,7 @@ export default function NewFixedAssetPage() {
 
                       <div className="mt-3 text-center">
                         <p className={cn(
-                          "text-xs sm:text-sm font-semibold",
+                          "text-[10px] sm:text-sm font-semibold",
                           currentStep === step.id
                             ? theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
                             : currentStepIndex > index
@@ -396,7 +556,7 @@ export default function NewFixedAssetPage() {
                     </div>
 
                     {index < STEPS.length - 1 && (
-                      <div className="flex-1 h-0.5 mx-2 sm:mx-3 mb-8 sm:mb-10 relative">
+                      <div className="flex-1 h-0.5 mx-1 sm:mx-3 mb-8 sm:mb-10 relative">
                         <div className={cn(
                           "absolute inset-0 rounded-full",
                           theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
@@ -516,7 +676,312 @@ export default function NewFixedAssetPage() {
                   </motion.div>
                 )}
 
-                {/* Step 2: Location */}
+                {/* Step 2: Photo */}
+                {currentStep === 'photo' && (
+                  <motion.div
+                    key="photo"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center">
+                        <Camera className="w-5 h-5 text-white" />
+                      </div>
+                      Foto del Activo
+                    </h2>
+
+                    <p className={cn(
+                      "text-sm",
+                      theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                    )}>
+                      Sube una foto del activo desde tu computadora o toma una con tu teléfono. Este paso es opcional.
+                    </p>
+
+                    {/* Current image preview */}
+                    {(imagePreview || form.imageUrl) ? (
+                      <motion.div
+                        initial={{ scale: 0.95, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="relative"
+                      >
+                        <div className={cn(
+                          'rounded-2xl overflow-hidden border-2',
+                          theme === 'dark' ? 'border-indigo-600 bg-gray-800' : 'border-indigo-400 bg-gray-50'
+                        )}>
+                          <img
+                            src={imagePreview || form.imageUrl}
+                            alt="Preview del activo"
+                            className="w-full max-h-80 object-contain mx-auto"
+                          />
+                        </div>
+                        <div className="flex items-center justify-center gap-3 mt-4">
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className={cn(
+                              'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors',
+                              theme === 'dark'
+                                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                            )}
+                          >
+                            <Upload className="w-4 h-4" />
+                            Cambiar foto
+                          </button>
+                          <button
+                            type="button"
+                            onClick={removeImage}
+                            className={cn(
+                              'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors',
+                              theme === 'dark'
+                                ? 'bg-red-900/30 text-red-400 hover:bg-red-900/50'
+                                : 'bg-red-100 text-red-600 hover:bg-red-200'
+                            )}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Eliminar
+                          </button>
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Drag & Drop / File Upload */}
+                        <div
+                          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                          onDragLeave={() => setDragOver(false)}
+                          onDrop={handleDrop}
+                          onClick={() => !uploading && fileInputRef.current?.click()}
+                          className={cn(
+                            'p-8 rounded-2xl border-2 border-dashed cursor-pointer transition-all text-center',
+                            dragOver
+                              ? theme === 'dark'
+                                ? 'border-indigo-500 bg-indigo-900/20'
+                                : 'border-indigo-500 bg-indigo-50'
+                              : theme === 'dark'
+                                ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-800/50'
+                                : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50',
+                            uploading && 'pointer-events-none opacity-70'
+                          )}
+                        >
+                          {uploading ? (
+                            <>
+                              <Loader2 className="w-12 h-12 mx-auto mb-3 text-indigo-500 animate-spin" />
+                              <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                Subiendo imagen...
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <Upload className={cn(
+                                'w-12 h-12 mx-auto mb-3',
+                                theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                              )} />
+                              <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                Arrastra una imagen aquí
+                              </p>
+                              <p className={cn('text-sm mt-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                o haz clic para seleccionar
+                              </p>
+                              <p className={cn('text-xs mt-3', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                                JPG, PNG o WebP hasta 10MB
+                              </p>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Phone Upload */}
+                        <div
+                          onClick={() => setShowPhoneUpload(true)}
+                          className={cn(
+                            'p-8 rounded-2xl border-2 border-dashed cursor-pointer transition-all text-center',
+                            theme === 'dark'
+                              ? 'border-gray-600 hover:border-blue-500 hover:bg-blue-900/10'
+                              : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                          )}
+                        >
+                          <Smartphone className={cn(
+                            'w-12 h-12 mx-auto mb-3',
+                            theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                          )} />
+                          <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                            Tomar foto con el teléfono
+                          </p>
+                          <p className={cn('text-sm mt-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                            Escanea un código QR
+                          </p>
+                          <p className={cn('text-xs mt-3', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                            Abre la cámara del celular
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handleFileInputChange}
+                      className="hidden"
+                    />
+
+                    {/* Divider */}
+                    <div className={cn(
+                      "border-t pt-6 mt-6",
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                    )}>
+                      <h3 className={cn(
+                        "text-lg font-bold flex items-center gap-3 mb-2",
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      )}>
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
+                          <Receipt className="w-4 h-4 text-white" />
+                        </div>
+                        Imagen de Factura Original
+                      </h3>
+                      <p className={cn(
+                        "text-sm mb-4",
+                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                      )}>
+                        Sube una foto de la factura o recibo de compra del activo. Este paso es opcional.
+                      </p>
+
+                      {/* Invoice image preview */}
+                      {(invoiceImagePreview || form.invoiceImageUrl) ? (
+                        <motion.div
+                          initial={{ scale: 0.95, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          className="relative"
+                        >
+                          <div className={cn(
+                            'rounded-2xl overflow-hidden border-2',
+                            theme === 'dark' ? 'border-amber-600 bg-gray-800' : 'border-amber-400 bg-gray-50'
+                          )}>
+                            <img
+                              src={invoiceImagePreview || form.invoiceImageUrl}
+                              alt="Preview factura"
+                              className="w-full max-h-80 object-contain mx-auto"
+                            />
+                          </div>
+                          <div className="flex items-center justify-center gap-3 mt-4">
+                            <button
+                              type="button"
+                              onClick={() => invoiceFileInputRef.current?.click()}
+                              className={cn(
+                                'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors',
+                                theme === 'dark'
+                                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                              )}
+                            >
+                              <Upload className="w-4 h-4" />
+                              Cambiar foto
+                            </button>
+                            <button
+                              type="button"
+                              onClick={removeInvoiceImage}
+                              className={cn(
+                                'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors',
+                                theme === 'dark'
+                                  ? 'bg-red-900/30 text-red-400 hover:bg-red-900/50'
+                                  : 'bg-red-100 text-red-600 hover:bg-red-200'
+                              )}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Eliminar
+                            </button>
+                          </div>
+                        </motion.div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Drag & Drop / File Upload for Invoice */}
+                          <div
+                            onDragOver={(e) => { e.preventDefault(); setDragOverInvoice(true) }}
+                            onDragLeave={() => setDragOverInvoice(false)}
+                            onDrop={handleInvoiceDrop}
+                            onClick={() => !uploadingInvoice && invoiceFileInputRef.current?.click()}
+                            className={cn(
+                              'p-8 rounded-2xl border-2 border-dashed cursor-pointer transition-all text-center',
+                              dragOverInvoice
+                                ? theme === 'dark'
+                                  ? 'border-amber-500 bg-amber-900/20'
+                                  : 'border-amber-500 bg-amber-50'
+                                : theme === 'dark'
+                                  ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-800/50'
+                                  : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50',
+                              uploadingInvoice && 'pointer-events-none opacity-70'
+                            )}
+                          >
+                            {uploadingInvoice ? (
+                              <>
+                                <Loader2 className="w-12 h-12 mx-auto mb-3 text-amber-500 animate-spin" />
+                                <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                  Subiendo imagen...
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <Receipt className={cn(
+                                  'w-12 h-12 mx-auto mb-3',
+                                  theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                                )} />
+                                <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                  Arrastra la factura aquí
+                                </p>
+                                <p className={cn('text-sm mt-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                  o haz clic para seleccionar
+                                </p>
+                                <p className={cn('text-xs mt-3', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                                  JPG, PNG o WebP hasta 10MB
+                                </p>
+                              </>
+                            )}
+                          </div>
+
+                          {/* Phone Upload for Invoice */}
+                          <div
+                            onClick={() => setShowPhoneUploadInvoice(true)}
+                            className={cn(
+                              'p-8 rounded-2xl border-2 border-dashed cursor-pointer transition-all text-center',
+                              theme === 'dark'
+                                ? 'border-gray-600 hover:border-amber-500 hover:bg-amber-900/10'
+                                : 'border-gray-300 hover:border-amber-400 hover:bg-amber-50'
+                            )}
+                          >
+                            <Smartphone className={cn(
+                              'w-12 h-12 mx-auto mb-3',
+                              theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                            )} />
+                            <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                              Tomar foto con el teléfono
+                            </p>
+                            <p className={cn('text-sm mt-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                              Escanea un código QR
+                            </p>
+                            <p className={cn('text-xs mt-3', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
+                              Abre la cámara del celular
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <input
+                      ref={invoiceFileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handleInvoiceFileInputChange}
+                      className="hidden"
+                    />
+                  </motion.div>
+                )}
+
+                {/* Step 3: Location */}
                 {currentStep === 'location' && (
                   <motion.div
                     key="location"
@@ -581,7 +1046,7 @@ export default function NewFixedAssetPage() {
                   </motion.div>
                 )}
 
-                {/* Step 3: Financial */}
+                {/* Step 4: Financial */}
                 {currentStep === 'financial' && (
                   <motion.div
                     key="financial"
@@ -675,7 +1140,7 @@ export default function NewFixedAssetPage() {
                   </motion.div>
                 )}
 
-                {/* Step 4: Technical + Review */}
+                {/* Step 5: Technical + Review */}
                 {currentStep === 'technical' && (
                   <motion.div
                     key="technical"
@@ -768,6 +1233,48 @@ export default function NewFixedAssetPage() {
                       </h3>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Image thumbnails in summary */}
+                        {((imagePreview || form.imageUrl) || (invoiceImagePreview || form.invoiceImageUrl)) && (
+                          <div className="md:col-span-2 flex flex-wrap items-center gap-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+                            {(imagePreview || form.imageUrl) && (
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={imagePreview || form.imageUrl}
+                                  alt="Activo"
+                                  className="w-20 h-20 rounded-xl object-cover"
+                                />
+                                <div>
+                                  <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                    Foto del Activo
+                                  </p>
+                                  <p className="font-medium text-green-600 flex items-center gap-1">
+                                    <Check className="w-4 h-4" />
+                                    Adjuntada
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                            {(invoiceImagePreview || form.invoiceImageUrl) && (
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={invoiceImagePreview || form.invoiceImageUrl}
+                                  alt="Factura"
+                                  className="w-20 h-20 rounded-xl object-cover"
+                                />
+                                <div>
+                                  <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                    Factura Original
+                                  </p>
+                                  <p className="font-medium text-green-600 flex items-center gap-1">
+                                    <Check className="w-4 h-4" />
+                                    Adjuntada
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <div>
                           <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
                             Nombre
@@ -939,6 +1446,22 @@ export default function NewFixedAssetPage() {
             </div>
           </motion.div>
         </div>
+
+        {/* Phone Upload Modal - Asset Photo */}
+        <PhoneUploadModal
+          isOpen={showPhoneUpload}
+          onClose={() => setShowPhoneUpload(false)}
+          purpose="fixed_asset_image"
+          onUploadComplete={handlePhoneUploadComplete}
+        />
+
+        {/* Phone Upload Modal - Invoice Photo */}
+        <PhoneUploadModal
+          isOpen={showPhoneUploadInvoice}
+          onClose={() => setShowPhoneUploadInvoice(false)}
+          purpose="fixed_asset_image"
+          onUploadComplete={handlePhoneUploadInvoiceComplete}
+        />
       </DashboardLayout>
     </ProtectedRoute>
   )
