@@ -261,6 +261,11 @@ export async function POST(request: NextRequest) {
       }, { status: 401 })
     }
 
+    // Migration: add invoice_image_url column if not exists
+    try {
+      await db.query(`ALTER TABLE market_fixed_assets ADD COLUMN IF NOT EXISTS invoice_image_url TEXT`)
+    } catch { /* column may already exist */ }
+
     const body = await request.json()
     const {
       name,
@@ -282,7 +287,8 @@ export async function POST(request: NextRequest) {
       status = 'active',
       condition = 'good',
       notes,
-      imageUrl
+      imageUrl,
+      invoiceImageUrl
     } = body
 
     if (!name) {
@@ -317,14 +323,14 @@ export async function POST(request: NextRequest) {
         responsible_employee_id, acquisition_date, acquisition_cost,
         currency, current_value, supplier_id, invoice_number,
         serial_number, brand, model, status, condition,
-        notes, image_url, created_by
+        notes, image_url, invoice_image_url, created_by
       ) VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9,
         $10, $11, $12,
         $13, $14, $15, $16,
         $17, $18, $19, $20, $21,
-        $22, $23, $24
+        $22, $23, $24, $25
       )
       RETURNING id
     `, [
@@ -351,6 +357,7 @@ export async function POST(request: NextRequest) {
       condition,
       notes || null,
       imageUrl || null,
+      invoiceImageUrl || null,
       payload.userId
     ])
 
