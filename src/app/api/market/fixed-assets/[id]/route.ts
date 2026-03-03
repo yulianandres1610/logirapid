@@ -168,6 +168,7 @@ export async function GET(
           lastAuditByName: asset.last_audit_by_name,
           notes: asset.notes,
           imageUrl: asset.image_url,
+          invoiceImageUrl: asset.invoice_image_url,
           createdBy: asset.created_by,
           createdByName: asset.created_by_name,
           createdAt: asset.created_at,
@@ -277,6 +278,11 @@ export async function PUT(
       }, { status: 403 })
     }
 
+    // Migration: add invoice_image_url column if not exists
+    try {
+      await db.query(`ALTER TABLE market_fixed_assets ADD COLUMN IF NOT EXISTS invoice_image_url TEXT`)
+    } catch { /* column may already exist */ }
+
     const body = await request.json()
     const {
       name,
@@ -299,6 +305,7 @@ export async function PUT(
       condition,
       notes,
       imageUrl,
+      invoiceImageUrl,
       movementReason
     } = body
 
@@ -326,53 +333,56 @@ export async function PUT(
     if (condition !== undefined && condition !== existing.condition) changedFields.push('condicion')
     if (notes !== undefined && notes !== existing.notes) changedFields.push('notas')
     if (imageUrl !== undefined && imageUrl !== existing.image_url) changedFields.push('imagen')
+    if (invoiceImageUrl !== undefined && invoiceImageUrl !== existing.invoice_image_url) changedFields.push('imagen factura')
 
-    // Update asset
+    // Update asset - use direct assignment (not COALESCE) so cleared fields actually save as null
     await db.query(`
       UPDATE market_fixed_assets SET
-        name = COALESCE($1, name),
-        description = COALESCE($2, description),
-        category_id = COALESCE($3, category_id),
-        asset_type = COALESCE($4, asset_type),
-        warehouse_id = COALESCE($5, warehouse_id),
-        location_code = COALESCE($6, location_code),
-        responsible_employee_id = COALESCE($7, responsible_employee_id),
-        acquisition_date = COALESCE($8, acquisition_date),
-        acquisition_cost = COALESCE($9, acquisition_cost),
-        currency = COALESCE($10, currency),
-        current_value = COALESCE($11, current_value),
-        supplier_id = COALESCE($12, supplier_id),
-        invoice_number = COALESCE($13, invoice_number),
-        serial_number = COALESCE($14, serial_number),
-        brand = COALESCE($15, brand),
-        model = COALESCE($16, model),
-        status = COALESCE($17, status),
-        condition = COALESCE($18, condition),
-        notes = COALESCE($19, notes),
-        image_url = COALESCE($20, image_url),
+        name = $1,
+        description = $2,
+        category_id = $3,
+        asset_type = $4,
+        warehouse_id = $5,
+        location_code = $6,
+        responsible_employee_id = $7,
+        acquisition_date = $8,
+        acquisition_cost = $9,
+        currency = $10,
+        current_value = $11,
+        supplier_id = $12,
+        invoice_number = $13,
+        serial_number = $14,
+        brand = $15,
+        model = $16,
+        status = $17,
+        condition = $18,
+        notes = $19,
+        image_url = $20,
+        invoice_image_url = $21,
         updated_at = NOW()
-      WHERE id = $21
+      WHERE id = $22
     `, [
-      name,
-      description,
-      categoryId,
-      assetType,
-      warehouseId,
-      locationCode,
-      responsibleEmployeeId,
-      acquisitionDate,
-      acquisitionCost,
-      currency,
-      currentValue,
-      supplierId,
-      invoiceNumber,
-      serialNumber,
-      brand,
-      model,
-      status,
-      condition,
-      notes,
-      imageUrl,
+      name !== undefined ? name : existing.name,
+      description !== undefined ? description : existing.description,
+      categoryId !== undefined ? categoryId : existing.category_id,
+      assetType !== undefined ? assetType : existing.asset_type,
+      warehouseId !== undefined ? warehouseId : existing.warehouse_id,
+      locationCode !== undefined ? locationCode : existing.location_code,
+      responsibleEmployeeId !== undefined ? responsibleEmployeeId : existing.responsible_employee_id,
+      acquisitionDate !== undefined ? acquisitionDate : existing.acquisition_date,
+      acquisitionCost !== undefined ? acquisitionCost : existing.acquisition_cost,
+      currency !== undefined ? currency : existing.currency,
+      currentValue !== undefined ? currentValue : existing.current_value,
+      supplierId !== undefined ? supplierId : existing.supplier_id,
+      invoiceNumber !== undefined ? invoiceNumber : existing.invoice_number,
+      serialNumber !== undefined ? serialNumber : existing.serial_number,
+      brand !== undefined ? brand : existing.brand,
+      model !== undefined ? model : existing.model,
+      status !== undefined ? status : existing.status,
+      condition !== undefined ? condition : existing.condition,
+      notes !== undefined ? notes : existing.notes,
+      imageUrl !== undefined ? imageUrl : existing.image_url,
+      invoiceImageUrl !== undefined ? invoiceImageUrl : existing.invoice_image_url,
       assetId
     ])
 

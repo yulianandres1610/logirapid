@@ -77,6 +77,7 @@ interface FixedAsset {
   lastAuditByName: string
   notes: string
   imageUrl: string
+  invoiceImageUrl: string
   createdBy: number
   createdByName: string
   createdAt: string
@@ -632,12 +633,18 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                 {/* Left: Asset Info */}
                 <div className="flex items-start gap-4">
-                  <div className={cn(
-                    'w-14 h-14 rounded-2xl flex items-center justify-center shrink-0',
-                    `bg-gradient-to-br ${statusConfig.bgGradient}`
-                  )}>
-                    <Box className="w-7 h-7 text-white" />
-                  </div>
+                  {asset.imageUrl ? (
+                    <div className="w-20 h-20 rounded-2xl overflow-hidden shrink-0 border-2 border-gray-200 dark:border-gray-700">
+                      <img src={asset.imageUrl} alt={asset.name} className="w-full h-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className={cn(
+                      'w-14 h-14 rounded-2xl flex items-center justify-center shrink-0',
+                      `bg-gradient-to-br ${statusConfig.bgGradient}`
+                    )}>
+                      <Box className="w-7 h-7 text-white" />
+                    </div>
+                  )}
                   <div>
                     <div className="flex items-center gap-3 mb-1 flex-wrap">
                       <h1 className={cn(
