@@ -1,6 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 
+export const dynamic = 'force-dynamic'
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+}
+
+/**
+ * OPTIONS /api/upload-tokens/[token]
+ * Handle CORS preflight requests
+ */
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS })
+}
+
 /**
  * GET /api/upload-tokens/[token]
  * Public endpoint - Get token info for mobile upload page
@@ -17,7 +33,7 @@ export async function GET(
       return NextResponse.json({
         success: false,
         error: 'Token invalido'
-      }, { status: 400 })
+      }, { status: 400, headers: CORS_HEADERS })
     }
 
     const result = await db.query(`
@@ -30,7 +46,7 @@ export async function GET(
       return NextResponse.json({
         success: false,
         error: 'Token no encontrado'
-      }, { status: 404 })
+      }, { status: 404, headers: CORS_HEADERS })
     }
 
     const tokenData = result.rows[0]
@@ -50,13 +66,13 @@ export async function GET(
         expired: isExpired,
         hasFile: !!tokenData.file_url
       }
-    })
+    }, { headers: CORS_HEADERS })
 
   } catch (error) {
     console.error('[Upload Token Info] Error:', error)
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Error al obtener info del token'
-    }, { status: 500 })
+    }, { status: 500, headers: CORS_HEADERS })
   }
 }

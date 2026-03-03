@@ -8,6 +8,12 @@ export const runtime = 'nodejs'
 
 const BUCKET_NAME = 'company-private-documents'
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+}
+
 const ALLOWED_TYPES = [
   'image/png',
   'image/jpeg',
@@ -15,6 +21,14 @@ const ALLOWED_TYPES = [
   'image/webp',
   'application/pdf'
 ]
+
+/**
+ * OPTIONS /api/upload-tokens/[token]/upload
+ * Handle CORS preflight requests
+ */
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS })
+}
 
 /**
  * POST /api/upload-tokens/[token]/upload
@@ -32,7 +46,7 @@ export async function POST(
       return NextResponse.json({
         success: false,
         error: 'Token invalido'
-      }, { status: 400 })
+      }, { status: 400, headers: CORS_HEADERS })
     }
 
     // Validate token
@@ -46,7 +60,7 @@ export async function POST(
       return NextResponse.json({
         success: false,
         error: 'Token no encontrado'
-      }, { status: 404 })
+      }, { status: 404, headers: CORS_HEADERS })
     }
 
     const tokenData = tokenResult.rows[0]
@@ -60,7 +74,7 @@ export async function POST(
           : tokenData.status === 'expired'
             ? 'Este token ha expirado'
             : 'Token no valido'
-      }, { status: 400 })
+      }, { status: 400, headers: CORS_HEADERS })
     }
 
     // Check expiration
@@ -69,7 +83,7 @@ export async function POST(
       return NextResponse.json({
         success: false,
         error: 'Este token ha expirado. Genere uno nuevo desde el sistema.'
-      }, { status: 400 })
+      }, { status: 400, headers: CORS_HEADERS })
     }
 
     // Verify storage config
@@ -77,7 +91,7 @@ export async function POST(
       return NextResponse.json({
         success: false,
         error: 'Almacenamiento no configurado'
-      }, { status: 500 })
+      }, { status: 500, headers: CORS_HEADERS })
     }
 
     // Parse form data
@@ -88,7 +102,7 @@ export async function POST(
       return NextResponse.json({
         success: false,
         error: 'No se proporciono archivo'
-      }, { status: 400 })
+      }, { status: 400, headers: CORS_HEADERS })
     }
 
     // Validate file type
@@ -96,7 +110,7 @@ export async function POST(
       return NextResponse.json({
         success: false,
         error: 'Tipo de archivo no permitido. Solo se aceptan imagenes (JPG, PNG, WEBP) y PDF.'
-      }, { status: 400 })
+      }, { status: 400, headers: CORS_HEADERS })
     }
 
     // Max file size: 10MB
@@ -104,7 +118,7 @@ export async function POST(
       return NextResponse.json({
         success: false,
         error: 'El archivo excede el limite de 10MB'
-      }, { status: 400 })
+      }, { status: 400, headers: CORS_HEADERS })
     }
 
     // Generate unique filename
@@ -129,8 +143,8 @@ export async function POST(
       console.error('[Upload Token] Upload error:', uploadResult.error)
       return NextResponse.json({
         success: false,
-        error: 'Error al subir el archivo'
-      }, { status: 500 })
+        error: 'Error al subir el archivo al almacenamiento'
+      }, { status: 500, headers: CORS_HEADERS })
     }
 
     // Update token with file info (including size and type)
@@ -192,13 +206,13 @@ export async function POST(
         fileSize: file.size,
         fileType: file.type
       }
-    })
+    }, { headers: CORS_HEADERS })
 
   } catch (error) {
     console.error('[Upload Token Upload] Error:', error)
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Error al subir archivo'
-    }, { status: 500 })
+    }, { status: 500, headers: CORS_HEADERS })
   }
 }
