@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
+import * as storageAdapter from '@/lib/storage-adapter'
+
+const BUCKET_NAME = 'company-private-documents'
 
 interface JWTPayload {
   userId: number
@@ -169,45 +172,59 @@ export async function GET(request: NextRequest) {
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `, [...params, limit, offset])
 
+    // Generate signed URLs for images in parallel
+    const storageConfigured = storageAdapter.isConfigured()
+    const assets = await Promise.all(assetsResult.rows.map(async (row) => {
+      let imageSignedUrl: string | null = null
+      if (storageConfigured && row.image_url) {
+        try {
+          imageSignedUrl = await storageAdapter.createSignedUrl(BUCKET_NAME, row.image_url, 3600)
+        } catch {
+          // Ignore - image just won't show
+        }
+      }
+      return {
+        id: row.id,
+        companyId: row.company_id,
+        assetCode: row.asset_code,
+        barcode: row.barcode,
+        name: row.name,
+        description: row.description,
+        categoryId: row.category_id,
+        categoryName: row.category_name,
+        categoryCode: row.category_code,
+        assetType: row.asset_type,
+        warehouseId: row.warehouse_id,
+        warehouseName: row.warehouse_name,
+        locationCode: row.location_code,
+        responsibleEmployeeId: row.responsible_employee_id,
+        responsibleName: row.responsible_name,
+        acquisitionDate: row.acquisition_date,
+        acquisitionCost: parseFloat(row.acquisition_cost) || 0,
+        currency: row.currency,
+        currentValue: parseFloat(row.current_value) || 0,
+        supplierId: row.supplier_id,
+        supplierName: row.supplier_name,
+        invoiceNumber: row.invoice_number,
+        serialNumber: row.serial_number,
+        brand: row.brand,
+        model: row.model,
+        status: row.status,
+        condition: row.condition,
+        lastAuditDate: row.last_audit_date,
+        notes: row.notes,
+        imageUrl: imageSignedUrl || row.image_url,
+        createdBy: row.created_by,
+        createdByName: row.created_by_name,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      }
+    }))
+
     return NextResponse.json({
       success: true,
       data: {
-        assets: assetsResult.rows.map(row => ({
-          id: row.id,
-          companyId: row.company_id,
-          assetCode: row.asset_code,
-          barcode: row.barcode,
-          name: row.name,
-          description: row.description,
-          categoryId: row.category_id,
-          categoryName: row.category_name,
-          categoryCode: row.category_code,
-          assetType: row.asset_type,
-          warehouseId: row.warehouse_id,
-          warehouseName: row.warehouse_name,
-          locationCode: row.location_code,
-          responsibleEmployeeId: row.responsible_employee_id,
-          responsibleName: row.responsible_name,
-          acquisitionDate: row.acquisition_date,
-          acquisitionCost: parseFloat(row.acquisition_cost) || 0,
-          currency: row.currency,
-          currentValue: parseFloat(row.current_value) || 0,
-          supplierId: row.supplier_id,
-          supplierName: row.supplier_name,
-          invoiceNumber: row.invoice_number,
-          serialNumber: row.serial_number,
-          brand: row.brand,
-          model: row.model,
-          status: row.status,
-          condition: row.condition,
-          lastAuditDate: row.last_audit_date,
-          notes: row.notes,
-          imageUrl: row.image_url,
-          createdBy: row.created_by,
-          createdByName: row.created_by_name,
-          createdAt: row.created_at,
-          updatedAt: row.updated_at
-        })),
+        assets,
         pagination: {
           page,
           limit,

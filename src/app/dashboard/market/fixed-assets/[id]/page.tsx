@@ -77,7 +77,9 @@ interface FixedAsset {
   lastAuditByName: string
   notes: string
   imageUrl: string
+  imageSignedUrl: string | null
   invoiceImageUrl: string
+  invoiceImageSignedUrl: string | null
   createdBy: number
   createdByName: string
   createdAt: string
@@ -633,9 +635,9 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                 {/* Left: Asset Info */}
                 <div className="flex items-start gap-4">
-                  {asset.imageUrl ? (
+                  {(asset.imageSignedUrl || asset.imageUrl) ? (
                     <div className="w-20 h-20 rounded-2xl overflow-hidden shrink-0 border-2 border-gray-200 dark:border-gray-700">
-                      <img src={asset.imageUrl} alt={asset.name} className="w-full h-full object-cover" />
+                      <img src={asset.imageSignedUrl || asset.imageUrl} alt={asset.name} className="w-full h-full object-cover" />
                     </div>
                   ) : (
                     <div className={cn(

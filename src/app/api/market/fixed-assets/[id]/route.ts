@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
+import * as storageAdapter from '@/lib/storage-adapter'
+
+const BUCKET_NAME = 'company-private-documents'
 
 interface JWTPayload {
   userId: number
@@ -132,6 +135,27 @@ export async function GET(
       LIMIT 20
     `, [assetId])
 
+    // Generate signed URLs for private images
+    let imageSignedUrl: string | null = null
+    let invoiceImageSignedUrl: string | null = null
+
+    if (storageAdapter.isConfigured()) {
+      if (asset.image_url) {
+        try {
+          imageSignedUrl = await storageAdapter.createSignedUrl(BUCKET_NAME, asset.image_url, 3600)
+        } catch (e) {
+          console.error('[Fixed Asset] Error creating signed URL for image:', e)
+        }
+      }
+      if (asset.invoice_image_url) {
+        try {
+          invoiceImageSignedUrl = await storageAdapter.createSignedUrl(BUCKET_NAME, asset.invoice_image_url, 3600)
+        } catch (e) {
+          console.error('[Fixed Asset] Error creating signed URL for invoice image:', e)
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -168,7 +192,9 @@ export async function GET(
           lastAuditByName: asset.last_audit_by_name,
           notes: asset.notes,
           imageUrl: asset.image_url,
+          imageSignedUrl,
           invoiceImageUrl: asset.invoice_image_url,
+          invoiceImageSignedUrl,
           createdBy: asset.created_by,
           createdByName: asset.created_by_name,
           createdAt: asset.created_at,

@@ -200,9 +200,9 @@ export default function EditFixedAssetPage() {
           }
           setForm(formData)
           setOriginalForm(formData)
-          // Set previews from existing URLs
-          if (asset.imageUrl) setImagePreview(asset.imageUrl)
-          if (asset.invoiceImageUrl) setInvoiceImagePreview(asset.invoiceImageUrl)
+          // Set previews from signed URLs (displayable in browser)
+          if (asset.imageSignedUrl || asset.imageUrl) setImagePreview(asset.imageSignedUrl || asset.imageUrl)
+          if (asset.invoiceImageSignedUrl || asset.invoiceImageUrl) setInvoiceImagePreview(asset.invoiceImageSignedUrl || asset.invoiceImageUrl)
         } else {
           showNotification('error', 'Error', 'No se pudo cargar el activo')
           router.push('/dashboard/market/fixed-assets')
