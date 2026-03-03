@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -13,7 +13,12 @@ import {
   DollarSign,
   Barcode,
   AlertTriangle,
-  Save
+  Save,
+  Camera,
+  Upload,
+  Smartphone,
+  Trash2,
+  Receipt
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
@@ -21,6 +26,7 @@ import { ProtectedRoute } from '@/components/protected-route'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
+import { PhoneUploadModal } from '@/components/uploads/PhoneUploadModal'
 
 interface Category {
   id: number
@@ -47,7 +53,7 @@ interface Supplier {
   name: string
 }
 
-type Step = 'basic' | 'location' | 'financial' | 'technical'
+type Step = 'basic' | 'photo' | 'location' | 'financial' | 'technical'
 
 interface WizardStep {
   id: Step
@@ -58,6 +64,7 @@ interface WizardStep {
 
 const STEPS: WizardStep[] = [
   { id: 'basic', title: 'Básico', description: 'Nombre y tipo', icon: Box },
+  { id: 'photo', title: 'Fotos', description: 'Imágenes', icon: Camera },
   { id: 'location', title: 'Ubicación', description: 'Almacén y responsable', icon: MapPin },
   { id: 'financial', title: 'Financiero', description: 'Costos y fechas', icon: DollarSign },
   { id: 'technical', title: 'Técnico', description: 'Detalles y revisión', icon: Barcode }
@@ -84,6 +91,8 @@ export default function EditFixedAssetPage() {
   const assetId = params.id as string
   const { theme } = useTheme()
   const { showNotification } = useNotifications()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const invoiceFileInputRef = useRef<HTMLInputElement>(null)
 
   const [currentStep, setCurrentStep] = useState<Step>('basic')
   const [loading, setLoading] = useState(false)
@@ -95,6 +104,18 @@ export default function EditFixedAssetPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [assetCode, setAssetCode] = useState('')
   const [movementReason, setMovementReason] = useState('')
+
+  // Photo state
+  const [uploading, setUploading] = useState(false)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [showPhoneUpload, setShowPhoneUpload] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+
+  // Invoice image state
+  const [uploadingInvoice, setUploadingInvoice] = useState(false)
+  const [invoiceImagePreview, setInvoiceImagePreview] = useState<string | null>(null)
+  const [showPhoneUploadInvoice, setShowPhoneUploadInvoice] = useState(false)
+  const [dragOverInvoice, setDragOverInvoice] = useState(false)
 
   // Form state
   const [form, setForm] = useState({
@@ -117,6 +138,7 @@ export default function EditFixedAssetPage() {
     condition: 'good',
     notes: '',
     imageUrl: '',
+    invoiceImageUrl: '',
     status: 'active'
   })
 
@@ -173,10 +195,14 @@ export default function EditFixedAssetPage() {
             condition: asset.condition || 'good',
             notes: asset.notes || '',
             imageUrl: asset.imageUrl || '',
+            invoiceImageUrl: asset.invoiceImageUrl || '',
             status: asset.status || 'active'
           }
           setForm(formData)
           setOriginalForm(formData)
+          // Set previews from existing URLs
+          if (asset.imageUrl) setImagePreview(asset.imageUrl)
+          if (asset.invoiceImageUrl) setInvoiceImagePreview(asset.invoiceImageUrl)
         } else {
           showNotification('error', 'Error', 'No se pudo cargar el activo')
           router.push('/dashboard/market/fixed-assets')
@@ -191,6 +217,132 @@ export default function EditFixedAssetPage() {
     fetchData()
   }, [assetId, router, showNotification])
 
+  // Upload image file (asset photo)
+  const handleFileUpload = async (file: File) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      showNotification('error', 'Formato no válido', 'Solo se permiten imágenes JPG, PNG y WebP')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showNotification('error', 'Archivo muy grande', 'La imagen no puede superar los 10MB')
+      return
+    }
+
+    setUploading(true)
+    try {
+      const reader = new FileReader()
+      reader.onload = (e) => setImagePreview(e.target?.result as string)
+      reader.readAsDataURL(file)
+
+      const formData = new FormData()
+      formData.append('image', file)
+      if (form.imageUrl) formData.append('oldImageUrl', form.imageUrl)
+
+      const res = await fetch('/api/market/fixed-assets/upload-image', { method: 'POST', body: formData })
+      const data = await res.json()
+      if (data.success) {
+        setForm(prev => ({ ...prev, imageUrl: data.data.imageUrl }))
+        showNotification('success', 'Imagen subida', 'La foto del activo se guardó correctamente')
+      } else {
+        setImagePreview(form.imageUrl || null)
+        showNotification('error', 'Error', data.error || 'Error al subir la imagen')
+      }
+    } catch {
+      setImagePreview(form.imageUrl || null)
+      showNotification('error', 'Error de conexión', 'No se pudo subir la imagen')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) handleFileUpload(file)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) handleFileUpload(file)
+  }
+
+  const handlePhoneUploadComplete = (fileUrl: string) => {
+    setForm(prev => ({ ...prev, imageUrl: fileUrl }))
+    setImagePreview(fileUrl)
+    showNotification('success', 'Foto recibida', 'La foto del activo se subió desde el teléfono')
+  }
+
+  const removeImage = () => {
+    setForm(prev => ({ ...prev, imageUrl: '' }))
+    setImagePreview(null)
+  }
+
+  // Upload invoice image
+  const handleInvoiceFileUpload = async (file: File) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      showNotification('error', 'Formato no válido', 'Solo se permiten imágenes JPG, PNG y WebP')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showNotification('error', 'Archivo muy grande', 'La imagen no puede superar los 10MB')
+      return
+    }
+
+    setUploadingInvoice(true)
+    try {
+      const reader = new FileReader()
+      reader.onload = (e) => setInvoiceImagePreview(e.target?.result as string)
+      reader.readAsDataURL(file)
+
+      const formData = new FormData()
+      formData.append('image', file)
+      if (form.invoiceImageUrl) formData.append('oldImageUrl', form.invoiceImageUrl)
+
+      const res = await fetch('/api/market/fixed-assets/upload-image', { method: 'POST', body: formData })
+      const data = await res.json()
+      if (data.success) {
+        setForm(prev => ({ ...prev, invoiceImageUrl: data.data.imageUrl }))
+        showNotification('success', 'Imagen subida', 'La foto de la factura se guardó correctamente')
+      } else {
+        setInvoiceImagePreview(form.invoiceImageUrl || null)
+        showNotification('error', 'Error', data.error || 'Error al subir la imagen')
+      }
+    } catch {
+      setInvoiceImagePreview(form.invoiceImageUrl || null)
+      showNotification('error', 'Error de conexión', 'No se pudo subir la imagen')
+    } finally {
+      setUploadingInvoice(false)
+    }
+  }
+
+  const handleInvoiceFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) handleInvoiceFileUpload(file)
+    if (invoiceFileInputRef.current) invoiceFileInputRef.current.value = ''
+  }
+
+  const handleInvoiceDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOverInvoice(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) handleInvoiceFileUpload(file)
+  }
+
+  const handlePhoneUploadInvoiceComplete = (fileUrl: string) => {
+    setForm(prev => ({ ...prev, invoiceImageUrl: fileUrl }))
+    setInvoiceImagePreview(fileUrl)
+    showNotification('success', 'Foto recibida', 'La foto de la factura se subió desde el teléfono')
+  }
+
+  const removeInvoiceImage = () => {
+    setForm(prev => ({ ...prev, invoiceImageUrl: '' }))
+    setInvoiceImagePreview(null)
+  }
+
   // Validate step
   const validateStep = (step: Step): boolean => {
     const newErrors: Record<string, string> = {}
@@ -198,6 +350,7 @@ export default function EditFixedAssetPage() {
       case 'basic':
         if (!form.name.trim()) newErrors.name = 'El nombre del activo es requerido'
         break
+      case 'photo':
       case 'location':
       case 'financial':
       case 'technical':
@@ -235,6 +388,8 @@ export default function EditFixedAssetPage() {
     if (form.name !== originalForm.name) changes.push('nombre')
     if (form.categoryId !== originalForm.categoryId) changes.push('categoría')
     if (form.condition !== originalForm.condition) changes.push('condición')
+    if (form.imageUrl !== originalForm.imageUrl) changes.push('imagen')
+    if (form.invoiceImageUrl !== originalForm.invoiceImageUrl) changes.push('imagen factura')
     return changes
   }
 
@@ -272,6 +427,7 @@ export default function EditFixedAssetPage() {
           condition: form.condition,
           notes: form.notes || null,
           imageUrl: form.imageUrl || null,
+          invoiceImageUrl: form.invoiceImageUrl || null,
           status: form.status,
           movementReason: movementReason || `Edición de activo: ${getChanges().join(', ') || 'datos actualizados'}`
         })
@@ -383,7 +539,7 @@ export default function EditFixedAssetPage() {
                 {STEPS.map((step, index) => (
                   <React.Fragment key={step.id}>
                     <div className="flex flex-col items-center">
-                      <div className="relative w-14 h-14">
+                      <div className="relative w-12 h-12 sm:w-14 sm:h-14">
                         {currentStep === step.id && (
                           <motion.div
                             className="absolute inset-0 rounded-full"
@@ -415,7 +571,7 @@ export default function EditFixedAssetPage() {
                                 : theme === 'dark' ? '#374151' : '#E5E7EB'
                           }}
                           className={cn(
-                            "w-14 h-14 rounded-full flex items-center justify-center relative z-10",
+                            "w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center relative z-10",
                             "transition-shadow duration-300",
                             currentStep === step.id && (
                               theme === 'dark'
@@ -425,10 +581,10 @@ export default function EditFixedAssetPage() {
                           )}
                         >
                           {currentStepIndex > index ? (
-                            <Check className="w-7 h-7 text-white" />
+                            <Check className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
                           ) : (
                             <step.icon className={cn(
-                              "w-7 h-7",
+                              "w-6 h-6 sm:w-7 sm:h-7",
                               currentStep === step.id ? 'text-white' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
                             )} />
                           )}
@@ -437,7 +593,7 @@ export default function EditFixedAssetPage() {
 
                       <div className="mt-3 text-center">
                         <p className={cn(
-                          "text-xs sm:text-sm font-semibold",
+                          "text-[10px] sm:text-sm font-semibold",
                           currentStep === step.id
                             ? theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
                             : currentStepIndex > index
@@ -450,7 +606,7 @@ export default function EditFixedAssetPage() {
                     </div>
 
                     {index < STEPS.length - 1 && (
-                      <div className="flex-1 h-0.5 mx-2 sm:mx-3 mb-8 sm:mb-10 relative">
+                      <div className="flex-1 h-0.5 mx-1 sm:mx-3 mb-8 sm:mb-10 relative">
                         <div className={cn(
                           "absolute inset-0 rounded-full",
                           theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
@@ -561,7 +717,198 @@ export default function EditFixedAssetPage() {
                   </motion.div>
                 )}
 
-                {/* Step 2: Location */}
+                {/* Step 2: Photo */}
+                {currentStep === 'photo' && (
+                  <motion.div
+                    key="photo"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <h2 className={cn(
+                      "text-xl font-bold flex items-center gap-3",
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center">
+                        <Camera className="w-5 h-5 text-white" />
+                      </div>
+                      Foto del Activo
+                    </h2>
+
+                    <p className={cn(
+                      "text-sm",
+                      theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                    )}>
+                      Sube una foto del activo desde tu computadora o toma una con tu teléfono. Este paso es opcional.
+                    </p>
+
+                    {/* Asset image preview */}
+                    {(imagePreview || form.imageUrl) ? (
+                      <motion.div
+                        initial={{ scale: 0.95, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="relative"
+                      >
+                        <div className={cn(
+                          'rounded-2xl overflow-hidden border-2',
+                          theme === 'dark' ? 'border-indigo-600 bg-gray-800' : 'border-indigo-400 bg-gray-50'
+                        )}>
+                          <img
+                            src={imagePreview || form.imageUrl}
+                            alt="Preview del activo"
+                            className="w-full max-h-80 object-contain mx-auto"
+                          />
+                        </div>
+                        <div className="flex items-center justify-center gap-3 mt-4">
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className={cn(
+                              'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors',
+                              theme === 'dark'
+                                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                            )}
+                          >
+                            <Upload className="w-4 h-4" />
+                            Cambiar foto
+                          </button>
+                          <button
+                            type="button"
+                            onClick={removeImage}
+                            className={cn(
+                              'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors',
+                              theme === 'dark'
+                                ? 'bg-red-900/30 text-red-400 hover:bg-red-900/50'
+                                : 'bg-red-100 text-red-600 hover:bg-red-200'
+                            )}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Eliminar
+                          </button>
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div
+                          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                          onDragLeave={() => setDragOver(false)}
+                          onDrop={handleDrop}
+                          onClick={() => !uploading && fileInputRef.current?.click()}
+                          className={cn(
+                            'p-8 rounded-2xl border-2 border-dashed cursor-pointer transition-all text-center',
+                            dragOver
+                              ? theme === 'dark' ? 'border-indigo-500 bg-indigo-900/20' : 'border-indigo-500 bg-indigo-50'
+                              : theme === 'dark' ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-800/50' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50',
+                            uploading && 'pointer-events-none opacity-70'
+                          )}
+                        >
+                          {uploading ? (
+                            <>
+                              <Loader2 className="w-12 h-12 mx-auto mb-3 text-indigo-500 animate-spin" />
+                              <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Subiendo imagen...</p>
+                            </>
+                          ) : (
+                            <>
+                              <Upload className={cn('w-12 h-12 mx-auto mb-3', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')} />
+                              <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Arrastra una imagen aquí</p>
+                              <p className={cn('text-sm mt-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>o haz clic para seleccionar</p>
+                              <p className={cn('text-xs mt-3', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>JPG, PNG o WebP hasta 10MB</p>
+                            </>
+                          )}
+                        </div>
+                        <div
+                          onClick={() => setShowPhoneUpload(true)}
+                          className={cn(
+                            'p-8 rounded-2xl border-2 border-dashed cursor-pointer transition-all text-center',
+                            theme === 'dark' ? 'border-gray-600 hover:border-blue-500 hover:bg-blue-900/10' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                          )}
+                        >
+                          <Smartphone className={cn('w-12 h-12 mx-auto mb-3', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')} />
+                          <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Tomar foto con el teléfono</p>
+                          <p className={cn('text-sm mt-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Escanea un código QR</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFileInputChange} className="hidden" />
+
+                    {/* Invoice Image Section */}
+                    <div className={cn("border-t pt-6 mt-6", theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                      <h3 className={cn("text-lg font-bold flex items-center gap-3 mb-2", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
+                          <Receipt className="w-4 h-4 text-white" />
+                        </div>
+                        Imagen de Factura Original
+                      </h3>
+                      <p className={cn("text-sm mb-4", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                        Sube una foto de la factura o recibo de compra del activo. Este paso es opcional.
+                      </p>
+
+                      {(invoiceImagePreview || form.invoiceImageUrl) ? (
+                        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative">
+                          <div className={cn('rounded-2xl overflow-hidden border-2', theme === 'dark' ? 'border-amber-600 bg-gray-800' : 'border-amber-400 bg-gray-50')}>
+                            <img src={invoiceImagePreview || form.invoiceImageUrl} alt="Preview factura" className="w-full max-h-80 object-contain mx-auto" />
+                          </div>
+                          <div className="flex items-center justify-center gap-3 mt-4">
+                            <button type="button" onClick={() => invoiceFileInputRef.current?.click()} className={cn('flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors', theme === 'dark' ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300')}>
+                              <Upload className="w-4 h-4" />
+                              Cambiar foto
+                            </button>
+                            <button type="button" onClick={removeInvoiceImage} className={cn('flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors', theme === 'dark' ? 'bg-red-900/30 text-red-400 hover:bg-red-900/50' : 'bg-red-100 text-red-600 hover:bg-red-200')}>
+                              <Trash2 className="w-4 h-4" />
+                              Eliminar
+                            </button>
+                          </div>
+                        </motion.div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div
+                            onDragOver={(e) => { e.preventDefault(); setDragOverInvoice(true) }}
+                            onDragLeave={() => setDragOverInvoice(false)}
+                            onDrop={handleInvoiceDrop}
+                            onClick={() => !uploadingInvoice && invoiceFileInputRef.current?.click()}
+                            className={cn(
+                              'p-8 rounded-2xl border-2 border-dashed cursor-pointer transition-all text-center',
+                              dragOverInvoice
+                                ? theme === 'dark' ? 'border-amber-500 bg-amber-900/20' : 'border-amber-500 bg-amber-50'
+                                : theme === 'dark' ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-800/50' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50',
+                              uploadingInvoice && 'pointer-events-none opacity-70'
+                            )}
+                          >
+                            {uploadingInvoice ? (
+                              <>
+                                <Loader2 className="w-12 h-12 mx-auto mb-3 text-amber-500 animate-spin" />
+                                <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Subiendo imagen...</p>
+                              </>
+                            ) : (
+                              <>
+                                <Receipt className={cn('w-12 h-12 mx-auto mb-3', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')} />
+                                <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Arrastra la factura aquí</p>
+                                <p className={cn('text-sm mt-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>o haz clic para seleccionar</p>
+                                <p className={cn('text-xs mt-3', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>JPG, PNG o WebP hasta 10MB</p>
+                              </>
+                            )}
+                          </div>
+                          <div
+                            onClick={() => setShowPhoneUploadInvoice(true)}
+                            className={cn('p-8 rounded-2xl border-2 border-dashed cursor-pointer transition-all text-center', theme === 'dark' ? 'border-gray-600 hover:border-amber-500 hover:bg-amber-900/10' : 'border-gray-300 hover:border-amber-400 hover:bg-amber-50')}
+                          >
+                            <Smartphone className={cn('w-12 h-12 mx-auto mb-3', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')} />
+                            <p className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Tomar foto con el teléfono</p>
+                            <p className={cn('text-sm mt-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Escanea un código QR</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <input ref={invoiceFileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleInvoiceFileInputChange} className="hidden" />
+                  </motion.div>
+                )}
+
+                {/* Step 3: Location */}
                 {currentStep === 'location' && (
                   <motion.div
                     key="location"
@@ -583,49 +930,27 @@ export default function EditFixedAssetPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
                         <label className={labelClass}>Almacén/Ubicación</label>
-                        <select
-                          value={form.warehouseId}
-                          onChange={(e) => setForm({ ...form, warehouseId: e.target.value })}
-                          className={inputClass}
-                        >
+                        <select value={form.warehouseId} onChange={(e) => setForm({ ...form, warehouseId: e.target.value })} className={inputClass}>
                           <option value="">Seleccionar ubicación</option>
-                          {warehouses.map(wh => (
-                            <option key={wh.id} value={wh.id}>{wh.name}</option>
-                          ))}
+                          {warehouses.map(wh => (<option key={wh.id} value={wh.id}>{wh.name}</option>))}
                         </select>
                       </div>
-
                       <div>
                         <label className={labelClass}>Código de Ubicación</label>
-                        <input
-                          type="text"
-                          value={form.locationCode}
-                          onChange={(e) => setForm({ ...form, locationCode: e.target.value })}
-                          placeholder="Ej: Oficina 201, Rack A3"
-                          className={inputClass}
-                        />
+                        <input type="text" value={form.locationCode} onChange={(e) => setForm({ ...form, locationCode: e.target.value })} placeholder="Ej: Oficina 201, Rack A3" className={inputClass} />
                       </div>
-
                       <div className="md:col-span-2">
                         <label className={labelClass}>Responsable</label>
-                        <select
-                          value={form.responsibleEmployeeId}
-                          onChange={(e) => setForm({ ...form, responsibleEmployeeId: e.target.value })}
-                          className={inputClass}
-                        >
+                        <select value={form.responsibleEmployeeId} onChange={(e) => setForm({ ...form, responsibleEmployeeId: e.target.value })} className={inputClass}>
                           <option value="">Seleccionar responsable</option>
-                          {employees.map(emp => (
-                            <option key={emp.id} value={emp.id}>
-                              {emp.fullName || `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.email}
-                            </option>
-                          ))}
+                          {employees.map(emp => (<option key={emp.id} value={emp.id}>{emp.fullName || `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.email}</option>))}
                         </select>
                       </div>
                     </div>
                   </motion.div>
                 )}
 
-                {/* Step 3: Financial */}
+                {/* Step 4: Financial */}
                 {currentStep === 'financial' && (
                   <motion.div
                     key="financial"
@@ -647,78 +972,39 @@ export default function EditFixedAssetPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
                         <label className={labelClass}>Fecha de Adquisición</label>
-                        <input
-                          type="date"
-                          value={form.acquisitionDate}
-                          onChange={(e) => setForm({ ...form, acquisitionDate: e.target.value })}
-                          className={inputClass}
-                        />
+                        <input type="date" value={form.acquisitionDate} onChange={(e) => setForm({ ...form, acquisitionDate: e.target.value })} className={inputClass} />
                       </div>
-
                       <div>
                         <label className={labelClass}>Costo de Adquisición</label>
                         <div className="flex gap-2">
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={form.acquisitionCost}
-                            onChange={(e) => setForm({ ...form, acquisitionCost: e.target.value })}
-                            placeholder="0.00"
-                            className={cn(inputClass, "flex-1")}
-                          />
-                          <select
-                            value={form.currency}
-                            onChange={(e) => setForm({ ...form, currency: e.target.value })}
-                            className={cn(inputClass, "w-24")}
-                          >
+                          <input type="number" step="0.01" value={form.acquisitionCost} onChange={(e) => setForm({ ...form, acquisitionCost: e.target.value })} placeholder="0.00" className={cn(inputClass, "flex-1")} />
+                          <select value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} className={cn(inputClass, "w-24")}>
                             <option value="USD">USD</option>
                             <option value="CUP">CUP</option>
                             <option value="EUR">EUR</option>
                           </select>
                         </div>
                       </div>
-
                       <div>
                         <label className={labelClass}>Valor Actual</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={form.currentValue}
-                          onChange={(e) => setForm({ ...form, currentValue: e.target.value })}
-                          placeholder="Valor actual del activo"
-                          className={inputClass}
-                        />
+                        <input type="number" step="0.01" value={form.currentValue} onChange={(e) => setForm({ ...form, currentValue: e.target.value })} placeholder="Valor actual del activo" className={inputClass} />
                       </div>
-
                       <div>
                         <label className={labelClass}>Proveedor</label>
-                        <select
-                          value={form.supplierId}
-                          onChange={(e) => setForm({ ...form, supplierId: e.target.value })}
-                          className={inputClass}
-                        >
+                        <select value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })} className={inputClass}>
                           <option value="">Seleccionar proveedor</option>
-                          {suppliers.map(sup => (
-                            <option key={sup.id} value={sup.id}>{sup.name}</option>
-                          ))}
+                          {suppliers.map(sup => (<option key={sup.id} value={sup.id}>{sup.name}</option>))}
                         </select>
                       </div>
-
                       <div className="md:col-span-2">
                         <label className={labelClass}>Número de Factura</label>
-                        <input
-                          type="text"
-                          value={form.invoiceNumber}
-                          onChange={(e) => setForm({ ...form, invoiceNumber: e.target.value })}
-                          placeholder="Ej: FAC-2025-001"
-                          className={inputClass}
-                        />
+                        <input type="text" value={form.invoiceNumber} onChange={(e) => setForm({ ...form, invoiceNumber: e.target.value })} placeholder="Ej: FAC-2025-001" className={inputClass} />
                       </div>
                     </div>
                   </motion.div>
                 )}
 
-                {/* Step 4: Technical + Review */}
+                {/* Step 5: Technical + Review */}
                 {currentStep === 'technical' && (
                   <motion.div
                     key="technical"
@@ -740,70 +1026,29 @@ export default function EditFixedAssetPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
                         <label className={labelClass}>Número de Serie</label>
-                        <input
-                          type="text"
-                          value={form.serialNumber}
-                          onChange={(e) => setForm({ ...form, serialNumber: e.target.value })}
-                          placeholder="Ej: SN123456789"
-                          className={inputClass}
-                        />
+                        <input type="text" value={form.serialNumber} onChange={(e) => setForm({ ...form, serialNumber: e.target.value })} placeholder="Ej: SN123456789" className={inputClass} />
                       </div>
-
                       <div>
                         <label className={labelClass}>Marca</label>
-                        <input
-                          type="text"
-                          value={form.brand}
-                          onChange={(e) => setForm({ ...form, brand: e.target.value })}
-                          placeholder="Ej: Dell, HP, Lenovo"
-                          className={inputClass}
-                        />
+                        <input type="text" value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} placeholder="Ej: Dell, HP, Lenovo" className={inputClass} />
                       </div>
-
                       <div>
                         <label className={labelClass}>Modelo</label>
-                        <input
-                          type="text"
-                          value={form.model}
-                          onChange={(e) => setForm({ ...form, model: e.target.value })}
-                          placeholder="Ej: PowerEdge R740"
-                          className={inputClass}
-                        />
+                        <input type="text" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder="Ej: PowerEdge R740" className={inputClass} />
                       </div>
-
                       <div>
                         <label className={labelClass}>Condición</label>
-                        <select
-                          value={form.condition}
-                          onChange={(e) => setForm({ ...form, condition: e.target.value })}
-                          className={inputClass}
-                        >
-                          {CONDITIONS.map(cond => (
-                            <option key={cond.value} value={cond.value}>{cond.label}</option>
-                          ))}
+                        <select value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })} className={inputClass}>
+                          {CONDITIONS.map(cond => (<option key={cond.value} value={cond.value}>{cond.label}</option>))}
                         </select>
                       </div>
-
                       <div className="md:col-span-2">
                         <label className={labelClass}>Notas</label>
-                        <textarea
-                          value={form.notes}
-                          onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                          placeholder="Notas adicionales..."
-                          rows={3}
-                          className={inputClass}
-                        />
+                        <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Notas adicionales..." rows={3} className={inputClass} />
                       </div>
-
                       <div className="md:col-span-2">
                         <label className={labelClass}>Razón del cambio (opcional)</label>
-                        <input
-                          type="text"
-                          value={movementReason}
-                          onChange={(e) => setMovementReason(e.target.value)}
-                          placeholder="Ej: Actualización de datos, corrección de información..."
-                          className={inputClass}
-                        />
+                        <input type="text" value={movementReason} onChange={(e) => setMovementReason(e.target.value)} placeholder="Ej: Actualización de datos, corrección de información..." className={inputClass} />
                         <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
                           Esta razón se registrará en el historial de movimientos del activo
                         </p>
@@ -824,18 +1069,40 @@ export default function EditFixedAssetPage() {
                       </h3>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Image thumbnails */}
+                        {((imagePreview || form.imageUrl) || (invoiceImagePreview || form.invoiceImageUrl)) && (
+                          <div className="md:col-span-2 flex flex-wrap items-center gap-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+                            {(imagePreview || form.imageUrl) && (
+                              <div className="flex items-center gap-3">
+                                <img src={imagePreview || form.imageUrl} alt="Activo" className="w-16 h-16 rounded-xl object-cover" />
+                                <div>
+                                  <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Foto del Activo</p>
+                                  <p className="font-medium text-green-600 flex items-center gap-1 text-sm"><Check className="w-3 h-3" />Adjuntada</p>
+                                </div>
+                              </div>
+                            )}
+                            {(invoiceImagePreview || form.invoiceImageUrl) && (
+                              <div className="flex items-center gap-3">
+                                <img src={invoiceImagePreview || form.invoiceImageUrl} alt="Factura" className="w-16 h-16 rounded-xl object-cover" />
+                                <div>
+                                  <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Factura Original</p>
+                                  <p className="font-medium text-green-600 flex items-center gap-1 text-sm"><Check className="w-3 h-3" />Adjuntada</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <div>
                           <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Nombre</p>
                           <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{form.name || '-'}</p>
                         </div>
-
                         {summary.category && (
                           <div>
                             <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Categoría</p>
                             <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{summary.category}</p>
                           </div>
                         )}
-
                         {summary.warehouse && (
                           <div>
                             <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Ubicación</p>
@@ -844,14 +1111,20 @@ export default function EditFixedAssetPage() {
                             </p>
                           </div>
                         )}
-
                         {summary.employee && (
                           <div>
                             <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Responsable</p>
                             <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{summary.employee}</p>
                           </div>
                         )}
-
+                        {form.acquisitionCost && (
+                          <div>
+                            <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Costo</p>
+                            <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                              {parseFloat(form.acquisitionCost).toLocaleString('en-US', { style: 'currency', currency: form.currency })}
+                            </p>
+                          </div>
+                        )}
                         <div>
                           <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>Condición</p>
                           <p className={cn("font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>{summary.condition}</p>
@@ -898,15 +1171,9 @@ export default function EditFixedAssetPage() {
                   )}
                 >
                   {loading ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Guardando...
-                    </>
+                    <><Loader2 className="w-5 h-5 animate-spin" />Guardando...</>
                   ) : (
-                    <>
-                      <Save className="w-5 h-5" />
-                      Guardar Cambios
-                    </>
+                    <><Save className="w-5 h-5" />Guardar Cambios</>
                   )}
                 </motion.button>
               ) : (
@@ -916,9 +1183,7 @@ export default function EditFixedAssetPage() {
                   onClick={goToNextStep}
                   className={cn(
                     "flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all",
-                    theme === 'dark'
-                      ? 'bg-blue-600 hover:bg-blue-700'
-                      : 'bg-blue-500 hover:bg-blue-600',
+                    theme === 'dark' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600',
                     'text-white'
                   )}
                 >
@@ -929,6 +1194,22 @@ export default function EditFixedAssetPage() {
             </div>
           </motion.div>
         </div>
+
+        {/* Phone Upload Modal - Asset Photo */}
+        <PhoneUploadModal
+          isOpen={showPhoneUpload}
+          onClose={() => setShowPhoneUpload(false)}
+          purpose="fixed_asset_image"
+          onUploadComplete={handlePhoneUploadComplete}
+        />
+
+        {/* Phone Upload Modal - Invoice Photo */}
+        <PhoneUploadModal
+          isOpen={showPhoneUploadInvoice}
+          onClose={() => setShowPhoneUploadInvoice(false)}
+          purpose="fixed_asset_image"
+          onUploadComplete={handlePhoneUploadInvoiceComplete}
+        />
       </DashboardLayout>
     </ProtectedRoute>
   )

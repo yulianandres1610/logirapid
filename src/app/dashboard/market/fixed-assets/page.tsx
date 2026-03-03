@@ -53,6 +53,7 @@ interface FixedAsset {
   status: string
   condition: string
   lastAuditDate: string
+  imageUrl: string
   createdAt: string
 }
 
@@ -744,19 +745,33 @@ export default function FixedAssetsPage() {
                               )}
                             >
                               <td className="py-4 px-4">
-                                <div>
-                                  <p className={cn(
-                                    "font-medium",
-                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                  )}>
-                                    {asset.name}
-                                  </p>
-                                  <p className={cn(
-                                    "text-xs font-mono",
-                                    theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                                  )}>
-                                    {asset.assetCode}
-                                  </p>
+                                <div className="flex items-center gap-3">
+                                  {asset.imageUrl ? (
+                                    <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-gray-200 dark:border-gray-700">
+                                      <img src={asset.imageUrl} alt={asset.name} className="w-full h-full object-cover" />
+                                    </div>
+                                  ) : (
+                                    <div className={cn(
+                                      'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
+                                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                                    )}>
+                                      <Box className={cn('w-5 h-5', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')} />
+                                    </div>
+                                  )}
+                                  <div>
+                                    <p className={cn(
+                                      "font-medium",
+                                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                                    )}>
+                                      {asset.name}
+                                    </p>
+                                    <p className={cn(
+                                      "text-xs font-mono",
+                                      theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                                    )}>
+                                      {asset.assetCode}
+                                    </p>
+                                  </div>
                                 </div>
                               </td>
                               <td className="py-4 px-4">
