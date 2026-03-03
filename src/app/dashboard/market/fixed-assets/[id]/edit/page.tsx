@@ -269,9 +269,9 @@ export default function EditFixedAssetPage() {
     if (file) handleFileUpload(file)
   }
 
-  const handlePhoneUploadComplete = (fileUrl: string) => {
+  const handlePhoneUploadComplete = (fileUrl: string, _fileName: string, _fileSize?: number, _fileType?: string, signedUrl?: string) => {
     setForm(prev => ({ ...prev, imageUrl: fileUrl }))
-    setImagePreview(fileUrl)
+    setImagePreview(signedUrl || fileUrl)
     showNotification('success', 'Foto recibida', 'La foto del activo se subió desde el teléfono')
   }
 
@@ -332,9 +332,9 @@ export default function EditFixedAssetPage() {
     if (file) handleInvoiceFileUpload(file)
   }
 
-  const handlePhoneUploadInvoiceComplete = (fileUrl: string) => {
+  const handlePhoneUploadInvoiceComplete = (fileUrl: string, _fileName: string, _fileSize?: number, _fileType?: string, signedUrl?: string) => {
     setForm(prev => ({ ...prev, invoiceImageUrl: fileUrl }))
-    setInvoiceImagePreview(fileUrl)
+    setInvoiceImagePreview(signedUrl || fileUrl)
     showNotification('success', 'Foto recibida', 'La foto de la factura se subió desde el teléfono')
   }
 
