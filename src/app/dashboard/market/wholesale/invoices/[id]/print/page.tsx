@@ -66,6 +66,7 @@ export default function PrintInvoicePage() {
   const [error, setError] = useState('')
   const [qrCodes, setQrCodes] = useState<Record<string, string>>({})
   const [brandLogo, setBrandLogo] = useState<string | null>(null)
+  const [currentWholesaleRate, setCurrentWholesaleRate] = useState<number | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -88,6 +89,7 @@ export default function PrintInvoicePage() {
 
   useEffect(() => {
     fetchInvoice()
+    fetchCurrentRate()
   }, [invoiceId])
 
   useEffect(() => {
@@ -95,6 +97,20 @@ export default function PrintInvoicePage() {
       generateQRCodes()
     }
   }, [invoice])
+
+  const fetchCurrentRate = async () => {
+    try {
+      const response = await fetch('/api/market/pos/exchange-rates')
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && result.rates?.CUP_WHOLESALE) {
+          setCurrentWholesaleRate(result.rates.CUP_WHOLESALE)
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching exchange rates:', err)
+    }
+  }
 
   const fetchInvoice = async () => {
     try {
@@ -478,7 +494,7 @@ export default function PrintInvoicePage() {
 
   // Render receipt (80mm ticket)
   if (format === 'receipt') {
-    const rate = invoice.wholesaleExchangeRate || 355
+    const rate = currentWholesaleRate || invoice.wholesaleExchangeRate || 355
 
     return (
       <>
@@ -604,7 +620,7 @@ export default function PrintInvoicePage() {
   }
 
   // Render letter format (default)
-  const rate = invoice.wholesaleExchangeRate || 355
+  const rate = currentWholesaleRate || invoice.wholesaleExchangeRate || 355
 
   return (
     <>

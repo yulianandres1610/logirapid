@@ -251,6 +251,18 @@ export default function WholesaleInvoicesPage() {
 
     setPrintingWithService(true)
     try {
+      // Fetch current system wholesale exchange rate
+      let currentExchangeRate: number | null = null
+      try {
+        const ratesRes = await fetch('/api/market/pos/exchange-rates')
+        const ratesData = await ratesRes.json()
+        if (ratesData.success && ratesData.rates?.CUP_WHOLESALE) {
+          currentExchangeRate = ratesData.rates.CUP_WHOLESALE
+        }
+      } catch (e) {
+        console.error('[Print] Error fetching exchange rates:', e)
+      }
+
       const customer = invoiceDetail
         ? { code: (invoiceDetail as Record<string, unknown>).customer ? ((invoiceDetail as Record<string, unknown>).customer as Record<string, string>).code : printInvoice.customerCode, name: (invoiceDetail as Record<string, unknown>).customer ? ((invoiceDetail as Record<string, unknown>).customer as Record<string, string>).businessName : printInvoice.customerName, taxId: (invoiceDetail as Record<string, unknown>).customer ? ((invoiceDetail as Record<string, unknown>).customer as Record<string, string>).taxId : undefined, address: (invoiceDetail as Record<string, unknown>).customer ? ((invoiceDetail as Record<string, unknown>).customer as Record<string, string>).address : undefined, phone: (invoiceDetail as Record<string, unknown>).customer ? ((invoiceDetail as Record<string, unknown>).customer as Record<string, string>).phone : undefined }
         : { code: printInvoice.customerCode, name: printInvoice.customerName }
@@ -277,7 +289,7 @@ export default function WholesaleInvoicesPage() {
             dueDate: printInvoice.dueDate,
             createdAt: printInvoice.createdAt,
             notes: (invoiceDetail as Record<string, unknown>)?.notes || undefined,
-            exchangeRate: (invoiceDetail as Record<string, unknown>)?.wholesaleExchangeRate || null
+            exchangeRate: currentExchangeRate || (invoiceDetail as Record<string, unknown>)?.wholesaleExchangeRate || null
           },
           copies,
           printServiceId: selectedPrinter.serviceId,
