@@ -56,7 +56,8 @@ import {
   Scale,
   Factory,
   Shield,
-  FlaskConical
+  FlaskConical,
+  ArrowLeftRight
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -578,6 +579,8 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       submenuItems: [
         { icon: Box, label: "Inventario", href: "/dashboard/market/fixed-assets" },
         { icon: Tag, label: "Categorías", href: "/dashboard/market/fixed-assets/categories" },
+        { icon: Package, label: "Consumibles", href: "/dashboard/market/fixed-assets/consumables" },
+        { icon: ArrowLeftRight, label: "Préstamos", href: "/dashboard/market/fixed-assets/checkouts" },
       ]
     },
     { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
@@ -704,6 +707,8 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       submenuItems: [
         { icon: Box, label: "Inventario", href: "/dashboard/market/fixed-assets" },
         { icon: Tag, label: "Categorías", href: "/dashboard/market/fixed-assets/categories" },
+        { icon: Package, label: "Consumibles", href: "/dashboard/market/fixed-assets/consumables" },
+        { icon: ArrowLeftRight, label: "Préstamos", href: "/dashboard/market/fixed-assets/checkouts" },
       ]
     },
     { icon: MessageCircle, label: "Conversaciones", href: "/dashboard/market/chat" },
