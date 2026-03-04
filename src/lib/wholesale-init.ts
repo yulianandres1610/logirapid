@@ -228,6 +228,15 @@ export async function initializeWholesaleTables() {
     // Columns may already exist
   }
 
+  // Add sales_rep_id column to quotes and invoices for commission tracking
+  try {
+    await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS sales_rep_id INTEGER REFERENCES users(id)`)
+    await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS sales_rep_id INTEGER REFERENCES users(id)`)
+    console.log('[Wholesale] Added sales_rep_id columns to market_quotes and market_invoices')
+  } catch {
+    // Columns may already exist
+  }
+
   // Create indexes for better performance
   try {
     await db.query(`CREATE INDEX IF NOT EXISTS idx_wholesale_customers_company ON market_wholesale_customers(company_id)`)

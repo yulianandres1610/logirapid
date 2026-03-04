@@ -57,12 +57,15 @@ export async function GET(
         c.tax_id as customer_tax_id,
         w.name as warehouse_name,
         pl.name as pricelist_name,
-        u.email as created_by_email
+        u.email as created_by_email,
+        CONCAT(sr.firstname, ' ', sr.lastname) as sales_rep_name,
+        sr.email as sales_rep_email
       FROM market_quotes q
       JOIN market_wholesale_customers c ON c.id = q.customer_id
       LEFT JOIN market_warehouses w ON w.id = q.warehouse_id
       LEFT JOIN market_pricelists pl ON pl.id = q.pricelist_id
       LEFT JOIN users u ON u.id = q.created_by
+      LEFT JOIN users sr ON sr.id = q.sales_rep_id
       WHERE q.id = $1 AND q.company_id = $2
     `, [quoteId, payload.companyId])
 
@@ -113,6 +116,9 @@ export async function GET(
       notes: row.notes,
       internalNotes: row.internal_notes,
       convertedToInvoiceId: row.converted_to_invoice_id,
+      salesRepId: row.sales_rep_id || null,
+      salesRepName: row.sales_rep_name || null,
+      salesRepEmail: row.sales_rep_email || null,
       createdBy: row.created_by_email,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
