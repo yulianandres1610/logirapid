@@ -295,15 +295,24 @@ a {
    ============================================================ */
 
 /* Servisumic login form inputs - ensure dark text on light backgrounds */
-/* Only apply to light theme login forms, not dark mode dashboard inputs */
+/* Apply to both light and dark themes because login page always uses light card */
 html.brand-servisumic.light input[type="email"],
 html.brand-servisumic.light input[type="password"],
 html.brand-servisumic.light input[type="text"] {
-  color: #1c1917; /* stone-900 - only in light mode */
+  color: #1c1917; /* stone-900 */
 }
 
 html.brand-servisumic.light input::placeholder {
-  color: #a8a29e; /* stone-400 - only in light mode */
+  color: #a8a29e; /* stone-400 */
+}
+
+/* Servisumic login inputs when user has dark theme in localStorage */
+/* The login page card is always light, so inputs need dark text */
+.servisumic-login-input {
+  color: #1c1917 !important; /* stone-900 */
+}
+.servisumic-login-input::placeholder {
+  color: #a8a29e !important; /* stone-400 */
 }
 
 /* Door Kiosk inputs - ensure proper text color in dark theme */
