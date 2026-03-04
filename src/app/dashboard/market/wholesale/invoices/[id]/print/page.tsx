@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { Loader2, Printer, QrCode, Package, Warehouse, CheckSquare } from 'lucide-react'
 import QRCode from 'qrcode'
+import { detectBrandFromHost, brands } from '@/lib/brand-config'
 
 interface InvoiceData {
   id: number
@@ -61,7 +62,26 @@ export default function PrintInvoicePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [qrCodes, setQrCodes] = useState<Record<string, string>>({})
+  const [brandLogo, setBrandLogo] = useState<string | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const brandName = detectBrandFromHost(window.location.hostname)
+    const brand = brands[brandName]
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.drawImage(img, 0, 0)
+        setBrandLogo(canvas.toDataURL('image/png'))
+      }
+    }
+    img.src = brand.logos.light
+  }, [])
 
   useEffect(() => {
     fetchInvoice()
@@ -615,19 +635,31 @@ export default function PrintInvoicePage() {
       {/* Invoice - Letter format */}
       <div className="max-w-[8.5in] mx-auto bg-white p-8 shadow-lg">
         {/* Header */}
-        <div className="flex justify-between items-start border-b-2 border-green-600 pb-6 mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-green-600">FACTURA</h1>
-            <p className="text-gray-500 mt-1">Venta Mayorista</p>
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold">{invoice.invoiceNumber}</p>
-            <p className="text-gray-500">Fecha: {formatDateLong(invoice.createdAt)}</p>
-            {invoice.dueDate && (
-              <p className="text-gray-500">Vencimiento: {formatDateLong(invoice.dueDate)}</p>
-            )}
-          </div>
-        </div>
+        {(() => {
+          const brandName = detectBrandFromHost(typeof window !== 'undefined' ? window.location.hostname : '')
+          const brand = brands[brandName]
+          const primaryColor = brand.colors.primary
+          return (
+            <div className="flex justify-between items-start pb-6 mb-6" style={{ borderBottom: `2px solid ${primaryColor}` }}>
+              <div className="flex items-center gap-4">
+                {brandLogo && (
+                  <img src={brandLogo} alt={brand.displayName} className="h-14 w-auto" />
+                )}
+                <div>
+                  <h1 className="text-3xl font-bold" style={{ color: primaryColor }}>FACTURA</h1>
+                  <p className="text-gray-500 mt-1">Venta Mayorista</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold">{invoice.invoiceNumber}</p>
+                <p className="text-gray-500">Fecha: {formatDateLong(invoice.createdAt)}</p>
+                {invoice.dueDate && (
+                  <p className="text-gray-500">Vencimiento: {formatDateLong(invoice.dueDate)}</p>
+                )}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Customer Info */}
         <div className="grid grid-cols-2 gap-8 mb-8">
@@ -638,28 +670,34 @@ export default function PrintInvoicePage() {
             {invoice.customer.address && <p className="text-gray-600">{invoice.customer.address}</p>}
             {invoice.customer.phone && <p className="text-gray-600">Tel: {invoice.customer.phone}</p>}
           </div>
-          <div className="bg-green-50 p-4 rounded-lg">
-            <p className="text-sm font-medium text-gray-500 mb-2">ESTADO DE PAGO:</p>
-            <span className={`inline-block px-3 py-1 text-sm font-bold rounded ${
-              invoice.paymentStatus === 'paid'
-                ? 'bg-green-100 text-green-700'
-                : invoice.paymentStatus === 'partial'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'bg-yellow-100 text-yellow-700'
-            }`}>
-              {invoice.paymentStatus === 'paid'
-                ? 'PAGADA'
-                : invoice.paymentStatus === 'partial'
-                  ? 'PAGO PARCIAL'
-                  : 'PENDIENTE DE PAGO'}
-            </span>
-            {invoice.downpaymentAmount && invoice.downpaymentAmount > 0 && (
-              <div className="mt-2 text-sm">
-                <p>Anticipo pagado: <span className="font-bold text-green-600">{formatCurrency(invoice.downpaymentAmount)}</span></p>
-                <p>Restante: <span className="font-bold text-amber-600">{formatCurrency(invoice.amountDue)}</span></p>
+          {(() => {
+            const brandName = detectBrandFromHost(typeof window !== 'undefined' ? window.location.hostname : '')
+            const brand = brands[brandName]
+            return (
+              <div className="p-4 rounded-lg" style={{ backgroundColor: `${brand.colors.primary}10` }}>
+                <p className="text-sm font-medium text-gray-500 mb-2">ESTADO DE PAGO:</p>
+                <span className={`inline-block px-3 py-1 text-sm font-bold rounded ${
+                  invoice.paymentStatus === 'paid'
+                    ? 'bg-green-100 text-green-700'
+                    : invoice.paymentStatus === 'partial'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'bg-yellow-100 text-yellow-700'
+                }`}>
+                  {invoice.paymentStatus === 'paid'
+                    ? 'PAGADA'
+                    : invoice.paymentStatus === 'partial'
+                      ? 'PAGO PARCIAL'
+                      : 'PENDIENTE DE PAGO'}
+                </span>
+                {invoice.downpaymentAmount && invoice.downpaymentAmount > 0 && (
+                  <div className="mt-2 text-sm">
+                    <p>Anticipo pagado: <span className="font-bold" style={{ color: brand.colors.primary }}>{formatCurrency(invoice.downpaymentAmount)}</span></p>
+                    <p>Restante: <span className="font-bold text-amber-600">{formatCurrency(invoice.amountDue)}</span></p>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            )
+          })()}
         </div>
 
         {/* Items Table */}
@@ -703,10 +741,16 @@ export default function PrintInvoicePage() {
             <div className="text-xs text-right text-gray-400 mb-2">
               Tasa mayoreo: $1 = {rate} CUP
             </div>
-            <div className="flex justify-between py-3 text-xl font-bold border-t-2 border-green-600 mt-2">
-              <span>TOTAL:</span>
-              <span className="text-green-600">{formatCurrency(invoice.total)}</span>
-            </div>
+            {(() => {
+              const brandName = detectBrandFromHost(typeof window !== 'undefined' ? window.location.hostname : '')
+              const brand = brands[brandName]
+              return (
+                <div className="flex justify-between py-3 text-xl font-bold mt-2" style={{ borderTop: `2px solid ${brand.colors.primary}` }}>
+                  <span>TOTAL:</span>
+                  <span style={{ color: brand.colors.primary }}>{formatCurrency(invoice.total)}</span>
+                </div>
+              )
+            })()}
           </div>
         </div>
 
@@ -734,6 +778,7 @@ export default function PrintInvoicePage() {
         {/* Footer */}
         <div className="mt-8 pt-4 border-t border-gray-200 text-center text-sm text-gray-400">
           <p>Documento generado el {new Date().toLocaleString('es-ES')}</p>
+          <p className="mt-1">{brands[detectBrandFromHost(typeof window !== 'undefined' ? window.location.hostname : '')].displayName}</p>
         </div>
       </div>
     </>

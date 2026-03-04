@@ -37,6 +37,7 @@ interface WholesaleInvoiceData {
   createdAt: string
   notes?: string
   companyName?: string
+  exchangeRate?: number  // Tasa CUP (ej: 355)
 }
 
 // ESC/POS Commands
@@ -77,6 +78,8 @@ export function generateWholesaleInvoiceEscpos(data: WholesaleInvoiceData): Buff
   const invoiceNumber = data.invoiceNumber || 'Sin numero'
   const dateStr = formatDate(data.createdAt)
   const currencySymbol = data.currency === 'USD' ? '$' : data.currency
+  const hasRate = data.exchangeRate && data.exchangeRate > 0
+  const rate = data.exchangeRate || 0
 
   // Initialize printer
   lines.push(Commands.INIT)
@@ -180,6 +183,12 @@ export function generateWholesaleInvoiceEscpos(data: WholesaleInvoiceData): Buff
       lines.push(priceDetail)
     }
     lines.push(Commands.FEED_LINE)
+
+    // Show CUP unit price
+    if (hasRate) {
+      lines.push(`     ${formatCUPAmount(item.unitPrice, rate)} c/u`)
+      lines.push(Commands.FEED_LINE)
+    }
   }
 
   lines.push(THIN_SEPARATOR)
@@ -188,6 +197,10 @@ export function generateWholesaleInvoiceEscpos(data: WholesaleInvoiceData): Buff
   // === TOTALS ===
   lines.push(formatLine('Subtotal:', formatCurrency(data.subtotal, currencySymbol), PAPER_WIDTH))
   lines.push(Commands.FEED_LINE)
+  if (hasRate) {
+    lines.push(formatLine('', formatCUPAmount(data.subtotal, rate), PAPER_WIDTH))
+    lines.push(Commands.FEED_LINE)
+  }
 
   if (data.discountAmount > 0) {
     lines.push(formatLine(`Descuento (${data.discountPercent}%):`, `-${formatCurrency(data.discountAmount, currencySymbol)}`, PAPER_WIDTH))
@@ -202,6 +215,14 @@ export function generateWholesaleInvoiceEscpos(data: WholesaleInvoiceData): Buff
   lines.push(Commands.NORMAL_SIZE)
   lines.push(Commands.BOLD_OFF)
   lines.push(Commands.FEED_LINE)
+  if (hasRate) {
+    lines.push(Commands.BOLD_ON)
+    lines.push(formatLine('TOTAL CUP:', formatCUPAmount(data.totalAmount, rate), PAPER_WIDTH))
+    lines.push(Commands.BOLD_OFF)
+    lines.push(Commands.FEED_LINE)
+    lines.push(formatLine('Tasa:', `$1 = ${rate} CUP`, PAPER_WIDTH))
+    lines.push(Commands.FEED_LINE)
+  }
 
   // === PAYMENT STATUS ===
   lines.push(THIN_SEPARATOR)
@@ -210,6 +231,10 @@ export function generateWholesaleInvoiceEscpos(data: WholesaleInvoiceData): Buff
   if (data.amountPaid > 0) {
     lines.push(formatLine('Pagado:', formatCurrency(data.amountPaid, currencySymbol), PAPER_WIDTH))
     lines.push(Commands.FEED_LINE)
+    if (hasRate) {
+      lines.push(formatLine('', formatCUPAmount(data.amountPaid, rate), PAPER_WIDTH))
+      lines.push(Commands.FEED_LINE)
+    }
   }
 
   if (data.amountDue > 0) {
@@ -217,6 +242,10 @@ export function generateWholesaleInvoiceEscpos(data: WholesaleInvoiceData): Buff
     lines.push(formatLine('PENDIENTE:', formatCurrency(data.amountDue, currencySymbol), PAPER_WIDTH))
     lines.push(Commands.BOLD_OFF)
     lines.push(Commands.FEED_LINE)
+    if (hasRate) {
+      lines.push(formatLine('', formatCUPAmount(data.amountDue, rate), PAPER_WIDTH))
+      lines.push(Commands.FEED_LINE)
+    }
   }
 
   const paymentLabel = data.paymentStatus === 'paid' ? 'PAGADO'
@@ -285,6 +314,10 @@ function formatLine(left: string, right: string, width: number): string {
 
 function formatCurrency(amount: number, symbol: string = '$'): string {
   return symbol + amount.toFixed(2)
+}
+
+function formatCUPAmount(amount: number, rate: number): string {
+  return Math.round(amount * rate).toLocaleString('es') + ' CUP'
 }
 
 function formatDate(dateStr: string): string {
