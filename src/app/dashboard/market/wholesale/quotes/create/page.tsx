@@ -156,6 +156,7 @@ function CreateQuotePage() {
   const [deliveryEstimates, setDeliveryEstimates] = useState<Record<number, string>>({})
   const [loadingEstimates, setLoadingEstimates] = useState(false)
   const estimateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const hasRestoredRef = useRef(false)
 
   const [isRestoring, setIsRestoring] = useState(true)
 
@@ -239,9 +240,10 @@ function CreateQuotePage() {
     setIsRestoring(false)
   }, [])
 
-  // Restore customer and lines after data is loaded
+  // Restore customer and lines after data is loaded (runs only once)
   useEffect(() => {
-    if (isRestoring || customers.length === 0 || products.length === 0) return
+    if (isRestoring || customers.length === 0 || products.length === 0 || hasRestoredRef.current) return
+    hasRestoredRef.current = true
 
     const savedState = localStorage.getItem(STORAGE_KEY)
     if (savedState) {
@@ -265,7 +267,7 @@ function CreateQuotePage() {
         console.error('Error restoring customer/lines:', e)
       }
     }
-  }, [isRestoring, customers, products, selectedCustomer, lines.length])
+  }, [isRestoring, customers, products])
 
   useEffect(() => {
     saveToStorage()
@@ -616,7 +618,7 @@ function CreateQuotePage() {
   }
 
   const removeLine = (index: number) => {
-    setLines(lines.filter((_, i) => i !== index))
+    setLines(prev => prev.filter((_, i) => i !== index))
   }
 
   const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
