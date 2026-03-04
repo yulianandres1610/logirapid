@@ -311,7 +311,8 @@ function CreateQuotePage() {
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
-          setCompanyUsers((result.data || []).map((u: { id: number; firstName?: string; lastName?: string; email: string }) => ({
+          const users = result.data?.users || result.data || []
+          setCompanyUsers(users.map((u: { id: number; firstName?: string; lastName?: string; email: string }) => ({
             id: u.id,
             name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email,
             email: u.email
