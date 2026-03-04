@@ -47,18 +47,22 @@ export async function GET(
     let customerName = ''
     let customerCode = ''
     let customerTaxId: string | null = null
+    let customerAddress: string | null = null
+    let customerPhone: string | null = null
     try {
       const custResult = await db.query(
-        'SELECT business_name, code, tax_id FROM market_wholesale_customers WHERE id = $1',
+        'SELECT business_name, code, tax_id, address, phone FROM market_wholesale_customers WHERE id = $1',
         [q.customer_id]
       )
       if (custResult.rows.length > 0) {
         customerName = custResult.rows[0].business_name || ''
         customerCode = custResult.rows[0].code || ''
         customerTaxId = custResult.rows[0].tax_id || null
+        customerAddress = custResult.rows[0].address || null
+        customerPhone = custResult.rows[0].phone || null
       }
     } catch {
-      // Try without tax_id
+      // Try without tax_id/address/phone
       try {
         const custResult2 = await db.query(
           'SELECT business_name, code FROM market_wholesale_customers WHERE id = $1',
@@ -210,7 +214,9 @@ export async function GET(
         customer: {
           businessName: customerName,
           code: customerCode,
-          taxId: customerTaxId
+          taxId: customerTaxId,
+          address: customerAddress,
+          phone: customerPhone
         },
         company: {
           name: companyName,

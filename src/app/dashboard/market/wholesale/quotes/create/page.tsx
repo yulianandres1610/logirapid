@@ -149,6 +149,11 @@ function CreateQuotePage() {
   const [notes, setNotes] = useState('')
   const [internalNotes, setInternalNotes] = useState('')
 
+  // Sales Rep
+  const [companyUsers, setCompanyUsers] = useState<Array<{id: number, name: string, email: string}>>([])
+  const [selectedSalesRepId, setSelectedSalesRepId] = useState<number | null>(null)
+  const [loadingUsers, setLoadingUsers] = useState(false)
+
   // Warehouse & Delivery Estimates
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([])
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | null>(null)
@@ -169,6 +174,7 @@ function CreateQuotePage() {
     phone: '',
     email: '',
     taxId: '',
+    address: '',
     pricelistId: ''
   })
   const [availablePricelists, setAvailablePricelists] = useState<Array<{ id: number; name: string }>>([])
@@ -298,11 +304,30 @@ function CreateQuotePage() {
     }
   }
 
+  const fetchCompanyUsers = async () => {
+    setLoadingUsers(true)
+    try {
+      const response = await fetch('/api/users?limit=200')
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          setCompanyUsers((result.data || []).map((u: { id: number; firstName?: string; lastName?: string; email: string }) => ({
+            id: u.id,
+            name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email,
+            email: u.email
+          })))
+        }
+      }
+    } catch { /* ignore */ }
+    finally { setLoadingUsers(false) }
+  }
+
   useEffect(() => {
     fetchCustomers()
     fetchProducts()
     fetchExchangeRates()
     fetchWarehouses()
+    fetchCompanyUsers()
   }, [])
 
   const fetchExchangeRates = async () => {
@@ -526,6 +551,7 @@ function CreateQuotePage() {
           phone: newCustomer.phone.trim() || null,
           email: newCustomer.email.trim() || null,
           taxId: newCustomer.taxId.trim() || null,
+          address: newCustomer.address.trim() || null,
           pricelistId: newCustomer.pricelistId ? parseInt(newCustomer.pricelistId) : null
         })
       })
@@ -542,7 +568,7 @@ function CreateQuotePage() {
           }
         }
         setShowCreateCustomer(false)
-        setNewCustomer({ businessName: '', contactName: '', phone: '', email: '', taxId: '', pricelistId: '' })
+        setNewCustomer({ businessName: '', contactName: '', phone: '', email: '', taxId: '', address: '', pricelistId: '' })
       } else {
         setError(result.error || 'Error al crear cliente')
       }
@@ -674,6 +700,7 @@ function CreateQuotePage() {
           discountPercent,
           notes,
           internalNotes,
+          salesRepId: selectedSalesRepId || null,
           lines: lines.map(l => ({
             productId: l.productId,
             variantId: l.variantId,
@@ -1330,6 +1357,38 @@ function CreateQuotePage() {
                     </p>
                   </div>
 
+                  {/* Sales Rep Selector */}
+                  <div className={cn(
+                    'md:col-span-2 p-4 rounded-xl border',
+                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                  )}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Users className="w-4 h-4 text-blue-600" />
+                      <label className="font-medium">Comercial de Ventas</label>
+                      {loadingUsers && (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 ml-auto" />
+                      )}
+                    </div>
+                    <select
+                      value={selectedSalesRepId || ''}
+                      onChange={(e) => setSelectedSalesRepId(e.target.value ? parseInt(e.target.value) : null)}
+                      className={cn(
+                        'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
+                        theme === 'dark'
+                          ? 'bg-gray-900 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                          : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                      )}
+                    >
+                      <option value="">Seleccionar comercial...</option>
+                      {companyUsers.map(u => (
+                        <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Comercial responsable de esta venta. Si no se selecciona, se asigna al usuario actual.
+                    </p>
+                  </div>
+
                   <div className={cn(
                     'p-4 rounded-xl border',
                     theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
@@ -1453,6 +1512,28 @@ function CreateQuotePage() {
                   )}>{selectedCustomer?.businessName}</p>
                   <p className="text-sm text-gray-500">{selectedCustomer?.code}</p>
                 </div>
+
+                {/* Sales Rep Summary */}
+                {selectedSalesRepId && (
+                  <div className={cn(
+                    'p-4 rounded-xl border',
+                    theme === 'dark' ? 'border-gray-700 bg-gray-900/50' : 'border-gray-200 bg-gray-50'
+                  )}>
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
+                      <Users className="w-4 h-4 text-blue-500" />
+                      Comercial de Ventas
+                    </h3>
+                    <p className={cn(
+                      'font-medium',
+                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                    )}>
+                      {companyUsers.find(u => u.id === selectedSalesRepId)?.name || ''}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {companyUsers.find(u => u.id === selectedSalesRepId)?.email || ''}
+                    </p>
+                  </div>
+                )}
 
                 {/* Products Summary */}
                 <div className={cn(
@@ -1699,6 +1780,24 @@ function CreateQuotePage() {
                       )}
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className={cn('block text-sm font-medium mb-1', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                    Dirección
+                  </label>
+                  <input
+                    type="text"
+                    value={newCustomer.address}
+                    onChange={(e) => setNewCustomer(prev => ({ ...prev, address: e.target.value }))}
+                    placeholder="Dirección del cliente"
+                    className={cn(
+                      'w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2',
+                      theme === 'dark'
+                        ? 'bg-gray-900 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500/20'
+                        : 'bg-white border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
+                    )}
+                  />
                 </div>
 
                 <div>

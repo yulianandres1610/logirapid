@@ -204,6 +204,7 @@ export async function POST(request: NextRequest) {
       discountPercent,
       notes,
       internalNotes,
+      salesRepId,
       lines
     } = body
 
@@ -271,6 +272,14 @@ export async function POST(request: NextRequest) {
       await db.query('ALTER TABLE market_quote_lines ADD COLUMN IF NOT EXISTS estimated_delivery VARCHAR(20)')
     } catch { /* column may already exist */ }
 
+    // Ensure sales_rep_id column exists
+    try {
+      await db.query('ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS sales_rep_id INTEGER REFERENCES users(id)')
+    } catch { /* column may already exist */ }
+    try {
+      await db.query('ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS sales_rep_id INTEGER REFERENCES users(id)')
+    } catch { /* column may already exist */ }
+
     // Create quote using transaction
     const result = await db.transaction(async (client) => {
       // Insert quote
@@ -278,8 +287,8 @@ export async function POST(request: NextRequest) {
         INSERT INTO market_quotes (
           company_id, quote_number, customer_id, pricelist_id, warehouse_id,
           status, subtotal, discount_percent, discount_amount, total_amount,
-          currency, valid_until, notes, internal_notes, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          currency, valid_until, notes, internal_notes, created_by, sales_rep_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
         RETURNING id
       `, [
         payload.companyId,
@@ -296,7 +305,8 @@ export async function POST(request: NextRequest) {
         validUntil || null,
         notes || null,
         internalNotes || null,
-        payload.userId
+        payload.userId,
+        salesRepId || payload.userId
       ])
 
       const quoteId = quoteResult.rows[0].id

@@ -34,6 +34,8 @@ interface QuoteData {
     businessName: string
     code: string
     taxId: string | null
+    address: string | null
+    phone: string | null
   }
   company: {
     name: string
@@ -356,6 +358,12 @@ function QuoteSignContent({ token }: { token: string }) {
                 )}
                 {quote.customer.taxId && (
                   <p className="text-xs text-gray-500">RUC/NIT: {quote.customer.taxId}</p>
+                )}
+                {quote.customer.address && (
+                  <p className="text-xs text-gray-500">{quote.customer.address}</p>
+                )}
+                {quote.customer.phone && (
+                  <p className="text-xs text-gray-500">Tel: {quote.customer.phone}</p>
                 )}
               </div>
               <div className="sm:text-right">

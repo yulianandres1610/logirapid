@@ -112,8 +112,8 @@ export async function POST(
         INSERT INTO market_invoices (
           company_id, invoice_number, customer_id, quote_id, pricelist_id, warehouse_id,
           status, payment_status, subtotal, discount_percent, discount_amount, total_amount,
-          amount_due, currency, due_date, notes, internal_notes, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+          amount_due, currency, due_date, notes, internal_notes, created_by, sales_rep_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
         RETURNING id
       `, [
         payload.companyId,
@@ -133,7 +133,8 @@ export async function POST(
         effectiveDueDate || null,
         quote.notes,
         quote.internal_notes,
-        payload.userId
+        payload.userId,
+        quote.sales_rep_id || null
       ])
 
       const invoiceId = invoiceResult.rows[0].id
