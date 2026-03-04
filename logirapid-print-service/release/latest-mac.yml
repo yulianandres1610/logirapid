@@ -1,11 +1,11 @@
-version: 1.62.6
+version: 1.62.7
 files:
-  - url: LogiRapid-Print-Service-1.62.6-arm64.zip
-    sha512: s9lsLBBQ4atN21u7JzoiszlOP+Cndhg7q79LUihruvMJI5H/lQ7B+npPXBvDxpxp8zMoM2wjJCFoKLP1ZRKLzg==
-    size: 104729378
-  - url: LogiRapid-Print-Service-1.62.6-arm64.dmg
-    sha512: DYBfDr6UPXgE7SU+KqrHe+NDgMagU0k9AfkGLhpIeyhKGNqUoc5RXSshHym7Fmy2DYejT847mJeEovcEvA3ZyA==
-    size: 109100665
-path: LogiRapid-Print-Service-1.62.6-arm64.zip
-sha512: s9lsLBBQ4atN21u7JzoiszlOP+Cndhg7q79LUihruvMJI5H/lQ7B+npPXBvDxpxp8zMoM2wjJCFoKLP1ZRKLzg==
-releaseDate: '2026-03-04T18:18:55.591Z'
+  - url: LogiRapid-Print-Service-1.62.7-arm64.zip
+    sha512: K16oAuRvh9k9+k+/+2YnlVwSQZyI3EHbB2AchKrHaQLHPhYJoYdMR+pnNNcpQ6VCWpEelLuEDMfNoBTCwSpOvA==
+    size: 104729865
+  - url: LogiRapid-Print-Service-1.62.7-arm64.dmg
+    sha512: mHLqzO4qEKF/go7L6MfQzycETkTiJ5L0K9ap6QZbVgZYxoOEVx7e6EfICRymvz6A/dtmnMuk/A/bflMlEiVvvA==
+    size: 109101787
+path: LogiRapid-Print-Service-1.62.7-arm64.zip
+sha512: K16oAuRvh9k9+k+/+2YnlVwSQZyI3EHbB2AchKrHaQLHPhYJoYdMR+pnNNcpQ6VCWpEelLuEDMfNoBTCwSpOvA==
+releaseDate: '2026-03-04T18:39:28.126Z'

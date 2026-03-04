@@ -1,10 +1,9 @@
 /**
  * Wholesale Invoice PDF Generator - Generates PDF for standard printers (letter size)
- * For printing wholesale (mayorista) invoices on standard printers like Epson ET-2800
- * Includes dual currency (USD/CUP) display
+ * Matches the HTML letter format design with brand logo, colors, and clean layout
  */
 
-import { PDFDocument, StandardFonts, rgb, PDFFont } from 'pdf-lib'
+import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib'
 import bwipjs from 'bwip-js'
 
 interface InvoiceLine {
@@ -42,67 +41,93 @@ export interface WholesaleInvoicePdfData {
   notes?: string
   companyName?: string
   exchangeRate?: number
+  // Brand support
+  brandLogo?: string | null      // Base64 data URL (data:image/png;base64,...)
+  brandPrimaryColor?: string     // Hex color (e.g., '#eb5b0c')
+  brandDisplayName?: string      // e.g., 'Servisumic'
+}
+
+function hexToRgb(hex: string) {
+  const h = hex.replace('#', '')
+  const r = parseInt(h.substring(0, 2), 16) / 255
+  const g = parseInt(h.substring(2, 4), 16) / 255
+  const b = parseInt(h.substring(4, 6), 16) / 255
+  return rgb(r, g, b)
 }
 
 export async function generateWholesaleInvoicePdf(data: WholesaleInvoicePdfData): Promise<Buffer> {
-  const companyName = data.companyName || 'LogiRapid'
+  const displayName = data.brandDisplayName || data.companyName || 'LogiRapid'
   const invoiceNumber = data.invoiceNumber || 'Sin numero'
   const dateStr = formatDate(data.createdAt)
-  const currencySymbol = data.currency === 'USD' ? '$' : data.currency
   const hasRate = data.exchangeRate && data.exchangeRate > 0
   const rate = data.exchangeRate || 0
 
+  // Brand color
+  const primaryColor = data.brandPrimaryColor ? hexToRgb(data.brandPrimaryColor) : rgb(0.8, 0.04, 0.27) // default LogiRapid red
+  const primaryColorLight = data.brandPrimaryColor
+    ? hexToRgb(data.brandPrimaryColor + '18') // Won't work, use manual alpha
+    : rgb(0.98, 0.95, 0.93)
+
   const pdfDoc = await PDFDocument.create()
   const page = pdfDoc.addPage([612, 792]) // Letter size
+  const pageWidth = 612
+  const margin = 40
 
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
   const black = rgb(0, 0, 0)
   const gray = rgb(0.4, 0.4, 0.4)
-  const lightGray = rgb(0.92, 0.92, 0.92)
-  const darkBlue = rgb(0.1, 0.2, 0.4)
-  const green = rgb(0, 0.5, 0)
-  const red = rgb(0.8, 0, 0)
-  const orange = rgb(0.8, 0.4, 0)
+  const lightGray = rgb(0.95, 0.95, 0.95)
+  const white = rgb(1, 1, 1)
+  const green = rgb(0.13, 0.55, 0.13)
+  const greenBg = rgb(0.9, 0.96, 0.9)
+  const amber = rgb(0.72, 0.53, 0)
+  const amberBg = rgb(1, 0.97, 0.88)
+  const blueBg = rgb(0.92, 0.94, 1)
+  const blue = rgb(0.1, 0.3, 0.7)
 
-  let y = 750
+  let y = 755
 
-  // Helper functions
-  const drawText = (
-    text: string,
-    x: number,
-    yPos: number,
-    options: { font?: PDFFont; size?: number; color?: typeof black } = {}
-  ) => {
+  // Helpers
+  const drawText = (text: string, x: number, yPos: number, options: { font?: PDFFont; size?: number; color?: ReturnType<typeof rgb> } = {}) => {
     page.drawText(text, {
-      x,
-      y: yPos,
+      x, y: yPos,
       font: options.font || fontRegular,
       size: options.size || 10,
       color: options.color || black
     })
   }
 
-  const drawLine = (x1: number, y1: number, x2: number, y2: number) => {
-    page.drawLine({
-      start: { x: x1, y: y1 },
-      end: { x: x2, y: y2 },
-      thickness: 0.5,
-      color: gray
-    })
+  const rightAlign = (text: string, rightX: number, yPos: number, options: { font?: PDFFont; size?: number; color?: ReturnType<typeof rgb> } = {}) => {
+    const f = options.font || fontRegular
+    const s = options.size || 10
+    const w = f.widthOfTextAtSize(text, s)
+    drawText(text, rightX - w, yPos, options)
   }
 
-  const rightAlignText = (
-    text: string,
-    rightX: number,
-    yPos: number,
-    options: { font?: PDFFont; size?: number; color?: typeof black } = {}
-  ) => {
-    const font = options.font || fontRegular
-    const size = options.size || 10
-    const width = font.widthOfTextAtSize(text, size)
-    drawText(text, rightX - width, yPos, options)
+  const drawLine = (x1: number, y1: number, x2: number, y2: number, color?: ReturnType<typeof rgb>, thickness?: number) => {
+    page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: thickness || 0.5, color: color || gray })
+  }
+
+  const contentRight = pageWidth - margin
+
+  // === EMBED BRAND LOGO ===
+  let logoImage: Awaited<ReturnType<typeof pdfDoc.embedPng>> | null = null
+  if (data.brandLogo) {
+    try {
+      const base64Match = data.brandLogo.match(/^data:image\/(png|jpeg|jpg);base64,(.+)/)
+      if (base64Match) {
+        const imageBytes = Buffer.from(base64Match[2], 'base64')
+        if (base64Match[1] === 'png') {
+          logoImage = await pdfDoc.embedPng(imageBytes)
+        } else {
+          logoImage = await pdfDoc.embedJpg(imageBytes) as any
+        }
+      }
+    } catch (err) {
+      console.error('[Wholesale Invoice PDF] Error embedding logo:', err)
+    }
   }
 
   // === GENERATE BARCODE ===
@@ -113,9 +138,11 @@ export async function generateWholesaleInvoicePdf(data: WholesaleInvoicePdfData)
       const barcodePng = await bwipjs.toBuffer({
         bcid: 'code128',
         text: barcodeData,
-        scale: 3,
-        height: 12,
-        includetext: false
+        scale: 2,
+        height: 10,
+        includetext: true,
+        textsize: 8,
+        textgaps: 2
       })
       barcodeImage = await pdfDoc.embedPng(barcodePng)
     }
@@ -123,235 +150,273 @@ export async function generateWholesaleInvoicePdf(data: WholesaleInvoicePdfData)
     console.error('[Wholesale Invoice PDF] Error generating barcode:', err)
   }
 
-  // === HEADER ===
-  drawText(companyName, 50, y, { font: fontBold, size: 18, color: darkBlue })
-  drawText('FACTURA MAYORISTA', 400, y, { font: fontBold, size: 16, color: darkBlue })
-  y -= 25
+  // =============================================
+  // HEADER: Logo + Title | Invoice Number + Date
+  // =============================================
+  const headerY = y
 
-  // Barcode below title on right
-  let infoY = y
-  if (barcodeImage) {
-    const barcodeWidth = 150
-    const barcodeHeight = 35
-    page.drawImage(barcodeImage, {
-      x: 400,
-      y: infoY - barcodeHeight,
-      width: barcodeWidth,
-      height: barcodeHeight
+  // Left side: Logo + Title
+  let logoEndX = margin
+  if (logoImage) {
+    const logoHeight = 40
+    const logoAspect = logoImage.width / logoImage.height
+    const logoWidth = logoHeight * logoAspect
+    page.drawImage(logoImage, {
+      x: margin,
+      y: headerY - 30,
+      width: Math.min(logoWidth, 160),
+      height: logoHeight
     })
-    infoY -= barcodeHeight + 8
+    logoEndX = margin + Math.min(logoWidth, 160) + 12
   }
 
-  // Invoice info
-  drawText(`No: ${invoiceNumber}`, 400, infoY, { font: fontBold, size: 11 })
-  drawText(`Fecha: ${dateStr}`, 400, infoY - 15, { size: 10 })
+  drawText('FACTURA', logoEndX, headerY - 5, { font: fontBold, size: 22, color: primaryColor })
+  drawText('Venta Mayorista', logoEndX, headerY - 22, { size: 10, color: gray })
 
-  if (data.warehouseName) {
-    drawText(`Almacen: ${data.warehouseName}`, 400, infoY - 30, { size: 9, color: gray })
-  }
-
+  // Right side: Invoice number + date
+  rightAlign(invoiceNumber, contentRight, headerY - 2, { font: fontBold, size: 16 })
+  rightAlign(`Fecha: ${dateStr}`, contentRight, headerY - 18, { size: 9, color: gray })
   if (data.dueDate) {
-    drawText(`Vencimiento: ${formatDate(data.dueDate)}`, 400, infoY - 45, { size: 9, color: gray })
+    rightAlign(`Vencimiento: ${formatDate(data.dueDate)}`, contentRight, headerY - 30, { size: 9, color: gray })
   }
 
-  y = 660
-  drawLine(50, y, 562, y)
-  y -= 25
+  // Brand color accent line below header
+  y = headerY - 45
+  drawLine(margin, y, contentRight, y, primaryColor, 2)
+  y -= 20
 
-  // === CUSTOMER INFO ===
-  drawText('CLIENTE', 50, y, { font: fontBold, size: 11, color: darkBlue })
-  y -= 18
+  // =============================================
+  // CUSTOMER INFO | PAYMENT STATUS
+  // =============================================
+  const infoTop = y
 
-  drawText(data.customer.name, 50, y, { font: fontBold, size: 11 })
-  y -= 15
-
-  if (data.customer.code) {
-    drawText(`Codigo: ${data.customer.code}`, 50, y, { size: 9 })
-    y -= 13
-  }
-
-  if (data.customer.taxId) {
-    drawText(`NIT/CI: ${data.customer.taxId}`, 50, y, { size: 9 })
-    y -= 13
-  }
-
-  if (data.customer.address) {
-    drawText(data.customer.address, 50, y, { size: 9, color: gray })
-    y -= 13
-  }
-
-  if (data.customer.phone) {
-    drawText(`Tel: ${data.customer.phone}`, 50, y, { size: 9, color: gray })
-    y -= 13
-  }
-
-  // Payment status box on right side
-  const paymentLabel = data.paymentStatus === 'paid' ? 'PAGADO'
-    : data.paymentStatus === 'partial' ? 'PAGO PARCIAL'
-    : data.paymentStatus === 'overdue' ? 'VENCIDO'
-    : 'PENDIENTE'
-  const paymentColor = data.paymentStatus === 'paid' ? green
-    : data.paymentStatus === 'overdue' ? red : orange
-
+  // Left column: Customer info (with light background)
+  const leftBoxWidth = 260
   page.drawRectangle({
-    x: 400,
-    y: y + 25,
-    width: 160,
-    height: 25,
-    color: paymentColor,
+    x: margin,
+    y: infoTop - 60,
+    width: leftBoxWidth,
+    height: 70,
+    color: lightGray,
     borderWidth: 0
   })
-  drawText(paymentLabel, 440, y + 32, { font: fontBold, size: 12, color: rgb(1, 1, 1) })
+  drawText('FACTURADO A:', margin + 10, infoTop - 2, { font: fontBold, size: 8, color: gray })
+  drawText(data.customer.name, margin + 10, infoTop - 16, { font: fontBold, size: 12 })
 
-  y -= 15
-  drawLine(50, y, 562, y)
-  y -= 10
+  let custY = infoTop - 30
+  if (data.customer.code) {
+    drawText(`Codigo: ${data.customer.code}`, margin + 10, custY, { size: 9, color: gray })
+    custY -= 12
+  }
+  if (data.customer.taxId) {
+    drawText(`NIT/CI: ${data.customer.taxId}`, margin + 10, custY, { size: 9, color: gray })
+    custY -= 12
+  }
+  if (data.customer.phone) {
+    drawText(`Tel: ${data.customer.phone}`, margin + 10, custY, { size: 9, color: gray })
+    custY -= 12
+  }
 
-  // === ITEMS TABLE ===
-  const tableTop = y
+  // Right column: Payment status badge
+  const rightBoxX = margin + leftBoxWidth + 15
+  const rightBoxWidth = contentRight - rightBoxX
+
+  // Payment status
+  const paymentLabel = data.paymentStatus === 'paid' ? 'PAGADA'
+    : data.paymentStatus === 'partial' ? 'PAGO PARCIAL'
+    : data.paymentStatus === 'overdue' ? 'VENCIDO'
+    : 'PENDIENTE DE PAGO'
+
+  const badgeColor = data.paymentStatus === 'paid' ? green
+    : data.paymentStatus === 'overdue' ? rgb(0.8, 0, 0)
+    : amber
+  const badgeBg = data.paymentStatus === 'paid' ? greenBg
+    : data.paymentStatus === 'overdue' ? rgb(1, 0.92, 0.92)
+    : amberBg
+
+  drawText('ESTADO DE PAGO:', rightBoxX, infoTop - 2, { font: fontBold, size: 8, color: gray })
+
+  // Badge
+  const badgeWidth = fontBold.widthOfTextAtSize(paymentLabel, 10) + 16
   page.drawRectangle({
-    x: 50,
-    y: tableTop - 5,
-    width: 512,
-    height: 20,
-    color: lightGray
+    x: rightBoxX,
+    y: infoTop - 22,
+    width: badgeWidth,
+    height: 18,
+    color: badgeBg,
+    borderWidth: 0
+  })
+  drawText(paymentLabel, rightBoxX + 8, infoTop - 17, { font: fontBold, size: 10, color: badgeColor })
+
+  // Payment amounts
+  if (data.amountPaid > 0) {
+    drawText(`Pagado: ${formatCurrency(data.amountPaid)}`, rightBoxX, infoTop - 38, { size: 9 })
+    if (hasRate) {
+      drawText(`(${formatCUP(data.amountPaid, rate)})`, rightBoxX + 100, infoTop - 38, { size: 8, color: gray })
+    }
+  }
+  if (data.amountDue > 0) {
+    drawText(`Pendiente: ${formatCurrency(data.amountDue)}`, rightBoxX, infoTop - 52, { font: fontBold, size: 9, color: amber })
+    if (hasRate) {
+      drawText(`(${formatCUP(data.amountDue, rate)})`, rightBoxX + 110, infoTop - 52, { size: 8, color: amber })
+    }
+  }
+
+  y = infoTop - 75
+
+  // =============================================
+  // ITEMS TABLE
+  // =============================================
+  const tableLeft = margin
+  const tableRight = contentRight
+
+  // Table header with brand color
+  const headerHeight = 22
+  page.drawRectangle({
+    x: tableLeft,
+    y: y - 5,
+    width: tableRight - tableLeft,
+    height: headerHeight,
+    color: lightGray,
+    borderWidth: 0
   })
 
-  drawText('Cant', 55, tableTop, { font: fontBold, size: 9 })
-  drawText('Descripcion', 90, tableTop, { font: fontBold, size: 9 })
-  drawText('SKU', 280, tableTop, { font: fontBold, size: 9 })
-  drawText('Precio Unit.', 350, tableTop, { font: fontBold, size: 9 })
-  drawText('Desc.', 430, tableTop, { font: fontBold, size: 9 })
-  rightAlignText('Total', 560, tableTop, { font: fontBold, size: 9 })
+  const colProduct = tableLeft + 8
+  const colQty = tableLeft + 220
+  const colPrice = tableLeft + 280
+  const colPriceCup = tableLeft + 360
+  const colSubtotal = tableRight - 8
 
-  y = tableTop - 25
+  drawText('Producto', colProduct, y + 2, { font: fontBold, size: 9, color: gray })
+  drawText('Cant', colQty, y + 2, { font: fontBold, size: 9, color: gray })
+  drawText('Precio USD', colPrice, y + 2, { font: fontBold, size: 9, color: gray })
+  if (hasRate) {
+    drawText('Precio CUP', colPriceCup, y + 2, { font: fontBold, size: 9, color: gray })
+  }
+  rightAlign('Subtotal', colSubtotal, y + 2, { font: fontBold, size: 9, color: gray })
 
-  // Items
+  y -= headerHeight + 3
+
+  // Table rows
   for (const item of data.lines) {
     const itemName = item.productName || 'Producto sin nombre'
+    const sku = item.productSku || ''
 
-    // Row
-    drawText((item.quantity ?? 0).toString(), 60, y, { size: 9 })
-    drawText(itemName.substring(0, 28), 90, y, { size: 9 })
-    drawText((item.productSku || '-').substring(0, 12), 280, y, { size: 8, color: gray })
-    drawText(formatCurrency(item.unitPrice, currencySymbol), 350, y, { size: 9 })
-
-    if (item.discountPercent > 0) {
-      drawText(`${item.discountPercent}%`, 435, y, { size: 8, color: red })
-    } else {
-      drawText('-', 435, y, { size: 8, color: gray })
+    // Product name and SKU
+    drawText(itemName.substring(0, 32), colProduct, y, { size: 9 })
+    if (sku) {
+      drawText(sku.substring(0, 18), colProduct, y - 11, { size: 7, color: gray })
     }
 
-    rightAlignText(formatCurrency(item.subtotal, currencySymbol), 560, y, { size: 9, font: fontBold })
+    // Quantity
+    drawText((item.quantity ?? 0).toString(), colQty + 10, y, { size: 9 })
 
-    // CUP price below
+    // Price USD
+    drawText(formatCurrency(item.unitPrice), colPrice, y, { size: 9 })
+
+    // Price CUP
     if (hasRate) {
-      y -= 13
-      drawText(formatCUP(item.unitPrice, rate) + ' c/u', 350, y, { size: 7, color: gray })
-      rightAlignText(formatCUP(item.subtotal, rate), 560, y, { size: 7, color: gray })
+      drawText(formatCUP(item.unitPrice, rate), colPriceCup, y, { size: 8, color: gray })
     }
 
-    y -= 18
+    // Subtotal
+    rightAlign(formatCurrency(item.subtotal), colSubtotal, y, { size: 9, font: fontBold })
 
-    if (y < 160) break
+    y -= (sku ? 24 : 18)
+
+    // Separator
+    drawLine(tableLeft, y + 6, tableRight, y + 6, rgb(0.9, 0.9, 0.9))
+
+    if (y < 170) break
   }
 
-  drawLine(50, y + 8, 562, y + 8)
-  y -= 15
+  y -= 8
 
-  // === TOTALS ===
-  const totalsLabelX = 380
-  const totalsValueX = 560
+  // =============================================
+  // TOTALS (right-aligned section)
+  // =============================================
+  const totalsRight = contentRight
+  const totalsLeft = totalsRight - 220
 
   // Subtotal
-  drawText('Subtotal:', totalsLabelX, y, { size: 10 })
-  rightAlignText(formatCurrency(data.subtotal, currencySymbol), totalsValueX, y, { size: 10 })
-  y -= 15
-
-  if (hasRate) {
-    rightAlignText(formatCUP(data.subtotal, rate), totalsValueX, y, { size: 9, color: gray })
-    y -= 15
-  }
+  drawText('Subtotal:', totalsLeft, y, { size: 10, color: gray })
+  rightAlign(formatCurrency(data.subtotal), totalsRight, y, { size: 10 })
+  y -= 16
 
   // Discount
   if (data.discountAmount > 0) {
-    drawText(`Descuento (${data.discountPercent}%):`, totalsLabelX, y, { size: 10 })
-    rightAlignText(`-${formatCurrency(data.discountAmount, currencySymbol)}`, totalsValueX, y, { size: 10, color: red })
-    y -= 18
+    drawText(`Descuento (${data.discountPercent}%):`, totalsLeft, y, { size: 10, color: gray })
+    rightAlign(`-${formatCurrency(data.discountAmount)}`, totalsRight, y, { size: 10, color: rgb(0.8, 0, 0) })
+    y -= 16
   }
 
-  y -= 5
-
-  // Total box
-  page.drawRectangle({
-    x: totalsLabelX - 10,
-    y: y - 8,
-    width: totalsValueX - totalsLabelX + 20,
-    height: 28,
-    color: darkBlue
-  })
-  drawText('TOTAL:', totalsLabelX, y, { font: fontBold, size: 12, color: rgb(1, 1, 1) })
-  rightAlignText(
-    formatCurrency(data.totalAmount, currencySymbol),
-    totalsValueX,
-    y,
-    { font: fontBold, size: 14, color: rgb(1, 1, 1) }
-  )
-  y -= 35
-
-  // Total in CUP
+  // CUP equivalent
   if (hasRate) {
-    drawText('Total CUP:', totalsLabelX, y, { font: fontBold, size: 11 })
-    rightAlignText(formatCUP(data.totalAmount, rate), totalsValueX, y, { font: fontBold, size: 12 })
-    y -= 18
-    drawText(`Tasa: $1 = ${rate} CUP`, totalsLabelX, y, { size: 9, color: gray })
-    y -= 25
+    drawText('En CUP:', totalsLeft, y, { size: 9, color: gray })
+    rightAlign(formatCUP(data.totalAmount, rate), totalsRight, y, { size: 9, color: gray })
+    y -= 12
+    rightAlign(`Tasa: $1 = ${rate} CUP`, totalsRight, y, { size: 8, color: gray })
+    y -= 16
   }
 
-  // === PAYMENT INFO ===
-  drawLine(50, y + 5, 350, y + 5)
-  y -= 10
+  // Total highlighted with brand color
+  drawLine(totalsLeft, y + 5, totalsRight, y + 5, primaryColor, 2)
+  y -= 2
 
-  if (data.amountPaid > 0) {
-    drawText('Pagado:', 50, y, { size: 10 })
-    drawText(formatCurrency(data.amountPaid, currencySymbol), 130, y, { size: 10 })
-    if (hasRate) {
-      drawText(formatCUP(data.amountPaid, rate), 220, y, { size: 9, color: gray })
-    }
-    y -= 18
+  drawText('TOTAL:', totalsLeft, y, { font: fontBold, size: 14 })
+  rightAlign(formatCurrency(data.totalAmount), totalsRight, y, { font: fontBold, size: 16, color: primaryColor })
+  y -= 20
+
+  // Total CUP bold
+  if (hasRate) {
+    rightAlign(formatCUP(data.totalAmount, rate), totalsRight, y, { font: fontBold, size: 12 })
+    y -= 20
   }
 
-  if (data.amountDue > 0) {
-    drawText('Pendiente:', 50, y, { font: fontBold, size: 10, color: red })
-    drawText(formatCurrency(data.amountDue, currencySymbol), 130, y, { font: fontBold, size: 10, color: red })
-    if (hasRate) {
-      drawText(formatCUP(data.amountDue, rate), 220, y, { size: 9, color: red })
-    }
-    y -= 18
-  }
-
-  // === NOTES ===
+  // =============================================
+  // NOTES
+  // =============================================
   if (data.notes) {
     y -= 5
-    drawLine(50, y + 5, 350, y + 5)
-    drawText('Notas:', 50, y - 10, { font: fontBold, size: 9 })
-    const noteLines = wordWrap(data.notes, 80)
-    let noteY = y - 25
+    drawText('Notas:', margin, y, { font: fontBold, size: 9, color: gray })
+    y -= 14
+    const noteLines = wordWrap(data.notes, 85)
     for (const noteLine of noteLines) {
-      drawText(noteLine, 50, noteY, { size: 9, color: gray })
-      noteY -= 13
+      drawText(noteLine, margin, y, { size: 9, color: gray })
+      y -= 12
     }
   }
 
-  // === FOOTER ===
-  drawText(`--- Documento generado por ${companyName} ---`, 180, 30, { size: 8, color: gray })
+  // =============================================
+  // BARCODE (small, centered at bottom)
+  // =============================================
+  if (barcodeImage) {
+    const bcWidth = 120
+    const bcAspect = barcodeImage.width / barcodeImage.height
+    const bcHeight = bcWidth / bcAspect
+    const bcX = (pageWidth - bcWidth) / 2
+
+    page.drawImage(barcodeImage, {
+      x: bcX,
+      y: 50,
+      width: bcWidth,
+      height: bcHeight
+    })
+  }
+
+  // =============================================
+  // FOOTER
+  // =============================================
+  const footerText = `Documento generado por ${displayName}`
+  const footerWidth = fontRegular.widthOfTextAtSize(footerText, 8)
+  drawText(footerText, (pageWidth - footerWidth) / 2, 35, { size: 8, color: gray })
 
   const pdfBytes = await pdfDoc.save()
   return Buffer.from(pdfBytes)
 }
 
-function formatCurrency(amount: number, symbol: string = '$'): string {
-  return symbol + (amount ?? 0).toFixed(2)
+function formatCurrency(amount: number): string {
+  return '$' + (amount ?? 0).toFixed(2)
 }
 
 function formatCUP(amount: number, rate: number): string {
