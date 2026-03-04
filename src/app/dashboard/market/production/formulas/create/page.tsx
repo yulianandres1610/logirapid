@@ -312,6 +312,7 @@ export default function CreateFormulaPage() {
   // Step 1: Product Selection
   const ProductStep = () => (
     <motion.div
+      key="step-product"
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
@@ -454,6 +455,7 @@ export default function CreateFormulaPage() {
   // Step 2: Materials
   const MaterialsStep = () => (
     <motion.div
+      key="step-materials"
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
@@ -658,6 +660,7 @@ export default function CreateFormulaPage() {
   // Step 3: Costs
   const CostsStep = () => (
     <motion.div
+      key="step-costs"
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
@@ -810,6 +813,7 @@ export default function CreateFormulaPage() {
   // Step 4: Review
   const ReviewStep = () => (
     <motion.div
+      key="step-review"
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
@@ -914,10 +918,10 @@ export default function CreateFormulaPage() {
 
   const renderStep = () => {
     switch (currentStep) {
-      case 'product': return <ProductStep />
-      case 'materials': return <MaterialsStep />
-      case 'costs': return <CostsStep />
-      case 'review': return <ReviewStep />
+      case 'product': return ProductStep()
+      case 'materials': return MaterialsStep()
+      case 'costs': return CostsStep()
+      case 'review': return ReviewStep()
       default: return null
     }
   }
@@ -946,7 +950,7 @@ export default function CreateFormulaPage() {
           </div>
 
           {/* Step Indicator */}
-          <StepIndicator />
+          {StepIndicator()}
 
           {/* Messages */}
           <AnimatePresence>
