@@ -46,6 +46,9 @@ interface QuoteData {
     productImage: string | null
     quantity: number
     unitPrice: number
+    originalPrice: number
+    discountPercent: number
+    discountAmount: number
     subtotal: number
     estimatedDelivery: string | null
   }>
@@ -394,6 +397,9 @@ function QuoteSignContent({ token }: { token: string }) {
                       <th className="py-2.5 px-3 text-right text-[11px] font-bold uppercase tracking-wider text-white">Subtotal CUP</th>
                     </>
                   )}
+                  {quote.lines.some(l => l.originalPrice > 0 && l.originalPrice !== l.unitPrice) && (
+                    <th className="py-2.5 px-3 text-center text-[11px] font-bold uppercase tracking-wider text-white">Desc.</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -404,7 +410,7 @@ function QuoteSignContent({ token }: { token: string }) {
                       <p className="text-sm font-medium" style={{ color: BRAND.secondary }}>{line.productName}</p>
                       {line.productSku && <p className="text-[11px] text-gray-400">{line.productSku}</p>}
                     </td>
-                    <td className="py-3 px-3 text-center text-sm">{line.quantity}</td>
+                    <td className="py-3 px-3 text-center text-sm text-gray-700">{line.quantity}</td>
                     {hasDeliveryEstimates && (
                       <td className="py-3 px-3 text-center">
                         {line.estimatedDelivery && deliveryBadgeConfig[line.estimatedDelivery] && (
@@ -422,15 +428,44 @@ function QuoteSignContent({ token }: { token: string }) {
                     )}
                     {showUSD && (
                       <>
-                        <td className="py-3 px-3 text-right text-sm">{fmtUSD(line.unitPrice)}</td>
-                        <td className="py-3 px-3 text-right text-sm font-medium">{fmtUSD(line.subtotal)}</td>
+                        <td className="py-3 px-3 text-right">
+                          {line.originalPrice > 0 && line.originalPrice !== line.unitPrice ? (
+                            <div>
+                              <span className="text-xs text-gray-400 line-through block">{fmtUSD(line.originalPrice)}</span>
+                              <span className="text-sm font-medium text-blue-600">{fmtUSD(line.unitPrice)}</span>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-700">{fmtUSD(line.unitPrice)}</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-right text-sm font-medium text-gray-900">{fmtUSD(line.subtotal)}</td>
                       </>
                     )}
                     {showCUP && (
                       <>
-                        <td className="py-3 px-3 text-right text-sm">{fmtCUP(line.unitPrice)}</td>
-                        <td className="py-3 px-3 text-right text-sm font-medium">{fmtCUP(line.subtotal)}</td>
+                        <td className="py-3 px-3 text-right">
+                          {line.originalPrice > 0 && line.originalPrice !== line.unitPrice ? (
+                            <div>
+                              <span className="text-xs text-gray-400 line-through block">{fmtCUP(line.originalPrice)}</span>
+                              <span className="text-sm font-medium text-blue-600">{fmtCUP(line.unitPrice)}</span>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-700">{fmtCUP(line.unitPrice)}</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-right text-sm font-medium text-gray-900">{fmtCUP(line.subtotal)}</td>
                       </>
+                    )}
+                    {quote.lines.some(l => l.originalPrice > 0 && l.originalPrice !== l.unitPrice) && (
+                      <td className="py-3 px-3 text-center">
+                        {line.discountPercent > 0 ? (
+                          <span className="text-green-600 text-sm font-medium">-{line.discountPercent}%</span>
+                        ) : line.originalPrice > 0 && line.originalPrice !== line.unitPrice ? (
+                          <span className="text-green-600 text-sm font-medium">
+                            -{Math.round((1 - line.unitPrice / line.originalPrice) * 100)}%
+                          </span>
+                        ) : null}
+                      </td>
                     )}
                   </tr>
                 ))}
@@ -464,13 +499,40 @@ function QuoteSignContent({ token }: { token: string }) {
                     </div>
                     <span className="text-xs text-gray-400 shrink-0">x{line.quantity}</span>
                   </div>
-                  <div className="flex justify-end gap-4 mt-1.5">
-                    {showUSD && (
-                      <span className="text-sm font-semibold" style={{ color: BRAND.secondary }}>{fmtUSD(line.subtotal)}</span>
-                    )}
-                    {showCUP && (
-                      <span className="text-sm font-semibold" style={{ color: BRAND.primary }}>{fmtCUP(line.subtotal)}</span>
-                    )}
+                  {line.originalPrice > 0 && line.originalPrice !== line.unitPrice && (
+                    <div className="flex items-center gap-2 mt-1">
+                      {showUSD && (
+                        <span className="text-xs text-gray-400 line-through">{fmtUSD(line.originalPrice)} c/u</span>
+                      )}
+                      {showCUP && !showUSD && (
+                        <span className="text-xs text-gray-400 line-through">{fmtCUP(line.originalPrice)} c/u</span>
+                      )}
+                      {line.discountPercent > 0 ? (
+                        <span className="text-xs text-green-600 font-medium">-{line.discountPercent}%</span>
+                      ) : (
+                        <span className="text-xs text-green-600 font-medium">
+                          -{Math.round((1 - line.unitPrice / line.originalPrice) * 100)}%
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center mt-1.5">
+                    <div className="text-xs text-gray-500">
+                      {showUSD && (
+                        <span>{fmtUSD(line.unitPrice)} c/u</span>
+                      )}
+                      {showCUP && !showUSD && (
+                        <span>{fmtCUP(line.unitPrice)} c/u</span>
+                      )}
+                    </div>
+                    <div className="flex gap-3">
+                      {showUSD && (
+                        <span className="text-sm font-semibold" style={{ color: BRAND.secondary }}>{fmtUSD(line.subtotal)}</span>
+                      )}
+                      {showCUP && (
+                        <span className="text-sm font-semibold text-gray-900">{fmtCUP(line.subtotal)}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -485,13 +547,13 @@ function QuoteSignContent({ token }: { token: string }) {
                   {showUSD && (
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Subtotal USD:</span>
-                      <span className="font-medium">{fmtUSD(quote.subtotal)}</span>
+                      <span className="font-medium text-gray-700">{fmtUSD(quote.subtotal)}</span>
                     </div>
                   )}
                   {showCUP && (
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Subtotal CUP:</span>
-                      <span className="font-medium">{fmtCUP(quote.subtotal)}</span>
+                      <span className="font-medium text-gray-700">{fmtCUP(quote.subtotal)}</span>
                     </div>
                   )}
                   {quote.discountPercent > 0 && (
@@ -512,8 +574,11 @@ function QuoteSignContent({ token }: { token: string }) {
                   {showCUP && (
                     <div className="flex justify-between items-center mt-1">
                       <span className="text-sm font-bold" style={{ color: BRAND.secondary }}>Total CUP:</span>
-                      <span className={`font-bold ${showUSD ? 'text-base' : 'text-xl'}`} style={{ color: BRAND.primary }}>{fmtCUP(quote.totalAmount)}</span>
+                      <span className={`font-bold ${showUSD ? 'text-base' : 'text-xl'}`} style={{ color: BRAND.secondary }}>{fmtCUP(quote.totalAmount)}</span>
                     </div>
+                  )}
+                  {showCUP && exchangeRate > 1 && (
+                    <p className="text-[10px] text-gray-400 text-right mt-1">Tasa: $1 = {exchangeRate} CUP</p>
                   )}
                 </div>
               </div>
