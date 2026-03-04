@@ -43,6 +43,7 @@ import { generateSessionCloseReport, SessionCloseReportData } from '../documents
 import { generateAssetLabelTspl, AssetLabelData } from '../documents/asset-label-tspl'
 import { generateAssetLabelZpl } from '../documents/asset-label-zpl'
 import { generateWholesaleInvoiceEscpos, WholesaleInvoiceData } from '../documents/wholesale-invoice-escpos'
+import { generateWholesaleInvoicePdf, WholesaleInvoicePdfData } from '../documents/wholesale-invoice-pdf'
 
 const execAsync = promisify(exec)
 
@@ -492,8 +493,9 @@ class JobProcessor {
           console.log(`[Job Processor] Using ESC/POS format for wholesale invoice on thermal printer`)
           return generateWholesaleInvoiceEscpos(data as unknown as WholesaleInvoiceData)
         }
-        // Fallback to consignment receipt PDF format for standard printers
-        return generateConsignmentReceipt(data as unknown as ConsignmentReceiptData)
+        // Use PDF for standard printers (letter size)
+        console.log(`[Job Processor] Using PDF format for wholesale invoice on standard printer`)
+        return generateWholesaleInvoicePdf(data as unknown as WholesaleInvoicePdfData)
 
       case 'unified_reception':
         // Use ESC/POS for thermal printers (80mm ticket format with barcodes)
