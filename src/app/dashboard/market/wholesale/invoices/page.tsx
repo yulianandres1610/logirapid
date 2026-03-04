@@ -276,7 +276,8 @@ export default function WholesaleInvoicesPage() {
             paymentStatus: printInvoice.paymentStatus,
             dueDate: printInvoice.dueDate,
             createdAt: printInvoice.createdAt,
-            notes: (invoiceDetail as Record<string, unknown>)?.notes || undefined
+            notes: (invoiceDetail as Record<string, unknown>)?.notes || undefined,
+            exchangeRate: (invoiceDetail as Record<string, unknown>)?.wholesaleExchangeRate || null
           },
           copies,
           printServiceId: selectedPrinter.serviceId,
