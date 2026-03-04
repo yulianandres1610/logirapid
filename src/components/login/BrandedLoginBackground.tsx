@@ -325,7 +325,7 @@ export function useBrandedFormStyles() {
 
   return {
     inputBase: isServisumic
-      ? 'bg-stone-50 border border-stone-300 text-stone-900 placeholder-stone-400 focus:ring-orange-500 focus:border-orange-500'
+      ? 'bg-stone-50 border border-stone-300 text-stone-900 placeholder-stone-400 focus:ring-orange-500 focus:border-orange-500 servisumic-login-input'
       : 'bg-white/5 border border-exa-secondary/30 text-white placeholder-gray-400 focus:ring-exa-secondary focus:border-exa-secondary',
 
     inputFilled: isServisumic
