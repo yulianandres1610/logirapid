@@ -81,7 +81,7 @@ export async function POST(
       try {
         const empResult = await client.query(`
           SELECT
-            COALESCE(u.firstname || ' ' || u.lastname, me.name, 'Empleado #' || me.id) as full_name
+            COALESCE(u.firstname || ' ' || u.lastname, 'Empleado #' || me.id) as full_name
           FROM market_employees me
           LEFT JOIN users u ON me.user_id = u.id
           WHERE me.id = $1

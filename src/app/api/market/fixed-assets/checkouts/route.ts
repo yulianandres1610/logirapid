@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
         a.name as asset_name,
         a.asset_code,
         a.image_url as asset_image,
-        COALESCE(eu.firstname || ' ' || eu.lastname, me.name, 'Empleado #' || me.id) as employee_name,
+        COALESCE(eu.firstname || ' ' || eu.lastname, 'Empleado #' || me.id) as employee_name,
         cu.firstname || ' ' || cu.lastname as checkout_by_name,
         ru.firstname || ' ' || ru.lastname as return_by_name
       FROM market_asset_checkouts c
