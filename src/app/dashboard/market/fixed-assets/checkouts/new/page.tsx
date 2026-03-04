@@ -80,7 +80,7 @@ export default function NewAssetCheckoutPage() {
         }
         const res = await fetch(`/api/market/fixed-assets?${params.toString()}`)
         const data = await res.json()
-        if (data.success) {
+        if (data.success && data.data) {
           setAssets(data.data.assets || [])
         }
       } catch {
@@ -102,8 +102,8 @@ export default function NewAssetCheckoutPage() {
         try {
           const res = await fetch('/api/market/accounting/employees?status=active')
           const data = await res.json()
-          if (data.success) {
-            setEmployees(data.data.employees || data.data || [])
+          if (data.success && data.data) {
+            setEmployees(data.data.employees || [])
           }
         } catch {
           console.error('Error fetching employees')

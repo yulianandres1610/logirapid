@@ -72,7 +72,7 @@ export default function ConsumableStockEntryPage() {
       }
       const res = await fetch(`/api/market/consumables?${queryParams.toString()}`)
       const data = await res.json()
-      if (data.success) {
+      if (data.success && data.data) {
         setItems(data.data.items || [])
       }
     } catch {
