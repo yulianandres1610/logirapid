@@ -73,12 +73,14 @@ export async function GET(request: NextRequest) {
     const total = parseInt(countResult.rows[0]?.total || '0')
 
     // Get customers with pricelist info
+    // Calculate balance dynamically from invoices (amount_due) instead of stored current_balance
     const query = `
       SELECT
         c.*,
         pl.name as pricelist_name,
         (SELECT COUNT(*) FROM market_invoices i WHERE i.customer_id = c.id) as total_invoices,
-        (SELECT COALESCE(SUM(i.total_amount), 0) FROM market_invoices i WHERE i.customer_id = c.id AND i.status != 'cancelled') as total_sales
+        (SELECT COALESCE(SUM(i.total_amount), 0) FROM market_invoices i WHERE i.customer_id = c.id AND i.status != 'cancelled') as total_sales,
+        (SELECT COALESCE(SUM(i.amount_due), 0) FROM market_invoices i WHERE i.customer_id = c.id AND i.status != 'cancelled') as computed_balance
       FROM market_wholesale_customers c
       LEFT JOIN market_pricelists pl ON pl.id = c.pricelist_id
       ${whereClause}
@@ -106,7 +108,7 @@ export async function GET(request: NextRequest) {
       pricelistName: row.pricelist_name,
       creditLimit: parseFloat(row.credit_limit) || 0,
       creditDays: row.credit_days || 0,
-      currentBalance: parseFloat(row.current_balance) || 0,
+      currentBalance: parseFloat(row.computed_balance) || 0,
       status: row.status,
       notes: row.notes,
       totalInvoices: parseInt(row.total_invoices) || 0,
@@ -115,18 +117,34 @@ export async function GET(request: NextRequest) {
       updatedAt: row.updated_at
     }))
 
-    // Calculate stats
+    // Calculate stats - compute total balance from actual invoice data
     const statsResult = await db.query(`
       SELECT
         COUNT(*) as total,
         COUNT(*) FILTER (WHERE status = 'active') as active,
         COUNT(*) FILTER (WHERE credit_limit > 0) as with_credit,
-        COALESCE(SUM(current_balance), 0) as total_balance
+        COALESCE((
+          SELECT SUM(i.amount_due)
+          FROM market_invoices i
+          JOIN market_wholesale_customers wc ON wc.id = i.customer_id
+          WHERE wc.company_id = $1 AND i.status != 'cancelled'
+        ), 0) as total_balance
       FROM market_wholesale_customers
       WHERE company_id = $1
     `, [payload.companyId])
 
     const stats = statsResult.rows[0]
+
+    // Sync current_balance column in background (fix any drift from past transaction bugs)
+    db.query(`
+      UPDATE market_wholesale_customers wc SET
+        current_balance = COALESCE((
+          SELECT SUM(i.amount_due)
+          FROM market_invoices i
+          WHERE i.customer_id = wc.id AND i.status != 'cancelled'
+        ), 0)
+      WHERE wc.company_id = $1
+    `, [payload.companyId]).catch(() => {})
 
     return NextResponse.json({
       success: true,

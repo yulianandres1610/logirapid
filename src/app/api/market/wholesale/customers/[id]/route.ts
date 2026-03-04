@@ -98,7 +98,7 @@ export async function GET(
       pricelistCurrency: row.pricelist_currency,
       creditLimit: parseFloat(row.credit_limit) || 0,
       creditDays: row.credit_days || 0,
-      currentBalance: parseFloat(row.current_balance) || 0,
+      currentBalance: parseFloat(salesResult.rows[0]?.total_pending) || 0,
       status: row.status,
       notes: row.notes,
       createdBy: row.created_by_email,
