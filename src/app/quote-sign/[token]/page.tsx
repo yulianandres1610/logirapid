@@ -104,8 +104,13 @@ function QuoteSignContent({ token }: { token: string }) {
     return () => window.removeEventListener('resize', measure)
   }, [loading, quote])
 
-  // Dynamic brand detection
-  const [brandConfig, setBrandConfig] = useState(() => brands.servisumic)
+  // Dynamic brand detection — detect immediately when window is available
+  const [brandConfig, setBrandConfig] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return brands[detectBrandFromHost(window.location.hostname)]
+    }
+    return brands.servisumic
+  })
   useEffect(() => {
     const brandName = detectBrandFromHost(window.location.hostname)
     setBrandConfig(brands[brandName])
@@ -698,7 +703,7 @@ function QuoteSignContent({ token }: { token: string }) {
                       value={signerName}
                       onChange={(e) => setSignerName(e.target.value)}
                       placeholder="Nombre completo"
-                      className="w-full px-4 py-3 sm:py-2.5 rounded-lg border border-gray-200 text-base sm:text-sm focus:outline-none focus:ring-2 transition-all"
+                      className="w-full px-4 py-3 sm:py-2.5 rounded-lg border border-gray-200 text-gray-900 text-base sm:text-sm focus:outline-none focus:ring-2 transition-all"
                       style={{ '--tw-ring-color': `${BRAND.primary}30` } as React.CSSProperties}
                       onFocus={(e) => { e.target.style.borderColor = BRAND.primary }}
                       onBlur={(e) => { e.target.style.borderColor = '#e5e7eb' }}
