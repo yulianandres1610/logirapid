@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
     // 2. Si no hay tasa manual, intentar obtener de ElToque
     if (!manualRateResult.rows[0]?.manual_rate) {
       try {
-        const elToqueResponse = await fetch('http://173.249.39.167:8000/tasas', {
+        const elToqueResponse = await fetch('https://scrapping-z2dx.onrender.com/api/data', {
           method: 'GET',
           headers: { 'access_token': 'tu_clave_secreta_aqui' },
           signal: AbortSignal.timeout(5000)
@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
         if (elToqueResponse.ok) {
           const data = await elToqueResponse.json()
           if (data.monedas && Array.isArray(data.monedas)) {
-            const usdRate = data.monedas.find((m: { moneda: string; precio_cup: number }) => m.moneda === 'USD')
+            const usdRate = data.monedas.find((m: { moneda: string; precio_cup: number }) => m.moneda.includes('USD'))
             if (usdRate?.precio_cup) {
               exchangeRate = usdRate.precio_cup
               console.log(`[Weight Labels API] Using ElToque rate: ${exchangeRate}`)

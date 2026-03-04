@@ -63,7 +63,7 @@ async function getCurrentUser(): Promise<JWTPayload | null> {
 // Fetch ElToque rates for reference
 async function fetchElToqueRate(): Promise<{ rate: number; timestamp: string } | null> {
   try {
-    const response = await fetch('http://173.249.39.167:8000/tasas', {
+    const response = await fetch('https://scrapping-z2dx.onrender.com/api/data', {
       method: 'GET',
       headers: { 'access_token': 'tu_clave_secreta_aqui' },
       signal: AbortSignal.timeout(10000)
@@ -73,7 +73,7 @@ async function fetchElToqueRate(): Promise<{ rate: number; timestamp: string } |
 
     const data = await response.json()
     if (data.monedas && Array.isArray(data.monedas)) {
-      const usdRate = data.monedas.find((m: { moneda: string }) => m.moneda === 'USD')
+      const usdRate = data.monedas.find((m: { moneda: string }) => m.moneda.includes('USD'))
       if (usdRate) {
         return {
           rate: usdRate.precio_cup,

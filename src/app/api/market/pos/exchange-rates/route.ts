@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
     console.log('[POS Exchange Rates] Fetching from external APIs...')
 
     const [elToqueResponse, bccResponse] = await Promise.all([
-      fetch('http://173.249.39.167:8000/tasas', {
+      fetch('https://scrapping-z2dx.onrender.com/api/data', {
         method: 'GET',
         headers: { 'access_token': 'tu_clave_secreta_aqui' },
         signal: AbortSignal.timeout(10000)
@@ -142,7 +142,9 @@ export async function GET(request: NextRequest) {
         if (data.monedas && Array.isArray(data.monedas)) {
           const rates: Record<string, number> = {}
           for (const moneda of data.monedas) {
-            rates[moneda.moneda] = moneda.precio_cup
+            // Handle both "USD" and "1 USD" formats
+            const code = moneda.moneda.replace(/^\d+\s*/, '').trim()
+            rates[code] = moneda.precio_cup
           }
           elToqueRate = rates.USD || 440
           mlcRate = rates.MLC ? (rates.USD / rates.MLC) : 1.11

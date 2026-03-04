@@ -1,5 +1,5 @@
 // Servicio para consumir el API de tasas de cambio de ElToque
-// Endpoint: http://173.249.39.167:8000/tasas
+// Endpoint: https://scrapping-z2dx.onrender.com/api/data
 
 export interface ExchangeRate {
   moneda: string
@@ -47,7 +47,7 @@ export function getCurrencyMeta(currency: string): CurrencyMeta {
 }
 
 class ElToqueAPI {
-  private static readonly BASE_URL = 'http://173.249.39.167:8000'
+  private static readonly BASE_URL = 'https://scrapping-z2dx.onrender.com'
   private static readonly ACCESS_TOKEN = 'tu_clave_secreta_aqui'
   private static lastFetchTime = 0
   private static readonly MIN_FETCH_INTERVAL = 300000 // 5 minutos mínimo entre peticiones para reducir latencia
@@ -69,7 +69,7 @@ class ElToqueAPI {
       console.log('🔄 Fetching fresh exchange rates from ElToque API...')
 
       // Autenticación con access_token header
-      const url = `${this.BASE_URL}/tasas`
+      const url = `${this.BASE_URL}/api/data`
       console.log('📡 Fetching from:', url)
 
       const controller = new AbortController()
@@ -245,8 +245,12 @@ class ElToqueAPI {
 
     datos.forEach((rateData: any, index) => {
       // Campos posibles para la moneda
-      const currency = rateData.moneda || rateData.currency || rateData.code || rateData.sigla ||
+      let currency = rateData.moneda || rateData.currency || rateData.code || rateData.sigla ||
                       rateData.coin || rateData.short_name || rateData.symbol || rateData.name
+      // Handle "1 USD" format - strip leading number and spaces
+      if (currency && typeof currency === 'string') {
+        currency = currency.replace(/^\d+\s*/, '').trim()
+      }
 
       // Campos posibles para la tasa (prioridad) - incluyendo precio_cup del nuevo ElToque
       const rate = rateData.precio_cup || rateData.tasa || rateData.rate || rateData.value || rateData.price ||
