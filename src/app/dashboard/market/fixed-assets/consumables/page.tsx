@@ -99,7 +99,7 @@ export default function ConsumablesPage() {
       const res = await fetch('/api/market/warehouses')
       const data = await res.json()
       if (data.success) {
-        setWarehouses(data.data || [])
+        setWarehouses(data.data?.warehouses || data.data || [])
       }
     } catch {
       console.error('Error fetching warehouses')
@@ -120,14 +120,15 @@ export default function ConsumablesPage() {
       const res = await fetch(`/api/market/consumables?${params.toString()}`)
       const data = await res.json()
 
-      if (data.success) {
-        setItems(data.data.items || [])
+      if (data.success && data.data) {
+        const itemsList = data.data.items || []
+        setItems(itemsList)
         setPagination(data.data.pagination || { page: 1, limit: 20, total: 0, totalPages: 0 })
         setStats(data.data.stats || { totalItems: 0, lowStock: 0, dispatchesThisMonth: 0 })
 
         // Extract unique categories from items
         const uniqueCategories = Array.from(
-          new Set((data.data.items || []).map((item: ConsumableItem) => item.category).filter(Boolean))
+          new Set(itemsList.map((item: ConsumableItem) => item.category).filter(Boolean))
         ) as string[]
         setCategories((prev) => {
           const merged = Array.from(new Set([...prev, ...uniqueCategories]))

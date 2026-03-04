@@ -87,9 +87,9 @@ export default function AssetCheckoutsPage() {
       const res = await fetch(url)
       const data = await res.json()
 
-      if (data.success) {
-        setCheckouts(data.data.checkouts)
-        setPagination(data.data.pagination)
+      if (data.success && data.data) {
+        setCheckouts(data.data.checkouts || [])
+        setPagination(data.data.pagination || { page: 1, limit: 20, total: 0, totalPages: 0 })
         if (data.data.stats) {
           setStats(data.data.stats)
         }
