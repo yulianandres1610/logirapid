@@ -77,6 +77,22 @@ export async function GET(
       }
     }
 
+    // Step 2b: Get sales rep info separately
+    let salesRepName: string | null = null
+    let salesRepEmail: string | null = null
+    if (q.sales_rep_id) {
+      try {
+        const srResult = await db.query(
+          "SELECT CONCAT(firstname, ' ', lastname) as name, email FROM users WHERE id = $1",
+          [q.sales_rep_id]
+        )
+        if (srResult.rows.length > 0) {
+          salesRepName = srResult.rows[0].name?.trim() || null
+          salesRepEmail = srResult.rows[0].email || null
+        }
+      } catch { /* ignore */ }
+    }
+
     // Step 3: Get company info separately
     let companyName = ''
     let companyLogo: string | null = null
@@ -222,6 +238,10 @@ export async function GET(
           name: companyName,
           logoUrl: companyLogo
         },
+        salesRep: salesRepName ? {
+          name: salesRepName,
+          email: salesRepEmail
+        } : null,
         lines
       }
     })
