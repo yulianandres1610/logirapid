@@ -103,8 +103,8 @@ export default function PrintInvoicePage() {
       const response = await fetch('/api/market/pos/exchange-rates')
       if (response.ok) {
         const result = await response.json()
-        if (result.success && result.rates?.CUP_WHOLESALE) {
-          setCurrentWholesaleRate(result.rates.CUP_WHOLESALE)
+        if (result.success && result.rates?.CUP) {
+          setCurrentWholesaleRate(result.rates.CUP)
         }
       }
     } catch (err) {

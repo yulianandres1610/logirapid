@@ -27,6 +27,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import { detectBrandFromHost, brands } from '@/lib/brand-config'
 
 interface PrintService {
   id: number
@@ -122,6 +123,27 @@ export default function WholesaleInvoicesPage() {
   const [loadingInvoiceLines, setLoadingInvoiceLines] = useState(false)
   const [invoiceLines, setInvoiceLines] = useState<InvoiceLine[]>([])
   const [invoiceDetail, setInvoiceDetail] = useState<Record<string, unknown> | null>(null)
+  const [brandLogoBase64, setBrandLogoBase64] = useState<string | null>(null)
+
+  // Preload brand logo as base64 for print service
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const brandName = detectBrandFromHost(window.location.hostname)
+    const brand = brands[brandName]
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.drawImage(img, 0, 0)
+        setBrandLogoBase64(canvas.toDataURL('image/png'))
+      }
+    }
+    img.src = brand.logos.light
+  }, [])
 
   useEffect(() => {
     fetchInvoices()
@@ -256,8 +278,8 @@ export default function WholesaleInvoicesPage() {
       try {
         const ratesRes = await fetch('/api/market/pos/exchange-rates')
         const ratesData = await ratesRes.json()
-        if (ratesData.success && ratesData.rates?.CUP_WHOLESALE) {
-          currentExchangeRate = ratesData.rates.CUP_WHOLESALE
+        if (ratesData.success && ratesData.rates?.CUP) {
+          currentExchangeRate = ratesData.rates.CUP
         }
       } catch (e) {
         console.error('[Print] Error fetching exchange rates:', e)
@@ -289,7 +311,10 @@ export default function WholesaleInvoicesPage() {
             dueDate: printInvoice.dueDate,
             createdAt: printInvoice.createdAt,
             notes: (invoiceDetail as Record<string, unknown>)?.notes || undefined,
-            exchangeRate: currentExchangeRate || (invoiceDetail as Record<string, unknown>)?.wholesaleExchangeRate || null
+            exchangeRate: currentExchangeRate || (invoiceDetail as Record<string, unknown>)?.wholesaleExchangeRate || null,
+            brandLogo: brandLogoBase64 || null,
+            brandPrimaryColor: brands[detectBrandFromHost(typeof window !== 'undefined' ? window.location.hostname : '')].colors.primary,
+            brandDisplayName: brands[detectBrandFromHost(typeof window !== 'undefined' ? window.location.hostname : '')].displayName
           },
           copies,
           printServiceId: selectedPrinter.serviceId,
