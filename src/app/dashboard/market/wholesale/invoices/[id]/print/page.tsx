@@ -16,7 +16,10 @@ interface InvoiceData {
     address: string | null
     phone: string | null
   }
-  total: number
+  subtotal: number
+  discountPercent: number
+  discountAmount: number
+  totalAmount: number
   currency: string
   status: string
   paymentStatus: string
@@ -541,11 +544,11 @@ export default function PrintInvoicePage() {
           <div className="border-t-2 border-dashed border-black pt-3 text-xs space-y-1">
             <div className="flex justify-between font-bold text-base">
               <span>TOTAL USD:</span>
-              <span>{formatCurrency(invoice.total)}</span>
+              <span>{formatCurrency(invoice.totalAmount)}</span>
             </div>
             <div className="flex justify-between text-gray-600">
               <span>Total CUP:</span>
-              <span>{formatCUP(invoice.total, rate)}</span>
+              <span>{formatCUP(invoice.totalAmount, rate)}</span>
             </div>
             <p className="text-[10px] text-gray-400 text-right">
               Tasa: $1 = {rate} CUP
@@ -633,7 +636,7 @@ export default function PrintInvoicePage() {
       </div>
 
       {/* Invoice - Letter format */}
-      <div className="max-w-[8.5in] mx-auto bg-white p-8 shadow-lg">
+      <div className="max-w-[8.5in] mx-auto bg-white text-black p-8 shadow-lg">
         {/* Header */}
         {(() => {
           const brandName = detectBrandFromHost(typeof window !== 'undefined' ? window.location.hostname : '')
@@ -732,11 +735,11 @@ export default function PrintInvoicePage() {
           <div className="w-80">
             <div className="flex justify-between py-2 text-lg">
               <span className="text-gray-600">Subtotal:</span>
-              <span className="font-medium">{formatCurrency(invoice.total)}</span>
+              <span className="font-medium">{formatCurrency(invoice.totalAmount)}</span>
             </div>
             <div className="flex justify-between py-2 text-gray-500">
               <span>En CUP:</span>
-              <span>{formatCUP(invoice.total, rate)}</span>
+              <span>{formatCUP(invoice.totalAmount, rate)}</span>
             </div>
             <div className="text-xs text-right text-gray-400 mb-2">
               Tasa mayoreo: $1 = {rate} CUP
@@ -747,7 +750,7 @@ export default function PrintInvoicePage() {
               return (
                 <div className="flex justify-between py-3 text-xl font-bold mt-2" style={{ borderTop: `2px solid ${brand.colors.primary}` }}>
                   <span>TOTAL:</span>
-                  <span style={{ color: brand.colors.primary }}>{formatCurrency(invoice.total)}</span>
+                  <span style={{ color: brand.colors.primary }}>{formatCurrency(invoice.totalAmount)}</span>
                 </div>
               )
             })()}
