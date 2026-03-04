@@ -80,34 +80,43 @@ export async function POST(
       // Column doesn't exist yet - ignore
     }
 
-    if (existingToken) {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://mercado.logirapid.com'
-      return NextResponse.json({
-        success: true,
-        message: 'Enlace de firma ya existente',
-        data: {
-          token: existingToken,
-          url: `${baseUrl}/quote-sign/${existingToken}`
-        }
-      })
+    // Parse optional body for currency mode
+    let body: { mode?: string; rate?: number } = {}
+    try {
+      body = await request.json()
+    } catch {
+      // Body is optional
     }
 
-    // Generate new token
-    const token = crypto.randomUUID()
+    const finalToken = existingToken || crypto.randomUUID()
 
-    await db.query(
-      'UPDATE market_quotes SET signature_token = $1, updated_at = NOW() WHERE id = $2',
-      [token, quoteId]
-    )
+    if (!existingToken) {
+      await db.query(
+        'UPDATE market_quotes SET signature_token = $1, updated_at = NOW() WHERE id = $2',
+        [finalToken, quoteId]
+      )
+    }
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://mercado.logirapid.com'
-    const url = `${baseUrl}/quote-sign/${token}`
+    let url = `${baseUrl}/quote-sign/${finalToken}`
+
+    // Append currency mode params
+    const urlParams = new URLSearchParams()
+    if (body.mode && body.mode !== 'usd') {
+      urlParams.set('mode', body.mode)
+    }
+    if (body.rate && body.mode !== 'usd') {
+      urlParams.set('r', body.rate.toString())
+    }
+    if (urlParams.toString()) {
+      url += `?${urlParams.toString()}`
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Enlace de firma generado exitosamente',
+      message: existingToken ? 'Enlace de firma ya existente' : 'Enlace de firma generado exitosamente',
       data: {
-        token,
+        token: finalToken,
         url
       }
     })
