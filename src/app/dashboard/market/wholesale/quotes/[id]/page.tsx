@@ -90,6 +90,9 @@ interface Quote {
   notes: string | null
   internalNotes: string | null
   convertedToInvoiceId: number | null
+  salesRepId: number | null
+  salesRepName: string | null
+  salesRepEmail: string | null
   createdBy: string
   createdAt: string
   updatedAt: string
@@ -1591,6 +1594,12 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                     <span className="text-gray-500">Creado por:</span>
                     <span className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{quote.createdBy}</span>
                   </div>
+                  {quote.salesRepName && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Comercial:</span>
+                      <span className={cn(theme === 'dark' ? 'text-white' : 'text-gray-900')}>{quote.salesRepName}</span>
+                    </div>
+                  )}
                   {quote.convertedToInvoiceId && (
                     <div className="flex justify-between">
                       <span className="text-gray-500">Factura:</span>

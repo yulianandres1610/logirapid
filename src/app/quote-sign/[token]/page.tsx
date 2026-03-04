@@ -41,6 +41,10 @@ interface QuoteData {
     name: string
     logoUrl: string | null
   }
+  salesRep: {
+    name: string
+    email: string | null
+  } | null
   lines: Array<{
     id: number
     productName: string
@@ -375,6 +379,11 @@ function QuoteSignContent({ token }: { token: string }) {
                 <p className="text-[10px] uppercase tracking-widest font-bold mb-1.5" style={{ color: BRAND.primary }}>
                   Detalles
                 </p>
+                {quote.salesRep && (
+                  <p className="text-xs text-gray-500">
+                    Comercial: <span className="font-medium">{quote.salesRep.name}</span>
+                  </p>
+                )}
                 {quote.validUntil && (
                   <p className="text-xs text-gray-500">
                     Válida hasta: <span className="font-medium">{formatDate(quote.validUntil)}</span>
