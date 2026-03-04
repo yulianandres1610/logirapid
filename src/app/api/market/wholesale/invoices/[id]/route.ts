@@ -98,28 +98,46 @@ export async function GET(
     `, [invoiceId])
 
     // Ensure delivery columns exist
-    await db.query(`ALTER TABLE market_invoice_deliveries ADD COLUMN IF NOT EXISTS dispatched_by INTEGER REFERENCES users(id)`)
-    await db.query(`ALTER TABLE market_invoice_deliveries ADD COLUMN IF NOT EXISTS delivered_by INTEGER REFERENCES users(id)`)
+    try {
+      await db.query(`ALTER TABLE market_invoice_deliveries ADD COLUMN IF NOT EXISTS dispatched_by INTEGER`)
+      await db.query(`ALTER TABLE market_invoice_deliveries ADD COLUMN IF NOT EXISTS delivered_by INTEGER`)
+    } catch { /* ignore migration errors */ }
 
-    // Get deliveries
-    const deliveriesResult = await db.query(`
-      SELECT
-        d.*,
-        w.name as warehouse_name,
-        u.email as created_by_email,
-        NULLIF(TRIM(CONCAT(COALESCE(u.firstname, ''), ' ', COALESCE(u.lastname, ''))), '') as created_by_name,
-        u2.email as dispatched_by_email,
-        NULLIF(TRIM(CONCAT(COALESCE(u2.firstname, ''), ' ', COALESCE(u2.lastname, ''))), '') as dispatched_by_name,
-        u3.email as delivered_by_email,
-        NULLIF(TRIM(CONCAT(COALESCE(u3.firstname, ''), ' ', COALESCE(u3.lastname, ''))), '') as delivered_by_name
-      FROM market_invoice_deliveries d
-      LEFT JOIN market_warehouses w ON w.id = d.warehouse_id
-      LEFT JOIN users u ON u.id = d.created_by
-      LEFT JOIN users u2 ON u2.id = d.dispatched_by
-      LEFT JOIN users u3 ON u3.id = d.delivered_by
-      WHERE d.invoice_id = $1
-      ORDER BY d.created_at DESC
-    `, [invoiceId])
+    // Get deliveries - use resilient approach with fallback query
+    let deliveriesResult: { rows: any[] } = { rows: [] }
+    try {
+      deliveriesResult = await db.query(`
+        SELECT
+          d.*,
+          w.name as warehouse_name,
+          u.email as created_by_email,
+          NULLIF(TRIM(CONCAT(COALESCE(u.firstname, ''), ' ', COALESCE(u.lastname, ''))), '') as created_by_name,
+          u2.email as dispatched_by_email,
+          NULLIF(TRIM(CONCAT(COALESCE(u2.firstname, ''), ' ', COALESCE(u2.lastname, ''))), '') as dispatched_by_name,
+          u3.email as delivered_by_email,
+          NULLIF(TRIM(CONCAT(COALESCE(u3.firstname, ''), ' ', COALESCE(u3.lastname, ''))), '') as delivered_by_name
+        FROM market_invoice_deliveries d
+        LEFT JOIN market_warehouses w ON w.id = d.warehouse_id
+        LEFT JOIN users u ON u.id = d.created_by
+        LEFT JOIN users u2 ON u2.id = d.dispatched_by
+        LEFT JOIN users u3 ON u3.id = d.delivered_by
+        WHERE d.invoice_id = $1
+        ORDER BY d.created_at DESC
+      `, [invoiceId])
+    } catch (deliveryQueryError) {
+      console.error('[Wholesale Invoice GET] Delivery query failed, trying fallback:', deliveryQueryError)
+      try {
+        deliveriesResult = await db.query(`
+          SELECT d.*, w.name as warehouse_name
+          FROM market_invoice_deliveries d
+          LEFT JOIN market_warehouses w ON w.id = d.warehouse_id
+          WHERE d.invoice_id = $1
+          ORDER BY d.created_at DESC
+        `, [invoiceId])
+      } catch {
+        console.error('[Wholesale Invoice GET] Fallback delivery query also failed')
+      }
+    }
 
     // Get payments
     const paymentsResult = await db.query(`
@@ -193,17 +211,29 @@ export async function GET(
         notes: line.notes
       })),
       deliveries: await Promise.all(deliveriesResult.rows.map(async d => {
-        // Get delivery lines for each delivery
-        const deliveryLinesResult = await db.query(`
-          SELECT
-            dl.*,
-            il.product_name,
-            il.product_sku
-          FROM market_invoice_delivery_lines dl
-          JOIN market_invoice_lines il ON il.id = dl.invoice_line_id
-          WHERE dl.delivery_id = $1
-          ORDER BY dl.id
-        `, [d.id])
+        // Get delivery lines for each delivery - with fallback
+        let deliveryLines: any[] = []
+        try {
+          const deliveryLinesResult = await db.query(`
+            SELECT
+              dl.*,
+              il.product_name,
+              il.product_sku
+            FROM market_invoice_delivery_lines dl
+            LEFT JOIN market_invoice_lines il ON il.id = dl.invoice_line_id
+            WHERE dl.delivery_id = $1
+            ORDER BY dl.id
+          `, [d.id])
+          deliveryLines = deliveryLinesResult.rows
+        } catch {
+          // Fallback: try without JOIN
+          try {
+            const dlResult = await db.query(`
+              SELECT * FROM market_invoice_delivery_lines WHERE delivery_id = $1 ORDER BY id
+            `, [d.id])
+            deliveryLines = dlResult.rows
+          } catch { /* ignore */ }
+        }
 
         return {
           id: d.id,
@@ -214,20 +244,20 @@ export async function GET(
           deliveryDate: d.delivery_date,
           deliveryAddress: d.delivery_address,
           notes: d.notes,
-          createdBy: d.created_by_name || d.created_by_email,
-          createdByEmail: d.created_by_email,
+          createdBy: d.created_by_name || d.created_by_email || null,
+          createdByEmail: d.created_by_email || null,
           createdAt: d.created_at,
           dispatchedAt: d.dispatched_at,
-          dispatchedBy: d.dispatched_by_name || d.dispatched_by_email,
-          dispatchedByEmail: d.dispatched_by_email,
+          dispatchedBy: d.dispatched_by_name || d.dispatched_by_email || null,
+          dispatchedByEmail: d.dispatched_by_email || null,
           deliveredAt: d.delivered_at,
-          deliveredBy: d.delivered_by_name || d.delivered_by_email,
-          deliveredByEmail: d.delivered_by_email,
-          lines: deliveryLinesResult.rows.map(dl => ({
+          deliveredBy: d.delivered_by_name || d.delivered_by_email || null,
+          deliveredByEmail: d.delivered_by_email || null,
+          lines: deliveryLines.map(dl => ({
             id: dl.id,
             productId: dl.product_id,
-            productName: dl.product_name,
-            productSku: dl.product_sku,
+            productName: dl.product_name || 'Producto',
+            productSku: dl.product_sku || null,
             quantity: parseFloat(dl.quantity_to_deliver) || 0,
             quantityDelivered: parseFloat(dl.quantity_delivered) || 0
           }))

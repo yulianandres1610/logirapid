@@ -63,8 +63,10 @@ async function generateDeliveryNumber(companyId: number): Promise<string> {
 
 /**
  * Deduct stock from warehouse using FIFO across all lot types
+ * @param txClient - Dedicated database client for transaction safety
  */
 async function deductStockFIFO(
+  txClient: any,
   warehouseId: number,
   productId: number,
   variantId: number | null,
@@ -82,7 +84,7 @@ async function deductStockFIFO(
     : [warehouseId, productId]
 
   // Get current stock
-  const stockResult = await db.query(`
+  const stockResult = await txClient.query(`
     SELECT id, quantity_on_hand, quantity_reserved
     FROM market_warehouse_stock
     WHERE warehouse_id = $1 AND product_id = $2 ${variantClause}
@@ -94,7 +96,7 @@ async function deductStockFIFO(
     const newOnHand = previousOnHand - quantity
 
     // Deduct from on_hand directly (NO reservation - direct deduction)
-    await db.query(`
+    await txClient.query(`
       UPDATE market_warehouse_stock SET
         quantity_on_hand = $1,
         quantity_reserved = GREATEST(0, COALESCE(quantity_reserved, 0)),
@@ -103,7 +105,7 @@ async function deductStockFIFO(
     `, [newOnHand, stock.id])
 
     // Create stock movement
-    await db.query(`
+    await txClient.query(`
       INSERT INTO market_stock_movements (
         company_id, from_warehouse_id, product_id, variant_id,
         movement_type, quantity, quantity_before, quantity_after,
@@ -119,7 +121,7 @@ async function deductStockFIFO(
 
     // Create inventory movement
     try {
-      await db.query(`
+      await txClient.query(`
         INSERT INTO market_inventory_movements (
           product_id, company_id, movement_type, quantity,
           quantity_before, quantity_after, reference_type, reference_id, notes, created_at
@@ -133,11 +135,11 @@ async function deductStockFIFO(
     // Update variant quantity if applicable
     if (variantId) {
       try {
-        const totalResult = await db.query(`
+        const totalResult = await txClient.query(`
           SELECT COALESCE(SUM(quantity_on_hand), 0) as total
           FROM market_warehouse_stock WHERE product_id = $1 AND variant_id = $2
         `, [productId, variantId])
-        await db.query(`
+        await txClient.query(`
           UPDATE market_product_variants SET quantity_on_hand = $1, updated_at = NOW() WHERE id = $2
         `, [totalResult.rows[0].total, variantId])
       } catch { /* non-fatal */ }
@@ -145,7 +147,7 @@ async function deductStockFIFO(
 
     // Update main product quantity
     try {
-      await db.query(`
+      await txClient.query(`
         UPDATE market_products SET quantity_on_hand = (
           SELECT COALESCE(SUM(quantity_on_hand), 0) FROM market_warehouse_stock
           WHERE product_id = $1 AND variant_id IS NULL
@@ -159,7 +161,7 @@ async function deductStockFIFO(
 
   // 1. Consignment lots
   try {
-    const lots = await db.query(`
+    const lots = await txClient.query(`
       SELECT id, lot_number, quantity_available, unit_cost, supplier_id, order_line_id
       FROM consignment_lot_inventory
       WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available > 0
@@ -174,37 +176,37 @@ async function deductStockFIFO(
       const toDeduct = Math.min(remainingQty, parseFloat(lot.quantity_available) || 0)
       const unitCost = parseFloat(lot.unit_cost)
 
-      await db.query(`
+      await txClient.query(`
         UPDATE consignment_lot_inventory
         SET quantity_available = quantity_available - $1, quantity_sold = COALESCE(quantity_sold, 0) + $1
         WHERE id = $2
       `, [toDeduct, lot.id])
 
       if (lot.order_line_id) {
-        const olr = await db.query(`SELECT order_id, unit_price FROM consignment_order_lines WHERE id = $1`, [lot.order_line_id])
-        await db.query(`UPDATE consignment_order_lines SET quantity_sold = COALESCE(quantity_sold, 0) + $1 WHERE id = $2`, [toDeduct, lot.order_line_id])
+        const olr = await txClient.query(`SELECT order_id, unit_price FROM consignment_order_lines WHERE id = $1`, [lot.order_line_id])
+        await txClient.query(`UPDATE consignment_order_lines SET quantity_sold = COALESCE(quantity_sold, 0) + $1 WHERE id = $2`, [toDeduct, lot.order_line_id])
         if (olr.rows.length > 0) {
-          await db.query(`UPDATE consignment_orders SET total_sold = COALESCE(total_sold, 0) + $1, updated_at = NOW() WHERE id = $2`,
+          await txClient.query(`UPDATE consignment_orders SET total_sold = COALESCE(total_sold, 0) + $1, updated_at = NOW() WHERE id = $2`,
             [toDeduct * (parseFloat(olr.rows[0].unit_price) || 0), olr.rows[0].order_id])
         }
       }
 
-      const wr = await db.query('SELECT id FROM consignment_supplier_wallets WHERE supplier_id = $1', [lot.supplier_id])
+      const wr = await txClient.query('SELECT id FROM consignment_supplier_wallets WHERE supplier_id = $1', [lot.supplier_id])
       if (wr.rows.length > 0) {
         const earnings = toDeduct * unitCost
-        await db.query(`UPDATE consignment_supplier_wallets SET balance_available = balance_available + $1, total_earned = COALESCE(total_earned, 0) + $1, updated_at = NOW() WHERE id = $2`, [earnings, wr.rows[0].id])
-        await db.query(`INSERT INTO consignment_wallet_transactions (wallet_id, transaction_type, amount, product_id, quantity, unit_price, notes, created_by, created_at) VALUES ($1, 'sale', $2, $3, $4, $5, $6, $7, NOW())`,
+        await txClient.query(`UPDATE consignment_supplier_wallets SET balance_available = balance_available + $1, total_earned = COALESCE(total_earned, 0) + $1, updated_at = NOW() WHERE id = $2`, [earnings, wr.rows[0].id])
+        await txClient.query(`INSERT INTO consignment_wallet_transactions (wallet_id, transaction_type, amount, product_id, quantity, unit_price, notes, created_by, created_at) VALUES ($1, 'sale', $2, $3, $4, $5, $6, $7, NOW())`,
           [wr.rows[0].id, earnings, productId, toDeduct, unitCost, `Venta Mayorista: ${invoiceNumber} - ${productName}`, userId])
       }
       remainingQty -= toDeduct
     }
-    await db.query(`DELETE FROM consignment_lot_inventory WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available <= 0`, [warehouseId, productId, companyId])
+    await txClient.query(`DELETE FROM consignment_lot_inventory WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available <= 0`, [warehouseId, productId, companyId])
   } catch { /* consignment tables may not exist */ }
 
   // 2. Production lots
   if (remainingQty > 0) {
     try {
-      const lots = await db.query(`
+      const lots = await txClient.query(`
         SELECT id, lot_number, quantity_available FROM production_lot_inventory
         WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available > 0
         ${variantId ? 'AND (variant_id = $4 OR variant_id IS NULL)' : 'AND variant_id IS NULL'}
@@ -213,17 +215,17 @@ async function deductStockFIFO(
       for (const lot of lots.rows) {
         if (remainingQty <= 0) break
         const toDeduct = Math.min(remainingQty, parseFloat(lot.quantity_available) || 0)
-        await db.query(`UPDATE production_lot_inventory SET quantity_available = quantity_available - $1, quantity_sold = COALESCE(quantity_sold, 0) + $1 WHERE id = $2`, [toDeduct, lot.id])
+        await txClient.query(`UPDATE production_lot_inventory SET quantity_available = quantity_available - $1, quantity_sold = COALESCE(quantity_sold, 0) + $1 WHERE id = $2`, [toDeduct, lot.id])
         remainingQty -= toDeduct
       }
-      await db.query(`DELETE FROM production_lot_inventory WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available <= 0`, [warehouseId, productId, companyId])
+      await txClient.query(`DELETE FROM production_lot_inventory WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available <= 0`, [warehouseId, productId, companyId])
     } catch { /* production tables may not exist */ }
   }
 
   // 3. Purchase lots
   if (remainingQty > 0) {
     try {
-      const lots = await db.query(`
+      const lots = await txClient.query(`
         SELECT id, lot_number, quantity_available FROM purchase_lot_inventory
         WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available > 0
         ${variantId ? 'AND (variant_id = $4 OR variant_id IS NULL)' : 'AND variant_id IS NULL'}
@@ -232,17 +234,17 @@ async function deductStockFIFO(
       for (const lot of lots.rows) {
         if (remainingQty <= 0) break
         const toDeduct = Math.min(remainingQty, parseFloat(lot.quantity_available) || 0)
-        await db.query(`UPDATE purchase_lot_inventory SET quantity_available = quantity_available - $1, quantity_sold = COALESCE(quantity_sold, 0) + $1 WHERE id = $2`, [toDeduct, lot.id])
+        await txClient.query(`UPDATE purchase_lot_inventory SET quantity_available = quantity_available - $1, quantity_sold = COALESCE(quantity_sold, 0) + $1 WHERE id = $2`, [toDeduct, lot.id])
         remainingQty -= toDeduct
       }
-      await db.query(`DELETE FROM purchase_lot_inventory WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available <= 0`, [warehouseId, productId, companyId])
+      await txClient.query(`DELETE FROM purchase_lot_inventory WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available <= 0`, [warehouseId, productId, companyId])
     } catch { /* purchase tables may not exist */ }
   }
 
   // 4. Manual lots
   if (remainingQty > 0) {
     try {
-      const lots = await db.query(`
+      const lots = await txClient.query(`
         SELECT id, lot_number, quantity_available FROM market_product_lots
         WHERE product_id = $1 AND company_id = $2 AND quantity_available > 0 AND is_active = true
         ORDER BY expiration_date ASC NULLS LAST, created_at ASC FOR UPDATE
@@ -250,10 +252,10 @@ async function deductStockFIFO(
       for (const lot of lots.rows) {
         if (remainingQty <= 0) break
         const toDeduct = Math.min(remainingQty, parseFloat(lot.quantity_available) || 0)
-        await db.query(`UPDATE market_product_lots SET quantity_available = quantity_available - $1 WHERE id = $2`, [toDeduct, lot.id])
+        await txClient.query(`UPDATE market_product_lots SET quantity_available = quantity_available - $1 WHERE id = $2`, [toDeduct, lot.id])
         remainingQty -= toDeduct
       }
-      await db.query(`UPDATE market_product_lots SET is_active = false WHERE product_id = $1 AND company_id = $2 AND quantity_available <= 0`, [productId, companyId])
+      await txClient.query(`UPDATE market_product_lots SET is_active = false WHERE product_id = $1 AND company_id = $2 AND quantity_available <= 0`, [productId, companyId])
     } catch { /* manual lots may not exist */ }
   }
 }
@@ -336,9 +338,6 @@ export async function POST(
 
     if (invoice.status === 'cancelled') {
       return NextResponse.json({ success: false, error: 'No se pueden confirmar facturas canceladas' }, { status: 400 })
-    }
-    if (invoice.status === 'delivered') {
-      return NextResponse.json({ success: false, error: 'Esta factura ya fue entregada' }, { status: 400 })
     }
 
     // Check if deliveries already exist
@@ -426,9 +425,13 @@ export async function POST(
     }
 
     // === SINGLE TRANSACTION: confirm + create delivery + deduct stock + mark delivered ===
-    await db.query('BEGIN')
+    // IMPORTANT: Use a dedicated client to ensure all queries run on the SAME connection.
+    // db.query() uses pool.query() which may assign different connections per call,
+    // breaking BEGIN/COMMIT/ROLLBACK transaction semantics.
+    const client = await db.getClient()
 
     try {
+      await client.query('BEGIN')
       const createdDeliveries: Array<{
         deliveryId: number; deliveryNumber: string; operationId: number
         warehouseId: number; warehouseName: string; operationNumber: string; productCount: number
@@ -458,7 +461,7 @@ export async function POST(
           const operationNumber = await generateOperationNumber(payload.companyId)
 
           // Create operation as DONE (not pending)
-          const opResult = await db.query(`
+          const opResult = await client.query(`
             INSERT INTO market_warehouse_operations (
               company_id, operation_number, operation_type, status,
               source_warehouse_id, validation_status,
@@ -472,7 +475,7 @@ export async function POST(
           const operationId = opResult.rows[0].id
 
           // Create delivery as DELIVERED
-          const delResult = await db.query(`
+          const delResult = await client.query(`
             INSERT INTO market_invoice_deliveries (
               invoice_id, delivery_number, warehouse_id, operation_id,
               status, delivery_address, notes, created_by, created_at,
@@ -487,22 +490,22 @@ export async function POST(
 
           // Create lines and deduct stock for each product
           for (const item of warehouseLines) {
-            await db.query(`
+            await client.query(`
               INSERT INTO market_warehouse_operation_lines (
                 operation_id, product_id, variant_id, quantity_planned, quantity_validated, created_at
               ) VALUES ($1, $2, $3, $4, $4, NOW())
             `, [operationId, item.productId, item.variantId, item.quantity])
 
-            await db.query(`
+            await client.query(`
               INSERT INTO market_invoice_delivery_lines (
                 delivery_id, invoice_line_id, product_id, variant_id,
                 quantity_to_deliver, quantity_delivered, created_at
               ) VALUES ($1, $2, $3, $4, $5, $5, NOW())
             `, [deliveryId, item.lineId, item.productId, item.variantId, item.quantity])
 
-            // Deduct stock directly (NO reservation)
+            // Deduct stock directly (NO reservation) - uses client for transaction safety
             await deductStockFIFO(
-              warehouseId, item.productId, item.variantId, item.quantity,
+              client, warehouseId, item.productId, item.variantId, item.quantity,
               payload.companyId, payload.userId, invoice.invoice_number,
               invoice.customer_name, operationId, item.productName
             )
@@ -519,7 +522,7 @@ export async function POST(
         const operationNumber = await generateOperationNumber(payload.companyId)
         const deliveryNumber = await generateDeliveryNumber(payload.companyId)
 
-        const opResult = await db.query(`
+        const opResult = await client.query(`
           INSERT INTO market_warehouse_operations (
             company_id, operation_number, operation_type, status,
             source_warehouse_id, validation_status,
@@ -532,7 +535,7 @@ export async function POST(
           `Entrega mayorista - Cliente: ${invoice.customer_name}`, payload.userId])
         const operationId = opResult.rows[0].id
 
-        const delResult = await db.query(`
+        const delResult = await client.query(`
           INSERT INTO market_invoice_deliveries (
             invoice_id, delivery_number, warehouse_id, operation_id,
             status, delivery_address, notes, created_by, created_at,
@@ -548,13 +551,13 @@ export async function POST(
         for (const line of linesResult.rows) {
           const qty = parseFloat(line.quantity)
 
-          await db.query(`
+          await client.query(`
             INSERT INTO market_warehouse_operation_lines (
               operation_id, product_id, variant_id, quantity_planned, quantity_validated, created_at
             ) VALUES ($1, $2, $3, $4, $4, NOW())
           `, [operationId, line.product_id, line.variant_id, qty])
 
-          await db.query(`
+          await client.query(`
             INSERT INTO market_invoice_delivery_lines (
               delivery_id, invoice_line_id, product_id, variant_id,
               quantity_to_deliver, quantity_delivered, created_at
@@ -562,7 +565,7 @@ export async function POST(
           `, [deliveryId, line.id, line.product_id, line.variant_id, qty])
 
           await deductStockFIFO(
-            invoice.warehouse_id, line.product_id, line.variant_id, qty,
+            client, invoice.warehouse_id, line.product_id, line.variant_id, qty,
             payload.companyId, payload.userId, invoice.invoice_number,
             invoice.customer_name, operationId, line.product_name
           )
@@ -581,14 +584,14 @@ export async function POST(
         const qty = isMultiWarehouse
           ? Object.values(line.warehouse_quantities as WarehouseQuantities || {}).reduce((s, v) => s + (v > 0 ? v : 0), 0)
           : parseFloat(line.quantity)
-        await db.query(`
+        await client.query(`
           UPDATE market_invoice_lines SET quantity_delivered = COALESCE(quantity_delivered, 0) + $1
           WHERE id = $2
         `, [qty, line.id])
       }
 
       // Update invoice status to delivered
-      await db.query(`
+      await client.query(`
         UPDATE market_invoices SET
           status = 'delivered',
           confirmed_at = COALESCE(confirmed_at, NOW()),
@@ -598,8 +601,8 @@ export async function POST(
       `, [invoiceId])
 
       // Update customer balance
-      const invoiceTotal = await db.query('SELECT total_amount FROM market_invoices WHERE id = $1', [invoiceId])
-      await db.query(`
+      const invoiceTotal = await client.query('SELECT total_amount FROM market_invoices WHERE id = $1', [invoiceId])
+      await client.query(`
         UPDATE market_wholesale_customers SET
           current_balance = current_balance + $1, updated_at = NOW()
         WHERE id = $2
@@ -611,14 +614,14 @@ export async function POST(
           if (isMultiWarehouse) {
             const wq = line.warehouse_quantities as WarehouseQuantities || {}
             for (const [wIdStr] of Object.entries(wq)) {
-              await db.query(`
+              await client.query(`
                 UPDATE market_warehouse_stock SET quantity_reserved = 0, updated_at = NOW()
                 WHERE warehouse_id = $1 AND product_id = $2 AND quantity_reserved > 0
                 ${line.variant_id ? 'AND variant_id = $3' : 'AND variant_id IS NULL'}
               `, line.variant_id ? [parseInt(wIdStr), line.product_id, line.variant_id] : [parseInt(wIdStr), line.product_id])
             }
           } else {
-            await db.query(`
+            await client.query(`
               UPDATE market_warehouse_stock SET quantity_reserved = 0, updated_at = NOW()
               WHERE warehouse_id = $1 AND product_id = $2 AND quantity_reserved > 0
               ${line.variant_id ? 'AND variant_id = $3' : 'AND variant_id IS NULL'}
@@ -627,7 +630,7 @@ export async function POST(
         } catch { /* non-fatal */ }
       }
 
-      await db.query('COMMIT')
+      await client.query('COMMIT')
 
       return NextResponse.json({
         success: true,
@@ -641,8 +644,12 @@ export async function POST(
       })
 
     } catch (txError) {
-      await db.query('ROLLBACK')
+      try {
+        await client.query('ROLLBACK')
+      } catch { /* ignore rollback errors */ }
       throw txError
+    } finally {
+      client.release()
     }
 
   } catch (error) {
