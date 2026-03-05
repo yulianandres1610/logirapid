@@ -181,59 +181,37 @@ export default function AssetCheckoutsPage() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
-            {/* Header */}
-            <div>
-              <h1 className={cn(
-                'text-2xl font-bold',
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              )}>
-                Préstamos de Activos
-              </h1>
-              <p className={cn(
-                'text-sm mt-1',
-                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-              )}>
-                Gestión de préstamos y devoluciones de activos fijos
-              </p>
-            </div>
-
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
               {/* Préstamos Activos */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
                 className={cn(
-                  'relative overflow-hidden rounded-2xl border shadow-xl',
+                  'relative overflow-hidden rounded-xl border aspect-square flex flex-col items-center justify-center',
                   theme === 'dark'
                     ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
                     : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
                 )}
               >
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600"></div>
-                <div className="p-6">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'p-3 rounded-xl shadow-sm',
-                      theme === 'dark'
-                        ? 'bg-amber-900/30 border border-amber-800/50'
-                        : 'bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200'
-                    )}>
-                      <ArrowLeftRight className="w-6 h-6 text-amber-600" />
-                    </div>
-                    <div>
-                      <p className={cn(
-                        'text-sm font-medium',
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                      )}>Préstamos Activos</p>
-                      <p className={cn(
-                        'text-3xl font-bold mt-1',
-                        theme === 'dark' ? 'text-white' : 'text-slate-900'
-                      )}>{stats.activeCheckouts}</p>
-                    </div>
-                  </div>
+                <div className={cn(
+                  'p-3 rounded-xl shadow-sm mb-3',
+                  theme === 'dark'
+                    ? 'bg-amber-900/30 border border-amber-800/50'
+                    : 'bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200'
+                )}>
+                  <ArrowLeftRight className="w-6 h-6 text-amber-600" />
                 </div>
+                <p className={cn(
+                  'text-4xl font-bold',
+                  theme === 'dark' ? 'text-white' : 'text-slate-900'
+                )}>{stats.activeCheckouts}</p>
+                <p className={cn(
+                  'text-sm font-medium mt-1',
+                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                )}>Préstamos Activos</p>
               </motion.div>
 
               {/* Devueltos este Mes */}
@@ -242,35 +220,29 @@ export default function AssetCheckoutsPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
                 className={cn(
-                  'relative overflow-hidden rounded-2xl border shadow-xl',
+                  'relative overflow-hidden rounded-xl border aspect-square flex flex-col items-center justify-center',
                   theme === 'dark'
                     ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
                     : 'bg-gradient-to-br from-slate-50 to-white border-slate-200'
                 )}
               >
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-600"></div>
-                <div className="p-6">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'p-3 rounded-xl shadow-sm',
-                      theme === 'dark'
-                        ? 'bg-emerald-900/30 border border-emerald-800/50'
-                        : 'bg-gradient-to-br from-emerald-50 to-green-100 border border-emerald-200'
-                    )}>
-                      <CheckCircle2 className="w-6 h-6 text-emerald-600" />
-                    </div>
-                    <div>
-                      <p className={cn(
-                        'text-sm font-medium',
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                      )}>Devueltos este Mes</p>
-                      <p className={cn(
-                        'text-3xl font-bold mt-1',
-                        theme === 'dark' ? 'text-white' : 'text-slate-900'
-                      )}>{stats.returnedThisMonth}</p>
-                    </div>
-                  </div>
+                <div className={cn(
+                  'p-3 rounded-xl shadow-sm mb-3',
+                  theme === 'dark'
+                    ? 'bg-emerald-900/30 border border-emerald-800/50'
+                    : 'bg-gradient-to-br from-emerald-50 to-green-100 border border-emerald-200'
+                )}>
+                  <CheckCircle2 className="w-6 h-6 text-emerald-600" />
                 </div>
+                <p className={cn(
+                  'text-4xl font-bold',
+                  theme === 'dark' ? 'text-white' : 'text-slate-900'
+                )}>{stats.returnedThisMonth}</p>
+                <p className={cn(
+                  'text-sm font-medium mt-1',
+                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                )}>Devueltos este Mes</p>
               </motion.div>
             </div>
 
