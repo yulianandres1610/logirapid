@@ -1,12 +1,12 @@
 {
-  "name": "ServiSumic",
-  "short_name": "ServiSumic",
-  "description": "Sistema de Punto de Venta LogiRapid",
-  "start_url": "/dashboard/market/pos",
+  "name": "ServiSumic - Control de Puerta",
+  "short_name": "Puerta",
+  "description": "Sistema de control de acceso y visitantes",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#1f2937",
+  "background_color": "#ffffff",
   "theme_color": "#e86c00",
-  "orientation": "any",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "/icons/icon-192x192.png",
