@@ -244,51 +244,6 @@ export default function ConsumablesPage() {
           initial="hidden"
           animate="visible"
         >
-          {/* Actions */}
-          <motion.div variants={itemVariants} className="flex items-center justify-end gap-3">
-            <div className="flex items-center gap-3">
-              <Link href="/dashboard/market/fixed-assets/consumables/entry">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all',
-                    theme === 'dark'
-                      ? 'bg-green-600/20 text-green-400 hover:bg-green-600/30 border border-green-500/30'
-                      : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
-                  )}
-                >
-                  <ArrowLeftFromLine className="w-4 h-4" />
-                  Nueva Entrada
-                </motion.button>
-              </Link>
-              <Link href="/dashboard/market/fixed-assets/consumables/dispatch">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all',
-                    theme === 'dark'
-                      ? 'bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 border border-orange-500/30'
-                      : 'bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200'
-                  )}
-                >
-                  <ArrowRightFromLine className="w-4 h-4" />
-                  Despachar
-                </motion.button>
-              </Link>
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setShowCreateModal(true)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:shadow-xl transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                Nuevo Item
-              </motion.button>
-            </div>
-          </motion.div>
-
           {/* Stats Cards */}
           <motion.div variants={itemVariants} className="grid grid-cols-3 gap-4">
             {/* Total Items */}
@@ -465,6 +420,47 @@ export default function ConsumablesPage() {
                 )}
               >
                 <RefreshCw className="w-4 h-4" />
+              </motion.button>
+
+              {/* Action Buttons */}
+              <Link href="/dashboard/market/fixed-assets/consumables/entry">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap',
+                    theme === 'dark'
+                      ? 'bg-green-600/20 text-green-400 hover:bg-green-600/30 border border-green-500/30'
+                      : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+                  )}
+                >
+                  <ArrowLeftFromLine className="w-4 h-4" />
+                  Nueva Entrada
+                </motion.button>
+              </Link>
+              <Link href="/dashboard/market/fixed-assets/consumables/dispatch">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap',
+                    theme === 'dark'
+                      ? 'bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 border border-orange-500/30'
+                      : 'bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200'
+                  )}
+                >
+                  <ArrowRightFromLine className="w-4 h-4" />
+                  Despachar
+                </motion.button>
+              </Link>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:shadow-xl transition-all whitespace-nowrap"
+              >
+                <Plus className="w-4 h-4" />
+                Nuevo Item
               </motion.button>
             </div>
           </motion.div>
