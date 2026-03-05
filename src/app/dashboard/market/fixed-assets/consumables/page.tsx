@@ -244,21 +244,8 @@ export default function ConsumablesPage() {
           initial="hidden"
           animate="visible"
         >
-          {/* Header */}
-          <motion.div variants={itemVariants} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <h1
-                className={cn(
-                  'text-2xl font-bold',
-                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                )}
-              >
-                Consumibles
-              </h1>
-              <p className={cn('text-sm mt-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                Gestiona el inventario de materiales consumibles
-              </p>
-            </div>
+          {/* Actions */}
+          <motion.div variants={itemVariants} className="flex items-center justify-end gap-3">
             <div className="flex items-center gap-3">
               <Link href="/dashboard/market/fixed-assets/consumables/entry">
                 <motion.button
@@ -303,101 +290,83 @@ export default function ConsumablesPage() {
           </motion.div>
 
           {/* Stats Cards */}
-          <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <motion.div variants={itemVariants} className="grid grid-cols-3 gap-4">
             {/* Total Items */}
             <motion.div
               whileHover={{ y: -2 }}
               className={cn(
-                'relative overflow-hidden',
+                'relative overflow-hidden aspect-square flex flex-col items-center justify-center',
                 theme === 'dark'
                   ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
                   : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
-                'rounded-2xl border shadow-xl'
+                'rounded-xl border'
               )}
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
-              <div className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                      Total Items
-                    </p>
-                    <p className={cn('text-3xl font-bold mt-1', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                      {stats.totalItems}
-                    </p>
-                  </div>
-                  <div className={cn(
-                    'p-3 rounded-xl',
-                    theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'
-                  )}>
-                    <Package className={cn('w-6 h-6', theme === 'dark' ? 'text-blue-400' : 'text-blue-600')} />
-                  </div>
-                </div>
+              <div className={cn(
+                'p-3 rounded-xl mb-3',
+                theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'
+              )}>
+                <Package className={cn('w-6 h-6', theme === 'dark' ? 'text-blue-400' : 'text-blue-600')} />
               </div>
+              <p className={cn('text-4xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                {stats.totalItems}
+              </p>
+              <p className={cn('text-sm font-medium mt-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                Total Items
+              </p>
             </motion.div>
 
             {/* Low Stock */}
             <motion.div
               whileHover={{ y: -2 }}
               className={cn(
-                'relative overflow-hidden',
+                'relative overflow-hidden aspect-square flex flex-col items-center justify-center',
                 theme === 'dark'
                   ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
                   : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
-                'rounded-2xl border shadow-xl'
+                'rounded-xl border'
               )}
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-amber-600"></div>
-              <div className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                      Stock Bajo
-                    </p>
-                    <p className={cn('text-3xl font-bold mt-1', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                      {stats.lowStock}
-                    </p>
-                  </div>
-                  <div className={cn(
-                    'p-3 rounded-xl',
-                    theme === 'dark' ? 'bg-amber-500/20' : 'bg-amber-100'
-                  )}>
-                    <AlertTriangle className={cn('w-6 h-6', theme === 'dark' ? 'text-amber-400' : 'text-amber-600')} />
-                  </div>
-                </div>
+              <div className={cn(
+                'p-3 rounded-xl mb-3',
+                theme === 'dark' ? 'bg-amber-500/20' : 'bg-amber-100'
+              )}>
+                <AlertTriangle className={cn('w-6 h-6', theme === 'dark' ? 'text-amber-400' : 'text-amber-600')} />
               </div>
+              <p className={cn('text-4xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                {stats.lowStock}
+              </p>
+              <p className={cn('text-sm font-medium mt-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                Stock Bajo
+              </p>
             </motion.div>
 
             {/* Dispatches This Month */}
             <motion.div
               whileHover={{ y: -2 }}
               className={cn(
-                'relative overflow-hidden',
+                'relative overflow-hidden aspect-square flex flex-col items-center justify-center',
                 theme === 'dark'
                   ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700'
                   : 'bg-gradient-to-br from-slate-50 to-white border-slate-200',
-                'rounded-2xl border shadow-xl'
+                'rounded-xl border'
               )}
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-green-600"></div>
-              <div className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                      Despachos este Mes
-                    </p>
-                    <p className={cn('text-3xl font-bold mt-1', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                      {stats.dispatchesThisMonth}
-                    </p>
-                  </div>
-                  <div className={cn(
-                    'p-3 rounded-xl',
-                    theme === 'dark' ? 'bg-green-500/20' : 'bg-green-100'
-                  )}>
-                    <TrendingUp className={cn('w-6 h-6', theme === 'dark' ? 'text-green-400' : 'text-green-600')} />
-                  </div>
-                </div>
+              <div className={cn(
+                'p-3 rounded-xl mb-3',
+                theme === 'dark' ? 'bg-green-500/20' : 'bg-green-100'
+              )}>
+                <TrendingUp className={cn('w-6 h-6', theme === 'dark' ? 'text-green-400' : 'text-green-600')} />
               </div>
+              <p className={cn('text-4xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                {stats.dispatchesThisMonth}
+              </p>
+              <p className={cn('text-sm font-medium mt-1', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                Despachos este Mes
+              </p>
             </motion.div>
           </motion.div>
 
