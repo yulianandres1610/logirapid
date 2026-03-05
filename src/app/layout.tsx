@@ -14,14 +14,14 @@ import { Analytics } from '@vercel/analytics/react'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'LogiRapid - Plataforma de Logistica y Entrega',
+  title: 'ServiSumic - Plataforma de Logistica y Entrega',
   description: 'Plataforma integral de logistica, envios y entrega de paquetes con rastreo en tiempo real',
   manifest: '/manifest.json',
-  themeColor: '#3b82f6',
+  themeColor: '#e86c00',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'LogiRapid POS',
+    title: 'ServiSumic',
   },
   icons: {
     icon: '/favicon.png',
