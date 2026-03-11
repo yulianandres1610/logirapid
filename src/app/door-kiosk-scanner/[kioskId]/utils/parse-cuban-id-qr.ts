@@ -63,6 +63,16 @@ export function isCubanIdQr(text: string): boolean {
 }
 
 /**
+ * Convert ALL CAPS name to Title Case.
+ * "GARCIA GONZALEZ" → "Garcia Gonzalez"
+ */
+function toTitleCase(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\b\w/g, char => char.toUpperCase())
+}
+
+/**
  * Parse a Cuban ID QR code string into structured data.
  * Returns null if the format is invalid.
  */
@@ -84,8 +94,8 @@ export function parseCubanIdQr(raw: string): CubanIdQrData | null {
     }
   }
 
-  const firstName = fields['N'] || ''
-  const lastNames = fields['A'] || ''
+  const firstName = toTitleCase(fields['N'] || '')
+  const lastNames = toTitleCase(fields['A'] || '')
   const idNumber = fields['CI'] || ''
   const validationCode = fields['FV'] || ''
 
