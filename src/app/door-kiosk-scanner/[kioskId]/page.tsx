@@ -1,8 +1,14 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { AnimatePresence } from 'framer-motion'
+import { useParams } from 'next/navigation'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Lock,
+  Shield,
+  RefreshCw,
+  AlertCircle
+} from 'lucide-react'
 import { useBarcodeScan } from '@/hooks/useBarcodeScan'
 import { parseCubanIdQr, isCubanIdQr } from './utils/parse-cuban-id-qr'
 
@@ -64,6 +70,7 @@ interface KioskStats {
 
 type KioskStep =
   | 'loading'
+  | 'guard_pin'
   | 'idle'
   | 'processing'
   | 'purpose_select'
@@ -73,6 +80,7 @@ type KioskStep =
   | 'error'
 
 const INACTIVITY_TIMEOUT = 300000 // 5 minutes
+const GUARD_STORAGE_KEY = 'door-scanner-guard'
 
 // Audio feedback using Web Audio API
 function playBeep(success: boolean) {
@@ -100,9 +108,171 @@ function vibrate(pattern: number[]) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Inline PIN Pad component (no navigation, no kiosk selector)
+// ---------------------------------------------------------------------------
+function GuardPinPad({
+  kioskId,
+  kioskName,
+  onAuthenticated,
+}: {
+  kioskId: string
+  kioskName: string
+  onAuthenticated: (guard: GuardInfo) => void
+}) {
+  const [pin, setPin] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (pin.length >= 4 && !loading) {
+      verifyPin()
+    }
+  }, [pin])
+
+  const handlePinChange = (digit: string) => {
+    if (pin.length < 4) {
+      setPin(prev => prev + digit)
+      setError(null)
+    }
+  }
+
+  const handlePinDelete = () => {
+    setPin(prev => prev.slice(0, -1))
+    setError(null)
+  }
+
+  const verifyPin = async () => {
+    if (pin.length < 4) return
+    setLoading(true)
+    setError(null)
+
+    try {
+      const res = await fetch(`/api/market/door-security/kiosks/${kioskId}/verify-guard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin })
+      })
+
+      const result = await res.json()
+
+      if (result.success) {
+        const guardData: GuardInfo = result.data.guard || result.data
+        // Persist in localStorage so PWA always remembers
+        localStorage.setItem(GUARD_STORAGE_KEY, JSON.stringify({
+          ...guardData,
+          kioskId,
+          savedAt: new Date().toISOString()
+        }))
+        onAuthenticated(guardData)
+      } else {
+        setError(result.error || 'PIN inválido')
+        setPin('')
+      }
+    } catch {
+      setError('Error de conexión')
+      setPin('')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-[100dvh] bg-gradient-to-br from-stone-800 via-stone-900 to-stone-800 flex flex-col items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-center mb-6"
+      >
+        <div className="w-14 h-14 bg-white/10 rounded-xl flex items-center justify-center mx-auto mb-3">
+          <Shield className="w-7 h-7 text-orange-500" />
+        </div>
+        <h1 className="text-2xl font-bold text-white mb-1">{kioskName}</h1>
+        <p className="text-stone-400 text-sm">Ingresa el PIN de guardia</p>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6"
+      >
+        <div className="text-center mb-4">
+          <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center mx-auto mb-3">
+            <Lock className="w-6 h-6 text-orange-500" />
+          </div>
+          <p className="text-xs text-gray-500">PIN de 4 dígitos</p>
+        </div>
+
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mb-3 p-2 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2"
+            >
+              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+              <span className="text-red-700 text-xs">{error}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* PIN Display */}
+        <div className="flex justify-center gap-2 mb-4">
+          {[0, 1, 2, 3].map(i => (
+            <div
+              key={i}
+              className={`w-11 h-11 rounded-lg border-2 flex items-center justify-center text-xl font-bold transition-all ${
+                i < pin.length
+                  ? 'border-orange-500 bg-orange-50 text-orange-600'
+                  : 'border-gray-200'
+              }`}
+            >
+              {i < pin.length ? '\u2022' : ''}
+            </div>
+          ))}
+        </div>
+
+        {/* Numeric Keypad */}
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((digit, i) => (
+            <button
+              key={i}
+              onClick={() => {
+                if (digit === null) return
+                if (digit === 'del') handlePinDelete()
+                else handlePinChange(digit.toString())
+              }}
+              disabled={loading || digit === null}
+              className={`h-12 rounded-lg text-lg font-bold transition-colors ${
+                digit === null
+                  ? 'invisible'
+                  : digit === 'del'
+                    ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    : 'bg-stone-100 text-stone-900 hover:bg-orange-100 active:scale-95'
+              }`}
+            >
+              {digit === 'del' ? '\u232B' : digit}
+            </button>
+          ))}
+        </div>
+
+        {loading && (
+          <div className="flex items-center justify-center gap-2 text-orange-600 py-3">
+            <RefreshCw className="w-4 h-4 animate-spin" />
+            <span className="text-sm">Verificando...</span>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Main kiosk scanner page
+// ---------------------------------------------------------------------------
 export default function DoorKioskScannerPage() {
   const params = useParams()
-  const router = useRouter()
   const kioskId = params.kioskId as string
 
   const [kiosk, setKiosk] = useState<KioskInfo | null>(null)
@@ -131,26 +301,52 @@ export default function DoorKioskScannerPage() {
     return () => clearInterval(timer)
   }, [])
 
-  // Load kiosk info and guard from session
+  // Load kiosk info + try to restore guard from localStorage/sessionStorage
   useEffect(() => {
     const loadKiosk = async () => {
       try {
-        const guardData = sessionStorage.getItem('door-guard')
-        if (!guardData) {
-          router.push('/door-kiosk-scanner')
-          return
-        }
-        setGuard(JSON.parse(guardData))
+        // Try localStorage first (PWA persistent), then sessionStorage (selector flow)
+        let guardData = localStorage.getItem(GUARD_STORAGE_KEY)
+        let guardObj: GuardInfo | null = null
 
+        if (guardData) {
+          try {
+            const parsed = JSON.parse(guardData)
+            // Verify guard is for this kiosk
+            if (parsed.kioskId === kioskId || !parsed.kioskId) {
+              guardObj = { id: parsed.id, name: parsed.name, code: parsed.code }
+            }
+          } catch { /* invalid JSON, ignore */ }
+        }
+
+        if (!guardObj) {
+          const sessionData = sessionStorage.getItem('door-guard')
+          if (sessionData) {
+            try {
+              guardObj = JSON.parse(sessionData)
+            } catch { /* invalid JSON */ }
+          }
+        }
+
+        // Fetch kiosk info
         const res = await fetch(`/api/market/door-security/kiosks/${kioskId}/public`)
         const result = await res.json()
-        if (result.success) {
-          setKiosk(result.data)
+
+        if (!result.success) {
+          setStep('error')
+          setErrorMessage(result.error || 'Kiosk no encontrado')
+          return
+        }
+
+        setKiosk(result.data)
+
+        if (guardObj) {
+          setGuard(guardObj)
           setStep('idle')
           fetchStats()
         } else {
-          setStep('error')
-          setErrorMessage('Kiosk no encontrado')
+          // No guard found — show inline PIN pad
+          setStep('guard_pin')
         }
       } catch {
         setStep('error')
@@ -158,26 +354,37 @@ export default function DoorKioskScannerPage() {
       }
     }
     loadKiosk()
-  }, [kioskId, router])
+  }, [kioskId])
 
-  // Inactivity lock
+  // When guard is authenticated via PIN pad
+  const handleGuardAuthenticated = useCallback((guardObj: GuardInfo) => {
+    setGuard(guardObj)
+    setStep('idle')
+    fetchStats()
+  }, [])
+
+  // Inactivity → back to PIN (not redirect)
   const resetInactivityTimer = useCallback(() => {
     if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current)
     inactivityTimerRef.current = setTimeout(() => {
+      // Clear session guard but keep localStorage (PWA stays persistent)
       sessionStorage.removeItem('door-guard')
-      router.push('/door-kiosk-scanner')
+      setGuard(null)
+      setStep('guard_pin')
     }, INACTIVITY_TIMEOUT)
-  }, [router])
+  }, [])
 
   useEffect(() => {
-    resetInactivityTimer()
-    const events = ['touchstart', 'click', 'keydown']
-    events.forEach(e => window.addEventListener(e, resetInactivityTimer))
-    return () => {
-      events.forEach(e => window.removeEventListener(e, resetInactivityTimer))
-      if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current)
+    if (step !== 'loading' && step !== 'guard_pin') {
+      resetInactivityTimer()
+      const events = ['touchstart', 'click', 'keydown']
+      events.forEach(e => window.addEventListener(e, resetInactivityTimer))
+      return () => {
+        events.forEach(e => window.removeEventListener(e, resetInactivityTimer))
+        if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current)
+      }
     }
-  }, [resetInactivityTimer])
+  }, [resetInactivityTimer, step])
 
   const fetchStats = async () => {
     try {
@@ -214,7 +421,6 @@ export default function DoorKioskScannerPage() {
     setStep('processing')
 
     try {
-      // Register/find visitor
       const res = await fetch('/api/market/door-security/visitors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -237,16 +443,13 @@ export default function DoorKioskScannerPage() {
       setVisitor(visitorData)
 
       if (visitorData.isCurrentlyInside) {
-        // Exit flow
         setActiveLogId(visitorData.activeLogId)
-        // Fetch pending sales
         if (visitorData.activeLogId) {
           try {
             const salesRes = await fetch(`/api/market/door-security/logs/${visitorData.activeLogId}/pending-sales`)
             const salesResult = await salesRes.json()
             if (salesResult.success) {
               setPendingSales(salesResult.data || [])
-              // Try to get entry time from log
               setEntryTime(salesResult.data?.entryTime || null)
             }
           } catch {
@@ -256,7 +459,6 @@ export default function DoorKioskScannerPage() {
         setScannedInvoices([])
         setStep('exit_pending')
       } else {
-        // Entry flow → purpose select
         setStep('purpose_select')
       }
     } catch (err: any) {
@@ -270,8 +472,6 @@ export default function DoorKioskScannerPage() {
   const processInvoiceScan = useCallback(async (barcode: string) => {
     if (step !== 'exit_pending') return
     if (!activeLogId) return
-
-    // Check if already scanned
     if (scannedInvoices.some(s => s.documentNumber === barcode)) return
 
     playBeep(true)
@@ -281,24 +481,16 @@ export default function DoorKioskScannerPage() {
       const res = await fetch('/api/market/door-security/scan-document', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          barcode,
-          logId: activeLogId,
-        })
+        body: JSON.stringify({ barcode, logId: activeLogId })
       })
 
       const result = await res.json()
       if (result.success) {
         setScannedInvoices(prev => [...prev, { documentNumber: barcode, validated: true }])
-
-        // Validate the document
         await fetch('/api/market/door-security/validate-document', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            barcode,
-            logId: activeLogId,
-          })
+          body: JSON.stringify({ barcode, logId: activeLogId })
         })
       } else {
         setScannedInvoices(prev => [...prev, { documentNumber: barcode, validated: false }])
@@ -308,25 +500,18 @@ export default function DoorKioskScannerPage() {
     }
   }, [step, activeLogId, scannedInvoices])
 
-  // Handle barcode scan - distinguish ID QR from invoice barcode
+  // Handle barcode scan
   const handleScan = useCallback((scannedText: string) => {
     resetInactivityTimer()
 
-    // The Zebra TC21K may send Enter between QR lines.
-    // If the text starts with a QR field prefix, buffer it.
     const isQrLine = /^(N:|A:|CI:|FV:)/i.test(scannedText.trim())
 
     if (isQrLine || qrBufferRef.current.length > 0) {
-      // Accumulate QR lines
       qrBufferRef.current.push(scannedText.trim())
-
-      // Clear any existing timeout
       if (qrBufferTimeoutRef.current) clearTimeout(qrBufferTimeoutRef.current)
 
-      // Check if we have all fields
       const combined = qrBufferRef.current.join('\n')
       if (isCubanIdQr(combined) && combined.includes('CI:')) {
-        // We have enough data, check if FV is there too or wait briefly
         const hasFV = qrBufferRef.current.some(l => l.startsWith('FV:'))
         if (hasFV || qrBufferRef.current.length >= 4) {
           qrBufferRef.current = []
@@ -335,7 +520,6 @@ export default function DoorKioskScannerPage() {
         }
       }
 
-      // Wait for more lines (150ms)
       qrBufferTimeoutRef.current = setTimeout(() => {
         const combined = qrBufferRef.current.join('\n')
         qrBufferRef.current = []
@@ -346,24 +530,22 @@ export default function DoorKioskScannerPage() {
       return
     }
 
-    // Full QR in one scan (no Enter between lines)
     if (isCubanIdQr(scannedText)) {
       processIdScan(scannedText)
       return
     }
 
-    // Not a Cuban ID QR - treat as invoice barcode during exit
     if (step === 'exit_pending') {
       processInvoiceScan(scannedText)
     }
   }, [processIdScan, processInvoiceScan, step, resetInactivityTimer])
 
-  // Barcode scanner hook - always active
+  // Barcode scanner - active when not loading/pin
   useBarcodeScan({
     onScan: handleScan,
     minLength: 2,
     maxTimeBetweenKeys: 150,
-    enabled: step !== 'loading',
+    enabled: step !== 'loading' && step !== 'guard_pin',
   })
 
   // Handle purpose selection → register entry
@@ -429,7 +611,6 @@ export default function DoorKioskScannerPage() {
         vibrate([50, 30, 50])
         setStep('exit_success')
         fetchStats()
-        // Return to idle after 3s
         setTimeout(() => resetToIdle(), 3000)
       } else {
         throw new Error(result.error)
@@ -467,10 +648,20 @@ export default function DoorKioskScannerPage() {
     )
   }
 
+  // Guard PIN step — inline, no navigation
+  if (step === 'guard_pin') {
+    return (
+      <GuardPinPad
+        kioskId={kioskId}
+        kioskName={kiosk?.name || 'Control de Acceso'}
+        onAuthenticated={handleGuardAuthenticated}
+      />
+    )
+  }
+
   return (
     <div className="min-h-[100dvh] bg-stone-900">
       <AnimatePresence mode="wait">
-        {/* Idle / Dashboard */}
         {(step === 'idle' || step === 'error') && (
           <div key="idle">
             <IdleScreen
@@ -479,7 +670,6 @@ export default function DoorKioskScannerPage() {
               currentTime={currentTime}
               stats={stats}
             />
-            {/* Error overlay */}
             {step === 'error' && errorMessage && (
               <ScanFeedback
                 visitorName={null}
@@ -490,15 +680,10 @@ export default function DoorKioskScannerPage() {
           </div>
         )}
 
-        {/* Processing scan */}
         {step === 'processing' && (
-          <ScanFeedback
-            key="processing"
-            visitorName={parsedName}
-          />
+          <ScanFeedback key="processing" visitorName={parsedName} />
         )}
 
-        {/* Purpose selection */}
         {step === 'purpose_select' && visitor && (
           <PurposeQuickSelect
             key="purpose"
@@ -508,7 +693,6 @@ export default function DoorKioskScannerPage() {
           />
         )}
 
-        {/* Entry confirmed */}
         {step === 'entry_success' && visitor && (
           <EntryConfirmation
             key="entry"
@@ -519,7 +703,6 @@ export default function DoorKioskScannerPage() {
           />
         )}
 
-        {/* Exit flow */}
         {step === 'exit_pending' && visitor && (
           <ExitFlow
             key="exit"
@@ -535,7 +718,6 @@ export default function DoorKioskScannerPage() {
           />
         )}
 
-        {/* Exit success */}
         {step === 'exit_success' && visitor && (
           <EntryConfirmation
             key="exit-success"
