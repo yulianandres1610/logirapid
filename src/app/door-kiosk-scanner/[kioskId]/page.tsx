@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -354,6 +354,7 @@ export default function DoorKioskScannerPage() {
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null)
   const qrBufferRef = useRef<string[]>([])
   const qrBufferTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const hiddenInputRef = useRef<HTMLInputElement | null>(null)
 
   // Clock
   useEffect(() => {
@@ -526,49 +527,122 @@ export default function DoorKioskScannerPage() {
 
   const handleScan = useCallback((scannedText: string) => {
     resetInactivityTimer()
+    console.log('[DoorKioskScanner] Raw scan received:', JSON.stringify(scannedText), 'step:', step)
+
+    // First check if the full text already contains a complete Cuban ID QR
+    // (scanner may send everything at once with newlines embedded)
+    if (isCubanIdQr(scannedText)) {
+      console.log('[DoorKioskScanner] Complete QR detected in single scan')
+      qrBufferRef.current = []
+      if (qrBufferTimeoutRef.current) clearTimeout(qrBufferTimeoutRef.current)
+      processIdScan(scannedText)
+      return
+    }
 
     const isQrLine = /^(N:|A:|CI:|FV:)/i.test(scannedText.trim())
 
     if (isQrLine || qrBufferRef.current.length > 0) {
       qrBufferRef.current.push(scannedText.trim())
       if (qrBufferTimeoutRef.current) clearTimeout(qrBufferTimeoutRef.current)
+      console.log('[DoorKioskScanner] QR buffer:', qrBufferRef.current)
 
       const combined = qrBufferRef.current.join('\n')
       if (isCubanIdQr(combined) && combined.includes('CI:')) {
         const hasFV = qrBufferRef.current.some(l => l.startsWith('FV:'))
         if (hasFV || qrBufferRef.current.length >= 4) {
+          console.log('[DoorKioskScanner] Complete QR from buffer')
           qrBufferRef.current = []
           processIdScan(combined)
           return
         }
       }
 
+      // Increased timeout to 500ms — scanner may have delays between QR lines
       qrBufferTimeoutRef.current = setTimeout(() => {
         const combined = qrBufferRef.current.join('\n')
+        console.log('[DoorKioskScanner] QR buffer timeout, combined:', JSON.stringify(combined))
         qrBufferRef.current = []
         if (isCubanIdQr(combined)) {
           processIdScan(combined)
+        } else {
+          console.log('[DoorKioskScanner] Buffer timeout - not a valid QR, discarding')
         }
-      }, 200)
-      return
-    }
-
-    if (isCubanIdQr(scannedText)) {
-      processIdScan(scannedText)
+      }, 500)
       return
     }
 
     if (step === 'exit_pending') {
       processInvoiceScan(scannedText)
+    } else {
+      console.log('[DoorKioskScanner] Unrecognized scan:', scannedText)
     }
   }, [processIdScan, processInvoiceScan, step, resetInactivityTimer])
+
+  const scanEnabled = step !== 'loading' && step !== 'guard_pin'
 
   useBarcodeScan({
     onScan: handleScan,
     minLength: 2,
     maxTimeBetweenKeys: 150,
-    enabled: step !== 'loading' && step !== 'guard_pin',
+    enabled: scanEnabled,
   })
+
+  // Keep hidden input focused so Zebra DataWedge keyboard emulation works
+  // On Android WebView/Chrome, keydown events may not fire without a focused input
+  useEffect(() => {
+    if (!scanEnabled) return
+
+    const keepFocus = () => {
+      const active = document.activeElement
+      const tag = active?.tagName.toLowerCase()
+      // Don't steal focus from real inputs/buttons
+      if (tag !== 'input' && tag !== 'textarea' && tag !== 'button') {
+        hiddenInputRef.current?.focus()
+      }
+    }
+
+    // Focus immediately and on touch/click on the background
+    keepFocus()
+    const interval = setInterval(keepFocus, 1000)
+    window.addEventListener('touchend', keepFocus)
+    window.addEventListener('click', keepFocus)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('touchend', keepFocus)
+      window.removeEventListener('click', keepFocus)
+    }
+  }, [scanEnabled])
+
+  // Handle paste events — some DataWedge configs paste instead of keystroke
+  useEffect(() => {
+    if (!scanEnabled) return
+
+    const handlePaste = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData('text')
+      if (text && text.length >= 2) {
+        console.log('[DoorKioskScanner] Paste detected:', JSON.stringify(text))
+        e.preventDefault()
+        handleScan(text)
+      }
+    }
+
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [scanEnabled, handleScan])
+
+  // Handle input event on hidden field — fallback for Android IME
+  const handleHiddenInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    if (!val) return
+
+    // Check if this looks like a complete QR or barcode
+    if (val.length >= 10 && (isCubanIdQr(val) || val.includes('N:') || val.includes('CI:'))) {
+      console.log('[DoorKioskScanner] Hidden input captured QR:', JSON.stringify(val))
+      e.target.value = ''
+      handleScan(val)
+    }
+  }, [handleScan])
 
   const handlePurposeSelect = useCallback(async (purpose: string) => {
     if (!visitor || !guard) return
@@ -679,6 +753,16 @@ export default function DoorKioskScannerPage() {
 
   return (
     <div className="h-[100dvh] bg-orange-50 overflow-hidden">
+      {/* Hidden input to capture Zebra DataWedge scanner input on Android */}
+      <input
+        ref={hiddenInputRef}
+        onChange={handleHiddenInput}
+        className="fixed -top-10 -left-10 w-1 h-1 opacity-0 pointer-events-none"
+        aria-hidden="true"
+        autoComplete="off"
+        tabIndex={-1}
+        inputMode="none"
+      />
       <AnimatePresence mode="wait">
         {(step === 'idle' || step === 'error') && (
           <div key="idle">
