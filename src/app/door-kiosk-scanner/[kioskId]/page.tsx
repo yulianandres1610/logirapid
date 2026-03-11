@@ -418,6 +418,12 @@ export default function DoorKioskScannerPage() {
   const qrBufferRef = useRef<string[]>([])
   const qrBufferTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const hiddenInputRef = useRef<HTMLInputElement | null>(null)
+  const stepRef = useRef<KioskStep>(step)
+  const activeLogIdRef = useRef<number | null>(activeLogId)
+
+  // Keep refs in sync with state
+  useEffect(() => { stepRef.current = step }, [step])
+  useEffect(() => { activeLogIdRef.current = activeLogId }, [activeLogId])
 
   // PWA install — hook lives here so it persists across all steps
   const { canInstall, isInstalled, promptInstall } = useInstallPrompt()
@@ -496,7 +502,13 @@ export default function DoorKioskScannerPage() {
   }
 
   const processIdScan = useCallback(async (qrText: string) => {
-    if (step !== 'idle' && step !== 'error') return
+    const currentStep = stepRef.current
+    console.log('[DoorKioskScanner] processIdScan called, currentStep:', currentStep)
+
+    if (currentStep !== 'idle' && currentStep !== 'error') {
+      console.log('[DoorKioskScanner] processIdScan skipped — step is:', currentStep)
+      return
+    }
 
     const parsed = parseCubanIdQr(qrText)
     if (!parsed || !parsed.isValid) {
@@ -536,13 +548,21 @@ export default function DoorKioskScannerPage() {
       setVisitor(visitorData)
 
       if (visitorData.isCurrentlyInside) {
-        setActiveLogId(visitorData.activeLogId)
-        if (visitorData.activeLogId) {
+        const logId = visitorData.activeLogId
+        setActiveLogId(logId)
+        if (logId) {
           try {
-            const salesRes = await fetch(`/api/market/door-security/logs/${visitorData.activeLogId}/pending-sales`)
+            const salesRes = await fetch(`/api/market/door-security/logs/${logId}/pending-sales`)
             const salesResult = await salesRes.json()
-            if (salesResult.success) {
-              setPendingSales(salesResult.data || [])
+            if (salesResult.success && salesResult.data) {
+              // API returns { pendingSales: { posReceipts: [...], wholesaleInvoices: [...] } }
+              const ps = salesResult.data.pendingSales || {}
+              const allSales: PendingSale[] = [
+                ...(ps.posReceipts || []),
+                ...(ps.wholesaleInvoices || []),
+              ]
+              console.log('[DoorKioskScanner] Pending sales:', allSales.length)
+              setPendingSales(allSales)
               setEntryTime(salesResult.data?.entryTime || null)
             }
           } catch {
@@ -559,12 +579,31 @@ export default function DoorKioskScannerPage() {
       setErrorMessage(err.message || 'Error al procesar')
       setTimeout(() => setStep('idle'), 3000)
     }
-  }, [step, kioskId, guard])
+  }, [kioskId, guard])
 
   const processInvoiceScan = useCallback(async (barcode: string) => {
-    if (step !== 'exit_pending') return
-    if (!activeLogId) return
-    if (scannedInvoices.some(s => s.documentNumber === barcode)) return
+    const currentStep = stepRef.current
+    const logId = activeLogIdRef.current
+    console.log('[DoorKioskScanner] processInvoiceScan called, step:', currentStep, 'logId:', logId, 'barcode:', barcode)
+
+    if (currentStep !== 'exit_pending') {
+      console.log('[DoorKioskScanner] processInvoiceScan skipped — step is:', currentStep)
+      return
+    }
+    if (!logId) {
+      console.log('[DoorKioskScanner] processInvoiceScan skipped — no activeLogId')
+      return
+    }
+
+    // Check for duplicates using functional approach
+    setScannedInvoices(prev => {
+      if (prev.some(s => s.documentNumber === barcode)) {
+        console.log('[DoorKioskScanner] Invoice already scanned:', barcode)
+        return prev
+      }
+      // We'll process this invoice
+      return prev
+    })
 
     playBeep(true)
     vibrate([50])
@@ -573,28 +612,35 @@ export default function DoorKioskScannerPage() {
       const res = await fetch('/api/market/door-security/scan-document', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ barcode, logId: activeLogId })
+        body: JSON.stringify({ barcode, logId })
       })
 
       const result = await res.json()
       if (result.success) {
-        setScannedInvoices(prev => [...prev, { documentNumber: barcode, validated: true }])
+        setScannedInvoices(prev => {
+          if (prev.some(s => s.documentNumber === barcode)) return prev
+          return [...prev, { documentNumber: barcode, validated: true }]
+        })
         await fetch('/api/market/door-security/validate-document', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ barcode, logId: activeLogId })
+          body: JSON.stringify({ barcode, logId })
         })
       } else {
-        setScannedInvoices(prev => [...prev, { documentNumber: barcode, validated: false }])
+        setScannedInvoices(prev => {
+          if (prev.some(s => s.documentNumber === barcode)) return prev
+          return [...prev, { documentNumber: barcode, validated: false }]
+        })
       }
     } catch {
       playBeep(false)
     }
-  }, [step, activeLogId, scannedInvoices])
+  }, [])
 
   const handleScan = useCallback((scannedText: string) => {
     resetInactivityTimer()
-    console.log('[DoorKioskScanner] Raw scan received:', JSON.stringify(scannedText), 'step:', step)
+    const currentStep = stepRef.current
+    console.log('[DoorKioskScanner] Raw scan received:', JSON.stringify(scannedText), 'step:', currentStep)
 
     // First check if the full text already contains a complete Cuban ID QR
     // (scanner may send everything at once with newlines embedded)
@@ -638,13 +684,15 @@ export default function DoorKioskScannerPage() {
       return
     }
 
-    if (step === 'exit_pending') {
+    // Not a Cuban ID QR — treat as invoice/ticket barcode during exit
+    if (currentStep === 'exit_pending') {
       processInvoiceScan(scannedText)
     } else {
-      console.log('[DoorKioskScanner] Unrecognized scan:', scannedText)
+      console.log('[DoorKioskScanner] Unrecognized scan:', scannedText, '(step:', currentStep, ')')
     }
-  }, [processIdScan, processInvoiceScan, step, resetInactivityTimer])
+  }, [processIdScan, processInvoiceScan, resetInactivityTimer])
 
+  // Enable scanning on all active steps — processIdScan uses stepRef to gate
   const scanEnabled = step !== 'loading' && step !== 'guard_pin'
 
   useBarcodeScan({
