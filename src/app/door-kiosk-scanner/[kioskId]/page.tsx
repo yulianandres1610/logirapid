@@ -656,11 +656,6 @@ export default function DoorKioskScannerPage() {
     const currentStep = stepRef.current
     console.log('[DoorKioskScanner] Raw scan received:', JSON.stringify(scannedText), 'step:', currentStep)
 
-    // Clear hidden input to prevent text accumulation
-    if (hiddenInputRef.current) {
-      hiddenInputRef.current.value = ''
-    }
-
     // First check if the full text already contains a complete Cuban ID QR
     // (scanner may send everything at once with newlines embedded)
     if (isCubanIdQr(scannedText)) {
@@ -727,15 +722,6 @@ export default function DoorKioskScannerPage() {
     if (!scanEnabled) return
 
     const keepFocus = () => {
-      // Clear any leftover text in hidden input to prevent accumulation
-      if (hiddenInputRef.current && hiddenInputRef.current.value.length > 0) {
-        const timeSinceLastChange = Date.now() - (hiddenInputRef.current as any)._lastChange
-        // Only clear if no recent input (avoid clearing mid-scan)
-        if (!timeSinceLastChange || timeSinceLastChange > 1000) {
-          hiddenInputRef.current.value = ''
-        }
-      }
-
       const active = document.activeElement
       const tag = active?.tagName.toLowerCase()
       // Don't steal focus from real inputs/buttons
@@ -775,27 +761,27 @@ export default function DoorKioskScannerPage() {
   }, [scanEnabled, handleScan])
 
   // Handle input event on hidden field — debounced fallback for Android IME
+  // This is ONLY a fallback: the primary scan mechanism is useBarcodeScan (keydown)
+  // On some Android devices, keydown events don't fire and only the input gets text
   const hiddenInputTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const handleHiddenInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const input = e.target
-    if (!input.value) return
+  const handleHiddenInput = useCallback(() => {
+    const input = hiddenInputRef.current
+    if (!input || !input.value) return
 
-    // Track last change time for cleanup
-    ;(input as any)._lastChange = Date.now()
-
-    // Debounce: wait 300ms after last character before processing
+    // Debounce: wait 500ms after last character before processing
     if (hiddenInputTimeoutRef.current) clearTimeout(hiddenInputTimeoutRef.current)
     hiddenInputTimeoutRef.current = setTimeout(() => {
+      if (!input) return
       const val = input.value
       if (val && val.length >= 5) {
         console.log('[DoorKioskScanner] Hidden input captured (debounced):', JSON.stringify(val))
         input.value = ''
         handleScan(val)
-      } else {
-        // Discard short/incomplete text
+      } else if (val) {
+        // Clear short leftover text
         input.value = ''
       }
-    }, 300)
+    }, 500)
   }, [handleScan])
 
   const handlePurposeSelect = useCallback(async (purpose: string) => {
@@ -921,12 +907,11 @@ export default function DoorKioskScannerPage() {
       {/* Hidden input to capture Zebra DataWedge scanner input on Android */}
       <input
         ref={hiddenInputRef}
-        onChange={handleHiddenInput}
+        onInput={handleHiddenInput}
         className="fixed -top-10 -left-10 w-1 h-1 opacity-0 pointer-events-none"
         aria-hidden="true"
         autoComplete="off"
         tabIndex={-1}
-        inputMode="none"
       />
       <AnimatePresence mode="wait">
         {(step === 'idle' || step === 'error') && (
