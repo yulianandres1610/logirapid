@@ -497,7 +497,7 @@ export default function DoorKiosksPage() {
                   </button>
                 </div>
                 <p className="text-[10px] text-orange-600/70 dark:text-orange-400/60 mt-1.5">
-                  Abrir en el dispositivo e instalar como app. El PIN se pide solo una vez.
+                  Abrir en el Zebra e instalar como app. Cada guardia ingresa su PIN al iniciar turno.
                 </p>
               </div>
 

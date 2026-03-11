@@ -19,6 +19,9 @@ const PURPOSE_LABELS: Record<string, string> = {
   otro: 'Otro',
 }
 
+/**
+ * Entry/exit success card with countdown — optimized for TC21K 5" screen
+ */
 export default function EntryConfirmation({ visitorName, idNumber, purpose, onComplete }: Props) {
   const [countdown, setCountdown] = useState(3)
 
@@ -44,40 +47,40 @@ export default function EntryConfirmation({ visitorName, idNumber, purpose, onCo
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-stone-900/95 p-6"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-stone-900/95 px-5"
     >
       <motion.div
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-        className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mb-4 border-2 border-green-500/40"
+        className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mb-3 border-2 border-green-500/40"
       >
-        <CheckCircle className="w-10 h-10 text-green-400" />
+        <CheckCircle className="w-8 h-8 text-green-400" />
       </motion.div>
 
-      <div className="flex items-center gap-2 text-green-400 mb-4">
-        <LogIn className="w-5 h-5" />
-        <span className="text-lg font-semibold">Entrada Registrada</span>
+      <div className="flex items-center gap-1.5 text-green-400 mb-3">
+        <LogIn className="w-4 h-4" />
+        <span className="text-base font-semibold">Entrada Registrada</span>
       </div>
 
-      <div className="bg-stone-800 rounded-2xl p-5 w-full max-w-sm space-y-3">
+      <div className="bg-stone-800 rounded-xl p-4 w-full max-w-[300px] space-y-2">
         <div className="text-center">
-          <p className="text-xl font-bold text-white">{visitorName}</p>
-          <p className="text-sm text-stone-400">{idNumber}</p>
+          <p className="text-lg font-bold text-white leading-tight">{visitorName}</p>
+          <p className="text-xs text-stone-400 mt-0.5">{idNumber}</p>
         </div>
-        <div className="border-t border-stone-700 pt-3 flex justify-between text-sm">
+        <div className="border-t border-stone-700 pt-2 flex justify-between text-xs">
           <span className="text-stone-400">Propósito</span>
           <span className="text-white font-medium">{PURPOSE_LABELS[purpose] || purpose}</span>
         </div>
-        <div className="flex justify-between text-sm">
+        <div className="flex justify-between text-xs">
           <span className="text-stone-400">Hora</span>
           <span className="text-white font-medium">{timeStr}</span>
         </div>
       </div>
 
       {/* Countdown */}
-      <div className="mt-6 w-12 h-12 rounded-full border-2 border-stone-600 flex items-center justify-center">
-        <span className="text-lg font-bold text-stone-400">{countdown}</span>
+      <div className="mt-4 w-10 h-10 rounded-full border-2 border-stone-600 flex items-center justify-center">
+        <span className="text-base font-bold text-stone-400">{countdown}</span>
       </div>
     </motion.div>
   )
