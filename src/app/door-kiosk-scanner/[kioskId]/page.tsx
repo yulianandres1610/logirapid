@@ -108,49 +108,75 @@ function vibrate(pattern: number[]) {
 }
 
 // ---------------------------------------------------------------------------
-// PWA Install prompt hook
+// PWA Install prompt hook — stored at module level so it survives re-renders
 // ---------------------------------------------------------------------------
+let deferredInstallPrompt: any = null
+
 function useInstallPrompt() {
-  const [installPrompt, setInstallPrompt] = useState<any>(null)
+  const [installPrompt, setInstallPrompt] = useState<any>(deferredInstallPrompt)
   const [isInstalled, setIsInstalled] = useState(false)
 
   useEffect(() => {
     // Check if already installed as PWA
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true
+    if (isStandalone) {
       setIsInstalled(true)
       return
     }
 
     const handler = (e: Event) => {
       e.preventDefault()
+      console.log('[PWA] beforeinstallprompt fired')
+      deferredInstallPrompt = e
       setInstallPrompt(e)
     }
 
-    window.addEventListener('beforeinstallprompt', handler)
-
-    // Detect when app gets installed
-    window.addEventListener('appinstalled', () => {
+    const installedHandler = () => {
+      console.log('[PWA] appinstalled fired')
       setIsInstalled(true)
       setInstallPrompt(null)
-    })
+      deferredInstallPrompt = null
+    }
+
+    window.addEventListener('beforeinstallprompt', handler)
+    window.addEventListener('appinstalled', installedHandler)
+
+    // If we already have a deferred prompt from before, use it
+    if (deferredInstallPrompt) {
+      setInstallPrompt(deferredInstallPrompt)
+    }
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handler)
+      window.removeEventListener('appinstalled', installedHandler)
     }
   }, [])
 
   const promptInstall = async () => {
-    if (!installPrompt) return false
-    installPrompt.prompt()
-    const result = await installPrompt.userChoice
-    if (result.outcome === 'accepted') {
-      setIsInstalled(true)
-      setInstallPrompt(null)
+    const prompt = installPrompt || deferredInstallPrompt
+    if (!prompt) return false
+    try {
+      prompt.prompt()
+      const result = await prompt.userChoice
+      if (result.outcome === 'accepted') {
+        setIsInstalled(true)
+        setInstallPrompt(null)
+        deferredInstallPrompt = null
+      }
+      return result.outcome === 'accepted'
+    } catch (err) {
+      console.error('[PWA] Install prompt error:', err)
+      return false
     }
-    return result.outcome === 'accepted'
   }
 
-  return { canInstall: !!installPrompt && !isInstalled, isInstalled, promptInstall }
+  return {
+    canInstall: (!!installPrompt || !!deferredInstallPrompt) && !isInstalled,
+    isInstalled,
+    promptInstall,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -161,15 +187,24 @@ function GuardPinPad({
   kioskId,
   kioskName,
   onAuthenticated,
+  canInstall,
+  isInstalled,
+  promptInstall,
+  showManualInstall,
+  onShowManualInstall,
 }: {
   kioskId: string
   kioskName: string
   onAuthenticated: (guard: GuardInfo) => void
+  canInstall: boolean
+  isInstalled: boolean
+  promptInstall: () => Promise<boolean>
+  showManualInstall: boolean
+  onShowManualInstall: () => void
 }) {
   const [pin, setPin] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { canInstall, isInstalled, promptInstall } = useInstallPrompt()
 
   useEffect(() => {
     if (pin.length >= 4 && !loading) {
@@ -220,7 +255,7 @@ function GuardPinPad({
 
   return (
     <div className="h-[100dvh] bg-orange-50 flex flex-col items-center justify-center px-4 py-3 overflow-hidden">
-      {/* Install banner — shown at top when available */}
+      {/* Install banner — native prompt */}
       {canInstall && (
         <motion.button
           initial={{ opacity: 0, y: -20 }}
@@ -234,6 +269,34 @@ function GuardPinPad({
             <p className="text-[10px] text-orange-100 leading-tight">Acceso directo a esta puerta</p>
           </div>
         </motion.button>
+      )}
+
+      {/* Manual install fallback — shows when native prompt is not available */}
+      {!canInstall && !isInstalled && showManualInstall && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-3 w-full max-w-[320px] bg-white border border-orange-200 rounded-xl p-3 shadow-sm"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <Download className="w-4 h-4 text-orange-600 flex-shrink-0" />
+            <p className="text-xs font-semibold text-gray-900">Instalar como App</p>
+          </div>
+          <ol className="text-[11px] text-gray-600 space-y-1 pl-4 list-decimal">
+            <li>Toque el menú <strong>&#8942;</strong> (tres puntos) arriba a la derecha</li>
+            <li>Seleccione <strong>&quot;Instalar aplicación&quot;</strong> o <strong>&quot;Agregar a pantalla de inicio&quot;</strong></li>
+          </ol>
+        </motion.div>
+      )}
+
+      {/* Show manual install link if native not available */}
+      {!canInstall && !isInstalled && !showManualInstall && (
+        <button
+          onClick={onShowManualInstall}
+          className="mb-2 text-[10px] text-orange-600 underline"
+        >
+          Instalar como aplicación
+        </button>
       )}
 
       {/* Header */}
@@ -355,6 +418,10 @@ export default function DoorKioskScannerPage() {
   const qrBufferRef = useRef<string[]>([])
   const qrBufferTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const hiddenInputRef = useRef<HTMLInputElement | null>(null)
+
+  // PWA install — hook lives here so it persists across all steps
+  const { canInstall, isInstalled, promptInstall } = useInstallPrompt()
+  const [showManualInstall, setShowManualInstall] = useState(false)
 
   // Clock
   useEffect(() => {
@@ -747,6 +814,11 @@ export default function DoorKioskScannerPage() {
         kioskId={kioskId}
         kioskName={kiosk?.name || 'Control de Acceso'}
         onAuthenticated={handleGuardAuthenticated}
+        canInstall={canInstall}
+        isInstalled={isInstalled}
+        promptInstall={promptInstall}
+        showManualInstall={showManualInstall}
+        onShowManualInstall={() => setShowManualInstall(true)}
       />
     )
   }
@@ -771,6 +843,8 @@ export default function DoorKioskScannerPage() {
               guardName={guard?.name || ''}
               currentTime={currentTime}
               stats={stats}
+              canInstall={canInstall}
+              onInstall={promptInstall}
             />
             {step === 'error' && errorMessage && (
               <ScanFeedback
