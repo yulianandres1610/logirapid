@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Shield, Users, ScanLine, Clock } from 'lucide-react'
+import { Shield, Users, ScanLine, Clock, Download } from 'lucide-react'
 
 interface KioskStats {
   visitorsInside: number
@@ -13,12 +13,14 @@ interface Props {
   guardName: string
   currentTime: Date | null
   stats: KioskStats | null
+  canInstall?: boolean
+  onInstall?: () => void
 }
 
 /**
  * Idle dashboard — light theme for outdoor use on Zebra TC21K (5" 1280x720)
  */
-export default function IdleScreen({ kioskName, guardName, currentTime, stats }: Props) {
+export default function IdleScreen({ kioskName, guardName, currentTime, stats, canInstall, onInstall }: Props) {
   const timeStr = currentTime
     ? currentTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
     : '--:--'
@@ -69,6 +71,17 @@ export default function IdleScreen({ kioskName, guardName, currentTime, stats }:
         <p className="text-lg font-semibold text-gray-900">Escanee el carnet</p>
         <p className="text-xs text-gray-500 mt-0.5">de identidad</p>
       </motion.div>
+
+      {/* Install button */}
+      {canInstall && onInstall && (
+        <button
+          onClick={onInstall}
+          className="mt-3 flex items-center gap-1.5 px-3 py-1.5 bg-orange-600 text-white text-xs font-medium rounded-lg shadow-sm"
+        >
+          <Download className="w-3.5 h-3.5" />
+          Instalar App
+        </button>
+      )}
     </div>
   )
 }
