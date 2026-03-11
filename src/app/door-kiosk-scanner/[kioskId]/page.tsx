@@ -7,7 +7,8 @@ import {
   Lock,
   Shield,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Download
 } from 'lucide-react'
 import { useBarcodeScan } from '@/hooks/useBarcodeScan'
 import { parseCubanIdQr, isCubanIdQr } from './utils/parse-cuban-id-qr'
@@ -107,6 +108,52 @@ function vibrate(pattern: number[]) {
 }
 
 // ---------------------------------------------------------------------------
+// PWA Install prompt hook
+// ---------------------------------------------------------------------------
+function useInstallPrompt() {
+  const [installPrompt, setInstallPrompt] = useState<any>(null)
+  const [isInstalled, setIsInstalled] = useState(false)
+
+  useEffect(() => {
+    // Check if already installed as PWA
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true)
+      return
+    }
+
+    const handler = (e: Event) => {
+      e.preventDefault()
+      setInstallPrompt(e)
+    }
+
+    window.addEventListener('beforeinstallprompt', handler)
+
+    // Detect when app gets installed
+    window.addEventListener('appinstalled', () => {
+      setIsInstalled(true)
+      setInstallPrompt(null)
+    })
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler)
+    }
+  }, [])
+
+  const promptInstall = async () => {
+    if (!installPrompt) return false
+    installPrompt.prompt()
+    const result = await installPrompt.userChoice
+    if (result.outcome === 'accepted') {
+      setIsInstalled(true)
+      setInstallPrompt(null)
+    }
+    return result.outcome === 'accepted'
+  }
+
+  return { canInstall: !!installPrompt && !isInstalled, isInstalled, promptInstall }
+}
+
+// ---------------------------------------------------------------------------
 // Inline PIN Pad — optimized for Zebra TC21K (360×640 CSS viewport)
 // Each guard must authenticate every session.
 // ---------------------------------------------------------------------------
@@ -122,6 +169,7 @@ function GuardPinPad({
   const [pin, setPin] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { canInstall, isInstalled, promptInstall } = useInstallPrompt()
 
   useEffect(() => {
     if (pin.length >= 4 && !loading) {
@@ -172,6 +220,22 @@ function GuardPinPad({
 
   return (
     <div className="h-[100dvh] bg-gradient-to-b from-stone-800 to-stone-900 flex flex-col items-center justify-center px-4 py-3 overflow-hidden">
+      {/* Install banner — shown at top when available */}
+      {canInstall && (
+        <motion.button
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={promptInstall}
+          className="mb-3 flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/30 transition-colors w-full max-w-[320px]"
+        >
+          <Download className="w-5 h-5 flex-shrink-0" />
+          <div className="text-left flex-1 min-w-0">
+            <p className="text-sm font-semibold leading-tight">Instalar App</p>
+            <p className="text-[10px] text-orange-100 leading-tight">Acceso directo a esta puerta</p>
+          </div>
+        </motion.button>
+      )}
+
       {/* Header — compact */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -230,7 +294,7 @@ function GuardPinPad({
           ))}
         </div>
 
-        {/* Keypad — 44px buttons fit well on 5" */}
+        {/* Keypad */}
         <div className="grid grid-cols-3 gap-1.5">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((digit, i) => (
             <button
@@ -261,6 +325,11 @@ function GuardPinPad({
           </div>
         )}
       </motion.div>
+
+      {/* Installed badge */}
+      {isInstalled && (
+        <p className="text-[10px] text-green-400 mt-2">App instalada</p>
+      )}
     </div>
   )
 }
