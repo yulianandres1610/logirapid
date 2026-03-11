@@ -505,7 +505,9 @@ export default function DoorKioskScannerPage() {
     const currentStep = stepRef.current
     console.log('[DoorKioskScanner] processIdScan called, currentStep:', currentStep)
 
-    if (currentStep !== 'idle' && currentStep !== 'error') {
+    // Allow scanning from idle, error, or success screens (interrupts countdown)
+    const allowedSteps: KioskStep[] = ['idle', 'error', 'entry_success', 'exit_success']
+    if (!allowedSteps.includes(currentStep)) {
       console.log('[DoorKioskScanner] processIdScan skipped — step is:', currentStep)
       return
     }
@@ -516,9 +518,21 @@ export default function DoorKioskScannerPage() {
       vibrate([100, 50, 100])
       setStep('error')
       setErrorMessage('QR no válido')
-      setTimeout(() => setStep('idle'), 2000)
+      setTimeout(() => {
+        // Only go to idle if we're still in error
+        if (stepRef.current === 'error') setStep('idle')
+      }, 2000)
       return
     }
+
+    // Clean up previous visitor state before processing new scan
+    setVisitor(null)
+    setActiveLogId(null)
+    setPendingSales([])
+    setScannedInvoices([])
+    setSelectedPurpose('')
+    setEntryTime(null)
+    setErrorMessage('')
 
     playBeep(true)
     vibrate([50, 30, 50])
@@ -642,6 +656,11 @@ export default function DoorKioskScannerPage() {
     const currentStep = stepRef.current
     console.log('[DoorKioskScanner] Raw scan received:', JSON.stringify(scannedText), 'step:', currentStep)
 
+    // Clear hidden input to prevent text accumulation
+    if (hiddenInputRef.current) {
+      hiddenInputRef.current.value = ''
+    }
+
     // First check if the full text already contains a complete Cuban ID QR
     // (scanner may send everything at once with newlines embedded)
     if (isCubanIdQr(scannedText)) {
@@ -708,6 +727,15 @@ export default function DoorKioskScannerPage() {
     if (!scanEnabled) return
 
     const keepFocus = () => {
+      // Clear any leftover text in hidden input to prevent accumulation
+      if (hiddenInputRef.current && hiddenInputRef.current.value.length > 0) {
+        const timeSinceLastChange = Date.now() - (hiddenInputRef.current as any)._lastChange
+        // Only clear if no recent input (avoid clearing mid-scan)
+        if (!timeSinceLastChange || timeSinceLastChange > 1000) {
+          hiddenInputRef.current.value = ''
+        }
+      }
+
       const active = document.activeElement
       const tag = active?.tagName.toLowerCase()
       // Don't steal focus from real inputs/buttons
@@ -746,17 +774,28 @@ export default function DoorKioskScannerPage() {
     return () => window.removeEventListener('paste', handlePaste)
   }, [scanEnabled, handleScan])
 
-  // Handle input event on hidden field — fallback for Android IME
+  // Handle input event on hidden field — debounced fallback for Android IME
+  const hiddenInputTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const handleHiddenInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value
-    if (!val) return
+    const input = e.target
+    if (!input.value) return
 
-    // Check if this looks like a complete QR or barcode
-    if (val.length >= 10 && (isCubanIdQr(val) || val.includes('N:') || val.includes('CI:'))) {
-      console.log('[DoorKioskScanner] Hidden input captured QR:', JSON.stringify(val))
-      e.target.value = ''
-      handleScan(val)
-    }
+    // Track last change time for cleanup
+    ;(input as any)._lastChange = Date.now()
+
+    // Debounce: wait 300ms after last character before processing
+    if (hiddenInputTimeoutRef.current) clearTimeout(hiddenInputTimeoutRef.current)
+    hiddenInputTimeoutRef.current = setTimeout(() => {
+      const val = input.value
+      if (val && val.length >= 5) {
+        console.log('[DoorKioskScanner] Hidden input captured (debounced):', JSON.stringify(val))
+        input.value = ''
+        handleScan(val)
+      } else {
+        // Discard short/incomplete text
+        input.value = ''
+      }
+    }, 300)
   }, [handleScan])
 
   const handlePurposeSelect = useCallback(async (purpose: string) => {
@@ -834,6 +873,12 @@ export default function DoorKioskScannerPage() {
   }, [visitor, guard, kioskId, activeLogId])
 
   const resetToIdle = useCallback(() => {
+    // Don't reset to idle if a new scan is already being processed
+    const currentStep = stepRef.current
+    if (currentStep === 'processing' || currentStep === 'purpose_select' || currentStep === 'exit_pending') {
+      console.log('[DoorKioskScanner] resetToIdle skipped — active step:', currentStep)
+      return
+    }
     setVisitor(null)
     setParsedName(null)
     setActiveLogId(null)
