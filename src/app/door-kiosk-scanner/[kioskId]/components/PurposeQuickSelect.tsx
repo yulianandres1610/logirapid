@@ -25,11 +25,11 @@ export default function PurposeQuickSelect({ visitorName, onSelect, loading }: P
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-stone-900/95 px-5"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/95 px-5"
     >
-      <p className="text-sm text-stone-400 mb-0.5">Visitante</p>
-      <p className="text-xl font-bold text-white mb-4 text-center leading-tight">{visitorName}</p>
-      <p className="text-sm text-stone-300 mb-3">Propósito de visita</p>
+      <p className="text-sm text-gray-500 mb-0.5">Visitante</p>
+      <p className="text-xl font-bold text-gray-900 mb-4 text-center leading-tight">{visitorName}</p>
+      <p className="text-sm text-gray-600 mb-3">Propósito de visita</p>
 
       <div className="grid grid-cols-2 gap-2.5 w-full max-w-[300px]">
         {PURPOSES.map((purpose) => {
@@ -39,12 +39,12 @@ export default function PurposeQuickSelect({ visitorName, onSelect, loading }: P
               key={purpose.id}
               onClick={() => onSelect(purpose.id)}
               disabled={loading}
-              className="flex flex-col items-center gap-1.5 py-4 px-3 rounded-xl bg-stone-800 hover:bg-stone-700 active:scale-95 transition-all disabled:opacity-50"
+              className="flex flex-col items-center gap-1.5 py-4 px-3 rounded-xl bg-white hover:bg-orange-50 active:scale-95 transition-all disabled:opacity-50 shadow-sm border border-gray-200"
             >
               <div className={`w-10 h-10 ${purpose.color} rounded-lg flex items-center justify-center`}>
                 <Icon className="w-5 h-5 text-white" />
               </div>
-              <span className="text-sm font-semibold text-white">{purpose.label}</span>
+              <span className="text-sm font-semibold text-gray-900">{purpose.label}</span>
             </button>
           )
         })}

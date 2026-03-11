@@ -10,7 +10,7 @@ interface Props {
 }
 
 /**
- * Processing / error overlay — optimized for TC21K 5" screen
+ * Processing / error overlay — light theme for outdoor TC21K
  */
 export default function ScanFeedback({ visitorName, isError, errorMessage }: Props) {
   return (
@@ -18,17 +18,17 @@ export default function ScanFeedback({ visitorName, isError, errorMessage }: Pro
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-stone-900/95 px-5"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/95 px-5"
     >
       {isError ? (
         <>
-          <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mb-3 border-2 border-red-500/40">
-            <ScanLine className="w-8 h-8 text-red-400" />
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-3 border-2 border-red-300">
+            <ScanLine className="w-8 h-8 text-red-600" />
           </div>
-          <p className="text-lg font-semibold text-red-400 text-center">
+          <p className="text-lg font-semibold text-red-600 text-center">
             {errorMessage || 'Error al procesar'}
           </p>
-          <p className="text-xs text-stone-400 mt-1">Intente de nuevo</p>
+          <p className="text-xs text-gray-500 mt-1">Intente de nuevo</p>
         </>
       ) : (
         <>
@@ -37,12 +37,12 @@ export default function ScanFeedback({ visitorName, isError, errorMessage }: Pro
             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
             className="mb-4"
           >
-            <RefreshCw className="w-10 h-10 text-orange-400" />
+            <RefreshCw className="w-10 h-10 text-orange-600" />
           </motion.div>
           {visitorName && (
-            <p className="text-xl font-bold text-white mb-1.5 text-center leading-tight">{visitorName}</p>
+            <p className="text-xl font-bold text-gray-900 mb-1.5 text-center leading-tight">{visitorName}</p>
           )}
-          <p className="text-sm text-stone-400">Procesando...</p>
+          <p className="text-sm text-gray-500">Procesando...</p>
         </>
       )}
     </motion.div>

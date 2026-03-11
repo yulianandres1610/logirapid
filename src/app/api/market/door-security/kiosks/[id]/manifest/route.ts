@@ -29,7 +29,7 @@ export async function GET(
       description: `Control de acceso - ${kioskName}`,
       start_url: `/door-kiosk-scanner/${kioskId}`,
       display: 'standalone',
-      background_color: '#1c1917',
+      background_color: '#fff7ed',
       theme_color: '#e86c00',
       orientation: 'portrait',
       icons: [
@@ -61,7 +61,7 @@ export async function GET(
       short_name: 'Puerta',
       start_url: `/door-kiosk-scanner/${(await params).id}`,
       display: 'standalone',
-      background_color: '#1c1917',
+      background_color: '#fff7ed',
       theme_color: '#e86c00',
       orientation: 'portrait',
       icons: [
