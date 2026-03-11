@@ -80,9 +80,7 @@ type KioskStep =
   | 'error'
 
 const INACTIVITY_TIMEOUT = 300000 // 5 minutes
-const GUARD_STORAGE_KEY = 'door-scanner-guard'
 
-// Audio feedback using Web Audio API
 function playBeep(success: boolean) {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
@@ -109,7 +107,8 @@ function vibrate(pattern: number[]) {
 }
 
 // ---------------------------------------------------------------------------
-// Inline PIN Pad component (no navigation, no kiosk selector)
+// Inline PIN Pad — optimized for Zebra TC21K (360×640 CSS viewport)
+// Each guard must authenticate every session.
 // ---------------------------------------------------------------------------
 function GuardPinPad({
   kioskId,
@@ -158,12 +157,6 @@ function GuardPinPad({
 
       if (result.success) {
         const guardData: GuardInfo = result.data.guard || result.data
-        // Persist in localStorage so PWA always remembers
-        localStorage.setItem(GUARD_STORAGE_KEY, JSON.stringify({
-          ...guardData,
-          kioskId,
-          savedAt: new Date().toISOString()
-        }))
         onAuthenticated(guardData)
       } else {
         setError(result.error || 'PIN inválido')
@@ -178,51 +171,55 @@ function GuardPinPad({
   }
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-br from-stone-800 via-stone-900 to-stone-800 flex flex-col items-center justify-center p-4">
+    <div className="h-[100dvh] bg-gradient-to-b from-stone-800 to-stone-900 flex flex-col items-center justify-center px-4 py-3 overflow-hidden">
+      {/* Header — compact */}
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
+        initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-6"
+        className="text-center mb-3"
       >
-        <div className="w-14 h-14 bg-white/10 rounded-xl flex items-center justify-center mx-auto mb-3">
-          <Shield className="w-7 h-7 text-orange-500" />
+        <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center mx-auto mb-2">
+          <Shield className="w-5 h-5 text-orange-500" />
         </div>
-        <h1 className="text-2xl font-bold text-white mb-1">{kioskName}</h1>
-        <p className="text-stone-400 text-sm">Ingresa el PIN de guardia</p>
+        <h1 className="text-lg font-bold text-white leading-tight">{kioskName}</h1>
+        <p className="text-stone-400 text-xs mt-0.5">Ingresa tu PIN de guardia</p>
       </motion.div>
 
+      {/* Card — tight padding for 360px wide viewport */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-[320px] overflow-hidden px-5 py-4"
       >
-        <div className="text-center mb-4">
-          <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-            <Lock className="w-6 h-6 text-orange-500" />
+        {/* Lock icon + label */}
+        <div className="text-center mb-3">
+          <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-1.5">
+            <Lock className="w-5 h-5 text-orange-500" />
           </div>
-          <p className="text-xs text-gray-500">PIN de 4 dígitos</p>
+          <p className="text-[11px] text-gray-500">PIN de 4 dígitos</p>
         </div>
 
+        {/* Error */}
         <AnimatePresence>
           {error && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
+              initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="mb-3 p-2 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2"
+              exit={{ opacity: 0, y: -8 }}
+              className="mb-2 p-1.5 bg-red-50 border border-red-200 rounded-lg flex items-center gap-1.5"
             >
-              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-              <span className="text-red-700 text-xs">{error}</span>
+              <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+              <span className="text-red-700 text-[11px]">{error}</span>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* PIN Display */}
-        <div className="flex justify-center gap-2 mb-4">
+        {/* PIN dots */}
+        <div className="flex justify-center gap-2.5 mb-3">
           {[0, 1, 2, 3].map(i => (
             <div
               key={i}
-              className={`w-11 h-11 rounded-lg border-2 flex items-center justify-center text-xl font-bold transition-all ${
+              className={`w-10 h-10 rounded-lg border-2 flex items-center justify-center text-lg font-bold transition-all ${
                 i < pin.length
                   ? 'border-orange-500 bg-orange-50 text-orange-600'
                   : 'border-gray-200'
@@ -233,8 +230,8 @@ function GuardPinPad({
           ))}
         </div>
 
-        {/* Numeric Keypad */}
-        <div className="grid grid-cols-3 gap-2 mb-3">
+        {/* Keypad — 44px buttons fit well on 5" */}
+        <div className="grid grid-cols-3 gap-1.5">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((digit, i) => (
             <button
               key={i}
@@ -244,12 +241,12 @@ function GuardPinPad({
                 else handlePinChange(digit.toString())
               }}
               disabled={loading || digit === null}
-              className={`h-12 rounded-lg text-lg font-bold transition-colors ${
+              className={`h-11 rounded-lg text-base font-bold transition-colors ${
                 digit === null
                   ? 'invisible'
                   : digit === 'del'
-                    ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    : 'bg-stone-100 text-stone-900 hover:bg-orange-100 active:scale-95'
+                    ? 'bg-gray-100 text-gray-600 hover:bg-gray-200 active:bg-gray-300'
+                    : 'bg-stone-100 text-stone-900 hover:bg-orange-100 active:bg-orange-200 active:scale-95'
               }`}
             >
               {digit === 'del' ? '\u232B' : digit}
@@ -258,9 +255,9 @@ function GuardPinPad({
         </div>
 
         {loading && (
-          <div className="flex items-center justify-center gap-2 text-orange-600 py-3">
-            <RefreshCw className="w-4 h-4 animate-spin" />
-            <span className="text-sm">Verificando...</span>
+          <div className="flex items-center justify-center gap-1.5 text-orange-600 pt-2">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            <span className="text-xs">Verificando...</span>
           </div>
         )}
       </motion.div>
@@ -301,34 +298,10 @@ export default function DoorKioskScannerPage() {
     return () => clearInterval(timer)
   }, [])
 
-  // Load kiosk info + try to restore guard from localStorage/sessionStorage
+  // Load kiosk info — always start at guard_pin (no persistent guard)
   useEffect(() => {
     const loadKiosk = async () => {
       try {
-        // Try localStorage first (PWA persistent), then sessionStorage (selector flow)
-        let guardData = localStorage.getItem(GUARD_STORAGE_KEY)
-        let guardObj: GuardInfo | null = null
-
-        if (guardData) {
-          try {
-            const parsed = JSON.parse(guardData)
-            // Verify guard is for this kiosk
-            if (parsed.kioskId === kioskId || !parsed.kioskId) {
-              guardObj = { id: parsed.id, name: parsed.name, code: parsed.code }
-            }
-          } catch { /* invalid JSON, ignore */ }
-        }
-
-        if (!guardObj) {
-          const sessionData = sessionStorage.getItem('door-guard')
-          if (sessionData) {
-            try {
-              guardObj = JSON.parse(sessionData)
-            } catch { /* invalid JSON */ }
-          }
-        }
-
-        // Fetch kiosk info
         const res = await fetch(`/api/market/door-security/kiosks/${kioskId}/public`)
         const result = await res.json()
 
@@ -339,15 +312,7 @@ export default function DoorKioskScannerPage() {
         }
 
         setKiosk(result.data)
-
-        if (guardObj) {
-          setGuard(guardObj)
-          setStep('idle')
-          fetchStats()
-        } else {
-          // No guard found — show inline PIN pad
-          setStep('guard_pin')
-        }
+        setStep('guard_pin')
       } catch {
         setStep('error')
         setErrorMessage('Error al cargar el kiosk')
@@ -356,19 +321,16 @@ export default function DoorKioskScannerPage() {
     loadKiosk()
   }, [kioskId])
 
-  // When guard is authenticated via PIN pad
   const handleGuardAuthenticated = useCallback((guardObj: GuardInfo) => {
     setGuard(guardObj)
     setStep('idle')
     fetchStats()
   }, [])
 
-  // Inactivity → back to PIN (not redirect)
+  // Inactivity → back to PIN
   const resetInactivityTimer = useCallback(() => {
     if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current)
     inactivityTimerRef.current = setTimeout(() => {
-      // Clear session guard but keep localStorage (PWA stays persistent)
-      sessionStorage.removeItem('door-guard')
       setGuard(null)
       setStep('guard_pin')
     }, INACTIVITY_TIMEOUT)
@@ -401,7 +363,6 @@ export default function DoorKioskScannerPage() {
     }
   }
 
-  // Process a Cuban ID QR scan
   const processIdScan = useCallback(async (qrText: string) => {
     if (step !== 'idle' && step !== 'error') return
 
@@ -468,7 +429,6 @@ export default function DoorKioskScannerPage() {
     }
   }, [step, kioskId, guard])
 
-  // Process an invoice barcode scan (during exit)
   const processInvoiceScan = useCallback(async (barcode: string) => {
     if (step !== 'exit_pending') return
     if (!activeLogId) return
@@ -500,7 +460,6 @@ export default function DoorKioskScannerPage() {
     }
   }, [step, activeLogId, scannedInvoices])
 
-  // Handle barcode scan
   const handleScan = useCallback((scannedText: string) => {
     resetInactivityTimer()
 
@@ -540,7 +499,6 @@ export default function DoorKioskScannerPage() {
     }
   }, [processIdScan, processInvoiceScan, step, resetInactivityTimer])
 
-  // Barcode scanner - active when not loading/pin
   useBarcodeScan({
     onScan: handleScan,
     minLength: 2,
@@ -548,7 +506,6 @@ export default function DoorKioskScannerPage() {
     enabled: step !== 'loading' && step !== 'guard_pin',
   })
 
-  // Handle purpose selection → register entry
   const handlePurposeSelect = useCallback(async (purpose: string) => {
     if (!visitor || !guard) return
 
@@ -586,7 +543,6 @@ export default function DoorKioskScannerPage() {
     }
   }, [visitor, guard, kioskId])
 
-  // Handle exit confirmation
   const handleConfirmExit = useCallback(async () => {
     if (!visitor || !guard || !activeLogId) return
 
@@ -636,19 +592,17 @@ export default function DoorKioskScannerPage() {
     setStep('idle')
   }, [])
 
-  // Loading state
   if (step === 'loading') {
     return (
-      <div className="min-h-[100dvh] bg-stone-900 flex items-center justify-center">
+      <div className="h-[100dvh] bg-stone-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-stone-400">Cargando kiosk...</p>
+          <div className="w-10 h-10 border-3 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-stone-400 text-sm">Cargando...</p>
         </div>
       </div>
     )
   }
 
-  // Guard PIN step — inline, no navigation
   if (step === 'guard_pin') {
     return (
       <GuardPinPad
@@ -660,7 +614,7 @@ export default function DoorKioskScannerPage() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-stone-900">
+    <div className="h-[100dvh] bg-stone-900 overflow-hidden">
       <AnimatePresence mode="wait">
         {(step === 'idle' || step === 'error') && (
           <div key="idle">
