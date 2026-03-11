@@ -217,6 +217,18 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
 
+    // Allow PWA resources: service worker, workbox, manifests, icons
+    if (
+      pathname === '/sw.js' ||
+      pathname.startsWith('/workbox-') ||
+      pathname.startsWith('/fallback-') ||
+      pathname.startsWith('/icons/') ||
+      pathname.endsWith('-manifest.json') ||
+      pathname === '/favicon.png'
+    ) {
+      return NextResponse.next()
+    }
+
     // Allow door security API routes (for kiosk operations)
     if (pathname.startsWith('/api/market/door-security') ||
         pathname.startsWith('/api/ai/scan-id-document') ||

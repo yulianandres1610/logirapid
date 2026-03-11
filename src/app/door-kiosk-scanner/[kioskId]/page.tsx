@@ -219,14 +219,14 @@ function GuardPinPad({
   }
 
   return (
-    <div className="h-[100dvh] bg-gradient-to-b from-stone-800 to-stone-900 flex flex-col items-center justify-center px-4 py-3 overflow-hidden">
+    <div className="h-[100dvh] bg-orange-50 flex flex-col items-center justify-center px-4 py-3 overflow-hidden">
       {/* Install banner — shown at top when available */}
       {canInstall && (
         <motion.button
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           onClick={promptInstall}
-          className="mb-3 flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/30 transition-colors w-full max-w-[320px]"
+          className="mb-3 flex items-center gap-2 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white rounded-xl shadow-lg shadow-orange-600/30 transition-colors w-full max-w-[320px]"
         >
           <Download className="w-5 h-5 flex-shrink-0" />
           <div className="text-left flex-1 min-w-0">
@@ -236,34 +236,32 @@ function GuardPinPad({
         </motion.button>
       )}
 
-      {/* Header — compact */}
+      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         className="text-center mb-3"
       >
-        <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center mx-auto mb-2">
-          <Shield className="w-5 h-5 text-orange-500" />
+        <div className="w-10 h-10 bg-orange-600 rounded-lg flex items-center justify-center mx-auto mb-2">
+          <Shield className="w-5 h-5 text-white" />
         </div>
-        <h1 className="text-lg font-bold text-white leading-tight">{kioskName}</h1>
-        <p className="text-stone-400 text-xs mt-0.5">Ingresa tu PIN de guardia</p>
+        <h1 className="text-lg font-bold text-gray-900 leading-tight">{kioskName}</h1>
+        <p className="text-gray-500 text-xs mt-0.5">Ingresa tu PIN de guardia</p>
       </motion.div>
 
-      {/* Card — tight padding for 360px wide viewport */}
+      {/* Card */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-[320px] overflow-hidden px-5 py-4"
+        className="bg-white rounded-2xl shadow-xl border border-orange-100 w-full max-w-[320px] overflow-hidden px-5 py-4"
       >
-        {/* Lock icon + label */}
         <div className="text-center mb-3">
           <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-1.5">
-            <Lock className="w-5 h-5 text-orange-500" />
+            <Lock className="w-5 h-5 text-orange-600" />
           </div>
           <p className="text-[11px] text-gray-500">PIN de 4 dígitos</p>
         </div>
 
-        {/* Error */}
         <AnimatePresence>
           {error && (
             <motion.div
@@ -278,7 +276,6 @@ function GuardPinPad({
           )}
         </AnimatePresence>
 
-        {/* PIN dots */}
         <div className="flex justify-center gap-2.5 mb-3">
           {[0, 1, 2, 3].map(i => (
             <div
@@ -286,7 +283,7 @@ function GuardPinPad({
               className={`w-10 h-10 rounded-lg border-2 flex items-center justify-center text-lg font-bold transition-all ${
                 i < pin.length
                   ? 'border-orange-500 bg-orange-50 text-orange-600'
-                  : 'border-gray-200'
+                  : 'border-gray-300'
               }`}
             >
               {i < pin.length ? '\u2022' : ''}
@@ -294,7 +291,6 @@ function GuardPinPad({
           ))}
         </div>
 
-        {/* Keypad */}
         <div className="grid grid-cols-3 gap-1.5">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, 'del'].map((digit, i) => (
             <button
@@ -310,7 +306,7 @@ function GuardPinPad({
                   ? 'invisible'
                   : digit === 'del'
                     ? 'bg-gray-100 text-gray-600 hover:bg-gray-200 active:bg-gray-300'
-                    : 'bg-stone-100 text-stone-900 hover:bg-orange-100 active:bg-orange-200 active:scale-95'
+                    : 'bg-orange-50 text-gray-900 border border-orange-200 hover:bg-orange-100 active:bg-orange-200 active:scale-95'
               }`}
             >
               {digit === 'del' ? '\u232B' : digit}
@@ -326,9 +322,8 @@ function GuardPinPad({
         )}
       </motion.div>
 
-      {/* Installed badge */}
       {isInstalled && (
-        <p className="text-[10px] text-green-400 mt-2">App instalada</p>
+        <p className="text-[10px] text-green-600 mt-2 font-medium">App instalada</p>
       )}
     </div>
   )
@@ -663,10 +658,10 @@ export default function DoorKioskScannerPage() {
 
   if (step === 'loading') {
     return (
-      <div className="h-[100dvh] bg-stone-900 flex items-center justify-center">
+      <div className="h-[100dvh] bg-orange-50 flex items-center justify-center">
         <div className="text-center">
           <div className="w-10 h-10 border-3 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-stone-400 text-sm">Cargando...</p>
+          <p className="text-gray-500 text-sm">Cargando...</p>
         </div>
       </div>
     )
@@ -683,7 +678,7 @@ export default function DoorKioskScannerPage() {
   }
 
   return (
-    <div className="h-[100dvh] bg-stone-900 overflow-hidden">
+    <div className="h-[100dvh] bg-orange-50 overflow-hidden">
       <AnimatePresence mode="wait">
         {(step === 'idle' || step === 'error') && (
           <div key="idle">
