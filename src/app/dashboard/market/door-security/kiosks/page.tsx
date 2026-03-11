@@ -17,7 +17,9 @@ import {
   UserPlus,
   ExternalLink,
   Copy,
-  Check
+  Check,
+  ScanLine,
+  Smartphone
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -74,6 +76,7 @@ export default function DoorKiosksPage() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null)
   const [selectedGuardIds, setSelectedGuardIds] = useState<number[]>([])
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [copiedScannerId, setCopiedScannerId] = useState<number | null>(null)
 
   useEffect(() => {
     fetchKiosks()
@@ -315,6 +318,26 @@ export default function DoorKiosksPage() {
     window.open(url, '_blank')
   }
 
+  const getScannerUrl = (kioskId: number) => {
+    if (typeof window !== 'undefined') {
+      const host = window.location.host
+      return `${window.location.protocol}//${host}/door-kiosk-scanner/${kioskId}`
+    }
+    return `/door-kiosk-scanner/${kioskId}`
+  }
+
+  const copyScannerUrl = async (kioskId: number) => {
+    const url = getScannerUrl(kioskId)
+    await navigator.clipboard.writeText(url)
+    setCopiedScannerId(kioskId)
+    setTimeout(() => setCopiedScannerId(null), 2000)
+  }
+
+  const openScannerUI = (kioskId: number) => {
+    const url = getScannerUrl(kioskId)
+    window.open(url, '_blank')
+  }
+
   if (loading) {
     return (
       <ProtectedRoute>
@@ -442,6 +465,40 @@ export default function DoorKiosksPage() {
                     <ExternalLink className="w-4 h-4" />
                   </button>
                 </div>
+              </div>
+
+              {/* Scanner App URL (installable PWA) */}
+              <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-3 mb-4 border border-orange-200 dark:border-orange-800/40">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <ScanLine className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />
+                  <p className="text-xs font-medium text-orange-700 dark:text-orange-400">App Scanner (Zebra TC21K):</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs text-orange-800 dark:text-orange-300 truncate">
+                    /door-kiosk-scanner/{kiosk.id}
+                  </code>
+                  <button
+                    onClick={() => copyScannerUrl(kiosk.id)}
+                    className="p-1.5 text-orange-400 hover:text-orange-600 dark:hover:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-900/30 rounded"
+                    title="Copiar URL Scanner"
+                  >
+                    {copiedScannerId === kiosk.id ? (
+                      <Check className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => openScannerUI(kiosk.id)}
+                    className="p-1.5 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/30 rounded"
+                    title="Abrir Scanner (instalar como app)"
+                  >
+                    <Smartphone className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-[10px] text-orange-600/70 dark:text-orange-400/60 mt-1.5">
+                  Abrir en el dispositivo e instalar como app. El PIN se pide solo una vez.
+                </p>
               </div>
 
               {/* Guards */}
