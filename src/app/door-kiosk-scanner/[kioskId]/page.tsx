@@ -465,7 +465,7 @@ export default function DoorKioskScannerPage() {
         throw new Error(result.error || 'Error al registrar visitante')
       }
 
-      const visitorData: VisitorInfo = result.data
+      const visitorData: VisitorInfo = result.data.visitor || result.data
       setVisitor(visitorData)
 
       if (visitorData.isCurrentlyInside) {
