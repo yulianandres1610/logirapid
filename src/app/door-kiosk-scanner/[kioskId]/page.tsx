@@ -730,8 +730,10 @@ export default function DoorKioskScannerPage() {
     enabled: scanEnabled,
   })
 
-  // Keep hidden textarea focused so Zebra DataWedge keyboard emulation works
-  // On Android, keydown events only fire when a text field is focused
+  // Keep hidden textarea focused so Zebra DataWedge keyboard emulation works.
+  // IMPORTANT: Only refocus via setInterval (programmatic), NOT on touch/click events.
+  // On Android Chrome, programmatic .focus() does NOT show the virtual keyboard,
+  // but .focus() triggered by a user gesture (click/touch) DOES show it.
   useEffect(() => {
     if (!scanEnabled) return
 
@@ -744,16 +746,14 @@ export default function DoorKioskScannerPage() {
       }
     }
 
-    // Focus immediately and on any interaction
-    keepFocus()
-    const interval = setInterval(keepFocus, 2000)
-    window.addEventListener('touchstart', keepFocus, { passive: true })
-    window.addEventListener('click', keepFocus)
+    // Initial focus after a short delay (avoid user-gesture context from mount)
+    const initialTimer = setTimeout(keepFocus, 300)
+    // Re-check focus every 500ms — fast enough to catch focus loss after taps
+    const interval = setInterval(keepFocus, 500)
 
     return () => {
+      clearTimeout(initialTimer)
       clearInterval(interval)
-      window.removeEventListener('touchstart', keepFocus)
-      window.removeEventListener('click', keepFocus)
     }
   }, [scanEnabled])
 
