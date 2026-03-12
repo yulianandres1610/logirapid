@@ -413,11 +413,12 @@ export default function DoorKioskScannerPage() {
   const [parsedName, setParsedName] = useState<string | null>(null)
   const [activeLogId, setActiveLogId] = useState<number | null>(null)
   const [entryTime, setEntryTime] = useState<string | null>(null)
+  const [debugFlash, setDebugFlash] = useState<string | null>(null)
 
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null)
   const qrBufferRef = useRef<string[]>([])
   const qrBufferTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const hiddenInputRef = useRef<HTMLInputElement | null>(null)
+  const hiddenInputRef = useRef<HTMLTextAreaElement | null>(null)
   const stepRef = useRef<KioskStep>(step)
   const activeLogIdRef = useRef<number | null>(activeLogId)
 
@@ -665,6 +666,10 @@ export default function DoorKioskScannerPage() {
     const currentStep = stepRef.current
     console.log('[DoorKioskScanner] Raw scan received:', JSON.stringify(scannedText), 'step:', currentStep)
 
+    // Visual debug indicator — shows briefly what was scanned
+    setDebugFlash(`Scan: ${scannedText.substring(0, 30)}... (${scannedText.length} chars)`)
+    setTimeout(() => setDebugFlash(null), 3000)
+
     // First check if the full text already contains a complete Cuban ID QR
     // (scanner may send everything at once with newlines embedded)
     if (isCubanIdQr(scannedText)) {
@@ -725,29 +730,29 @@ export default function DoorKioskScannerPage() {
     enabled: scanEnabled,
   })
 
-  // Keep hidden input focused so Zebra DataWedge keyboard emulation works
-  // On Android WebView/Chrome, keydown events may not fire without a focused input
+  // Keep hidden textarea focused so Zebra DataWedge keyboard emulation works
+  // On Android, keydown events only fire when a text field is focused
   useEffect(() => {
     if (!scanEnabled) return
 
     const keepFocus = () => {
       const active = document.activeElement
       const tag = active?.tagName.toLowerCase()
-      // Don't steal focus from real inputs/buttons
-      if (tag !== 'input' && tag !== 'textarea' && tag !== 'button') {
-        hiddenInputRef.current?.focus()
+      // Don't steal focus from real inputs/buttons (like PIN pad)
+      if (tag !== 'input' && tag !== 'button' && active !== hiddenInputRef.current) {
+        hiddenInputRef.current?.focus({ preventScroll: true })
       }
     }
 
-    // Focus immediately and on touch/click on the background
+    // Focus immediately and on any interaction
     keepFocus()
-    const interval = setInterval(keepFocus, 1000)
-    window.addEventListener('touchend', keepFocus)
+    const interval = setInterval(keepFocus, 2000)
+    window.addEventListener('touchstart', keepFocus, { passive: true })
     window.addEventListener('click', keepFocus)
 
     return () => {
       clearInterval(interval)
-      window.removeEventListener('touchend', keepFocus)
+      window.removeEventListener('touchstart', keepFocus)
       window.removeEventListener('click', keepFocus)
     }
   }, [scanEnabled])
@@ -769,28 +774,30 @@ export default function DoorKioskScannerPage() {
     return () => window.removeEventListener('paste', handlePaste)
   }, [scanEnabled, handleScan])
 
-  // Handle input event on hidden field — debounced fallback for Android IME
-  // This is ONLY a fallback: the primary scan mechanism is useBarcodeScan (keydown)
-  // On some Android devices, keydown events don't fire and only the input gets text
+  // Handle input on hidden textarea — primary scan capture for Android/Zebra
+  // DataWedge sends keystrokes through Android IME; on Chrome, keydown may not
+  // fire with correct keys, but the textarea WILL receive the text via onInput.
+  // Using a <textarea> so Enter from DataWedge adds a newline instead of submitting,
+  // allowing the entire multiline QR to be captured in one value.
   const hiddenInputTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const handleHiddenInput = useCallback(() => {
     const input = hiddenInputRef.current
-    if (!input || !input.value) return
+    if (!input) return
+    const currentVal = input.value
+    if (!currentVal) return
 
-    // Debounce: wait 500ms after last character before processing
+    // Debounce: wait 400ms after last character before processing
+    // DataWedge sends the full QR rapidly, so all chars arrive within ~200ms
     if (hiddenInputTimeoutRef.current) clearTimeout(hiddenInputTimeoutRef.current)
     hiddenInputTimeoutRef.current = setTimeout(() => {
       if (!input) return
       const val = input.value
-      if (val && val.length >= 5) {
-        console.log('[DoorKioskScanner] Hidden input captured (debounced):', JSON.stringify(val))
-        input.value = ''
+      input.value = ''
+      if (val && val.length >= 3) {
+        console.log('[DoorKioskScanner] Textarea captured:', JSON.stringify(val), 'len:', val.length)
         handleScan(val)
-      } else if (val) {
-        // Clear short leftover text
-        input.value = ''
       }
-    }, 500)
+    }, 400)
   }, [handleScan])
 
   const handlePurposeSelect = useCallback(async (purpose: string) => {
@@ -912,19 +919,41 @@ export default function DoorKioskScannerPage() {
   }
 
   return (
-    <div className="h-[100dvh] bg-orange-50 overflow-hidden">
-      {/* Hidden input to capture Zebra DataWedge scanner input on Android */}
-      <input
+    <div className="h-[100dvh] bg-orange-50 overflow-hidden relative">
+      {/* Debug flash — shows scan activity for troubleshooting */}
+      {debugFlash && (
+        <div className="absolute top-1 left-1 right-1 z-50 bg-blue-600 text-white text-[10px] px-2 py-1 rounded shadow-lg font-mono">
+          {debugFlash}
+        </div>
+      )}
+
+      {/* Hidden textarea captures Zebra DataWedge scanner input on Android.
+          Using <textarea> so Enter between QR lines adds \n instead of submitting.
+          Positioned far off-screen; do NOT use inputMode="none" or readOnly
+          as both block DataWedge keystroke output on Android. */}
+      <textarea
         ref={hiddenInputRef}
         onInput={handleHiddenInput}
-        className="fixed -top-10 -left-10 w-1 h-1 opacity-0 pointer-events-none caret-transparent"
+        style={{
+          position: 'fixed',
+          left: '-9999px',
+          top: '-9999px',
+          width: '1px',
+          height: '1px',
+          fontSize: '16px',
+          opacity: 0.01,
+          border: 'none',
+          outline: 'none',
+          resize: 'none',
+          padding: 0,
+          zIndex: -1,
+        }}
         aria-hidden="true"
         autoComplete="off"
         autoCorrect="off"
         autoCapitalize="off"
         spellCheck={false}
         tabIndex={-1}
-        inputMode="none"
       />
       <AnimatePresence mode="wait">
         {(step === 'idle' || step === 'error') && (
