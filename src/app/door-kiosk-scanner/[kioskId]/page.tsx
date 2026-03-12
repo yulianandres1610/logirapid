@@ -418,7 +418,6 @@ export default function DoorKioskScannerPage() {
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null)
   const qrBufferRef = useRef<string[]>([])
   const qrBufferTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const hiddenInputRef = useRef<HTMLTextAreaElement | null>(null)
   const stepRef = useRef<KioskStep>(step)
   const activeLogIdRef = useRef<number | null>(activeLogId)
 
@@ -730,33 +729,6 @@ export default function DoorKioskScannerPage() {
     enabled: scanEnabled,
   })
 
-  // Keep hidden textarea focused so Zebra DataWedge keyboard emulation works.
-  // IMPORTANT: Only refocus via setInterval (programmatic), NOT on touch/click events.
-  // On Android Chrome, programmatic .focus() does NOT show the virtual keyboard,
-  // but .focus() triggered by a user gesture (click/touch) DOES show it.
-  useEffect(() => {
-    if (!scanEnabled) return
-
-    const keepFocus = () => {
-      const active = document.activeElement
-      const tag = active?.tagName.toLowerCase()
-      // Don't steal focus from real inputs/buttons (like PIN pad)
-      if (tag !== 'input' && tag !== 'button' && active !== hiddenInputRef.current) {
-        hiddenInputRef.current?.focus({ preventScroll: true })
-      }
-    }
-
-    // Initial focus after a short delay (avoid user-gesture context from mount)
-    const initialTimer = setTimeout(keepFocus, 300)
-    // Re-check focus every 500ms — fast enough to catch focus loss after taps
-    const interval = setInterval(keepFocus, 500)
-
-    return () => {
-      clearTimeout(initialTimer)
-      clearInterval(interval)
-    }
-  }, [scanEnabled])
-
   // Handle paste events — some DataWedge configs paste instead of keystroke
   useEffect(() => {
     if (!scanEnabled) return
@@ -773,32 +745,6 @@ export default function DoorKioskScannerPage() {
     window.addEventListener('paste', handlePaste)
     return () => window.removeEventListener('paste', handlePaste)
   }, [scanEnabled, handleScan])
-
-  // Handle input on hidden textarea — primary scan capture for Android/Zebra
-  // DataWedge sends keystrokes through Android IME; on Chrome, keydown may not
-  // fire with correct keys, but the textarea WILL receive the text via onInput.
-  // Using a <textarea> so Enter from DataWedge adds a newline instead of submitting,
-  // allowing the entire multiline QR to be captured in one value.
-  const hiddenInputTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const handleHiddenInput = useCallback(() => {
-    const input = hiddenInputRef.current
-    if (!input) return
-    const currentVal = input.value
-    if (!currentVal) return
-
-    // Debounce: wait 400ms after last character before processing
-    // DataWedge sends the full QR rapidly, so all chars arrive within ~200ms
-    if (hiddenInputTimeoutRef.current) clearTimeout(hiddenInputTimeoutRef.current)
-    hiddenInputTimeoutRef.current = setTimeout(() => {
-      if (!input) return
-      const val = input.value
-      input.value = ''
-      if (val && val.length >= 3) {
-        console.log('[DoorKioskScanner] Textarea captured:', JSON.stringify(val), 'len:', val.length)
-        handleScan(val)
-      }
-    }, 400)
-  }, [handleScan])
 
   const handlePurposeSelect = useCallback(async (purpose: string) => {
     if (!visitor || !guard) return
@@ -927,34 +873,9 @@ export default function DoorKioskScannerPage() {
         </div>
       )}
 
-      {/* Hidden textarea captures Zebra DataWedge scanner input on Android.
-          Using <textarea> so Enter between QR lines adds \n instead of submitting.
-          Positioned far off-screen; do NOT use inputMode="none" or readOnly
-          as both block DataWedge keystroke output on Android. */}
-      <textarea
-        ref={hiddenInputRef}
-        onInput={handleHiddenInput}
-        style={{
-          position: 'fixed',
-          left: '-9999px',
-          top: '-9999px',
-          width: '1px',
-          height: '1px',
-          fontSize: '16px',
-          opacity: 0.01,
-          border: 'none',
-          outline: 'none',
-          resize: 'none',
-          padding: 0,
-          zIndex: -1,
-        }}
-        aria-hidden="true"
-        autoComplete="off"
-        autoCorrect="off"
-        autoCapitalize="off"
-        spellCheck={false}
-        tabIndex={-1}
-      />
+      {/* No hidden input/textarea — DataWedge keystroke output dispatches
+          keydown events to window directly. useBarcodeScan captures them.
+          This avoids the Android virtual keyboard appearing. */}
       <AnimatePresence mode="wait">
         {(step === 'idle' || step === 'error') && (
           <div key="idle">
