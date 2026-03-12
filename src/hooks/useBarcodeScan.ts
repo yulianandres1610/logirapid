@@ -57,15 +57,15 @@ export function useBarcodeScan(options: UseBarcodeScanOptions) {
   const handleKeyPress = useCallback((event: KeyboardEvent) => {
     if (!enabled) return
 
-    // Ignore if focus is on a visible input/textarea (unless it's the search input or hidden scanner input)
+    // Ignore if focus is on a visible input/textarea (unless it's a search or hidden scanner element)
     const target = event.target as HTMLElement
     const tagName = target.tagName.toLowerCase()
     const placeholder = target.getAttribute('placeholder')?.toLowerCase() || ''
     const isSearchInput = placeholder.includes('buscar') || placeholder.includes('escanear') || placeholder.includes('search')
-    const isHiddenInput = target.getAttribute('aria-hidden') === 'true' || (target as HTMLInputElement).tabIndex === -1
+    const isHiddenElement = target.getAttribute('aria-hidden') === 'true' || (target as HTMLInputElement).tabIndex === -1
 
-    // Allow scanning from search-related inputs and hidden scanner inputs
-    if ((tagName === 'input' || tagName === 'textarea') && !isSearchInput && !isHiddenInput) {
+    // Allow scanning from search-related inputs and hidden scanner elements (input or textarea)
+    if ((tagName === 'input' || tagName === 'textarea') && !isSearchInput && !isHiddenElement) {
       return
     }
 
