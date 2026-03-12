@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -8,9 +8,9 @@ import {
   Shield,
   RefreshCw,
   AlertCircle,
-  Download
+  Download,
+  ScanLine
 } from 'lucide-react'
-import { useBarcodeScan } from '@/hooks/useBarcodeScan'
 import { parseCubanIdQr, isCubanIdQr } from './utils/parse-cuban-id-qr'
 
 import IdleScreen from './components/IdleScreen'
@@ -413,11 +413,11 @@ export default function DoorKioskScannerPage() {
   const [parsedName, setParsedName] = useState<string | null>(null)
   const [activeLogId, setActiveLogId] = useState<number | null>(null)
   const [entryTime, setEntryTime] = useState<string | null>(null)
-  const [debugFlash, setDebugFlash] = useState<string | null>(null)
+  const [scanBuffer, setScanBuffer] = useState('')
 
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const qrBufferRef = useRef<string[]>([])
-  const qrBufferTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const scanInputRef = useRef<HTMLInputElement>(null)
+  const debounceRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const stepRef = useRef<KioskStep>(step)
   const activeLogIdRef = useRef<number | null>(activeLogId)
 
@@ -660,91 +660,81 @@ export default function DoorKioskScannerPage() {
     }
   }, [])
 
-  const handleScan = useCallback((scannedText: string) => {
+  // ---------------------------------------------------------------------------
+  // Scanner input — mirrors dispatch-scanner.tsx pattern (proven on Zebra TC21K)
+  // Uses a VISIBLE <input> with inputMode="none" to suppress virtual keyboard
+  // while still accepting DataWedge keystroke output.
+  // ---------------------------------------------------------------------------
+  const scanEnabled = step !== 'loading' && step !== 'guard_pin'
+
+  const processScanData = useCallback((rawText: string) => {
+    const text = rawText.trim()
+    if (!text) return
+
     resetInactivityTimer()
     const currentStep = stepRef.current
-    console.log('[DoorKioskScanner] Raw scan received:', JSON.stringify(scannedText), 'step:', currentStep)
+    console.log('[Scanner] Received:', JSON.stringify(text), 'step:', currentStep)
 
-    // Visual debug indicator — shows briefly what was scanned
-    setDebugFlash(`Scan: ${scannedText.substring(0, 30)}... (${scannedText.length} chars)`)
-    setTimeout(() => setDebugFlash(null), 3000)
-
-    // First check if the full text already contains a complete Cuban ID QR
-    // (scanner may send everything at once with newlines embedded)
-    if (isCubanIdQr(scannedText)) {
-      console.log('[DoorKioskScanner] Complete QR detected in single scan')
-      qrBufferRef.current = []
-      if (qrBufferTimeoutRef.current) clearTimeout(qrBufferTimeoutRef.current)
-      processIdScan(scannedText)
+    // Check if it's a Cuban ID QR (complete or partial)
+    if (isCubanIdQr(text)) {
+      processIdScan(text)
       return
     }
 
-    const isQrLine = /^(N:|A:|CI:|FV:)/i.test(scannedText.trim())
-
-    if (isQrLine || qrBufferRef.current.length > 0) {
-      qrBufferRef.current.push(scannedText.trim())
-      if (qrBufferTimeoutRef.current) clearTimeout(qrBufferTimeoutRef.current)
-      console.log('[DoorKioskScanner] QR buffer:', qrBufferRef.current)
-
-      const combined = qrBufferRef.current.join('\n')
-      if (isCubanIdQr(combined) && combined.includes('CI:')) {
-        const hasFV = qrBufferRef.current.some(l => l.startsWith('FV:'))
-        if (hasFV || qrBufferRef.current.length >= 4) {
-          console.log('[DoorKioskScanner] Complete QR from buffer')
-          qrBufferRef.current = []
-          processIdScan(combined)
-          return
-        }
-      }
-
-      // Increased timeout to 500ms — scanner may have delays between QR lines
-      qrBufferTimeoutRef.current = setTimeout(() => {
-        const combined = qrBufferRef.current.join('\n')
-        console.log('[DoorKioskScanner] QR buffer timeout, combined:', JSON.stringify(combined))
-        qrBufferRef.current = []
-        if (isCubanIdQr(combined)) {
-          processIdScan(combined)
-        } else {
-          console.log('[DoorKioskScanner] Buffer timeout - not a valid QR, discarding')
-        }
-      }, 500)
+    // If it looks like a single QR field line, it's an incomplete scan
+    // DataWedge should send the full QR at once via the input, so this is rare
+    if (/^(N:|A:|CI:|FV:)/i.test(text) && !text.includes('\n')) {
+      console.log('[Scanner] Partial QR line, ignoring:', text)
       return
     }
 
     // Not a Cuban ID QR — treat as invoice/ticket barcode during exit
     if (currentStep === 'exit_pending') {
-      processInvoiceScan(scannedText)
+      processInvoiceScan(text)
     } else {
-      console.log('[DoorKioskScanner] Unrecognized scan:', scannedText, '(step:', currentStep, ')')
+      console.log('[Scanner] Unrecognized scan:', text, '(step:', currentStep, ')')
     }
   }, [processIdScan, processInvoiceScan, resetInactivityTimer])
 
-  // Enable scanning on all active steps — processIdScan uses stepRef to gate
-  const scanEnabled = step !== 'loading' && step !== 'guard_pin'
+  // Enter key from DataWedge — process immediately
+  const handleScanKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      clearTimeout(debounceRef.current)
+      const code = scanInputRef.current?.value?.trim() || ''
+      if (scanInputRef.current) scanInputRef.current.value = ''
+      setScanBuffer('')
+      if (code) processScanData(code)
+    }
+  }, [processScanData])
 
-  useBarcodeScan({
-    onScan: handleScan,
-    minLength: 2,
-    maxTimeBetweenKeys: 150,
-    enabled: scanEnabled,
-  })
+  // DataWedge text injection via Android InputConnection — debounced at 150ms
+  const handleScanInput = useCallback(() => {
+    const val = scanInputRef.current?.value || ''
+    setScanBuffer(val)
+    clearTimeout(debounceRef.current)
+    if (val.trim().length >= 3) {
+      debounceRef.current = setTimeout(() => {
+        const code = scanInputRef.current?.value?.trim() || ''
+        if (scanInputRef.current) scanInputRef.current.value = ''
+        setScanBuffer('')
+        if (code) processScanData(code)
+      }, 150)
+    }
+  }, [processScanData])
 
-  // Handle paste events — some DataWedge configs paste instead of keystroke
+  // Keep scan input focused — same pattern as dispatch-scanner.tsx
   useEffect(() => {
     if (!scanEnabled) return
-
-    const handlePaste = (e: ClipboardEvent) => {
-      const text = e.clipboardData?.getData('text')
-      if (text && text.length >= 2) {
-        console.log('[DoorKioskScanner] Paste detected:', JSON.stringify(text))
-        e.preventDefault()
-        handleScan(text)
+    const focus = () => {
+      if (scanInputRef.current && document.activeElement !== scanInputRef.current) {
+        scanInputRef.current.focus()
       }
     }
-
-    window.addEventListener('paste', handlePaste)
-    return () => window.removeEventListener('paste', handlePaste)
-  }, [scanEnabled, handleScan])
+    focus()
+    const interval = setInterval(focus, 500)
+    return () => clearInterval(interval)
+  }, [scanEnabled])
 
   const handlePurposeSelect = useCallback(async (purpose: string) => {
     if (!visitor || !guard) return
@@ -865,17 +855,36 @@ export default function DoorKioskScannerPage() {
   }
 
   return (
-    <div className="h-[100dvh] bg-orange-50 overflow-hidden relative">
-      {/* Debug flash — shows scan activity for troubleshooting */}
-      {debugFlash && (
-        <div className="absolute top-1 left-1 right-1 z-50 bg-blue-600 text-white text-[10px] px-2 py-1 rounded shadow-lg font-mono">
-          {debugFlash}
+    <div className="h-[100dvh] bg-orange-50 overflow-hidden flex flex-col">
+      {/* Scanner input bar — visible, styled, with inputMode="none" to suppress keyboard.
+          This is the proven Zebra TC21K pattern from dispatch-scanner.tsx */}
+      <div className="px-3 pt-2 pb-1 flex-shrink-0">
+        <div className="relative">
+          <ScanLine className={`absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 z-10 pointer-events-none ${
+            scanBuffer ? 'text-orange-600' : 'text-orange-400 animate-pulse'
+          }`} />
+          <input
+            ref={scanInputRef}
+            type="text"
+            inputMode="none"
+            onKeyDown={handleScanKeyDown}
+            onInput={handleScanInput}
+            className={`w-full pl-10 pr-4 py-2.5 rounded-xl border-2 text-xs font-mono outline-none transition-colors bg-white ${
+              scanBuffer
+                ? 'border-orange-500 text-gray-900'
+                : 'border-orange-200 text-gray-500 placeholder:text-gray-400'
+            }`}
+            placeholder={step === 'exit_pending' ? 'Escanee ticket o carnet...' : 'Escanee el carnet de identidad...'}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            autoFocus
+          />
         </div>
-      )}
+      </div>
 
-      {/* No hidden input/textarea — DataWedge keystroke output dispatches
-          keydown events to window directly. useBarcodeScan captures them.
-          This avoids the Android virtual keyboard appearing. */}
+      <div className="flex-1 overflow-hidden">
       <AnimatePresence mode="wait">
         {(step === 'idle' || step === 'error') && (
           <div key="idle">
@@ -945,6 +954,7 @@ export default function DoorKioskScannerPage() {
           />
         )}
       </AnimatePresence>
+      </div>
     </div>
   )
 }
