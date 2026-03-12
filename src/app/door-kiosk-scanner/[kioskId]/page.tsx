@@ -912,6 +912,8 @@ export default function DoorKioskScannerPage() {
         aria-hidden="true"
         autoComplete="off"
         tabIndex={-1}
+        inputMode="none"
+        readOnly
       />
       <AnimatePresence mode="wait">
         {(step === 'idle' || step === 'error') && (
