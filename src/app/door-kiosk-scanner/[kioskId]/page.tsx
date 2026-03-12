@@ -429,6 +429,15 @@ export default function DoorKioskScannerPage() {
   const { canInstall, isInstalled, promptInstall } = useInstallPrompt()
   const [showManualInstall, setShowManualInstall] = useState(false)
 
+  // Register service worker for PWA installability
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then(reg => console.log('[PWA] SW registered, scope:', reg.scope))
+        .catch(err => console.error('[PWA] SW registration failed:', err))
+    }
+  }, [])
+
   // Clock
   useEffect(() => {
     setCurrentTime(new Date())
@@ -908,12 +917,14 @@ export default function DoorKioskScannerPage() {
       <input
         ref={hiddenInputRef}
         onInput={handleHiddenInput}
-        className="fixed -top-10 -left-10 w-1 h-1 opacity-0 pointer-events-none"
+        className="fixed -top-10 -left-10 w-1 h-1 opacity-0 pointer-events-none caret-transparent"
         aria-hidden="true"
         autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
         tabIndex={-1}
         inputMode="none"
-        readOnly
       />
       <AnimatePresence mode="wait">
         {(step === 'idle' || step === 'error') && (
