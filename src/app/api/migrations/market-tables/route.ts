@@ -1576,7 +1576,7 @@ export async function POST() {
         UPDATE consignment_orders o
         SET
           total_sold = COALESCE((
-            SELECT SUM(ol.quantity_sold * ol.unit_price)
+            SELECT SUM(ol.quantity_sold * ol.unit_cost)
             FROM consignment_order_lines ol
             WHERE ol.order_id = o.id
           ), 0),

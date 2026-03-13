@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
         COUNT(*) FILTER (WHERE status = 'received') as received_orders,
         COALESCE(SUM(total_cost), 0) as total_cost,
         COALESCE((
-          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          SELECT SUM(ol.quantity_sold * ol.unit_cost)
           FROM consignment_order_lines ol
           JOIN consignment_orders o2 ON o2.id = ol.order_id
           WHERE o2.company_id = $1
@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
         co.status,
         co.total_cost,
         COALESCE((
-          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          SELECT SUM(ol.quantity_sold * ol.unit_cost)
           FROM consignment_order_lines ol
           WHERE ol.order_id = co.id
         ), 0) as total_sold,
@@ -224,14 +224,14 @@ export async function GET(request: NextRequest) {
         COUNT(DISTINCT co.id) as total_orders,
         COALESCE(SUM(co.total_cost), 0) as total_cost,
         COALESCE((
-          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          SELECT SUM(ol.quantity_sold * ol.unit_cost)
           FROM consignment_order_lines ol
           JOIN consignment_orders o2 ON o2.id = ol.order_id
           WHERE o2.supplier_id = cs.id AND o2.status != 'cancelled'
         ), 0) as total_sold,
         COALESCE(SUM(co.total_returned), 0) as total_returned,
         COALESCE(SUM(co.total_cost), 0) - COALESCE((
-          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          SELECT SUM(ol.quantity_sold * ol.unit_cost)
           FROM consignment_order_lines ol
           JOIN consignment_orders o2 ON o2.id = ol.order_id
           WHERE o2.supplier_id = cs.id AND o2.status != 'cancelled'

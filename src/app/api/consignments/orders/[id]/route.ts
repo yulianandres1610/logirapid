@@ -78,7 +78,7 @@ export async function GET(
         o.validated_at,
         COALESCE(u3.firstname || ' ' || u3.lastname, u3.email) as validated_by_name,
         COALESCE((
-          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          SELECT SUM(ol.quantity_sold * ol.unit_cost)
           FROM consignment_order_lines ol
           WHERE ol.order_id = o.id
         ), 0) as calculated_total_sold
