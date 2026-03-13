@@ -196,11 +196,11 @@ async function deductStockFIFO(
       `, [toDeduct, lot.id])
 
       if (lot.order_line_id) {
-        const olr = await txClient.query(`SELECT order_id, unit_price FROM consignment_order_lines WHERE id = $1`, [lot.order_line_id])
+        const olr = await txClient.query(`SELECT order_id FROM consignment_order_lines WHERE id = $1`, [lot.order_line_id])
         await txClient.query(`UPDATE consignment_order_lines SET quantity_sold = COALESCE(quantity_sold, 0) + $1 WHERE id = $2`, [toDeduct, lot.order_line_id])
         if (olr.rows.length > 0) {
           await txClient.query(`UPDATE consignment_orders SET total_sold = COALESCE(total_sold, 0) + $1, updated_at = NOW() WHERE id = $2`,
-            [toDeduct * (parseFloat(olr.rows[0].unit_price) || 0), olr.rows[0].order_id])
+            [toDeduct * unitCost, olr.rows[0].order_id])
         }
       }
 

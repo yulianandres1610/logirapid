@@ -300,8 +300,7 @@ export async function POST(
 
               if (orderLineResult.rows.length > 0) {
                 const orderId = orderLineResult.rows[0].order_id
-                const lineUnitPrice = parseFloat(orderLineResult.rows[0].unit_price) || 0
-                const saleAmount = toDeduct * lineUnitPrice
+                const saleAmount = toDeduct * unitCost
 
                 await db.query(`
                   UPDATE consignment_orders
