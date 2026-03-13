@@ -119,8 +119,9 @@ async function deductStockFIFO(
       userId
     ])
 
-    // Create inventory movement
+    // Create inventory movement (using SAVEPOINT to avoid aborting transaction if table doesn't exist)
     try {
+      await txClient.query('SAVEPOINT sp_inventory_movement')
       await txClient.query(`
         INSERT INTO market_inventory_movements (
           product_id, company_id, movement_type, quantity,
@@ -130,11 +131,15 @@ async function deductStockFIFO(
         FROM market_products WHERE id = $1
       `, [productId, -quantity, previousOnHand, newOnHand, operationId,
         `Venta Mayorista: ${invoiceNumber} - ${customerName}`])
-    } catch { /* non-fatal */ }
+      await txClient.query('RELEASE SAVEPOINT sp_inventory_movement')
+    } catch {
+      await txClient.query('ROLLBACK TO SAVEPOINT sp_inventory_movement')
+    }
 
     // Update variant quantity if applicable
     if (variantId) {
       try {
+        await txClient.query('SAVEPOINT sp_variant_qty')
         const totalResult = await txClient.query(`
           SELECT COALESCE(SUM(quantity_on_hand), 0) as total
           FROM market_warehouse_stock WHERE product_id = $1 AND variant_id = $2
@@ -142,25 +147,33 @@ async function deductStockFIFO(
         await txClient.query(`
           UPDATE market_product_variants SET quantity_on_hand = $1, updated_at = NOW() WHERE id = $2
         `, [totalResult.rows[0].total, variantId])
-      } catch { /* non-fatal */ }
+        await txClient.query('RELEASE SAVEPOINT sp_variant_qty')
+      } catch {
+        await txClient.query('ROLLBACK TO SAVEPOINT sp_variant_qty')
+      }
     }
 
     // Update main product quantity
     try {
+      await txClient.query('SAVEPOINT sp_product_qty')
       await txClient.query(`
         UPDATE market_products SET quantity_on_hand = (
           SELECT COALESCE(SUM(quantity_on_hand), 0) FROM market_warehouse_stock
           WHERE product_id = $1 AND variant_id IS NULL
         ), updated_at = NOW() WHERE id = $1
       `, [productId])
-    } catch { /* non-fatal */ }
+      await txClient.query('RELEASE SAVEPOINT sp_product_qty')
+    } catch {
+      await txClient.query('ROLLBACK TO SAVEPOINT sp_product_qty')
+    }
   }
 
   // Process FIFO lots
   let remainingQty = quantity
 
-  // 1. Consignment lots
+  // 1. Consignment lots (using SAVEPOINT to avoid aborting transaction if tables don't exist)
   try {
+    await txClient.query('SAVEPOINT sp_consignment')
     const lots = await txClient.query(`
       SELECT id, lot_number, quantity_available, unit_cost, supplier_id, order_line_id
       FROM consignment_lot_inventory
@@ -201,11 +214,15 @@ async function deductStockFIFO(
       remainingQty -= toDeduct
     }
     await txClient.query(`DELETE FROM consignment_lot_inventory WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available <= 0`, [warehouseId, productId, companyId])
-  } catch { /* consignment tables may not exist */ }
+    await txClient.query('RELEASE SAVEPOINT sp_consignment')
+  } catch {
+    await txClient.query('ROLLBACK TO SAVEPOINT sp_consignment')
+  }
 
   // 2. Production lots
   if (remainingQty > 0) {
     try {
+      await txClient.query('SAVEPOINT sp_production')
       const lots = await txClient.query(`
         SELECT id, lot_number, quantity_available FROM production_lot_inventory
         WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available > 0
@@ -219,12 +236,16 @@ async function deductStockFIFO(
         remainingQty -= toDeduct
       }
       await txClient.query(`DELETE FROM production_lot_inventory WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available <= 0`, [warehouseId, productId, companyId])
-    } catch { /* production tables may not exist */ }
+      await txClient.query('RELEASE SAVEPOINT sp_production')
+    } catch {
+      await txClient.query('ROLLBACK TO SAVEPOINT sp_production')
+    }
   }
 
   // 3. Purchase lots
   if (remainingQty > 0) {
     try {
+      await txClient.query('SAVEPOINT sp_purchase')
       const lots = await txClient.query(`
         SELECT id, lot_number, quantity_available FROM purchase_lot_inventory
         WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available > 0
@@ -238,12 +259,16 @@ async function deductStockFIFO(
         remainingQty -= toDeduct
       }
       await txClient.query(`DELETE FROM purchase_lot_inventory WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available <= 0`, [warehouseId, productId, companyId])
-    } catch { /* purchase tables may not exist */ }
+      await txClient.query('RELEASE SAVEPOINT sp_purchase')
+    } catch {
+      await txClient.query('ROLLBACK TO SAVEPOINT sp_purchase')
+    }
   }
 
   // 4. Manual lots
   if (remainingQty > 0) {
     try {
+      await txClient.query('SAVEPOINT sp_manual_lots')
       const lots = await txClient.query(`
         SELECT id, lot_number, quantity_available FROM market_product_lots
         WHERE product_id = $1 AND company_id = $2 AND quantity_available > 0 AND is_active = true
@@ -256,7 +281,10 @@ async function deductStockFIFO(
         remainingQty -= toDeduct
       }
       await txClient.query(`UPDATE market_product_lots SET is_active = false WHERE product_id = $1 AND company_id = $2 AND quantity_available <= 0`, [productId, companyId])
-    } catch { /* manual lots may not exist */ }
+      await txClient.query('RELEASE SAVEPOINT sp_manual_lots')
+    } catch {
+      await txClient.query('ROLLBACK TO SAVEPOINT sp_manual_lots')
+    }
   }
 }
 
@@ -611,6 +639,7 @@ export async function POST(
       // Clean up any stuck reservations for these products
       for (const line of linesResult.rows) {
         try {
+          await client.query('SAVEPOINT sp_cleanup_reservations')
           if (isMultiWarehouse) {
             const wq = line.warehouse_quantities as WarehouseQuantities || {}
             for (const [wIdStr] of Object.entries(wq)) {
@@ -627,7 +656,10 @@ export async function POST(
               ${line.variant_id ? 'AND variant_id = $3' : 'AND variant_id IS NULL'}
             `, line.variant_id ? [invoice.warehouse_id, line.product_id, line.variant_id] : [invoice.warehouse_id, line.product_id])
           }
-        } catch { /* non-fatal */ }
+          await client.query('RELEASE SAVEPOINT sp_cleanup_reservations')
+        } catch {
+          await client.query('ROLLBACK TO SAVEPOINT sp_cleanup_reservations')
+        }
       }
 
       await client.query('COMMIT')
