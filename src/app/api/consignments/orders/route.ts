@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
         uv.firstname || ' ' || uv.lastname as validated_by_name,
         (SELECT COUNT(*) FROM consignment_order_lines WHERE order_id = o.id) as line_count,
         COALESCE((
-          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          SELECT SUM(ol.quantity_sold * ol.unit_cost)
           FROM consignment_order_lines ol
           WHERE ol.order_id = o.id
         ), 0) as calculated_total_sold
@@ -206,7 +206,7 @@ export async function GET(request: NextRequest) {
         COUNT(*) as count,
         COALESCE(SUM(o.total_cost), 0) as total_cost,
         COALESCE(SUM((
-          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          SELECT SUM(ol.quantity_sold * ol.unit_cost)
           FROM consignment_order_lines ol
           WHERE ol.order_id = o.id
         )), 0) as total_sold,

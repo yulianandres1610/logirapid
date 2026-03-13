@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
         COUNT(*) as total_orders,
         COALESCE(SUM(o.total_cost), 0) as total_consigned,
         COALESCE((
-          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          SELECT SUM(ol.quantity_sold * ol.unit_cost)
           FROM consignment_order_lines ol
           JOIN consignment_orders o2 ON o2.id = ol.order_id
           JOIN consignment_suppliers s2 ON s2.id = o2.supplier_id
@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
         s.code,
         s.name,
         COALESCE((
-          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          SELECT SUM(ol.quantity_sold * ol.unit_cost)
           FROM consignment_order_lines ol
           JOIN consignment_orders o2 ON o2.id = ol.order_id
           WHERE o2.supplier_id = s.id

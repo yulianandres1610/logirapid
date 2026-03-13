@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       UPDATE consignment_orders o
       SET
         total_sold = COALESCE((
-          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          SELECT SUM(ol.quantity_sold * ol.unit_cost)
           FROM consignment_order_lines ol
           WHERE ol.order_id = o.id
         ), 0),
@@ -109,14 +109,14 @@ export async function GET(request: NextRequest) {
         o.order_number,
         o.total_sold as stored_total_sold,
         COALESCE((
-          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          SELECT SUM(ol.quantity_sold * ol.unit_cost)
           FROM consignment_order_lines ol
           WHERE ol.order_id = o.id
         ), 0) as calculated_total_sold
       FROM consignment_orders o
       WHERE o.company_id = $1
         AND COALESCE(o.total_sold, 0) != COALESCE((
-          SELECT SUM(ol.quantity_sold * ol.unit_price)
+          SELECT SUM(ol.quantity_sold * ol.unit_cost)
           FROM consignment_order_lines ol
           WHERE ol.order_id = o.id
         ), 0)
