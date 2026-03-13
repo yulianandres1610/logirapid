@@ -642,11 +642,10 @@ export async function POST(request: NextRequest) {
               WHERE id = $2
             `, [toDeduct, lot.order_line_id])
 
-            // Update consignment_orders.total_sold (aggregate)
+            // Update consignment_orders.total_sold (aggregate) using unit_cost, not unit_price
             if (orderLineResult.rows.length > 0) {
               const orderId = orderLineResult.rows[0].order_id
-              const unitPrice = parseFloat(orderLineResult.rows[0].unit_price) || 0
-              const saleAmount = toDeduct * unitPrice
+              const saleAmount = toDeduct * unitCost
 
               await db.query(`
                 UPDATE consignment_orders
