@@ -166,6 +166,46 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Search market_invoices table (main wholesale module) if not found yet
+    if (!document && (isInvoice || !isPOS)) {
+      try {
+        const invoiceResult2 = await db.query(`
+          SELECT
+            mi.id,
+            mi.invoice_number,
+            mi.total_amount,
+            mi.currency,
+            mi.created_at,
+            mi.status,
+            mi.payment_status,
+            wc.business_name as customername
+          FROM market_invoices mi
+          LEFT JOIN market_wholesale_customers wc ON mi.customer_id = wc.id
+          WHERE mi.company_id = $1
+            AND mi.invoice_number = $2
+            AND mi.status IN ('confirmed', 'delivered', 'completed', 'draft', 'paid')
+          LIMIT 1
+        `, [companyId, code])
+
+        if (invoiceResult2.rows.length > 0) {
+          const row = invoiceResult2.rows[0]
+          document = {
+            found: true,
+            documentType: 'wholesale_invoice',
+            documentId: row.id,
+            documentNumber: row.invoice_number,
+            customerName: row.customername,
+            totalAmount: parseFloat(row.total_amount || '0'),
+            currency: row.currency || 'CUP',
+            createdAt: row.created_at,
+            alreadyValidated: false
+          }
+        }
+      } catch (e) {
+        console.log('[Scan Document] market_invoices table not available:', e)
+      }
+    }
+
     // Also try POS sales table (legacy) if still not found
     if (!document && (isPOS || !isInvoice)) {
       try {

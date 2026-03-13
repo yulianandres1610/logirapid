@@ -186,6 +186,42 @@ export async function GET(
       console.log('[Pending Sales] Wholesale tables not available, skipping')
     }
 
+    // Also search market_invoices table (main wholesale module)
+    let marketInvoicesResult = { rows: [] as any[] }
+    try {
+      marketInvoicesResult = await db.query(`
+        SELECT
+          mi.id,
+          mi.invoice_number,
+          mi.customer_id,
+          mi.total_amount,
+          mi.currency,
+          mi.status,
+          mi.payment_status,
+          mi.created_at,
+          wc.business_name as customername,
+          wc.tax_id as customeridnumber
+        FROM market_invoices mi
+        LEFT JOIN market_wholesale_customers wc ON mi.customer_id = wc.id
+        WHERE mi.company_id = $1
+          AND DATE(mi.created_at) = DATE($2)
+          AND mi.status IN ('confirmed', 'delivered', 'completed', 'draft', 'paid')
+          AND (
+            LOWER(wc.business_name) ILIKE LOWER($3)
+            OR LOWER(wc.contact_name) ILIKE LOWER($3)
+            OR wc.tax_id ILIKE $4
+          )
+        ORDER BY mi.created_at DESC
+      `, [
+        log.companyid,
+        log.entrytime,
+        `%${log.fullname.split(' ')[0]}%`,
+        `%${log.idnumber}%`
+      ])
+    } catch (e) {
+      console.log('[Pending Sales] market_invoices table not available, skipping')
+    }
+
     // Format POS receipts
     const posReceipts = posResult.rows.map(r => {
       const docKey = `pos_receipt-${r.id}`
@@ -206,7 +242,7 @@ export async function GET(
       }
     })
 
-    // Format wholesale invoices
+    // Format wholesale invoices (legacy table)
     const wholesaleInvoices = wholesaleResult.rows.map(r => {
       const docKey = `wholesale_invoice-${r.id}`
       return {
@@ -227,9 +263,40 @@ export async function GET(
       }
     })
 
+    // Format market_invoices (main wholesale module)
+    const marketInvoices = marketInvoicesResult.rows.map(r => {
+      const docKey = `wholesale_invoice-${r.invoice_number}`
+      // Also check by ID
+      const docKeyById = `wholesale_invoice-${r.id}`
+      return {
+        type: 'wholesale_invoice',
+        id: r.id,
+        documentNumber: r.invoice_number,
+        customerName: r.customername,
+        customerIdNumber: r.customeridnumber,
+        items: null,
+        subtotal: 0,
+        tax: 0,
+        total: parseFloat(r.total_amount || '0'),
+        currency: r.currency || 'CUP',
+        paymentMethod: null,
+        status: r.status,
+        createdAt: r.created_at,
+        alreadyValidated: validatedDocs.has(docKey) || validatedDocs.has(docKeyById)
+      }
+    })
+
+    // Combine both wholesale sources (avoid duplicates by documentNumber)
+    const allWholesale = [...wholesaleInvoices]
+    for (const mi of marketInvoices) {
+      if (!allWholesale.some(w => w.documentNumber === mi.documentNumber)) {
+        allWholesale.push(mi)
+      }
+    }
+
     // Filter out already validated
     const pendingPos = posReceipts.filter(r => !r.alreadyValidated)
-    const pendingWholesale = wholesaleInvoices.filter(r => !r.alreadyValidated)
+    const pendingWholesale = allWholesale.filter(r => !r.alreadyValidated)
 
     const hasPending = pendingPos.length > 0 || pendingWholesale.length > 0
 
@@ -247,6 +314,7 @@ export async function GET(
       data: {
         visitorName: log.fullname,
         visitorIdNumber: log.idnumber,
+        entryTime: log.entrytime,
         hasPendingSales: hasPending,
         pendingSales: {
           posReceipts: pendingPos,
@@ -254,7 +322,7 @@ export async function GET(
         },
         validatedSales: {
           posReceipts: posReceipts.filter(r => r.alreadyValidated),
-          wholesaleInvoices: wholesaleInvoices.filter(r => r.alreadyValidated)
+          wholesaleInvoices: allWholesale.filter(r => r.alreadyValidated)
         },
         summary: {
           totalPendingReceipts: pendingPos.length,
