@@ -142,7 +142,8 @@ export async function middleware(request: NextRequest) {
         pathname.startsWith('/api/users') ||
         pathname.startsWith('/api/audit') ||
         pathname.startsWith('/api/companies') ||
-        pathname.startsWith('/api/webhooks')) {
+        pathname.startsWith('/api/webhooks') ||
+        pathname.startsWith('/api/apps')) {
       return NextResponse.next()
     }
 
@@ -232,7 +233,8 @@ export async function middleware(request: NextRequest) {
     // Allow door security API routes (for kiosk operations)
     if (pathname.startsWith('/api/market/door-security') ||
         pathname.startsWith('/api/ai/scan-id-document') ||
-        pathname.startsWith('/api/ai/scan-receipt')) {
+        pathname.startsWith('/api/ai/scan-receipt') ||
+        pathname.startsWith('/api/apps')) {
       return NextResponse.next()
     }
 
@@ -303,7 +305,8 @@ export async function middleware(request: NextRequest) {
         pathname.startsWith('/api/users') ||
         pathname.startsWith('/api/audit') ||
         pathname.startsWith('/api/companies') ||
-        pathname.startsWith('/api/webhooks')) {
+        pathname.startsWith('/api/webhooks') ||
+        pathname.startsWith('/api/apps')) {
       return NextResponse.next()
     }
 
@@ -521,7 +524,7 @@ export async function middleware(request: NextRequest) {
     }
 
     // Allow driver API routes
-    if (pathname.startsWith('/api/driver-app') || pathname.startsWith('/api/auth') || pathname.startsWith('/api/products')) {
+    if (pathname.startsWith('/api/driver-app') || pathname.startsWith('/api/auth') || pathname.startsWith('/api/products') || pathname.startsWith('/api/apps')) {
       return NextResponse.next()
     }
 
@@ -799,6 +802,11 @@ export async function middleware(request: NextRequest) {
 
   // Payment links - rutas públicas para pagos
   if (pathname.startsWith('/api/payment-links')) {
+    return NextResponse.next()
+  }
+
+  // App updates - check-update is public, releases requires auth (handled in route)
+  if (pathname.startsWith('/api/apps')) {
     return NextResponse.next()
   }
 
