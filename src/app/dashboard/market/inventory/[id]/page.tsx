@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package,
@@ -52,6 +52,7 @@ import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 import { PrintLabelModal } from '@/components/print/PrintLabelModal'
 import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
+import JsBarcode from 'jsbarcode'
 
 interface VariantOption {
   type: string
@@ -775,7 +776,7 @@ export default function ProductDetailPage() {
                   </div>
 
                   {/* SKU and Barcode */}
-                  <div className="flex items-center gap-4 text-sm text-gray-500 flex-wrap mb-6">
+                  <div className="flex items-center gap-4 text-sm text-gray-500 flex-wrap mb-4">
                     <span className={cn(
                       'flex items-center gap-1.5 font-mono px-3 py-1.5 rounded-lg',
                       theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
@@ -799,6 +800,35 @@ export default function ProductDetailPage() {
                       {product.unitOfMeasure}
                     </span>
                   </div>
+
+                  {/* Visual Barcode */}
+                  {product.barcode && (
+                    <div className={cn(
+                      'mb-6 inline-flex items-center rounded-xl px-4 py-2.5 border',
+                      theme === 'dark' ? 'bg-white border-gray-600' : 'bg-white border-gray-200'
+                    )}>
+                      <svg
+                        ref={(node) => {
+                          if (node && product.barcode) {
+                            try {
+                              JsBarcode(node, product.barcode, {
+                                format: 'CODE128',
+                                width: 1.5,
+                                height: 40,
+                                displayValue: true,
+                                fontSize: 12,
+                                fontOptions: 'bold',
+                                font: 'monospace',
+                                margin: 0,
+                                background: 'transparent',
+                                lineColor: '#000000',
+                              })
+                            } catch { /* invalid barcode format, ignore */ }
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
 
                   {/* Price Grid */}
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-auto">
