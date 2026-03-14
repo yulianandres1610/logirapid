@@ -37,11 +37,15 @@ class PrinterService {
         systemPrinters = await this.detectLinuxPrinters()
       }
 
-      // Filter out RAW queues from the main printer list (they're auxiliary queues, not real printers)
-      const filteredPrinters = systemPrinters.filter(p => {
-        const name = p.name.toLowerCase()
-        return !name.endsWith('_raw') && !name.includes('_raw_')
-      })
+      // On macOS/Linux, filter out CUPS RAW auxiliary queues (e.g. "Zebra_RAW")
+      // On Windows, keep all printers — Windows doesn't use CUPS RAW queues
+      let filteredPrinters = systemPrinters
+      if (process.platform !== 'win32') {
+        filteredPrinters = systemPrinters.filter(p => {
+          const name = p.name.toLowerCase()
+          return !name.endsWith('_raw') && !name.includes('_raw_')
+        })
+      }
 
       this.printers = filteredPrinters.map(p => this.enrichPrinterInfo(p))
 
@@ -106,40 +110,142 @@ class PrinterService {
   }
 
   private async detectWindowsPrinters(): Promise<SystemPrinter[]> {
+    const printersMap = new Map<string, SystemPrinter>()
+    let defaultName = ''
+
+    // Get default printer
     try {
-      // Use PowerShell to get printer information
-      const { stdout } = await execAsync(
-        'powershell -Command "Get-Printer | Select-Object Name, DriverName, PortName, PrinterStatus, Type | ConvertTo-Json"',
-        { encoding: 'utf8' }
-      )
-
-      if (!stdout.trim()) return []
-
-      const printers = JSON.parse(stdout)
-      const printerArray = Array.isArray(printers) ? printers : [printers]
-
-      // Get default printer
       const { stdout: defaultPrinter } = await execAsync(
         'powershell -Command "(Get-WmiObject -Query \\"SELECT * FROM Win32_Printer WHERE Default=TRUE\\").Name"',
         { encoding: 'utf8' }
       )
-      const defaultName = defaultPrinter.trim()
-
-      return printerArray.map((p: { Name: string; DriverName?: string; PortName?: string; PrinterStatus?: number }) => ({
-        name: p.Name,
-        displayName: p.Name,
-        description: p.DriverName,
-        status: p.PrinterStatus,
-        isDefault: p.Name === defaultName,
-        options: {
-          driverName: p.DriverName || '',
-          portName: p.PortName || ''
-        }
-      }))
-    } catch (error) {
-      console.error('[Printer Service] Windows detection failed:', error)
-      return []
+      defaultName = defaultPrinter.trim()
+    } catch (e) {
+      console.warn('[Printer Service] Could not get default printer:', e)
     }
+
+    // Method 1: Get-Printer (PowerShell PrintManagement module)
+    try {
+      const { stdout } = await execAsync(
+        'powershell -Command "Get-Printer | Select-Object Name, DriverName, PortName, PrinterStatus, Type | ConvertTo-Json"',
+        { encoding: 'utf8', timeout: 10000 }
+      )
+
+      if (stdout.trim()) {
+        const printers = JSON.parse(stdout)
+        const printerArray = Array.isArray(printers) ? printers : [printers]
+
+        console.log(`[Printer Service] Get-Printer found ${printerArray.length} printers:`)
+        printerArray.forEach((p: any, i: number) => {
+          console.log(`  [${i + 1}] Name="${p.Name}" Driver="${p.DriverName}" Port="${p.PortName}" Status=${p.PrinterStatus} Type=${p.Type}`)
+        })
+
+        for (const p of printerArray) {
+          if (p.Name && !printersMap.has(p.Name)) {
+            printersMap.set(p.Name, {
+              name: p.Name,
+              displayName: p.Name,
+              description: p.DriverName,
+              status: p.PrinterStatus,
+              isDefault: p.Name === defaultName,
+              options: {
+                driverName: p.DriverName || '',
+                portName: p.PortName || ''
+              }
+            })
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[Printer Service] Get-Printer failed, trying WMI fallback:', error)
+    }
+
+    // Method 2: WMI fallback — catches printers Get-Printer might miss (network, shared, etc.)
+    try {
+      const { stdout } = await execAsync(
+        'powershell -Command "Get-WmiObject -Class Win32_Printer | Select-Object Name, DriverName, PortName, PrinterStatus, Local, Network | ConvertTo-Json"',
+        { encoding: 'utf8', timeout: 10000 }
+      )
+
+      if (stdout.trim()) {
+        const wmiPrinters = JSON.parse(stdout)
+        const wmiArray = Array.isArray(wmiPrinters) ? wmiPrinters : [wmiPrinters]
+
+        console.log(`[Printer Service] WMI Win32_Printer found ${wmiArray.length} printers:`)
+        wmiArray.forEach((p: any, i: number) => {
+          console.log(`  [${i + 1}] Name="${p.Name}" Driver="${p.DriverName}" Port="${p.PortName}" Status=${p.PrinterStatus} Local=${p.Local} Network=${p.Network}`)
+        })
+
+        for (const p of wmiArray) {
+          if (p.Name && !printersMap.has(p.Name)) {
+            console.log(`[Printer Service] WMI found additional printer: "${p.Name}"`)
+            printersMap.set(p.Name, {
+              name: p.Name,
+              displayName: p.Name,
+              description: p.DriverName,
+              status: p.PrinterStatus,
+              isDefault: p.Name === defaultName,
+              options: {
+                driverName: p.DriverName || '',
+                portName: p.PortName || '',
+                isNetwork: p.Network ? 'true' : 'false'
+              }
+            })
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[Printer Service] WMI Win32_Printer also failed:', error)
+    }
+
+    // Method 3: wmic fallback for very old Windows versions
+    if (printersMap.size === 0) {
+      try {
+        const { stdout } = await execAsync(
+          'wmic printer get Name,DriverName,PortName,PrinterStatus /format:csv',
+          { encoding: 'utf8', timeout: 10000 }
+        )
+
+        if (stdout.trim()) {
+          const lines = stdout.trim().split('\n').filter(l => l.trim())
+          // First non-empty line is header
+          const header = lines[0]?.split(',').map(h => h.trim()) || []
+          const nameIdx = header.indexOf('Name')
+          const driverIdx = header.indexOf('DriverName')
+          const portIdx = header.indexOf('PortName')
+          const statusIdx = header.indexOf('PrinterStatus')
+
+          console.log(`[Printer Service] WMIC found ${lines.length - 1} printers`)
+
+          for (let i = 1; i < lines.length; i++) {
+            const cols = lines[i].split(',').map(c => c.trim())
+            const name = nameIdx >= 0 ? cols[nameIdx] : ''
+            if (name && !printersMap.has(name)) {
+              console.log(`[Printer Service] WMIC found additional printer: "${name}"`)
+              printersMap.set(name, {
+                name,
+                displayName: name,
+                description: driverIdx >= 0 ? cols[driverIdx] : undefined,
+                status: statusIdx >= 0 ? parseInt(cols[statusIdx]) || 0 : undefined,
+                isDefault: name === defaultName,
+                options: {
+                  driverName: driverIdx >= 0 ? cols[driverIdx] || '' : '',
+                  portName: portIdx >= 0 ? cols[portIdx] || '' : ''
+                }
+              })
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('[Printer Service] WMIC fallback also failed:', error)
+      }
+    }
+
+    const result = Array.from(printersMap.values())
+    console.log(`[Printer Service] Total Windows printers detected: ${result.length}`)
+    result.forEach((p, i) => console.log(`  [${i + 1}] "${p.name}" (driver: ${p.description || 'unknown'})`))
+
+    return result
   }
 
   private async detectMacPrinters(): Promise<SystemPrinter[]> {
