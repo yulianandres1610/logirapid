@@ -68,6 +68,21 @@ export function ReceptionDetailScreen() {
   const [expModalIdx, setExpModalIdx] = useState<number | null>(null)
   const [expDate, setExpDate] = useState('')
 
+  // Auto-format date as DD/MM/YYYY
+  const handleDateChange = (text: string) => {
+    // Remove all non-digits
+    const digits = text.replace(/\D/g, '')
+    let formatted = ''
+    if (digits.length <= 2) {
+      formatted = digits
+    } else if (digits.length <= 4) {
+      formatted = digits.slice(0, 2) + '/' + digits.slice(2)
+    } else {
+      formatted = digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4, 8)
+    }
+    setExpDate(formatted)
+  }
+
   // Load lines if empty (from pending list)
   useEffect(() => {
     if (receiveLines.length === 0 && order.id && order.type === 'purchase') {
@@ -382,8 +397,8 @@ export function ReceptionDetailScreen() {
             <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text, marginBottom: 4 }}>Fecha de Vencimiento</Text>
             <Text style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 16 }}>{expModalIdx !== null ? receiveLines[expModalIdx]?.name : ''}</Text>
             <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 }}>Fecha de vencimiento (opcional)</Text>
-            <TextInput value={expDate} onChangeText={setExpDate} placeholder="DD/MM/YYYY" placeholderTextColor={colors.textMuted} keyboardType="numeric"
-              style={{ backgroundColor: colors.inputBg, borderWidth: 1, borderColor: colors.inputBorder, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 18, fontWeight: '700', color: colors.text, textAlign: 'center', letterSpacing: 2, marginBottom: 6 }} autoFocus maxLength={10} />
+            <TextInput value={expDate} onChangeText={handleDateChange} placeholder="DD/MM/YYYY" placeholderTextColor={colors.textMuted} keyboardType="numeric"
+              style={{ backgroundColor: colors.inputBg, borderWidth: 1, borderColor: colors.inputBorder, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 22, fontWeight: '700', color: colors.text, textAlign: 'center', letterSpacing: 3, marginBottom: 6 }} autoFocus maxLength={10} />
             <Text style={{ fontSize: 10, color: colors.textMuted, textAlign: 'center', marginBottom: 16 }}>El número de lote se genera automáticamente</Text>
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <TouchableOpacity onPress={handleSkipExp} style={{ flex: 1, paddingVertical: 14, borderRadius: 14, alignItems: 'center', backgroundColor: isDark ? '#3f3b39' : '#f5f5f4' }} activeOpacity={0.7}>
