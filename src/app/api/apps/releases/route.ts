@@ -49,9 +49,9 @@ export async function POST(request: NextRequest) {
       userRole = request.headers.get('x-user-role') || request.cookies.get('user-role')?.value || null
     }
 
-    if (!userRole || userRole !== 'SUPER_ADMIN') {
+    if (!userRole || !['SUPER_ADMIN', 'ADMIN'].includes(userRole)) {
       return NextResponse.json(
-        { success: false, error: 'Solo SUPER_ADMIN puede registrar releases' },
+        { success: false, error: 'Solo ADMIN o SUPER_ADMIN puede registrar releases' },
         { status: 403 }
       )
     }
