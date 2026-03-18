@@ -656,27 +656,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate purchase number - use MAX to avoid duplicates when purchases are deleted
+    // Generate purchase number - use MAX globally to avoid unique constraint violations
     const year = new Date().getFullYear()
     const maxResult = await db.query(`
       SELECT MAX(CAST(SUBSTRING(purchase_number FROM 10) AS INTEGER)) as max_num
       FROM market_purchases
-      WHERE company_id = $1
-        AND purchase_number LIKE $2
-    `, [companyId, `PUR-${year}-%`])
+      WHERE purchase_number LIKE $1
+    `, [`PUR-${year}-%`])
     const nextNum = (parseInt(maxResult.rows[0]?.max_num || '0') || 0) + 1
     let purchaseNumber = `PUR-${year}-${nextNum.toString().padStart(4, '0')}`
 
-    // Verify uniqueness and retry if needed (handles race conditions)
+    // Verify global uniqueness (constraint is global, not per-company)
     let attempts = 0
     while (attempts < 10) {
       const existsCheck = await db.query(
-        'SELECT id FROM market_purchases WHERE purchase_number = $1 AND company_id = $2',
-        [purchaseNumber, companyId]
+        'SELECT id FROM market_purchases WHERE purchase_number = $1',
+        [purchaseNumber]
       )
       if (existsCheck.rows.length === 0) break
 
-      // Number exists, increment and try again
       const newNum = nextNum + attempts + 1
       purchaseNumber = `PUR-${year}-${newNum.toString().padStart(4, '0')}`
       attempts++
