@@ -434,7 +434,7 @@ function ProductDetailCard({ product, isDark, colors, onClear }: {
                       }}>
                         {lot.quantityAvailable}
                       </Text>
-                      <Text style={{ fontSize: 9, color: colors.textMuted, fontWeight: '600' }}>uds</Text>
+                      <Text style={{ fontSize: 9, color: colors.textMuted, fontWeight: '600' }}>{product.unit || 'uds'}</Text>
                     </View>
                   </View>
                 </View>
