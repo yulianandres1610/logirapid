@@ -364,6 +364,71 @@ function ProductDetailCard({ product, isDark, colors, onClear }: {
           </View>
         )}
 
+        {/* Lots / Expiration */}
+        {product.lots && product.lots.length > 0 && (
+          <View style={{
+            backgroundColor: isDark ? '#2d2a28' : '#fff',
+            borderRadius: 18, padding: 16, marginBottom: 10,
+            borderWidth: 1, borderColor: isDark ? '#3f3b39' : '#f0efee',
+          }}>
+            <Text style={{
+              fontSize: 11, fontWeight: '700', color: colors.textSecondary,
+              textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10,
+            }}>
+              {product.lots.length} Lote{product.lots.length !== 1 ? 's' : ''} Disponible{product.lots.length !== 1 ? 's' : ''}
+            </Text>
+            {product.lots.map((lot: any, idx: number) => {
+              const isExpired = lot.expirationDate && new Date(lot.expirationDate) < new Date()
+              const isNearExpiry = lot.expirationDate && !isExpired &&
+                (new Date(lot.expirationDate).getTime() - Date.now()) < 30 * 24 * 60 * 60 * 1000
+
+              const formatDate = (d: string | null) => {
+                if (!d) return 'Sin vencimiento'
+                const date = new Date(d)
+                return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`
+              }
+
+              return (
+                <View key={lot.lotNumber + idx} style={{
+                  paddingVertical: 10,
+                  borderTopWidth: idx > 0 ? 1 : 0,
+                  borderTopColor: isDark ? '#3f3b39' : '#f5f5f4',
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{lot.lotNumber}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3, gap: 6 }}>
+                        <Text style={{
+                          fontSize: 12, fontWeight: '600',
+                          color: isExpired ? '#ef4444' : isNearExpiry ? '#f59e0b' : colors.textSecondary,
+                        }}>
+                          {isExpired ? '⚠ Vencido: ' : isNearExpiry ? '⏰ Vence: ' : 'Vence: '}
+                          {formatDate(lot.expirationDate)}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                          · ${lot.unitCost?.toFixed(2)}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={{
+                      backgroundColor: isExpired ? '#fef2f2' : isNearExpiry ? '#fffbeb' : (isDark ? '#1c1917' : '#f0fdf4'),
+                      borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center',
+                    }}>
+                      <Text style={{
+                        fontSize: 16, fontWeight: '900',
+                        color: isExpired ? '#ef4444' : isNearExpiry ? '#f59e0b' : '#10b981',
+                      }}>
+                        {lot.quantityAvailable}
+                      </Text>
+                      <Text style={{ fontSize: 9, color: colors.textMuted, fontWeight: '600' }}>uds</Text>
+                    </View>
+                  </View>
+                </View>
+              )
+            })}
+          </View>
+        )}
+
         {/* Scan another button */}
         <TouchableOpacity onPress={onClear} activeOpacity={0.8} style={{
           backgroundColor: '#eb5b0c',

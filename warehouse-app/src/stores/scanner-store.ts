@@ -14,6 +14,15 @@ export interface ScannedVariant {
   imageUrl?: string
 }
 
+export interface LotInfo {
+  lotNumber: string
+  expirationDate: string | null
+  quantityAvailable: number
+  unitCost: number
+  source: string
+  receivedAt: string
+}
+
 export interface ScannedProduct {
   productId: number
   variantId?: number
@@ -29,6 +38,7 @@ export interface ScannedProduct {
   sellingPrice: number
   warehouseName?: string
   variants?: ScannedVariant[]
+  lots?: LotInfo[]
   unit?: string
   image?: string
 }
@@ -92,6 +102,7 @@ export const useScannerStore = create<ScannerState>((set) => ({
         unit: p.unit || 'unidad',
         image: raw.variant?.imageUrl || p.imageUrl || p.image || undefined,
         variants: variants.length > 1 ? variants : undefined,
+        lots: raw.lots || undefined,
       }
       set({ lastProduct: product, isProcessing: false })
       playSuccessBeep()
