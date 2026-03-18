@@ -1,3 +1,8 @@
+# React Native apps - Not needed for Vercel deployment
+warehouse-app/
+audit-app/
+door-kiosk-app/
+
 # Electron Print Service App - Not needed for Vercel deployment
 logirapid-print-service/
 
