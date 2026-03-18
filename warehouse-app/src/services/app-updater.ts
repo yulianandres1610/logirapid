@@ -2,8 +2,8 @@ import { NativeModules, NativeEventEmitter } from 'react-native'
 import { CONFIG } from '@/src/config'
 
 const APP_ID = 'warehouse'
-const CURRENT_VERSION_CODE = 10010
-const CURRENT_VERSION = '1.0.10'
+const CURRENT_VERSION_CODE = 10012
+const CURRENT_VERSION = '1.0.12'
 
 export interface UpdateInfo {
   updateAvailable: boolean
