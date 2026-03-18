@@ -83,7 +83,11 @@ export async function GET(
     }
 
     const companyId = payload.companyId
-    const purchaseId = parseInt(id)
+
+    // Support both numeric ID and purchase_number (e.g., PUR-2026-0060)
+    const isNumericId = /^\d+$/.test(id)
+    const purchaseIdClause = isNumericId ? 'mp.id = $2' : 'mp.purchase_number = $2'
+    const purchaseIdValue = isNumericId ? parseInt(id) : id
 
     // Get purchase with supplier and warehouse info
     const purchaseResult = await db.query(`
@@ -132,8 +136,8 @@ export async function GET(
       LEFT JOIN users u3 ON mp.received_by = u3.id
       LEFT JOIN users u4 ON mp.accepted_by = u4.id
       LEFT JOIN users u5 ON mp.validated_by = u5.id
-      WHERE mp.id = $1 AND mp.company_id = $2
-    `, [purchaseId, companyId])
+      WHERE ${purchaseIdClause} AND mp.company_id = $1
+    `, [companyId, purchaseIdValue])
 
     if (purchaseResult.rows.length === 0) {
       return NextResponse.json({
