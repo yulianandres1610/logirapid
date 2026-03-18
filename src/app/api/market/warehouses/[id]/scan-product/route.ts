@@ -16,6 +16,75 @@ interface ScanRequest {
 }
 
 /**
+ * Get lot inventory (FIFO) for a product in a warehouse
+ * Combines purchase_lot_inventory and consignment_lot_inventory
+ */
+async function getLotInventory(warehouseId: number, productId: number, variantId: number | null) {
+  const lots: Array<{
+    lotNumber: string
+    expirationDate: string | null
+    quantityAvailable: number
+    unitCost: number
+    source: string
+    receivedAt: string
+  }> = []
+
+  // Purchase lots
+  try {
+    const variantClause = variantId ? 'AND variant_id = $3' : 'AND variant_id IS NULL'
+    const params = variantId ? [warehouseId, productId, variantId] : [warehouseId, productId]
+    const purchaseLots = await db.query(`
+      SELECT lot_number, expiration_date, quantity_available, unit_cost, created_at
+      FROM purchase_lot_inventory
+      WHERE warehouse_id = $1 AND product_id = $2 ${variantClause}
+        AND quantity_available > 0
+      ORDER BY expiration_date ASC NULLS LAST, created_at ASC
+    `, params)
+
+    for (const lot of purchaseLots.rows) {
+      lots.push({
+        lotNumber: lot.lot_number,
+        expirationDate: lot.expiration_date,
+        quantityAvailable: parseFloat(lot.quantity_available) || 0,
+        unitCost: parseFloat(lot.unit_cost) || 0,
+        source: 'purchase',
+        receivedAt: lot.created_at,
+      })
+    }
+  } catch {
+    // Table may not exist
+  }
+
+  // Consignment lots
+  try {
+    const variantClause = variantId ? 'AND variant_id = $3' : 'AND variant_id IS NULL'
+    const params = variantId ? [warehouseId, productId, variantId] : [warehouseId, productId]
+    const consignmentLots = await db.query(`
+      SELECT lot_number, expiration_date, quantity_available, unit_cost, created_at
+      FROM consignment_lot_inventory
+      WHERE warehouse_id = $1 AND product_id = $2 ${variantClause}
+        AND quantity_available > 0
+      ORDER BY expiration_date ASC NULLS LAST, created_at ASC
+    `, params)
+
+    for (const lot of consignmentLots.rows) {
+      lots.push({
+        lotNumber: lot.lot_number,
+        expirationDate: lot.expiration_date,
+        quantityAvailable: parseFloat(lot.quantity_available) || 0,
+        unitCost: parseFloat(lot.unit_cost) || 0,
+        source: 'consignment',
+        receivedAt: lot.created_at,
+      })
+    }
+  } catch {
+    // Table may not exist
+  }
+
+  return lots
+}
+
+/**
  * POST /api/market/warehouses/[id]/scan-product
  * Scan a product by barcode/SKU and get stock info for this warehouse
  */
@@ -140,6 +209,9 @@ export async function POST(
       // Construir nombre de variante completo para display
       const variantDisplayName = v.variant_name || v.variant_sku || `Variante ${v.variant_id}`
 
+      // Get lot inventory for this variant
+      const lots = await getLotInventory(warehouseId, v.product_id, v.variant_id)
+
       return NextResponse.json({
         success: true,
         data: {
@@ -171,7 +243,8 @@ export async function POST(
             quantityReserved,
             quantityAvailable,
             allowNegative: warehouse.allow_negative_stock
-          }
+          },
+          lots
         }
       })
     }
@@ -290,6 +363,9 @@ export async function POST(
     const quantityReserved = parseFloat(product.quantity_reserved) || 0
     const quantityAvailable = quantityOnHand - quantityReserved
 
+    // Get lot inventory for this product
+    const lots = await getLotInventory(warehouseId, product.id, null)
+
     return NextResponse.json({
       success: true,
       data: {
@@ -314,7 +390,8 @@ export async function POST(
           quantityReserved,
           quantityAvailable,
           allowNegative: warehouse.allow_negative_stock
-        }
+        },
+        lots
       }
     })
 
