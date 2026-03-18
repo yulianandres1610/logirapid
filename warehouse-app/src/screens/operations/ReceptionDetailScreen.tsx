@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react'
+import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import Animated, { FadeIn, FadeOut, SlideInUp } from 'react-native-reanimated'
@@ -8,6 +8,7 @@ import { useOperationsStore, type PendingOrder, type OperationLine } from '@/src
 import { useScannerStore } from '@/src/stores/scanner-store'
 import { playSuccessBeep, playErrorBeep, vibrateSuccess, vibrateError } from '@/src/services/feedback'
 import { useThemeStore } from '@/src/stores/theme-store'
+import { api } from '@/src/services/api'
 
 interface ReceiveLine extends OperationLine {
   receivedQuantity: number
@@ -60,8 +61,39 @@ export function ReceptionDetailScreen() {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [lastScannedIdx, setLastScannedIdx] = useState<number | null>(null)
+  const [loadingLines, setLoadingLines] = useState(false)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const flatListRef = useRef<FlatList>(null)
+
+  // If order has no lines (came from pending list), fetch them from API
+  useEffect(() => {
+    if (receiveLines.length === 0 && order.id && order.type === 'purchase') {
+      setLoadingLines(true)
+      api.get<any>(`/api/market/purchases/${order.id}`)
+        .then((data) => {
+          if (data?.lines && data.lines.length > 0) {
+            const mapped = data.lines.map((l: any) => ({
+              lineId: l.id,
+              productId: l.productId,
+              variantId: l.variantId || null,
+              name: l.variantName ? `${l.productName} - ${l.variantName}` : l.productName,
+              sku: l.variantSku || l.productSku || '',
+              barcode: l.variantBarcode || l.productBarcode || l.variantSku || l.productSku || '',
+              quantity: parseFloat(l.quantity) || 0,
+              expectedQuantity: parseFloat(l.quantity) || 0,
+              imageUrl: l.productImage || null,
+              unitPrice: parseFloat(l.unitPrice) || 0,
+              receivedQuantity: parseFloat(l.quantityReceived) || 0,
+              lotNumber: '',
+              expirationDate: '',
+            }))
+            setReceiveLines(mapped)
+          }
+        })
+        .catch((err) => console.error('[ReceptionDetail] Failed to load lines:', err))
+        .finally(() => setLoadingLines(false))
+    }
+  }, [])
 
   const showToast = useCallback((type: 'success' | 'error', message: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -414,10 +446,21 @@ export function ReceptionDetailScreen() {
         onScrollToIndexFailed={() => {}}
         ListEmptyComponent={
           <View style={{ alignItems: 'center', paddingTop: 40 }}>
-            <Text style={{ fontSize: 36, marginBottom: 12 }}>📭</Text>
-            <Text style={{ fontSize: 15, fontWeight: '700', color: colors.textSecondary }}>
-              Sin productos en esta orden
-            </Text>
+            {loadingLines ? (
+              <>
+                <ActivityIndicator size="large" color="#eb5b0c" />
+                <Text style={{ fontSize: 14, color: colors.textSecondary, marginTop: 12 }}>
+                  Cargando productos...
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={{ fontSize: 36, marginBottom: 12 }}>📭</Text>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: colors.textSecondary }}>
+                  Sin productos en esta orden
+                </Text>
+              </>
+            )}
           </View>
         }
       />
