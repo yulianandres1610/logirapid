@@ -149,8 +149,19 @@ export async function POST(
       }, { status: 401 })
     }
 
-    const body: RegisterRequest = await request.json()
-    const { platform, hostname, version, printers } = body
+    const body = await request.json()
+    const { platform, hostname, version, printers } = body as RegisterRequest
+
+    // Debug: log full body received
+    console.log(`[Print Service Register] === FULL BODY RECEIVED ===`)
+    console.log(`[Print Service Register] platform=${platform}, hostname=${hostname}, version=${version}`)
+    console.log(`[Print Service Register] printers type: ${typeof printers}, isArray: ${Array.isArray(printers)}, length: ${printers?.length}`)
+    console.log(`[Print Service Register] body keys: ${Object.keys(body).join(', ')}`)
+    if (printers && printers.length > 0) {
+      console.log(`[Print Service Register] first printer: ${JSON.stringify(printers[0])}`)
+    } else {
+      console.log(`[Print Service Register] RAW printers value: ${JSON.stringify(printers)}`)
+    }
 
     // Validate required fields
     if (!platform || !hostname || !version) {

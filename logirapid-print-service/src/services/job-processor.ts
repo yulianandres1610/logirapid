@@ -186,12 +186,20 @@ class JobProcessor {
       }
     }
 
-    const result = await apiClient.heartbeat()
+    // Always send printers in heartbeat as fallback sync mechanism
+    const result = await apiClient.heartbeat(undefined, currentPrinters)
 
     if (result.success && result.data) {
+      // Check if server now has our printers
+      if (result.data.serverPrinterCount !== undefined) {
+        this.serverHasPrinters = result.data.serverPrinterCount > 0
+        if (result.data.serverPrinterCount !== currentPrinters.length) {
+          console.log(`[Job Processor] Server has ${result.data.serverPrinterCount} printers, client has ${currentPrinters.length}`)
+        }
+      }
+
       // Adjust poll interval based on urgency
       if (result.data.urgentJobs > 0 && result.data.nextPoll < this.pollIntervalMs) {
-        // Poll faster for urgent jobs
         if (this.pollInterval) {
           clearInterval(this.pollInterval)
           this.pollInterval = setInterval(() => this.pollJobs(), result.data.nextPoll)
