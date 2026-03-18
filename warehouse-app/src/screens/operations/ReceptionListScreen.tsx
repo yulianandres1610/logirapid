@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { ScrollView, Text, TextInput, TouchableOpacity, View, RefreshControl, ActivityIndicator, Alert } from 'react-native'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useIsFocused } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import type { OperationsStackParamList } from '@/src/navigation/types'
 
@@ -35,6 +35,7 @@ export function ReceptionListScreen() {
   const { colors, isDark } = useThemeStore()
   const navigation = useNavigation<Nav>()
   const { pendingOrders, fetchPendingOrders, isLoading } = useOperationsStore()
+  const isFocused = useIsFocused()
   const [refreshing, setRefreshing] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [manualCode, setManualCode] = useState('')
@@ -50,7 +51,9 @@ export function ReceptionListScreen() {
   }
 
   // Handle barcode scan — search for purchase by number
+  // Only process when this screen is focused (not when ReceptionDetail is on top)
   const handleScan = useCallback(async (barcode: string) => {
+    if (!isFocused) return
     const code = barcode.trim()
     if (!code || scanning) return
 
@@ -99,7 +102,7 @@ export function ReceptionListScreen() {
     } finally {
       setScanning(false)
     }
-  }, [navigation, scanning])
+  }, [navigation, scanning, isFocused])
 
   useDataWedge(handleScan)
 
