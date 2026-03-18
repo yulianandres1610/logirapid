@@ -61,6 +61,7 @@ class JobProcessor {
   private pollIntervalMs = 5000
   private heartbeatIntervalMs = 30000
   private lastKnownPrinterNames: Set<string> = new Set()
+  private serverHasPrinters = false
 
   async start(): Promise<void> {
     if (this.isRunning) return
@@ -105,8 +106,20 @@ class JobProcessor {
   private async registerService(): Promise<void> {
     console.log('[Job Processor] Registering service with server...')
 
-    // Detect printers
-    const printers = await printerService.detectPrinters()
+    // Detect printers — retry up to 3 times if no printers found
+    // (PowerShell queries on Windows can take a moment to complete)
+    let printers = await printerService.detectPrinters()
+    if (printers.length === 0) {
+      console.log('[Job Processor] No printers found, retrying in 3 seconds...')
+      await new Promise(r => setTimeout(r, 3000))
+      printers = await printerService.detectPrinters()
+    }
+    if (printers.length === 0) {
+      console.log('[Job Processor] Still no printers, retrying in 5 seconds...')
+      await new Promise(r => setTimeout(r, 5000))
+      printers = await printerService.detectPrinters()
+    }
+
     console.log(`[Job Processor] Detected ${printers.length} printers:`)
     printers.forEach((p, i) => {
       console.log(`[Job Processor]   [${i + 1}] ${p.printerName}`)
@@ -117,6 +130,7 @@ class JobProcessor {
 
     // Store printer names for change detection
     this.lastKnownPrinterNames = new Set(printers.map(p => p.printerName))
+    this.serverHasPrinters = false // Force first heartbeat to sync
 
     // Register with server
     const result = await apiClient.register(printers)
@@ -125,6 +139,7 @@ class JobProcessor {
       console.log(`[Job Processor] ✓ Registered successfully!`)
       console.log(`[Job Processor]   - Service Code: ${result.data.serviceCode}`)
       console.log(`[Job Processor]   - Pending Jobs: ${result.data.pendingJobs}`)
+      this.serverHasPrinters = printers.length > 0
 
       // Update intervals if server provides them
       if (result.data.configuration) {
@@ -133,6 +148,7 @@ class JobProcessor {
       }
     } else {
       console.error('[Job Processor] Registration failed:', result.error)
+      this.serverHasPrinters = false // Mark as not synced
     }
   }
 
@@ -145,10 +161,18 @@ class JobProcessor {
     const printersChanged = currentNames.size !== this.lastKnownPrinterNames.size ||
       [...currentNames].some(name => !this.lastKnownPrinterNames.has(name))
 
-    if (printersChanged) {
-      console.log('[Job Processor] Printer change detected, re-registering...')
-      console.log('[Job Processor] Previous printers:', [...this.lastKnownPrinterNames])
-      console.log('[Job Processor] Current printers:', [...currentNames])
+    // Also re-register if server doesn't have our printers yet (initial sync failed)
+    const needsSync = printersChanged || (!this.serverHasPrinters && currentPrinters.length > 0)
+
+    if (needsSync) {
+      console.log('[Job Processor] Syncing printers with server...')
+      if (printersChanged) {
+        console.log('[Job Processor] Reason: Printer change detected')
+        console.log('[Job Processor] Previous printers:', [...this.lastKnownPrinterNames])
+        console.log('[Job Processor] Current printers:', [...currentNames])
+      } else {
+        console.log('[Job Processor] Reason: Server missing printers, re-syncing')
+      }
 
       this.lastKnownPrinterNames = currentNames
 
@@ -156,6 +180,7 @@ class JobProcessor {
       const registerResult = await apiClient.register(currentPrinters)
       if (registerResult.success) {
         console.log('[Job Processor] Printers synced with server')
+        this.serverHasPrinters = currentPrinters.length > 0
       } else {
         console.error('[Job Processor] Failed to sync printers:', registerResult.error)
       }
