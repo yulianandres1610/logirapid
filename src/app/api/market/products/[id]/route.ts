@@ -818,6 +818,13 @@ export async function DELETE(
       { table: 'market_invoice_delivery_lines', column: 'product_id', ids: [productId] },
       { table: 'market_quote_lines', column: 'product_id', ids: [productId] },
       { table: 'odoo_product_mapping', column: 'local_product_id', ids: [productId] },
+      // Production formulas: delete lines first (ingredient references), then formulas (target product)
+      { table: 'market_production_formula_lines', column: 'product_id', ids: [productId] },
+      { table: 'market_production_formulas', column: 'target_product_id', ids: [productId] },
+      // Audit and lot tables
+      { table: 'audit_count_lines', column: 'product_id', ids: [productId] },
+      { table: 'consignment_lot_inventory', column: 'product_id', ids: [productId] },
+      { table: 'purchase_lot_inventory', column: 'product_id', ids: [productId] },
     ]
 
     for (const { table, column, ids } of relatedTables) {
