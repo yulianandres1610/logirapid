@@ -43,7 +43,7 @@ if [[ -z "$APP_NAME" ]] || [[ -z "$VERSION" ]]; then
   echo ""
   echo "Uso: ./scripts/deploy-apk.sh <app> <version> \"<changelog>\" [--mandatory]"
   echo ""
-  echo "Apps disponibles: warehouse, door-kiosk"
+  echo "Apps disponibles: warehouse, door-kiosk, audit"
   echo ""
   echo "Ejemplos:"
   echo "  ./scripts/deploy-apk.sh warehouse 1.2.0 \"Corregido bug de escaneo\""
@@ -61,8 +61,12 @@ case "$APP_NAME" in
     APP_DIR="door-kiosk-app"
     APP_ID="door-kiosk"
     ;;
+  audit)
+    APP_DIR="audit-app"
+    APP_ID="audit"
+    ;;
   *)
-    echo -e "${RED}Error: App desconocida '$APP_NAME'. Use: warehouse, door-kiosk${NC}"
+    echo -e "${RED}Error: App desconocida '$APP_NAME'. Use: warehouse, door-kiosk, audit${NC}"
     exit 1
     ;;
 esac
@@ -130,10 +134,17 @@ echo -e "${YELLOW}[2/5] Compilando APK release...${NC}"
 cd "$APP_PATH/android"
 ./gradlew assembleRelease --quiet
 
+# Try universal APK first, then arm64 split
 APK_PATH="$APP_PATH/android/app/build/outputs/apk/release/app-release.apk"
 
 if [[ ! -f "$APK_PATH" ]]; then
-  echo -e "${RED}Error: APK no generado en $APK_PATH${NC}"
+  APK_PATH="$APP_PATH/android/app/build/outputs/apk/release/app-arm64-v8a-release.apk"
+fi
+
+if [[ ! -f "$APK_PATH" ]]; then
+  echo -e "${RED}Error: APK no generado. Buscado en:${NC}"
+  echo "  - $APP_PATH/android/app/build/outputs/apk/release/app-release.apk"
+  echo "  - $APP_PATH/android/app/build/outputs/apk/release/app-arm64-v8a-release.apk"
   exit 1
 fi
 
