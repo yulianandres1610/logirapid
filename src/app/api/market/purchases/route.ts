@@ -671,8 +671,8 @@ export async function POST(request: NextRequest) {
     let attempts = 0
     while (attempts < 10) {
       const existsCheck = await db.query(
-        'SELECT id FROM market_purchases WHERE purchase_number = $1',
-        [purchaseNumber]
+        'SELECT id FROM market_purchases WHERE purchase_number = $1 AND company_id = $2',
+        [purchaseNumber, companyId]
       )
       if (existsCheck.rows.length === 0) break
 
