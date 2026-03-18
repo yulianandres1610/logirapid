@@ -73,13 +73,15 @@ export function ReceptionListScreen() {
           lines: (data.lines || []).map((l: any) => ({
             lineId: l.id,
             productId: l.productId,
-            variantId: l.variantId,
+            variantId: l.variantId || null,
             name: l.variantName ? `${l.productName} - ${l.variantName}` : l.productName,
-            sku: l.productSku || '',
-            barcode: l.productBarcode || l.productSku || '',
+            sku: l.variantSku || l.productSku || '',
+            barcode: l.variantBarcode || l.productBarcode || l.variantSku || l.productSku || '',
             quantity: parseFloat(l.quantity) || 0,
             expectedQuantity: parseFloat(l.quantity) || 0,
             imageUrl: l.productImage || null,
+            unitPrice: parseFloat(l.unitPrice) || 0,
+            quantityReceived: parseFloat(l.quantityReceived) || 0,
           })),
         }
 
