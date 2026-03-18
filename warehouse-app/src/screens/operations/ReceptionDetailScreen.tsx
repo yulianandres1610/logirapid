@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react'
-import { View, Text, FlatList, TouchableOpacity, TextInput, ActivityIndicator, Alert, Modal } from 'react-native'
+import { View, Text, FlatList, TouchableOpacity, TextInput, ActivityIndicator, Alert, Modal, Image } from 'react-native'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import Animated, { FadeIn, FadeOut, SlideInUp } from 'react-native-reanimated'
 import { useDataWedge } from '@/src/hooks/useDataWedge'
@@ -270,13 +270,20 @@ export function ReceptionDetailScreen() {
         borderColor: isLast ? '#3b82f6' : isComplete ? (isDark ? 'rgba(16,185,129,0.2)' : '#dcfce7') : isDark ? '#3f3b39' : '#f0efee',
       }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-          <View style={{
-            width: 36, height: 36, borderRadius: 10,
-            backgroundColor: isComplete ? 'rgba(16,185,129,0.15)' : isDark ? '#3f3b39' : '#f5f5f4',
-            alignItems: 'center', justifyContent: 'center', marginRight: 10,
-          }}>
-            <Text style={{ fontSize: 16 }}>{isComplete ? '✅' : '📦'}</Text>
-          </View>
+          {line.imageUrl ? (
+            <Image source={{ uri: line.imageUrl }} style={{
+              width: 40, height: 40, borderRadius: 10, marginRight: 10,
+              backgroundColor: isDark ? '#3f3b39' : '#f5f5f4',
+            }} resizeMode="cover" />
+          ) : (
+            <View style={{
+              width: 40, height: 40, borderRadius: 10,
+              backgroundColor: isComplete ? 'rgba(16,185,129,0.15)' : isDark ? '#3f3b39' : '#f5f5f4',
+              alignItems: 'center', justifyContent: 'center', marginRight: 10,
+            }}>
+              <Text style={{ fontSize: 16 }}>{isComplete ? '✅' : '📦'}</Text>
+            </View>
+          )}
           <View style={{ flex: 1 }}>
             <Text numberOfLines={2} style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{line.name}</Text>
             <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 1 }}>
