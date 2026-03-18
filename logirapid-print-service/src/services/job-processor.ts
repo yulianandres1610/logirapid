@@ -153,52 +153,25 @@ class JobProcessor {
   }
 
   private async sendHeartbeat(): Promise<void> {
-    // Check if printers have changed and re-register if needed
     const currentPrinters = await printerService.detectPrinters()
-    const currentNames = new Set(currentPrinters.map(p => p.printerName))
 
-    // Check if printers have changed
-    const printersChanged = currentNames.size !== this.lastKnownPrinterNames.size ||
-      [...currentNames].some(name => !this.lastKnownPrinterNames.has(name))
-
-    // Also re-register if server doesn't have our printers yet (initial sync failed)
-    const needsSync = printersChanged || (!this.serverHasPrinters && currentPrinters.length > 0)
-
-    if (needsSync) {
-      console.log('[Job Processor] Syncing printers with server...')
-      if (printersChanged) {
-        console.log('[Job Processor] Reason: Printer change detected')
-        console.log('[Job Processor] Previous printers:', [...this.lastKnownPrinterNames])
-        console.log('[Job Processor] Current printers:', [...currentNames])
-      } else {
-        console.log('[Job Processor] Reason: Server missing printers, re-syncing')
-      }
-
-      this.lastKnownPrinterNames = currentNames
-
-      // Re-register with updated printer list
+    // ALWAYS re-register on every heartbeat to ensure server has printers
+    if (currentPrinters.length > 0) {
       const registerResult = await apiClient.register(currentPrinters)
       if (registerResult.success) {
-        console.log('[Job Processor] Printers synced with server')
-        this.serverHasPrinters = currentPrinters.length > 0
+        this.serverHasPrinters = true
       } else {
-        console.error('[Job Processor] Failed to sync printers:', registerResult.error)
+        console.error('[Job Processor] Register failed:', registerResult.error)
       }
     }
 
-    // Always send printers in heartbeat as fallback sync mechanism
+    this.lastKnownPrinterNames = new Set(currentPrinters.map(p => p.printerName))
+
     const result = await apiClient.heartbeat(undefined, currentPrinters)
-
     if (result.success && result.data) {
-      // Check if server now has our printers
-      if (result.data.serverPrinterCount !== undefined) {
-        this.serverHasPrinters = result.data.serverPrinterCount > 0
-        if (result.data.serverPrinterCount !== currentPrinters.length) {
-          console.log(`[Job Processor] Server has ${result.data.serverPrinterCount} printers, client has ${currentPrinters.length}`)
-        }
+      if (result.data.serverPrinterCount !== undefined && result.data.serverPrinterCount === 0 && currentPrinters.length > 0) {
+        console.log(`[Job Processor] WARNING: Server has 0 printers but client has ${currentPrinters.length}`)
       }
-
-      // Adjust poll interval based on urgency
       if (result.data.urgentJobs > 0 && result.data.nextPoll < this.pollIntervalMs) {
         if (this.pollInterval) {
           clearInterval(this.pollInterval)

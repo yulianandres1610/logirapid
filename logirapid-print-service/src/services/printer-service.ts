@@ -128,7 +128,7 @@ class PrinterService {
     try {
       const { stdout } = await execAsync(
         'powershell -Command "Get-Printer | Select-Object Name, DriverName, PortName, PrinterStatus, Type | ConvertTo-Json"',
-        { encoding: 'utf8', timeout: 10000 }
+        { encoding: 'utf8', timeout: 30000 }
       )
 
       if (stdout.trim()) {
@@ -164,7 +164,7 @@ class PrinterService {
     try {
       const { stdout } = await execAsync(
         'powershell -Command "Get-WmiObject -Class Win32_Printer | Select-Object Name, DriverName, PortName, PrinterStatus, Local, Network | ConvertTo-Json"',
-        { encoding: 'utf8', timeout: 10000 }
+        { encoding: 'utf8', timeout: 30000 }
       )
 
       if (stdout.trim()) {
@@ -203,7 +203,7 @@ class PrinterService {
       try {
         const { stdout } = await execAsync(
           'wmic printer get Name,DriverName,PortName,PrinterStatus /format:csv',
-          { encoding: 'utf8', timeout: 10000 }
+          { encoding: 'utf8', timeout: 30000 }
         )
 
         if (stdout.trim()) {
