@@ -78,21 +78,23 @@ export async function GET(
     try {
       const poResult = await db.query(`
         SELECT
-          po.id,
-          po.order_number,
-          COALESCE(s.name, 'Proveedor desconocido') as supplier_name,
-          COUNT(poi.id) as item_count,
-          COALESCE(SUM(poi.quantity), 0) as total_units,
-          po.expected_delivery_date,
-          po.created_at
-        FROM market_purchase_orders po
-        LEFT JOIN market_suppliers s ON po.supplier_id = s.id
-        LEFT JOIN market_purchase_order_items poi ON po.id = poi.purchase_order_id
-        WHERE po.company_id = $1
-          AND po.warehouse_id = $2
-          AND po.status IN ('pending', 'approved', 'ordered')
-        GROUP BY po.id, po.order_number, s.name, po.expected_delivery_date, po.created_at
-        ORDER BY po.expected_delivery_date ASC NULLS LAST, po.created_at DESC
+          mp.id,
+          mp.purchase_number as order_number,
+          COALESCE(s.name, mp.supplier_name, 'Proveedor desconocido') as supplier_name,
+          COUNT(mpl.id) as item_count,
+          COALESCE(SUM(mpl.quantity), 0) as total_units,
+          COALESCE(SUM(mpl.quantity_received), 0) as total_received,
+          mp.expected_date,
+          mp.created_at
+        FROM market_purchases mp
+        LEFT JOIN market_suppliers s ON mp.supplier_id = s.id
+        LEFT JOIN market_purchase_lines mpl ON mp.id = mpl.purchase_id
+        WHERE mp.company_id = $1
+          AND mp.warehouse_id = $2
+          AND mp.status IN ('comprada', 'pendiente')
+          AND (mp.validation_status IS NULL OR mp.validation_status = 'confirmed')
+        GROUP BY mp.id, mp.purchase_number, s.name, mp.supplier_name, mp.expected_date, mp.created_at
+        ORDER BY mp.expected_date ASC NULLS LAST, mp.created_at DESC
       `, [payload.companyId, warehouseId])
 
       purchaseOrders = poResult.rows.map(r => ({
@@ -100,13 +102,12 @@ export async function GET(
         orderNumber: r.order_number,
         supplierName: r.supplier_name,
         itemCount: parseInt(r.item_count) || 0,
-        totalUnits: parseInt(r.total_units) || 0,
-        expectedDate: r.expected_delivery_date,
+        totalUnits: parseFloat(r.total_units) || 0,
+        expectedDate: r.expected_date,
         createdAt: r.created_at
       }))
-    } catch {
-      // Table might not exist, continue without purchase orders
-      console.log('[Pending Orders] Purchase orders table not available')
+    } catch (err) {
+      console.log('[Pending Orders] Purchase orders query failed:', err)
     }
 
     // Get in-transit consignments destined for this company
