@@ -13,28 +13,41 @@ autoUpdater.autoDownload = true
 autoUpdater.autoInstallOnAppQuit = true
 // Disable code signing verification (app is not signed)
 autoUpdater.forceCodeSigning = false
+// Force allow downgrade in case of rollback
+autoUpdater.allowDowngrade = false
+
+// Log the updater feed URL for debugging
+autoUpdater.logger = {
+  info: (msg: string) => console.log('[Auto-Updater]', msg),
+  warn: (msg: string) => console.warn('[Auto-Updater]', msg),
+  error: (msg: string) => console.error('[Auto-Updater]', msg),
+  debug: (msg: string) => console.log('[Auto-Updater][debug]', msg),
+}
 
 // Auto-updater event handlers
 autoUpdater.on('checking-for-update', () => {
   console.log('[Auto-Updater] Checking for updates...')
+  console.log('[Auto-Updater] Current version:', app.getVersion())
   mainWindow?.webContents.send('update-status', { status: 'checking' })
 })
 
 autoUpdater.on('update-available', (info) => {
   console.log('[Auto-Updater] Update available:', info.version)
+  console.log('[Auto-Updater] Release date:', info.releaseDate)
+  console.log('[Auto-Updater] Files:', JSON.stringify(info.files?.map(f => f.url)))
   mainWindow?.webContents.send('update-status', {
     status: 'available',
     version: info.version
   })
 })
 
-autoUpdater.on('update-not-available', () => {
-  console.log('[Auto-Updater] No updates available')
+autoUpdater.on('update-not-available', (info) => {
+  console.log('[Auto-Updater] No updates available. Latest:', info?.version, '| Current:', app.getVersion())
   mainWindow?.webContents.send('update-status', { status: 'not-available' })
 })
 
 autoUpdater.on('download-progress', (progressObj) => {
-  console.log(`[Auto-Updater] Download progress: ${progressObj.percent.toFixed(1)}%`)
+  console.log(`[Auto-Updater] Download progress: ${progressObj.percent.toFixed(1)}% (${(progressObj.transferred / 1048576).toFixed(1)}/${(progressObj.total / 1048576).toFixed(1)} MB)`)
   mainWindow?.webContents.send('update-download-progress', {
     percent: progressObj.percent,
     bytesPerSecond: progressObj.bytesPerSecond,
@@ -44,29 +57,43 @@ autoUpdater.on('download-progress', (progressObj) => {
 })
 
 autoUpdater.on('update-downloaded', (info) => {
-  console.log('[Auto-Updater] Update downloaded:', info.version)
+  console.log('[Auto-Updater] ✓ Update downloaded successfully:', info.version)
+  console.log('[Auto-Updater] Downloaded file:', info.downloadedFile)
   mainWindow?.webContents.send('update-status', {
     status: 'downloaded',
     version: info.version
   })
 
+  // Auto-install after 10 seconds if user doesn't respond
+  const autoInstallTimeout = setTimeout(() => {
+    console.log('[Auto-Updater] Auto-installing update (timeout)...')
+    autoUpdater.quitAndInstall(false, true)
+  }, 30000)
+
   // Notify user about the update
   dialog.showMessageBox({
     type: 'info',
     title: 'Actualización Disponible',
-    message: `Una nueva versión (${info.version}) ha sido descargada.`,
-    detail: 'La actualización se instalará automáticamente al cerrar la aplicación.',
+    message: `Nueva versión ${info.version} descargada.`,
+    detail: 'Se reiniciará la aplicación para instalar la actualización.',
     buttons: ['Reiniciar Ahora', 'Más Tarde'],
-    defaultId: 0
+    defaultId: 0,
+    noLink: true
   }).then((result) => {
+    clearTimeout(autoInstallTimeout)
     if (result.response === 0) {
-      autoUpdater.quitAndInstall()
+      console.log('[Auto-Updater] User chose to install now')
+      // isSilent=false (show installer), isForceRunAfter=true (restart after install)
+      autoUpdater.quitAndInstall(false, true)
+    } else {
+      console.log('[Auto-Updater] User chose to install later — will install on quit')
     }
   })
 })
 
 autoUpdater.on('error', (err) => {
-  console.error('[Auto-Updater] Error:', err)
+  console.error('[Auto-Updater] ERROR:', err?.message || err)
+  console.error('[Auto-Updater] Stack:', err?.stack)
   mainWindow?.webContents.send('update-status', {
     status: 'error',
     error: err.message
