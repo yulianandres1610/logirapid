@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react'
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native'
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import Animated, { FadeIn, FadeOut, SlideInUp } from 'react-native-reanimated'
 import { LotExpirationForm } from '@/src/components/LotExpirationForm'
@@ -34,7 +34,7 @@ function ScanToast({ message, type }: { message: string; type: 'success' | 'erro
       <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900', marginRight: 8 }}>
         {isSuccess ? '✓' : '✕'}
       </Text>
-      <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700', flex: 1 }} numberOfLines={1}>
+      <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700', flex: 1 }} numberOfLines={2}>
         {message}
       </Text>
     </Animated.View>
@@ -46,24 +46,60 @@ export function ReceptionDetailScreen() {
   const navigation = useNavigation()
   const route = useRoute<RouteProp<{ params: { order: PendingOrder } }, 'params'>>()
   const order = route.params.order
-  const { receiveOrder, isLoading } = useOperationsStore()
+  const { receiveOrder } = useOperationsStore()
   const { processBarcode, isProcessing } = useScannerStore()
   const [receiveLines, setReceiveLines] = useState<ReceiveLine[]>(
-    (order.lines || []).map((l) => ({ ...l, receivedQuantity: 0, lotNumber: '', expirationDate: '' })),
+    (order.lines || []).map((l) => ({
+      ...l,
+      receivedQuantity: (l as any).quantityReceived || 0,
+      lotNumber: '',
+      expirationDate: '',
+    })),
   )
   const [activeLotIndex, setActiveLotIndex] = useState<number | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [lastScannedIdx, setLastScannedIdx] = useState<number | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const flatListRef = useRef<FlatList>(null)
 
   const showToast = useCallback((type: 'success' | 'error', message: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current)
     setToast({ type, message })
-    toastTimer.current = setTimeout(() => setToast(null), 1200)
+    toastTimer.current = setTimeout(() => setToast(null), 1500)
   }, [])
 
+  // Find line by barcode directly (O(1) lookup by barcode in order lines)
+  const findLineByBarcode = useCallback((barcode: string): number => {
+    const code = barcode.trim().toLowerCase()
+    return receiveLines.findIndex(
+      (l) => (l.barcode && l.barcode.toLowerCase() === code) ||
+             (l.sku && l.sku.toLowerCase() === code)
+    )
+  }, [receiveLines])
+
   const handleScan = useCallback(async (barcode: string) => {
+    // First try direct match in order lines (fastest)
+    let idx = findLineByBarcode(barcode)
+
+    if (idx >= 0) {
+      // Direct match — increment
+      const line = receiveLines[idx]
+      const expected = line.expectedQuantity || line.quantity
+      const updated = [...receiveLines]
+      updated[idx] = { ...updated[idx], receivedQuantity: updated[idx].receivedQuantity + 1 }
+      setReceiveLines(updated)
+      setLastScannedIdx(idx)
+      setActiveLotIndex(idx)
+      playSuccessBeep()
+      vibrateSuccess()
+      showToast('success', `${line.name} (${updated[idx].receivedQuantity}/${expected})`)
+      // Scroll to item
+      flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.3 })
+      return
+    }
+
+    // Fallback: use server-side barcode lookup
     const product = await processBarcode(barcode)
     if (!product) {
       playErrorBeep()
@@ -72,33 +108,28 @@ export function ReceptionDetailScreen() {
       return
     }
 
-    const idx = receiveLines.findIndex(
+    idx = receiveLines.findIndex(
       (l) => l.productId === product.productId && (!l.variantId || l.variantId === product.variantId),
     )
 
     if (idx >= 0) {
       const line = receiveLines[idx]
       const expected = line.expectedQuantity || line.quantity
-      if (line.receivedQuantity < expected) {
-        const updated = [...receiveLines]
-        updated[idx] = { ...updated[idx], receivedQuantity: updated[idx].receivedQuantity + 1 }
-        setReceiveLines(updated)
-        setActiveLotIndex(idx)
-        setLastScannedIdx(idx)
-        playSuccessBeep()
-        vibrateSuccess()
-        showToast('success', `${product.name} (${updated[idx].receivedQuantity}/${expected})`)
-      } else {
-        playErrorBeep()
-        vibrateError()
-        showToast('error', `${product.name} — Cantidad completa`)
-      }
+      const updated = [...receiveLines]
+      updated[idx] = { ...updated[idx], receivedQuantity: updated[idx].receivedQuantity + 1 }
+      setReceiveLines(updated)
+      setLastScannedIdx(idx)
+      setActiveLotIndex(idx)
+      playSuccessBeep()
+      vibrateSuccess()
+      showToast('success', `${product.name} (${updated[idx].receivedQuantity}/${expected})`)
+      flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.3 })
     } else {
       playErrorBeep()
       vibrateError()
-      showToast('error', 'No está en esta orden')
+      showToast('error', `"${product.name}" no está en esta orden`)
     }
-  }, [receiveLines, showToast])
+  }, [receiveLines, findLineByBarcode, showToast])
 
   useDataWedge(handleScan)
 
@@ -109,6 +140,30 @@ export function ReceptionDetailScreen() {
       setReceiveLines(updated)
       setActiveLotIndex(null)
     }
+  }
+
+  const handleIncrement = (idx: number) => {
+    const updated = [...receiveLines]
+    updated[idx] = { ...updated[idx], receivedQuantity: updated[idx].receivedQuantity + 1 }
+    setReceiveLines(updated)
+    setLastScannedIdx(idx)
+  }
+
+  const handleDecrement = (idx: number) => {
+    if (receiveLines[idx].receivedQuantity > 0) {
+      const updated = [...receiveLines]
+      updated[idx] = { ...updated[idx], receivedQuantity: updated[idx].receivedQuantity - 1 }
+      setReceiveLines(updated)
+    }
+  }
+
+  const handleReceiveAll = (idx: number) => {
+    const line = receiveLines[idx]
+    const expected = line.expectedQuantity || line.quantity
+    const updated = [...receiveLines]
+    updated[idx] = { ...updated[idx], receivedQuantity: expected }
+    setReceiveLines(updated)
+    setLastScannedIdx(idx)
   }
 
   const handleConfirm = async () => {
@@ -127,41 +182,174 @@ export function ReceptionDetailScreen() {
       return
     }
 
-    setConfirming(true)
-    try {
-      await receiveOrder(order.type, order.id, linesToSend)
-      showToast('success', '¡Recepción completada!')
-      setTimeout(() => navigation.goBack(), 600)
-    } catch (err: any) {
-      showToast('error', err.message || 'Error al confirmar')
-    }
-    setConfirming(false)
+    Alert.alert(
+      allComplete ? 'Completar Recepción' : 'Confirmar Parcial',
+      `${totalReceived} de ${totalExpected} unidades.\n¿Confirmar recepción?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Confirmar',
+          onPress: async () => {
+            setConfirming(true)
+            try {
+              await receiveOrder(order.type, order.id, linesToSend)
+              showToast('success', '¡Recepción completada!')
+              setTimeout(() => navigation.goBack(), 600)
+            } catch (err: any) {
+              showToast('error', err.message || 'Error al confirmar')
+            }
+            setConfirming(false)
+          },
+        },
+      ]
+    )
   }
 
   const totalExpected = receiveLines.reduce((s, l) => s + (l.expectedQuantity || l.quantity), 0)
   const totalReceived = receiveLines.reduce((s, l) => s + l.receivedQuantity, 0)
+  const linesWithReceived = receiveLines.filter(l => l.receivedQuantity > 0).length
   const pct = totalExpected > 0 ? Math.round((totalReceived / totalExpected) * 100) : 0
   const allComplete = totalReceived >= totalExpected && totalExpected > 0
+
+  const renderItem = useCallback(({ item: line, index: idx }: { item: ReceiveLine; index: number }) => {
+    const expected = line.expectedQuantity || line.quantity
+    const isComplete = line.receivedQuantity >= expected
+    const isLastScanned = idx === lastScannedIdx
+    const hasReceived = line.receivedQuantity > 0
+
+    return (
+      <View
+        style={{
+          backgroundColor: isComplete
+            ? isDark ? 'rgba(16,185,129,0.08)' : '#f0fdf4'
+            : isLastScanned
+              ? isDark ? 'rgba(59,130,246,0.08)' : '#eff6ff'
+              : isDark ? '#2d2a28' : '#fff',
+          borderRadius: 14, padding: 12, marginBottom: 8, marginHorizontal: 16,
+          borderWidth: isLastScanned ? 2 : 1,
+          borderColor: isLastScanned ? '#3b82f6'
+            : isComplete ? isDark ? 'rgba(16,185,129,0.2)' : '#dcfce7'
+            : isDark ? '#3f3b39' : '#f0efee',
+        }}
+      >
+        {/* Product info */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+          <View style={{
+            width: 36, height: 36, borderRadius: 10,
+            backgroundColor: isComplete ? 'rgba(16,185,129,0.15)' : isDark ? '#3f3b39' : '#f5f5f4',
+            alignItems: 'center', justifyContent: 'center', marginRight: 10,
+          }}>
+            <Text style={{ fontSize: 16 }}>{isComplete ? '✅' : '📦'}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text numberOfLines={2} style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>
+              {line.name}
+            </Text>
+            <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 1 }}>
+              SKU: {line.sku}{line.barcode && line.barcode !== line.sku ? ` | ${line.barcode}` : ''}
+            </Text>
+          </View>
+        </View>
+
+        {/* Quantity row */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          {/* Expected */}
+          <View style={{ alignItems: 'center' }}>
+            <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>ESPERADO</Text>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: colors.textSecondary }}>{expected}</Text>
+          </View>
+
+          {/* +/- Controls */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <TouchableOpacity
+              onPress={() => handleDecrement(idx)}
+              style={{
+                width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+                backgroundColor: isDark ? '#3f3b39' : '#f5f5f4',
+              }}
+              activeOpacity={0.6}
+            >
+              <Text style={{ fontSize: 20, fontWeight: '700', color: colors.textMuted }}>−</Text>
+            </TouchableOpacity>
+
+            <View style={{
+              minWidth: 56, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+              backgroundColor: isComplete ? '#10b981' : hasReceived ? '#3b82f6' : (isDark ? '#3f3b39' : '#e7e5e4'),
+              paddingHorizontal: 8,
+            }}>
+              <Text style={{
+                fontSize: 18, fontWeight: '900',
+                color: (isComplete || hasReceived) ? '#fff' : colors.text,
+              }}>
+                {line.receivedQuantity}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              onPress={() => handleIncrement(idx)}
+              style={{
+                width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+                backgroundColor: '#eb5b0c',
+              }}
+              activeOpacity={0.6}
+            >
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#fff' }}>+</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Receive All button */}
+          <TouchableOpacity
+            onPress={() => handleReceiveAll(idx)}
+            disabled={isComplete}
+            style={{
+              paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10,
+              backgroundColor: isComplete ? (isDark ? '#3f3b39' : '#f5f5f4') : (isDark ? 'rgba(59,130,246,0.15)' : '#eff6ff'),
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={{
+              fontSize: 11, fontWeight: '700',
+              color: isComplete ? colors.textMuted : '#3b82f6',
+            }}>
+              {isComplete ? 'Listo' : 'Todo'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Lot info */}
+        {line.lotNumber ? (
+          <View style={{ marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: colors.separator }}>
+            <Text style={{ fontSize: 10, color: '#2563eb', fontWeight: '600' }}>
+              Lote: {line.lotNumber} {line.expirationDate ? `| Exp: ${line.expirationDate}` : ''}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    )
+  }, [receiveLines, lastScannedIdx, isDark, colors])
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       {/* Header */}
       <View style={{
         flexDirection: 'row', alignItems: 'center',
-        paddingHorizontal: 16, paddingVertical: 12,
+        paddingHorizontal: 16, paddingVertical: 10,
         backgroundColor: colors.card,
         borderBottomWidth: isDark ? 0 : 1,
         borderBottomColor: isDark ? 'transparent' : '#e7e5e4',
       }}>
-        <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} style={{ marginRight: 14 }}>
+        <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={{ marginRight: 12 }}>
           <View style={{
-            width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
+            width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
             backgroundColor: isDark ? '#3f3b39' : '#f5f5f4',
           }}>
-            <Text style={{ fontSize: 22, color: '#eb5b0c', fontWeight: '700' }}>‹</Text>
+            <Text style={{ fontSize: 20, color: '#eb5b0c', fontWeight: '700' }}>‹</Text>
           </View>
         </TouchableOpacity>
-        <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text, flex: 1 }}>Recibir Orden</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>{order.orderNumber}</Text>
+          <Text style={{ fontSize: 12, color: colors.textSecondary }}>{order.supplierName}</Text>
+        </View>
         {isProcessing && <ActivityIndicator size="small" color="#eb5b0c" />}
       </View>
 
@@ -172,167 +360,93 @@ export function ReceptionDetailScreen() {
           backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 100,
           alignItems: 'center', justifyContent: 'center',
         }}>
-          <View style={{
-            backgroundColor: isDark ? '#2d2a28' : '#fff', borderRadius: 24, padding: 32, alignItems: 'center',
-          }}>
+          <View style={{ backgroundColor: isDark ? '#2d2a28' : '#fff', borderRadius: 24, padding: 32, alignItems: 'center' }}>
             <ActivityIndicator size="large" color="#3b82f6" />
             <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700', marginTop: 16 }}>Procesando...</Text>
           </View>
         </View>
       )}
 
-      {/* Order info + progress */}
-      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 }}>
-        <View style={{
-          flexDirection: 'row', alignItems: 'center',
-          backgroundColor: isDark ? 'rgba(59,130,246,0.1)' : '#eff6ff',
-          borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8,
-          borderWidth: 1, borderColor: isDark ? 'rgba(59,130,246,0.2)' : '#dbeafe',
-        }}>
-          <Text style={{ fontSize: 13, marginRight: 6 }}>📥</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: '#3b82f6' }}>{order.orderNumber}</Text>
-            <Text style={{ fontSize: 11, color: colors.textSecondary }}>{order.supplierName}</Text>
-          </View>
+      {/* Progress bar */}
+      <View style={{
+        paddingHorizontal: 16, paddingVertical: 10,
+        backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.separator,
+      }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>
+            {totalReceived}/{totalExpected} unidades ({linesWithReceived}/{receiveLines.length} productos)
+          </Text>
+          <Text style={{ fontSize: 13, fontWeight: '800', color: allComplete ? '#10b981' : '#3b82f6' }}>
+            {allComplete ? '✓ COMPLETO' : `${pct}%`}
+          </Text>
         </View>
-
-        {/* Progress */}
-        <View style={{
-          flexDirection: 'row', alignItems: 'center', gap: 12,
-          backgroundColor: isDark ? '#2d2a28' : '#fff',
-          borderRadius: 16, padding: 14, marginBottom: 8,
-          borderWidth: 1, borderColor: allComplete ? '#10b981' : isDark ? '#3f3b39' : '#f0efee',
-        }}>
+        <View style={{ height: 6, backgroundColor: isDark ? '#3f3b39' : '#e7e5e4', borderRadius: 3, overflow: 'hidden' }}>
           <View style={{
-            width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
-            backgroundColor: allComplete ? 'rgba(16,185,129,0.15)' : isDark ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.08)',
-          }}>
-            <Text style={{ fontSize: 18, fontWeight: '900', color: allComplete ? '#10b981' : '#3b82f6' }}>{pct}%</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>
-                {totalReceived} de {totalExpected} unidades
-              </Text>
-              {allComplete && <Text style={{ fontSize: 11, fontWeight: '800', color: '#10b981' }}>✓ COMPLETO</Text>}
-            </View>
-            <View style={{ height: 6, backgroundColor: isDark ? '#3f3b39' : '#e7e5e4', borderRadius: 3, overflow: 'hidden' }}>
-              <View style={{
-                height: '100%', borderRadius: 3,
-                backgroundColor: allComplete ? '#10b981' : '#3b82f6',
-                width: `${Math.min(pct, 100)}%`,
-              }} />
-            </View>
-          </View>
+            height: '100%', borderRadius: 3,
+            backgroundColor: allComplete ? '#10b981' : '#3b82f6',
+            width: `${Math.min(pct, 100)}%`,
+          }} />
         </View>
+        <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 6, textAlign: 'center' }}>
+          Escanee los productos con el lector de código de barras
+        </Text>
       </View>
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 100 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {activeLotIndex !== null && (
+      {/* Lot form */}
+      {activeLotIndex !== null && (
+        <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
           <LotExpirationForm
             onConfirm={handleLotConfirm}
             onSkip={() => setActiveLotIndex(null)}
           />
-        )}
+        </View>
+      )}
 
-        {receiveLines.map((line, idx) => {
-          const expected = line.expectedQuantity || line.quantity
-          const isComplete = line.receivedQuantity >= expected
-          const isLastScanned = idx === lastScannedIdx
-
-          return (
-            <View
-              key={`${line.productId}-${line.variantId}-${idx}`}
-              style={{
-                flexDirection: 'row', alignItems: 'center',
-                backgroundColor: isComplete
-                  ? isDark ? 'rgba(16,185,129,0.08)' : '#f0fdf4'
-                  : isDark ? '#2d2a28' : '#fff',
-                borderRadius: 14, padding: 10, marginBottom: 6,
-                borderWidth: isLastScanned ? 1.5 : 1,
-                borderColor: isLastScanned ? '#3b82f6'
-                  : isComplete ? isDark ? 'rgba(16,185,129,0.2)' : '#dcfce7'
-                  : isDark ? '#3f3b39' : '#f0efee',
-              }}
-            >
-              <View style={{
-                width: 40, height: 40, borderRadius: 10,
-                backgroundColor: isLastScanned
-                  ? isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)'
-                  : isDark ? '#3f3b39' : '#f5f5f4',
-                alignItems: 'center', justifyContent: 'center', marginRight: 10,
-              }}>
-                {isComplete ? (
-                  <Text style={{ fontSize: 18 }}>✅</Text>
-                ) : (
-                  <Text style={{ fontSize: 18 }}>📦</Text>
-                )}
-              </View>
-              <View style={{ flex: 1, marginRight: 8 }}>
-                <Text numberOfLines={1} style={{
-                  fontSize: 13, fontWeight: '700',
-                  color: isLastScanned ? '#3b82f6' : colors.text,
-                }}>
-                  {line.name}
-                </Text>
-                <Text style={{ fontSize: 10, color: colors.textSecondary, fontWeight: '500', marginTop: 1 }}>{line.sku}</Text>
-                {line.lotNumber ? (
-                  <Text style={{ fontSize: 9, color: '#2563eb', fontWeight: '600', marginTop: 2 }}>
-                    Lote: {line.lotNumber} {line.expirationDate ? `| ${line.expirationDate}` : ''}
-                  </Text>
-                ) : null}
-              </View>
-              <View style={{
-                backgroundColor: isComplete ? '#10b981' : isDark ? '#3f3b39' : '#e7e5e4',
-                borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, minWidth: 50, alignItems: 'center',
-              }}>
-                <Text style={{
-                  fontSize: 14, fontWeight: '900',
-                  color: isComplete ? '#fff' : colors.text,
-                }}>
-                  {line.receivedQuantity}/{expected}
-                </Text>
-              </View>
-            </View>
-          )
-        })}
-
-        {receiveLines.length === 0 && (
+      {/* Product list */}
+      <FlatList
+        ref={flatListRef}
+        data={receiveLines}
+        keyExtractor={(item, idx) => `${item.productId}-${item.variantId}-${idx}`}
+        renderItem={renderItem}
+        contentContainerStyle={{ paddingTop: 8, paddingBottom: 120 }}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={20}
+        onScrollToIndexFailed={() => {}}
+        ListEmptyComponent={
           <View style={{ alignItems: 'center', paddingTop: 40 }}>
-            <Text style={{ fontSize: 36, marginBottom: 12 }}>📥</Text>
+            <Text style={{ fontSize: 36, marginBottom: 12 }}>📭</Text>
             <Text style={{ fontSize: 15, fontWeight: '700', color: colors.textSecondary }}>
-              Sin líneas — escanea productos para agregar
+              Sin productos en esta orden
             </Text>
           </View>
-        )}
-      </ScrollView>
+        }
+      />
 
       {/* Bottom confirm button */}
       {totalReceived > 0 && (
         <Animated.View entering={FadeIn.duration(150)} style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
           padding: 16, paddingBottom: 20, backgroundColor: isDark ? '#0c0a09' : '#fff',
           borderTopWidth: 1, borderTopColor: isDark ? '#2d2a28' : '#e7e5e4',
+          shadowColor: '#000', shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1, shadowRadius: 8, elevation: 8,
         }}>
           <TouchableOpacity onPress={handleConfirm} activeOpacity={0.8} style={{
             backgroundColor: allComplete ? '#10b981' : '#3b82f6',
-            borderRadius: 18, paddingVertical: 16,
+            borderRadius: 16, paddingVertical: 16,
             flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
             shadowColor: allComplete ? '#10b981' : '#3b82f6',
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.35, shadowRadius: 12, elevation: 6,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
           }}>
             <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>
-              {allComplete ? 'Completar Recepción' : `Confirmar Parcial (${totalReceived}/${totalExpected})`}
+              {allComplete ? '✓ Completar Recepción' : `Confirmar Parcial (${totalReceived}/${totalExpected})`}
             </Text>
           </TouchableOpacity>
         </Animated.View>
       )}
 
-      {/* Inline toast */}
+      {/* Toast */}
       {toast && <ScanToast message={toast.message} type={toast.type} />}
     </View>
   )

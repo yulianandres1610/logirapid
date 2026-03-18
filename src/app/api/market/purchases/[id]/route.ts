@@ -173,7 +173,7 @@ export async function GET(
       LEFT JOIN market_product_variants mpv ON mpl.variant_id = mpv.id
       WHERE mpl.purchase_id = $1
       ORDER BY mpl.id
-    `, [purchaseId])
+    `, [purchase.id])
 
     return NextResponse.json({
       success: true,
