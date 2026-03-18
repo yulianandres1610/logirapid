@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native'
 import { useAuthStore } from '@/src/stores/auth-store'
+import { getCurrentVersion } from '@/src/services/app-updater'
 
 const logo = require('@/src/assets/servisumic-logo.png')
 
@@ -16,6 +17,7 @@ export function LoginScreen() {
   const isLoading = useAuthStore((s) => s.isLoading)
   const error = useAuthStore((s) => s.error)
   const passwordRef = useRef<TextInput>(null)
+  const { version } = getCurrentVersion()
 
   const canSubmit = email.trim().length > 0 && password.length > 0 && !isLoading
 
@@ -40,7 +42,7 @@ export function LoginScreen() {
         <View style={{ alignItems: 'center', marginBottom: 40 }}>
           <Image
             source={logo}
-            style={{ width: 280, height: 80 }}
+            style={{ width: 320, height: 100 }}
             resizeMode="contain"
           />
         </View>
@@ -128,6 +130,12 @@ export function LoginScreen() {
             <Text style={{ color: canSubmit ? '#fff' : '#a8a29e', fontSize: 16, fontWeight: '700' }}>Entrar</Text>
           )}
         </TouchableOpacity>
+
+        {/* Watermark */}
+        <View style={{ alignItems: 'center', marginTop: 24 }}>
+          <Text style={{ fontSize: 11, color: '#d6d3d1', fontWeight: '500' }}>v{version}</Text>
+          <Text style={{ fontSize: 10, color: '#d6d3d1', marginTop: 2 }}>Servisumic. Todos los derechos reservados.</Text>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   )
