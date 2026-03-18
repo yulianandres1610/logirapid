@@ -141,6 +141,20 @@ function ProductDetailCard({ product, isDark, colors, onClear }: {
   const statusColor = stockStatus === 'out' ? '#ef4444' : stockStatus === 'low' ? '#f59e0b' : '#10b981'
   const statusLabel = stockStatus === 'out' ? 'Sin Stock' : stockStatus === 'low' ? 'Stock Bajo' : 'En Stock'
 
+  // Format stock numbers: use commas, hide decimals if .0
+  const fmtQty = (n: number) => {
+    const s = Number.isInteger(n) ? n.toString() : n.toFixed(2).replace(/\.?0+$/, '')
+    return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  }
+  // Dynamic font size based on number length
+  const qtyFont = (n: number) => {
+    const len = fmtQty(n).length
+    if (len > 8) return 16
+    if (len > 6) return 18
+    if (len > 4) return 22
+    return 26
+  }
+
   return (
     <Animated.View entering={FadeIn.duration(250)} style={{ flex: 1 }}>
       <ScrollView
@@ -252,14 +266,14 @@ function ProductDetailCard({ product, isDark, colors, onClear }: {
             ) : null}
           </View>
 
-          <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
             <View style={{
               flex: 1, alignItems: 'center',
               backgroundColor: isDark ? '#1c1917' : '#fafaf9',
-              borderRadius: 14, paddingVertical: 14,
+              borderRadius: 14, paddingVertical: 12, paddingHorizontal: 4,
             }}>
-              <Text style={{ fontSize: 28, fontWeight: '900', color: statusColor }}>
-                {product.currentStock}
+              <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: qtyFont(product.currentStock), fontWeight: '900', color: statusColor }}>
+                {fmtQty(product.currentStock)}
               </Text>
               <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textSecondary, marginTop: 2 }}>
                 En Mano
@@ -268,10 +282,10 @@ function ProductDetailCard({ product, isDark, colors, onClear }: {
             <View style={{
               flex: 1, alignItems: 'center',
               backgroundColor: isDark ? '#1c1917' : '#fafaf9',
-              borderRadius: 14, paddingVertical: 14,
+              borderRadius: 14, paddingVertical: 12, paddingHorizontal: 4,
             }}>
-              <Text style={{ fontSize: 28, fontWeight: '900', color: '#3b82f6' }}>
-                {product.quantityAvailable}
+              <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: qtyFont(product.quantityAvailable), fontWeight: '900', color: '#3b82f6' }}>
+                {fmtQty(product.quantityAvailable)}
               </Text>
               <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textSecondary, marginTop: 2 }}>
                 Disponible
@@ -280,10 +294,10 @@ function ProductDetailCard({ product, isDark, colors, onClear }: {
             <View style={{
               flex: 1, alignItems: 'center',
               backgroundColor: isDark ? '#1c1917' : '#fafaf9',
-              borderRadius: 14, paddingVertical: 14,
+              borderRadius: 14, paddingVertical: 12, paddingHorizontal: 4,
             }}>
-              <Text style={{ fontSize: 28, fontWeight: '900', color: '#f59e0b' }}>
-                {product.quantityReserved}
+              <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: qtyFont(product.quantityReserved), fontWeight: '900', color: '#f59e0b' }}>
+                {fmtQty(product.quantityReserved)}
               </Text>
               <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textSecondary, marginTop: 2 }}>
                 Reservado
