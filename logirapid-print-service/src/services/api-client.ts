@@ -38,6 +38,7 @@ interface HeartbeatResponse {
     nextPoll: number
     pendingJobs: number
     urgentJobs: number
+    serverPrinterCount?: number
   }
   error?: string
 }
@@ -154,7 +155,7 @@ class ApiClient {
     }
   }
 
-  async heartbeat(printerStatuses?: { printerId: number; isOnline: boolean }[]): Promise<HeartbeatResponse> {
+  async heartbeat(printerStatuses?: { printerId: number; isOnline: boolean }[], printers?: PrinterInfo[]): Promise<HeartbeatResponse> {
     if (!this.client || !this.credentials) {
       return { success: false, error: 'Not initialized' }
     }
@@ -162,7 +163,7 @@ class ApiClient {
     try {
       const response = await this.client.post<HeartbeatResponse>(
         `/api/print/services/${this.credentials.serviceCode}/heartbeat`,
-        { printerStatuses }
+        { printerStatuses, printers }
       )
 
       return response.data
