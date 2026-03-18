@@ -37,6 +37,9 @@
   ],
   "exclude": [
     "node_modules",
-    "logirapid-print-service"
+    "logirapid-print-service",
+    "warehouse-app",
+    "audit-app",
+    "door-kiosk-app"
   ]
 }
