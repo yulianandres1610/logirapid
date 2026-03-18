@@ -223,8 +223,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 })
     }
 
-    // Only ADMIN and SUPER_ADMIN can create print services
-    if (!['ADMIN', 'SUPER_ADMIN'].includes(payload.role)) {
+    // Only ADMIN, MARKET_MANAGER and SUPER_ADMIN can create print services
+    if (!['ADMIN', 'SUPER_ADMIN', 'MARKET_MANAGER'].includes(payload.role)) {
       return NextResponse.json({
         success: false,
         error: 'No tienes permisos para crear servicios de impresión'
