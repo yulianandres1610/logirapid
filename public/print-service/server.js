@@ -4,7 +4,7 @@ const path = require("path");
 const http = require("http");
 const { exec, execSync } = require("child_process");
 
-const VERSION = "1.1.5";
+const VERSION = "1.1.6";
 const platform = os.platform();
 const INSTALL_DIR = path.join(os.homedir(), ".logirapid-print-service");
 const CONFIG_PATH = path.join(INSTALL_DIR, "config.json");
@@ -379,12 +379,32 @@ async function printRawBytes(printerName, rawData, copies = 1) {
         `if (-not $ok) { throw 'WritePrinter failed' }`
       );
     } else {
-      // Mac/Linux: try lp first (more reliable with CUPS), fallback to lpr
+      // Mac/Linux: for ZPL/raw data, use CUPS USB backend directly (lp -o raw doesn't truly bypass filters)
       const escapedName = (printerName || "").replace(/"/g, '\\"');
-      try {
-        await execAsync(`lp ${printerName ? '-d "' + escapedName + '"' : ""} -o raw "${tmpFile}"`);
-      } catch {
-        await execAsync(`lpr ${printerName ? '-P "' + escapedName + '"' : ""} -o raw "${tmpFile}"`);
+      let printed = false;
+
+      // Try CUPS USB backend for direct raw printing (most reliable for Zebra/label printers)
+      if (printerName) {
+        try {
+          const deviceUri = await execAsync(`lpstat -v "${escapedName}" 2>/dev/null`);
+          const uriMatch = deviceUri.match(/:\s*(usb:\/\/[^\s]+)/);
+          if (uriMatch) {
+            await execAsync(`DEVICE_URI="${uriMatch[1]}" /usr/libexec/cups/backend/usb 1 user "RAW" 1 "" "${tmpFile}" 2>/dev/null`);
+            printed = true;
+            console.log(`  [Print] Sent via CUPS USB backend to ${printerName}`);
+          }
+        } catch (e) {
+          console.log(`  [Print] CUPS USB backend failed: ${e.message}, trying lp...`);
+        }
+      }
+
+      // Fallback to lp/lpr
+      if (!printed) {
+        try {
+          await execAsync(`lp ${printerName ? '-d "' + escapedName + '"' : ""} -o raw "${tmpFile}"`);
+        } catch {
+          await execAsync(`lpr ${printerName ? '-P "' + escapedName + '"' : ""} -o raw "${tmpFile}"`);
+        }
       }
     }
   } finally { try { fs.unlinkSync(tmpFile); } catch {} }
