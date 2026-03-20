@@ -947,7 +947,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                             theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
                           )}>
                             <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Producto</th>
-                            <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase">Cant.</th>
+                            <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase">Cantidad</th>
+                            <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase">Unidad</th>
                             <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase">Entregado</th>
                             <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase">Precio</th>
                             <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase">Subtotal</th>
@@ -994,6 +995,9 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                                 )}>
                                   {line.quantity}
                                 </span>
+                              </td>
+                              <td className="py-3 px-4 text-center">
+                                <span className="text-sm text-gray-500">{(line as any).unit || 'unidad'}</span>
                               </td>
                               <td className="py-3 px-4 text-center">
                                 <span className={cn(

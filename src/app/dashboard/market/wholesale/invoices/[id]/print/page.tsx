@@ -35,6 +35,7 @@ interface InvoiceData {
     id: number
     productName: string
     productSku: string
+    unit: string
     quantity: number
     unitPrice: number
     subtotal: number
@@ -307,7 +308,7 @@ export default function PrintInvoicePage() {
                     <p className="font-medium">{line.productName}</p>
                     <div className="flex justify-between text-gray-600">
                       <span>{line.productSku}</span>
-                      <span className="font-bold">x{line.quantity}</span>
+                      <span className="font-bold">x{line.quantity} {(line as any).unit || ''}</span>
                     </div>
                   </div>
                 </div>
@@ -447,7 +448,7 @@ export default function PrintInvoicePage() {
                           <p className="font-medium">{line.productName}</p>
                           <div className="flex justify-between text-gray-600">
                             <span>{line.productSku}</span>
-                            <span className="font-bold">x{line.quantity}</span>
+                            <span className="font-bold">x{line.quantity} {(line as any).unit || ''}</span>
                           </div>
                         </div>
                       </div>
@@ -548,7 +549,7 @@ export default function PrintInvoicePage() {
                 <div key={idx}>
                   <p className="font-medium">{line.productName}</p>
                   <div className="flex justify-between text-gray-600">
-                    <span>{line.quantity} x {formatCurrency(line.unitPrice)}</span>
+                    <span>{line.quantity} {line.unit} x {formatCurrency(line.unitPrice)}</span>
                     <span className="font-medium">{formatCurrency(line.subtotal)}</span>
                   </div>
                 </div>
@@ -725,6 +726,7 @@ export default function PrintInvoicePage() {
             <tr className="bg-gray-100">
               <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600">Producto</th>
               <th className="text-center py-3 px-4 text-sm font-semibold text-gray-600">Cantidad</th>
+              <th className="text-center py-3 px-4 text-sm font-semibold text-gray-600">Unidad</th>
               <th className="text-right py-3 px-4 text-sm font-semibold text-gray-600">Precio USD</th>
               <th className="text-right py-3 px-4 text-sm font-semibold text-gray-600">Precio CUP</th>
               <th className="text-right py-3 px-4 text-sm font-semibold text-gray-600">Subtotal</th>
@@ -738,6 +740,7 @@ export default function PrintInvoicePage() {
                   <p className="text-sm text-gray-500">{line.productSku}</p>
                 </td>
                 <td className="text-center py-3 px-4">{line.quantity}</td>
+                <td className="text-center py-3 px-4 text-gray-500 text-sm">{line.unit}</td>
                 <td className="text-right py-3 px-4">{formatCurrency(line.unitPrice)}</td>
                 <td className="text-right py-3 px-4 text-gray-500">{formatCUP(line.unitPrice, rate)}</td>
                 <td className="text-right py-3 px-4 font-medium">{formatCurrency(line.subtotal)}</td>

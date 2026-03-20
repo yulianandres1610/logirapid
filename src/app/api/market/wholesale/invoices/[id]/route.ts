@@ -90,7 +90,8 @@ export async function GET(
     const linesResult = await db.query(`
       SELECT
         il.*,
-        p.image_url as product_image
+        p.image_url as product_image,
+        p.unit_of_measure as product_unit
       FROM market_invoice_lines il
       LEFT JOIN market_products p ON p.id = il.product_id
       WHERE il.invoice_id = $1
@@ -199,6 +200,7 @@ export async function GET(
         productName: line.product_name,
         productSku: line.product_sku,
         productImage: line.product_image,
+        unit: line.product_unit || 'unidad',
         quantity: parseFloat(line.quantity) || 0,
         quantityDelivered: parseFloat(line.quantity_delivered) || 0,
         unitPrice: parseFloat(line.unit_price) || 0,
