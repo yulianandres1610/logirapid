@@ -60,24 +60,59 @@ echo "   LogiRapid Print Service - Instalador"
 echo "  ==========================================="
 echo ""
 
-# ─── 1. Verificar Node.js ───
+# ─── 1. Verificar e instalar dependencias ───
 
+# Homebrew (macOS package manager)
+if [ "$(uname)" = "Darwin" ]; then
+  if ! command -v brew &> /dev/null; then
+    echo "  [!] Homebrew no encontrado. Instalando..."
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" < /dev/tty
+    # Add brew to PATH for Apple Silicon and Intel
+    if [ -f /opt/homebrew/bin/brew ]; then
+      eval "$(/opt/homebrew/bin/brew shellenv)"
+    elif [ -f /usr/local/bin/brew ]; then
+      eval "$(/usr/local/bin/brew shellenv)"
+    fi
+    echo "  [OK] Homebrew instalado"
+  else
+    echo "  [OK] Homebrew encontrado"
+  fi
+fi
+
+# Node.js
 if command -v node &> /dev/null; then
-  NODE_PATH=$(which node)
   echo "  [OK] Node.js: $(node -v)"
 else
-  echo "  [!] Node.js no encontrado."
+  echo "  [!] Node.js no encontrado. Instalando..."
   if command -v brew &> /dev/null; then
-    echo "  Instalando via Homebrew..."
     brew install node
-    NODE_PATH=$(which node)
+    echo "  [OK] Node.js instalado: $(node -v)"
+  elif [ "$(uname)" = "Linux" ]; then
+    # Linux: use NodeSource
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - 2>/dev/null
+    sudo apt-get install -y nodejs 2>/dev/null || sudo yum install -y nodejs 2>/dev/null
     echo "  [OK] Node.js instalado: $(node -v)"
   else
-    echo ""
-    echo "  Node.js es requerido. Instalalo desde: https://nodejs.org/"
-    echo "  O con Homebrew: brew install node"
-    echo ""
+    echo "  [ERROR] No se pudo instalar Node.js automaticamente."
+    echo "  Instalalo desde: https://nodejs.org/"
     exit 1
+  fi
+fi
+
+# npm (viene con Node pero verificamos)
+if ! command -v npm &> /dev/null; then
+  echo "  [ERROR] npm no encontrado. Reinstala Node.js desde https://nodejs.org/"
+  exit 1
+fi
+echo "  [OK] npm: $(npm -v)"
+
+# curl (necesario para descargas)
+if ! command -v curl &> /dev/null; then
+  echo "  [!] curl no encontrado. Instalando..."
+  if command -v brew &> /dev/null; then
+    brew install curl
+  elif command -v apt-get &> /dev/null; then
+    sudo apt-get install -y curl
   fi
 fi
 
