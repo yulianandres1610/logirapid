@@ -66,8 +66,6 @@ export default function WeightLabelsPage() {
   const [isFullscreen, setIsFullscreen] = useState(true) // Start fullscreen by default
   const [mounted, setMounted] = useState(false)
   const [showPrintModal, setShowPrintModal] = useState(false)
-  const [printServices, setPrintServices] = useState<Array<{ id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; printerType: string }> }>>([])
-  const [selectedPrinter, setSelectedPrinter] = useState<{ serviceId: number; printerId: number } | null>(null)
   const [printingToService, setPrintingToService] = useState(false)
   const [labelSize, setLabelSize] = useState<'3x2' | '2x1'>('3x2') // Label size selector
 
@@ -182,8 +180,6 @@ export default function WeightLabelsPage() {
           ))
         }
 
-        // Fetch print services and show modal
-        await fetchPrintServices()
         console.log('[WeightLabels] Showing print modal')
         setShowPrintModal(true)
         // Reset weight for next label
@@ -232,14 +228,9 @@ export default function WeightLabelsPage() {
   }
 
   // Print services are now resolved automatically by the server via /api/print-jobs
-  const fetchPrintServices = async () => {
-    setPrintServices([])
-    return []
-  }
-
   // Print label with service
   const printWithService = async () => {
-    if (!lastLabel || !selectedPrinter) return
+    if (!lastLabel) return
 
     const pricePerKgValue = selectedProduct ? parseFloat(String(selectedProduct.sellingPrice)) || 0 : 0
 
@@ -266,8 +257,6 @@ export default function WeightLabelsPage() {
             labelSize: labelSize // '3x2' or '2x1'
           },
           copies,
-          printServiceId: selectedPrinter.serviceId,
-          printerId: selectedPrinter.printerId,
           sourceType: 'weight_label'
         })
       })
@@ -1088,47 +1077,6 @@ export default function WeightLabelsPage() {
                   )}
                 </div>
 
-                {/* Print Services */}
-                {printServices.length > 0 ? (
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-400 mb-2">Seleccionar Impresora</label>
-                    <div className="space-y-2 max-h-32 overflow-y-auto">
-                      {printServices.map(service => (
-                        service.printers.map(printer => (
-                          <button
-                            key={`${service.id}-${printer.id}`}
-                            onClick={() => setSelectedPrinter({ serviceId: service.id, printerId: printer.id })}
-                            className={cn(
-                              "w-full p-3 rounded-xl border-2 transition-all text-left flex items-center justify-between",
-                              selectedPrinter?.printerId === printer.id
-                                ? 'border-purple-500 bg-purple-900/20'
-                                : 'border-gray-600 hover:border-gray-500 bg-gray-700/50'
-                            )}
-                          >
-                            <div className="flex items-center gap-3">
-                              <Printer className="w-5 h-5 text-gray-400" />
-                              <div>
-                                <p className="font-medium text-white">{printer.printerName}</p>
-                                <p className="text-xs text-gray-400">{service.serviceName}</p>
-                              </div>
-                            </div>
-                            {printer.isOnline ? (
-                              <span className="text-xs text-green-400">Online</span>
-                            ) : (
-                              <span className="text-xs text-gray-500">Offline</span>
-                            )}
-                          </button>
-                        ))
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mb-6 p-4 rounded-xl bg-gray-700/50 text-center">
-                    <p className="text-gray-400 text-sm">No hay servicios de impresión disponibles</p>
-                    <p className="text-gray-500 text-xs mt-1">Se usará impresión del navegador</p>
-                  </div>
-                )}
-
                 {/* Action Buttons */}
                 <div className="flex gap-3">
                   <button
@@ -1138,25 +1086,23 @@ export default function WeightLabelsPage() {
                     <Package className="w-5 h-5" />
                     Descargar PDF
                   </button>
-                  {printServices.length > 0 && (
-                    <button
-                      onClick={printWithService}
-                      disabled={printingToService || !selectedPrinter}
-                      className={cn(
-                        "flex-1 py-3 rounded-xl transition-all font-bold flex items-center justify-center gap-2",
-                        printingToService || !selectedPrinter
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                          : 'bg-purple-600 hover:bg-purple-500 text-white'
-                      )}
-                    >
-                      {printingToService ? (
-                        <RefreshCw className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <Printer className="w-5 h-5" />
-                      )}
-                      Imprimir
-                    </button>
-                  )}
+                  <button
+                    onClick={printWithService}
+                    disabled={printingToService}
+                    className={cn(
+                      "flex-1 py-3 rounded-xl transition-all font-bold flex items-center justify-center gap-2",
+                      printingToService
+                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                        : 'bg-purple-600 hover:bg-purple-500 text-white'
+                    )}
+                  >
+                    {printingToService ? (
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Printer className="w-5 h-5" />
+                    )}
+                    Imprimir
+                  </button>
                 </div>
               </motion.div>
             </motion.div>

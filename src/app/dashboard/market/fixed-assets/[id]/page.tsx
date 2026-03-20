@@ -118,24 +118,6 @@ interface AuditRecord {
   notes: string
 }
 
-interface PrintService {
-  id: number
-  serviceCode: string
-  serviceName: string
-  status: string
-  printers: PrinterInfo[]
-}
-
-interface PrinterInfo {
-  id: number
-  printerName: string
-  printerId: string
-  printerType: string
-  isOnline: boolean
-  isDefault: boolean
-  supportedDocumentTypes: string[]
-}
-
 const STATUS_CONFIG: Record<string, { label: string; color: string; bgGradient: string; icon: React.ElementType; step: number }> = {
   active: { label: 'Activo', color: 'emerald', bgGradient: 'from-emerald-500 to-teal-500', icon: CheckCircle2, step: 1 },
   in_repair: { label: 'En Reparacion', color: 'amber', bgGradient: 'from-amber-500 to-orange-500', icon: Wrench, step: 2 },
@@ -183,10 +165,6 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
   // Print modal state
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [printLoading, setPrintLoading] = useState(false)
-  const [printServices, setPrintServices] = useState<PrintService[]>([])
-  const [loadingServices, setLoadingServices] = useState(false)
-  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null)
-  const [selectedPrinterId, setSelectedPrinterId] = useState<number | null>(null)
   const [labelSize, setLabelSize] = useState<'3x2' | '2x1'>('3x2')
   const [copies, setCopies] = useState(1)
 
@@ -239,11 +217,6 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
     }
   }, [asset?.barcode, theme, showPrintModal])
 
-  // Print services are now resolved automatically by the server via /api/print-jobs
-  const fetchPrintServices = async () => {
-    setPrintServices([])
-    setLoadingServices(false)
-  }
 
   const deleteAsset = async () => {
     if (!confirm('Dar de baja este activo? El activo quedara marcado como "disposed".')) return
@@ -269,15 +242,9 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
 
   const handleOpenPrintModal = () => {
     setShowPrintModal(true)
-    fetchPrintServices()
   }
 
   const handlePrintWithService = async () => {
-    if (!selectedServiceId || !selectedPrinterId) {
-      showNotification('error', 'Error', 'Seleccione una impresora')
-      return
-    }
-
     setPrintLoading(true)
 
     try {
@@ -285,8 +252,6 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          printServiceId: selectedServiceId,
-          printerId: selectedPrinterId,
           labelSize,
           copies
         })
@@ -527,10 +492,6 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
   const statusConfig = STATUS_CONFIG[asset.status] || STATUS_CONFIG.active
   const StatusIcon = statusConfig.icon
   const depreciation = calculateDepreciation()
-
-  // Get selected service and printer info
-  const selectedService = printServices.find(s => s.id === selectedServiceId)
-  const selectedPrinter = selectedService?.printers.find(p => p.id === selectedPrinterId)
 
   return (
     <ProtectedRoute>
@@ -1277,73 +1238,6 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
 
                 {/* Modal Body */}
                 <div className="p-6 space-y-6">
-                  {/* Printer Selection */}
-                  <div>
-                    <label className={cn("block text-sm font-medium mb-3", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                      Seleccionar Impresora
-                    </label>
-
-                    {loadingServices ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                      </div>
-                    ) : printServices.length === 0 ? (
-                      <div className={cn(
-                        'p-4 rounded-xl text-center',
-                        theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'
-                      )}>
-                        <Monitor className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                        <p className="text-sm text-gray-500">No hay servicios de impresion disponibles</p>
-                        <p className="text-xs text-gray-400 mt-1">Configure un servicio de impresion primero</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2 max-h-48 overflow-y-auto">
-                        {printServices.map(service => (
-                          <div key={service.id}>
-                            {service.printers.map(printer => (
-                              <button
-                                key={printer.id}
-                                onClick={() => {
-                                  setSelectedServiceId(service.id)
-                                  setSelectedPrinterId(printer.id)
-                                }}
-                                className={cn(
-                                  'w-full p-3 rounded-xl border text-left transition-all',
-                                  selectedServiceId === service.id && selectedPrinterId === printer.id
-                                    ? theme === 'dark'
-                                      ? 'border-blue-500 bg-blue-900/30'
-                                      : 'border-blue-500 bg-blue-50'
-                                    : theme === 'dark'
-                                      ? 'border-gray-700 hover:border-gray-600 bg-gray-700/30'
-                                      : 'border-gray-200 hover:border-gray-300 bg-white'
-                                )}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div className={cn(
-                                    'w-3 h-3 rounded-full',
-                                    printer.isOnline ? 'bg-green-500' : 'bg-gray-400'
-                                  )} />
-                                  <div className="flex-1 min-w-0">
-                                    <p className={cn(
-                                      'font-medium truncate',
-                                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                    )}>{printer.printerName}</p>
-                                    <p className="text-xs text-gray-500">
-                                      {service.serviceName} • {printer.isOnline ? 'En linea' : 'Desconectada'}
-                                    </p>
-                                  </div>
-                                  {selectedServiceId === service.id && selectedPrinterId === printer.id && (
-                                    <Check className="w-5 h-5 text-blue-500" />
-                                  )}
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
                   {/* Label Size Selection */}
                   <div>
                     <label className={cn("block text-sm font-medium mb-3", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
@@ -1536,10 +1430,10 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
 
                   <button
                     onClick={handlePrintWithService}
-                    disabled={printLoading || !selectedPrinterId}
+                    disabled={printLoading}
                     className={cn(
                       'flex items-center gap-2 px-6 py-2 rounded-lg font-medium transition-colors',
-                      printLoading || !selectedPrinterId
+                      printLoading
                         ? 'bg-blue-400 cursor-not-allowed'
                         : 'bg-blue-600 hover:bg-blue-700',
                       'text-white'

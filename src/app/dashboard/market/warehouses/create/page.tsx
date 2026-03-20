@@ -29,14 +29,7 @@ import { cn } from '@/lib/utils'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoieXVsaWFuYW5kcmVzMTYxMCIsImEiOiJjbWgycTlsZGsxM200YnNvbnN2d2wwcHJ5In0.wlU7-bazAs2eYjknx7H97Q'
-
-interface PrintService {
-  id: number
-  name: string
-  code: string
-  status?: string
-}
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
 
 type Step = 'info' | 'location' | 'manager' | 'review'
 
@@ -438,8 +431,6 @@ export default function CreateMarketWarehousePage() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [showCancelModal, setShowCancelModal] = useState(false)
 
-  const [printServices, setPrintServices] = useState<PrintService[]>([])
-
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -459,21 +450,6 @@ export default function CreateMarketWarehousePage() {
     email: ''
   })
 
-  // Fetch print services on mount
-  useEffect(() => {
-    const fetchPrintServices = async () => {
-      try {
-        const response = await fetch('/api/market/print-services')
-        const data = await response.json()
-        if (data.success && data.data) {
-          setPrintServices(data.data)
-        }
-      } catch (err) {
-        console.error('Error fetching print services:', err)
-      }
-    }
-    fetchPrintServices()
-  }, [])
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
 
@@ -1007,49 +983,6 @@ export default function CreateMarketWarehousePage() {
                         </label>
                       </div>
 
-                      {/* Print Service Selector */}
-                      {printServices.length > 0 && (
-                        <div className="md:col-span-2">
-                          <label className={cn(
-                            "block text-sm font-medium mb-2",
-                            theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                          )}>
-                            <div className="flex items-center gap-2">
-                              <Printer className="w-4 h-4 text-blue-500" />
-                              Servicio de Impresión
-                            </div>
-                          </label>
-                          <p className={cn(
-                            "text-xs mb-3",
-                            theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
-                          )}>
-                            Selecciona el servicio de impresión que se usará para imprimir documentos en este almacén
-                          </p>
-                          <div className="relative">
-                            <select
-                              value={formData.defaultPrintServiceId || ''}
-                              onChange={(e) => setFormData({ ...formData, defaultPrintServiceId: e.target.value ? parseInt(e.target.value) : null })}
-                              className={cn(
-                                'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all appearance-none cursor-pointer',
-                                theme === 'dark'
-                                  ? 'bg-gray-900/50 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                                  : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
-                              )}
-                            >
-                              <option value="">Sin servicio de impresión</option>
-                              {printServices.map(ps => (
-                                <option key={ps.id} value={ps.id}>
-                                  {ps.name} ({ps.code})
-                                </option>
-                              ))}
-                            </select>
-                            <ChevronDown className={cn(
-                              "absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 pointer-events-none",
-                              theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
-                            )} />
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </motion.div>
                 )}

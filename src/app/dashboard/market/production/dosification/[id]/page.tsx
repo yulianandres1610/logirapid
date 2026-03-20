@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
   ArrowLeft,
   Package,
@@ -26,8 +26,6 @@ import {
   Boxes,
   Receipt,
   FileDown,
-  Wifi,
-  WifiOff,
   ChevronDown
 } from 'lucide-react'
 import Link from 'next/link'
@@ -37,22 +35,6 @@ import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { cn } from '@/lib/utils'
-
-interface PrintService {
-  id: number
-  serviceCode: string
-  serviceName: string
-  status: string
-  printers: Array<{
-    id: number
-    printerName: string
-    printerId: string
-    printerType: string
-    isOnline: boolean
-    isDefault: boolean
-    supportedDocumentTypes: string[]
-  }>
-}
 
 interface ProductionOrder {
   id: number
@@ -193,12 +175,6 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
   const [printing, setPrinting] = useState<'materials' | 'reception' | null>(null)
   const [downloadingPdf, setDownloadingPdf] = useState<'receipt' | 'letter' | null>(null)
 
-  // Printer selection state
-  const [showPrinterModal, setShowPrinterModal] = useState(false)
-  const [printServices, setPrintServices] = useState<PrintService[]>([])
-  const [loadingPrinters, setLoadingPrinters] = useState(false)
-  const [selectedPrinter, setSelectedPrinter] = useState<{ serviceId: number; printerId: number } | null>(null)
-  const [pendingPrintType, setPendingPrintType] = useState<'materials' | 'reception' | null>(null)
 
   useEffect(() => {
     fetchOrder()
@@ -221,28 +197,8 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
     }
   }
 
-  // Print services are now resolved automatically by the server via /api/print-jobs
-  const fetchPrintServices = async () => {
-    setPrintServices([])
-    setLoadingPrinters(false)
-  }
-
-  const openPrinterModal = (documentType: 'materials' | 'reception') => {
-    setPendingPrintType(documentType)
-    setShowPrinterModal(true)
-    if (printServices.length === 0) {
-      fetchPrintServices()
-    }
-  }
-
-  const confirmPrint = async () => {
-    if (!pendingPrintType || !selectedPrinter) {
-      showNotification('error', 'Error', 'Seleccione una impresora')
-      return
-    }
-    setShowPrinterModal(false)
-    await handlePrint(pendingPrintType, selectedPrinter.serviceId, selectedPrinter.printerId)
-    setPendingPrintType(null)
+  const handlePrintDocument = async (documentType: 'materials' | 'reception') => {
+    await handlePrint(documentType)
   }
 
   const formatCurrency = (value: number) => {
@@ -272,7 +228,7 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
   }
 
   // Silent print using print service
-  const handlePrint = async (documentType: 'materials' | 'reception', printServiceId?: number, printerId?: number) => {
+  const handlePrint = async (documentType: 'materials' | 'reception') => {
     if (!order) return
     setPrinting(documentType)
     try {
@@ -280,9 +236,7 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          documentType,
-          printServiceId,
-          printerId
+          documentType
         })
       })
       const data = await response.json()
@@ -690,7 +644,7 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => openPrinterModal('materials')}
+                    onClick={() => handlePrintDocument('materials')}
                     disabled={printing !== null}
                     className={cn(
                       'flex items-center gap-2 px-3 py-2 rounded-xl transition-colors',
@@ -714,7 +668,7 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => openPrinterModal('reception')}
+                    onClick={() => handlePrintDocument('reception')}
                     disabled={printing !== null}
                     className={cn(
                       'flex items-center gap-2 px-3 py-2 rounded-xl transition-colors',
@@ -1378,199 +1332,6 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
           </div>
         </div>
 
-        {/* Printer Selection Modal */}
-        <AnimatePresence>
-          {showPrinterModal && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-              onClick={() => setShowPrinterModal(false)}
-            >
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                onClick={(e) => e.stopPropagation()}
-                className={cn(
-                  'w-full max-w-md rounded-2xl p-6',
-                  theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-                )}
-              >
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'p-2 rounded-xl',
-                      theme === 'dark' ? 'bg-amber-900/30' : 'bg-amber-100'
-                    )}>
-                      <Printer className="w-5 h-5 text-amber-500" />
-                    </div>
-                    <div>
-                      <h3 className={cn(
-                        'font-semibold',
-                        theme === 'dark' ? 'text-white' : 'text-gray-900'
-                      )}>Seleccionar Impresora</h3>
-                      <p className="text-sm text-gray-500">
-                        {pendingPrintType === 'materials' ? 'Recibo de Materiales' : 'Recibo de Recepcion'}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowPrinterModal(false)}
-                    className={cn(
-                      'p-2 rounded-xl transition-colors',
-                      theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-                    )}
-                  >
-                    <X className="w-5 h-5 text-gray-500" />
-                  </button>
-                </div>
-
-                {loadingPrinters ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
-                  </div>
-                ) : printServices.length === 0 ? (
-                  <div className={cn(
-                    'text-center py-8 rounded-xl',
-                    theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-100'
-                  )}>
-                    <WifiOff className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                    <p className={cn(
-                      'font-medium mb-1',
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    )}>No hay impresoras disponibles</p>
-                    <p className="text-sm text-gray-500">
-                      Verifique que el servicio de impresion este activo
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3 max-h-[300px] overflow-y-auto">
-                    {printServices.map((service) => (
-                      <div key={service.id}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className={cn(
-                            'text-xs font-medium px-2 py-0.5 rounded',
-                            service.status === 'active'
-                              ? theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
-                              : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-600'
-                          )}>
-                            {service.serviceName}
-                          </span>
-                          {service.status === 'active' ? (
-                            <Wifi className="w-3 h-3 text-emerald-500" />
-                          ) : (
-                            <WifiOff className="w-3 h-3 text-gray-400" />
-                          )}
-                        </div>
-                        {service.printers.map((printer) => (
-                          <button
-                            key={printer.id}
-                            onClick={() => setSelectedPrinter({ serviceId: service.id, printerId: printer.id })}
-                            className={cn(
-                              'w-full p-3 rounded-xl border transition-all text-left mb-2',
-                              selectedPrinter?.printerId === printer.id
-                                ? theme === 'dark'
-                                  ? 'bg-amber-900/30 border-amber-500 ring-2 ring-amber-500/30'
-                                  : 'bg-amber-50 border-amber-500 ring-2 ring-amber-500/30'
-                                : theme === 'dark'
-                                  ? 'bg-gray-700/50 border-gray-600 hover:border-gray-500'
-                                  : 'bg-gray-50 border-gray-200 hover:border-gray-300'
-                            )}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className={cn(
-                                  'w-10 h-10 rounded-xl flex items-center justify-center',
-                                  printer.isOnline
-                                    ? theme === 'dark' ? 'bg-emerald-900/30' : 'bg-emerald-100'
-                                    : theme === 'dark' ? 'bg-gray-600' : 'bg-gray-200'
-                                )}>
-                                  <Printer className={cn(
-                                    'w-5 h-5',
-                                    printer.isOnline ? 'text-emerald-500' : 'text-gray-400'
-                                  )} />
-                                </div>
-                                <div>
-                                  <p className={cn(
-                                    'font-medium text-sm',
-                                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                  )}>
-                                    {printer.printerName}
-                                  </p>
-                                  <div className="flex items-center gap-2">
-                                    <span className={cn(
-                                      'text-xs',
-                                      printer.printerType === 'thermal' ? 'text-amber-500' : 'text-blue-500'
-                                    )}>
-                                      {printer.printerType === 'thermal' ? 'Termica' : 'Normal'}
-                                    </span>
-                                    {printer.isDefault && (
-                                      <span className="text-xs text-gray-500">(Predeterminada)</span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {printer.isOnline ? (
-                                  <span className="flex items-center gap-1 text-xs text-emerald-500">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                    En linea
-                                  </span>
-                                ) : (
-                                  <span className="text-xs text-gray-500">Desconectada</span>
-                                )}
-                              </div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="flex items-center gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <button
-                    onClick={() => setShowPrinterModal(false)}
-                    className={cn(
-                      'flex-1 py-2.5 rounded-xl font-medium transition-colors',
-                      theme === 'dark'
-                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    )}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={confirmPrint}
-                    disabled={!selectedPrinter || printing !== null}
-                    className={cn(
-                      'flex-1 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2',
-                      selectedPrinter
-                        ? 'bg-amber-600 text-white hover:bg-amber-700'
-                        : theme === 'dark'
-                          ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                          : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    )}
-                  >
-                    {printing ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Enviando...
-                      </>
-                    ) : (
-                      <>
-                        <Printer className="w-4 h-4" />
-                        Imprimir
-                      </>
-                    )}
-                  </button>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </DashboardLayout>
     </ProtectedRoute>
   )

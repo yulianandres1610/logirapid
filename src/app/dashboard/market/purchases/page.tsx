@@ -314,7 +314,7 @@ export default function MarketPurchasesPage() {
   }
 
   const printWithSilentService = async () => {
-    if (!printPurchase || !selectedPrinter || purchaseLines.length === 0) return
+    if (!printPurchase || purchaseLines.length === 0) return
 
     setPrintingWithService(true)
     try {
@@ -349,8 +349,6 @@ export default function MarketPurchasesPage() {
             warehouseName: printPurchase.warehouseName || (purchaseData as Record<string, unknown>)?.warehouseName
           },
           copies,
-          printServiceId: selectedPrinter.serviceId,
-          printerId: selectedPrinter.printerId,
           sourceType: 'purchase',
           sourceId: printPurchase.id
         })
@@ -1099,12 +1097,10 @@ export default function MarketPurchasesPage() {
                     </div>
 
                     <div className="p-6 space-y-6">
-                      {(printServices.length === 0 || loadingPurchaseLines) ? (
+                      {loadingPurchaseLines ? (
                         <div className="text-center py-4">
                           <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-4" />
-                          <p className="text-gray-500">
-                            {loadingPurchaseLines ? 'Cargando datos...' : 'Buscando impresoras...'}
-                          </p>
+                          <p className="text-gray-500">Cargando datos...</p>
                         </div>
                       ) : (
                         <>
@@ -1124,56 +1120,6 @@ export default function MarketPurchasesPage() {
                             <div className="flex justify-between items-center">
                               <span className="text-sm text-gray-500">Productos</span>
                               <span className="font-medium text-gray-900 dark:text-white">{purchaseLines.length} items</span>
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className={cn(
-                              "block text-sm font-medium mb-2",
-                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                            )}>
-                              Seleccionar Impresora
-                            </label>
-                            <div className="space-y-2 max-h-48 overflow-y-auto">
-                              {printServices.map(service => (
-                                service.printers.map(printer => (
-                                  <button
-                                    key={`${service.id}-${printer.id}`}
-                                    onClick={() => setSelectedPrinter({ serviceId: service.id, printerId: printer.id })}
-                                    className={cn(
-                                      'w-full p-3 rounded-xl border-2 transition-all text-left flex items-center justify-between',
-                                      selectedPrinter?.printerId === printer.id
-                                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
-                                        : theme === 'dark'
-                                          ? 'border-gray-600 bg-gray-700/50 hover:border-gray-500'
-                                          : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                                    )}
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <Printer className={cn(
-                                        "w-5 h-5",
-                                        selectedPrinter?.printerId === printer.id ? 'text-emerald-600' : 'text-gray-400'
-                                      )} />
-                                      <div>
-                                        <p className={cn(
-                                          "font-medium",
-                                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                        )}>
-                                          {printer.printerName}
-                                        </p>
-                                        <p className="text-xs text-gray-500">
-                                          {printer.printerType === 'thermal_80mm' ? 'Termica 80mm' : 'Estandar'}
-                                        </p>
-                                      </div>
-                                    </div>
-                                    {printer.isOnline ? (
-                                      <span className="text-xs text-emerald-500 font-medium">Online</span>
-                                    ) : (
-                                      <span className="text-xs text-gray-400">Offline</span>
-                                    )}
-                                  </button>
-                                ))
-                              ))}
                             </div>
                           </div>
 
@@ -1223,7 +1169,7 @@ export default function MarketPurchasesPage() {
                       )}
                     </div>
 
-                    {printServices.length > 0 && !loadingPurchaseLines && (
+                    {!loadingPurchaseLines && (
                       <div className={cn(
                         "flex gap-3 p-6 pt-4 border-t",
                         theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
@@ -1250,7 +1196,7 @@ export default function MarketPurchasesPage() {
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
                           onClick={printWithSilentService}
-                          disabled={printingWithService || !selectedPrinter || purchaseLines.length === 0}
+                          disabled={printingWithService || purchaseLines.length === 0}
                           className={cn(
                             "flex-1 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2",
                             "bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50"

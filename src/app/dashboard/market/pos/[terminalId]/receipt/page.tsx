@@ -315,8 +315,6 @@ function ReceiptContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showPrintModal, setShowPrintModal] = useState(false)
-  const [printServices, setPrintServices] = useState<Array<{ id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; isDefault: boolean; printerType: string }> }>>([])
-  const [selectedPrinter, setSelectedPrinter] = useState<{ serviceId: number; printerId: number } | null>(null)
   const [printingWithService, setPrintingWithService] = useState(false)
   const [copies, setCopies] = useState(1)
   const [exchangeRate, setExchangeRate] = useState<number>(411) // Tasa USD -> CUP BCC por defecto
@@ -589,15 +587,9 @@ function ReceiptContent() {
     return labels[method] || method
   }
 
-  // Print services are now resolved automatically by the server via /api/print-jobs
-  const fetchPrintServices = async (): Promise<{ services: typeof printServices; thermalPrinters: Array<{ serviceId: number; printer: { id: number; printerName: string; isOnline: boolean; isDefault: boolean; printerType: string; supportedDocumentTypes?: string[] } }> }> => {
-    setPrintServices([])
-    return { services: [], thermalPrinters: [] }
-  }
-
-  // Print with silent service
+  // Print with service (server resolves printer automatically)
   const printWithService = async () => {
-    if (!order || !selectedPrinter) return
+    if (!order) return
 
     setPrintingWithService(true)
     try {
@@ -645,8 +637,6 @@ function ReceiptContent() {
             thankYouMessage: '¡Gracias por su compra!'
           },
           copies,
-          printServiceId: selectedPrinter.serviceId,
-          printerId: selectedPrinter.printerId,
           sourceType: 'pos_order',
           sourceId: order.id || 0
         })
@@ -669,7 +659,7 @@ function ReceiptContent() {
     }
   }
 
-  // Open print modal or use browser print if offline
+  // Print receipt - use print service for online orders, browser for offline
   const handlePrint = async () => {
     console.log('[Receipt] handlePrint called, isOfflineOrder:', isOfflineOrder)
 
@@ -680,100 +670,9 @@ function ReceiptContent() {
       return
     }
 
-    // For online orders, try to use print service
-    console.log('[Receipt] Online order, fetching print services...')
-    const { thermalPrinters } = await fetchPrintServices()
-    console.log('[Receipt] Found', thermalPrinters.length, 'thermal printers')
-
-    // Si hay exactamente una impresora térmica, imprimir silenciosamente
-    if (thermalPrinters.length === 1) {
-      console.log('[Receipt] Solo una impresora térmica, imprimiendo silenciosamente')
-      setSelectedPrinter({ serviceId: thermalPrinters[0].serviceId, printerId: thermalPrinters[0].printer.id })
-      // Imprimir directamente
-      setPrintingWithService(true)
-      try {
-        // IMPORTANTE: El generador espera 'items' con 'name' y 'price', no 'lines' con 'productName' y 'unitPrice'
-        const printPayload = {
-          documentType: 'pos_receipt',
-          documentData: {
-            receiptNumber: order?.orderNumber,
-            orderNumber: order?.orderNumber, // Para código de barras
-            companyName: 'LogiRapid',
-            terminalName: order?.terminalName, // Nombre del terminal
-            date: new Date(order?.createdAt || new Date()).toLocaleDateString('es-ES'),
-            time: new Date(order?.createdAt || new Date()).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-            cashierName: order?.createdByName,
-            customerName: order?.customerName,
-            items: order?.lines.map(l => ({
-              name: l.productName,
-              quantity: l.quantity,
-              price: l.unitPrice,
-              originalPrice: l.originalPrice,
-              total: l.total
-            })),
-            subtotal: order?.subtotal,
-            discount: order?.discountAmount,
-            total: order?.totalAmount,
-            // Tasa de cambio
-            exchangeRate: exchangeRate,
-            exchangeCurrency: 'CUP',
-            totalInLocalCurrency: calcOrderTotalCUP(order?.lines || []),
-            // Pagos con detalle de efectivo
-            payments: order?.payments.map(p => ({
-              method: p.method === 'cash' ? 'Efectivo' :
-                      p.method === 'card' ? 'Tarjeta' :
-                      p.method === 'transfer' ? 'Transferencia' :
-                      p.method === 'credit' ? 'Crédito' : p.method,
-              amount: p.amount,
-              currency: p.currency,
-              amountTendered: p.amountTendered ?? undefined,
-              changeAmount: p.changeAmount ?? undefined,
-              changeCurrency: p.changeCurrency ?? undefined
-            })),
-            thankYouMessage: '¡Gracias por su compra!'
-          },
-          copies: 1,
-          printServiceId: thermalPrinters[0].serviceId,
-          printerId: thermalPrinters[0].printer.id,
-          sourceType: 'pos_order',
-          sourceId: order?.id || 0
-        }
-        console.log('[Receipt] Sending print job:', printPayload)
-
-        const response = await fetch('/api/print-jobs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(printPayload)
-        })
-
-        const data = await response.json()
-        console.log('[Receipt] Print job response:', data)
-
-        if (data.success) {
-          console.log('[Receipt] Impresión silenciosa exitosa')
-          alert('Recibo enviado a imprimir')
-        } else {
-          console.error('[Receipt] Error en impresión silenciosa:', data.error)
-          alert('Error al enviar a imprimir: ' + data.error)
-          // Fallback to browser print
-          printReceipt()
-        }
-      } catch (err) {
-        console.error('[Receipt] Error imprimiendo:', err)
-        alert('Error de conexión al imprimir')
-        printReceipt()
-      } finally {
-        setPrintingWithService(false)
-      }
-    } else if (thermalPrinters.length > 1) {
-      // Más de una impresora, mostrar modal para seleccionar
-      console.log('[Receipt] Múltiples impresoras, mostrando modal')
-      setShowPrintModal(true)
-    } else {
-      // No hay impresoras térmicas, usar navegador
-      console.log('[Receipt] No hay impresoras térmicas, usando navegador')
-      printReceipt()
-    }
+    // For online orders, send to print service (server resolves printer automatically)
+    console.log('[Receipt] Online order, sending to print service...')
+    await printWithService()
   }
 
   // Auto-print silently when order loads (if autoPrint=true)
@@ -1198,98 +1097,48 @@ ${order.payments.map(p => {
             </div>
 
             <div className="p-6 space-y-6">
-              {printServices.length === 0 ? (
-                <div className="text-center py-4">
-                  <p className={`${tc.textMuted} mb-4`}>No hay servicio de impresión disponible</p>
+              <div>
+                <label className={`block text-sm font-medium ${tc.textMuted} mb-2`}>Copias</label>
+                <div className="flex items-center justify-center gap-4">
                   <button
-                    onClick={() => { setShowPrintModal(false); printReceipt(); }}
-                    className={`px-4 py-2 rounded-lg ${tc.button}`}
+                    onClick={() => setCopies(Math.max(1, copies - 1))}
+                    className={`w-10 h-10 rounded-xl ${tc.button} flex items-center justify-center`}
                   >
-                    Usar impresión del navegador
+                    -
+                  </button>
+                  <span className="w-12 text-center text-xl font-bold">{copies}</span>
+                  <button
+                    onClick={() => setCopies(Math.min(5, copies + 1))}
+                    className={`w-10 h-10 rounded-xl ${tc.button} flex items-center justify-center`}
+                  >
+                    +
                   </button>
                 </div>
-              ) : (
-                <>
-                  <div>
-                    <label className={`block text-sm font-medium ${tc.textMuted} mb-2`}>Impresora</label>
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {printServices.map(service => (
-                        service.printers.map(printer => (
-                          <button
-                            key={`${service.id}-${printer.id}`}
-                            onClick={() => setSelectedPrinter({ serviceId: service.id, printerId: printer.id })}
-                            className={`w-full p-3 rounded-xl border-2 transition-all text-left flex items-center justify-between ${
-                              selectedPrinter?.printerId === printer.id
-                                ? 'border-blue-500 bg-blue-900/20'
-                                : `${tc.border} ${tc.button}`
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <PrinterIcon />
-                              <div>
-                                <p className="font-medium">{printer.printerName}</p>
-                                <p className={`text-xs ${tc.textMuted}`}>
-                                  {printer.printerType === 'thermal_80mm' ? 'Térmica 80mm' : 'Estándar'}
-                                </p>
-                              </div>
-                            </div>
-                            {printer.isOnline ? (
-                              <span className="text-xs text-green-400">Online</span>
-                            ) : (
-                              <span className={`text-xs ${tc.textMuted}`}>Offline</span>
-                            )}
-                          </button>
-                        ))
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className={`block text-sm font-medium ${tc.textMuted} mb-2`}>Copias</label>
-                    <div className="flex items-center justify-center gap-4">
-                      <button
-                        onClick={() => setCopies(Math.max(1, copies - 1))}
-                        className={`w-10 h-10 rounded-xl ${tc.button} flex items-center justify-center`}
-                      >
-                        -
-                      </button>
-                      <span className="w-12 text-center text-xl font-bold">{copies}</span>
-                      <button
-                        onClick={() => setCopies(Math.min(5, copies + 1))}
-                        className={`w-10 h-10 rounded-xl ${tc.button} flex items-center justify-center`}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
+              </div>
             </div>
 
-            {printServices.length > 0 && (
-              <div className={`px-6 py-4 border-t ${tc.border} flex gap-3`}>
-                <button
-                  onClick={() => { setShowPrintModal(false); printReceipt(); }}
-                  className={`flex-1 py-3 rounded-xl font-medium ${tc.button}`}
-                >
-                  Navegador
-                </button>
-                <button
-                  onClick={printWithService}
-                  disabled={printingWithService || !selectedPrinter}
-                  className="flex-1 py-3 rounded-xl font-medium bg-blue-500 hover:bg-blue-600 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {printingWithService ? (
-                    <LoaderIcon />
-                  ) : (
-                    <>
-                      <PrinterIcon />
-                      Imprimir
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
+            <div className={`px-6 py-4 border-t ${tc.border} flex gap-3`}>
+              <button
+                onClick={() => { setShowPrintModal(false); printReceipt(); }}
+                className={`flex-1 py-3 rounded-xl font-medium ${tc.button}`}
+              >
+                Navegador
+              </button>
+              <button
+                onClick={printWithService}
+                disabled={printingWithService}
+                className="flex-1 py-3 rounded-xl font-medium bg-blue-500 hover:bg-blue-600 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {printingWithService ? (
+                  <LoaderIcon />
+                ) : (
+                  <>
+                    <PrinterIcon />
+                    Imprimir
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
