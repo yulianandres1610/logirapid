@@ -13,7 +13,8 @@ import {
   CheckSquare,
   Square,
   Package,
-  Search
+  Search,
+  ChevronDown
 } from 'lucide-react'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
@@ -52,6 +53,9 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
   const [selectedProducts, setSelectedProducts] = useState<Set<number>>(new Set())
   const [productCopies, setProductCopies] = useState<Record<number, number>>({})
   const [searchTerm, setSearchTerm] = useState('')
+  const [labelSize, setLabelSize] = useState<'2x1' | '3x2' | '4x6'>('2x1')
+  const [availableServices, setAvailableServices] = useState<any[]>([])
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null)
 
   // Filter products by search
   const filteredProducts = products.filter(p =>
@@ -67,6 +71,17 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
   useEffect(() => {
     if (isOpen) {
       fetchAllProducts()
+      // Fetch available print services
+      fetch('/api/print-services/available?documentType=product_label', { credentials: 'include' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.data) {
+            const online = data.data.filter((s: any) => s.online)
+            setAvailableServices(online.length > 0 ? online : data.data)
+            setSelectedServiceId(data.data.length === 1 ? data.data[0].id : null)
+          }
+        })
+        .catch(() => {})
     } else {
       // Reset state when closed
       setSelectedProducts(new Set())
@@ -172,6 +187,7 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
           barcode: product.barcode,
           barcodeType: detectBarcodeType(product.barcode),
           priceCUP,
+          priceUSD: product.sellingPrice || 0,
           currency: 'CUP',
           copies
         }
@@ -187,9 +203,10 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
           documentData: {
             includePrice,
             items, // All labels in one job
-            labelSize: 'medium'
+            labelSize
           },
           copies: 1, // Copies per item are in the items array
+          serviceId: selectedServiceId,
           sourceType: 'bulk_inventory',
           priority: 1
         })
@@ -277,6 +294,62 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
             >
               <X className="w-5 h-5 text-gray-500" />
             </button>
+          </div>
+
+          {/* Label size + printer selector */}
+          <div className={cn(
+            'px-4 py-3 border-b flex-shrink-0 space-y-3',
+            theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+          )}>
+            <div>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Tamano de Etiqueta</p>
+              <div className="flex gap-2">
+                {([
+                  { key: '2x1' as const, label: '2x1"', desc: 'Nombre + Codigo' },
+                  { key: '3x2' as const, label: '3x2"', desc: 'SKU + Codigo + Precio' },
+                  { key: '4x6' as const, label: '4x6"', desc: 'Completa (CUP + USD)' },
+                ]).map(size => (
+                  <button
+                    key={size.key}
+                    onClick={() => setLabelSize(size.key)}
+                    disabled={printing}
+                    className={cn(
+                      'flex-1 py-2 px-2 rounded-lg border transition-all text-center',
+                      labelSize === size.key
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30'
+                        : theme === 'dark' ? 'border-gray-600 hover:border-gray-500' : 'border-gray-200 hover:border-gray-300'
+                    )}
+                  >
+                    <p className={cn('text-sm font-bold', labelSize === size.key ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300')}>{size.label}</p>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight">{size.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {availableServices.length > 1 && (
+              <div>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Impresora</p>
+                <div className="relative">
+                  <select
+                    value={selectedServiceId || ''}
+                    onChange={(e) => setSelectedServiceId(e.target.value ? Number(e.target.value) : null)}
+                    disabled={printing}
+                    className={cn(
+                      'w-full px-3 py-2 pr-8 rounded-lg border text-sm font-medium appearance-none cursor-pointer',
+                      theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    )}
+                  >
+                    <option value="">Automatico (mejor disponible)</option>
+                    {availableServices.map((s: any) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}{s.printerName ? ` — ${s.printerName.replace(/_/g, ' ')}` : ''}{s.online ? '' : ' (offline)'}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Content */}

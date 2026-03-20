@@ -49,6 +49,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
   const [variantCopies, setVariantCopies] = useState<Record<number, number>>({})
   const [availableServices, setAvailableServices] = useState<any[]>([])
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null)
+  const [labelSize, setLabelSize] = useState<'2x1' | '3x2' | '4x6'>('2x1')
 
   useEffect(() => {
     if (isOpen) {
@@ -114,11 +115,12 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
             barcodeType: detectBarcodeType(productData.barcode || ''),
             includePrice,
             priceCUP: calculatePriceCUP(Number(productData.price) || 0),
+            priceUSD: Number(productData.price) || 0,
             currency: 'CUP',
             unitOfMeasure: productData.unitOfMeasure,
             category: productData.category,
             description: productData.description,
-            labelSize: 'medium'
+            labelSize
           },
           copies
         })
@@ -138,10 +140,12 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
                 barcodeType: detectBarcodeType(variant.barcode || ''),
                 includePrice,
                 priceCUP: calculatePriceCUP(variantPrice),
+                priceUSD: variantPrice,
                 currency: 'CUP',
                 unitOfMeasure: productData.unitOfMeasure,
                 category: productData.category,
-                labelSize: 'medium'
+                description: productData.description,
+                labelSize
               },
               copies: qty
             })
@@ -271,6 +275,34 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
                       </div>
                     </div>
                   )}
+
+                  {/* Label size selector */}
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+                      Tamano de Etiqueta
+                    </p>
+                    <div className="flex gap-2">
+                      {([
+                        { key: '2x1' as const, label: '2x1"', desc: 'Nombre + Codigo' },
+                        { key: '3x2' as const, label: '3x2"', desc: 'SKU + Codigo + Precio' },
+                        { key: '4x6' as const, label: '4x6"', desc: 'Completa (CUP + USD)' },
+                      ]).map(size => (
+                        <button
+                          key={size.key}
+                          onClick={() => setLabelSize(size.key)}
+                          className={cn(
+                            'flex-1 py-2 px-2 rounded-lg border transition-all text-center',
+                            labelSize === size.key
+                              ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30'
+                              : theme === 'dark' ? 'border-gray-600 hover:border-gray-500' : 'border-gray-200 hover:border-gray-300'
+                          )}
+                        >
+                          <p className={cn('text-sm font-bold', labelSize === size.key ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300')}>{size.label}</p>
+                          <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight">{size.desc}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
                   <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                     Etiquetas ({totalCopies})

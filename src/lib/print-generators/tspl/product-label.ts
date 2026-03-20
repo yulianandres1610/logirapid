@@ -10,7 +10,9 @@ interface ProductLabelItem {
   barcodeType?: 'code128' | 'ean13' | 'upc' | 'qrcode'
   price?: number
   priceCUP?: number
+  priceUSD?: number
   currency?: string
+  description?: string
   copies?: number
 }
 
@@ -21,6 +23,7 @@ interface ProductLabelData {
   barcodeType?: 'code128' | 'ean13' | 'upc' | 'qrcode'
   price?: number
   priceCUP?: number // Price already converted to CUP
+  priceUSD?: number // Price in USD
   currency?: string
   includePrice?: boolean // Set to false to exclude price from label
   description?: string
@@ -30,6 +33,7 @@ interface ProductLabelData {
   weight?: string
   labelWidth?: number // in mm
   labelHeight?: number // in mm
+  labelSize?: '2x1' | '3x2' | '4x6' // Predefined label sizes
   companyName?: string
   // Support for bulk printing
   items?: ProductLabelItem[]
@@ -101,20 +105,184 @@ function generateSingleLabelTspl(
 }
 
 /**
+ * Generate TSPL for a 3x2" (76x51mm, 608x408 dots @203dpi) product label
+ */
+function generateSingleLabel3x2Tspl(
+  item: ProductLabelItem,
+  includePrice: boolean,
+  labelWidthDots: number
+): string[] {
+  const tspl: string[] = []
+  tspl.push('CLS')
+
+  const maxNameLength = 30
+  const productName = item.productName.length > maxNameLength
+    ? item.productName.substring(0, maxNameLength - 2) + '..'
+    : item.productName
+
+  let y = 16
+
+  // Product Name (larger font - font "4")
+  tspl.push(`TEXT 16,${y},"4",0,1,1,"${escapeTspl(productName)}"`)
+  y += 48
+
+  // SKU line
+  if (item.sku) {
+    tspl.push(`TEXT 16,${y},"2",0,1,1,"SKU: ${escapeTspl(item.sku)}"`)
+    y += 32
+  }
+
+  // Barcode (centered, taller)
+  const barcodeHeight = 120
+  const barcodeType = getTsplBarcodeType(item.barcode, item.barcodeType)
+  const barcodeX = Math.round((labelWidthDots - 350) / 2)
+  tspl.push(`BARCODE ${barcodeX},${y + 8},"${barcodeType}",${barcodeHeight},1,0,2,4,"${item.barcode}"`)
+
+  // Price (bottom-right corner, large font) - only if includePrice
+  const shouldShowPrice = includePrice && (item.priceCUP !== undefined || item.price !== undefined || item.priceUSD !== undefined)
+  if (shouldShowPrice) {
+    const priceValue = item.priceCUP !== undefined ? item.priceCUP : item.price
+    const isCUP = item.priceCUP !== undefined
+
+    if (priceValue !== undefined) {
+      const formattedPrice = isCUP ? Math.round(priceValue).toLocaleString() : priceValue.toFixed(2)
+      const currencyLabel = isCUP ? 'CUP' : (item.currency || 'USD')
+      const priceText = isCUP ? formattedPrice : `$${formattedPrice}`
+      const priceY = 408 - 60
+      tspl.push(`TEXT ${labelWidthDots - 180},${priceY},"4",0,1,1,"${priceText}"`)
+      tspl.push(`TEXT ${labelWidthDots - 80},${priceY + 36},"2",0,1,1,"${currencyLabel}"`)
+    }
+  }
+
+  return tspl
+}
+
+/**
+ * Generate TSPL for a 4x6" (102x152mm, 812x1216 dots @203dpi) full product label
+ */
+function generateSingleLabel4x6Tspl(
+  item: ProductLabelItem,
+  includePrice: boolean,
+  labelWidthDots: number
+): string[] {
+  const labelHeightDots = 1216
+  const tspl: string[] = []
+  tspl.push('CLS')
+
+  const margin = 24
+
+  const maxNameLength = 36
+  const productName = item.productName.length > maxNameLength
+    ? item.productName.substring(0, maxNameLength - 2) + '..'
+    : item.productName
+
+  let y = margin
+
+  // Product Name (very large - font "5")
+  tspl.push(`TEXT ${margin},${y},"5",0,1,1,"${escapeTspl(productName)}"`)
+  y += 64
+
+  // Description (up to 2 lines, if available)
+  if (item.description) {
+    const maxDescLine = 48
+    const desc = item.description
+    if (desc.length <= maxDescLine) {
+      tspl.push(`TEXT ${margin},${y},"3",0,1,1,"${escapeTspl(desc)}"`)
+      y += 34
+    } else {
+      let splitIdx = desc.lastIndexOf(' ', maxDescLine)
+      if (splitIdx <= 0) splitIdx = maxDescLine
+      const line1 = desc.substring(0, splitIdx)
+      let line2 = desc.substring(splitIdx).trim()
+      if (line2.length > maxDescLine) {
+        line2 = line2.substring(0, maxDescLine - 2) + '..'
+      }
+      tspl.push(`TEXT ${margin},${y},"3",0,1,1,"${escapeTspl(line1)}"`)
+      y += 32
+      tspl.push(`TEXT ${margin},${y},"3",0,1,1,"${escapeTspl(line2)}"`)
+      y += 34
+    }
+  }
+
+  // SKU line
+  if (item.sku) {
+    tspl.push(`TEXT ${margin},${y},"3",0,1,1,"SKU: ${escapeTspl(item.sku)}"`)
+    y += 38
+  }
+
+  // Separator line (horizontal rule)
+  y += 10
+  tspl.push(`BAR ${margin},${y},${labelWidthDots - margin * 2},2`)
+  y += 20
+
+  // Prices section
+  const shouldShowPrice = includePrice && (item.priceCUP !== undefined || item.price !== undefined || item.priceUSD !== undefined)
+  if (shouldShowPrice) {
+    // Price CUP (large, bold)
+    if (item.priceCUP !== undefined) {
+      const formattedCUP = Math.round(item.priceCUP).toLocaleString()
+      tspl.push(`TEXT ${margin},${y},"5",0,1,1,"${formattedCUP} CUP"`)
+      y += 56
+    } else if (item.price !== undefined && item.priceCUP === undefined && item.priceUSD === undefined) {
+      const currencySymbol = item.currency || '$'
+      const formattedPrice = item.price.toFixed(2)
+      tspl.push(`TEXT ${margin},${y},"5",0,1,1,"${currencySymbol}${formattedPrice}"`)
+      y += 56
+    }
+
+    // Price USD (smaller)
+    if (item.priceUSD !== undefined) {
+      const formattedUSD = item.priceUSD.toFixed(2)
+      tspl.push(`TEXT ${margin},${y},"3",0,1,1,"$${formattedUSD} USD"`)
+      y += 42
+    }
+  }
+
+  // Barcode (bottom, centered, tall)
+  const barcodeHeight = 160
+  const barcodeType = getTsplBarcodeType(item.barcode, item.barcodeType)
+  const barcodeX = Math.round((labelWidthDots - 400) / 2)
+  const barcodeY = labelHeightDots - barcodeHeight - 80
+  tspl.push(`BARCODE ${barcodeX},${barcodeY},"${barcodeType}",${barcodeHeight},1,0,3,4,"${item.barcode}"`)
+
+  return tspl
+}
+
+/**
  * Generate TSPL code for a product label
  * Default size: 2" wide x 1" tall (51mm x 25mm)
  *
  * TSPL coordinate system: 8 dots per mm (203 DPI)
  * For 51mm x 25mm label: 408 x 200 dots
  *
+ * Supports label sizes: '2x1' (default), '3x2', '4x6'
  * Supports bulk printing: if data.items is provided, generates all labels in one job
  */
 export function generateProductLabelTspl(data: ProductLabelData): Buffer {
-  const labelWidthMm = data.labelWidth || 51
-  const labelHeightMm = data.labelHeight || 25
+  const labelSize = data.labelSize || '2x1'
+  const includePrice = data.includePrice !== false
+
+  // Resolve dimensions based on labelSize
+  let labelWidthMm: number
+  let labelHeightMm: number
+  switch (labelSize) {
+    case '3x2':
+      labelWidthMm = 76
+      labelHeightMm = 51
+      break
+    case '4x6':
+      labelWidthMm = 102
+      labelHeightMm = 152
+      break
+    case '2x1':
+    default:
+      labelWidthMm = data.labelWidth || 51
+      labelHeightMm = data.labelHeight || 25
+      break
+  }
+
   const labelWidthDots = Math.round(labelWidthMm * 8)
   const gapMm = 3
-  const includePrice = data.includePrice !== false
 
   const tspl: string[] = []
 
@@ -124,11 +292,24 @@ export function generateProductLabelTspl(data: ProductLabelData): Buffer {
   tspl.push('DIRECTION 1')
   tspl.push('DENSITY 8')
 
+  // Dispatcher: select the right generator based on label size
+  function generateLabel(item: ProductLabelItem): string[] {
+    switch (labelSize) {
+      case '3x2':
+        return generateSingleLabel3x2Tspl(item, includePrice, labelWidthDots)
+      case '4x6':
+        return generateSingleLabel4x6Tspl(item, includePrice, labelWidthDots)
+      case '2x1':
+      default:
+        return generateSingleLabelTspl(item, includePrice, labelWidthDots)
+    }
+  }
+
   // Check if bulk mode
   if (data.items && data.items.length > 0) {
     for (const item of data.items) {
       const copies = item.copies || 1
-      const labelCommands = generateSingleLabelTspl(item, includePrice, labelWidthDots)
+      const labelCommands = generateLabel(item)
 
       // Add CLS and label content, then PRINT with copies
       tspl.push(...labelCommands)
@@ -143,10 +324,12 @@ export function generateProductLabelTspl(data: ProductLabelData): Buffer {
       barcodeType: data.barcodeType,
       price: data.price,
       priceCUP: data.priceCUP,
-      currency: data.currency
+      priceUSD: data.priceUSD,
+      currency: data.currency,
+      description: data.description
     }
 
-    const labelCommands = generateSingleLabelTspl(singleItem, includePrice, labelWidthDots)
+    const labelCommands = generateLabel(singleItem)
     tspl.push(...labelCommands)
     tspl.push('PRINT 1,1')
   }

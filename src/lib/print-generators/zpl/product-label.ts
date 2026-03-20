@@ -9,7 +9,9 @@ interface ProductLabelItem {
   barcodeType?: 'code128' | 'ean13' | 'upc' | 'qrcode'
   price?: number
   priceCUP?: number
+  priceUSD?: number
   currency?: string
+  description?: string
   copies?: number // Number of copies for this specific item
 }
 
@@ -20,6 +22,7 @@ interface ProductLabelData {
   barcodeType?: 'code128' | 'ean13' | 'upc' | 'qrcode'
   price?: number
   priceCUP?: number // Price already converted to CUP
+  priceUSD?: number // Price in USD
   currency?: string
   includePrice?: boolean // Set to false to exclude price from label
   description?: string
@@ -29,6 +32,7 @@ interface ProductLabelData {
   weight?: string
   labelWidth?: number // in mm
   labelHeight?: number // in mm
+  labelSize?: '2x1' | '3x2' | '4x6' // Predefined label sizes
   companyName?: string
   // Support for bulk printing multiple different labels in one job
   items?: ProductLabelItem[]
@@ -143,30 +147,224 @@ function generateSingleLabelZpl(
 }
 
 /**
+ * Generate ZPL code for a 3x2" (76x51mm, 608x408 dots @203dpi) product label
+ */
+function generateSingleLabel3x2Zpl(
+  item: ProductLabelItem,
+  includePrice: boolean
+): string {
+  const labelWidth = 608
+  const labelHeight = 408
+  const margin = 16
+
+  const maxNameLength = 30
+  const productName = item.productName.length > maxNameLength
+    ? item.productName.substring(0, maxNameLength - 2) + '..'
+    : item.productName
+
+  const zpl: string[] = []
+
+  zpl.push('^XA')
+  zpl.push(`^PW${labelWidth}`)
+  zpl.push(`^LL${labelHeight}`)
+  zpl.push('^PON')
+  zpl.push('^LH0,0')
+
+  let y = margin
+
+  // Product Name (larger font)
+  zpl.push(`^FO${margin},${y}^A0N,34,34^FD${escapeZpl(productName)}^FS`)
+  y += 44
+
+  // SKU line
+  if (item.sku) {
+    zpl.push(`^FO${margin},${y}^A0N,22,22^FDSKU: ${escapeZpl(item.sku)}^FS`)
+    y += 32
+  }
+
+  // Barcode (centered, taller)
+  const barcodeHeight = 90
+  const barcodeCmd = getBarcodeCommand(item.barcode, item.barcodeType)
+  const barcodeX = Math.round((labelWidth - 350) / 2)
+  const barcodeY = y + 10
+  zpl.push(`^FO${barcodeX},${barcodeY}^BY2`)
+  zpl.push(`${barcodeCmd},${barcodeHeight},Y,N,N^FD${item.barcode}^FS`)
+
+  // Price (bottom-right corner, large font) - only if includePrice
+  const shouldShowPrice = includePrice && (item.priceCUP !== undefined || item.price !== undefined || item.priceUSD !== undefined)
+  if (shouldShowPrice) {
+    const priceValue = item.priceCUP !== undefined ? item.priceCUP : item.price
+    const isCUP = item.priceCUP !== undefined
+
+    if (priceValue !== undefined) {
+      const formattedPrice = isCUP ? Math.round(priceValue).toLocaleString() : priceValue.toFixed(2)
+      const currencyLabel = isCUP ? 'CUP' : (item.currency || 'USD')
+      const priceText = isCUP ? formattedPrice : `$${formattedPrice}`
+      const priceY = labelHeight - 60
+      zpl.push(`^FO${labelWidth - 200},${priceY}^A0N,36,36^FD${priceText}^FS`)
+      zpl.push(`^FO${labelWidth - 80},${priceY + 36}^A0N,18,18^FD${currencyLabel}^FS`)
+    }
+  }
+
+  zpl.push('^XZ')
+  return zpl.join('\n')
+}
+
+/**
+ * Generate ZPL code for a 4x6" (102x152mm, 812x1216 dots @203dpi) full product label
+ */
+function generateSingleLabel4x6Zpl(
+  item: ProductLabelItem,
+  includePrice: boolean
+): string {
+  const labelWidth = 812
+  const labelHeight = 1216
+  const margin = 24
+
+  const maxNameLength = 36
+  const productName = item.productName.length > maxNameLength
+    ? item.productName.substring(0, maxNameLength - 2) + '..'
+    : item.productName
+
+  const zpl: string[] = []
+
+  zpl.push('^XA')
+  zpl.push(`^PW${labelWidth}`)
+  zpl.push(`^LL${labelHeight}`)
+  zpl.push('^PON')
+  zpl.push('^LH0,0')
+
+  let y = margin
+
+  // Product Name (very large)
+  zpl.push(`^FO${margin},${y}^A0N,48,48^FD${escapeZpl(productName)}^FS`)
+  y += 64
+
+  // Description (up to 2 lines, if available)
+  if (item.description) {
+    const maxDescLine = 42
+    const desc = item.description
+    if (desc.length <= maxDescLine) {
+      zpl.push(`^FO${margin},${y}^A0N,24,24^FD${escapeZpl(desc)}^FS`)
+      y += 34
+    } else {
+      // Split into 2 lines at word boundary
+      let splitIdx = desc.lastIndexOf(' ', maxDescLine)
+      if (splitIdx <= 0) splitIdx = maxDescLine
+      const line1 = desc.substring(0, splitIdx)
+      let line2 = desc.substring(splitIdx).trim()
+      if (line2.length > maxDescLine) {
+        line2 = line2.substring(0, maxDescLine - 2) + '..'
+      }
+      zpl.push(`^FO${margin},${y}^A0N,24,24^FD${escapeZpl(line1)}^FS`)
+      y += 32
+      zpl.push(`^FO${margin},${y}^A0N,24,24^FD${escapeZpl(line2)}^FS`)
+      y += 34
+    }
+  }
+
+  // SKU line
+  if (item.sku) {
+    zpl.push(`^FO${margin},${y}^A0N,26,26^FDSKU: ${escapeZpl(item.sku)}^FS`)
+    y += 38
+  }
+
+  // Separator line (horizontal rule)
+  y += 10
+  zpl.push(`^FO${margin},${y}^GB${labelWidth - margin * 2},2,2^FS`)
+  y += 20
+
+  // Prices section
+  const shouldShowPrice = includePrice && (item.priceCUP !== undefined || item.price !== undefined || item.priceUSD !== undefined)
+  if (shouldShowPrice) {
+    // Price CUP (large, bold)
+    if (item.priceCUP !== undefined) {
+      const formattedCUP = Math.round(item.priceCUP).toLocaleString()
+      zpl.push(`^FO${margin},${y}^A0N,44,44^FD${formattedCUP} CUP^FS`)
+      y += 56
+    } else if (item.price !== undefined && item.priceCUP === undefined && item.priceUSD === undefined) {
+      // Fallback: show generic price
+      const currencySymbol = item.currency || '$'
+      const formattedPrice = item.price.toFixed(2)
+      zpl.push(`^FO${margin},${y}^A0N,44,44^FD${currencySymbol}${formattedPrice}^FS`)
+      y += 56
+    }
+
+    // Price USD (smaller)
+    if (item.priceUSD !== undefined) {
+      const formattedUSD = item.priceUSD.toFixed(2)
+      zpl.push(`^FO${margin},${y}^A0N,30,30^FD$${formattedUSD} USD^FS`)
+      y += 42
+    }
+  }
+
+  // Barcode (bottom, centered, tall)
+  const barcodeHeight = 140
+  const barcodeCmd = getBarcodeCommand(item.barcode, item.barcodeType)
+  const barcodeX = Math.round((labelWidth - 400) / 2)
+  const barcodeY = labelHeight - barcodeHeight - 80
+  zpl.push(`^FO${barcodeX},${barcodeY}^BY3`)
+  zpl.push(`${barcodeCmd},${barcodeHeight},Y,N,N^FD${item.barcode}^FS`)
+
+  zpl.push('^XZ')
+  return zpl.join('\n')
+}
+
+/**
  * Generate ZPL code for a product label
  * ZPL is Zebra Programming Language - native format for Zebra printers
  * Default size: 2" wide x 1" tall (standard price label)
  *
+ * Supports label sizes: '2x1' (default), '3x2', '4x6'
  * Supports bulk printing: if data.items is provided, generates all labels in one job
  */
 export function generateProductLabelZpl(data: ProductLabelData): Buffer {
-  const labelWidthMm = data.labelWidth || 51
-  const labelHeightMm = data.labelHeight || 25
+  const labelSize = data.labelSize || '2x1'
   const includePrice = data.includePrice !== false
+
+  // Resolve dimensions based on labelSize
+  let labelWidthMm: number
+  let labelHeightMm: number
+  switch (labelSize) {
+    case '3x2':
+      labelWidthMm = 76
+      labelHeightMm = 51
+      break
+    case '4x6':
+      labelWidthMm = 102
+      labelHeightMm = 152
+      break
+    case '2x1':
+    default:
+      labelWidthMm = data.labelWidth || 51
+      labelHeightMm = data.labelHeight || 25
+      break
+  }
+
+  // Dispatcher: select the right generator based on label size
+  function generateLabel(item: ProductLabelItem): string {
+    switch (labelSize) {
+      case '3x2':
+        return generateSingleLabel3x2Zpl(item, includePrice)
+      case '4x6':
+        return generateSingleLabel4x6Zpl(item, includePrice)
+      case '2x1':
+      default:
+        return generateSingleLabelZpl(item, includePrice, labelWidthMm, labelHeightMm)
+    }
+  }
 
   // Check if bulk mode (multiple items)
   if (data.items && data.items.length > 0) {
     const allLabels: string[] = []
-    let totalLabels = 0
 
     for (const item of data.items) {
       const copies = item.copies || 1
-      const labelZpl = generateSingleLabelZpl(item, includePrice, labelWidthMm, labelHeightMm)
+      const labelZpl = generateLabel(item)
 
       // Add the label multiple times for copies
       for (let i = 0; i < copies; i++) {
         allLabels.push(labelZpl)
-        totalLabels++
       }
     }
 
@@ -181,10 +379,12 @@ export function generateProductLabelZpl(data: ProductLabelData): Buffer {
     barcodeType: data.barcodeType,
     price: data.price,
     priceCUP: data.priceCUP,
-    currency: data.currency
+    priceUSD: data.priceUSD,
+    currency: data.currency,
+    description: data.description
   }
 
-  const zplContent = generateSingleLabelZpl(singleItem, includePrice, labelWidthMm, labelHeightMm)
+  const zplContent = generateLabel(singleItem)
 
   return Buffer.from(zplContent, 'utf8')
 }
