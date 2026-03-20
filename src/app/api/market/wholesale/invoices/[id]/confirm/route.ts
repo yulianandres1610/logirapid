@@ -502,13 +502,12 @@ export async function POST(
             `Entrega mayorista - Cliente: ${invoice.customer_name}`, payload.userId])
           const operationId = opResult.rows[0].id
 
-          // Create delivery as DELIVERED
+          // Create delivery as PENDING — warehouse must validate and dispatch
           const delResult = await client.query(`
             INSERT INTO market_invoice_deliveries (
               invoice_id, delivery_number, warehouse_id, operation_id,
-              status, delivery_address, notes, created_by, created_at,
-              dispatched_at, delivered_at, dispatched_by, delivered_by
-            ) VALUES ($1, $2, $3, $4, 'delivered', $5, $6, $7, NOW(), NOW(), NOW(), $7, $7)
+              status, delivery_address, notes, created_by, created_at
+            ) VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, NOW())
             RETURNING id
           `, [invoiceId, deliveryNumber, warehouseId, operationId,
             invoice.customer_address || null,
@@ -566,9 +565,8 @@ export async function POST(
         const delResult = await client.query(`
           INSERT INTO market_invoice_deliveries (
             invoice_id, delivery_number, warehouse_id, operation_id,
-            status, delivery_address, notes, created_by, created_at,
-            dispatched_at, delivered_at, dispatched_by, delivered_by
-          ) VALUES ($1, $2, $3, $4, 'delivered', $5, $6, $7, NOW(), NOW(), NOW(), $7, $7)
+            status, delivery_address, notes, created_by, created_at
+          ) VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, NOW())
           RETURNING id
         `, [invoiceId, deliveryNumber, invoice.warehouse_id, operationId,
           invoice.customer_address || null,
@@ -618,12 +616,11 @@ export async function POST(
         `, [qty, line.id])
       }
 
-      // Update invoice status to delivered
+      // Update invoice status to confirmed (pending delivery from warehouse)
       await client.query(`
         UPDATE market_invoices SET
-          status = 'delivered',
+          status = 'confirmed',
           confirmed_at = COALESCE(confirmed_at, NOW()),
-          delivered_at = NOW(),
           updated_at = NOW()
         WHERE id = $1
       `, [invoiceId])
