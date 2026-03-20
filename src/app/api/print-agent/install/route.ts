@@ -294,25 +294,21 @@ if (-not $nodeInstalled) {
     Write-Host "  [!] Node.js no encontrado. Instalando automaticamente..."
     Write-Host ""
 
-    # Intentar con winget primero (Windows 10/11 moderno)
-    $wingetAvailable = $false
+    # Siempre usar MSI directo (mas confiable que winget)
+    Write-Host "  Descargando Node.js 20 LTS..."
+    $nodeInstallerUrl = "https://nodejs.org/dist/v20.18.1/node-v20.18.1-x64.msi"
+    $nodeInstallerPath = "$env:TEMP\\node-installer.msi"
     try {
-        $wv = & winget --version 2>$null
-        if ($wv) { $wingetAvailable = $true }
-    } catch {}
-
-    if ($wingetAvailable) {
-        Write-Host "  Instalando Node.js via winget..."
-        & winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements --silent 2>$null
-    } else {
-        # Descargar instalador MSI directamente
-        Write-Host "  Descargando Node.js LTS installer..."
-        $nodeInstallerUrl = "https://nodejs.org/dist/v20.18.1/node-v20.18.1-x64.msi"
-        $nodeInstallerPath = "$env:TEMP\\node-installer.msi"
         Invoke-WebRequest -Uri $nodeInstallerUrl -OutFile $nodeInstallerPath -UseBasicParsing
-        Write-Host "  Instalando Node.js (esto puede tomar un minuto)..."
+        Write-Host "  [OK] Descargado. Instalando (esto toma ~1 minuto)..."
         Start-Process msiexec.exe -ArgumentList "/i $nodeInstallerPath /qn /norestart" -Wait -NoNewWindow
         Remove-Item $nodeInstallerPath -ErrorAction SilentlyContinue
+        Write-Host "  [OK] Node.js instalado"
+    } catch {
+        Write-Host "  [!] Error descargando MSI. Intentando con winget..."
+        try {
+            & winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements --silent 2>$null
+        } catch {}
     }
 
     # Refrescar PATH completamente (Machine + User + rutas comunes de Node)
