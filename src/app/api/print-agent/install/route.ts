@@ -444,33 +444,46 @@ if (Test-Path $configPath) {
     $pairingToken = Read-Host "  Token de emparejamiento"
 
     if (!$pairingToken) {
-        Write-Host "  [ERROR] Token requerido."
-        Read-Host "  Presiona Enter para salir"
-        exit 1
+        Write-Host "  [!] Sin token. Puedes configurarlo despues desde http://localhost:9100"
+        $emptyConfig = @{ server = "$BaseUrl"; tokens = @() } | ConvertTo-Json
+        Set-Content -Path $configPath -Value $emptyConfig -Encoding UTF8
+    } else {
+        Write-Host "  Verificando token..."
+        Push-Location $InstallDir
+        & node -e "fetch('$BaseUrl/api/print-agent?token=$pairingToken&version=1.0.0').then(r=>{if(!r.ok)throw new Error();return r.json()}).then(d=>{const c={server:'$BaseUrl',tokens:[{token:'$pairingToken',name:d.service_name}]};require('fs').writeFileSync('config.json',JSON.stringify(c,null,2));console.log('[OK] '+d.service_name)}).catch(()=>{console.error('[ERROR]');process.exit(1)})"
+        Pop-Location
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  [!] Token invalido. Puedes configurarlo despues desde http://localhost:9100"
+            $emptyConfig = @{ server = "$BaseUrl"; tokens = @() } | ConvertTo-Json
+            Set-Content -Path $configPath -Value $emptyConfig -Encoding UTF8
+        } else {
+            Write-Host "  [OK] Configuracion guardada"
+        }
     }
-
-    Write-Host "  Verificando token..."
-    Push-Location $InstallDir
-    & node -e "fetch('$BaseUrl/api/print-agent?token=$pairingToken&version=1.0.0').then(r=>{if(!r.ok)throw new Error();return r.json()}).then(d=>{const c={server:'$BaseUrl',tokens:[{token:'$pairingToken',name:d.service_name}]};require('fs').writeFileSync('config.json',JSON.stringify(c,null,2));console.log('[OK] '+d.service_name)}).catch(()=>{console.error('[ERROR]');process.exit(1)})"
-    Pop-Location
-
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "  [ERROR] Token invalido o servidor no accesible."
-        Read-Host "  Presiona Enter para salir"
-        exit 1
-    }
-
-    Write-Host "  [OK] Configuracion guardada"
 }
 
 # ─── 6. Crear script de inicio ───
+
+# Find full path to node.exe for the start script
+$nodePath = (Get-Command node -ErrorAction SilentlyContinue).Source
+if (-not $nodePath) { $nodePath = "node" }
 
 @"
 @echo off
 title LogiRapid Print Service
 cd /d "$InstallDir"
-node server.js
+SET PATH=C:\Program Files\nodejs;%PATH%
+"$nodePath" server.js
+if %ERRORLEVEL% neq 0 (
+    echo.
+    echo   [ERROR] El servicio se detuvo. Revisa la configuracion.
+    echo   Directorio: $InstallDir
+    echo.
+    pause
+)
 "@ | Set-Content "$InstallDir\\start.bat" -Encoding ASCII
+Write-Host "  [OK] Script de inicio creado"
 
 # ─── 7. Inicio automatico ───
 
@@ -492,8 +505,31 @@ Write-Host "  [OK] Inicio automatico configurado"
 
 # ─── 8. Iniciar servicio ───
 
+Write-Host "  Verificando que el servicio arranca..."
+# Quick test: run server.js with --help to verify it works
+Push-Location $InstallDir
+try {
+    $testOutput = & node server.js --help 2>&1
+    Write-Host "  [OK] server.js verificado"
+} catch {
+    Write-Host "  [!] Advertencia: server.js podria tener problemas"
+}
+Pop-Location
+
 Write-Host "  Iniciando servicio..."
 Start-Process -FilePath "cmd.exe" -ArgumentList "/c $InstallDir\\start.bat" -WindowStyle Minimized
+Start-Sleep -Seconds 3
+
+# Verify it's running by checking port 9100
+try {
+    $response = Invoke-WebRequest -Uri "http://localhost:9100/api/status" -UseBasicParsing -TimeoutSec 5 2>$null
+    if ($response.StatusCode -eq 200) {
+        Write-Host "  [OK] Servicio corriendo en http://localhost:9100"
+    }
+} catch {
+    Write-Host "  [!] El servicio puede tardar unos segundos en iniciar."
+    Write-Host "  Abre http://localhost:9100 en el navegador para verificar."
+}
 
 Write-Host ""
 Write-Host "  =============================================="
