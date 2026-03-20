@@ -4,7 +4,7 @@ const path = require("path");
 const http = require("http");
 const { exec, execSync } = require("child_process");
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 const platform = os.platform();
 const INSTALL_DIR = path.join(os.homedir(), ".logirapid-print-service");
 const CONFIG_PATH = path.join(INSTALL_DIR, "config.json");
@@ -377,14 +377,120 @@ async function pollAll(config) {
 
 // ─── Auto-update ───
 
+let updateStatus = { available: false, version: null, updating: false, error: null, lastCheck: null };
+
 async function checkForUpdate(config) {
   try {
     const res = await fetch(`${config.server}/api/print-agent/version`);
     if (!res.ok) return null;
     const data = await res.json();
-    if (data.version && data.version !== VERSION) return data;
+    updateStatus.lastCheck = new Date().toISOString();
+    if (data.version && data.version !== VERSION) {
+      updateStatus.available = true;
+      updateStatus.version = data.version;
+      return data;
+    }
+    updateStatus.available = false;
+    updateStatus.version = null;
     return null;
   } catch { return null; }
+}
+
+async function performUpdate(config) {
+  if (updateStatus.updating) return { success: false, error: "Actualizacion en curso" };
+  updateStatus.updating = true;
+  updateStatus.error = null;
+
+  try {
+    const serverUrl = config.server;
+    const installDir = INSTALL_DIR;
+
+    // 1. Download new server.js
+    console.log("  [Update] Descargando nueva version...");
+    let newCode = null;
+    try {
+      const res = await fetch(`${serverUrl}/print-service/server.js`);
+      if (res.ok) newCode = await res.text();
+    } catch {}
+    if (!newCode) {
+      const res = await fetch(`${serverUrl}/api/print-agent/install/files?name=server.js`);
+      if (res.ok) newCode = await res.text();
+    }
+    if (!newCode) throw new Error("No se pudo descargar server.js");
+
+    // 2. Download new package.json
+    let newPkg = null;
+    try {
+      const res = await fetch(`${serverUrl}/print-service/package.json`);
+      if (res.ok) newPkg = await res.text();
+    } catch {}
+    if (!newPkg) {
+      const res = await fetch(`${serverUrl}/api/print-agent/install/files?name=package.json`);
+      if (res.ok) newPkg = await res.text();
+    }
+
+    // 3. Backup current files
+    const serverPath = path.join(installDir, "server.js");
+    const backupPath = path.join(installDir, "server.js.bak");
+    if (fs.existsSync(serverPath)) {
+      fs.copyFileSync(serverPath, backupPath);
+    }
+
+    // 4. Write new files
+    fs.writeFileSync(serverPath, newCode, "utf8");
+    if (newPkg) {
+      fs.writeFileSync(path.join(installDir, "package.json"), newPkg, "utf8");
+    }
+    console.log("  [Update] Archivos actualizados");
+
+    // 5. Install dependencies if package.json changed
+    if (newPkg) {
+      try {
+        console.log("  [Update] Instalando dependencias...");
+        execSync("npm install --omit=dev --silent", { cwd: installDir, stdio: "ignore", timeout: 30000 });
+      } catch {}
+    }
+
+    console.log("  [Update] Reiniciando servicio...");
+    updateStatus.updating = false;
+    updateStatus.available = false;
+
+    // 6. Restart the process
+    // On Windows use start.bat, on Mac/Linux use launchctl or direct node
+    setTimeout(() => {
+      if (platform === "win32") {
+        const startBat = path.join(installDir, "start.bat");
+        if (fs.existsSync(startBat)) {
+          exec(`start "" /min cmd /c "${startBat}"`, { cwd: installDir });
+        } else {
+          exec(`start "" /min cmd /c "cd /d ${installDir} && node server.js"`, { cwd: installDir });
+        }
+      } else if (platform === "darwin") {
+        try {
+          execSync('launchctl kickstart -k gui/$(id -u)/com.logirapid.print-service 2>/dev/null', { stdio: "ignore" });
+        } catch {
+          exec(`cd "${installDir}" && node server.js &`, { cwd: installDir });
+        }
+      } else {
+        exec(`cd "${installDir}" && node server.js &`, { cwd: installDir });
+      }
+      process.exit(0);
+    }, 500);
+
+    return { success: true, version: updateStatus.version };
+  } catch (err) {
+    // Restore backup if exists
+    const serverPath = path.join(INSTALL_DIR, "server.js");
+    const backupPath = path.join(INSTALL_DIR, "server.js.bak");
+    if (fs.existsSync(backupPath)) {
+      fs.copyFileSync(backupPath, serverPath);
+      console.log("  [Update] Restaurado desde backup");
+    }
+    updateStatus.updating = false;
+    updateStatus.error = err.message;
+    console.error("  [Update] Error:", err.message);
+    return { success: false, error: err.message };
+  }
 }
 
 // ─── Web UI ───
@@ -490,6 +596,19 @@ function getUIHtml() {
     <div id="history"></div>
   </div>
 
+  <!-- Update -->
+  <div class="section" id="update-section">
+    <h2>Actualizacion</h2>
+    <div class="row">
+      <label>Version actual</label>
+      <span style="font-size:12px;color:#71717a">v${VERSION}</span>
+    </div>
+    <div id="update-status"></div>
+    <div class="actions">
+      <button class="btn small" id="check-update-btn" onclick="checkUpdate()">Buscar actualizacion</button>
+    </div>
+  </div>
+
   <!-- Settings -->
   <div class="section">
     <h2>Configuracion</h2>
@@ -590,6 +709,60 @@ function renderHistory(jobs) {
   }).join('');
 }
 
+async function checkUpdate() {
+  const btn = document.getElementById('check-update-btn');
+  const el = document.getElementById('update-status');
+  btn.disabled = true;
+  btn.textContent = 'Buscando...';
+  el.innerHTML = '';
+  try {
+    const res = await fetch('/api/check-update');
+    const data = await res.json();
+    if (data.available) {
+      el.innerHTML = '<div class="msg success" style="display:flex;align-items:center;justify-content:space-between">' +
+        '<span>Nueva version disponible: <b>v' + data.version + '</b></span>' +
+        '<button class="btn primary small" onclick="doUpdate()">Actualizar ahora</button></div>';
+      btn.textContent = 'Nueva version: v' + data.version;
+    } else {
+      el.innerHTML = '<div class="msg success">Estas al dia (v${VERSION})</div>';
+      btn.textContent = 'Buscar actualizacion';
+      setTimeout(() => { el.innerHTML = ''; }, 3000);
+    }
+  } catch (e) {
+    el.innerHTML = '<div class="msg error">Error al buscar: ' + e.message + '</div>';
+    btn.textContent = 'Buscar actualizacion';
+  }
+  btn.disabled = false;
+}
+
+async function doUpdate() {
+  const el = document.getElementById('update-status');
+  el.innerHTML = '<div class="msg" style="background:rgba(5,128,240,0.1);color:#0580f0">Descargando e instalando... No cierres esta ventana.</div>';
+  try {
+    const res = await fetch('/api/update', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      el.innerHTML = '<div class="msg success">Actualizado a v' + data.version + '. Reiniciando servicio...</div>';
+      setTimeout(() => { location.reload(); }, 3000);
+    } else {
+      el.innerHTML = '<div class="msg error">Error: ' + data.error + '</div>';
+    }
+  } catch {
+    el.innerHTML = '<div class="msg success">Servicio reiniciando... Recargando en 5s.</div>';
+    setTimeout(() => { location.reload(); }, 5000);
+  }
+}
+
+function renderUpdateStatus(update) {
+  if (!update) return;
+  const el = document.getElementById('update-status');
+  if (update.available && !update.updating) {
+    el.innerHTML = '<div class="msg success" style="display:flex;align-items:center;justify-content:space-between">' +
+      '<span>Nueva version: <b>v' + update.version + '</b></span>' +
+      '<button class="btn primary small" onclick="doUpdate()">Actualizar ahora</button></div>';
+  }
+}
+
 async function refresh() {
   try {
     const res = await fetch('/api/status');
@@ -598,6 +771,7 @@ async function refresh() {
     renderPrinters(data.printers);
     renderHistory(data.history);
     updateAutoStartUI(data.autoStart);
+    renderUpdateStatus(data.update);
   } catch {}
 }
 
@@ -639,7 +813,34 @@ function createUIServer(config) {
         history: loadHistory(),
         pollStatus: lastPollStatus,
         autoStart: isAutoStartEnabled(),
+        update: updateStatus,
       }));
+      return;
+    }
+
+    if (url.pathname === "/api/check-update" && req.method === "GET") {
+      const current = loadConfig();
+      if (!current?.server) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ available: false, error: "Sin servidor configurado" }));
+        return;
+      }
+      const update = await checkForUpdate(current);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ available: !!update, version: update?.version || null }));
+      return;
+    }
+
+    if (url.pathname === "/api/update" && req.method === "POST") {
+      const current = loadConfig();
+      if (!current?.server) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success: false, error: "Sin servidor configurado" }));
+        return;
+      }
+      const result = await performUpdate(current);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(result));
       return;
     }
 
@@ -846,6 +1047,14 @@ async function main() {
 
   // Always start UI server (even without tokens, so user can configure via web)
   createUIServer(config);
+
+  // Check for updates on startup and every 30 minutes
+  if (config.server) {
+    checkForUpdate(config).then((u) => {
+      if (u) console.log(`  [!] Nueva version disponible: v${u.version} — Actualiza desde http://localhost:${UI_PORT}`);
+    });
+    setInterval(() => checkForUpdate(config), 30 * 60 * 1000);
+  }
 
   if (config.tokens?.length) {
     console.log(`  Esperando trabajos de impresion...\n`);
