@@ -279,15 +279,71 @@ Write-Host "   LogiRapid Print Service - Instalador Windows"
 Write-Host "  =============================================="
 Write-Host ""
 
-# ─── 1. Verificar Node.js ───
+# ─── 1. Verificar e instalar dependencias ───
 
+$nodeInstalled = $false
 try {
     $nodeVersion = & node -v 2>$null
-    Write-Host "  [OK] Node.js: $nodeVersion"
-} catch {
-    Write-Host "  [ERROR] Node.js no esta instalado."
-    Write-Host "  Descargalo de: https://nodejs.org/"
+    if ($nodeVersion) {
+        Write-Host "  [OK] Node.js: $nodeVersion"
+        $nodeInstalled = $true
+    }
+} catch {}
+
+if (-not $nodeInstalled) {
+    Write-Host "  [!] Node.js no encontrado. Instalando automaticamente..."
     Write-Host ""
+
+    # Intentar con winget primero (Windows 10/11 moderno)
+    $wingetAvailable = $false
+    try {
+        $wv = & winget --version 2>$null
+        if ($wv) { $wingetAvailable = $true }
+    } catch {}
+
+    if ($wingetAvailable) {
+        Write-Host "  Instalando Node.js via winget..."
+        & winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements --silent 2>$null
+        # Refrescar PATH
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+    } else {
+        # Descargar instalador MSI directamente
+        Write-Host "  Descargando Node.js LTS installer..."
+        $nodeInstallerUrl = "https://nodejs.org/dist/v20.18.1/node-v20.18.1-x64.msi"
+        $nodeInstallerPath = "$env:TEMP\\node-installer.msi"
+        Invoke-WebRequest -Uri $nodeInstallerUrl -OutFile $nodeInstallerPath -UseBasicParsing
+        Write-Host "  Instalando Node.js (esto puede tomar un minuto)..."
+        Start-Process msiexec.exe -ArgumentList "/i $nodeInstallerPath /qn /norestart" -Wait -NoNewWindow
+        Remove-Item $nodeInstallerPath -ErrorAction SilentlyContinue
+        # Refrescar PATH
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+    }
+
+    # Verificar instalacion
+    try {
+        $nodeVersion = & node -v 2>$null
+        if ($nodeVersion) {
+            Write-Host "  [OK] Node.js instalado: $nodeVersion"
+        } else {
+            throw "node not found"
+        }
+    } catch {
+        Write-Host ""
+        Write-Host "  [ERROR] No se pudo instalar Node.js automaticamente."
+        Write-Host "  Descargalo manualmente de: https://nodejs.org/"
+        Write-Host "  Despues ejecuta este instalador de nuevo."
+        Write-Host ""
+        Read-Host "  Presiona Enter para salir"
+        exit 1
+    }
+}
+
+# Verificar npm
+try {
+    $npmVersion = & npm -v 2>$null
+    Write-Host "  [OK] npm: $npmVersion"
+} catch {
+    Write-Host "  [ERROR] npm no encontrado. Reinstala Node.js desde https://nodejs.org/"
     Read-Host "  Presiona Enter para salir"
     exit 1
 }
