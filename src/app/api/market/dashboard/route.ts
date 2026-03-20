@@ -202,6 +202,19 @@ export async function GET(request: NextRequest) {
       WHERE company_id = $1 AND status IN ('paid', 'completed')
     `, [companyId])
 
+    // Get wholesale sales statistics (from market_invoices)
+    const wholesaleSales = await safeQuery(`
+      SELECT
+        COALESCE(SUM(total_amount) FILTER (WHERE DATE(created_at) = CURRENT_DATE), 0) as sales_today,
+        COUNT(*) FILTER (WHERE DATE(created_at) = CURRENT_DATE) as invoices_today,
+        COALESCE(SUM(total_amount) FILTER (WHERE DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)), 0) as sales_month,
+        COUNT(*) FILTER (WHERE DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)) as invoices_month,
+        COALESCE(SUM(total_amount) FILTER (WHERE DATE_TRUNC('year', created_at) = DATE_TRUNC('year', CURRENT_DATE)), 0) as sales_year,
+        COUNT(*) FILTER (WHERE DATE_TRUNC('year', created_at) = DATE_TRUNC('year', CURRENT_DATE)) as invoices_year
+      FROM market_invoices
+      WHERE company_id = $1 AND status NOT IN ('cancelled', 'draft')
+    `, [companyId])
+
     // Get POS sales by terminal
     const posByTerminal = await safeQuery(`
       SELECT
@@ -321,6 +334,19 @@ export async function GET(request: NextRequest) {
           ordersMonth: parseInt(posSales.rows[0]?.orders_month) || 0,
           year: parseFloat(posSales.rows[0]?.sales_year) || 0,
           ordersYear: parseInt(posSales.rows[0]?.orders_year) || 0
+        },
+        wholesaleSales: {
+          today: parseFloat(wholesaleSales.rows[0]?.sales_today) || 0,
+          invoicesToday: parseInt(wholesaleSales.rows[0]?.invoices_today) || 0,
+          month: parseFloat(wholesaleSales.rows[0]?.sales_month) || 0,
+          invoicesMonth: parseInt(wholesaleSales.rows[0]?.invoices_month) || 0,
+          year: parseFloat(wholesaleSales.rows[0]?.sales_year) || 0,
+          invoicesYear: parseInt(wholesaleSales.rows[0]?.invoices_year) || 0
+        },
+        totalSales: {
+          today: (parseFloat(posSales.rows[0]?.sales_today) || 0) + (parseFloat(wholesaleSales.rows[0]?.sales_today) || 0),
+          month: (parseFloat(posSales.rows[0]?.sales_month) || 0) + (parseFloat(wholesaleSales.rows[0]?.sales_month) || 0),
+          year: (parseFloat(posSales.rows[0]?.sales_year) || 0) + (parseFloat(wholesaleSales.rows[0]?.sales_year) || 0),
         },
         posByTerminal: posByTerminal.rows.map(row => ({
           terminalId: row.terminal_id,
