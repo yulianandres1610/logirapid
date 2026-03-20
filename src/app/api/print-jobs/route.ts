@@ -63,12 +63,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve the best matching print service
-    // Priority: 1) exact POS terminal match, 2) exact warehouse match, 3) any service with no location, 4) any active service
+    // Priority: 1) has printer_mapping for this document type, 2) POS terminal match, 3) warehouse match, 4) any active
     const serviceResult = await db.query(
-      `SELECT id, selected_printer, printer_type FROM print_services
+      `SELECT id, selected_printer, printer_type, printer_mappings FROM print_services
        WHERE company_id = $1 AND status = 'active'
        ORDER BY
          CASE
+           WHEN printer_mappings IS NOT NULL AND printer_mappings ? $4 THEN 0
            WHEN pos_terminal_id IS NOT NULL AND pos_terminal_id = $3 THEN 1
            WHEN warehouse_id IS NOT NULL AND warehouse_id = $2 THEN 2
            WHEN warehouse_id IS NULL AND pos_terminal_id IS NULL THEN 3
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
          END,
          last_seen_at DESC NULLS LAST
        LIMIT 1`,
-      [companyId, warehouseId, posTerminalId]
+      [companyId, warehouseId, posTerminalId, documentType]
     )
 
     if (serviceResult.rows.length === 0) {
