@@ -144,20 +144,94 @@ async function listPrinters() {
 }
 
 async function listPrintersWindows() {
+  // Method 1: Get-CimInstance (works on all Windows editions)
   try {
-    const raw = await execAsync('powershell -Command "Get-Printer | Select-Object Name, PrinterStatus, IsDefault | ConvertTo-Json"');
-    const parsed = JSON.parse(raw);
-    const arr = Array.isArray(parsed) ? parsed : [parsed];
-    return arr.map((p) => ({ name: p.Name, isDefault: p.IsDefault || false, status: p.PrinterStatus === 0 || p.PrinterStatus === "Normal" ? "idle" : "error" }));
-  } catch {
-    try {
-      const raw = await execAsync("wmic printer get Name,Default,PrinterStatus /format:csv");
-      return raw.split("\n").filter((l) => l.trim() && !l.startsWith("Node")).map((line) => {
-        const p = line.split(",");
-        return { name: p[2]?.trim() || "Unknown", isDefault: p[1]?.trim() === "TRUE", status: "idle" };
-      }).filter((p) => p.name !== "Unknown");
-    } catch { return []; }
+    const raw = await execAsync(
+      'powershell.exe -NoProfile -Command "' +
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ' +
+      'Get-CimInstance -ClassName Win32_Printer | Select-Object Name, PrinterStatus, Default | ConvertTo-Json -Compress' +
+      '"'
+    );
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const arr = Array.isArray(parsed) ? parsed : [parsed];
+      return arr.map((p) => ({
+        name: p.Name,
+        isDefault: p.Default || false,
+        status: p.PrinterStatus === 0 || p.PrinterStatus === 3 ? "idle" : "error",
+      }));
+    }
+  } catch (e) {
+    console.log("  [Printers] Get-CimInstance failed:", e.message);
   }
+
+  // Method 2: Get-Printer (Pro/Enterprise only)
+  try {
+    const raw = await execAsync(
+      'powershell.exe -NoProfile -Command "' +
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ' +
+      'Get-Printer | Select-Object Name, PrinterStatus, IsDefault | ConvertTo-Json -Compress' +
+      '"'
+    );
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const arr = Array.isArray(parsed) ? parsed : [parsed];
+      return arr.map((p) => ({
+        name: p.Name,
+        isDefault: p.IsDefault || false,
+        status: p.PrinterStatus === 0 || p.PrinterStatus === "Normal" ? "idle" : "error",
+      }));
+    }
+  } catch (e) {
+    console.log("  [Printers] Get-Printer failed:", e.message);
+  }
+
+  // Method 3: .NET System.Drawing.Printing (works even without WMI/CIM)
+  try {
+    const raw = await execAsync(
+      'powershell.exe -NoProfile -Command "' +
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ' +
+      'Add-Type -AssemblyName System.Drawing; ' +
+      '[System.Drawing.Printing.PrinterSettings]::InstalledPrinters | ForEach-Object { ' +
+      '  $s = New-Object System.Drawing.Printing.PrinterSettings; $s.PrinterName = $_; ' +
+      '  [PSCustomObject]@{ Name = $_; IsDefault = $s.IsDefaultPrinter; IsValid = $s.IsValid } ' +
+      '} | ConvertTo-Json -Compress' +
+      '"'
+    );
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const arr = Array.isArray(parsed) ? parsed : [parsed];
+      return arr.filter((p) => p.IsValid).map((p) => ({
+        name: p.Name,
+        isDefault: p.IsDefault || false,
+        status: "idle",
+      }));
+    }
+  } catch (e) {
+    console.log("  [Printers] .NET fallback failed:", e.message);
+  }
+
+  // Method 4: wmic legacy (very old Windows)
+  try {
+    const raw = await execAsync("wmic printer get Name,Default,PrinterStatus /format:csv");
+    const lines = raw.split("\n").filter((l) => l.trim() && !l.startsWith("Node"));
+    if (lines.length > 1) {
+      const header = lines[0].split(",").map((h) => h.trim());
+      const nameIdx = header.indexOf("Name");
+      const defaultIdx = header.indexOf("Default");
+      const statusIdx = header.indexOf("PrinterStatus");
+      return lines.slice(1).map((line) => {
+        const cols = line.split(",").map((c) => c.trim());
+        return {
+          name: nameIdx >= 0 ? cols[nameIdx] : cols[2] || "Unknown",
+          isDefault: defaultIdx >= 0 ? cols[defaultIdx] === "TRUE" : false,
+          status: "idle",
+        };
+      }).filter((p) => p.name && p.name !== "Unknown");
+    }
+  } catch {}
+
+  return [];
 }
 
 async function listPrintersMac() {
