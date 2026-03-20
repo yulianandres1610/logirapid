@@ -73,18 +73,25 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve the best matching print service
+    // Priority: 1) exact POS terminal match, 2) exact warehouse match, 3) any service with no location, 4) any active service
     const serviceResult = await db.query(
       `SELECT id, selected_printer, printer_type FROM print_services
        WHERE company_id = $1 AND status = 'active'
-       AND (warehouse_id = $2 OR pos_terminal_id = $3 OR (warehouse_id IS NULL AND pos_terminal_id IS NULL))
-       ORDER BY CASE WHEN pos_terminal_id = $3 THEN 1 WHEN warehouse_id = $2 THEN 2 ELSE 3 END
+       ORDER BY
+         CASE
+           WHEN pos_terminal_id IS NOT NULL AND pos_terminal_id = $3 THEN 1
+           WHEN warehouse_id IS NOT NULL AND warehouse_id = $2 THEN 2
+           WHEN warehouse_id IS NULL AND pos_terminal_id IS NULL THEN 3
+           ELSE 4
+         END,
+         last_seen_at DESC NULLS LAST
        LIMIT 1`,
       [companyId, warehouseId, posTerminalId]
     )
 
     if (serviceResult.rows.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'No hay servicio de impresión activo para esta ubicación' },
+        { success: false, error: 'No hay servicio de impresión activo. Crea uno en Configuración > Impresión.' },
         { status: 404 }
       )
     }

@@ -80,7 +80,7 @@ export async function GET() {
       warehouseName: row.warehouse_name || null,
       createdAt: row.created_at,
       online: row.last_seen_at
-        ? (now.getTime() - new Date(row.last_seen_at).getTime()) < 30000
+        ? (now.getTime() - new Date(row.last_seen_at).getTime()) < 300000
         : false
     }))
 
