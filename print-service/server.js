@@ -4,7 +4,7 @@ const path = require("path");
 const http = require("http");
 const { exec, execSync } = require("child_process");
 
-const VERSION = "1.1.3";
+const VERSION = "1.1.4";
 const platform = os.platform();
 const INSTALL_DIR = path.join(os.homedir(), ".logirapid-print-service");
 const CONFIG_PATH = path.join(INSTALL_DIR, "config.json");
@@ -69,7 +69,7 @@ function addToHistory(job, status, errorMessage) {
 
 function execAsync(cmd) {
   return new Promise((resolve, reject) => {
-    exec(cmd, { encoding: "utf8", maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
+    exec(cmd, { encoding: "utf8", maxBuffer: 5 * 1024 * 1024, windowsHide: true }, (err, stdout) => {
       if (err) return reject(err);
       resolve(stdout.trim());
     });
@@ -151,22 +151,26 @@ function getPowerShellPath() {
   return "powershell.exe"; // fallback to PATH
 }
 
-// Execute command using PowerShell as the shell directly (bypasses cmd.exe entirely)
+// Execute command using PowerShell directly (bypasses cmd.exe, hidden window)
 function execPS(cmd, timeout = 15000) {
   const psPath = getPowerShellPath();
   return new Promise((resolve, reject) => {
-    exec(cmd, {
-      shell: psPath,
-      encoding: "utf8",
-      maxBuffer: 5 * 1024 * 1024,
+    const child = require("child_process").spawn(psPath, ["-NoProfile", "-NoLogo", "-Command", cmd], {
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
       timeout,
-    }, (err, stdout, stderr) => {
-      if (err) {
-        console.log(`  [PS] Command failed: ${cmd.substring(0, 80)}...`);
-        console.log(`  [PS] Error: ${(stderr || err.message || "").substring(0, 200)}`);
-        return reject(err);
+    });
+    let stdout = "", stderr = "";
+    child.stdout.on("data", (d) => stdout += d);
+    child.stderr.on("data", (d) => stderr += d);
+    child.on("error", (err) => reject(err));
+    child.on("close", (code) => {
+      if (code !== 0) {
+        console.log(`  [PS] Command failed (code ${code}): ${cmd.substring(0, 80)}...`);
+        if (stderr) console.log(`  [PS] stderr: ${stderr.substring(0, 200)}`);
+        return reject(new Error(stderr || `Exit code ${code}`));
       }
-      resolve((stdout || "").trim());
+      resolve(stdout.trim());
     });
   });
 }
