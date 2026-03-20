@@ -98,10 +98,9 @@ export async function GET(
         LEFT JOIN market_wholesale_customers c ON c.id = i.customer_id
         LEFT JOIN users u ON u.id = d.created_by
         WHERE d.warehouse_id = $1
-          AND i.company_id = $2
           AND d.status IN ('pending', 'dispatched')
         ORDER BY d.created_at DESC
-      `, [warehouseId, payload.companyId])
+      `, [warehouseId])
 
       // Get lines for each delivery
       deliveries = await Promise.all(
