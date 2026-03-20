@@ -49,7 +49,8 @@ import {
   ChevronRight,
   Tag,
   Receipt,
-  FileText
+  FileText,
+  Terminal
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -1281,1334 +1282,600 @@ export default function MarketSettingsPage() {
   )
 }
 
-// Printer configuration constants
-const ALL_DOCUMENT_TYPES = [
-  { id: 'pos_receipt', label: 'Recibo POS', description: 'Recibos de punto de venta' },
-  { id: 'purchase_invoice', label: 'Factura de Compra', description: 'Facturas de proveedores' },
-  { id: 'sales_report', label: 'Reporte de Ventas', description: 'Reportes de ventas diarias' },
-  { id: 'cash_register_report', label: 'Reporte de Caja', description: 'Arqueos y cierres de caja' },
-  { id: 'inventory_count_report', label: 'Reporte de Conteo', description: 'Conteos de inventario' },
-  { id: 'invoice', label: 'Factura', description: 'Facturas generales' },
-  { id: 'product_label', label: 'Etiqueta Producto', description: 'Etiquetas de productos' },
-  { id: 'shipping_label', label: 'Etiqueta Envío', description: 'Etiquetas de paquetes' },
-  { id: 'warehouse_operation', label: 'Operación Almacén', description: 'Documentos de almacén' },
-  { id: 'consignment_receipt', label: 'Recibo Consignación', description: 'Recibos de consignación' },
-  { id: 'unified_reception', label: 'Recepción Unificada', description: 'Documentos de recepción' }
-]
 
+// Printer configuration constants
 const PRINTER_TYPES = [
-  { id: 'thermal_80mm', label: 'Térmica 80mm', description: 'Impresora de recibos' },
-  { id: 'label_4x6', label: 'Etiquetas 4x6', description: 'Impresora de etiquetas de envío' },
-  { id: 'label_barcode', label: 'Código de Barras', description: 'Impresora de etiquetas pequeñas' },
-  { id: 'standard', label: 'Estándar', description: 'Impresora de documentos' }
+  { id: 'thermal_80mm', label: 'Térmica 80mm', description: 'Impresora térmica de recibos' },
+  { id: 'thermal_58mm', label: 'Térmica 58mm', description: 'Impresora térmica compacta' },
+  { id: 'label_zebra', label: 'Zebra (ZPL)', description: 'Impresora de etiquetas Zebra' },
+  { id: 'label_tspl', label: 'TSC/TSPL', description: 'Impresora de etiquetas TSC' },
+  { id: 'standard', label: 'Estándar/Láser', description: 'Impresora de documentos PDF' }
 ]
 
 // Print Services Tab Component
 function PrintServicesTab({ theme }: { theme: string }) {
   const [services, setServices] = useState<any[]>([])
+  const [warehouses, setWarehouses] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showCredentialsModal, setShowCredentialsModal] = useState(false)
-  const [showDetailsModal, setShowDetailsModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [selectedService, setSelectedService] = useState<any>(null)
-  const [newCredentials, setNewCredentials] = useState<{ serviceCode: string; apiKey: string; apiSecret: string } | null>(null)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null)
+  const [createdToken, setCreatedToken] = useState('')
+  const [createdName, setCreatedName] = useState('')
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [formData, setFormData] = useState({
+    name: '',
+    warehouse_id: '',
+    printer_type: 'thermal_80mm'
+  })
   const [creating, setCreating] = useState(false)
-  const [updating, setUpdating] = useState(false)
-  const [regenerating, setRegenerating] = useState(false)
-  const [serviceName, setServiceName] = useState('')
-  const [editServiceName, setEditServiceName] = useState('')
-  const [actionMenuOpen, setActionMenuOpen] = useState<number | null>(null)
-  const [copied, setCopied] = useState<string | null>(null)
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
-  // Printer configuration state
-  const [showPrinterConfigModal, setShowPrinterConfigModal] = useState(false)
-  const [selectedPrinter, setSelectedPrinter] = useState<any>(null)
-  const [printerConfig, setPrinterConfig] = useState<{
-    printerType: string
-    supportedDocumentTypes: string[]
-  }>({ printerType: 'standard', supportedDocumentTypes: [] })
-  const [savingPrinter, setSavingPrinter] = useState(false)
-  const [refreshingPrinters, setRefreshingPrinters] = useState(false)
+  const isDark = theme === 'dark'
+
+  const fetchServices = async () => {
+    try {
+      setLoading(true)
+      const res = await fetch('/api/print-services')
+      const json = await res.json()
+      if (json.success) {
+        setServices(json.data || [])
+      }
+    } catch (err) {
+      console.error('Error fetching print services:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchWarehouses = async () => {
+    try {
+      const res = await fetch('/api/market/warehouses')
+      const json = await res.json()
+      if (json.success) {
+        setWarehouses(json.data || [])
+      }
+    } catch (err) {
+      console.error('Error fetching warehouses:', err)
+    }
+  }
 
   useEffect(() => {
     fetchServices()
+    fetchWarehouses()
   }, [])
 
-  useEffect(() => {
-    if (message) {
-      const timer = setTimeout(() => setMessage(null), 4000)
-      return () => clearTimeout(timer)
-    }
-  }, [message])
-
-  // Print services are now resolved automatically by the server via /api/print-jobs
-  const fetchServices = async () => {
-    setLoading(true)
-    setServices([])
-    setLoading(false)
-  }
-
-  const fetchServiceDetails = async (id: number) => {
-    // Print services API no longer exists - resolved automatically by server
-    console.log(`[Settings] fetchServiceDetails(${id}) - print services now managed via tokens`)
-    return null
-  }
-
-  const handleCreateService = async (e: React.FormEvent) => {
-    e.preventDefault()
-    // Print services API no longer exists - managed via tokens
-    setMessage({ type: 'error', text: 'La gestión de servicios de impresión ahora se realiza mediante tokens' })
-  }
-
-  const handleViewDetails = async (service: any) => {
-    setActionMenuOpen(null)
-    const details = await fetchServiceDetails(service.id)
-    if (details) {
-      setSelectedService({ ...service, ...details.service, printers: details.printers })
-      setShowDetailsModal(true)
-    }
-  }
-
-  const refreshPrinters = async () => {
-    // Print services API no longer exists - managed via tokens
-    setMessage({ type: 'error', text: 'La gestión de servicios de impresión ahora se realiza mediante tokens' })
-  }
-
-  const handleEditService = (service: any) => {
-    setActionMenuOpen(null)
-    setSelectedService(service)
-    setEditServiceName(service.serviceName)
-    setShowEditModal(true)
-  }
-
-  const handleSaveEdit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    // Print services API no longer exists - managed via tokens
-    setMessage({ type: 'error', text: 'La gestión de servicios de impresión ahora se realiza mediante tokens' })
-  }
-
-  const handleRegenerateCredentials = async () => {
-    // Print services API no longer exists - managed via tokens
-    setMessage({ type: 'error', text: 'La gestión de servicios de impresión ahora se realiza mediante tokens' })
-  }
-
-  const handleDeleteService = async (id: number, name: string) => {
-    // Print services API no longer exists - managed via tokens
-    setMessage({ type: 'error', text: 'La gestión de servicios de impresión ahora se realiza mediante tokens' })
-  }
-
-  const copyToClipboard = (text: string, field: string) => {
-    navigator.clipboard.writeText(text)
-    setCopied(field)
-    setTimeout(() => setCopied(null), 2000)
-  }
-
-  // Printer configuration functions
-  const openPrinterConfig = (printer: any) => {
-    setSelectedPrinter(printer)
-    setPrinterConfig({
-      printerType: printer.printerType || 'standard',
-      supportedDocumentTypes: printer.supportedDocumentTypes || ALL_DOCUMENT_TYPES.map(t => t.id)
-    })
-    setShowPrinterConfigModal(true)
-  }
-
-  const handleSavePrinterConfig = async () => {
-    // Print services API no longer exists - managed via tokens
-    setMessage({ type: 'error', text: 'La gestión de servicios de impresión ahora se realiza mediante tokens' })
-    setShowPrinterConfigModal(false)
-    return
-    // Dead code below preserved for reference
-    if (!selectedPrinter || !selectedService) return
-
-    setSavingPrinter(true)
+  const handleCreate = async () => {
+    if (!formData.name.trim()) return
     try {
-      const response = await fetch(`/api/print/services/${selectedService.id}/printers/${selectedPrinter.id}`, {
-        method: 'PUT',
+      setCreating(true)
+      const res = await fetch('/api/print-services', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          printerType: printerConfig.printerType,
-          supportedDocumentTypes: printerConfig.supportedDocumentTypes
-        })
+        body: JSON.stringify(formData)
       })
-
-      const data = await response.json()
-
-      if (response.ok && data.success) {
-        setMessage({ type: 'success', text: 'Configuración de impresora actualizada' })
-        setShowPrinterConfigModal(false)
-        // Refresh service details
-        const details = await fetchServiceDetails(selectedService.id)
-        if (details) {
-          setSelectedService({ ...selectedService, ...details.service, printers: details.printers })
-        }
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Error al guardar configuración' })
+      const json = await res.json()
+      if (json.success) {
+        setCreatedToken(json.data?.token || '')
+        setCreatedName(formData.name)
+        setShowCreateModal(false)
+        setShowSuccessModal(true)
+        setFormData({ name: '', warehouse_id: '', printer_type: 'thermal_80mm' })
+        fetchServices()
       }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Error al guardar configuración de impresora' })
+    } catch (err) {
+      console.error('Error creating print service:', err)
     } finally {
-      setSavingPrinter(false)
+      setCreating(false)
     }
   }
 
-  const toggleDocumentType = (docType: string) => {
-    setPrinterConfig(prev => ({
-      ...prev,
-      supportedDocumentTypes: prev.supportedDocumentTypes.includes(docType)
-        ? prev.supportedDocumentTypes.filter(t => t !== docType)
-        : [...prev.supportedDocumentTypes, docType]
-    }))
-  }
-
-  const formatLastSeen = (date: string | null) => {
-    if (!date) return 'Nunca'
-    const d = new Date(date)
-    const diff = Date.now() - d.getTime()
-    if (diff < 60000) return 'Hace menos de 1 min'
-    if (diff < 3600000) return `Hace ${Math.floor(diff / 60000)} min`
-    if (diff < 86400000) return `Hace ${Math.floor(diff / 3600000)} horas`
-    return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
-  }
-
-  const getStatusBadge = (status: string, lastSeenAt: string | null) => {
-    const isRecentlyActive = lastSeenAt && (Date.now() - new Date(lastSeenAt).getTime()) < 2 * 60 * 1000
-
-    if (status === 'active' && isRecentlyActive) {
-      return (
-        <span className={cn(
-          "inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full",
-          theme === 'dark' ? 'bg-green-900/40 text-green-400 border border-green-800' : 'bg-green-100 text-green-800'
-        )}>
-          <Wifi className="w-3 h-3" />
-          En línea
-        </span>
-      )
-    } else if (status === 'pending') {
-      return (
-        <span className={cn(
-          "inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full",
-          theme === 'dark' ? 'bg-amber-900/40 text-amber-400 border border-amber-800' : 'bg-amber-100 text-amber-800'
-        )}>
-          <Clock className="w-3 h-3" />
-          Pendiente
-        </span>
-      )
-    } else {
-      return (
-        <span className={cn(
-          "inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full",
-          theme === 'dark' ? 'bg-gray-700 text-gray-300 border border-gray-600' : 'bg-gray-100 text-gray-600'
-        )}>
-          <WifiOff className="w-3 h-3" />
-          Desconectado
-        </span>
-      )
+  const handleDelete = async (id: number) => {
+    try {
+      setDeleting(true)
+      const res = await fetch(`/api/print-services?id=${id}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.success) {
+        setShowDeleteConfirm(null)
+        fetchServices()
+      }
+    } catch (err) {
+      console.error('Error deleting print service:', err)
+    } finally {
+      setDeleting(false)
     }
+  }
+
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text)
+    setCopiedId(id)
+    setTimeout(() => setCopiedId(null), 2000)
+  }
+
+  const truncateToken = (token: string) => {
+    if (!token) return '---'
+    if (token.length <= 16) return token
+    return token.substring(0, 8) + '...' + token.substring(token.length - 8)
+  }
+
+  const getOnlineStatus = (lastSeenAt: string | null) => {
+    if (!lastSeenAt) return { online: false, label: 'Nunca conectado' }
+    const diff = Date.now() - new Date(lastSeenAt).getTime()
+    const minutes = diff / 1000 / 60
+    if (minutes < 5) return { online: true, label: 'En línea' }
+    if (minutes < 60) return { online: false, label: `Hace ${Math.floor(minutes)} min` }
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return { online: false, label: `Hace ${hours}h` }
+    return { online: false, label: `Hace ${Math.floor(hours / 24)}d` }
+  }
+
+  const getPrinterTypeLabel = (typeId: string) => {
+    return PRINTER_TYPES.find(t => t.id === typeId)?.label || typeId
   }
 
   return (
     <motion.div
-      key="print"
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 20 }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      {/* Message Toast */}
-      <AnimatePresence>
-        {message && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className={cn(
-              "p-4 rounded-xl flex items-center gap-3",
-              message.type === 'success'
-                ? theme === 'dark' ? 'bg-green-900/40 border border-green-700 text-green-300' : 'bg-green-50 border border-green-200 text-green-800'
-                : theme === 'dark' ? 'bg-red-900/40 border border-red-700 text-red-300' : 'bg-red-50 border border-red-200 text-red-800'
-            )}
-          >
-            {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
-            <p className="text-sm">{message.text}</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className={cn(
-        "rounded-2xl border p-6 shadow-lg",
-        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-      )}>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className={cn(
-            "text-lg font-bold flex items-center gap-3",
-            theme === 'dark' ? 'text-white' : 'text-gray-900'
-          )}>
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/25">
-              <Printer className="w-5 h-5 text-white" />
-            </div>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
             Servicios de Impresión
           </h2>
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+            Gestiona los agentes de impresión conectados a tu tienda
+          </p>
+        </div>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          Nuevo Servicio
+        </button>
+      </div>
+
+      {/* Services List */}
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+        </div>
+      ) : services.length === 0 ? (
+        <div className={`rounded-xl border ${isDark ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'} p-12 text-center`}>
+          <Server className={`w-12 h-12 mx-auto mb-4 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} />
+          <h3 className={`text-lg font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            No hay servicios de impresión
+          </h3>
+          <p className={`text-sm mb-6 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+            Crea un servicio de impresión para conectar un agente a tu tienda
+          </p>
+          <button
             onClick={() => setShowCreateModal(true)}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-all shadow-lg",
-              theme === 'dark'
-                ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/25'
-                : 'bg-purple-500 hover:bg-purple-600 text-white shadow-purple-500/25'
-            )}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Nuevo Servicio
-          </motion.button>
+            Crear Servicio
+          </button>
         </div>
+      ) : (
+        <div className="grid gap-4">
+          {services.map((service) => {
+            const status = getOnlineStatus(service.last_seen_at)
+            const agentPrinters = service.agent_printers ? (typeof service.agent_printers === 'string' ? JSON.parse(service.agent_printers) : service.agent_printers) : []
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          {/* Download App Card */}
-          <div className={cn(
-            "p-4 rounded-xl border",
-            theme === 'dark' ? 'bg-gradient-to-br from-green-900/40 to-emerald-900/40 border-green-700' : 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200'
-          )}>
-            <div className="flex items-start gap-3">
-              <div className={cn(
-                "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
-                theme === 'dark' ? 'bg-green-800' : 'bg-green-100'
-              )}>
-                <Download className={cn("w-5 h-5", theme === 'dark' ? 'text-green-400' : 'text-green-600')} />
-              </div>
-              <div className="flex-1">
-                <h3 className={cn("font-semibold", theme === 'dark' ? 'text-green-200' : 'text-green-900')}>
-                  Descargar LogiRapid Print Service
-                </h3>
-                <p className={cn("text-sm mt-1", theme === 'dark' ? 'text-green-300' : 'text-green-700')}>
-                  Aplicación para Windows y Mac que permite imprimir recibos y etiquetas automáticamente
-                </p>
-                <div className="flex flex-wrap gap-2 mt-3">
-                  <a
-                    href="https://github.com/yulianandres1610/logirapid/releases/latest"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={cn(
-                      "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-                      theme === 'dark'
-                        ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white'
-                    )}
-                  >
-                    <Download className="w-4 h-4" />
-                    Windows (.exe)
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                  <a
-                    href="https://github.com/yulianandres1610/logirapid/releases/latest"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={cn(
-                      "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-                      theme === 'dark'
-                        ? 'bg-gray-600 hover:bg-gray-500 text-white'
-                        : 'bg-gray-700 hover:bg-gray-800 text-white'
-                    )}
-                  >
-                    <Download className="w-4 h-4" />
-                    macOS (.dmg)
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Admin Link Card */}
-          <div className={cn(
-            "p-4 rounded-xl border",
-            theme === 'dark' ? 'bg-gradient-to-br from-purple-900/40 to-indigo-900/40 border-purple-700' : 'bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-200'
-          )}>
-            <div className="flex items-start gap-3">
-              <div className={cn(
-                "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
-                theme === 'dark' ? 'bg-purple-800' : 'bg-purple-100'
-              )}>
-                <Settings className={cn("w-5 h-5", theme === 'dark' ? 'text-purple-400' : 'text-purple-600')} />
-              </div>
-              <div className="flex-1">
-                <h3 className={cn("font-semibold", theme === 'dark' ? 'text-purple-200' : 'text-purple-900')}>
-                  Administrador de Impresoras
-                </h3>
-                <p className={cn("text-sm mt-1", theme === 'dark' ? 'text-purple-300' : 'text-purple-700')}>
-                  Configura impresoras de tickets, etiquetas y documentos. Asigna tipos de documento a cada impresora.
-                </p>
-                <a
-                  href="/dashboard/market/print-services"
-                  className={cn(
-                    "inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-                    theme === 'dark'
-                      ? 'bg-purple-600 hover:bg-purple-500 text-white'
-                      : 'bg-purple-600 hover:bg-purple-700 text-white'
-                  )}
-                >
-                  <Settings className="w-4 h-4" />
-                  Ir al Administrador
-                  <ChevronRight className="w-4 h-4" />
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Printer Types Info */}
-        <div className={cn(
-          "p-4 rounded-xl mb-6 border",
-          theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'
-        )}>
-          <h3 className={cn("font-semibold mb-3 flex items-center gap-2", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-            <Tag className="w-4 h-4" />
-            Tipos de Impresoras Soportadas
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {PRINTER_TYPES.map((type) => (
-              <div
-                key={type.id}
-                className={cn(
-                  "flex items-center gap-3 p-3 rounded-lg",
-                  theme === 'dark' ? 'bg-gray-900/60' : 'bg-white'
-                )}
-              >
-                <div className={cn(
-                  "w-8 h-8 rounded-lg flex items-center justify-center",
-                  type.id === 'thermal_80mm'
-                    ? theme === 'dark' ? 'bg-orange-900/50 text-orange-400' : 'bg-orange-100 text-orange-600'
-                    : type.id.startsWith('label_')
-                    ? theme === 'dark' ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'
-                    : theme === 'dark' ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-600'
-                )}>
-                  {type.id === 'thermal_80mm' ? (
-                    <Receipt className="w-4 h-4" />
-                  ) : type.id.startsWith('label_') ? (
-                    <Tag className="w-4 h-4" />
-                  ) : (
-                    <FileText className="w-4 h-4" />
-                  )}
-                </div>
-                <div>
-                  <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                    {type.label}
-                  </p>
-                  <p className={cn("text-xs", theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
-                    {type.description}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Info Card */}
-        <div className={cn(
-          "p-4 rounded-xl mb-6 border",
-          theme === 'dark' ? 'bg-blue-950/40 border-blue-800' : 'bg-blue-50 border-blue-200'
-        )}>
-          <div className="flex items-start gap-3">
-            <Server className={cn("w-5 h-5 mt-0.5 flex-shrink-0", theme === 'dark' ? 'text-blue-400' : 'text-blue-600')} />
-            <div>
-              <h3 className={cn("font-medium", theme === 'dark' ? 'text-blue-200' : 'text-blue-900')}>
-                Cómo configurar la impresión silenciosa
-              </h3>
-              <ol className={cn("text-sm mt-2 space-y-1 list-decimal list-inside", theme === 'dark' ? 'text-blue-300' : 'text-blue-700')}>
-                <li>Crea un servicio de impresión y guarda las credenciales</li>
-                <li>Descarga e instala LogiRapid Print Service en tu PC</li>
-                <li>Abre la aplicación y configura las credenciales</li>
-                <li>Las impresoras conectadas se detectarán automáticamente</li>
-                <li>Desde el Administrador, asigna el tipo de impresora (Tickets, Etiquetas, etc.)</li>
-              </ol>
-            </div>
-          </div>
-        </div>
-
-        {/* Services List */}
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className={cn("w-8 h-8 animate-spin", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')} />
-          </div>
-        ) : services.length === 0 ? (
-          <div className={cn(
-            "text-center py-12 rounded-xl border-2 border-dashed",
-            theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-          )}>
-            <Printer className={cn("w-14 h-14 mx-auto mb-4", theme === 'dark' ? 'text-gray-600' : 'text-gray-300')} />
-            <p className={cn("text-base font-medium", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-              No hay servicios de impresión
-            </p>
-            <p className={cn("text-sm mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
-              Crea un servicio para imprimir recibos automáticamente
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {services.map((service) => (
+            return (
               <div
                 key={service.id}
-                className={cn(
-                  "p-4 rounded-xl border transition-all hover:shadow-md",
-                  theme === 'dark'
-                    ? 'bg-gray-900/60 border-gray-700 hover:border-gray-600'
-                    : 'bg-white border-gray-200 hover:border-gray-300'
-                )}
+                className={`rounded-xl border p-5 ${isDark ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'}`}
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "w-10 h-10 rounded-lg flex items-center justify-center",
-                      service.status === 'active'
-                        ? theme === 'dark' ? "bg-green-900/40 border border-green-800" : "bg-green-100"
-                        : theme === 'dark' ? "bg-gray-800 border border-gray-700" : "bg-gray-100"
-                    )}>
-                      <Printer className={cn(
-                        "w-5 h-5",
-                        service.status === 'active'
-                          ? theme === 'dark' ? "text-green-400" : "text-green-600"
-                          : theme === 'dark' ? "text-gray-400" : "text-gray-500"
-                      )} />
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-4 flex-1 min-w-0">
+                    {/* Status indicator */}
+                    <div className={`mt-1 p-2.5 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-100'}`}>
+                      <Printer className={`w-5 h-5 ${status.online ? 'text-green-500' : isDark ? 'text-gray-500' : 'text-gray-400'}`} />
                     </div>
-                    <div>
-                      <h3 className={cn("font-semibold text-sm", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                        {service.serviceName}
-                      </h3>
-                      <p className={cn("text-xs font-mono", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
-                        {service.serviceCode}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {getStatusBadge(service.status, service.lastSeenAt)}
-                    <div className="relative">
-                      <button
-                        onClick={() => setActionMenuOpen(actionMenuOpen === service.id ? null : service.id)}
-                        className={cn(
-                          "p-1.5 rounded-lg transition-colors",
-                          theme === 'dark'
-                            ? 'hover:bg-gray-700 text-gray-400'
-                            : 'hover:bg-gray-100 text-gray-500'
-                        )}
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
 
-                      {/* Action Menu */}
-                      {actionMenuOpen === service.id && (
-                        <div className={cn(
-                          "absolute right-0 top-8 w-48 rounded-lg shadow-xl border z-10 py-1",
-                          theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                        )}>
-                          <button
-                            onClick={() => handleViewDetails(service)}
-                            className={cn(
-                              "w-full px-4 py-2 text-sm text-left flex items-center gap-2",
-                              theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-50 text-gray-700'
-                            )}
-                          >
-                            <Info className="w-4 h-4" />
-                            Ver credenciales
-                          </button>
-                          <button
-                            onClick={() => handleEditService(service)}
-                            className={cn(
-                              "w-full px-4 py-2 text-sm text-left flex items-center gap-2",
-                              theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-50 text-gray-700'
-                            )}
-                          >
-                            <Edit3 className="w-4 h-4" />
-                            Editar nombre
-                          </button>
-                          <button
-                            onClick={() => handleDeleteService(service.id, service.serviceName)}
-                            className={cn(
-                              "w-full px-4 py-2 text-sm text-left flex items-center gap-2",
-                              theme === 'dark' ? 'hover:bg-red-900/30 text-red-400' : 'hover:bg-red-50 text-red-600'
-                            )}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Eliminar
-                          </button>
+                    <div className="flex-1 min-w-0">
+                      {/* Name and status */}
+                      <div className="flex items-center gap-3 mb-1">
+                        <h3 className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          {service.name}
+                        </h3>
+                        <div className="flex items-center gap-1.5">
+                          <div className={`w-2 h-2 rounded-full ${status.online ? 'bg-green-500' : 'bg-red-500'}`} />
+                          <span className={`text-xs ${status.online ? 'text-green-500' : isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {status.label}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Details grid */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 mt-3">
+                        {/* Token */}
+                        <div>
+                          <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Token</span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <code className={`text-xs font-mono ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                              {truncateToken(service.token)}
+                            </code>
+                            <button
+                              onClick={() => copyToClipboard(service.token, `token-${service.id}`)}
+                              className={`p-0.5 rounded ${isDark ? 'hover:bg-gray-600' : 'hover:bg-gray-200'} transition-colors`}
+                              title="Copiar token"
+                            >
+                              {copiedId === `token-${service.id}` ? (
+                                <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                              ) : (
+                                <Copy className={`w-3.5 h-3.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Printer Type */}
+                        <div>
+                          <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Tipo</span>
+                          <p className={`text-sm mt-0.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                            {getPrinterTypeLabel(service.printer_type)}
+                          </p>
+                        </div>
+
+                        {/* Warehouse */}
+                        <div>
+                          <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Almacén</span>
+                          <p className={`text-sm mt-0.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                            {service.warehouse_name || '---'}
+                          </p>
+                        </div>
+
+                        {/* Agent Version */}
+                        <div>
+                          <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Agente</span>
+                          <p className={`text-sm mt-0.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                            {service.agent_version || '---'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Detected printers */}
+                      {Array.isArray(agentPrinters) && agentPrinters.length > 0 && (
+                        <div className="mt-3">
+                          <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            Impresoras detectadas
+                          </span>
+                          <div className="flex flex-wrap gap-1.5 mt-1">
+                            {agentPrinters.map((p: any, i: number) => (
+                              <span
+                                key={i}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${
+                                  isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                                }`}
+                              >
+                                <Printer className="w-3 h-3" />
+                                {typeof p === 'string' ? p : p.name || p.displayName || 'Desconocida'}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
                   </div>
-                </div>
 
-                <div className={cn(
-                  "space-y-1.5 text-xs",
-                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                )}>
-                  {service.hostname && (
-                    <p className="flex items-center gap-2">
-                      <span className={theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}>Host:</span>
-                      {service.hostname}
-                    </p>
-                  )}
-                  <p className="flex items-center gap-2">
-                    <span className={theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}>Última conexión:</span>
-                    {formatLastSeen(service.lastSeenAt)}
-                  </p>
-                  <p className="flex items-center gap-2">
-                    <span className={theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}>Impresoras:</span>
-                    {service.printerCount || 0} detectada(s)
-                  </p>
+                  {/* Delete button */}
+                  <button
+                    onClick={() => setShowDeleteConfirm(service.id)}
+                    className={`p-2 rounded-lg ${isDark ? 'hover:bg-red-900/30 text-gray-500 hover:text-red-400' : 'hover:bg-red-50 text-gray-400 hover:text-red-500'} transition-colors`}
+                    title="Eliminar servicio"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Click outside to close menu */}
-      {actionMenuOpen !== null && (
-        <div className="fixed inset-0 z-0" onClick={() => setActionMenuOpen(null)} />
+            )
+          })}
+        </div>
       )}
 
       {/* Create Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className={cn(
-              "rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl",
-              theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-white'
-            )}
-          >
-            <h2 className={cn(
-              "text-lg font-bold mb-4 flex items-center gap-3",
-              theme === 'dark' ? 'text-white' : 'text-gray-900'
-            )}>
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
-                <Plus className="w-5 h-5 text-white" />
-              </div>
-              Nuevo Servicio de Impresión
-            </h2>
-            <form onSubmit={handleCreateService} className="space-y-4">
-              <div>
-                <label className={cn(
-                  "block text-sm font-medium mb-2",
-                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                )}>
-                  Nombre del servicio *
-                </label>
-                <input
-                  type="text"
-                  value={serviceName}
-                  onChange={(e) => setServiceName(e.target.value)}
-                  placeholder="ej: Impresora POS Terminal 1"
-                  className={cn(
-                    "w-full px-4 py-3 text-sm rounded-xl border focus:ring-2 focus:outline-none transition-all",
-                    theme === 'dark'
-                      ? 'bg-gray-900 border-gray-600 text-white focus:border-purple-500 focus:ring-purple-500/20'
-                      : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20'
-                  )}
-                  required
-                  autoFocus
-                />
-              </div>
-              <div className="flex gap-3 justify-end pt-2">
-                <button
-                  type="button"
-                  onClick={() => { setShowCreateModal(false); setServiceName(''); }}
-                  disabled={creating}
-                  className={cn(
-                    "px-5 py-2.5 rounded-xl text-sm font-medium transition-colors",
-                    theme === 'dark'
-                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  )}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating || !serviceName.trim()}
-                  className={cn(
-                    "px-5 py-2.5 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition-colors",
-                    creating || !serviceName.trim()
-                      ? 'bg-purple-400 cursor-not-allowed'
-                      : 'bg-purple-600 hover:bg-purple-700'
-                  )}
-                >
-                  {creating && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {creating ? 'Creando...' : 'Crear Servicio'}
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Edit Modal */}
-      {showEditModal && selectedService && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className={cn(
-              "rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl",
-              theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-white'
-            )}
-          >
-            <h2 className={cn(
-              "text-lg font-bold mb-4 flex items-center gap-3",
-              theme === 'dark' ? 'text-white' : 'text-gray-900'
-            )}>
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
-                <Edit3 className="w-5 h-5 text-white" />
-              </div>
-              Editar Servicio
-            </h2>
-            <form onSubmit={handleSaveEdit} className="space-y-4">
-              <div>
-                <label className={cn(
-                  "block text-sm font-medium mb-2",
-                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                )}>
-                  Nombre del servicio *
-                </label>
-                <input
-                  type="text"
-                  value={editServiceName}
-                  onChange={(e) => setEditServiceName(e.target.value)}
-                  placeholder="ej: Impresora POS Terminal 1"
-                  className={cn(
-                    "w-full px-4 py-3 text-sm rounded-xl border focus:ring-2 focus:outline-none transition-all",
-                    theme === 'dark'
-                      ? 'bg-gray-900 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500/20'
-                      : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500 focus:ring-blue-500/20'
-                  )}
-                  required
-                  autoFocus
-                />
-              </div>
-              <div className="flex gap-3 justify-end pt-2">
-                <button
-                  type="button"
-                  onClick={() => { setShowEditModal(false); setSelectedService(null); }}
-                  disabled={updating}
-                  className={cn(
-                    "px-5 py-2.5 rounded-xl text-sm font-medium transition-colors",
-                    theme === 'dark'
-                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  )}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={updating || !editServiceName.trim()}
-                  className={cn(
-                    "px-5 py-2.5 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition-colors",
-                    updating || !editServiceName.trim()
-                      ? 'bg-blue-400 cursor-not-allowed'
-                      : 'bg-blue-600 hover:bg-blue-700'
-                  )}
-                >
-                  {updating && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {updating ? 'Guardando...' : 'Guardar'}
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Details Modal */}
-      {showDetailsModal && selectedService && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className={cn(
-              "rounded-2xl p-6 w-full max-w-lg mx-4 shadow-2xl max-h-[90vh] overflow-y-auto",
-              theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-white'
-            )}
-          >
-            <div className="flex items-center justify-between mb-6">
-              <h2 className={cn(
-                "text-lg font-bold flex items-center gap-3",
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              )}>
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
-                  <Key className="w-5 h-5 text-white" />
-                </div>
-                Credenciales del Servicio
-              </h2>
-              {getStatusBadge(selectedService.status, selectedService.lastSeenAt)}
-            </div>
-
-            <div className="space-y-4">
-              {/* Service Info */}
-              <div className={cn(
-                "p-4 rounded-xl",
-                theme === 'dark' ? 'bg-gray-900/60 border border-gray-700' : 'bg-gray-50'
-              )}>
-                <h3 className={cn("font-semibold mb-2", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                  {selectedService.serviceName}
+      <AnimatePresence>
+        {showCreateModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60"
+              onClick={() => setShowCreateModal(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className={`relative w-full max-w-md rounded-xl border shadow-2xl ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}
+            >
+              <div className="p-6">
+                <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  Nuevo Servicio de Impresión
                 </h3>
-                <div className={cn("text-sm space-y-1", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                  {selectedService.hostname && <p>Host: {selectedService.hostname}</p>}
-                  {selectedService.platform && <p>Plataforma: {selectedService.platform}</p>}
-                  {selectedService.version && <p>Versión: {selectedService.version}</p>}
-                  <p>Creado: {new Date(selectedService.createdAt).toLocaleDateString('es-ES')}</p>
-                </div>
-              </div>
 
-              {/* Credentials */}
-              <div>
-                <label className={cn(
-                  "block text-sm font-medium mb-2",
-                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                )}>
-                  ID del Servicio (Service Code)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={selectedService.serviceCode}
-                    readOnly
-                    className={cn(
-                      "flex-1 px-4 py-2.5 text-sm font-mono font-bold rounded-xl border",
-                      theme === 'dark'
-                        ? 'bg-gray-900 border-gray-600 text-white'
-                        : 'bg-gray-100 border-gray-200 text-gray-900'
-                    )}
-                  />
+                <div className="space-y-4">
+                  {/* Name */}
+                  <div>
+                    <label className={`block text-sm font-medium mb-1.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Nombre <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="Ej: Impresora Caja 1"
+                      className={`w-full px-3 py-2 rounded-lg border text-sm ${
+                        isDark
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
+                          : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                      } focus:outline-none focus:ring-2 focus:ring-blue-500/40`}
+                    />
+                  </div>
+
+                  {/* Warehouse */}
+                  <div>
+                    <label className={`block text-sm font-medium mb-1.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Almacén
+                    </label>
+                    <select
+                      value={formData.warehouse_id}
+                      onChange={(e) => setFormData({ ...formData, warehouse_id: e.target.value })}
+                      className={`w-full px-3 py-2 rounded-lg border text-sm ${
+                        isDark
+                          ? 'bg-gray-700 border-gray-600 text-white'
+                          : 'bg-white border-gray-300 text-gray-900'
+                      } focus:outline-none focus:ring-2 focus:ring-blue-500/40`}
+                    >
+                      <option value="">Sin asignar</option>
+                      {warehouses.map((w: any) => (
+                        <option key={w.id} value={w.id}>{w.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Printer Type */}
+                  <div>
+                    <label className={`block text-sm font-medium mb-1.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Tipo de Impresora
+                    </label>
+                    <select
+                      value={formData.printer_type}
+                      onChange={(e) => setFormData({ ...formData, printer_type: e.target.value })}
+                      className={`w-full px-3 py-2 rounded-lg border text-sm ${
+                        isDark
+                          ? 'bg-gray-700 border-gray-600 text-white'
+                          : 'bg-white border-gray-300 text-gray-900'
+                      } focus:outline-none focus:ring-2 focus:ring-blue-500/40`}
+                    >
+                      {PRINTER_TYPES.map((pt) => (
+                        <option key={pt.id} value={pt.id}>{pt.label} - {pt.description}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex justify-end gap-3 mt-6">
                   <button
-                    onClick={() => copyToClipboard(selectedService.serviceCode, 'serviceCode')}
-                    className={cn(
-                      "px-3 py-2.5 rounded-xl transition-colors flex items-center gap-1",
-                      copied === 'serviceCode'
-                        ? 'bg-green-500 text-white'
-                        : theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                    )}
+                    onClick={() => setShowCreateModal(false)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                      isDark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    } transition-colors`}
                   >
-                    {copied === 'serviceCode' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleCreate}
+                    disabled={!formData.name.trim() || creating}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors"
+                  >
+                    {creating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Creando...
+                      </>
+                    ) : (
+                      'Crear Servicio'
+                    )}
                   </button>
                 </div>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
-              <div>
-                <label className={cn(
-                  "block text-sm font-medium mb-2",
-                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                )}>
-                  API Key
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={selectedService.apiKey || 'No disponible'}
-                    readOnly
-                    className={cn(
-                      "flex-1 px-4 py-2.5 text-xs font-mono rounded-xl border",
-                      theme === 'dark'
-                        ? 'bg-gray-900 border-gray-600 text-white'
-                        : 'bg-gray-100 border-gray-200 text-gray-900'
-                    )}
-                  />
-                  {selectedService.apiKey && (
-                    <button
-                      onClick={() => copyToClipboard(selectedService.apiKey, 'apiKey')}
-                      className={cn(
-                        "px-3 py-2.5 rounded-xl transition-colors flex items-center gap-1",
-                        copied === 'apiKey'
-                          ? 'bg-green-500 text-white'
-                          : theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                      )}
-                    >
-                      {copied === 'apiKey' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* API Secret Warning */}
-              <div className={cn(
-                "p-4 rounded-xl border",
-                theme === 'dark' ? 'bg-amber-950/40 border-amber-800' : 'bg-amber-50 border-amber-200'
-              )}>
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className={cn("w-5 h-5 flex-shrink-0", theme === 'dark' ? 'text-amber-400' : 'text-amber-600')} />
+      {/* Success Modal with Token */}
+      <AnimatePresence>
+        {showSuccessModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60"
+              onClick={() => setShowSuccessModal(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className={`relative w-full max-w-lg rounded-xl border shadow-2xl ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}
+            >
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 rounded-full bg-green-500/10">
+                    <CheckCircle className="w-6 h-6 text-green-500" />
+                  </div>
                   <div>
-                    <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-amber-200' : 'text-amber-800')}>
-                      API Secret no disponible
-                    </p>
-                    <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-amber-300/80' : 'text-amber-700')}>
-                      El API Secret solo se muestra al crear el servicio. Si lo perdiste, puedes regenerar las credenciales.
+                    <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      Servicio Creado
+                    </h3>
+                    <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {createdName}
                     </p>
                   </div>
                 </div>
-              </div>
 
-              {/* Printers */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className={cn(
-                    "block text-sm font-medium",
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                  )}>
-                    Impresoras Detectadas ({selectedService.printers?.length || 0})
+                {/* Token */}
+                <div className={`rounded-lg border p-4 mb-4 ${isDark ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                  <label className={`block text-xs font-medium mb-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Token de Autenticación
                   </label>
-                  <button
-                    onClick={refreshPrinters}
-                    disabled={refreshingPrinters}
-                    className={cn(
-                      "px-3 py-1.5 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors",
-                      theme === 'dark'
-                        ? 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                        : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                    )}
-                  >
-                    <RefreshCw className={cn("w-3.5 h-3.5", refreshingPrinters && "animate-spin")} />
-                    {refreshingPrinters ? 'Actualizando...' : 'Actualizar'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <code className={`flex-1 text-sm font-mono break-all ${isDark ? 'text-green-400' : 'text-green-700'}`}>
+                      {createdToken}
+                    </code>
+                    <button
+                      onClick={() => copyToClipboard(createdToken, 'created-token')}
+                      className={`shrink-0 p-2 rounded-lg ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-200'} transition-colors`}
+                      title="Copiar token"
+                    >
+                      {copiedId === 'created-token' ? (
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <Copy className={`w-4 h-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+                      )}
+                    </button>
+                  </div>
+                  <p className={`text-xs mt-2 ${isDark ? 'text-yellow-500/80' : 'text-yellow-600'}`}>
+                    Guarda este token. No se mostrará de nuevo.
+                  </p>
                 </div>
-              {selectedService.printers && selectedService.printers.length > 0 ? (
-                  <div className="space-y-2">
-                    {selectedService.printers.map((printer: any) => (
-                      <div
-                        key={printer.id}
-                        className={cn(
-                          "p-3 rounded-xl border flex items-center gap-3",
-                          theme === 'dark' ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-50 border-gray-200'
-                        )}
-                      >
-                        <div className={cn(
-                          "w-8 h-8 rounded-lg flex items-center justify-center",
-                          printer.isOnline
-                            ? theme === 'dark' ? 'bg-green-900/40' : 'bg-green-100'
-                            : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                        )}>
-                          <Printer className={cn(
-                            "w-4 h-4",
-                            printer.isOnline
-                              ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
-                              : theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                          )} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={cn("text-sm font-medium truncate", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                            {printer.printerName}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <p className={cn("text-xs", theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
-                              {PRINTER_TYPES.find(t => t.id === printer.printerType)?.label || 'Sin configurar'}
-                            </p>
-                            {printer.supportedDocumentTypes && (
-                              <span className={cn(
-                                "text-xs px-1.5 py-0.5 rounded",
-                                printer.supportedDocumentTypes.length === ALL_DOCUMENT_TYPES.length
-                                  ? theme === 'dark' ? 'bg-green-900/40 text-green-300' : 'bg-green-100 text-green-700'
-                                  : theme === 'dark' ? 'bg-blue-900/40 text-blue-300' : 'bg-blue-100 text-blue-700'
-                              )}>
-                                {printer.supportedDocumentTypes.length === ALL_DOCUMENT_TYPES.length
-                                  ? 'Todos los docs'
-                                  : `${printer.supportedDocumentTypes.length} docs`}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {printer.isDefault && (
-                          <span className={cn(
-                            "text-xs px-2 py-1 rounded-full",
-                            theme === 'dark' ? 'bg-purple-900/40 text-purple-300' : 'bg-purple-100 text-purple-700'
-                          )}>
-                            Predeterminada
-                          </span>
-                        )}
+
+                {/* Install Instructions */}
+                <div className={`rounded-lg border p-4 ${isDark ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Terminal className={`w-4 h-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+                    <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Instalar Agente
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {/* Mac */}
+                    <div>
+                      <span className={`text-xs font-medium ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Mac</span>
+                      <div className={`flex items-center gap-2 mt-1 rounded-md p-2 ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
+                        <code className={`flex-1 text-xs font-mono break-all ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                          curl -fsSL &quot;https://fabrica.servisumic.com/api/print-agent/install?os=mac&quot; | bash
+                        </code>
                         <button
-                          onClick={() => openPrinterConfig(printer)}
-                          className={cn(
-                            "px-3 py-1.5 text-xs font-medium rounded-lg transition-colors",
-                            theme === 'dark'
-                              ? 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                              : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                          )}
+                          onClick={() => copyToClipboard('curl -fsSL "https://fabrica.servisumic.com/api/print-agent/install?os=mac" | bash', 'install-mac')}
+                          className={`shrink-0 p-1 rounded ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-200'} transition-colors`}
                         >
-                          Configurar
+                          {copiedId === 'install-mac' ? (
+                            <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                          ) : (
+                            <Copy className={`w-3.5 h-3.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                          )}
                         </button>
                       </div>
-                    ))}
-                  </div>
-              ) : (
-                <div className={cn(
-                  "p-4 rounded-xl border text-center",
-                  theme === 'dark' ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-50 border-gray-200'
-                )}>
-                  <Printer className={cn("w-8 h-8 mx-auto mb-2", theme === 'dark' ? 'text-gray-600' : 'text-gray-400')} />
-                  <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
-                    No hay impresoras registradas
-                  </p>
-                  <p className={cn("text-xs mt-1", theme === 'dark' ? 'text-gray-500' : 'text-gray-400')}>
-                    Inicia la app LogiRapid Print Service para detectar impresoras
-                  </p>
-                </div>
-              )}
-              </div>
-            </div>
-
-            <div className="flex gap-3 justify-between pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">
-              <button
-                onClick={handleRegenerateCredentials}
-                disabled={regenerating}
-                className={cn(
-                  "px-4 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 transition-colors",
-                  regenerating
-                    ? 'bg-amber-400 text-white cursor-not-allowed'
-                    : theme === 'dark'
-                      ? 'bg-amber-900/40 text-amber-300 hover:bg-amber-900/60 border border-amber-800'
-                      : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                )}
-              >
-                {regenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4" />}
-                {regenerating ? 'Regenerando...' : 'Regenerar Credenciales'}
-              </button>
-              <button
-                onClick={() => { setShowDetailsModal(false); setSelectedService(null); }}
-                className={cn(
-                  "px-5 py-2.5 rounded-xl text-sm font-medium text-white",
-                  theme === 'dark' ? 'bg-purple-600 hover:bg-purple-500' : 'bg-purple-500 hover:bg-purple-600'
-                )}
-              >
-                Cerrar
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Credentials Modal (for new or regenerated credentials) */}
-      {showCredentialsModal && newCredentials && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className={cn(
-              "rounded-2xl p-6 w-full max-w-lg mx-4 shadow-2xl",
-              theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-white'
-            )}
-          >
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
-                <Key className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className={cn("text-lg font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                  Credenciales Generadas
-                </h2>
-                <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                  Guárdalas en un lugar seguro
-                </p>
-              </div>
-            </div>
-
-            <div className={cn(
-              "p-4 rounded-xl mb-6 border",
-              theme === 'dark' ? 'bg-red-950/40 border-red-800' : 'bg-red-50 border-red-200'
-            )}>
-              <div className="flex items-start gap-3">
-                <AlertCircle className={cn("w-5 h-5 flex-shrink-0 mt-0.5", theme === 'dark' ? 'text-red-400' : 'text-red-600')} />
-                <p className={cn("text-sm", theme === 'dark' ? 'text-red-200' : 'text-red-800')}>
-                  <strong>Importante:</strong> Guarda estas credenciales ahora. El API Secret no se mostrará de nuevo.
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className={cn(
-                  "block text-sm font-medium mb-2",
-                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                )}>
-                  ID del Servicio (Service Code)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newCredentials.serviceCode}
-                    readOnly
-                    className={cn(
-                      "flex-1 px-4 py-2.5 text-sm font-mono font-bold rounded-xl border",
-                      theme === 'dark'
-                        ? 'bg-gray-900 border-gray-600 text-white'
-                        : 'bg-gray-100 border-gray-200 text-gray-900'
-                    )}
-                  />
-                  <button
-                    onClick={() => copyToClipboard(newCredentials.serviceCode, 'new-serviceCode')}
-                    className={cn(
-                      "px-3 py-2.5 rounded-xl transition-colors",
-                      copied === 'new-serviceCode'
-                        ? 'bg-green-500 text-white'
-                        : theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                    )}
-                  >
-                    {copied === 'new-serviceCode' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className={cn(
-                  "block text-sm font-medium mb-2",
-                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                )}>
-                  API Key
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newCredentials.apiKey}
-                    readOnly
-                    className={cn(
-                      "flex-1 px-4 py-2.5 text-xs font-mono rounded-xl border",
-                      theme === 'dark'
-                        ? 'bg-gray-900 border-gray-600 text-white'
-                        : 'bg-gray-100 border-gray-200 text-gray-900'
-                    )}
-                  />
-                  <button
-                    onClick={() => copyToClipboard(newCredentials.apiKey, 'new-apiKey')}
-                    className={cn(
-                      "px-3 py-2.5 rounded-xl transition-colors",
-                      copied === 'new-apiKey'
-                        ? 'bg-green-500 text-white'
-                        : theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                    )}
-                  >
-                    {copied === 'new-apiKey' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className={cn(
-                  "block text-sm font-medium mb-2",
-                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                )}>
-                  API Secret
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newCredentials.apiSecret}
-                    readOnly
-                    className={cn(
-                      "flex-1 px-4 py-2.5 text-xs font-mono rounded-xl border",
-                      theme === 'dark'
-                        ? 'bg-gray-900 border-gray-600 text-green-400'
-                        : 'bg-gray-100 border-gray-200 text-green-700'
-                    )}
-                  />
-                  <button
-                    onClick={() => copyToClipboard(newCredentials.apiSecret, 'new-apiSecret')}
-                    className={cn(
-                      "px-3 py-2.5 rounded-xl transition-colors",
-                      copied === 'new-apiSecret'
-                        ? 'bg-green-500 text-white'
-                        : theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                    )}
-                  >
-                    {copied === 'new-apiSecret' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-6">
-              <button
-                onClick={() => {
-                  setShowCredentialsModal(false)
-                  setNewCredentials(null)
-                }}
-                className={cn(
-                  "px-6 py-2.5 rounded-xl text-sm font-medium text-white",
-                  theme === 'dark' ? 'bg-green-600 hover:bg-green-500' : 'bg-green-500 hover:bg-green-600'
-                )}
-              >
-                He guardado las credenciales
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Printer Configuration Modal */}
-      {showPrinterConfigModal && selectedPrinter && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className={cn(
-              "rounded-2xl p-6 w-full max-w-lg mx-4 shadow-2xl max-h-[90vh] overflow-y-auto",
-              theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-white'
-            )}
-          >
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                <Settings className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className={cn("text-lg font-bold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                  Configurar Impresora
-                </h2>
-                <p className={cn("text-sm", theme === 'dark' ? 'text-gray-400' : 'text-gray-600')}>
-                  {selectedPrinter.printerName}
-                </p>
-              </div>
-            </div>
-
-            {/* Printer Type */}
-            <div className="mb-6">
-              <label className={cn(
-                "block text-sm font-medium mb-3",
-                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-              )}>
-                Tipo de Impresora
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {PRINTER_TYPES.map(type => (
-                  <button
-                    key={type.id}
-                    onClick={() => setPrinterConfig(prev => ({ ...prev, printerType: type.id }))}
-                    className={cn(
-                      "p-3 rounded-xl border-2 text-left transition-all",
-                      printerConfig.printerType === type.id
-                        ? theme === 'dark'
-                          ? "border-blue-500 bg-blue-900/30"
-                          : "border-blue-500 bg-blue-50"
-                        : theme === 'dark'
-                          ? "border-gray-700 hover:border-gray-600"
-                          : "border-gray-200 hover:border-gray-300"
-                    )}
-                  >
-                    <p className={cn(
-                      "text-sm font-medium",
-                      printerConfig.printerType === type.id
-                        ? theme === 'dark' ? "text-blue-300" : "text-blue-700"
-                        : theme === 'dark' ? "text-white" : "text-gray-900"
-                    )}>
-                      {type.label}
-                    </p>
-                    <p className={cn("text-xs", theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
-                      {type.description}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Supported Document Types */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <label className={cn(
-                  "block text-sm font-medium",
-                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                )}>
-                  Documentos Soportados
-                </label>
-                <button
-                  onClick={() => setPrinterConfig(prev => ({
-                    ...prev,
-                    supportedDocumentTypes: prev.supportedDocumentTypes.length === ALL_DOCUMENT_TYPES.length
-                      ? []
-                      : ALL_DOCUMENT_TYPES.map(t => t.id)
-                  }))}
-                  className={cn(
-                    "text-xs font-medium",
-                    theme === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'
-                  )}
-                >
-                  {printerConfig.supportedDocumentTypes.length === ALL_DOCUMENT_TYPES.length
-                    ? 'Deseleccionar todos'
-                    : 'Seleccionar todos'}
-                </button>
-              </div>
-              <div className="space-y-2 max-h-[250px] overflow-y-auto">
-                {ALL_DOCUMENT_TYPES.map(docType => (
-                  <label
-                    key={docType.id}
-                    className={cn(
-                      "flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all",
-                      printerConfig.supportedDocumentTypes.includes(docType.id)
-                        ? theme === 'dark'
-                          ? "border-green-600 bg-green-900/30"
-                          : "border-green-500 bg-green-50"
-                        : theme === 'dark'
-                          ? "border-gray-700 hover:bg-gray-700/50"
-                          : "border-gray-200 hover:bg-gray-50"
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={printerConfig.supportedDocumentTypes.includes(docType.id)}
-                      onChange={() => toggleDocumentType(docType.id)}
-                      className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                    />
-                    <div className="flex-1">
-                      <p className={cn(
-                        "text-sm font-medium",
-                        theme === 'dark' ? 'text-white' : 'text-gray-900'
-                      )}>
-                        {docType.label}
-                      </p>
-                      <p className={cn("text-xs", theme === 'dark' ? 'text-gray-500' : 'text-gray-500')}>
-                        {docType.description}
-                      </p>
                     </div>
-                  </label>
-                ))}
-              </div>
-            </div>
 
-            {/* Actions */}
-            <div className="flex gap-3 justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
-              <button
-                onClick={() => setShowPrinterConfigModal(false)}
-                disabled={savingPrinter}
-                className={cn(
-                  "px-4 py-2.5 rounded-xl text-sm font-medium transition-colors",
-                  theme === 'dark'
-                    ? 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                )}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSavePrinterConfig}
-                disabled={savingPrinter || printerConfig.supportedDocumentTypes.length === 0}
-                className={cn(
-                  "px-5 py-2.5 rounded-xl text-sm font-medium text-white flex items-center gap-2",
-                  savingPrinter || printerConfig.supportedDocumentTypes.length === 0
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : theme === 'dark' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-blue-500 hover:bg-blue-600'
-                )}
-              >
-                {savingPrinter ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Guardando...
-                  </>
-                ) : (
-                  'Guardar Configuración'
-                )}
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
+                    {/* Windows */}
+                    <div>
+                      <span className={`text-xs font-medium ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Windows</span>
+                      <div className={`flex items-center gap-2 mt-1 rounded-md p-2 ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
+                        <code className={`flex-1 text-xs font-mono break-all ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                          powershell -c &quot;irm https://fabrica.servisumic.com/api/print-agent/install?os=windows | iex&quot;
+                        </code>
+                        <button
+                          onClick={() => copyToClipboard('powershell -c "irm https://fabrica.servisumic.com/api/print-agent/install?os=windows | iex"', 'install-win')}
+                          className={`shrink-0 p-1 rounded ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-200'} transition-colors`}
+                        >
+                          {copiedId === 'install-win' ? (
+                            <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                          ) : (
+                            <Copy className={`w-3.5 h-3.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Close button */}
+                <div className="flex justify-end mt-4">
+                  <button
+                    onClick={() => setShowSuccessModal(false)}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Entendido
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation */}
+      <AnimatePresence>
+        {showDeleteConfirm !== null && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60"
+              onClick={() => setShowDeleteConfirm(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className={`relative w-full max-w-sm rounded-xl border shadow-2xl ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}
+            >
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 rounded-full bg-red-500/10">
+                    <Trash2 className="w-5 h-5 text-red-500" />
+                  </div>
+                  <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    Eliminar Servicio
+                  </h3>
+                </div>
+                <p className={`text-sm mb-6 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Esta acción eliminará el servicio de impresión y revocará su token. El agente dejará de funcionar inmediatamente.
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setShowDeleteConfirm(null)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                      isDark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    } transition-colors`}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => handleDelete(showDeleteConfirm)}
+                    disabled={deleting}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+                  >
+                    {deleting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Eliminando...
+                      </>
+                    ) : (
+                      'Eliminar'
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }
