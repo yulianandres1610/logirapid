@@ -4,7 +4,7 @@ const path = require("path");
 const http = require("http");
 const { exec, execSync } = require("child_process");
 
-const VERSION = "1.1.6";
+const VERSION = "1.2.0";
 const platform = os.platform();
 const INSTALL_DIR = path.join(os.homedir(), ".logirapid-print-service");
 const CONFIG_PATH = path.join(INSTALL_DIR, "config.json");
@@ -87,7 +87,7 @@ function isAutoStartEnabled() {
     const plist = path.join(os.homedir(), "Library/LaunchAgents/com.logirapid.print-service.plist");
     return fs.existsSync(plist);
   } else if (platform === "win32") {
-    const shortcut = path.join(process.env.APPDATA || "", "Microsoft/Windows/Start Menu/Programs/Startup/LogiRapid Print Service.lnk");
+    const shortcut = path.join(process.env.APPDATA || "", "Microsoft/Windows/Start Menu/Programs/Startup/Servisumic Print Service.lnk");
     return fs.existsSync(shortcut);
   }
   return false;
@@ -119,7 +119,7 @@ function setAutoStart(enabled) {
       try { fs.unlinkSync(plist); } catch {}
     }
   } else if (platform === "win32") {
-    const shortcut = path.join(process.env.APPDATA || "", "Microsoft/Windows/Start Menu/Programs/Startup/LogiRapid Print Service.lnk");
+    const shortcut = path.join(process.env.APPDATA || "", "Microsoft/Windows/Start Menu/Programs/Startup/Servisumic Print Service.lnk");
     if (enabled) {
       const vbs = path.join(os.tmpdir(), "create-shortcut.vbs");
       const startBat = path.join(INSTALL_DIR, "start.bat");
@@ -634,134 +634,195 @@ async function performUpdate(config) {
 // ─── Web UI ───
 
 function getUIHtml() {
+  const typeIcons = {
+    pos_receipt: 'receipt', purchase_invoice: 'receipt', wholesale_invoice: 'receipt',
+    consignment_receipt: 'receipt', unified_reception: 'receipt',
+    product_label: 'label', weight_label: 'label', lot_label: 'label',
+    asset_label: 'label', shipping_label: 'label',
+    sales_report: 'report', inventory_count_report: 'report', cash_register_report: 'report',
+    warehouse_operation: 'report', production_order: 'report',
+  };
+  const typeNames = {
+    pos_receipt: 'Recibo POS', purchase_invoice: 'Factura', wholesale_invoice: 'Factura Mayorista',
+    consignment_receipt: 'Consignacion', unified_reception: 'Recepcion',
+    product_label: 'Etiqueta', weight_label: 'Etiqueta Peso', lot_label: 'Etiqueta Lote',
+    asset_label: 'Etiqueta Activo', shipping_label: 'Etiqueta Envio',
+    sales_report: 'Reporte Ventas', inventory_count_report: 'Inventario', cash_register_report: 'Cierre Caja',
+    warehouse_operation: 'Operacion', production_order: 'Prod. Order',
+  };
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LogiRapid Print Service</title>
+<title>Servisumic Print Service</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f1117; color: #e4e4e7; min-height: 100vh; }
-  .container { max-width: 720px; margin: 0 auto; padding: 20px; }
-  .header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #27272a; }
-  .header h1 { font-size: 18px; font-weight: 700; }
-  .header .version { font-size: 11px; color: #71717a; background: #27272a; padding: 2px 8px; border-radius: 99px; }
-  .header .status { margin-left: auto; font-size: 12px; display: flex; align-items: center; gap: 6px; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; }
-  .dot.green { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
-  .dot.red { background: #ef4444; }
-  .section { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-  .section h2 { font-size: 13px; font-weight: 600; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
-  .warehouse { display: flex; align-items: center; gap: 10px; padding: 10px; background: #27272a; border-radius: 8px; margin-bottom: 8px; }
-  .warehouse .info { flex: 1; }
-  .warehouse .name { font-size: 14px; font-weight: 600; }
-  .warehouse .token { font-size: 10px; color: #71717a; font-family: monospace; }
-  .warehouse .status-badge { font-size: 10px; padding: 2px 8px; border-radius: 99px; font-weight: 600; }
-  .warehouse .status-badge.online { background: rgba(34,197,94,0.15); color: #22c55e; }
-  .warehouse .status-badge.offline { background: rgba(239,68,68,0.15); color: #ef4444; }
-  .btn { padding: 8px 16px; border-radius: 8px; border: 1px solid #27272a; background: #27272a; color: #e4e4e7; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
-  .btn:hover { background: #3f3f46; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; background: #09090b; color: #fafafa; min-height: 100vh; }
+  .app { max-width: 680px; margin: 0 auto; padding: 24px 16px 40px; }
+
+  /* Header */
+  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+  .header-icon { width: 40px; height: 40px; background: linear-gradient(135deg, #0580f0, #06b6d4); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .header-icon svg { width: 22px; height: 22px; stroke: white; fill: none; stroke-width: 2; }
+  .header-text { flex: 1; }
+  .header-text h1 { font-size: 17px; font-weight: 700; line-height: 1.2; }
+  .header-text .subtitle { font-size: 11px; color: #71717a; display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+  .header-text .ver { background: #27272a; padding: 1px 7px; border-radius: 99px; font-size: 10px; color: #a1a1aa; }
+  .status-pill { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 99px; flex-shrink: 0; }
+  .status-pill.online { background: rgba(34,197,94,0.12); color: #4ade80; }
+  .status-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 6px currentColor; }
+
+  /* Cards */
+  .card { background: #111113; border: 1px solid #1e1e22; border-radius: 14px; margin-bottom: 14px; overflow: hidden; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 0; }
+  .card-header h2 { font-size: 12px; font-weight: 700; color: #71717a; text-transform: uppercase; letter-spacing: 0.8px; }
+  .card-body { padding: 10px 16px 14px; }
+
+  /* Departamentos */
+  .dept { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #18181b; border-radius: 10px; margin-bottom: 6px; border: 1px solid #27272a; }
+  .dept .icon { width: 32px; height: 32px; border-radius: 8px; background: #27272a; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .dept .icon svg { width: 16px; height: 16px; stroke: #a1a1aa; fill: none; stroke-width: 2; }
+  .dept .info { flex: 1; min-width: 0; }
+  .dept .name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dept .token { font-size: 9px; color: #52525b; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .badge { font-size: 10px; padding: 3px 8px; border-radius: 99px; font-weight: 600; white-space: nowrap; }
+  .badge.online { background: rgba(34,197,94,0.12); color: #4ade80; }
+  .badge.offline { background: rgba(239,68,68,0.12); color: #f87171; }
+  .badge.default { background: rgba(245,158,11,0.12); color: #fbbf24; }
+  .badge.idle { background: rgba(34,197,94,0.08); color: #4ade80; }
+  .badge.error { background: rgba(239,68,68,0.12); color: #f87171; }
+  .badge.format { background: rgba(5,128,240,0.12); color: #60a5fa; font-family: monospace; }
+
+  /* Buttons */
+  .btn { padding: 7px 14px; border-radius: 8px; border: 1px solid #27272a; background: #18181b; color: #e4e4e7; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; gap: 5px; }
+  .btn:hover { background: #27272a; border-color: #3f3f46; }
+  .btn:disabled { opacity: 0.5; cursor: default; }
   .btn.primary { background: #0580f0; border-color: #0580f0; color: white; }
-  .btn.primary:hover { background: #0460c0; }
-  .btn.danger { color: #ef4444; }
-  .btn.danger:hover { background: #7f1d1d30; }
-  .btn.small { padding: 4px 10px; font-size: 11px; }
-  .printer { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #27272a; border-radius: 8px; margin-bottom: 6px; }
-  .printer .name { font-size: 13px; flex: 1; }
-  .printer .badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #3f3f46; color: #a1a1aa; }
-  .printer .badge.default { background: rgba(245,158,11,0.15); color: #f59e0b; }
-  .job { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #27272a; border-radius: 8px; margin-bottom: 6px; font-size: 12px; }
-  .job .id { font-family: monospace; color: #71717a; width: 70px; }
-  .job .type { color: #a1a1aa; width: 50px; }
-  .job .format { font-family: monospace; width: 45px; color: #0580f0; }
-  .job .time { color: #71717a; margin-left: auto; font-size: 11px; }
-  .job .result { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
-  .job .result.done { background: rgba(34,197,94,0.15); color: #22c55e; }
-  .job .result.error { background: rgba(239,68,68,0.15); color: #ef4444; }
-  .toggle { position: relative; width: 40px; height: 22px; background: #3f3f46; border-radius: 99px; cursor: pointer; transition: 0.2s; }
-  .toggle.on { background: #0580f0; }
-  .toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; background: white; border-radius: 50%; transition: 0.2s; }
-  .toggle.on::after { left: 21px; }
-  .row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
-  .row label { font-size: 13px; }
-  .empty { text-align: center; padding: 20px; color: #52525b; font-size: 13px; }
-  .input-row { display: flex; gap: 8px; margin-top: 8px; }
-  .input-row input { flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid #27272a; background: #27272a; color: #e4e4e7; font-size: 13px; font-family: monospace; outline: none; }
+  .btn.primary:hover { background: #0369d1; }
+  .btn.sm { padding: 4px 10px; font-size: 11px; }
+  .btn.danger { color: #f87171; border-color: transparent; background: transparent; }
+  .btn.danger:hover { background: rgba(239,68,68,0.1); }
+
+  /* Printers */
+  .printer-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: #18181b; border-radius: 10px; margin-bottom: 5px; border: 1px solid #27272a; }
+  .printer-item .icon { width: 28px; height: 28px; border-radius: 7px; background: #27272a; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .printer-item .icon svg { width: 14px; height: 14px; stroke: #a1a1aa; fill: none; stroke-width: 2; }
+  .printer-item .name { flex: 1; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .printer-item .badges { display: flex; gap: 4px; }
+
+  /* History */
+  .job-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #18181b; border-radius: 8px; margin-bottom: 4px; font-size: 12px; border: 1px solid transparent; }
+  .job-item:hover { border-color: #27272a; }
+  .job-item .job-icon { font-size: 14px; width: 20px; text-align: center; flex-shrink: 0; }
+  .job-item .job-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
+  .job-item .job-type { font-weight: 500; white-space: nowrap; }
+  .job-item .job-id { font-family: monospace; color: #52525b; font-size: 10px; }
+  .job-item .job-meta { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .job-item .job-time { color: #52525b; font-size: 11px; }
+
+  /* Forms */
+  .input-row { display: flex; gap: 6px; margin-top: 10px; }
+  .input-row input { flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid #27272a; background: #18181b; color: #fafafa; font-size: 13px; font-family: monospace; outline: none; transition: border 0.15s; }
   .input-row input:focus { border-color: #0580f0; }
-  .msg { font-size: 12px; padding: 8px; border-radius: 8px; margin-top: 8px; }
-  .msg.success { background: rgba(34,197,94,0.1); color: #22c55e; }
-  .msg.error { background: rgba(239,68,68,0.1); color: #ef4444; }
-  .actions { display: flex; gap: 8px; margin-top: 12px; }
+  .input-row input::placeholder { color: #3f3f46; }
+
+  /* Toggle */
+  .toggle { position: relative; width: 38px; height: 20px; background: #27272a; border-radius: 99px; cursor: pointer; transition: 0.2s; flex-shrink: 0; }
+  .toggle.on { background: #0580f0; }
+  .toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: white; border-radius: 50%; transition: 0.2s; }
+  .toggle.on::after { left: 20px; }
+
+  /* Row */
+  .setting-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #1e1e22; }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-row label { font-size: 13px; color: #d4d4d8; }
+  .setting-row .val { font-size: 12px; color: #71717a; }
+
+  /* Messages */
+  .msg { font-size: 12px; padding: 10px 12px; border-radius: 8px; margin-top: 8px; display: flex; align-items: center; gap: 8px; }
+  .msg.success { background: rgba(34,197,94,0.08); color: #4ade80; border: 1px solid rgba(34,197,94,0.15); }
+  .msg.error { background: rgba(239,68,68,0.08); color: #f87171; border: 1px solid rgba(239,68,68,0.15); }
+  .msg.info { background: rgba(5,128,240,0.08); color: #60a5fa; border: 1px solid rgba(5,128,240,0.15); }
+
+  .empty { text-align: center; padding: 24px 16px; color: #3f3f46; font-size: 13px; }
+  .actions { display: flex; gap: 6px; padding: 6px 16px 14px; }
+  .update-row { display: flex; align-items: center; justify-content: space-between; }
 </style>
 </head>
 <body>
-<div class="container">
+<div class="app">
   <div class="header">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0580f0" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-    <h1>LogiRapid Print Service</h1>
-    <span class="version">v${VERSION}</span>
-    <div class="status"><div class="dot green"></div> Activo</div>
+    <div class="header-icon">
+      <svg viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+    </div>
+    <div class="header-text">
+      <h1>Servisumic S.U.R.L</h1>
+      <div class="subtitle">Print Service <span class="ver">v${VERSION}</span></div>
+    </div>
+    <div class="status-pill online"><span class="dot"></span> Activo</div>
   </div>
 
   <!-- Departamentos -->
-  <div class="section">
-    <h2>Departamentos Emparejados</h2>
-    <div id="warehouses"></div>
-    <div class="input-row" id="add-token-row" style="display:none">
-      <input type="text" id="new-token" placeholder="Pega el token del nuevo departamento..." />
-      <button class="btn primary small" onclick="addToken()">Agregar</button>
-      <button class="btn small" onclick="toggleAddToken(false)">Cancelar</button>
+  <div class="card">
+    <div class="card-header"><h2>Departamentos</h2></div>
+    <div class="card-body">
+      <div id="warehouses"></div>
+      <div class="input-row" id="add-token-row" style="display:none">
+        <input type="text" id="new-token" placeholder="Pega el token del departamento..." />
+        <button class="btn primary sm" onclick="addToken()">Agregar</button>
+        <button class="btn sm" onclick="toggleAddToken(false)">Cancelar</button>
+      </div>
+      <div id="add-msg"></div>
     </div>
-    <div id="add-msg"></div>
     <div class="actions">
-      <button class="btn primary" onclick="toggleAddToken(true)">+ Agregar Departamento</button>
+      <button class="btn sm primary" onclick="toggleAddToken(true)">+ Agregar Departamento</button>
     </div>
   </div>
 
-  <!-- Printers -->
-  <div class="section">
-    <h2>Impresoras del Sistema</h2>
-    <div id="printers"></div>
-    <div class="actions">
-      <button class="btn small" onclick="refreshPrinters()">Actualizar</button>
+  <!-- Impresoras -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Impresoras</h2>
+      <button class="btn sm" id="refresh-btn" onclick="refreshPrinters()">Detectar</button>
     </div>
+    <div class="card-body" id="printers"></div>
   </div>
 
-  <!-- History -->
-  <div class="section">
-    <h2>Historial de Impresion</h2>
-    <div id="history"></div>
+  <!-- Historial -->
+  <div class="card">
+    <div class="card-header"><h2>Historial</h2></div>
+    <div class="card-body" id="history"></div>
   </div>
 
-  <!-- Update -->
-  <div class="section" id="update-section">
-    <h2>Actualizacion</h2>
-    <div class="row">
-      <label>Version actual</label>
-      <span style="font-size:12px;color:#71717a">v${VERSION}</span>
-    </div>
-    <div id="update-status"></div>
-    <div class="actions">
-      <button class="btn small" id="check-update-btn" onclick="checkUpdate()">Buscar actualizacion</button>
-    </div>
-  </div>
-
-  <!-- Settings -->
-  <div class="section">
-    <h2>Configuracion</h2>
-    <div class="row">
-      <label>Inicio automatico</label>
-      <div class="toggle" id="autostart-toggle" onclick="toggleAutoStart()"></div>
-    </div>
-    <div class="row">
-      <label>Plataforma</label>
-      <span style="font-size:12px;color:#71717a">${platform} - ${os.arch()}</span>
+  <!-- Actualizacion + Config juntos -->
+  <div class="card">
+    <div class="card-header"><h2>Sistema</h2></div>
+    <div class="card-body">
+      <div class="setting-row update-row">
+        <label>Version</label>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="val">v${VERSION}</span>
+          <button class="btn sm" id="check-update-btn" onclick="checkUpdate()">Buscar actualizacion</button>
+        </div>
+      </div>
+      <div id="update-status"></div>
+      <div class="setting-row">
+        <label>Inicio automatico</label>
+        <div class="toggle" id="autostart-toggle" onclick="toggleAutoStart()"></div>
+      </div>
+      <div class="setting-row">
+        <label>Plataforma</label>
+        <span class="val">${platform} ${os.arch()}</span>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
+const TYPE_ICONS = ${JSON.stringify(typeIcons)};
+const TYPE_NAMES = ${JSON.stringify(typeNames)};
+
 function toggleAddToken(show) {
   document.getElementById('add-token-row').style.display = show ? 'flex' : 'none';
   if (show) document.getElementById('new-token').focus();
@@ -793,31 +854,30 @@ async function removeToken(token) {
 async function toggleAutoStart() {
   const res = await fetch('/api/autostart', { method: 'POST' });
   const data = await res.json();
-  updateAutoStartUI(data.enabled);
-}
-
-function updateAutoStartUI(enabled) {
-  const el = document.getElementById('autostart-toggle');
-  el.className = 'toggle' + (enabled ? ' on' : '');
+  document.getElementById('autostart-toggle').className = 'toggle' + (data.enabled ? ' on' : '');
 }
 
 async function refreshPrinters() {
-  const btn = event.target;
-  btn.disabled = true;
-  btn.textContent = 'Buscando...';
+  const btn = document.getElementById('refresh-btn');
+  btn.disabled = true; btn.textContent = 'Buscando...';
   const res = await fetch('/api/printers');
   const data = await res.json();
   renderPrinters(data.printers);
-  btn.textContent = data.printers.length ? data.printers.length + ' impresora(s) encontrada(s)' : 'Sin impresoras';
-  setTimeout(() => { btn.disabled = false; btn.textContent = 'Actualizar'; }, 2000);
+  btn.textContent = data.printers.length + ' encontrada(s)';
+  setTimeout(() => { btn.disabled = false; btn.textContent = 'Detectar'; }, 2000);
 }
 
 function renderPrinters(printers) {
   const el = document.getElementById('printers');
   if (!printers.length) { el.innerHTML = '<div class="empty">No se detectaron impresoras</div>'; return; }
-  el.innerHTML = printers.map(p => '<div class="printer"><span class="name">' + p.name + '</span>' +
-    (p.isDefault ? '<span class="badge default">Default</span>' : '') +
-    '<span class="badge">' + p.status + '</span></div>').join('');
+  el.innerHTML = printers.map(p => {
+    const name = p.name.replace(/_/g, ' ');
+    return '<div class="printer-item">' +
+      '<div class="icon"><svg viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></div>' +
+      '<span class="name">' + name + '</span>' +
+      '<div class="badges">' + (p.isDefault ? '<span class="badge default">Default</span>' : '') +
+      '<span class="badge ' + p.status + '">' + p.status + '</span></div></div>';
+  }).join('');
 }
 
 function renderWarehouses(tokens, pollStatus) {
@@ -825,91 +885,92 @@ function renderWarehouses(tokens, pollStatus) {
   if (!tokens.length) { el.innerHTML = '<div class="empty">No hay departamentos emparejados</div>'; return; }
   el.innerHTML = tokens.map(t => {
     const s = pollStatus[t.token] || {};
-    const online = s.online;
-    return '<div class="warehouse"><div class="info"><div class="name">' + t.name + '</div><div class="token">' + t.token + '</div></div>' +
-      '<span class="status-badge ' + (online ? 'online' : 'offline') + '">' + (online ? 'Online' : 'Offline') + '</span>' +
-      '<button class="btn danger small" onclick="removeToken(\\''+t.token+'\\')">Quitar</button></div>';
+    const on = s.online;
+    return '<div class="dept">' +
+      '<div class="icon"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>' +
+      '<div class="info"><div class="name">' + t.name + '</div><div class="token">' + t.token.substring(0, 12) + '...</div></div>' +
+      '<span class="badge ' + (on ? 'online' : 'offline') + '">' + (on ? 'Online' : 'Offline') + '</span>' +
+      '<button class="btn danger sm" onclick="removeToken(\\'' + t.token + '\\')">Quitar</button></div>';
   }).join('');
 }
 
 function renderHistory(jobs) {
   const el = document.getElementById('history');
   if (!jobs.length) { el.innerHTML = '<div class="empty">Sin impresiones recientes</div>'; return; }
-  const statusLabels = { done: 'Impreso', error: 'Error', pending: 'Pendiente', printing: 'Imprimiendo' };
-  el.innerHTML = jobs.slice().reverse().slice(0, 50).map(j => {
-    const time = new Date(j.timestamp).toLocaleTimeString();
-    const typeLabel = j.document_type || j.label_type || 'doc';
-    const statusLabel = statusLabels[j.status] || j.status;
+  const labels = { done: 'Impreso', error: 'Error' };
+  el.innerHTML = jobs.slice().reverse().slice(0, 30).map(j => {
+    const time = new Date(j.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    const dt = j.document_type || j.label_type || 'doc';
+    const icon = TYPE_ICONS[dt] === 'label' ? '🏷' : TYPE_ICONS[dt] === 'report' ? '📊' : '🧾';
+    const typeName = TYPE_NAMES[dt] || dt;
+    const statusCls = j.status === 'done' ? 'online' : 'error';
     const errorTip = j.error ? ' title="' + j.error.replace(/"/g, '&quot;') + '"' : '';
-    return '<div class="job"><span class="id">' + j.id.slice(0,8) + '</span><span class="type">' + typeLabel + '</span>' +
-      '<span class="format">' + j.format.toUpperCase() + '</span><span class="result ' + j.status + '"' + errorTip + '>' + statusLabel + '</span>' +
-      '<span class="time">' + time + '</span></div>';
+    return '<div class="job-item"' + errorTip + '>' +
+      '<span class="job-icon">' + icon + '</span>' +
+      '<div class="job-info"><span class="job-type">' + typeName + '</span><span class="job-id">#' + j.id.slice(0,6) + '</span></div>' +
+      '<div class="job-meta"><span class="badge format">' + j.format.toUpperCase() + '</span>' +
+      '<span class="badge ' + statusCls + '">' + (labels[j.status] || j.status) + '</span>' +
+      '<span class="job-time">' + time + '</span></div></div>';
   }).join('');
 }
 
 async function checkUpdate() {
   const btn = document.getElementById('check-update-btn');
   const el = document.getElementById('update-status');
-  btn.disabled = true;
-  btn.textContent = 'Buscando...';
+  btn.disabled = true; btn.textContent = 'Buscando...';
   el.innerHTML = '';
   try {
     const res = await fetch('/api/check-update');
     const data = await res.json();
     if (data.available) {
-      el.innerHTML = '<div class="msg success" style="display:flex;align-items:center;justify-content:space-between">' +
-        '<span>Nueva version disponible: <b>v' + data.version + '</b></span>' +
-        '<button class="btn primary small" onclick="doUpdate()">Actualizar ahora</button></div>';
-      btn.textContent = 'Nueva version: v' + data.version;
+      el.innerHTML = '<div class="msg info update-row"><span>Nueva version: <b>v' + data.version + '</b></span>' +
+        '<button class="btn primary sm" onclick="doUpdate()">Actualizar ahora</button></div>';
     } else {
-      el.innerHTML = '<div class="msg success">Estas al dia (v${VERSION})</div>';
-      btn.textContent = 'Buscar actualizacion';
+      el.innerHTML = '<div class="msg success">Estas al dia</div>';
       setTimeout(() => { el.innerHTML = ''; }, 3000);
     }
   } catch (e) {
-    el.innerHTML = '<div class="msg error">Error al buscar: ' + e.message + '</div>';
-    btn.textContent = 'Buscar actualizacion';
+    el.innerHTML = '<div class="msg error">' + e.message + '</div>';
   }
-  btn.disabled = false;
+  btn.disabled = false; btn.textContent = 'Buscar actualizacion';
 }
 
 async function doUpdate() {
   const el = document.getElementById('update-status');
-  el.innerHTML = '<div class="msg" style="background:rgba(5,128,240,0.1);color:#0580f0">Descargando e instalando... No cierres esta ventana.</div>';
+  el.innerHTML = '<div class="msg info">Descargando e instalando...</div>';
   try {
     const res = await fetch('/api/update', { method: 'POST' });
     const data = await res.json();
     if (data.success) {
-      el.innerHTML = '<div class="msg success">Actualizado a v' + data.version + '. Reiniciando servicio...</div>';
-      setTimeout(() => { location.reload(); }, 3000);
+      el.innerHTML = '<div class="msg success">Actualizado a v' + data.version + '. Reiniciando...</div>';
+      setTimeout(() => location.reload(), 3000);
     } else {
-      el.innerHTML = '<div class="msg error">Error: ' + data.error + '</div>';
+      el.innerHTML = '<div class="msg error">' + data.error + '</div>';
     }
   } catch {
-    el.innerHTML = '<div class="msg success">Servicio reiniciando... Recargando en 5s.</div>';
-    setTimeout(() => { location.reload(); }, 5000);
+    el.innerHTML = '<div class="msg success">Reiniciando servicio...</div>';
+    setTimeout(() => location.reload(), 5000);
   }
 }
 
-function renderUpdateStatus(update) {
-  if (!update) return;
+function renderUpdateStatus(u) {
+  if (!u || !u.available || u.updating) return;
   const el = document.getElementById('update-status');
-  if (update.available && !update.updating) {
-    el.innerHTML = '<div class="msg success" style="display:flex;align-items:center;justify-content:space-between">' +
-      '<span>Nueva version: <b>v' + update.version + '</b></span>' +
-      '<button class="btn primary small" onclick="doUpdate()">Actualizar ahora</button></div>';
+  if (!el.innerHTML) {
+    el.innerHTML = '<div class="msg info update-row"><span>v' + u.version + ' disponible</span>' +
+      '<button class="btn primary sm" onclick="doUpdate()">Actualizar</button></div>';
   }
 }
 
 async function refresh() {
   try {
     const res = await fetch('/api/status');
-    const data = await res.json();
-    renderWarehouses(data.tokens, data.pollStatus);
-    renderPrinters(data.printers);
-    renderHistory(data.history);
-    updateAutoStartUI(data.autoStart);
-    renderUpdateStatus(data.update);
+    const d = await res.json();
+    renderWarehouses(d.tokens, d.pollStatus);
+    renderPrinters(d.printers);
+    renderHistory(d.history);
+    document.getElementById('autostart-toggle').className = 'toggle' + (d.autoStart ? ' on' : '');
+    renderUpdateStatus(d.update);
   } catch {}
 }
 
@@ -1081,7 +1142,7 @@ async function setup() {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const ask = (q) => new Promise((r) => rl.question(q, r));
 
-  console.log("\n  LogiRapid Print Service - Configuracion inicial\n");
+  console.log("\n  Servisumic Print Service - Configuracion inicial\n");
   const server = (await ask("  URL del servidor: ")).trim();
   if (!server) { console.log("  [ERROR] URL del servidor requerida.\n"); rl.close(); process.exit(1); }
   const token = (await ask("  Token de emparejamiento: ")).trim();
@@ -1126,7 +1187,7 @@ async function addTokenCLI() {
 function listTokensCLI() {
   const config = loadConfig();
   if (!config?.tokens?.length) { console.log("\n  Sin departamentos. Usa --setup.\n"); process.exit(0); }
-  console.log(`\n  LogiRapid Print Service v${VERSION}`);
+  console.log(`\n  Servisumic Print Service v${VERSION}`);
   console.log(`  Servidor: ${config.server}\n`);
   config.tokens.forEach((t, i) => console.log(`  ${i + 1}. ${t.name}\n     ${t.token}`));
   console.log("");
@@ -1159,7 +1220,7 @@ async function main() {
   if (process.argv.includes("--remove-token")) { await removeTokenCLI(); process.exit(0); }
   if (process.argv.includes("--list")) { listTokensCLI(); process.exit(0); }
   if (process.argv.includes("--help")) {
-    console.log(`\n  LogiRapid Print Service v${VERSION}\n\n  node server.js                Iniciar servicio\n  node server.js --setup        Configuracion inicial\n  node server.js --add-token    Agregar departamento\n  node server.js --remove-token Quitar departamento\n  node server.js --list         Ver departamentos\n  node server.js --help         Ayuda\n`);
+    console.log(`\n  Servisumic Print Service v${VERSION}\n\n  node server.js                Iniciar servicio\n  node server.js --setup        Configuracion inicial\n  node server.js --add-token    Agregar departamento\n  node server.js --remove-token Quitar departamento\n  node server.js --list         Ver departamentos\n  node server.js --help         Ayuda\n`);
     process.exit(0);
   }
 
@@ -1170,7 +1231,7 @@ async function main() {
 
   const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL || "5000", 10);
 
-  console.log(`\n  LogiRapid Print Service v${VERSION}`);
+  console.log(`\n  Servisumic Print Service v${VERSION}`);
   console.log(`  Plataforma: ${platform}`);
 
   if (!config.tokens?.length) {
