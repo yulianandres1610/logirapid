@@ -164,39 +164,10 @@ export default function SessionReceiptPage() {
     fetchReport()
   }, [sessionId])
 
-  // Fetch print services - returns data directly for use
+  // Print services are now resolved automatically by the server via /api/print-jobs
   const fetchPrintServicesData = async (): Promise<{ services: PrintService[], thermalPrinters: Array<{ serviceId: number; printer: PrintService['printers'][0] }> }> => {
-    try {
-      const response = await fetch('/api/print/services')
-      const data = await response.json()
-
-      if (data.success && data.data.services) {
-        const validServices = data.data.services.filter((s: PrintService) =>
-          ['active', 'pending', 'offline'].includes(s.status)
-        )
-
-        // Build flat list of thermal printers
-        const thermalPrinters: Array<{ serviceId: number; printer: PrintService['printers'][0] }> = []
-        for (const service of validServices) {
-          for (const printer of service.printers || []) {
-            const type = printer.printerType?.toLowerCase() || ''
-            const name = printer.printerName?.toLowerCase() || ''
-            if (type.includes('thermal') || type.includes('receipt') ||
-                type.includes('pos') || name.includes('tm-') ||
-                name.includes('termica') || name.includes('ticket')) {
-              thermalPrinters.push({ serviceId: service.id, printer })
-            }
-          }
-        }
-
-        setPrintServices(validServices)
-        return { services: validServices, thermalPrinters }
-      }
-      return { services: [], thermalPrinters: [] }
-    } catch (err) {
-      console.error('Error fetching print services:', err)
-      return { services: [], thermalPrinters: [] }
-    }
+    setPrintServices([])
+    return { services: [], thermalPrinters: [] }
   }
 
   // Initial fetch on mount
@@ -273,7 +244,7 @@ export default function SessionReceiptPage() {
 
       console.log('[Session Receipt] Sending print job to service:', serviceId, 'printer ID:', printerId)
 
-      const response = await fetch('/api/print/jobs', {
+      const response = await fetch('/api/print-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(printData)

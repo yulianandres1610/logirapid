@@ -1,28 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Printer, X, Loader2, CheckCircle, AlertCircle, Wifi, WifiOff, Minus, Plus, FileText, Receipt, Package, ShoppingCart, Download } from 'lucide-react'
+import { Printer, X, Loader2, Minus, Plus, FileText, Receipt, Package, ShoppingCart } from 'lucide-react'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { cn } from '@/lib/utils'
-
-interface PrintService {
-  id: number
-  serviceCode: string
-  serviceName: string
-  status: string
-  printers: PrinterInfo[]
-}
-
-interface PrinterInfo {
-  id: number
-  printerName: string
-  printerId: string
-  printerType: string
-  isOnline: boolean
-  isDefault: boolean
-  supportedDocumentTypes?: string[]
-}
 
 export type DocumentType =
   | 'pos_receipt'
@@ -38,31 +20,6 @@ export type DocumentType =
   | 'consignment_receipt'
   | 'warehouse_operation'
   | 'wholesale_invoice'
-
-// Document types that should ONLY use label printers
-const LABEL_DOCUMENT_TYPES = ['product_label', 'shipping_label', 'lot_label']
-
-// Document types that should ONLY use THERMAL printers (receipt printers)
-// These use ESC/POS format and print on 80mm thermal paper
-const THERMAL_ONLY_DOCUMENT_TYPES = [
-  'sales_report', 'cash_register_report', 'inventory_count_report', 'pos_receipt'
-]
-
-// Document types that can use thermal OR standard printers (NOT label printers)
-// These have both ESC/POS and PDF templates in the print service
-const THERMAL_OR_STANDARD_INVOICE_TYPES = [
-  'purchase_invoice', 'invoice', 'consignment_receipt', 'wholesale_invoice'
-]
-
-// Document types that should ONLY use STANDARD printers (NOT thermal, NOT label)
-// These are PDF documents that need standard paper printers
-const STANDARD_ONLY_DOCUMENT_TYPES = [
-  'unified_reception', 'warehouse_operation'
-]
-
-// Document types that can use thermal OR standard printers (NOT label printers)
-// Currently empty - all receipt/report types now use thermal only
-const THERMAL_OR_STANDARD_DOCUMENT_TYPES: string[] = []
 
 interface PrintDocumentModalProps {
   isOpen: boolean
@@ -103,165 +60,22 @@ export function PrintDocumentModal({
 }: PrintDocumentModalProps) {
   const { showNotification } = useNotifications()
 
-  const [loading, setLoading] = useState(true)
   const [printing, setPrinting] = useState(false)
-  const [downloading, setDownloading] = useState(false)
-  const [services, setServices] = useState<PrintService[]>([])
-  const [selectedService, setSelectedService] = useState<PrintService | null>(null)
-  const [selectedPrinter, setSelectedPrinter] = useState<PrinterInfo | null>(null)
   const [copies, setCopies] = useState(1)
-  const [error, setError] = useState<string | null>(null)
-
-  // Document types that support PDF download
-  const supportsDownload = ['sales_report', 'cash_register_report', 'inventory_count_report', 'purchase_invoice'].includes(documentType)
 
   const docConfig = DOCUMENT_LABELS[documentType] || { label: 'Documento', icon: FileText }
   const DocIcon = docConfig.icon
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchPrintServices()
-    }
-  }, [isOpen])
-
-  // Helper to check if printer supports the document type
-  const printerSupportsDocType = (printer: PrinterInfo, docType: string): boolean => {
-    const isLabelPrinter = printer.printerType === 'label_4x6' || printer.printerType === 'label_barcode'
-    const isStandardPrinter = printer.printerType === 'standard'
-    const isThermalPrinter = printer.printerType === 'thermal_80mm'
-
-    // Label documents should ONLY go to label printers
-    if (LABEL_DOCUMENT_TYPES.includes(docType)) {
-      return isLabelPrinter
-    }
-
-    // Thermal-only documents should ONLY go to thermal printers
-    if (THERMAL_ONLY_DOCUMENT_TYPES.includes(docType)) {
-      return isThermalPrinter
-    }
-
-    // Invoice/receipt documents can go to thermal OR standard printers (NOT label)
-    if (THERMAL_OR_STANDARD_INVOICE_TYPES.includes(docType)) {
-      return isThermalPrinter || isStandardPrinter
-    }
-
-    // Standard-only documents should ONLY go to standard printers
-    if (STANDARD_ONLY_DOCUMENT_TYPES.includes(docType)) {
-      return isStandardPrinter
-    }
-
-    // Thermal/standard documents can go to thermal OR standard printers (NOT label)
-    if (THERMAL_OR_STANDARD_DOCUMENT_TYPES.includes(docType)) {
-      return isThermalPrinter || isStandardPrinter
-    }
-
-    // For other documents, check supportedDocumentTypes if defined
-    if (printer.supportedDocumentTypes && printer.supportedDocumentTypes.length > 0) {
-      return printer.supportedDocumentTypes.includes(docType)
-    }
-
-    return true
-  }
-
-  const fetchPrintServices = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const response = await fetch('/api/print/services?includeOffline=false')
-      const data = await response.json()
-
-      if (data.success && data.data?.services) {
-        // Filter services that have at least one printer supporting this document type
-        const activeServices = data.data.services
-          .filter((s: PrintService) => s.status === 'active' && s.printers?.length > 0)
-          .map((service: PrintService) => ({
-            ...service,
-            // Filter printers to only those supporting this document type
-            printers: service.printers.filter((p: PrinterInfo) => printerSupportsDocType(p, documentType))
-          }))
-          .filter((s: PrintService) => s.printers.length > 0) // Only keep services with compatible printers
-
-        setServices(activeServices)
-
-        if (activeServices.length > 0) {
-          const firstService = activeServices[0]
-          setSelectedService(firstService)
-
-          // Select appropriate default printer based on document type
-          let defaultPrinter: PrinterInfo | undefined
-
-          if (LABEL_DOCUMENT_TYPES.includes(documentType)) {
-            // For labels, prefer label printers
-            defaultPrinter = firstService.printers.find(
-              (p: PrinterInfo) => (p.printerType === 'label_4x6' || p.printerType === 'label_barcode') && p.isOnline
-            )
-          } else if (THERMAL_ONLY_DOCUMENT_TYPES.includes(documentType)) {
-            // For thermal-only documents, ONLY thermal printers
-            defaultPrinter = firstService.printers.find(
-              (p: PrinterInfo) => p.printerType === 'thermal_80mm' && p.isOnline
-            )
-          } else if (THERMAL_OR_STANDARD_INVOICE_TYPES.includes(documentType)) {
-            // For invoices/receipts, prefer thermal, accept standard
-            defaultPrinter = firstService.printers.find(
-              (p: PrinterInfo) => p.printerType === 'thermal_80mm' && p.isOnline
-            ) || firstService.printers.find(
-              (p: PrinterInfo) => p.printerType === 'standard' && p.isOnline
-            )
-          } else if (STANDARD_ONLY_DOCUMENT_TYPES.includes(documentType)) {
-            // For standard-only documents, ONLY standard printers
-            defaultPrinter = firstService.printers.find(
-              (p: PrinterInfo) => p.printerType === 'standard' && p.isOnline
-            )
-          } else if (THERMAL_OR_STANDARD_DOCUMENT_TYPES.includes(documentType)) {
-            // For receipts/reports, prefer thermal, then standard
-            defaultPrinter = firstService.printers.find(
-              (p: PrinterInfo) => p.printerType === 'thermal_80mm' && p.isOnline
-            ) || firstService.printers.find(
-              (p: PrinterInfo) => p.printerType === 'standard' && p.isOnline
-            )
-          } else {
-            // For other documents, prefer thermal printers
-            defaultPrinter = firstService.printers.find(
-              (p: PrinterInfo) => p.printerType === 'thermal_80mm' && p.isOnline
-            )
-          }
-
-          // Fallback to default or first available printer
-          defaultPrinter = defaultPrinter
-            || firstService.printers.find((p: PrinterInfo) => p.isDefault && p.isOnline)
-            || firstService.printers.find((p: PrinterInfo) => p.isOnline)
-            || firstService.printers[0]
-
-          setSelectedPrinter(defaultPrinter)
-        }
-      } else {
-        setError('No se encontraron servicios de impresión activos')
-      }
-    } catch (err) {
-      console.error('Error fetching print services:', err)
-      setError('Error al cargar los servicios de impresión')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handlePrint = async () => {
-    if (!selectedService || !selectedPrinter) {
-      showNotification('error', 'Error', 'Seleccione una impresora')
-      return
-    }
-
     setPrinting(true)
     try {
-      const response = await fetch('/api/print/jobs', {
+      const response = await fetch('/api/print-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           documentType,
           documentData,
           copies,
-          printServiceId: selectedService.id,
-          printerId: selectedPrinter.id,
           sourceType,
           sourceId,
           priority: 1
@@ -271,7 +85,7 @@ export function PrintDocumentModal({
       const data = await response.json()
 
       if (response.ok && data.success) {
-        showNotification('success', 'Imprimiendo', `Trabajo ${data.data.jobNumber} enviado a ${selectedPrinter.printerName}`)
+        showNotification('success', 'Imprimiendo', `Trabajo ${data.data.jobNumber} enviado a imprimir`)
         onPrintSuccess?.(data.data.jobNumber)
         onClose()
       } else {
@@ -282,43 +96,6 @@ export function PrintDocumentModal({
       showNotification('error', 'Error de impresión', errorMessage)
     } finally {
       setPrinting(false)
-    }
-  }
-
-  const handleDownload = async () => {
-    setDownloading(true)
-    try {
-      const response = await fetch('/api/print/download', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documentType,
-          documentData
-        })
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Error al generar PDF')
-      }
-
-      // Get the PDF blob and download it
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = response.headers.get('Content-Disposition')?.split('filename="')[1]?.replace('"', '') || `documento-${Date.now()}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-
-      showNotification('success', 'Descarga completada', 'El PDF se ha descargado correctamente')
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Error desconocido'
-      showNotification('error', 'Error de descarga', errorMessage)
-    } finally {
-      setDownloading(false)
     }
   }
 
@@ -361,230 +138,58 @@ export function PrintDocumentModal({
 
           {/* Content */}
           <div className="p-6 space-y-6">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-8">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-3" />
-                <p className="text-sm text-gray-400">Buscando impresoras...</p>
-              </div>
-            ) : error ? (
-              <div className="flex flex-col items-center justify-center py-8">
-                <AlertCircle className="w-12 h-12 text-red-500 mb-3" />
-                <p className="text-gray-300 text-center">{error}</p>
+            {/* Copies Selector */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Cantidad de copias
+              </label>
+              <div className="flex items-center justify-center gap-4">
                 <button
-                  onClick={fetchPrintServices}
-                  className="mt-4 text-sm text-blue-400 hover:text-blue-300"
+                  onClick={() => setCopies(Math.max(1, copies - 1))}
+                  className="w-12 h-12 rounded-xl flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white transition-colors"
                 >
-                  Reintentar
+                  <Minus className="w-5 h-5" />
+                </button>
+                <div className="w-20 h-12 rounded-xl flex items-center justify-center text-2xl font-bold bg-gray-700 text-white">
+                  {copies}
+                </div>
+                <button
+                  onClick={() => setCopies(Math.min(10, copies + 1))}
+                  className="w-12 h-12 rounded-xl flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white transition-colors"
+                >
+                  <Plus className="w-5 h-5" />
                 </button>
               </div>
-            ) : services.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8">
-                <AlertCircle className="w-12 h-12 text-amber-500 mb-3" />
-                <p className="text-gray-300 text-center font-medium">
-                  No hay servicios de impresión disponibles
-                </p>
-                <p className="text-sm text-gray-500 text-center mt-1">
-                  Instala y configura LogiRapid Print Service
-                </p>
-              </div>
-            ) : (
-              <>
-                {/* Service Selector (if multiple) */}
-                {services.length > 1 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Servicio de Impresión
-                    </label>
-                    <select
-                      value={selectedService?.id || ''}
-                      onChange={(e) => {
-                        const service = services.find(s => s.id === parseInt(e.target.value))
-                        setSelectedService(service || null)
-                        if (service) {
-                          let defaultPrinter: PrinterInfo | undefined
-                          if (LABEL_DOCUMENT_TYPES.includes(documentType)) {
-                            defaultPrinter = service.printers.find(
-                              p => (p.printerType === 'label_4x6' || p.printerType === 'label_barcode') && p.isOnline
-                            )
-                          } else if (THERMAL_OR_STANDARD_INVOICE_TYPES.includes(documentType)) {
-                            // Invoices/receipts prefer thermal, accept standard
-                            defaultPrinter = service.printers.find(
-                              p => p.printerType === 'thermal_80mm' && p.isOnline
-                            ) || service.printers.find(
-                              p => p.printerType === 'standard' && p.isOnline
-                            )
-                          } else if (STANDARD_ONLY_DOCUMENT_TYPES.includes(documentType)) {
-                            // Standard-only go to standard printers
-                            defaultPrinter = service.printers.find(
-                              p => p.printerType === 'standard' && p.isOnline
-                            )
-                          } else if (THERMAL_OR_STANDARD_DOCUMENT_TYPES.includes(documentType)) {
-                            // Receipts/reports prefer thermal, then standard
-                            defaultPrinter = service.printers.find(
-                              p => p.printerType === 'thermal_80mm' && p.isOnline
-                            ) || service.printers.find(
-                              p => p.printerType === 'standard' && p.isOnline
-                            )
-                          }
-                          defaultPrinter = defaultPrinter
-                            || service.printers.find(p => p.isDefault && p.isOnline)
-                            || service.printers.find(p => p.isOnline)
-                            || service.printers[0]
-                          setSelectedPrinter(defaultPrinter)
-                        }
-                      }}
-                      className="w-full px-4 py-3 rounded-xl border bg-gray-700 border-gray-600 text-white"
-                    >
-                      {services.map(service => (
-                        <option key={service.id} value={service.id}>
-                          {service.serviceName} ({service.serviceCode})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Printer Selector */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Impresora
-                  </label>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {selectedService?.printers.map(printer => (
-                      <button
-                        key={printer.id}
-                        onClick={() => setSelectedPrinter(printer)}
-                        className={cn(
-                          'w-full p-4 rounded-xl border-2 transition-all text-left flex items-center justify-between',
-                          selectedPrinter?.id === printer.id
-                            ? 'border-blue-500 bg-blue-900/20'
-                            : 'border-gray-600 bg-gray-700/50 hover:border-gray-500'
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Printer className={cn(
-                            'w-5 h-5',
-                            selectedPrinter?.id === printer.id ? 'text-blue-400' : 'text-gray-400'
-                          )} />
-                          <div>
-                            <p className={cn(
-                              'font-medium',
-                              selectedPrinter?.id === printer.id
-                                ? 'text-blue-400'
-                                : 'text-white'
-                            )}>
-                              {printer.printerName}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {printer.printerType === 'thermal_80mm' ? 'Térmica 80mm' :
-                               printer.printerType === 'label_4x6' ? 'Etiquetas 4x6' :
-                               printer.printerType === 'label_barcode' ? 'Código de barras' :
-                               'Estándar'}
-                              {printer.isDefault && ' • Predeterminada'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {printer.isOnline ? (
-                            <div className="flex items-center gap-1 text-green-400">
-                              <Wifi className="w-4 h-4" />
-                              <span className="text-xs">Online</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1 text-gray-500">
-                              <WifiOff className="w-4 h-4" />
-                              <span className="text-xs">Offline</span>
-                            </div>
-                          )}
-                          {selectedPrinter?.id === printer.id && (
-                            <CheckCircle className="w-5 h-5 text-blue-500" />
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Copies Selector */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Cantidad de copias
-                  </label>
-                  <div className="flex items-center justify-center gap-4">
-                    <button
-                      onClick={() => setCopies(Math.max(1, copies - 1))}
-                      className="w-12 h-12 rounded-xl flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white transition-colors"
-                    >
-                      <Minus className="w-5 h-5" />
-                    </button>
-                    <div className="w-20 h-12 rounded-xl flex items-center justify-center text-2xl font-bold bg-gray-700 text-white">
-                      {copies}
-                    </div>
-                    <button
-                      onClick={() => setCopies(Math.min(10, copies + 1))}
-                      className="w-12 h-12 rounded-xl flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white transition-colors"
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
+            </div>
           </div>
 
           {/* Footer */}
-          {!loading && (services.length > 0 || supportsDownload) && (
-            <div className="px-6 py-4 border-t border-gray-700 bg-gray-800/50 flex gap-3">
-              <button
-                onClick={onClose}
-                className="py-3 px-4 rounded-xl font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
-              >
-                Cancelar
-              </button>
+          <div className="px-6 py-4 border-t border-gray-700 bg-gray-800/50 flex gap-3">
+            <button
+              onClick={onClose}
+              className="py-3 px-4 rounded-xl font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+            >
+              Cancelar
+            </button>
 
-              {/* Download button - always available for supported document types */}
-              {supportsDownload && (
-                <button
-                  onClick={handleDownload}
-                  disabled={downloading}
-                  className={cn(
-                    'flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors',
-                    'bg-gradient-to-r from-green-500 to-green-600 text-white',
-                    'hover:from-green-600 hover:to-green-700',
-                    'disabled:opacity-50 disabled:cursor-not-allowed'
-                  )}
-                >
-                  {downloading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Download className="w-5 h-5" />
-                  )}
-                  {downloading ? 'Generando...' : 'Descargar PDF'}
-                </button>
+            <button
+              onClick={handlePrint}
+              disabled={printing}
+              className={cn(
+                'flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors',
+                'bg-gradient-to-r from-blue-500 to-blue-600 text-white',
+                'hover:from-blue-600 hover:to-blue-700',
+                'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
-
-              {/* Print button - only if printers available */}
-              {services.length > 0 && (
-                <button
-                  onClick={handlePrint}
-                  disabled={printing || !selectedPrinter}
-                  className={cn(
-                    'flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors',
-                    'bg-gradient-to-r from-blue-500 to-blue-600 text-white',
-                    'hover:from-blue-600 hover:to-blue-700',
-                    'disabled:opacity-50 disabled:cursor-not-allowed'
-                  )}
-                >
-                  {printing ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Printer className="w-5 h-5" />
-                  )}
-                  {printing ? 'Enviando...' : `Imprimir ${copies > 1 ? `(${copies})` : ''}`}
-                </button>
+            >
+              {printing ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Printer className="w-5 h-5" />
               )}
-            </div>
-          )}
+              {printing ? 'Enviando...' : `Imprimir ${copies > 1 ? `(${copies})` : ''}`}
+            </button>
+          </div>
         </motion.div>
       </motion.div>
     </AnimatePresence>

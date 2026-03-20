@@ -6,10 +6,6 @@ import {
   Printer,
   X,
   Loader2,
-  CheckCircle,
-  AlertCircle,
-  Wifi,
-  WifiOff,
   Minus,
   Plus,
   DollarSign,
@@ -23,23 +19,6 @@ import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
 import { cn } from '@/lib/utils'
-
-interface PrintService {
-  id: number
-  serviceCode: string
-  serviceName: string
-  status: string
-  printers: PrinterInfo[]
-}
-
-interface PrinterInfo {
-  id: number
-  printerName: string
-  printerId: string
-  printerType: string
-  isOnline: boolean
-  isDefault: boolean
-}
 
 interface BulkProduct {
   id: number
@@ -65,21 +44,14 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
   const exchangeRates = useMarketExchangeRates()
   const USD_CUP = exchangeRates?.USD_CUP || 411
 
-  const [loadingServices, setLoadingServices] = useState(true)
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [printing, setPrinting] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
-
-  const [services, setServices] = useState<PrintService[]>([])
-  const [selectedService, setSelectedService] = useState<PrintService | null>(null)
-  const [selectedPrinter, setSelectedPrinter] = useState<PrinterInfo | null>(null)
 
   const [products, setProducts] = useState<BulkProduct[]>([])
   const [selectedProducts, setSelectedProducts] = useState<Set<number>>(new Set())
   const [productCopies, setProductCopies] = useState<Record<number, number>>({})
   const [searchTerm, setSearchTerm] = useState('')
-
-  const [error, setError] = useState<string | null>(null)
 
   // Filter products by search
   const filteredProducts = products.filter(p =>
@@ -94,7 +66,6 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
 
   useEffect(() => {
     if (isOpen) {
-      fetchPrintServices()
       fetchAllProducts()
     } else {
       // Reset state when closed
@@ -104,51 +75,6 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
       setProgress({ current: 0, total: 0 })
     }
   }, [isOpen])
-
-  const fetchPrintServices = async () => {
-    setLoadingServices(true)
-    setError(null)
-    try {
-      const response = await fetch('/api/print/services?includeOffline=false', { credentials: 'include' })
-      const data = await response.json()
-
-      if (!data.success) {
-        setError(data.error || 'Error al cargar servicios de impresión')
-        return
-      }
-
-      if (data.data?.services && data.data.services.length > 0) {
-        const activeServices = data.data.services.filter(
-          (s: PrintService) => s.status === 'active' && s.printers?.length > 0
-        )
-        setServices(activeServices)
-
-        if (activeServices.length > 0) {
-          const firstService = activeServices[0]
-          setSelectedService(firstService)
-
-          const labelPrinters = firstService.printers.filter((p: PrinterInfo) =>
-            p.printerType === 'label_barcode' ||
-            p.printerType === 'label_4x6' ||
-            p.printerName.toLowerCase().includes('label') ||
-            p.printerName.toLowerCase().includes('barcode') ||
-            p.printerName.toLowerCase().includes('etiqueta')
-          )
-
-          const defaultPrinter = labelPrinters.find((p: PrinterInfo) => p.isDefault && p.isOnline)
-            || labelPrinters.find((p: PrinterInfo) => p.isOnline)
-            || labelPrinters[0]
-
-          setSelectedPrinter(defaultPrinter || null)
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching print services:', err)
-      setError('Error al cargar los servicios de impresión')
-    } finally {
-      setLoadingServices(false)
-    }
-  }
 
   const fetchAllProducts = async () => {
     setLoadingProducts(true)
@@ -221,11 +147,6 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
   }
 
   const handlePrint = async (includePrice: boolean) => {
-    if (!selectedService || !selectedPrinter) {
-      showNotification('error', 'Error', 'Seleccione una impresora')
-      return
-    }
-
     if (totalSelectedProducts === 0) {
       showNotification('error', 'Error', 'Seleccione al menos un producto')
       return
@@ -257,7 +178,7 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
       }).filter(Boolean)
 
       // Send single job with all items
-      const response = await fetch('/api/print/jobs', {
+      const response = await fetch('/api/print-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -269,8 +190,6 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
             labelSize: 'medium'
           },
           copies: 1, // Copies per item are in the items array
-          printServiceId: selectedService.id,
-          printerId: selectedPrinter.id,
           sourceType: 'bulk_inventory',
           priority: 1
         })
@@ -285,7 +204,7 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
         showNotification(
           'success',
           'Impresión enviada',
-          `${totalCopies} etiquetas ${priceInfo} enviadas a ${selectedPrinter.printerName} en un solo trabajo`
+          `${totalCopies} etiquetas ${priceInfo} enviadas a imprimir`
         )
 
         if (onPrintSuccess) {
@@ -311,15 +230,7 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
 
   if (!isOpen) return null
 
-  const labelPrinters = selectedService?.printers.filter(printer =>
-    printer.printerType === 'label_barcode' ||
-    printer.printerType === 'label_4x6' ||
-    printer.printerName.toLowerCase().includes('label') ||
-    printer.printerName.toLowerCase().includes('barcode') ||
-    printer.printerName.toLowerCase().includes('etiqueta')
-  ) || []
-
-  const isLoading = loadingServices || loadingProducts
+  const isLoading = loadingProducts
 
   return (
     <AnimatePresence>
@@ -369,82 +280,23 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-hidden flex">
+          <div className="flex-1 overflow-hidden flex flex-col">
             {isLoading ? (
               <div className="flex-1 flex flex-col items-center justify-center py-12">
                 <Loader2 className="w-10 h-10 animate-spin text-emerald-500 mb-3" />
                 <p className="text-gray-500">Cargando...</p>
               </div>
-            ) : error ? (
-              <div className="flex-1 flex flex-col items-center justify-center py-12">
-                <AlertCircle className="w-12 h-12 text-red-500 mb-3" />
-                <p className="text-gray-600 dark:text-gray-300 text-center">{error}</p>
-                <button
-                  onClick={fetchPrintServices}
-                  className="mt-4 text-sm text-emerald-600 hover:text-emerald-700"
-                >
-                  Reintentar
-                </button>
-              </div>
             ) : (
               <>
-                {/* Left: Printer Selection */}
-                <div className={cn(
-                  'w-64 flex-shrink-0 p-4 border-r overflow-y-auto',
-                  theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                )}>
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
-                    Impresora
-                  </p>
-                  <div className="space-y-2">
-                    {labelPrinters.map(printer => (
-                      <button
-                        key={printer.id}
-                        onClick={() => setSelectedPrinter(printer)}
-                        disabled={printing}
-                        className={cn(
-                          'w-full p-3 rounded-xl border transition-all text-left',
-                          selectedPrinter?.id === printer.id
-                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30'
-                            : theme === 'dark'
-                              ? 'border-gray-600 hover:border-gray-500'
-                              : 'border-gray-200 hover:border-gray-300'
-                        )}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1 min-w-0">
-                            <p className={cn(
-                              'text-sm font-medium truncate',
-                              selectedPrinter?.id === printer.id
-                                ? 'text-emerald-700 dark:text-emerald-400'
-                                : 'text-gray-900 dark:text-white'
-                            )}>
-                              {printer.printerName}
-                            </p>
-                            <div className="flex items-center gap-1.5 mt-1">
-                              {printer.isOnline ? (
-                                <Wifi className="w-3 h-3 text-green-500" />
-                              ) : (
-                                <WifiOff className="w-3 h-3 text-gray-400" />
-                              )}
-                              <span className="text-xs text-gray-500">
-                                {printer.isOnline ? 'Online' : 'Offline'}
-                              </span>
-                            </div>
-                          </div>
-                          {selectedPrinter?.id === printer.id && (
-                            <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Quick copies */}
-                  {totalSelectedProducts > 0 && (
-                    <div className="mt-6">
-                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
-                        Copias por producto
+                {/* Quick copies */}
+                {totalSelectedProducts > 0 && (
+                  <div className={cn(
+                    'flex-shrink-0 px-4 py-3 border-b',
+                    theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                  )}>
+                    <div className="flex items-center gap-3">
+                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                        Copias por producto:
                       </p>
                       <div className="flex gap-2">
                         {[1, 2, 5, 10].map(n => (
@@ -453,7 +305,7 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
                             onClick={() => setAllCopies(n)}
                             disabled={printing}
                             className={cn(
-                              'flex-1 py-2 rounded-lg text-sm font-medium transition-all',
+                              'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
                               theme === 'dark'
                                 ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
                                 : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
@@ -464,10 +316,10 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
                         ))}
                       </div>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
-                {/* Right: Products */}
+                {/* Products */}
                 <div className="flex-1 flex flex-col overflow-hidden">
                   {/* Search and select all */}
                   <div className={cn(
@@ -644,7 +496,7 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
           )}
 
           {/* Footer */}
-          {!isLoading && services.length > 0 && (
+          {!isLoading && (
             <div className={cn(
               'px-6 py-4 border-t flex items-center justify-between',
               theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
@@ -655,7 +507,7 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
               <div className="flex gap-3">
                 <button
                   onClick={() => handlePrint(true)}
-                  disabled={printing || !selectedPrinter || totalSelectedProducts === 0}
+                  disabled={printing || totalSelectedProducts === 0}
                   className={cn(
                     'px-6 py-2.5 rounded-xl font-medium flex items-center gap-2',
                     'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white',
@@ -672,7 +524,7 @@ export function BulkPrintLabelsModal({ isOpen, onClose, onPrintSuccess }: BulkPr
                 </button>
                 <button
                   onClick={() => handlePrint(false)}
-                  disabled={printing || !selectedPrinter || totalSelectedProducts === 0}
+                  disabled={printing || totalSelectedProducts === 0}
                   className={cn(
                     'px-6 py-2.5 rounded-xl font-medium flex items-center gap-2',
                     theme === 'dark'

@@ -231,64 +231,9 @@ export default function InventoryCountReportPage() {
     router.push(`/dashboard/market/pos/${terminalId}/close`)
   }, [router, terminalId])
 
-  // Fetch print services - filtered by terminal configuration and document type support
+  // Print services are now resolved automatically by the server via /api/print-jobs
   const fetchPrintServices = async () => {
-    try {
-      console.log('[CountReport] Fetching print services, defaultPrintServiceId:', defaultPrintServiceId)
-      const response = await fetch('/api/print/services')
-      const data = await response.json()
-
-      if (data.success && data.data?.services) {
-        let allServices = data.data.services
-
-        // FILTER BY TERMINAL'S CONFIGURED PRINT SERVICE
-        if (defaultPrintServiceId) {
-          console.log('[CountReport] Filtering by terminal print service ID:', defaultPrintServiceId)
-          allServices = allServices.filter((s: { id: number }) => s.id === defaultPrintServiceId)
-          console.log('[CountReport] Services after filtering:', allServices.length)
-        }
-
-        // Filter to active/pending/offline services with printers
-        const activeServices = allServices.filter(
-          (s: { status: string; printers?: unknown[] }) =>
-            (s.status === 'active' || s.status === 'pending' || s.status === 'offline') &&
-            s.printers && s.printers.length > 0
-        )
-
-        // Filter printers that support inventory_count_report document type
-        const supportsCountReport = (p: { printerType: string; supportedDocumentTypes?: string[] }) => {
-          // If printer has supportedDocumentTypes configured, check if inventory_count_report is included
-          if (p.supportedDocumentTypes && p.supportedDocumentTypes.length > 0) {
-            return p.supportedDocumentTypes.includes('inventory_count_report') ||
-                   p.supportedDocumentTypes.includes('pos_receipt') // Receipt printers usually can print reports too
-          }
-          // If no supportedDocumentTypes, thermal printers can print reports
-          const thermalTypes = ['thermal_80mm', 'thermal_58mm', 'pos', 'receipt', 'thermal']
-          return thermalTypes.includes((p.printerType || '').toLowerCase())
-        }
-
-        const servicesWithValidPrinters = activeServices.map((service: { id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; isDefault: boolean; printerType: string; supportedDocumentTypes?: string[] }> }) => ({
-          ...service,
-          printers: service.printers.filter(supportsCountReport)
-        })).filter((s: { printers: unknown[] }) => s.printers.length > 0)
-
-        console.log('[CountReport] Services with valid printers:', servicesWithValidPrinters.length)
-        servicesWithValidPrinters.forEach((s: { serviceName: string; printers: Array<{ printerName: string }> }) => {
-          console.log(`[CountReport]   Service: ${s.serviceName} - Printers: ${s.printers.map(p => p.printerName).join(', ')}`)
-        })
-
-        setPrintServices(servicesWithValidPrinters)
-
-        // Auto-select first printer
-        if (servicesWithValidPrinters.length > 0 && servicesWithValidPrinters[0].printers.length > 0) {
-          const firstPrinter = servicesWithValidPrinters[0].printers.find((p: { isOnline: boolean }) => p.isOnline) || servicesWithValidPrinters[0].printers[0]
-          console.log('[CountReport] Auto-selecting printer:', firstPrinter.printerName)
-          setSelectedPrinter({ serviceId: servicesWithValidPrinters[0].id, printerId: firstPrinter.id })
-        }
-      }
-    } catch (err) {
-      console.error('[CountReport] Error fetching print services:', err)
-    }
+    setPrintServices([])
   }
 
   // Print with service
@@ -297,7 +242,7 @@ export default function InventoryCountReportPage() {
 
     setPrintingWithService(true)
     try {
-      const response = await fetch('/api/print/jobs', {
+      const response = await fetch('/api/print-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

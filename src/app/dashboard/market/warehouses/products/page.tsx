@@ -88,34 +88,9 @@ export default function WarehouseProductsPage() {
     ) || []
   }, [services, selectedService])
 
-  // Fetch services
+  // Print services are now resolved automatically by the server via /api/print-jobs
   const fetchServices = useCallback(async () => {
-    try {
-      const response = await fetch('/api/print/services')
-      if (response.ok) {
-        const data = await response.json()
-        const activeServices = (data.data?.services || []).filter(
-          (s: PrintService) => s.status === 'active'
-        )
-        setServices(activeServices)
-
-        // Auto-select first service with label printers
-        for (const service of activeServices) {
-          const labelPrinters = service.printers?.filter((p: PrintServicePrinter) =>
-            p.printerType === 'label_barcode' ||
-            p.printerType === 'label_4x6' ||
-            p.printerType.includes('label')
-          ) || []
-          if (labelPrinters.length > 0) {
-            setSelectedService(service.id)
-            setSelectedPrinter(labelPrinters[0].id)
-            break
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching services:', error)
-    }
+    setServices([])
   }, [])
 
   // Search products
@@ -210,7 +185,7 @@ export default function WarehouseProductsPage() {
         ? Math.round(product.sellingPrice * USD_CUP)
         : undefined
 
-      const response = await fetch('/api/print/jobs', {
+      const response = await fetch('/api/print-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

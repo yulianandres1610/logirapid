@@ -216,49 +216,9 @@ export default function AuditReportPage() {
     }
   }, [countData, router])
 
-  // Fetch print services
+  // Print services are now resolved automatically by the server via /api/print-jobs
   const fetchPrintServices = async () => {
-    try {
-      const response = await fetch('/api/print/services')
-      const data = await response.json()
-
-      if (data.success && data.data?.services) {
-        const allServices = data.data.services
-
-        // Filter to active/pending/offline services with printers
-        const activeServices = allServices.filter(
-          (s: { status: string; printers?: unknown[] }) =>
-            (s.status === 'active' || s.status === 'pending' || s.status === 'offline') &&
-            s.printers && s.printers.length > 0
-        )
-
-        // Filter printers that support audit_count_report or thermal printers
-        const supportsAuditReport = (p: { printerType: string; supportedDocumentTypes?: string[] }) => {
-          if (p.supportedDocumentTypes && p.supportedDocumentTypes.length > 0) {
-            return p.supportedDocumentTypes.includes('audit_count_report') ||
-                   p.supportedDocumentTypes.includes('inventory_count_report') ||
-                   p.supportedDocumentTypes.includes('pos_receipt')
-          }
-          const thermalTypes = ['thermal_80mm', 'thermal_58mm', 'pos', 'receipt', 'thermal']
-          return thermalTypes.includes((p.printerType || '').toLowerCase())
-        }
-
-        const servicesWithValidPrinters = activeServices.map((service: { id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; isDefault: boolean; printerType: string; supportedDocumentTypes?: string[] }> }) => ({
-          ...service,
-          printers: service.printers.filter(supportsAuditReport)
-        })).filter((s: { printers: unknown[] }) => s.printers.length > 0)
-
-        setPrintServices(servicesWithValidPrinters)
-
-        // Auto-select first printer
-        if (servicesWithValidPrinters.length > 0 && servicesWithValidPrinters[0].printers.length > 0) {
-          const firstPrinter = servicesWithValidPrinters[0].printers.find((p: { isOnline: boolean }) => p.isOnline) || servicesWithValidPrinters[0].printers[0]
-          setSelectedPrinter({ serviceId: servicesWithValidPrinters[0].id, printerId: firstPrinter.id })
-        }
-      }
-    } catch (err) {
-      console.error('[AuditReport] Error fetching print services:', err)
-    }
+    setPrintServices([])
   }
 
   // Print with service
@@ -309,7 +269,7 @@ export default function AuditReportPage() {
         }))
       }
 
-      const response = await fetch('/api/print/jobs', {
+      const response = await fetch('/api/print-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

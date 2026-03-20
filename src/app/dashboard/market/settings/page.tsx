@@ -1343,73 +1343,23 @@ function PrintServicesTab({ theme }: { theme: string }) {
     }
   }, [message])
 
+  // Print services are now resolved automatically by the server via /api/print-jobs
   const fetchServices = async () => {
-    try {
-      setLoading(true)
-      const response = await fetch('/api/print/services')
-      if (response.ok) {
-        const data = await response.json()
-        setServices(data.data?.services || [])
-      }
-    } catch (error) {
-      console.error('Error fetching print services:', error)
-    } finally {
-      setLoading(false)
-    }
+    setLoading(true)
+    setServices([])
+    setLoading(false)
   }
 
   const fetchServiceDetails = async (id: number) => {
-    try {
-      const response = await fetch(`/api/print/services/${id}`)
-      if (response.ok) {
-        const data = await response.json()
-        console.log(`[Settings] Service ${id} details received:`, data.data)
-        console.log(`[Settings] Printers received: ${data.data?.printers?.length || 0}`)
-        if (data.data?.printers) {
-          data.data.printers.forEach((p: any, i: number) =>
-            console.log(`[Settings]   [${i + 1}] "${p.printerName}" (id: ${p.id}, type: ${p.printerType})`)
-          )
-        }
-        return data.data
-      }
-    } catch (error) {
-      console.error('Error fetching service details:', error)
-    }
+    // Print services API no longer exists - resolved automatically by server
+    console.log(`[Settings] fetchServiceDetails(${id}) - print services now managed via tokens`)
     return null
   }
 
   const handleCreateService = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!serviceName.trim()) return
-
-    setCreating(true)
-    try {
-      const response = await fetch('/api/print/services', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serviceName })
-      })
-
-      const data = await response.json()
-
-      if (response.ok && data.success) {
-        setNewCredentials({
-          serviceCode: data.data.serviceCode,
-          apiKey: data.data.apiKey,
-          apiSecret: data.data.apiSecret
-        })
-        setShowCreateModal(false)
-        setShowCredentialsModal(true)
-        setServiceName('')
-        fetchServices()
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Error al crear servicio' })
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Error al crear servicio' })
-    } finally {
-      setCreating(false)
-    }
+    // Print services API no longer exists - managed via tokens
+    setMessage({ type: 'error', text: 'La gestión de servicios de impresión ahora se realiza mediante tokens' })
   }
 
   const handleViewDetails = async (service: any) => {
@@ -1422,19 +1372,8 @@ function PrintServicesTab({ theme }: { theme: string }) {
   }
 
   const refreshPrinters = async () => {
-    if (!selectedService) return
-    setRefreshingPrinters(true)
-    try {
-      const details = await fetchServiceDetails(selectedService.id)
-      if (details) {
-        setSelectedService(prev => prev ? { ...prev, printers: details.printers } : null)
-        setMessage({ type: 'success', text: `${details.printers?.length || 0} impresoras encontradas` })
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Error al refrescar impresoras' })
-    } finally {
-      setRefreshingPrinters(false)
-    }
+    // Print services API no longer exists - managed via tokens
+    setMessage({ type: 'error', text: 'La gestión de servicios de impresión ahora se realiza mediante tokens' })
   }
 
   const handleEditService = (service: any) => {
@@ -1446,82 +1385,18 @@ function PrintServicesTab({ theme }: { theme: string }) {
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editServiceName.trim() || !selectedService) return
-
-    setUpdating(true)
-    try {
-      const response = await fetch(`/api/print/services/${selectedService.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serviceName: editServiceName })
-      })
-
-      const data = await response.json()
-
-      if (response.ok && data.success) {
-        setMessage({ type: 'success', text: 'Servicio actualizado correctamente' })
-        setShowEditModal(false)
-        setSelectedService(null)
-        fetchServices()
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Error al actualizar' })
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Error al actualizar servicio' })
-    } finally {
-      setUpdating(false)
-    }
+    // Print services API no longer exists - managed via tokens
+    setMessage({ type: 'error', text: 'La gestión de servicios de impresión ahora se realiza mediante tokens' })
   }
 
   const handleRegenerateCredentials = async () => {
-    if (!selectedService) return
-    if (!confirm('¿Regenerar las credenciales? La app de impresión dejará de funcionar hasta que configures las nuevas credenciales.')) return
-
-    setRegenerating(true)
-    try {
-      const response = await fetch(`/api/print/services/${selectedService.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ regenerateCredentials: true })
-      })
-
-      const data = await response.json()
-
-      if (response.ok && data.success && data.data) {
-        setNewCredentials({
-          serviceCode: selectedService.serviceCode,
-          apiKey: data.data.apiKey,
-          apiSecret: data.data.apiSecret
-        })
-        setShowDetailsModal(false)
-        setShowCredentialsModal(true)
-        fetchServices()
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Error al regenerar credenciales' })
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Error al regenerar credenciales' })
-    } finally {
-      setRegenerating(false)
-    }
+    // Print services API no longer exists - managed via tokens
+    setMessage({ type: 'error', text: 'La gestión de servicios de impresión ahora se realiza mediante tokens' })
   }
 
   const handleDeleteService = async (id: number, name: string) => {
-    setActionMenuOpen(null)
-    if (!confirm(`¿Eliminar el servicio "${name}"? Esta acción no se puede deshacer.`)) return
-
-    try {
-      const response = await fetch(`/api/print/services/${id}`, { method: 'DELETE' })
-      const data = await response.json()
-      if (response.ok) {
-        setMessage({ type: 'success', text: 'Servicio eliminado' })
-        fetchServices()
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Error al eliminar' })
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Error al eliminar servicio' })
-    }
+    // Print services API no longer exists - managed via tokens
+    setMessage({ type: 'error', text: 'La gestión de servicios de impresión ahora se realiza mediante tokens' })
   }
 
   const copyToClipboard = (text: string, field: string) => {
@@ -1541,6 +1416,11 @@ function PrintServicesTab({ theme }: { theme: string }) {
   }
 
   const handleSavePrinterConfig = async () => {
+    // Print services API no longer exists - managed via tokens
+    setMessage({ type: 'error', text: 'La gestión de servicios de impresión ahora se realiza mediante tokens' })
+    setShowPrinterConfigModal(false)
+    return
+    // Dead code below preserved for reference
     if (!selectedPrinter || !selectedService) return
 
     setSavingPrinter(true)

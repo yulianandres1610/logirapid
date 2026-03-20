@@ -2,28 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Printer, X, Loader2, CheckCircle, AlertCircle, Wifi, WifiOff, Minus, Plus, DollarSign, Tag } from 'lucide-react'
+import { Printer, X, Loader2, Minus, Plus, DollarSign, Tag } from 'lucide-react'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
 import { cn } from '@/lib/utils'
-
-interface PrintService {
-  id: number
-  serviceCode: string
-  serviceName: string
-  status: string
-  printers: PrinterInfo[]
-}
-
-interface PrinterInfo {
-  id: number
-  printerName: string
-  printerId: string
-  printerType: string
-  isOnline: boolean
-  isDefault: boolean
-}
 
 interface ProductVariant {
   id: number
@@ -61,14 +44,9 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
   const exchangeRates = useMarketExchangeRates()
   const USD_CUP = exchangeRates?.USD_CUP || 411
 
-  const [loading, setLoading] = useState(true)
   const [printing, setPrinting] = useState(false)
-  const [services, setServices] = useState<PrintService[]>([])
-  const [selectedService, setSelectedService] = useState<PrintService | null>(null)
-  const [selectedPrinter, setSelectedPrinter] = useState<PrinterInfo | null>(null)
   const [copies, setCopies] = useState(1)
   const [variantCopies, setVariantCopies] = useState<Record<number, number>>({})
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (isOpen) {
@@ -99,77 +77,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
     }))
   }
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchPrintServices()
-    }
-  }, [isOpen])
-
-  const fetchPrintServices = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      // Try filtering by warehouse first, fallback to all services
-      let url = warehouseId
-        ? `/api/print/services?includeOffline=false&warehouseId=${warehouseId}`
-        : '/api/print/services?includeOffline=false'
-      let response = await fetch(url, { credentials: 'include' })
-      let data = await response.json()
-
-      // If no services found for this warehouse, try without filter
-      if (data.success && warehouseId && (!data.data?.services || data.data.services.length === 0)) {
-        response = await fetch('/api/print/services?includeOffline=false', { credentials: 'include' })
-        data = await response.json()
-      }
-
-      if (!data.success) {
-        setError(data.error || 'Error al cargar servicios de impresión')
-        return
-      }
-
-      if (data.data?.services && data.data.services.length > 0) {
-        const activeServices = data.data.services.filter(
-          (s: PrintService) => s.status === 'active' && s.printers?.length > 0
-        )
-        setServices(activeServices)
-
-        if (activeServices.length > 0) {
-          const firstService = activeServices[0]
-          setSelectedService(firstService)
-
-          const labelPrinters = firstService.printers.filter((p: PrinterInfo) =>
-            p.printerType === 'label_barcode' ||
-            p.printerType === 'label_4x6' ||
-            p.printerName.toLowerCase().includes('label') ||
-            p.printerName.toLowerCase().includes('barcode') ||
-            p.printerName.toLowerCase().includes('etiqueta')
-          )
-
-          const defaultPrinter = labelPrinters.find((p: PrinterInfo) => p.isDefault && p.isOnline)
-            || labelPrinters.find((p: PrinterInfo) => p.isOnline)
-            || labelPrinters[0]
-
-          setSelectedPrinter(defaultPrinter || null)
-        } else {
-          setError('No hay servicios de impresión activos con impresoras configuradas')
-        }
-      } else {
-        setError('No se encontraron servicios de impresión.')
-      }
-    } catch (err) {
-      console.error('Error fetching print services:', err)
-      setError('Error al cargar los servicios de impresión')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handlePrint = async (includePrice: boolean) => {
-    if (!selectedService || !selectedPrinter) {
-      showNotification('error', 'Error', 'Seleccione una impresora')
-      return
-    }
-
     if (totalCopies === 0) {
       showNotification('error', 'Error', 'Seleccione al menos una etiqueta para imprimir')
       return
@@ -234,14 +142,13 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
 
       const jobNumbers: string[] = []
       for (const job of jobs) {
-        const response = await fetch('/api/print/jobs', {
+        const response = await fetch('/api/print-jobs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({
             ...job,
-            printServiceId: selectedService.id,
-            printerId: selectedPrinter.id,
+            warehouseId,
             sourceType: 'product',
             priority: 1
           })
@@ -259,7 +166,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
       showNotification(
         'success',
         'Imprimiendo',
-        `${totalCopies} etiqueta${totalCopies > 1 ? 's' : ''} ${priceInfo} enviada${totalCopies > 1 ? 's' : ''} a ${selectedPrinter.printerName}`
+        `${totalCopies} etiqueta${totalCopies > 1 ? 's' : ''} ${priceInfo} enviada${totalCopies > 1 ? 's' : ''} a imprimir`
       )
 
       if (onPrintSuccess && jobNumbers.length > 0) {
@@ -285,14 +192,6 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
   }
 
   if (!isOpen) return null
-
-  const labelPrinters = selectedService?.printers.filter(printer =>
-    printer.printerType === 'label_barcode' ||
-    printer.printerType === 'label_4x6' ||
-    printer.printerName.toLowerCase().includes('label') ||
-    printer.printerName.toLowerCase().includes('barcode') ||
-    printer.printerName.toLowerCase().includes('etiqueta')
-  ) || []
 
   return (
     <AnimatePresence>
@@ -332,72 +231,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
 
           {/* Content */}
           <div className="p-4">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-8">
-                <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mb-2" />
-                <p className="text-sm text-gray-500">Buscando impresoras...</p>
-              </div>
-            ) : error ? (
-              <div className="flex flex-col items-center justify-center py-6">
-                <AlertCircle className="w-10 h-10 text-red-500 mb-2" />
-                <p className="text-gray-600 dark:text-gray-300 text-center text-sm">{error}</p>
-                <button
-                  onClick={fetchPrintServices}
-                  className="mt-3 text-sm text-emerald-600 hover:text-emerald-700"
-                >
-                  Reintentar
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4">
-                {/* Columna izquierda: Impresora */}
-                <div className="space-y-3">
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    Impresora
-                  </p>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                    {labelPrinters.map(printer => (
-                      <button
-                        key={printer.id}
-                        onClick={() => setSelectedPrinter(printer)}
-                        className={cn(
-                          'w-full p-2.5 rounded-lg border transition-all text-left flex items-center gap-2',
-                          selectedPrinter?.id === printer.id
-                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30'
-                            : theme === 'dark'
-                              ? 'border-gray-600 hover:border-gray-500'
-                              : 'border-gray-200 hover:border-gray-300'
-                        )}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className={cn(
-                            'text-sm font-medium truncate',
-                            selectedPrinter?.id === printer.id
-                              ? 'text-emerald-700 dark:text-emerald-400'
-                              : 'text-gray-900 dark:text-white'
-                          )}>
-                            {printer.printerName}
-                          </p>
-                          <div className="flex items-center gap-1.5">
-                            {printer.isOnline ? (
-                              <Wifi className="w-3 h-3 text-green-500" />
-                            ) : (
-                              <WifiOff className="w-3 h-3 text-gray-400" />
-                            )}
-                            <span className="text-xs text-gray-500">
-                              {printer.isOnline ? 'Online' : 'Offline'}
-                            </span>
-                          </div>
-                        </div>
-                        {selectedPrinter?.id === printer.id && (
-                          <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Columna derecha: Productos */}
+              <div>
                 <div className="space-y-3">
                   <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                     Etiquetas ({totalCopies})
@@ -485,18 +319,16 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
                   </div>
                 </div>
               </div>
-            )}
           </div>
 
           {/* Footer compacto */}
-          {!loading && services.length > 0 && (
-            <div className={cn(
+          <div className={cn(
               'px-4 py-3 border-t flex gap-2',
               theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
             )}>
               <button
                 onClick={() => handlePrint(true)}
-                disabled={printing || !selectedPrinter || totalCopies === 0}
+                disabled={printing || totalCopies === 0}
                 className={cn(
                   'flex-1 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 text-sm',
                   'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white',
@@ -513,7 +345,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
               </button>
               <button
                 onClick={() => handlePrint(false)}
-                disabled={printing || !selectedPrinter || totalCopies === 0}
+                disabled={printing || totalCopies === 0}
                 className={cn(
                   'flex-1 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 text-sm',
                   theme === 'dark'
@@ -529,7 +361,6 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
                 Sin Precio
               </button>
             </div>
-          )}
         </motion.div>
       </motion.div>
     </AnimatePresence>

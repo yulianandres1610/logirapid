@@ -262,45 +262,9 @@ export default function MarketPurchasesPage() {
     })
   }
 
-  // Print functions
+  // Print services are now resolved automatically by the server via /api/print-jobs
   const fetchPrintServices = async () => {
-    try {
-      const response = await fetch('/api/print/services?includeOffline=false')
-      const data = await response.json()
-      if (data.success && data.data?.services) {
-        // Filter services to include thermal and standard printers (not label printers)
-        const activeServices = data.data.services
-          .filter((s: { status: string; printers?: unknown[] }) => s.status === 'active' && s.printers && s.printers.length > 0)
-          .map((service: PrintService) => ({
-            ...service,
-            printers: service.printers.filter((p: { printerType: string }) =>
-              p.printerType === 'thermal_80mm' || p.printerType === 'standard'
-            )
-          }))
-          .filter((s: PrintService) => s.printers.length > 0)
-
-        setPrintServices(activeServices)
-
-        // Auto-select first available printer (prefer thermal, then standard)
-        for (const service of activeServices) {
-          let availablePrinter = service.printers.find((p: { isOnline: boolean; printerType: string }) =>
-            p.isOnline && p.printerType === 'thermal_80mm'
-          )
-          if (!availablePrinter) {
-            availablePrinter = service.printers.find((p: { isOnline: boolean }) => p.isOnline)
-          }
-          if (!availablePrinter && service.printers.length > 0) {
-            availablePrinter = service.printers[0]
-          }
-          if (availablePrinter) {
-            setSelectedPrinter({ serviceId: service.id, printerId: availablePrinter.id })
-            break
-          }
-        }
-      }
-    } catch (err) {
-      console.error('[Print] Error fetching print services:', err)
-    }
+    setPrintServices([])
   }
 
   const fetchPurchaseLines = async (purchaseId: number) => {
@@ -354,7 +318,7 @@ export default function MarketPurchasesPage() {
 
     setPrintingWithService(true)
     try {
-      const response = await fetch('/api/print/jobs', {
+      const response = await fetch('/api/print-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

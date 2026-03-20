@@ -22,8 +22,6 @@ interface PrintButtonProps {
   sourceType?: string
   sourceId?: number
   copies?: number
-  printServiceId?: number
-  printerId?: number
   posTerminalId?: number
   warehouseId?: number
   onPrintStarted?: (jobNumber: string) => void
@@ -43,8 +41,6 @@ export function PrintButton({
   sourceType,
   sourceId,
   copies: defaultCopies = 1,
-  printServiceId,
-  printerId,
   posTerminalId,
   warehouseId,
   onPrintStarted,
@@ -77,7 +73,7 @@ export function PrintButton({
     setShowCopiesModal(false)
 
     try {
-      const response = await fetch('/api/print/jobs', {
+      const response = await fetch('/api/print-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -86,8 +82,6 @@ export function PrintButton({
           sourceType,
           sourceId,
           copies,
-          printServiceId,
-          printerId,
           posTerminalId,
           warehouseId
         })
@@ -131,7 +125,7 @@ export function PrintButton({
     const checkStatus = async () => {
       attempts++
       try {
-        const response = await fetch(`/api/print/jobs?status=completed&limit=1`)
+        const response = await fetch(`/api/print-jobs?status=completed&limit=1`)
         const data = await response.json()
 
         if (data.success) {

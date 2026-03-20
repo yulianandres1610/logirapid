@@ -231,82 +231,10 @@ export default function WeightLabelsPage() {
     }
   }
 
-  // Fetch print services for label printing
+  // Print services are now resolved automatically by the server via /api/print-jobs
   const fetchPrintServices = async () => {
-    try {
-      console.log('[WeightLabels] Fetching print services...')
-      const response = await fetch('/api/print/services')
-      const data = await response.json()
-      console.log('[WeightLabels] Print services response:', data)
-
-      if (data.success && data.data?.services) {
-        const allServices = data.data.services
-        console.log('[WeightLabels] Total services:', allServices.length)
-
-        const activeServices = allServices.filter(
-          (s: { status: string; printers?: unknown[] }) =>
-            (s.status === 'active' || s.status === 'pending' || s.status === 'offline') &&
-            s.printers && s.printers.length > 0
-        )
-        console.log('[WeightLabels] Active services:', activeServices.length)
-
-        // Filter for LABEL printers (any printer that can print labels)
-        const servicesWithPrinters = activeServices.map((service: { id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; printerType: string; supportedDocumentTypes?: string[] }> }) => {
-          const labelPrinters = service.printers.filter((p: { supportedDocumentTypes?: string[]; printerType: string; printerName: string }) => {
-            const name = (p.printerName || '').toLowerCase()
-            const type = (p.printerType || '').toLowerCase()
-
-            // 1. Check if supportedDocumentTypes explicitly includes weight_label or product_label
-            if (p.supportedDocumentTypes && p.supportedDocumentTypes.length > 0) {
-              const hasLabelSupport = p.supportedDocumentTypes.includes('weight_label') ||
-                                      p.supportedDocumentTypes.includes('product_label') ||
-                                      p.supportedDocumentTypes.includes('lot_label')
-              if (hasLabelSupport) {
-                console.log(`[WeightLabels] Printer ${p.printerName} has label support in documentTypes`)
-                return true
-              }
-            }
-
-            // 2. Check if printerType is a label type
-            if (type === 'label_4x6' || type === 'label_barcode') {
-              console.log(`[WeightLabels] Printer ${p.printerName} is label type: ${type}`)
-              return true
-            }
-
-            // 3. Check printer name for known label printer brands/keywords
-            const labelKeywords = ['label', 'etiqueta', 'zebra', 'dymo', 'brother', 'zd', 'ztc', 'tsc', 'godex', 'honeywell', 'sato', 'citizen', 'postek', 'barcode']
-            const isLabelPrinter = labelKeywords.some(keyword => name.includes(keyword))
-            if (isLabelPrinter) {
-              console.log(`[WeightLabels] Printer ${p.printerName} matched by name keyword`)
-              return true
-            }
-
-            console.log(`[WeightLabels] Printer ${p.printerName} not a label printer (type: ${type})`)
-            return false
-          })
-          return { ...service, printers: labelPrinters }
-        }).filter((s: { printers: unknown[] }) => s.printers.length > 0)
-
-        console.log('[WeightLabels] Services with label printers:', servicesWithPrinters.length)
-        setPrintServices(servicesWithPrinters)
-
-        // Auto-select first printer
-        if (servicesWithPrinters.length > 0 && servicesWithPrinters[0].printers.length > 0) {
-          setSelectedPrinter({
-            serviceId: servicesWithPrinters[0].id,
-            printerId: servicesWithPrinters[0].printers[0].id
-          })
-          console.log('[WeightLabels] Auto-selected printer:', servicesWithPrinters[0].printers[0].printerName)
-        }
-
-        return servicesWithPrinters
-      }
-      console.log('[WeightLabels] No services found in response')
-      return []
-    } catch (err) {
-      console.error('[WeightLabels] Error fetching print services:', err)
-      return []
-    }
+    setPrintServices([])
+    return []
   }
 
   // Print label with service
@@ -317,7 +245,7 @@ export default function WeightLabelsPage() {
 
     setPrintingToService(true)
     try {
-      const response = await fetch('/api/print/jobs', {
+      const response = await fetch('/api/print-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

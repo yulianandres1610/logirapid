@@ -239,36 +239,10 @@ export default function FixedAssetDetailPage({ params }: { params: Promise<{ id:
     }
   }, [asset?.barcode, theme, showPrintModal])
 
+  // Print services are now resolved automatically by the server via /api/print-jobs
   const fetchPrintServices = async () => {
-    setLoadingServices(true)
-    try {
-      const res = await fetch('/api/print/services')
-      const data = await res.json()
-      if (data.success) {
-        // Filter to show only active/online services with label-compatible printers
-        const services = (data.data.services || []).filter((s: PrintService) =>
-          s.status === 'active' || s.status === 'offline'
-        )
-        setPrintServices(services)
-
-        // Auto-select first service with online printer
-        const serviceWithOnline = services.find((s: PrintService) =>
-          s.status === 'active' && s.printers.some(p => p.isOnline)
-        )
-        if (serviceWithOnline) {
-          setSelectedServiceId(serviceWithOnline.id)
-          const onlinePrinter = serviceWithOnline.printers.find((p: PrinterInfo) => p.isOnline && p.isDefault) ||
-            serviceWithOnline.printers.find((p: PrinterInfo) => p.isOnline)
-          if (onlinePrinter) {
-            setSelectedPrinterId(onlinePrinter.id)
-          }
-        }
-      }
-    } catch {
-      console.error('Error fetching print services')
-    } finally {
-      setLoadingServices(false)
-    }
+    setPrintServices([])
+    setLoadingServices(false)
   }
 
   const deleteAsset = async () => {

@@ -536,7 +536,7 @@ export default function UnifiedReceptionView({
           }
         })
 
-      const response = await fetch('/api/print/jobs', {
+      const response = await fetch('/api/print-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -601,7 +601,7 @@ export default function UnifiedReceptionView({
         const orderLine = detectedOrder.lines.find(ol => ol.lineId === line.lineId)
         if (!orderLine) continue
 
-        const response = await fetch('/api/print/jobs', {
+        const response = await fetch('/api/print-jobs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

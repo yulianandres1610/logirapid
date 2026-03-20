@@ -208,18 +208,8 @@ export default function POSSettingsPage() {
           setPricelists(Array.isArray(pls) ? pls : [])
         }
 
-        // Fetch print services
-        const printServicesRes = await fetch('/api/print/services')
-        const printServicesData = await printServicesRes.json()
-        if (printServicesData.success) {
-          const services = printServicesData.data?.services || printServicesData.data || []
-          setPrintServices(Array.isArray(services) ? services.map((s: { id: number; service_name?: string; serviceName?: string; service_code?: string; serviceCode?: string; status: string }) => ({
-            id: s.id,
-            serviceName: s.service_name || s.serviceName || '',
-            serviceCode: s.service_code || s.serviceCode || '',
-            status: s.status
-          })) : [])
-        }
+        // Print services are now resolved automatically by the server via /api/print-jobs
+        setPrintServices([])
 
         const usersRes = await fetch('/api/users')
         const usersData = await usersRes.json()

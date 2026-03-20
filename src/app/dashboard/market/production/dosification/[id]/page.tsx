@@ -221,33 +221,10 @@ export default function ProductionOrderDetailPage({ params }: { params: Promise<
     }
   }
 
+  // Print services are now resolved automatically by the server via /api/print-jobs
   const fetchPrintServices = async () => {
-    setLoadingPrinters(true)
-    try {
-      const response = await fetch('/api/print/services')
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success && data.data.services) {
-          // Filter to only active services with online printers
-          const activeServices = data.data.services.filter(
-            (s: PrintService) => (s.status === 'active' || s.status === 'offline') && s.printers.length > 0
-          )
-          setPrintServices(activeServices)
-          // Auto-select default printer if exists
-          for (const service of activeServices) {
-            const defaultPrinter = service.printers.find((p: PrintService['printers'][0]) => p.isDefault && p.isOnline)
-            if (defaultPrinter) {
-              setSelectedPrinter({ serviceId: service.id, printerId: defaultPrinter.id })
-              break
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching print services:', error)
-    } finally {
-      setLoadingPrinters(false)
-    }
+    setPrintServices([])
+    setLoadingPrinters(false)
   }
 
   const openPrinterModal = (documentType: 'materials' | 'reception') => {

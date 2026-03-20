@@ -1,0 +1,222 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/database'
+
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
+/**
+ * Helper to extract user info from auth-token cookie.
+ * Token is base64(userId:email:role)
+ */
+function parseAuthToken(token: string): { userId: string; email: string; role: string } | null {
+  try {
+    const decoded = Buffer.from(token, 'base64').toString('utf-8')
+    const parts = decoded.split(':')
+    if (parts.length < 3) return null
+    return {
+      userId: parts[0],
+      email: parts[1],
+      role: parts.slice(2).join(':'),
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * POST /api/print-jobs
+ *
+ * Create a print job from the web app.
+ * Body: { documentType, documentData, copies?, warehouseId?, posTerminalId? }
+ */
+export async function POST(request: NextRequest) {
+  try {
+    // Auth: parse token from cookie
+    const authToken = request.cookies.get('auth-token')?.value
+    if (!authToken) {
+      return NextResponse.json(
+        { success: false, error: 'No autenticado' },
+        { status: 401 }
+      )
+    }
+
+    const user = parseAuthToken(authToken)
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Token inválido' },
+        { status: 401 }
+      )
+    }
+
+    const companyId = request.cookies.get('user-company-id')?.value
+    if (!companyId) {
+      return NextResponse.json(
+        { success: false, error: 'Company ID requerido' },
+        { status: 400 }
+      )
+    }
+
+    const body = await request.json()
+    const {
+      documentType,
+      documentData,
+      copies = 1,
+      warehouseId = null,
+      posTerminalId = null,
+    } = body
+
+    if (!documentType || !documentData) {
+      return NextResponse.json(
+        { success: false, error: 'documentType y documentData son requeridos' },
+        { status: 400 }
+      )
+    }
+
+    // Resolve the best matching print service
+    const serviceResult = await db.query(
+      `SELECT id, selected_printer, printer_type FROM print_services
+       WHERE company_id = $1 AND status = 'active'
+       AND (warehouse_id = $2 OR pos_terminal_id = $3 OR (warehouse_id IS NULL AND pos_terminal_id IS NULL))
+       ORDER BY CASE WHEN pos_terminal_id = $3 THEN 1 WHEN warehouse_id = $2 THEN 2 ELSE 3 END
+       LIMIT 1`,
+      [companyId, warehouseId, posTerminalId]
+    )
+
+    if (serviceResult.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No hay servicio de impresión activo para esta ubicación' },
+        { status: 404 }
+      )
+    }
+
+    const service = serviceResult.rows[0]
+
+    // Insert the print job
+    const insertResult = await db.query(
+      `INSERT INTO print_jobs (service_id, company_id, document_type, document_data, copies, requested_by, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+       RETURNING id, created_at`,
+      [
+        service.id,
+        companyId,
+        documentType,
+        JSON.stringify(documentData),
+        copies,
+        user.userId,
+      ]
+    )
+
+    const job = insertResult.rows[0]
+    const jobId = String(job.id)
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        jobId: job.id,
+        jobNumber: 'PJ-' + jobId.slice(0, 8),
+        createdAt: job.created_at,
+      },
+    })
+  } catch (error) {
+    console.error('[Print Jobs] POST error:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al crear trabajo de impresión: ' + String(error) },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * GET /api/print-jobs?page=1&limit=10&status=pending&documentType=pos_receipt
+ *
+ * List print jobs for the authenticated user's company.
+ */
+export async function GET(request: NextRequest) {
+  try {
+    // Auth
+    const authToken = request.cookies.get('auth-token')?.value
+    if (!authToken) {
+      return NextResponse.json(
+        { success: false, error: 'No autenticado' },
+        { status: 401 }
+      )
+    }
+
+    const user = parseAuthToken(authToken)
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Token inválido' },
+        { status: 401 }
+      )
+    }
+
+    const companyId = request.cookies.get('user-company-id')?.value
+    if (!companyId) {
+      return NextResponse.json(
+        { success: false, error: 'Company ID requerido' },
+        { status: 400 }
+      )
+    }
+
+    const { searchParams } = new URL(request.url)
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '10', 10)))
+    const status = searchParams.get('status')
+    const documentType = searchParams.get('documentType')
+    const offset = (page - 1) * limit
+
+    // Build query with filters
+    let whereClause = 'WHERE pj.company_id = $1'
+    const params: any[] = [companyId]
+    let paramIdx = 2
+
+    if (status) {
+      whereClause += ` AND pj.status = $${paramIdx}`
+      params.push(status)
+      paramIdx++
+    }
+
+    if (documentType) {
+      whereClause += ` AND pj.document_type = $${paramIdx}`
+      params.push(documentType)
+      paramIdx++
+    }
+
+    // Count total
+    const countResult = await db.query(
+      `SELECT COUNT(*) as total FROM print_jobs pj ${whereClause}`,
+      params
+    )
+    const total = parseInt(countResult.rows[0].total, 10)
+
+    // Fetch page
+    const jobsResult = await db.query(
+      `SELECT pj.id, pj.service_id, pj.document_type, pj.copies, pj.status,
+              pj.error_message, pj.requested_by, pj.created_at, pj.updated_at,
+              ps.name as service_name
+       FROM print_jobs pj
+       LEFT JOIN print_services ps ON ps.id = pj.service_id
+       ${whereClause}
+       ORDER BY pj.created_at DESC
+       LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+      [...params, limit, offset]
+    )
+
+    return NextResponse.json({
+      success: true,
+      data: jobsResult.rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    })
+  } catch (error) {
+    console.error('[Print Jobs] GET error:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al listar trabajos de impresión: ' + String(error) },
+      { status: 500 }
+    )
+  }
+}

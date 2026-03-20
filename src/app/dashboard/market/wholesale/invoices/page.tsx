@@ -198,40 +198,9 @@ export default function WholesaleInvoicesPage() {
     })
   }
 
-  // Print functions
+  // Print services are now resolved automatically by the server via /api/print-jobs
   const fetchPrintServices = async () => {
-    try {
-      const response = await fetch('/api/print/services?includeOffline=false')
-      const data = await response.json()
-      if (data.success && data.data?.services) {
-        const activeServices = data.data.services
-          .filter((s: { status: string; printers?: unknown[] }) => s.status === 'active' && s.printers && s.printers.length > 0)
-          .map((service: PrintService) => ({
-            ...service,
-            printers: service.printers.filter((p: { printerType: string }) =>
-              p.printerType === 'thermal_80mm' || p.printerType === 'standard'
-            )
-          }))
-          .filter((s: PrintService) => s.printers.length > 0)
-
-        setPrintServices(activeServices)
-
-        for (const service of activeServices) {
-          let availablePrinter = service.printers.find((p: { isOnline: boolean; printerType: string }) =>
-            p.isOnline && p.printerType === 'thermal_80mm'
-          )
-          if (!availablePrinter) {
-            availablePrinter = service.printers.find((p: { isOnline: boolean }) => p.isOnline)
-          }
-          if (availablePrinter) {
-            setSelectedPrinter({ serviceId: service.id, printerId: availablePrinter.id })
-            break
-          }
-        }
-      }
-    } catch (err) {
-      console.error('[Print] Error fetching print services:', err)
-    }
+    setPrintServices([])
   }
 
   const fetchInvoiceLines = async (invoiceId: number) => {
@@ -289,7 +258,7 @@ export default function WholesaleInvoicesPage() {
         ? { code: (invoiceDetail as Record<string, unknown>).customer ? ((invoiceDetail as Record<string, unknown>).customer as Record<string, string>).code : printInvoice.customerCode, name: (invoiceDetail as Record<string, unknown>).customer ? ((invoiceDetail as Record<string, unknown>).customer as Record<string, string>).businessName : printInvoice.customerName, taxId: (invoiceDetail as Record<string, unknown>).customer ? ((invoiceDetail as Record<string, unknown>).customer as Record<string, string>).taxId : undefined, address: (invoiceDetail as Record<string, unknown>).customer ? ((invoiceDetail as Record<string, unknown>).customer as Record<string, string>).address : undefined, phone: (invoiceDetail as Record<string, unknown>).customer ? ((invoiceDetail as Record<string, unknown>).customer as Record<string, string>).phone : undefined }
         : { code: printInvoice.customerCode, name: printInvoice.customerName }
 
-      const response = await fetch('/api/print/jobs', {
+      const response = await fetch('/api/print-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
