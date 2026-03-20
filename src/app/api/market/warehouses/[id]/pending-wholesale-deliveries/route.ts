@@ -171,9 +171,18 @@ export async function GET(
           }
         })
       )
-    } catch (err) {
-      console.log('[Pending Wholesale] Query error:', err)
-      // Table may not exist yet
+    } catch (err: any) {
+      console.error('[Pending Wholesale] Query error:', err)
+      return NextResponse.json({
+        success: true,
+        data: {
+          warehouseId,
+          warehouseName: warehouseCheck.rows[0].name,
+          pendingCount: 0,
+          deliveries: [],
+          _queryError: err?.message || String(err)
+        }
+      })
     }
 
     return NextResponse.json({
