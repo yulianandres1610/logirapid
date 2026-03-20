@@ -272,6 +272,11 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
 
+    // Allow print service agent files (public, no auth needed)
+    if (pathname.startsWith('/print-service/') || pathname.startsWith('/api/print-agent')) {
+      return NextResponse.next()
+    }
+
     // Allow factory login page
     if (pathname === '/factory/login' || pathname.startsWith('/factory/login')) {
       return NextResponse.next()
