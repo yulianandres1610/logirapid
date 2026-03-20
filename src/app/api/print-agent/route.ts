@@ -6,6 +6,47 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 /**
+ * Infer the printer type from the printer name.
+ * This ensures the correct document format is generated
+ * (e.g., ESCPOS for thermal printers, ZPL for Zebra, PDF for standard).
+ */
+function inferPrinterType(printerName: string | null, fallback: string): string {
+  if (!printerName) return fallback || 'thermal_80mm'
+  const name = printerName.toLowerCase()
+
+  // Thermal receipt printers
+  if (name.includes('tm-') || name.includes('tm_') || name.includes('epson_tm') ||
+      name.includes('star_') || name.includes('bixolon') || name.includes('thermal') ||
+      name.includes('receipt') || name.includes('pos_') || name.includes('t20') ||
+      name.includes('t88') || name.includes('m30') || name.includes('ct-s')) {
+    return 'thermal_80mm'
+  }
+
+  // Zebra label printers
+  if (name.includes('zebra') || name.includes('zpl') || name.includes('ztc') ||
+      name.includes('zd') || name.includes('zp') || name.includes('gk4') ||
+      name.includes('gx4') || name.includes('gc4')) {
+    return 'label_zebra'
+  }
+
+  // TSC/TSPL label printers
+  if (name.includes('tsc') || name.includes('tspl') || name.includes('4barcode') ||
+      name.includes('godex') || name.includes('argox')) {
+    return 'label_tspl'
+  }
+
+  // Standard/laser/inkjet printers
+  if (name.includes('laser') || name.includes('officejet') || name.includes('laserjet') ||
+      name.includes('brother') || name.includes('canon') || name.includes('hp_') ||
+      name.includes('epson_et') || name.includes('epson_l') || name.includes('ecotank') ||
+      name.includes('deskjet') || name.includes('pixma')) {
+    return 'standard'
+  }
+
+  return fallback || 'thermal_80mm'
+}
+
+/**
  * GET /api/print-agent?token=X&version=1.0.0&printers=[...]
  *
  * Agent polling endpoint. The desktop print agent calls this periodically
@@ -66,19 +107,27 @@ export async function GET(request: NextRequest) {
     const generatedJobs = await Promise.all(
       jobs.map(async (job: any) => {
         try {
+          // Resolve the target printer for this specific job
+          const targetPrinter = job.printer_name
+            || (service.printer_mappings && service.printer_mappings[job.document_type])
+            || service.selected_printer
+
+          // Infer printer type from the target printer name (not from service default)
+          const inferredPrinterType = inferPrinterType(targetPrinter, service.printer_type)
+
           const generated = await generateDocument(
             job.document_type,
             typeof job.document_data === 'string'
               ? JSON.parse(job.document_data)
               : job.document_data,
-            service.printer_type || 'thermal_80mm'
+            inferredPrinterType
           )
           return {
             id: job.id,
             document_type: job.document_type,
             format: generated.format,
             data: generated.data,
-            printer_name: job.printer_name || (service.printer_mappings && service.printer_mappings[job.document_type]) || service.selected_printer,
+            printer_name: targetPrinter,
             copies: job.copies || 1,
           }
         } catch (genError) {
