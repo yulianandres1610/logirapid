@@ -364,28 +364,28 @@ export default function MarketDashboardPage() {
             </button>
           </motion.div>
 
-          {/* POS Sales Metrics */}
+          {/* Total Sales (POS + Wholesale) */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
               title="Ventas Hoy"
-              value={`$${(data?.posSales?.today || 0).toLocaleString()}`}
-              subtitle={`${data?.posSales?.ordersToday || 0} órdenes`}
+              value={`$${((data as any)?.totalSales?.today || (data?.posSales?.today || 0)).toLocaleString()}`}
+              subtitle={`POS: $${(data?.posSales?.today || 0).toLocaleString()} · Mayoreo: $${((data as any)?.wholesaleSales?.today || 0).toLocaleString()}`}
               icon={DollarSign}
               color="green"
               delay={0.1}
             />
             <MetricCard
               title="Ventas del Mes"
-              value={`$${(data?.posSales?.month || 0).toLocaleString()}`}
-              subtitle={`${data?.posSales?.ordersMonth || 0} órdenes`}
+              value={`$${((data as any)?.totalSales?.month || (data?.posSales?.month || 0)).toLocaleString()}`}
+              subtitle={`POS: $${(data?.posSales?.month || 0).toLocaleString()} · Mayoreo: $${((data as any)?.wholesaleSales?.month || 0).toLocaleString()}`}
               icon={ShoppingCart}
               color="blue"
               delay={0.15}
             />
             <MetricCard
               title="Ventas del Año"
-              value={`$${(data?.posSales?.year || 0).toLocaleString()}`}
-              subtitle={`${data?.posSales?.ordersYear || 0} órdenes`}
+              value={`$${((data as any)?.totalSales?.year || (data?.posSales?.year || 0)).toLocaleString()}`}
+              subtitle={`POS: $${(data?.posSales?.year || 0).toLocaleString()} · Mayoreo: $${((data as any)?.wholesaleSales?.year || 0).toLocaleString()}`}
               icon={Target}
               color="purple"
               delay={0.2}
