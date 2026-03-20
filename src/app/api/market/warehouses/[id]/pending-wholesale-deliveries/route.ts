@@ -79,6 +79,7 @@ export async function GET(
     let deliveries: any[] = []
 
     try {
+      // Simple query first to find deliveries, then enrich
       const deliveriesResult = await db.query(`
         SELECT
           d.id,
@@ -87,20 +88,35 @@ export async function GET(
           d.warehouse_id,
           d.status,
           d.created_at,
-          i.invoice_number,
-          i.customer_id,
-          i.total_amount,
-          c.business_name as customer_name,
-          c.code as customer_code,
-          COALESCE(u.firstname || ' ' || u.lastname, u.email, 'Sistema') as created_by_name
+          d.created_by
         FROM market_invoice_deliveries d
-        JOIN market_invoices i ON i.id = d.invoice_id
-        LEFT JOIN market_wholesale_customers c ON c.id = i.customer_id
-        LEFT JOIN users u ON u.id = d.created_by
         WHERE d.warehouse_id = $1
           AND d.status IN ('pending', 'dispatched')
         ORDER BY d.created_at DESC
       `, [warehouseId])
+
+      console.log('[Pending Wholesale] Found', deliveriesResult.rows.length, 'deliveries for warehouse', warehouseId)
+
+      // Enrich with invoice and customer data
+      for (const d of deliveriesResult.rows) {
+        try {
+          const inv = await db.query('SELECT invoice_number, customer_id, total_amount FROM market_invoices WHERE id = $1', [d.invoice_id])
+          if (inv.rows[0]) {
+            d.invoice_number = inv.rows[0].invoice_number
+            d.customer_id = inv.rows[0].customer_id
+            d.total_amount = inv.rows[0].total_amount
+            if (inv.rows[0].customer_id) {
+              const cust = await db.query('SELECT business_name, code FROM market_wholesale_customers WHERE id = $1', [inv.rows[0].customer_id])
+              d.customer_name = cust.rows[0]?.business_name || 'Cliente'
+              d.customer_code = cust.rows[0]?.code || ''
+            }
+          }
+        } catch { /* ignore enrichment errors */ }
+        try {
+          const usr = await db.query("SELECT COALESCE(firstname || ' ' || lastname, email) as name FROM users WHERE id = $1", [d.created_by])
+          d.created_by_name = usr.rows[0]?.name || 'Sistema'
+        } catch { d.created_by_name = 'Sistema' }
+      }
 
       // Get lines for each delivery
       deliveries = await Promise.all(
