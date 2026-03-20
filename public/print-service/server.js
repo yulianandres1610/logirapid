@@ -4,7 +4,7 @@ const path = require("path");
 const http = require("http");
 const { exec, execSync } = require("child_process");
 
-const VERSION = "1.1.1";
+const VERSION = "1.1.2";
 const platform = os.platform();
 const INSTALL_DIR = path.join(os.homedir(), ".logirapid-print-service");
 const CONFIG_PATH = path.join(INSTALL_DIR, "config.json");
@@ -474,26 +474,30 @@ async function performUpdate(config) {
     updateStatus.updating = false;
     updateStatus.available = false;
 
-    // 6. Restart the process
-    // On Windows use start.bat, on Mac/Linux use launchctl or direct node
+    // 6. Restart: spawn detached child process BEFORE exiting
+    const nodePath = process.execPath;
+    const serverFile = path.join(installDir, "server.js");
+
+    // Small delay to allow HTTP response to be sent
     setTimeout(() => {
-      if (platform === "win32") {
-        const startBat = path.join(installDir, "start.bat");
-        if (fs.existsSync(startBat)) {
-          exec(`start "" /min cmd /c "${startBat}"`, { cwd: installDir });
-        } else {
-          exec(`start "" /min cmd /c "cd /d ${installDir} && node server.js"`, { cwd: installDir });
+      try {
+        const child = require("child_process").spawn(nodePath, [serverFile], {
+          cwd: installDir,
+          detached: true,
+          stdio: "ignore",
+          windowsHide: true,
+        });
+        child.unref();
+        console.log("  [Update] Nuevo proceso iniciado (PID: " + child.pid + ")");
+      } catch (spawnErr) {
+        console.error("  [Update] Error al iniciar nuevo proceso:", spawnErr.message);
+        // Fallback: on Mac use launchctl, on Windows create a scheduled task
+        if (platform === "darwin") {
+          try { execSync('launchctl kickstart -k gui/$(id -u)/com.logirapid.print-service 2>/dev/null', { stdio: "ignore" }); } catch {}
         }
-      } else if (platform === "darwin") {
-        try {
-          execSync('launchctl kickstart -k gui/$(id -u)/com.logirapid.print-service 2>/dev/null', { stdio: "ignore" });
-        } catch {
-          exec(`cd "${installDir}" && node server.js &`, { cwd: installDir });
-        }
-      } else {
-        exec(`cd "${installDir}" && node server.js &`, { cwd: installDir });
       }
-      process.exit(0);
+      // Exit current process after spawn
+      setTimeout(() => process.exit(0), 300);
     }, 500);
 
     return { success: true, version: updateStatus.version };
