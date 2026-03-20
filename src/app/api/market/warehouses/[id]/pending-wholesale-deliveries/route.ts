@@ -52,20 +52,28 @@ export async function GET(
     }
 
     // Get pending deliveries from market_invoice_deliveries
-    // One-time fix: correct deliveries that were created as 'delivered' when they should be 'pending'
+    // One-time fix: correct deliveries that were auto-set to 'delivered' on creation
+    // These have dispatched_at within 1 second of created_at (set in same transaction)
     try {
-      await db.query(`
+      const fixResult = await db.query(`
         UPDATE market_invoice_deliveries
         SET status = 'pending', dispatched_at = NULL, delivered_at = NULL, dispatched_by = NULL, delivered_by = NULL
-        WHERE status = 'delivered' AND dispatched_at = created_at AND delivered_at = created_at
-      `)
-      await db.query(`
-        UPDATE market_invoices SET status = 'confirmed', delivered_at = NULL
-        WHERE status = 'delivered' AND id IN (
-          SELECT invoice_id FROM market_invoice_deliveries WHERE status = 'pending'
-        )
-      `)
-    } catch { /* ignore */ }
+        WHERE status = 'delivered'
+          AND ABS(EXTRACT(EPOCH FROM (dispatched_at - created_at))) < 2
+          AND warehouse_id = $1
+      `, [warehouseId])
+      if (fixResult.rowCount && fixResult.rowCount > 0) {
+        console.log(`[Wholesale Fix] Corrected ${fixResult.rowCount} deliveries from delivered to pending`)
+        await db.query(`
+          UPDATE market_invoices SET status = 'confirmed', delivered_at = NULL
+          WHERE status = 'delivered' AND id IN (
+            SELECT invoice_id FROM market_invoice_deliveries WHERE status = 'pending' AND warehouse_id = $1
+          )
+        `, [warehouseId])
+      }
+    } catch (fixErr) {
+      console.log('[Wholesale Fix] Error:', fixErr)
+    }
 
     // Status: pending = not yet dispatched, dispatched = in transit, delivered = completed
     let deliveries: any[] = []
