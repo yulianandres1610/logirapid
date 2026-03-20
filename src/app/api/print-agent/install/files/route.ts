@@ -90,7 +90,7 @@ function getEmbeddedFile(name: string): string | null {
     case 'package.json':
       return JSON.stringify({
         name: 'logirapid-print-service',
-        version: '1.1.4',
+        version: '1.1.5',
         description: 'LogiRapid Print Service - Agente local de impresion',
         main: 'server.js',
         scripts: {

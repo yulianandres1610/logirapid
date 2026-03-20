@@ -4,7 +4,7 @@ const path = require("path");
 const http = require("http");
 const { exec, execSync } = require("child_process");
 
-const VERSION = "1.1.4";
+const VERSION = "1.1.5";
 const platform = os.platform();
 const INSTALL_DIR = path.join(os.homedir(), ".logirapid-print-service");
 const CONFIG_PATH = path.join(INSTALL_DIR, "config.json");
@@ -354,9 +354,38 @@ async function printRawBytes(printerName, rawData, copies = 1) {
   fs.writeFileSync(tmpFile, data, "binary");
   try {
     if (platform === "win32") {
-      await execAsync(`powershell -Command "Get-Content '${tmpFile}' | Out-Printer ${printerName ? "'" + printerName + "'" : ""}"`);
+      // Use WinSpool API via PowerShell to send raw data (ZPL/ESCPOS/TSPL) directly
+      const escapedPrinter = (printerName || "").replace(/'/g, "''");
+      const escapedFile = tmpFile.replace(/\\/g, "/");
+      await execPS(
+        `$bytes = [System.IO.File]::ReadAllBytes('${escapedFile}'); ` +
+        `Add-Type -TypeDefinition '` +
+        `using System; using System.Runtime.InteropServices; ` +
+        `public class RawPrint { ` +
+        `[StructLayout(LayoutKind.Sequential)] public struct DOCINFOA { [MarshalAs(UnmanagedType.LPStr)] public string pDocName; [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile; [MarshalAs(UnmanagedType.LPStr)] public string pDatatype; } ` +
+        `[DllImport("winspool.drv", EntryPoint="OpenPrinterA", SetLastError=true)] public static extern bool OpenPrinter(string p, out IntPtr h, IntPtr d); ` +
+        `[DllImport("winspool.drv", SetLastError=true)] public static extern bool ClosePrinter(IntPtr h); ` +
+        `[DllImport("winspool.drv", EntryPoint="StartDocPrinterA", SetLastError=true)] public static extern int StartDocPrinter(IntPtr h, int l, ref DOCINFOA di); ` +
+        `[DllImport("winspool.drv", SetLastError=true)] public static extern bool EndDocPrinter(IntPtr h); ` +
+        `[DllImport("winspool.drv", SetLastError=true)] public static extern bool StartPagePrinter(IntPtr h); ` +
+        `[DllImport("winspool.drv", SetLastError=true)] public static extern bool EndPagePrinter(IntPtr h); ` +
+        `[DllImport("winspool.drv", SetLastError=true)] public static extern bool WritePrinter(IntPtr h, byte[] b, int c, out int w); ` +
+        `public static bool Send(string name, byte[] data) { IntPtr h; DOCINFOA di = new DOCINFOA(); di.pDocName = "RAW"; di.pDatatype = "RAW"; ` +
+        `if (!OpenPrinter(name, out h, IntPtr.Zero)) return false; ` +
+        `if (StartDocPrinter(h, 1, ref di) == 0) { ClosePrinter(h); return false; } ` +
+        `StartPagePrinter(h); int w; bool ok = WritePrinter(h, data, data.Length, out w); ` +
+        `EndPagePrinter(h); EndDocPrinter(h); ClosePrinter(h); return ok; } }'; ` +
+        `$ok = [RawPrint]::Send('${escapedPrinter}', $bytes); ` +
+        `if (-not $ok) { throw 'WritePrinter failed' }`
+      );
     } else {
-      await execAsync(`lpr ${printerName ? '-P "' + printerName + '"' : ""} -o raw "${tmpFile}"`);
+      // Mac/Linux: try lp first (more reliable with CUPS), fallback to lpr
+      const escapedName = (printerName || "").replace(/"/g, '\\"');
+      try {
+        await execAsync(`lp ${printerName ? '-d "' + escapedName + '"' : ""} -o raw "${tmpFile}"`);
+      } catch {
+        await execAsync(`lpr ${printerName ? '-P "' + escapedName + '"' : ""} -o raw "${tmpFile}"`);
+      }
     }
   } finally { try { fs.unlinkSync(tmpFile); } catch {} }
 }
@@ -371,7 +400,10 @@ async function printPDF(printerName, base64Data, copies = 1) {
         const o = { copies };
         if (printerName) o.printer = printerName;
         await p.print(tmpFile, o);
-      } catch { await execAsync(`powershell -Command "Start-Process -FilePath '${tmpFile}' -Verb Print"`); }
+      } catch {
+        const escapedFile = tmpFile.replace(/\\/g, "/");
+        await execPS(`Start-Process -FilePath '${escapedFile}' -Verb Print -WindowStyle Hidden`);
+      }
     } else {
       await execAsync(`lpr ${printerName ? '-P "' + printerName + '"' : ""} -# ${copies} "${tmpFile}"`);
     }
@@ -398,6 +430,8 @@ async function processJob(job, server, token) {
     if (!job.data) throw new Error("Job sin datos para imprimir");
     if (!job.format) throw new Error("Job sin formato especificado");
 
+    console.log(`  [Job] ${job.id.substring(0, 8)} tipo=${job.document_type} formato=${job.format} impresora=${job.printer_name || "(auto)"} copias=${job.copies || 1} datos=${(job.data || "").length} bytes`);
+
     // Check printer is online before sending
     const isOnline = await checkPrinterOnline(job.printer_name);
     if (!isOnline) {
@@ -405,8 +439,10 @@ async function processJob(job, server, token) {
     }
 
     if (job.format === "zpl" || job.format === "escpos" || job.format === "tspl") {
+      console.log(`  [Job] Enviando RAW (${job.format}) a ${job.printer_name || "default"}...`);
       await printRawBytes(job.printer_name, job.data, job.copies || 1);
     } else if (job.format === "pdf") {
+      console.log(`  [Job] Enviando PDF a ${job.printer_name || "default"}...`);
       await printPDF(job.printer_name, job.data, job.copies || 1);
     } else {
       throw new Error(`Formato no soportado: ${job.format}`);
