@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
             document_type: job.document_type,
             format: generated.format,
             data: generated.data,
-            printer_name: job.printer_name || service.selected_printer,
+            printer_name: job.printer_name || (service.printer_mappings && service.printer_mappings[job.document_type]) || service.selected_printer,
             copies: job.copies || 1,
           }
         } catch (genError) {
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
             document_type: job.document_type,
             format: 'escpos' as const,
             data: '',
-            printer_name: job.printer_name || service.selected_printer,
+            printer_name: job.printer_name || (service.printer_mappings && service.printer_mappings[job.document_type]) || service.selected_printer,
             copies: job.copies || 1,
             error: 'Generation failed',
           }

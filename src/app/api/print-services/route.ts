@@ -54,7 +54,7 @@ export async function GET() {
     const result = await db.query(`
       SELECT
         ps.id, ps.company_id, ps.name, ps.pairing_token, ps.warehouse_id, ps.pos_terminal_id,
-        ps.selected_printer, ps.printer_type, ps.agent_printers, ps.last_seen_at,
+        ps.selected_printer, ps.printer_type, ps.printer_mappings, ps.agent_printers, ps.last_seen_at,
         ps.agent_version, ps.status, ps.created_at,
         mw.name as warehouse_name
       FROM print_services ps
@@ -73,6 +73,7 @@ export async function GET() {
       posTerminalId: row.pos_terminal_id,
       selectedPrinter: row.selected_printer,
       printerType: row.printer_type,
+      printerMappings: row.printer_mappings || {},
       agentPrinters: row.agent_printers || [],
       lastSeenAt: row.last_seen_at,
       agentVersion: row.agent_version,
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
 
     const companyId = payload.companyId
     const body = await request.json()
-    const { name, warehouseId, posTerminalId, printerType } = body
+    const { name, warehouseId, posTerminalId, printerType, printerMappings } = body
 
     if (!name) {
       return NextResponse.json({
@@ -124,12 +125,12 @@ export async function POST(request: NextRequest) {
     const result = await db.query(`
       INSERT INTO print_services (
         company_id, name, pairing_token, warehouse_id, pos_terminal_id,
-        printer_type, status, created_at
+        printer_type, printer_mappings, status, created_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, 'active', NOW()
+        $1, $2, $3, $4, $5, $6, $7, 'active', NOW()
       ) RETURNING
         id, company_id, name, pairing_token, warehouse_id, pos_terminal_id,
-        selected_printer, printer_type, agent_printers, last_seen_at,
+        selected_printer, printer_type, printer_mappings, agent_printers, last_seen_at,
         agent_version, status, created_at
     `, [
       companyId,
@@ -137,7 +138,8 @@ export async function POST(request: NextRequest) {
       pairingToken,
       warehouseId || null,
       posTerminalId || null,
-      printerType || 'thermal_80mm'
+      printerType || 'thermal_80mm',
+      JSON.stringify(printerMappings || {})
     ])
 
     const row = result.rows[0]
@@ -153,6 +155,7 @@ export async function POST(request: NextRequest) {
         posTerminalId: row.pos_terminal_id,
         selectedPrinter: row.selected_printer,
         printerType: row.printer_type,
+        printerMappings: row.printer_mappings || {},
         agentPrinters: row.agent_printers || [],
         lastSeenAt: row.last_seen_at,
         agentVersion: row.agent_version,
@@ -183,7 +186,7 @@ export async function PUT(request: NextRequest) {
 
     const companyId = payload.companyId
     const body = await request.json()
-    const { id, name, selectedPrinter, printerType, warehouseId, posTerminalId, status } = body
+    const { id, name, selectedPrinter, printerType, printerMappings, warehouseId, posTerminalId, status } = body
 
     if (!id) {
       return NextResponse.json({
@@ -225,6 +228,11 @@ export async function PUT(request: NextRequest) {
       params.push(printerType)
       paramIndex++
     }
+    if (printerMappings !== undefined) {
+      setClauses.push(`printer_mappings = $${paramIndex}`)
+      params.push(JSON.stringify(printerMappings))
+      paramIndex++
+    }
     if (warehouseId !== undefined) {
       setClauses.push(`warehouse_id = $${paramIndex}`)
       params.push(warehouseId || null)
@@ -257,7 +265,7 @@ export async function PUT(request: NextRequest) {
       WHERE id = $${paramIndex} AND company_id = $${paramIndex + 1}
       RETURNING
         id, company_id, name, pairing_token, warehouse_id, pos_terminal_id,
-        selected_printer, printer_type, agent_printers, last_seen_at,
+        selected_printer, printer_type, printer_mappings, agent_printers, last_seen_at,
         agent_version, status, created_at
     `, params)
 
@@ -275,6 +283,7 @@ export async function PUT(request: NextRequest) {
         posTerminalId: row.pos_terminal_id,
         selectedPrinter: row.selected_printer,
         printerType: row.printer_type,
+        printerMappings: row.printer_mappings || {},
         agentPrinters: row.agent_printers || [],
         lastSeenAt: row.last_seen_at,
         agentVersion: row.agent_version,

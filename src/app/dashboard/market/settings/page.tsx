@@ -1285,11 +1285,35 @@ export default function MarketSettingsPage() {
 
 // Printer configuration constants
 const PRINTER_TYPES = [
-  { id: 'thermal_80mm', label: 'Térmica 80mm', description: 'Impresora térmica de recibos' },
-  { id: 'thermal_58mm', label: 'Térmica 58mm', description: 'Impresora térmica compacta' },
-  { id: 'label_zebra', label: 'Zebra (ZPL)', description: 'Impresora de etiquetas Zebra' },
-  { id: 'label_tspl', label: 'TSC/TSPL', description: 'Impresora de etiquetas TSC' },
-  { id: 'standard', label: 'Estándar/Láser', description: 'Impresora de documentos PDF' }
+  { id: 'thermal_80mm', label: 'Térmica 80mm' },
+  { id: 'thermal_58mm', label: 'Térmica 58mm' },
+  { id: 'label_zebra', label: 'Zebra (ZPL)' },
+  { id: 'label_tspl', label: 'TSC/TSPL' },
+  { id: 'standard', label: 'Estándar/Láser' }
+]
+
+const DOCUMENT_TYPES = [
+  { id: 'pos_receipt', label: 'Recibo POS', group: 'receipts' },
+  { id: 'purchase_invoice', label: 'Factura de Compra', group: 'receipts' },
+  { id: 'wholesale_invoice', label: 'Factura Mayoreo', group: 'receipts' },
+  { id: 'consignment_receipt', label: 'Recibo Consignación', group: 'receipts' },
+  { id: 'unified_reception', label: 'Recepción Unificada', group: 'receipts' },
+  { id: 'cash_register_report', label: 'Cierre de Caja', group: 'reports' },
+  { id: 'sales_report', label: 'Reporte de Ventas', group: 'reports' },
+  { id: 'inventory_count_report', label: 'Conteo de Inventario', group: 'reports' },
+  { id: 'warehouse_operation', label: 'Operación de Almacén', group: 'reports' },
+  { id: 'production_order', label: 'Orden de Producción', group: 'reports' },
+  { id: 'product_label', label: 'Etiqueta de Producto', group: 'labels' },
+  { id: 'weight_label', label: 'Etiqueta de Peso', group: 'labels' },
+  { id: 'lot_label', label: 'Etiqueta de Lote', group: 'labels' },
+  { id: 'asset_label', label: 'Etiqueta de Activo', group: 'labels' },
+  { id: 'shipping_label', label: 'Etiqueta de Envío', group: 'labels' }
+]
+
+const DOCUMENT_GROUPS: { key: string; label: string }[] = [
+  { key: 'receipts', label: 'RECIBOS Y FACTURAS' },
+  { key: 'reports', label: 'REPORTES' },
+  { key: 'labels', label: 'ETIQUETAS' }
 ]
 
 // Print Services Tab Component
@@ -1303,13 +1327,11 @@ function PrintServicesTab({ theme }: { theme: string }) {
   const [createdToken, setCreatedToken] = useState('')
   const [createdName, setCreatedName] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [formData, setFormData] = useState({
-    name: '',
-    warehouseId: '',
-    printerType: 'thermal_80mm'
-  })
+  const [formData, setFormData] = useState({ name: '' })
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [editingMappings, setEditingMappings] = useState<Record<number, Record<string, string>>>({})
+  const [savingMappings, setSavingMappings] = useState<number | null>(null)
 
   const isDark = theme === 'dark'
 
@@ -1319,7 +1341,22 @@ function PrintServicesTab({ theme }: { theme: string }) {
       const res = await fetch('/api/print-services')
       const json = await res.json()
       if (json.success) {
-        setServices(json.data || [])
+        const svcs = json.data || []
+        setServices(svcs)
+        // Initialize editing mappings from server data
+        const initial: Record<number, Record<string, string>> = {}
+        svcs.forEach((s: any) => {
+          initial[s.id] = s.printerMappings || {}
+        })
+        setEditingMappings(prev => {
+          const merged = { ...prev }
+          svcs.forEach((s: any) => {
+            if (!merged[s.id]) {
+              merged[s.id] = s.printerMappings || {}
+            }
+          })
+          return merged
+        })
       }
     } catch (err) {
       console.error('Error fetching print services:', err)
@@ -1352,7 +1389,7 @@ function PrintServicesTab({ theme }: { theme: string }) {
       const res = await fetch('/api/print-services', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({ name: formData.name })
       })
       const json = await res.json()
       if (json.success) {
@@ -1360,7 +1397,7 @@ function PrintServicesTab({ theme }: { theme: string }) {
         setCreatedName(formData.name)
         setShowCreateModal(false)
         setShowSuccessModal(true)
-        setFormData({ name: '', warehouseId: '', printerType: 'thermal_80mm' })
+        setFormData({ name: '' })
         fetchServices()
       }
     } catch (err) {
@@ -1386,6 +1423,37 @@ function PrintServicesTab({ theme }: { theme: string }) {
     }
   }
 
+  const handleSaveMappings = async (serviceId: number) => {
+    try {
+      setSavingMappings(serviceId)
+      const res = await fetch('/api/print-services', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: serviceId, printerMappings: editingMappings[serviceId] || {} })
+      })
+      const json = await res.json()
+      if (json.success) {
+        fetchServices()
+      }
+    } catch (err) {
+      console.error('Error saving printer mappings:', err)
+    } finally {
+      setSavingMappings(null)
+    }
+  }
+
+  const updateMapping = (serviceId: number, docType: string, printerName: string) => {
+    setEditingMappings(prev => {
+      const current = { ...(prev[serviceId] || {}) }
+      if (printerName) {
+        current[docType] = printerName
+      } else {
+        delete current[docType]
+      }
+      return { ...prev, [serviceId]: current }
+    })
+  }
+
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text)
     setCopiedId(id)
@@ -1409,8 +1477,9 @@ function PrintServicesTab({ theme }: { theme: string }) {
     return { online: false, label: `Hace ${Math.floor(hours / 24)}d` }
   }
 
-  const getPrinterTypeLabel = (typeId: string) => {
-    return PRINTER_TYPES.find(t => t.id === typeId)?.label || typeId
+  const getPrinterName = (p: any): string => {
+    if (typeof p === 'string') return p
+    return p.name || p.displayName || 'Desconocida'
   }
 
   return (
@@ -1423,10 +1492,10 @@ function PrintServicesTab({ theme }: { theme: string }) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            Servicios de Impresión
+            Servicios de Impresion
           </h2>
           <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-            Gestiona los agentes de impresión conectados a tu tienda
+            Gestiona los agentes de impresion conectados a tu tienda
           </p>
         </div>
         <button
@@ -1447,10 +1516,10 @@ function PrintServicesTab({ theme }: { theme: string }) {
         <div className={`rounded-xl border ${isDark ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'} p-12 text-center`}>
           <Server className={`w-12 h-12 mx-auto mb-4 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} />
           <h3 className={`text-lg font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            No hay servicios de impresión
+            No hay servicios de impresion
           </h3>
           <p className={`text-sm mb-6 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-            Crea un servicio de impresión para conectar un agente a tu tienda
+            Crea un servicio de impresion para conectar un agente a tu tienda
           </p>
           <button
             onClick={() => setShowCreateModal(true)}
@@ -1464,7 +1533,11 @@ function PrintServicesTab({ theme }: { theme: string }) {
         <div className="grid gap-4">
           {services.map((service) => {
             const status = getOnlineStatus(service.lastSeenAt)
-            const agentPrinters = service.agentPrinters ? (typeof service.agentPrinters === 'string' ? JSON.parse(service.agentPrinters) : service.agentPrinters) : []
+            const agentPrinters: any[] = service.agentPrinters
+              ? (typeof service.agentPrinters === 'string' ? JSON.parse(service.agentPrinters) : service.agentPrinters)
+              : []
+            const printerNames = agentPrinters.map(getPrinterName)
+            const localMappings = editingMappings[service.id] || {}
 
             return (
               <div
@@ -1493,7 +1566,7 @@ function PrintServicesTab({ theme }: { theme: string }) {
                       </div>
 
                       {/* Details grid */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 mt-3">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 mt-3">
                         {/* Token */}
                         <div>
                           <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Token</span>
@@ -1515,27 +1588,19 @@ function PrintServicesTab({ theme }: { theme: string }) {
                           </div>
                         </div>
 
-                        {/* Printer Type */}
-                        <div>
-                          <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Tipo</span>
-                          <p className={`text-sm mt-0.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                            {getPrinterTypeLabel(service.printerType)}
-                          </p>
-                        </div>
-
-                        {/* Warehouse */}
-                        <div>
-                          <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Almacén</span>
-                          <p className={`text-sm mt-0.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                            {service.warehouseName || '---'}
-                          </p>
-                        </div>
-
                         {/* Agent Version */}
                         <div>
                           <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Agente</span>
                           <p className={`text-sm mt-0.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
                             {service.agentVersion || '---'}
+                          </p>
+                        </div>
+
+                        {/* Last seen */}
+                        <div>
+                          <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Ultima conexion</span>
+                          <p className={`text-sm mt-0.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                            {status.label}
                           </p>
                         </div>
                       </div>
@@ -1555,12 +1620,85 @@ function PrintServicesTab({ theme }: { theme: string }) {
                                 }`}
                               >
                                 <Printer className="w-3 h-3" />
-                                {typeof p === 'string' ? p : p.name || p.displayName || 'Desconocida'}
+                                {getPrinterName(p)}
                               </span>
                             ))}
                           </div>
                         </div>
                       )}
+
+                      {/* Printer Mappings Section */}
+                      <div className={`mt-4 pt-4 border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+                        <div className="flex items-center gap-2 mb-3">
+                          <FileText className={`w-4 h-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+                          <span className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                            Asignacion de Impresoras
+                          </span>
+                        </div>
+
+                        {printerNames.length === 0 ? (
+                          <p className={`text-xs italic ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            Esperando conexion del agente...
+                          </p>
+                        ) : (
+                          <div className="space-y-4">
+                            {DOCUMENT_GROUPS.map(group => {
+                              const docs = DOCUMENT_TYPES.filter(d => d.group === group.key)
+                              return (
+                                <div key={group.key}>
+                                  <h4 className={`text-xs font-bold uppercase tracking-wider mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                    {group.label}
+                                  </h4>
+                                  <div className="grid gap-2">
+                                    {docs.map(doc => (
+                                      <div key={doc.id} className="flex items-center justify-between gap-4">
+                                        <label className={`text-sm whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                          {doc.label}
+                                        </label>
+                                        <select
+                                          value={localMappings[doc.id] || ''}
+                                          onChange={(e) => updateMapping(service.id, doc.id, e.target.value)}
+                                          className={`w-64 px-2 py-1.5 rounded-lg border text-sm ${
+                                            isDark
+                                              ? 'bg-gray-700 border-gray-600 text-white'
+                                              : 'bg-white border-gray-300 text-gray-900'
+                                          } focus:outline-none focus:ring-2 focus:ring-blue-500/40`}
+                                        >
+                                          <option value="">-- Sin asignar --</option>
+                                          {printerNames.map((name) => (
+                                            <option key={name} value={name}>{name}</option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )
+                            })}
+
+                            {/* Save button */}
+                            <div className="flex justify-end pt-2">
+                              <button
+                                onClick={() => handleSaveMappings(service.id)}
+                                disabled={savingMappings === service.id}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+                              >
+                                {savingMappings === service.id ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Guardando...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save className="w-4 h-4" />
+                                    Guardar Mapeo
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -1598,7 +1736,7 @@ function PrintServicesTab({ theme }: { theme: string }) {
             >
               <div className="p-6">
                 <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                  Nuevo Servicio de Impresión
+                  Nuevo Servicio de Impresion
                 </h3>
 
                 <div className="space-y-4">
@@ -1611,54 +1749,13 @@ function PrintServicesTab({ theme }: { theme: string }) {
                       type="text"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="Ej: Impresora Caja 1"
+                      placeholder="Ej: Produccion Berroa"
                       className={`w-full px-3 py-2 rounded-lg border text-sm ${
                         isDark
                           ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
                           : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                       } focus:outline-none focus:ring-2 focus:ring-blue-500/40`}
                     />
-                  </div>
-
-                  {/* Warehouse */}
-                  <div>
-                    <label className={`block text-sm font-medium mb-1.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Almacén
-                    </label>
-                    <select
-                      value={formData.warehouseId}
-                      onChange={(e) => setFormData({ ...formData, warehouseId: e.target.value })}
-                      className={`w-full px-3 py-2 rounded-lg border text-sm ${
-                        isDark
-                          ? 'bg-gray-700 border-gray-600 text-white'
-                          : 'bg-white border-gray-300 text-gray-900'
-                      } focus:outline-none focus:ring-2 focus:ring-blue-500/40`}
-                    >
-                      <option value="">Sin asignar</option>
-                      {warehouses.map((w: any) => (
-                        <option key={w.id} value={w.id}>{w.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Printer Type */}
-                  <div>
-                    <label className={`block text-sm font-medium mb-1.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Tipo de Impresora
-                    </label>
-                    <select
-                      value={formData.printerType}
-                      onChange={(e) => setFormData({ ...formData, printerType: e.target.value })}
-                      className={`w-full px-3 py-2 rounded-lg border text-sm ${
-                        isDark
-                          ? 'bg-gray-700 border-gray-600 text-white'
-                          : 'bg-white border-gray-300 text-gray-900'
-                      } focus:outline-none focus:ring-2 focus:ring-blue-500/40`}
-                    >
-                      {PRINTER_TYPES.map((pt) => (
-                        <option key={pt.id} value={pt.id}>{pt.label} - {pt.description}</option>
-                      ))}
-                    </select>
                   </div>
                 </div>
 
@@ -1728,7 +1825,7 @@ function PrintServicesTab({ theme }: { theme: string }) {
                 {/* Token */}
                 <div className={`rounded-lg border p-4 mb-4 ${isDark ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
                   <label className={`block text-xs font-medium mb-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Token de Autenticación
+                    Token de Autenticacion
                   </label>
                   <div className="flex items-center gap-2">
                     <code className={`flex-1 text-sm font-mono break-all ${isDark ? 'text-green-400' : 'text-green-700'}`}>
@@ -1747,7 +1844,7 @@ function PrintServicesTab({ theme }: { theme: string }) {
                     </button>
                   </div>
                   <p className={`text-xs mt-2 ${isDark ? 'text-yellow-500/80' : 'text-yellow-600'}`}>
-                    Guarda este token. No se mostrará de nuevo.
+                    Guarda este token. No se mostrara de nuevo.
                   </p>
                 </div>
 
@@ -1845,7 +1942,7 @@ function PrintServicesTab({ theme }: { theme: string }) {
                   </h3>
                 </div>
                 <p className={`text-sm mb-6 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Esta acción eliminará el servicio de impresión y revocará su token. El agente dejará de funcionar inmediatamente.
+                  Esta accion eliminara el servicio de impresion y revocara su token. El agente dejara de funcionar inmediatamente.
                 </p>
                 <div className="flex justify-end gap-3">
                   <button
