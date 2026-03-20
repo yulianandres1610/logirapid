@@ -1,26 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-/**
- * Helper to extract user info from auth-token cookie.
- * Token is base64(userId:email:role)
- */
-function parseAuthToken(token: string): { userId: string; email: string; role: string } | null {
-  try {
-    const decoded = Buffer.from(token, 'base64').toString('utf-8')
-    const parts = decoded.split(':')
-    if (parts.length < 3) return null
-    return {
-      userId: parts[0],
-      email: parts[1],
-      role: parts.slice(2).join(':'),
-    }
-  } catch {
-    return null
-  }
+interface JWTPayload {
+  userId: number
+  email: string
+  role: string
+  companyId: number
+  companyName: string
 }
 
 /**
@@ -31,8 +22,9 @@ function parseAuthToken(token: string): { userId: string; email: string; role: s
  */
 export async function POST(request: NextRequest) {
   try {
-    // Auth: parse token from cookie
-    const authToken = request.cookies.get('auth-token')?.value
+    // Auth: parse JWT from cookie
+    const cookieStore = await cookies()
+    const authToken = cookieStore.get('auth-token')?.value
     if (!authToken) {
       return NextResponse.json(
         { success: false, error: 'No autenticado' },
@@ -40,21 +32,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const user = parseAuthToken(authToken)
-    if (!user) {
+    let payload: JWTPayload
+    try {
+      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+      payload = jwt.verify(authToken, secret) as JWTPayload
+    } catch {
       return NextResponse.json(
         { success: false, error: 'Token inválido' },
         { status: 401 }
       )
     }
 
-    const companyId = request.cookies.get('user-company-id')?.value
-    if (!companyId) {
-      return NextResponse.json(
-        { success: false, error: 'Company ID requerido' },
-        { status: 400 }
-      )
-    }
+    const companyId = payload.companyId
+    const userId = payload.userId
 
     const body = await request.json()
     const {
@@ -109,7 +99,7 @@ export async function POST(request: NextRequest) {
         documentType,
         JSON.stringify(documentData),
         copies,
-        user.userId,
+        userId,
       ]
     )
 
@@ -140,8 +130,9 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    // Auth
-    const authToken = request.cookies.get('auth-token')?.value
+    // Auth: parse JWT from cookie
+    const cookieStore = await cookies()
+    const authToken = cookieStore.get('auth-token')?.value
     if (!authToken) {
       return NextResponse.json(
         { success: false, error: 'No autenticado' },
@@ -149,21 +140,18 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const user = parseAuthToken(authToken)
-    if (!user) {
+    let payload: JWTPayload
+    try {
+      const secret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+      payload = jwt.verify(authToken, secret) as JWTPayload
+    } catch {
       return NextResponse.json(
         { success: false, error: 'Token inválido' },
         { status: 401 }
       )
     }
 
-    const companyId = request.cookies.get('user-company-id')?.value
-    if (!companyId) {
-      return NextResponse.json(
-        { success: false, error: 'Company ID requerido' },
-        { status: 400 }
-      )
-    }
+    const companyId = payload.companyId
 
     const { searchParams } = new URL(request.url)
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
