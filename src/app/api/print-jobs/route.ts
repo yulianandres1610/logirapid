@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
       copies = 1,
       warehouseId = null,
       posTerminalId = null,
+      serviceId = null,
     } = body
 
     if (!documentType || !documentData) {
@@ -62,32 +63,49 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Resolve the best matching print service
-    // Priority: 1) has printer_mapping for this document type, 2) POS terminal match, 3) warehouse match, 4) any active
-    const serviceResult = await db.query(
-      `SELECT id, selected_printer, printer_type, printer_mappings FROM print_services
-       WHERE company_id = $1 AND status = 'active'
-       ORDER BY
-         CASE
-           WHEN printer_mappings IS NOT NULL AND printer_mappings ? $4 THEN 0
-           WHEN pos_terminal_id IS NOT NULL AND pos_terminal_id = $3 THEN 1
-           WHEN warehouse_id IS NOT NULL AND warehouse_id = $2 THEN 2
-           WHEN warehouse_id IS NULL AND pos_terminal_id IS NULL THEN 3
-           ELSE 4
-         END,
-         last_seen_at DESC NULLS LAST
-       LIMIT 1`,
-      [companyId, warehouseId, posTerminalId, documentType]
-    )
+    let service: any
 
-    if (serviceResult.rows.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'No hay servicio de impresión activo. Crea uno en Configuración > Impresión.' },
-        { status: 404 }
+    if (serviceId) {
+      // User explicitly selected a print service
+      const serviceResult = await db.query(
+        `SELECT id, selected_printer, printer_type, printer_mappings FROM print_services
+         WHERE id = $1 AND company_id = $2 AND status = 'active'`,
+        [serviceId, companyId]
       )
-    }
+      if (serviceResult.rows.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Servicio de impresión no encontrado o inactivo' },
+          { status: 404 }
+        )
+      }
+      service = serviceResult.rows[0]
+    } else {
+      // Auto-select best matching print service
+      // Priority: 1) has printer_mapping for this document type, 2) POS terminal match, 3) warehouse match, 4) any active
+      const serviceResult = await db.query(
+        `SELECT id, selected_printer, printer_type, printer_mappings FROM print_services
+         WHERE company_id = $1 AND status = 'active'
+         ORDER BY
+           CASE
+             WHEN printer_mappings IS NOT NULL AND printer_mappings ? $4 THEN 0
+             WHEN pos_terminal_id IS NOT NULL AND pos_terminal_id = $3 THEN 1
+             WHEN warehouse_id IS NOT NULL AND warehouse_id = $2 THEN 2
+             WHEN warehouse_id IS NULL AND pos_terminal_id IS NULL THEN 3
+             ELSE 4
+           END,
+           last_seen_at DESC NULLS LAST
+         LIMIT 1`,
+        [companyId, warehouseId, posTerminalId, documentType]
+      )
 
-    const service = serviceResult.rows[0]
+      if (serviceResult.rows.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'No hay servicio de impresión activo. Crea uno en Configuración > Impresión.' },
+          { status: 404 }
+        )
+      }
+      service = serviceResult.rows[0]
+    }
 
     // Insert the print job
     const insertResult = await db.query(

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Printer, X, Loader2, Minus, Plus, DollarSign, Tag } from 'lucide-react'
+import { Printer, X, Loader2, Minus, Plus, DollarSign, Tag, ChevronDown } from 'lucide-react'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
@@ -47,20 +47,29 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
   const [printing, setPrinting] = useState(false)
   const [copies, setCopies] = useState(1)
   const [variantCopies, setVariantCopies] = useState<Record<number, number>>({})
+  const [availableServices, setAvailableServices] = useState<any[]>([])
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null)
 
   useEffect(() => {
     if (isOpen) {
-      console.log('[PrintLabelModal] Datos recibidos:', {
-        productName: productData?.productName,
-        sku: productData?.sku,
-        barcode: productData?.barcode,
-        price: productData?.price,
-        currency: productData?.currency,
-        hasVariants: !!productData?.variants,
-        variantsCount: productData?.variants?.length || 0
-      })
+      // Fetch available print services for product_label
+      fetch('/api/print-services/available?documentType=product_label', { credentials: 'include' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.data) {
+            const online = data.data.filter((s: any) => s.online)
+            setAvailableServices(online.length > 0 ? online : data.data)
+            // Auto-select first if only one
+            if (data.data.length === 1) {
+              setSelectedServiceId(data.data[0].id)
+            } else {
+              setSelectedServiceId(null) // Let user choose or auto
+            }
+          }
+        })
+        .catch(() => {})
     }
-  }, [isOpen, productData])
+  }, [isOpen])
 
   if (!productData) {
     console.error('[PrintLabelModal] productData is null or undefined')
@@ -149,6 +158,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
           body: JSON.stringify({
             ...job,
             warehouseId,
+            serviceId: selectedServiceId,
             sourceType: 'product',
             priority: 1
           })
@@ -233,6 +243,35 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
           <div className="p-4">
               <div>
                 <div className="space-y-3">
+                  {/* Printer selector - shown when multiple services available */}
+                  {availableServices.length > 1 && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+                        Impresora
+                      </p>
+                      <div className="relative">
+                        <select
+                          value={selectedServiceId || ''}
+                          onChange={(e) => setSelectedServiceId(e.target.value ? Number(e.target.value) : null)}
+                          className={cn(
+                            'w-full px-3 py-2 pr-8 rounded-lg border text-sm font-medium appearance-none cursor-pointer',
+                            theme === 'dark'
+                              ? 'bg-gray-700 border-gray-600 text-white'
+                              : 'bg-gray-50 border-gray-200 text-gray-900'
+                          )}
+                        >
+                          <option value="">Automatico (mejor disponible)</option>
+                          {availableServices.map((s: any) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}{s.printerName ? ` — ${s.printerName.replace(/_/g, ' ')}` : ''}{s.online ? '' : ' (offline)'}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
+                  )}
+
                   <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                     Etiquetas ({totalCopies})
                   </p>

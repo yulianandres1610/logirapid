@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Printer, X, Loader2, Minus, Plus, FileText, Receipt, Package, ShoppingCart } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Printer, X, Loader2, Minus, Plus, FileText, Receipt, Package, ShoppingCart, ChevronDown } from 'lucide-react'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { cn } from '@/lib/utils'
 
@@ -62,6 +62,23 @@ export function PrintDocumentModal({
 
   const [printing, setPrinting] = useState(false)
   const [copies, setCopies] = useState(1)
+  const [availableServices, setAvailableServices] = useState<any[]>([])
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (isOpen) {
+      fetch(`/api/print-services/available?documentType=${documentType}`, { credentials: 'include' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.data) {
+            const online = data.data.filter((s: any) => s.online)
+            setAvailableServices(online.length > 0 ? online : data.data)
+            setSelectedServiceId(data.data.length === 1 ? data.data[0].id : null)
+          }
+        })
+        .catch(() => {})
+    }
+  }, [isOpen, documentType])
 
   const docConfig = DOCUMENT_LABELS[documentType] || { label: 'Documento', icon: FileText }
   const DocIcon = docConfig.icon
@@ -76,6 +93,7 @@ export function PrintDocumentModal({
           documentType,
           documentData,
           copies,
+          serviceId: selectedServiceId,
           sourceType,
           sourceId,
           priority: 1
@@ -138,6 +156,28 @@ export function PrintDocumentModal({
 
           {/* Content */}
           <div className="p-6 space-y-6">
+            {/* Printer selector */}
+            {availableServices.length > 1 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Impresora</label>
+                <div className="relative">
+                  <select
+                    value={selectedServiceId || ''}
+                    onChange={(e) => setSelectedServiceId(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full px-3 py-2.5 pr-8 rounded-lg border bg-gray-700 border-gray-600 text-white text-sm font-medium appearance-none cursor-pointer"
+                  >
+                    <option value="">Automatico</option>
+                    {availableServices.map((s: any) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}{s.printerName ? ` — ${s.printerName.replace(/_/g, ' ')}` : ''}{s.online ? '' : ' (offline)'}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+            )}
+
             {/* Copies Selector */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
