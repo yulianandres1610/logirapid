@@ -53,12 +53,14 @@ export async function GET() {
 
     const result = await db.query(`
       SELECT
-        id, company_id, name, pairing_token, warehouse_id, pos_terminal_id,
-        selected_printer, printer_type, agent_printers, last_seen_at,
-        agent_version, status, created_at
-      FROM print_services
-      WHERE company_id = $1
-      ORDER BY created_at DESC
+        ps.id, ps.company_id, ps.name, ps.pairing_token, ps.warehouse_id, ps.pos_terminal_id,
+        ps.selected_printer, ps.printer_type, ps.agent_printers, ps.last_seen_at,
+        ps.agent_version, ps.status, ps.created_at,
+        mw.name as warehouse_name
+      FROM print_services ps
+      LEFT JOIN market_warehouses mw ON mw.id = ps.warehouse_id
+      WHERE ps.company_id = $1
+      ORDER BY ps.created_at DESC
     `, [companyId])
 
     const now = new Date()
@@ -75,6 +77,7 @@ export async function GET() {
       lastSeenAt: row.last_seen_at,
       agentVersion: row.agent_version,
       status: row.status,
+      warehouseName: row.warehouse_name || null,
       createdAt: row.created_at,
       online: row.last_seen_at
         ? (now.getTime() - new Date(row.last_seen_at).getTime()) < 30000

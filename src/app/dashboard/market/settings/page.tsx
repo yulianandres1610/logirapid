@@ -1305,8 +1305,8 @@ function PrintServicesTab({ theme }: { theme: string }) {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
-    warehouse_id: '',
-    printer_type: 'thermal_80mm'
+    warehouseId: '',
+    printerType: 'thermal_80mm'
   })
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -1333,7 +1333,7 @@ function PrintServicesTab({ theme }: { theme: string }) {
       const res = await fetch('/api/market/warehouses')
       const json = await res.json()
       if (json.success) {
-        setWarehouses(json.data || [])
+        setWarehouses(json.data?.warehouses || [])
       }
     } catch (err) {
       console.error('Error fetching warehouses:', err)
@@ -1356,11 +1356,11 @@ function PrintServicesTab({ theme }: { theme: string }) {
       })
       const json = await res.json()
       if (json.success) {
-        setCreatedToken(json.data?.token || '')
+        setCreatedToken(json.data?.pairingToken || '')
         setCreatedName(formData.name)
         setShowCreateModal(false)
         setShowSuccessModal(true)
-        setFormData({ name: '', warehouse_id: '', printer_type: 'thermal_80mm' })
+        setFormData({ name: '', warehouseId: '', printerType: 'thermal_80mm' })
         fetchServices()
       }
     } catch (err) {
@@ -1463,8 +1463,8 @@ function PrintServicesTab({ theme }: { theme: string }) {
       ) : (
         <div className="grid gap-4">
           {services.map((service) => {
-            const status = getOnlineStatus(service.last_seen_at)
-            const agentPrinters = service.agent_printers ? (typeof service.agent_printers === 'string' ? JSON.parse(service.agent_printers) : service.agent_printers) : []
+            const status = getOnlineStatus(service.lastSeenAt)
+            const agentPrinters = service.agentPrinters ? (typeof service.agentPrinters === 'string' ? JSON.parse(service.agentPrinters) : service.agentPrinters) : []
 
             return (
               <div
@@ -1499,10 +1499,10 @@ function PrintServicesTab({ theme }: { theme: string }) {
                           <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Token</span>
                           <div className="flex items-center gap-1.5 mt-0.5">
                             <code className={`text-xs font-mono ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                              {truncateToken(service.token)}
+                              {truncateToken(service.pairingToken)}
                             </code>
                             <button
-                              onClick={() => copyToClipboard(service.token, `token-${service.id}`)}
+                              onClick={() => copyToClipboard(service.pairingToken, `token-${service.id}`)}
                               className={`p-0.5 rounded ${isDark ? 'hover:bg-gray-600' : 'hover:bg-gray-200'} transition-colors`}
                               title="Copiar token"
                             >
@@ -1519,7 +1519,7 @@ function PrintServicesTab({ theme }: { theme: string }) {
                         <div>
                           <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Tipo</span>
                           <p className={`text-sm mt-0.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                            {getPrinterTypeLabel(service.printer_type)}
+                            {getPrinterTypeLabel(service.printerType)}
                           </p>
                         </div>
 
@@ -1527,7 +1527,7 @@ function PrintServicesTab({ theme }: { theme: string }) {
                         <div>
                           <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Almacén</span>
                           <p className={`text-sm mt-0.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                            {service.warehouse_name || '---'}
+                            {service.warehouseName || '---'}
                           </p>
                         </div>
 
@@ -1535,7 +1535,7 @@ function PrintServicesTab({ theme }: { theme: string }) {
                         <div>
                           <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Agente</span>
                           <p className={`text-sm mt-0.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                            {service.agent_version || '---'}
+                            {service.agentVersion || '---'}
                           </p>
                         </div>
                       </div>
@@ -1626,8 +1626,8 @@ function PrintServicesTab({ theme }: { theme: string }) {
                       Almacén
                     </label>
                     <select
-                      value={formData.warehouse_id}
-                      onChange={(e) => setFormData({ ...formData, warehouse_id: e.target.value })}
+                      value={formData.warehouseId}
+                      onChange={(e) => setFormData({ ...formData, warehouseId: e.target.value })}
                       className={`w-full px-3 py-2 rounded-lg border text-sm ${
                         isDark
                           ? 'bg-gray-700 border-gray-600 text-white'
@@ -1647,8 +1647,8 @@ function PrintServicesTab({ theme }: { theme: string }) {
                       Tipo de Impresora
                     </label>
                     <select
-                      value={formData.printer_type}
-                      onChange={(e) => setFormData({ ...formData, printer_type: e.target.value })}
+                      value={formData.printerType}
+                      onChange={(e) => setFormData({ ...formData, printerType: e.target.value })}
                       className={`w-full px-3 py-2 rounded-lg border text-sm ${
                         isDark
                           ? 'bg-gray-700 border-gray-600 text-white'
