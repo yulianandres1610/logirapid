@@ -68,8 +68,8 @@ export async function GET(request: NextRequest) {
       query = `
         SELECT
           mw.*,
-          ps.service_name as print_service_name,
-          ps.service_code as print_service_code,
+          ps.name as print_service_name,
+          ps.pairing_token as print_service_code,
           COALESCE(mws.quantity_on_hand, 0) as stock_on_hand,
           COALESCE(mws.quantity_reserved, 0) as stock_reserved,
           COALESCE(mws.quantity_on_hand, 0) - COALESCE(mws.quantity_reserved, 0) as stock_available
@@ -84,8 +84,8 @@ export async function GET(request: NextRequest) {
       query = `
         SELECT
           mw.*,
-          ps.service_name as print_service_name,
-          ps.service_code as print_service_code,
+          ps.name as print_service_name,
+          ps.pairing_token as print_service_code,
           (SELECT COUNT(*) FROM market_warehouse_stock mws WHERE mws.warehouse_id = mw.id) as products_count,
           (SELECT COALESCE(SUM(mws.quantity_on_hand), 0) FROM market_warehouse_stock mws WHERE mws.warehouse_id = mw.id) as total_stock
         FROM market_warehouses mw

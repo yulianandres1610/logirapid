@@ -67,8 +67,8 @@ export async function GET(
         w.code as warehouse_code,
         w.address as warehouse_address,
         p.name as pricelist_name,
-        ps.service_name as print_service_name,
-        ps.service_code as print_service_code
+        ps.name as print_service_name,
+        ps.pairing_token as print_service_code
       FROM market_pos_terminals t
       LEFT JOIN market_warehouses w ON t.warehouse_id = w.id
       LEFT JOIN market_pricelists p ON t.pricelist_id = p.id
