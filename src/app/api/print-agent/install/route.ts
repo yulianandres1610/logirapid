@@ -304,8 +304,6 @@ if (-not $nodeInstalled) {
     if ($wingetAvailable) {
         Write-Host "  Instalando Node.js via winget..."
         & winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements --silent 2>$null
-        # Refrescar PATH
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
     } else {
         # Descargar instalador MSI directamente
         Write-Host "  Descargando Node.js LTS installer..."
@@ -315,8 +313,21 @@ if (-not $nodeInstalled) {
         Write-Host "  Instalando Node.js (esto puede tomar un minuto)..."
         Start-Process msiexec.exe -ArgumentList "/i $nodeInstallerPath /qn /norestart" -Wait -NoNewWindow
         Remove-Item $nodeInstallerPath -ErrorAction SilentlyContinue
-        # Refrescar PATH
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+    }
+
+    # Refrescar PATH completamente (Machine + User + rutas comunes de Node)
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+    # Agregar rutas comunes donde Node.js se instala
+    $nodePaths = @(
+        "C:\\Program Files\\nodejs",
+        "$env:ProgramFiles\\nodejs",
+        "$env:APPDATA\\npm",
+        "$env:LOCALAPPDATA\\Programs\\nodejs"
+    )
+    foreach ($np in $nodePaths) {
+        if ((Test-Path $np) -and ($env:Path -notlike "*$np*")) {
+            $env:Path = "$np;$env:Path"
+        }
     }
 
     # Verificar instalacion
@@ -338,14 +349,35 @@ if (-not $nodeInstalled) {
     }
 }
 
-# Verificar npm
+# Verificar npm (agregar rutas comunes si no se encuentra)
+$npmFound = $false
 try {
     $npmVersion = & npm -v 2>$null
+    if ($npmVersion) { $npmFound = $true }
+} catch {}
+
+if (-not $npmFound) {
+    # Buscar npm en rutas conocidas
+    $npmPaths = @(
+        "C:\\Program Files\\nodejs",
+        "$env:ProgramFiles\\nodejs",
+        "$env:APPDATA\\npm"
+    )
+    foreach ($np in $npmPaths) {
+        if (Test-Path "$np\\npm.cmd") {
+            $env:Path = "$np;$env:Path"
+            $npmFound = $true
+            break
+        }
+    }
+}
+
+if ($npmFound) {
+    $npmVersion = & npm -v 2>$null
     Write-Host "  [OK] npm: $npmVersion"
-} catch {
-    Write-Host "  [ERROR] npm no encontrado. Reinstala Node.js desde https://nodejs.org/"
-    Read-Host "  Presiona Enter para salir"
-    exit 1
+} else {
+    Write-Host "  [!] npm no encontrado en PATH. Intentando continuar..."
+    Write-Host "  Si falla, cierra PowerShell, reabrelo y ejecuta el instalador de nuevo."
 }
 
 # ─── 2. Detener servicio previo ───
