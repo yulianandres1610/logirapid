@@ -4,7 +4,7 @@ const path = require("path");
 const http = require("http");
 const { exec, execSync } = require("child_process");
 
-const VERSION = "1.1.0";
+const VERSION = "1.1.1";
 const platform = os.platform();
 const INSTALL_DIR = path.join(os.homedir(), ".logirapid-print-service");
 const CONFIG_PATH = path.join(INSTALL_DIR, "config.json");
@@ -143,18 +143,34 @@ async function listPrinters() {
   return cachedPrinters;
 }
 
+// Run a PowerShell script via temp file (avoids cmd.exe quoting hell)
+function runPowerShell(script) {
+  return new Promise((resolve, reject) => {
+    const tmpPs1 = path.join(os.tmpdir(), `logirapid-ps-${Date.now()}.ps1`);
+    fs.writeFileSync(tmpPs1, script, "utf8");
+    exec(
+      `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${tmpPs1}"`,
+      { encoding: "utf8", maxBuffer: 5 * 1024 * 1024, timeout: 15000 },
+      (err, stdout, stderr) => {
+        try { fs.unlinkSync(tmpPs1); } catch {}
+        if (err) return reject(new Error((stderr || err.message).trim()));
+        resolve((stdout || "").trim());
+      }
+    );
+  });
+}
+
 async function listPrintersWindows() {
-  // Method 1: Get-CimInstance (works on all Windows editions)
+  // Method 1: Get-CimInstance (works on all Windows editions including Home)
   try {
-    const raw = await execAsync(
-      'powershell.exe -NoProfile -Command "' +
-      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ' +
-      'Get-CimInstance -ClassName Win32_Printer | Select-Object Name, PrinterStatus, Default | ConvertTo-Json -Compress' +
-      '"'
+    const raw = await runPowerShell(
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n' +
+      'Get-CimInstance -ClassName Win32_Printer | Select-Object Name, PrinterStatus, Default | ConvertTo-Json -Compress'
     );
     if (raw) {
       const parsed = JSON.parse(raw);
       const arr = Array.isArray(parsed) ? parsed : [parsed];
+      console.log(`  [Printers] Get-CimInstance found ${arr.length} printer(s)`);
       return arr.map((p) => ({
         name: p.Name,
         isDefault: p.Default || false,
@@ -167,15 +183,14 @@ async function listPrintersWindows() {
 
   // Method 2: Get-Printer (Pro/Enterprise only)
   try {
-    const raw = await execAsync(
-      'powershell.exe -NoProfile -Command "' +
-      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ' +
-      'Get-Printer | Select-Object Name, PrinterStatus, IsDefault | ConvertTo-Json -Compress' +
-      '"'
+    const raw = await runPowerShell(
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n' +
+      'Get-Printer | Select-Object Name, PrinterStatus, IsDefault | ConvertTo-Json -Compress'
     );
     if (raw) {
       const parsed = JSON.parse(raw);
       const arr = Array.isArray(parsed) ? parsed : [parsed];
+      console.log(`  [Printers] Get-Printer found ${arr.length} printer(s)`);
       return arr.map((p) => ({
         name: p.Name,
         isDefault: p.IsDefault || false,
@@ -188,19 +203,21 @@ async function listPrintersWindows() {
 
   // Method 3: .NET System.Drawing.Printing (works even without WMI/CIM)
   try {
-    const raw = await execAsync(
-      'powershell.exe -NoProfile -Command "' +
-      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ' +
-      'Add-Type -AssemblyName System.Drawing; ' +
-      '[System.Drawing.Printing.PrinterSettings]::InstalledPrinters | ForEach-Object { ' +
-      '  $s = New-Object System.Drawing.Printing.PrinterSettings; $s.PrinterName = $_; ' +
-      '  [PSCustomObject]@{ Name = $_; IsDefault = $s.IsDefaultPrinter; IsValid = $s.IsValid } ' +
-      '} | ConvertTo-Json -Compress' +
-      '"'
+    const raw = await runPowerShell(
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n' +
+      'Add-Type -AssemblyName System.Drawing\n' +
+      '$result = @()\n' +
+      'foreach ($name in [System.Drawing.Printing.PrinterSettings]::InstalledPrinters) {\n' +
+      '  $s = New-Object System.Drawing.Printing.PrinterSettings\n' +
+      '  $s.PrinterName = $name\n' +
+      '  $result += [PSCustomObject]@{ Name = $name; IsDefault = $s.IsDefaultPrinter; IsValid = $s.IsValid }\n' +
+      '}\n' +
+      '$result | ConvertTo-Json -Compress'
     );
     if (raw) {
       const parsed = JSON.parse(raw);
       const arr = Array.isArray(parsed) ? parsed : [parsed];
+      console.log(`  [Printers] .NET found ${arr.length} printer(s)`);
       return arr.filter((p) => p.IsValid).map((p) => ({
         name: p.Name,
         isDefault: p.IsDefault || false,
@@ -219,7 +236,6 @@ async function listPrintersWindows() {
       const header = lines[0].split(",").map((h) => h.trim());
       const nameIdx = header.indexOf("Name");
       const defaultIdx = header.indexOf("Default");
-      const statusIdx = header.indexOf("PrinterStatus");
       return lines.slice(1).map((line) => {
         const cols = line.split(",").map((c) => c.trim());
         return {
@@ -229,8 +245,11 @@ async function listPrintersWindows() {
         };
       }).filter((p) => p.name && p.name !== "Unknown");
     }
-  } catch {}
+  } catch (e) {
+    console.log("  [Printers] WMIC failed:", e.message);
+  }
 
+  console.log("  [Printers] WARNING: All detection methods failed!");
   return [];
 }
 
