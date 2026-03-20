@@ -750,27 +750,47 @@ async function main() {
     process.exit(0);
   }
 
-  const config = loadConfig();
-  if (!config?.tokens?.length) {
-    console.log(`\n  LogiRapid Print Service v${VERSION}\n  Sin configuracion. Ejecuta: node server.js --setup\n`);
-    process.exit(1);
+  let config = loadConfig();
+  if (!config) {
+    config = { server: "", tokens: [] };
   }
 
   const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL || "5000", 10);
 
   console.log(`\n  LogiRapid Print Service v${VERSION}`);
   console.log(`  Plataforma: ${platform}`);
-  console.log(`  Servidor: ${config.server}`);
-  console.log(`  Departamentos: ${config.tokens.map((t) => t.name).join(", ")}`);
-  console.log(`  Polling cada: ${POLL_INTERVAL / 1000}s`);
 
-  // Start UI server
+  if (!config.tokens?.length) {
+    console.log(`  Sin departamentos configurados.`);
+    console.log(`  Abre http://localhost:${UI_PORT} para agregar un token.`);
+    console.log(`  O ejecuta: node server.js --setup\n`);
+  } else {
+    console.log(`  Servidor: ${config.server}`);
+    console.log(`  Departamentos: ${config.tokens.map((t) => t.name).join(", ")}`);
+    console.log(`  Polling cada: ${POLL_INTERVAL / 1000}s`);
+  }
+
+  // Always start UI server (even without tokens, so user can configure via web)
   createUIServer(config);
 
-  console.log(`  Esperando trabajos de impresion...\n`);
-
-  await pollAll(config);
-  setInterval(() => pollAll(config), POLL_INTERVAL);
+  if (config.tokens?.length) {
+    console.log(`  Esperando trabajos de impresion...\n`);
+    await pollAll(config);
+    setInterval(() => pollAll(config), POLL_INTERVAL);
+  } else {
+    console.log(`  Panel web listo. Esperando configuracion...\n`);
+    // Poll periodically to check if config was added via UI
+    setInterval(async () => {
+      const updated = loadConfig();
+      if (updated?.tokens?.length && !config.tokens?.length) {
+        config = updated;
+        console.log(`  [OK] Configuracion detectada: ${config.tokens.map((t) => t.name).join(", ")}`);
+        console.log(`  Iniciando polling...\n`);
+        await pollAll(config);
+        setInterval(() => pollAll(config), POLL_INTERVAL);
+      }
+    }, 3000);
+  }
 }
 
 main().catch((err) => { console.error("Fatal:", err); process.exit(1); });

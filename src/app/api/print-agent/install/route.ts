@@ -114,6 +114,7 @@ npm install --omit=dev --silent 2>/dev/null
 echo "  [OK] Dependencias instaladas"
 
 # ─── 5. Configurar ───
+# Note: read from /dev/tty because stdin is consumed by curl|bash
 
 if [ -f "$INSTALL_DIR/config.json" ]; then
   echo "  [OK] Configuracion existente encontrada"
@@ -121,62 +122,58 @@ if [ -f "$INSTALL_DIR/config.json" ]; then
   echo "  Departamentos emparejados:"
   node -e "const c=JSON.parse(require('fs').readFileSync('$INSTALL_DIR/config.json','utf8')); (c.tokens||[]).forEach((t,i)=>console.log('    '+(i+1)+'. '+t.name))"
   echo ""
-  read -p "  Agregar otro departamento? (s/n, default: n): " ADD_MORE
-  if [ "$ADD_MORE" = "s" ] || [ "$ADD_MORE" = "S" ]; then
-    read -p "  Token del nuevo departamento: " NEW_TOKEN
-    if [ -n "$NEW_TOKEN" ]; then
-      cd "$INSTALL_DIR" && node -e "
-        const fs = require('fs');
-        const config = JSON.parse(fs.readFileSync('config.json','utf8'));
-        if (config.tokens.some(t => t.token === '$NEW_TOKEN')) { console.log('  [!] Token ya registrado.'); process.exit(0); }
-        fetch(config.server + '/api/print-agent?token=$NEW_TOKEN&version=1.0.0')
-          .then(r => { if(!r.ok) throw new Error('Token invalido'); return r.json(); })
-          .then(d => {
-            config.tokens.push({ token: '$NEW_TOKEN', name: d.service_name });
-            fs.writeFileSync('config.json', JSON.stringify(config, null, 2));
-            console.log('  [OK] Departamento agregado: ' + d.service_name);
-          })
-          .catch(e => { console.error('  [ERROR] ' + e.message); process.exit(1); });
-      " 2>&1
-    fi
-  fi
 else
   echo ""
   echo "  ─── Configuracion inicial ───"
   echo ""
   echo "  Servidor: $BASE_URL"
   echo ""
-  read -p "  Token de emparejamiento: " PAIRING_TOKEN
+  printf "  Token de emparejamiento: "
+  read PAIRING_TOKEN < /dev/tty
 
   if [ -z "$PAIRING_TOKEN" ]; then
-    echo "  [ERROR] Token requerido. Obtienelo desde la configuracion del departamento."
-    exit 1
-  fi
+    echo ""
+    echo "  [!] Sin token. Puedes configurarlo despues:"
+    echo "      cd ~/.logirapid-print-service && node server.js --setup"
+    echo "      O abre http://localhost:9100 y agrega el token desde la UI"
+    echo ""
+    # Create empty config so the service starts with the web UI
+    cat > "$INSTALL_DIR/config.json" << CONF
+{
+  "server": "$BASE_URL",
+  "tokens": []
+}
+CONF
+  else
+    echo "  Verificando token..."
+    RESULT=\$(node -e "
+      fetch('$BASE_URL/api/print-agent?token=$PAIRING_TOKEN&version=1.0.0')
+        .then(r => { if(!r.ok) throw new Error('invalido'); return r.json(); })
+        .then(d => console.log(d.service_name))
+        .catch(() => { console.error('ERROR'); process.exit(1); });
+    " 2>&1)
 
-  echo "  Verificando token..."
-  RESULT=$(node -e "
-    fetch('$BASE_URL/api/print-agent?token=$PAIRING_TOKEN&version=1.0.0')
-      .then(r => { if(!r.ok) throw new Error('invalido'); return r.json(); })
-      .then(d => console.log(d.service_name))
-      .catch(() => { console.error('ERROR'); process.exit(1); });
-  " 2>&1)
-
-  if [ "$RESULT" = "ERROR" ]; then
-    echo "  [ERROR] Token invalido o servidor no accesible."
-    exit 1
-  fi
-
-  echo "  [OK] Conectado a: $RESULT"
-
-  cat > "$INSTALL_DIR/config.json" << CONF
+    if [ "\$RESULT" = "ERROR" ]; then
+      echo "  [!] Token invalido. Puedes configurarlo desde http://localhost:9100"
+      cat > "$INSTALL_DIR/config.json" << CONF
+{
+  "server": "$BASE_URL",
+  "tokens": []
+}
+CONF
+    else
+      echo "  [OK] Conectado a: \$RESULT"
+      cat > "$INSTALL_DIR/config.json" << CONF
 {
   "server": "$BASE_URL",
   "tokens": [
-    { "token": "$PAIRING_TOKEN", "name": "$RESULT" }
+    { "token": "$PAIRING_TOKEN", "name": "\$RESULT" }
   ]
 }
 CONF
-  echo "  [OK] Configuracion guardada"
+      echo "  [OK] Configuracion guardada"
+    fi
+  fi
 fi
 
 # ─── 6. Crear LaunchAgent (solo macOS) ───
