@@ -240,6 +240,9 @@ export function PrintButton({
           onCopiesChange={setCopies}
           onConfirm={() => handlePrint()}
           onCancel={() => setShowCopiesModal(false)}
+          services={availableServices}
+          selectedServiceId={selectedServiceId}
+          onServiceChange={setSelectedServiceId}
         />
       )}
     </>
