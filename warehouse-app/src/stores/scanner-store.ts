@@ -41,6 +41,7 @@ export interface ScannedProduct {
   lots?: LotInfo[]
   unit?: string
   image?: string
+  detectedWeight?: number | null
 }
 
 interface ScannerState {
@@ -103,6 +104,7 @@ export const useScannerStore = create<ScannerState>((set) => ({
         image: raw.variant?.imageUrl || p.imageUrl || p.image || undefined,
         variants: variants.length > 1 ? variants : undefined,
         lots: raw.lots || undefined,
+        detectedWeight: raw.detectedWeight || null,
       }
       set({ lastProduct: product, isProcessing: false })
       playSuccessBeep()

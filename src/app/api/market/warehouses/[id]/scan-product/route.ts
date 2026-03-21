@@ -151,6 +151,35 @@ export async function POST(
 
     const searchCode = barcode.trim()
 
+    // STEP 0: Check if this is a weight barcode (EAN-13 starting with "2")
+    // Format: 2PPPPPWWWWWC where P=product prefix, W=weight in grams, C=check digit
+    let detectedWeight: number | null = null
+    let weightSearchCode = searchCode
+
+    if (searchCode.length === 13 && searchCode.startsWith('2')) {
+      const prefix = searchCode.substring(1, 6)
+      const weightStr = searchCode.substring(6, 11)
+      if (/^\d{5}$/.test(prefix) && /^\d{5}$/.test(weightStr)) {
+        const parsedWeight = parseInt(weightStr) / 1000
+        if (parsedWeight > 0 && parsedWeight <= 9999.999) {
+          detectedWeight = parsedWeight
+          // Try to find product by weight_barcode_prefix first
+          try {
+            const weightProductResult = await db.query(`
+              SELECT id, barcode FROM market_products
+              WHERE company_id = $1 AND weight_barcode_prefix = $2 AND is_active = true
+              LIMIT 1
+            `, [payload.companyId, prefix])
+            if (weightProductResult.rows.length > 0) {
+              // Use the product's actual barcode for lookup
+              weightSearchCode = weightProductResult.rows[0].barcode || searchCode
+              console.log(`[Scan] Weight barcode detected: prefix=${prefix}, weight=${parsedWeight}kg, product barcode=${weightSearchCode}`)
+            }
+          } catch {}
+        }
+      }
+    }
+
     // STEP 1: First try to find a VARIANT by exact barcode/SKU match
     const variantResult = await db.query(`
       SELECT
@@ -179,9 +208,9 @@ export async function POST(
       LEFT JOIN market_warehouse_stock ws ON ws.product_id = p.id AND ws.variant_id = v.id AND ws.warehouse_id = $2
       WHERE p.company_id = $1
         AND v.is_active = true
-        AND (v.barcode = $3 OR v.sku = $3)
+        AND (v.barcode = $3 OR v.sku = $3 OR v.barcode = $4 OR v.sku = $4)
       LIMIT 1
-    `, [payload.companyId, warehouseId, searchCode])
+    `, [payload.companyId, warehouseId, searchCode, weightSearchCode])
 
     // If variant found, return it
     if (variantResult.rows.length > 0) {
@@ -244,7 +273,8 @@ export async function POST(
             quantityAvailable,
             allowNegative: warehouse.allow_negative_stock
           },
-          lots
+          lots,
+          detectedWeight
         }
       })
     }
@@ -268,9 +298,9 @@ export async function POST(
         COALESCE(ws.quantity_reserved, 0) as quantity_reserved
       FROM market_products p
       LEFT JOIN market_warehouse_stock ws ON p.id = ws.product_id AND ws.variant_id IS NULL AND ws.warehouse_id = $2
-      WHERE p.company_id = $1 AND (p.barcode = $3 OR p.sku = $3)
+      WHERE p.company_id = $1 AND (p.barcode = $3 OR p.sku = $3 OR p.barcode = $4 OR p.sku = $4)
       LIMIT 1
-    `, [payload.companyId, warehouseId, searchCode])
+    `, [payload.companyId, warehouseId, searchCode, weightSearchCode])
 
     // STEP 3: If no exact match, try partial search on name, SKU, or barcode
     if (productResult.rows.length === 0) {
@@ -391,7 +421,8 @@ export async function POST(
           quantityAvailable,
           allowNegative: warehouse.allow_negative_stock
         },
-        lots
+        lots,
+        detectedWeight
       }
     })
 

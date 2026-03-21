@@ -34,8 +34,10 @@ export function ScrapAdjustmentScreen() {
       if (product.variants && product.variants.length > 1) {
         setPendingProduct(product)
       } else {
-        addLine(product, 1)
-        setFeedback({ type: 'success', message: product.name })
+        const qty = product.detectedWeight || 1
+        addLine(product, qty)
+        const info = product.detectedWeight ? ` (${product.detectedWeight} ${product.unit || 'kg'})` : ''
+        setFeedback({ type: 'success', message: product.name + info })
       }
     } else {
       setFeedback({ type: 'error', message: 'Producto no encontrado' })

@@ -649,9 +649,12 @@ export function TransferCreateScreen() {
       if (product.variants && product.variants.length > 1) {
         setPendingProduct(product)
       } else {
-        addLine(product, 1)
+        // Use detected weight as quantity for weight products, otherwise 1
+        const qty = product.detectedWeight || 1
+        addLine(product, qty)
         setLastScannedKey(`${product.productId}-${product.variantId || 0}`)
-        showToast('success', product.name)
+        const weightInfo = product.detectedWeight ? ` (${product.detectedWeight} ${product.unit || 'kg'})` : ''
+        showToast('success', product.name + weightInfo)
       }
     } else {
       showToast('error', 'Producto no encontrado')
