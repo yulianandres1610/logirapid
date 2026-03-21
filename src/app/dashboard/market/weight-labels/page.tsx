@@ -67,7 +67,7 @@ export default function WeightLabelsPage() {
   const [mounted, setMounted] = useState(false)
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [printingToService, setPrintingToService] = useState(false)
-  const [labelSize, setLabelSize] = useState<'3x2' | '2x1'>('3x2') // Label size selector
+  const [labelSize, setLabelSize] = useState<'3x2' | '2x1' | '4x6'>('3x2') // Label size selector
 
   // Client-side mount
   useEffect(() => {
@@ -123,9 +123,9 @@ export default function WeightLabelsPage() {
       // Limit to 3 decimal places
       const parts = weight.split('.')
       if (parts.length === 2 && parts[1].length >= 3) return
-      // Limit to reasonable weight (99.999 max)
+      // Limit to reasonable weight (9999.999 max)
       const newWeight = weight + key
-      if (parseFloat(newWeight) <= 99.999) {
+      if (parseFloat(newWeight) <= 9999.999) {
         setWeight(newWeight)
       }
     }
@@ -659,17 +659,6 @@ export default function WeightLabelsPage() {
                       <label className="block text-gray-400 text-xs mb-2 uppercase text-center">Tamaño de Etiqueta</label>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => setLabelSize('3x2')}
-                          className={cn(
-                            "flex-1 py-2 px-3 rounded-lg border transition-all text-sm",
-                            labelSize === '3x2'
-                              ? 'border-purple-500 bg-purple-900/30 text-purple-300'
-                              : 'border-gray-600 bg-gray-700/50 text-gray-400 hover:border-gray-500'
-                          )}
-                        >
-                          3x2" (76x51mm)
-                        </button>
-                        <button
                           onClick={() => setLabelSize('2x1')}
                           className={cn(
                             "flex-1 py-2 px-3 rounded-lg border transition-all text-sm",
@@ -678,7 +667,29 @@ export default function WeightLabelsPage() {
                               : 'border-gray-600 bg-gray-700/50 text-gray-400 hover:border-gray-500'
                           )}
                         >
-                          2x1" (51x25mm)
+                          2x1"
+                        </button>
+                        <button
+                          onClick={() => setLabelSize('3x2')}
+                          className={cn(
+                            "flex-1 py-2 px-3 rounded-lg border transition-all text-sm",
+                            labelSize === '3x2'
+                              ? 'border-purple-500 bg-purple-900/30 text-purple-300'
+                              : 'border-gray-600 bg-gray-700/50 text-gray-400 hover:border-gray-500'
+                          )}
+                        >
+                          3x2"
+                        </button>
+                        <button
+                          onClick={() => setLabelSize('4x6')}
+                          className={cn(
+                            "flex-1 py-2 px-3 rounded-lg border transition-all text-sm",
+                            labelSize === '4x6'
+                              ? 'border-purple-500 bg-purple-900/30 text-purple-300'
+                              : 'border-gray-600 bg-gray-700/50 text-gray-400 hover:border-gray-500'
+                          )}
+                        >
+                          4x6"
                         </button>
                       </div>
                     </div>
@@ -990,18 +1001,6 @@ export default function WeightLabelsPage() {
                   <label className="block text-sm font-medium text-gray-400 mb-2">Tamaño de Etiqueta</label>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setLabelSize('3x2')}
-                      className={cn(
-                        "flex-1 py-3 px-4 rounded-xl border-2 transition-all font-medium",
-                        labelSize === '3x2'
-                          ? 'border-purple-500 bg-purple-900/30 text-purple-300'
-                          : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
-                      )}
-                    >
-                      <div className="text-lg">3" x 2"</div>
-                      <div className="text-xs opacity-70">76 x 51 mm</div>
-                    </button>
-                    <button
                       onClick={() => setLabelSize('2x1')}
                       className={cn(
                         "flex-1 py-3 px-4 rounded-xl border-2 transition-all font-medium",
@@ -1010,8 +1009,32 @@ export default function WeightLabelsPage() {
                           : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
                       )}
                     >
-                      <div className="text-lg">2" x 1"</div>
-                      <div className="text-xs opacity-70">51 x 25 mm</div>
+                      <div className="text-lg">2x1"</div>
+                      <div className="text-xs opacity-70">Basica</div>
+                    </button>
+                    <button
+                      onClick={() => setLabelSize('3x2')}
+                      className={cn(
+                        "flex-1 py-3 px-4 rounded-xl border-2 transition-all font-medium",
+                        labelSize === '3x2'
+                          ? 'border-purple-500 bg-purple-900/30 text-purple-300'
+                          : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
+                      )}
+                    >
+                      <div className="text-lg">3x2"</div>
+                      <div className="text-xs opacity-70">Mediana</div>
+                    </button>
+                    <button
+                      onClick={() => setLabelSize('4x6')}
+                      className={cn(
+                        "flex-1 py-3 px-4 rounded-xl border-2 transition-all font-medium",
+                        labelSize === '4x6'
+                          ? 'border-purple-500 bg-purple-900/30 text-purple-300'
+                          : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
+                      )}
+                    >
+                      <div className="text-lg">4x6"</div>
+                      <div className="text-xs opacity-70">Completa</div>
                     </button>
                   </div>
                 </div>

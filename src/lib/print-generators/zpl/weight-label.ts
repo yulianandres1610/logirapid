@@ -19,7 +19,7 @@ export interface WeightLabelData {
   printDate: string        // Fecha de impresión
   companyName?: string     // Nombre de la empresa (opcional)
   exchangeRate?: number    // Tasa de cambio (opcional para referencia)
-  labelSize?: '3x2' | '2x1' // Tamaño de etiqueta (default: 3x2)
+  labelSize?: '3x2' | '2x1' | '4x6' // Tamaño de etiqueta (default: 3x2)
 }
 
 /**
@@ -28,6 +28,9 @@ export interface WeightLabelData {
 export function generateWeightLabelZpl(data: WeightLabelData): Buffer {
   const labelSize = data.labelSize || '3x2'
 
+  if (labelSize === '4x6') {
+    return generateWeightLabel4x6(data)
+  }
   if (labelSize === '2x1') {
     return generateWeightLabel2x1(data)
   }
@@ -162,6 +165,119 @@ export function generateWeightLabel2x1(data: WeightLabelData): Buffer {
   const zplContent = zpl.join('\n')
 
   return Buffer.from(zplContent, 'utf8')
+}
+
+/**
+ * Generate ZPL code for a 4x6 inch weight label - Full detail
+ * 4x6 inch (102x152mm) label at 203 DPI = 812 x 1218 dots
+ */
+export function generateWeightLabel4x6(data: WeightLabelData): Buffer {
+  const W = 812
+  const H = 1218
+  const M = 30
+  const CW = W - M * 2
+
+  const zpl: string[] = []
+  zpl.push('^XA')
+  zpl.push(`^PW${W}`)
+  zpl.push(`^LL${H}`)
+  zpl.push('^PON')
+  zpl.push('^LH0,0')
+  zpl.push('^CI28')
+
+  const unit = data.unitOfMeasure || 'kg'
+  const pricePerUnit = data.pricePerUnit || Math.round((data.pricePerKg || 0) * (data.exchangeRate || 1))
+  const formattedPricePerUnit = pricePerUnit.toLocaleString('es-ES')
+  const formattedTotalCUP = data.priceCUP.toLocaleString('es-ES')
+  const dateText = data.printDate || new Date().toLocaleDateString('es-ES')
+
+  let y = M
+
+  // ═══ COMPANY NAME (if available) ═══
+  if (data.companyName) {
+    zpl.push(`^FO${M},${y}^A0N,28,28^FB${CW},1,0,C,0^FD${escapeZpl(data.companyName)}^FS`)
+    y += 38
+  }
+
+  // ═══ PRODUCT NAME (large, centered, up to 3 lines) ═══
+  zpl.push(`^FO${M},${y}^A0N,52,52^FB${CW},3,4,C,0^FD${escapeZpl(data.productName.toUpperCase())}^FS`)
+  y += 175
+
+  // ═══ SEPARATOR ═══
+  zpl.push(`^FO${M},${y}^GB${CW},4,4^FS`)
+  y += 25
+
+  // ═══ WEIGHT (huge, centered) ═══
+  zpl.push(`^FO${M},${y}^A0N,30,30^FB${CW},1,0,C,0^FDPESO NETO^FS`)
+  y += 38
+  zpl.push(`^FO${M},${y}^A0N,90,90^FB${CW},1,0,C,0^FD${escapeZpl(data.weight)}^FS`)
+  y += 110
+
+  // ═══ SEPARATOR ═══
+  zpl.push(`^FO${M},${y}^GB${CW},3,3^FS`)
+  y += 25
+
+  // ═══ PRICE TABLE ═══
+  const colLeft = M
+  const colRight = M + Math.round(CW / 2) + 20
+
+  // Price per unit
+  zpl.push(`^FO${colLeft},${y}^A0N,26,26^FDPRECIO/${unit.toUpperCase()}^FS`)
+  zpl.push(`^FO${colRight},${y}^A0N,26,26^FDTOTAL^FS`)
+  y += 35
+
+  // Values
+  zpl.push(`^FO${colLeft},${y}^A0N,50,50^FD$${formattedPricePerUnit} CUP^FS`)
+  zpl.push(`^FO${colRight},${y}^A0N,70,70^FD$${formattedTotalCUP}^FS`)
+  y += 85
+
+  // CUP label
+  zpl.push(`^FO${colRight},${y}^A0N,30,30^FDCUP^FS`)
+  y += 42
+
+  // USD price
+  if (data.priceUSD !== undefined) {
+    const formattedUSD = data.priceUSD.toFixed(2)
+    zpl.push(`^FO${colLeft},${y}^A0N,28,28^FDPrecio USD:^FS`)
+    zpl.push(`^FO${colRight},${y}^A0N,40,40^FD$${formattedUSD} USD^FS`)
+    y += 55
+  }
+
+  // ═══ SEPARATOR ═══
+  y += 10
+  zpl.push(`^FO${M},${y}^GB${CW},3,3^FS`)
+  y += 25
+
+  // ═══ SKU ═══
+  if (data.productSku) {
+    zpl.push(`^FO${M},${y}^A0N,26,26^FDSKU: ${escapeZpl(data.productSku)}^FS`)
+    y += 36
+  }
+
+  // ═══ DATE ═══
+  zpl.push(`^FO${M},${y}^A0N,24,24^FDFecha: ${dateText}^FS`)
+  y += 36
+
+  // ═══ EXCHANGE RATE ═══
+  if (data.exchangeRate) {
+    zpl.push(`^FO${M},${y}^A0N,22,22^FDTasa: 1 USD = ${Math.round(data.exchangeRate)} CUP^FS`)
+    y += 32
+  }
+
+  // ═══ SEPARATOR ═══
+  y += 10
+  zpl.push(`^FO${M},${y}^GB${CW},2,2^FS`)
+  y += 20
+
+  // ═══ BARCODE (fills remaining space) ═══
+  const remainingHeight = H - y - 40
+  const barcodeHeight = Math.min(Math.max(remainingHeight - 30, 100), 200)
+  const barcodeX = Math.round((W - 500) / 2)
+  zpl.push(`^FO${barcodeX},${y}^BY3`)
+  zpl.push(`^BEN,${barcodeHeight},Y,N^FD${data.barcode}^FS`)
+
+  zpl.push('^XZ')
+  return Buffer.from(zpl.join('\n'), 'utf8')
 }
 
 /**
