@@ -293,13 +293,15 @@ function generateSingleLabel4x6Zpl(
   zpl.push(`^FO${M},${y}^GB${CW},2,2^FS`)
   y += 25
 
-  // ═══ BARCODE (full width, rectangular) ═══
+  // ═══ BARCODE (wide + short = rectangular, centered) ═══
   if (item.barcode) {
     const barcodeCmd = getBarcodeCommand(item.barcode, item.barcodeType)
-    const remainingHeight = H - y - 30
-    const barcodeHeight = Math.min(Math.max(remainingHeight - 25, 80), 160)
-    zpl.push(`^FO${M},${y}^BY2`)
-    zpl.push(`${barcodeCmd},${barcodeHeight},Y,N,N^FD${item.barcode}^FS`)
+    // BY5 makes barcode ~650 dots wide (fills most of 812 label width)
+    // Height 90 = slim/rectangular look
+    const barcodeWidth = 650
+    const barcodeX = Math.round((W - barcodeWidth) / 2)
+    zpl.push(`^FO${barcodeX},${y}^BY5`)
+    zpl.push(`${barcodeCmd},90,Y,N,N^FD${item.barcode}^FS`)
   }
 
   zpl.push('^XZ')

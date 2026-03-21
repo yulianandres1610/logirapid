@@ -262,12 +262,13 @@ export function generateWeightLabel4x6(data: WeightLabelData): Buffer {
   zpl.push(`^FO${M},${y}^GB${CW},2,2^FS`)
   y += 18
 
-  // ═══ BARCODE (full width, rectangular) ═══
-  const remainingHeight = H - y - 30
-  const barcodeHeight = Math.min(Math.max(remainingHeight - 25, 80), 160)
-  // Full width barcode: use BY2 for denser bars, start close to margin
-  zpl.push(`^FO${M},${y}^BY2`)
-  zpl.push(`^BEN,${barcodeHeight},Y,N^FD${data.barcode}^FS`)
+  // ═══ BARCODE (wide + short = rectangular, centered) ═══
+  // BY5 makes EAN-13 ~650 dots wide (fills most of 812 label width)
+  // Height 90 = slim/rectangular look
+  const barcodeWidth = 650
+  const barcodeX = Math.round((W - barcodeWidth) / 2)
+  zpl.push(`^FO${barcodeX},${y}^BY5`)
+  zpl.push(`^BEN,90,Y,N^FD${data.barcode}^FS`)
 
   zpl.push('^XZ')
   return Buffer.from(zpl.join('\n'), 'utf8')
