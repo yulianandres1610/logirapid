@@ -8,5 +8,5 @@ export const dynamic = 'force-dynamic'
  * Returns the current expected agent version.
  */
 export async function GET() {
-  return NextResponse.json({ version: '1.2.2' })
+  return NextResponse.json({ version: '1.2.3' })
 }

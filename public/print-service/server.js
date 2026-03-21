@@ -4,7 +4,7 @@ const path = require("path");
 const http = require("http");
 const { exec, execSync } = require("child_process");
 
-const VERSION = "1.2.2";
+const VERSION = "1.2.3";
 const platform = os.platform();
 const INSTALL_DIR = path.join(os.homedir(), ".logirapid-print-service");
 const CONFIG_PATH = path.join(INSTALL_DIR, "config.json");
@@ -134,16 +134,10 @@ function setAutoStart(enabled) {
       }
       // Create shortcut via VBScript
       const vbs = path.join(os.tmpdir(), "create-shortcut-" + Date.now() + ".vbs");
-      const vbsContent = [
-        'Set WshShell = CreateObject("WScript.Shell")',
-        'Set Shortcut = WshShell.CreateShortcut("' + shortcut.replace(/\\/g, '\\\\') + '")',
-        'Shortcut.TargetPath = "cmd.exe"',
-        'Shortcut.Arguments = "/c """ + startBat.replace(/\\/g, '\\\\') + '"""',
-        'Shortcut.WorkingDirectory = "' + INSTALL_DIR.replace(/\\/g, '\\\\') + '"',
-        'Shortcut.WindowStyle = 7',
-        'Shortcut.Description = "Servisumic Print Service"',
-        'Shortcut.Save',
-      ].join("\r\n");
+      const scPath = shortcut.replace(/\\/g, "\\\\");
+      const batPath = startBat.replace(/\\/g, "\\\\");
+      const dirPath = INSTALL_DIR.replace(/\\/g, "\\\\");
+      const vbsContent = `Set WshShell = CreateObject("WScript.Shell")\r\nSet Shortcut = WshShell.CreateShortcut("${scPath}")\r\nShortcut.TargetPath = "cmd.exe"\r\nShortcut.Arguments = "/c ""${batPath}"""\r\nShortcut.WorkingDirectory = "${dirPath}"\r\nShortcut.WindowStyle = 7\r\nShortcut.Description = "Servisumic Print Service"\r\nShortcut.Save\r\n`;
       fs.writeFileSync(vbs, vbsContent, "utf8");
       try {
         execSync(`cscript //nologo "${vbs}"`, { windowsHide: true, stdio: "ignore" });
