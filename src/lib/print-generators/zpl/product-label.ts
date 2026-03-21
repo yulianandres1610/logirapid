@@ -12,6 +12,7 @@ interface ProductLabelItem {
   priceUSD?: number
   currency?: string
   description?: string
+  unitOfMeasure?: string
   copies?: number // Number of copies for this specific item
 }
 
@@ -27,6 +28,7 @@ interface ProductLabelData {
   includePrice?: boolean // Set to false to exclude price from label
   description?: string
   category?: string
+  unitOfMeasure?: string
   expirationDate?: string
   lotNumber?: string
   weight?: string
@@ -264,23 +266,30 @@ function generateSingleLabel4x6Zpl(
   y += 25
 
   // ═══ PRICES (large, centered, prominent) ═══
+  const unit = item.unitOfMeasure || ''
+  const unitSuffix = unit ? `/${unit.toUpperCase()}` : ''
   const shouldShowPrice = includePrice && (item.priceCUP !== undefined || item.price !== undefined || item.priceUSD !== undefined)
   if (shouldShowPrice) {
-    // Price CUP - HUGE centered
+    // Price CUP - HUGE centered with unit
     if (item.priceCUP !== undefined) {
       const cupStr = Math.round(item.priceCUP).toLocaleString()
       zpl.push(`^FO${M},${y}^A0N,90,90^FB${CW},1,0,C,0^FD${cupStr} CUP^FS`)
-      y += 110
+      y += 105
+      // Unit label
+      if (unit) {
+        zpl.push(`^FO${M},${y}^A0N,28,28^FB${CW},1,0,C,0^FDel ${unit.toUpperCase()}^FS`)
+        y += 38
+      }
 
-      // USD price below
+      // USD price below with unit
       if (item.priceUSD !== undefined) {
         const usdStr = item.priceUSD.toFixed(2)
-        zpl.push(`^FO${M},${y}^A0N,44,44^FB${CW},1,0,C,0^FD$${usdStr} USD^FS`)
+        zpl.push(`^FO${M},${y}^A0N,44,44^FB${CW},1,0,C,0^FD$${usdStr} USD${unitSuffix}^FS`)
         y += 60
       }
     } else if (item.price !== undefined) {
       const priceStr = item.price.toFixed(2)
-      zpl.push(`^FO${M},${y}^A0N,90,90^FB${CW},1,0,C,0^FD$${priceStr}^FS`)
+      zpl.push(`^FO${M},${y}^A0N,90,90^FB${CW},1,0,C,0^FD$${priceStr}${unitSuffix}^FS`)
       y += 110
     }
   } else {
@@ -382,7 +391,8 @@ export function generateProductLabelZpl(data: ProductLabelData): Buffer {
     priceCUP: data.priceCUP,
     priceUSD: data.priceUSD,
     currency: data.currency,
-    description: data.description
+    description: data.description,
+    unitOfMeasure: data.unitOfMeasure
   }
 
   const zplContent = generateLabel(singleItem)
