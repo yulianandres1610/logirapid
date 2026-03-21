@@ -4,7 +4,7 @@ const path = require("path");
 const http = require("http");
 const { exec, execSync } = require("child_process");
 
-const VERSION = "1.2.1";
+const VERSION = "1.2.2";
 const platform = os.platform();
 const INSTALL_DIR = path.join(os.homedir(), ".logirapid-print-service");
 const CONFIG_PATH = path.join(INSTALL_DIR, "config.json");
@@ -616,30 +616,45 @@ async function performUpdate(config) {
     updateStatus.updating = false;
     updateStatus.available = false;
 
-    // 6. Restart: spawn detached child process BEFORE exiting
+    // 6. Restart service after update
     const nodePath = process.execPath;
     const serverFile = path.join(installDir, "server.js");
 
     // Small delay to allow HTTP response to be sent
     setTimeout(() => {
       try {
-        const child = require("child_process").spawn(nodePath, [serverFile], {
-          cwd: installDir,
-          detached: true,
-          stdio: "ignore",
-          windowsHide: true,
-        });
-        child.unref();
-        console.log("  [Update] Nuevo proceso iniciado (PID: " + child.pid + ")");
-      } catch (spawnErr) {
-        console.error("  [Update] Error al iniciar nuevo proceso:", spawnErr.message);
-        // Fallback: on Mac use launchctl, on Windows create a scheduled task
-        if (platform === "darwin") {
-          try { execSync('launchctl kickstart -k gui/$(id -u)/com.logirapid.print-service 2>/dev/null', { stdio: "ignore" }); } catch {}
+        if (platform === "win32") {
+          // Windows: use start.bat or create a temp restart script
+          const startBat = path.join(installDir, "start.bat");
+          if (fs.existsSync(startBat)) {
+            exec(`start "" /min cmd /c "${startBat}"`, { windowsHide: true });
+          } else {
+            // Create a temp restart bat that waits 2 seconds then starts
+            const restartBat = path.join(os.tmpdir(), "servisumic-restart-" + Date.now() + ".bat");
+            fs.writeFileSync(restartBat, `@echo off\r\nping 127.0.0.1 -n 3 >nul\r\ncd /d "${installDir}"\r\nstart "" /min cmd /c ""${nodePath}" server.js"\r\ndel "%~f0"\r\n`, "utf8");
+            exec(`start "" /min cmd /c "${restartBat}"`, { windowsHide: true });
+          }
+        } else if (platform === "darwin") {
+          try {
+            execSync('launchctl kickstart -k gui/$(id -u)/com.logirapid.print-service 2>/dev/null', { stdio: "ignore" });
+          } catch {
+            const child = require("child_process").spawn(nodePath, [serverFile], {
+              cwd: installDir, detached: true, stdio: "ignore",
+            });
+            child.unref();
+          }
+        } else {
+          const child = require("child_process").spawn(nodePath, [serverFile], {
+            cwd: installDir, detached: true, stdio: "ignore",
+          });
+          child.unref();
         }
+        console.log("  [Update] Reinicio programado");
+      } catch (err) {
+        console.error("  [Update] Error al reiniciar:", err.message);
       }
-      // Exit current process after spawn
-      setTimeout(() => process.exit(0), 300);
+      // Exit current process
+      setTimeout(() => process.exit(0), 500);
     }, 500);
 
     return { success: true, version: updateStatus.version };
