@@ -217,94 +217,92 @@ function generateSingleLabel4x6Zpl(
   item: ProductLabelItem,
   includePrice: boolean
 ): string {
-  const labelWidth = 812
-  const labelHeight = 1216
-  const margin = 24
-
-  const maxNameLength = 36
-  const productName = item.productName.length > maxNameLength
-    ? item.productName.substring(0, maxNameLength - 2) + '..'
-    : item.productName
+  // 4x6 label at 203 DPI = 812 x 1218 dots
+  const W = 812
+  const H = 1218
+  const M = 30 // margin
+  const CW = W - M * 2 // content width
 
   const zpl: string[] = []
-
   zpl.push('^XA')
-  zpl.push(`^PW${labelWidth}`)
-  zpl.push(`^LL${labelHeight}`)
+  zpl.push(`^PW${W}`)
+  zpl.push(`^LL${H}`)
   zpl.push('^PON')
   zpl.push('^LH0,0')
 
-  let y = margin
+  let y = M
 
-  // Product Name (very large)
-  zpl.push(`^FO${margin},${y}^A0N,48,48^FD${escapeZpl(productName)}^FS`)
-  y += 64
+  // ═══ HEADER: PRODUCT NAME (large, auto-wrap up to 3 lines) ═══
+  zpl.push(`^FO${M},${y}^A0N,52,52^FB${CW},3,4,L,0^FD${escapeZpl(item.productName)}^FS`)
+  y += 175
 
-  // Description (up to 2 lines, if available)
+  // ═══ THIN SEPARATOR ═══
+  zpl.push(`^FO${M},${y}^GB${CW},2,2^FS`)
+  y += 18
+
+  // ═══ DESCRIPTION (auto-wrap up to 5 lines) ═══
   if (item.description) {
-    const maxDescLine = 42
-    const desc = item.description
-    if (desc.length <= maxDescLine) {
-      zpl.push(`^FO${margin},${y}^A0N,24,24^FD${escapeZpl(desc)}^FS`)
-      y += 34
-    } else {
-      // Split into 2 lines at word boundary
-      let splitIdx = desc.lastIndexOf(' ', maxDescLine)
-      if (splitIdx <= 0) splitIdx = maxDescLine
-      const line1 = desc.substring(0, splitIdx)
-      let line2 = desc.substring(splitIdx).trim()
-      if (line2.length > maxDescLine) {
-        line2 = line2.substring(0, maxDescLine - 2) + '..'
-      }
-      zpl.push(`^FO${margin},${y}^A0N,24,24^FD${escapeZpl(line1)}^FS`)
-      y += 32
-      zpl.push(`^FO${margin},${y}^A0N,24,24^FD${escapeZpl(line2)}^FS`)
-      y += 34
-    }
+    zpl.push(`^FO${M},${y}^A0N,26,26^FB${CW},5,2,L,0^FD${escapeZpl(item.description)}^FS`)
+    y += 155
   }
 
-  // SKU line
+  // ═══ SKU ═══
   if (item.sku) {
-    zpl.push(`^FO${margin},${y}^A0N,26,26^FDSKU: ${escapeZpl(item.sku)}^FS`)
+    zpl.push(`^FO${M},${y}^A0N,28,28^FDSKU: ${escapeZpl(item.sku)}^FS`)
+    y += 42
+  }
+
+  // ═══ BARCODE NUMBER (human readable, small) ═══
+  if (item.barcode) {
+    zpl.push(`^FO${M},${y}^A0N,24,24^FDCodigo: ${escapeZpl(item.barcode)}^FS`)
     y += 38
   }
 
-  // Separator line (horizontal rule)
+  // ═══ THICK SEPARATOR ═══
   y += 10
-  zpl.push(`^FO${margin},${y}^GB${labelWidth - margin * 2},2,2^FS`)
-  y += 20
+  zpl.push(`^FO${M},${y}^GB${CW},4,4^FS`)
+  y += 25
 
-  // Prices section
+  // ═══ PRICES (large, centered, prominent) ═══
   const shouldShowPrice = includePrice && (item.priceCUP !== undefined || item.price !== undefined || item.priceUSD !== undefined)
   if (shouldShowPrice) {
-    // Price CUP (large, bold)
+    // Price CUP - HUGE centered
     if (item.priceCUP !== undefined) {
-      const formattedCUP = Math.round(item.priceCUP).toLocaleString()
-      zpl.push(`^FO${margin},${y}^A0N,44,44^FD${formattedCUP} CUP^FS`)
-      y += 56
-    } else if (item.price !== undefined && item.priceCUP === undefined && item.priceUSD === undefined) {
-      // Fallback: show generic price
-      const currencySymbol = item.currency || '$'
-      const formattedPrice = item.price.toFixed(2)
-      zpl.push(`^FO${margin},${y}^A0N,44,44^FD${currencySymbol}${formattedPrice}^FS`)
-      y += 56
-    }
+      const cupStr = Math.round(item.priceCUP).toLocaleString()
+      zpl.push(`^FO${M},${y}^A0N,90,90^FB${CW},1,0,C,0^FD${cupStr} CUP^FS`)
+      y += 110
 
-    // Price USD (smaller)
-    if (item.priceUSD !== undefined) {
-      const formattedUSD = item.priceUSD.toFixed(2)
-      zpl.push(`^FO${margin},${y}^A0N,30,30^FD$${formattedUSD} USD^FS`)
-      y += 42
+      // USD price below
+      if (item.priceUSD !== undefined) {
+        const usdStr = item.priceUSD.toFixed(2)
+        zpl.push(`^FO${M},${y}^A0N,44,44^FB${CW},1,0,C,0^FD$${usdStr} USD^FS`)
+        y += 60
+      }
+    } else if (item.price !== undefined) {
+      const priceStr = item.price.toFixed(2)
+      zpl.push(`^FO${M},${y}^A0N,90,90^FB${CW},1,0,C,0^FD$${priceStr}^FS`)
+      y += 110
     }
+  } else {
+    // No price - add spacing
+    y += 80
   }
 
-  // Barcode (bottom, centered, tall)
-  const barcodeHeight = 140
-  const barcodeCmd = getBarcodeCommand(item.barcode, item.barcodeType)
-  const barcodeX = Math.round((labelWidth - 400) / 2)
-  const barcodeY = labelHeight - barcodeHeight - 80
-  zpl.push(`^FO${barcodeX},${barcodeY}^BY3`)
-  zpl.push(`${barcodeCmd},${barcodeHeight},Y,N,N^FD${item.barcode}^FS`)
+  // ═══ SEPARATOR BEFORE BARCODE ═══
+  y += 15
+  zpl.push(`^FO${M},${y}^GB${CW},2,2^FS`)
+  y += 25
+
+  // ═══ BARCODE (large, centered, fills remaining space) ═══
+  if (item.barcode) {
+    const barcodeCmd = getBarcodeCommand(item.barcode, item.barcodeType)
+    // Calculate remaining space for barcode
+    const remainingHeight = H - y - 60
+    const barcodeHeight = Math.min(Math.max(remainingHeight - 30, 120), 250)
+    const barcodeX = Math.round((W - 500) / 2)
+    zpl.push(`^FO${barcodeX},${y}^BY3`)
+    zpl.push(`${barcodeCmd},${barcodeHeight},Y,N,N^FD${item.barcode}^FS`)
+  }
 
   zpl.push('^XZ')
   return zpl.join('\n')
