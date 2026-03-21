@@ -124,10 +124,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Peso inválido' }, { status: 400 })
     }
 
-    if (weightKg > 99.999) {
+    if (weightKg > 9999.999) {
       return NextResponse.json({
         success: false,
-        error: 'El peso máximo soportado es 99.999 kg'
+        error: 'El peso maximo soportado es 9999.999 kg'
       }, { status: 400 })
     }
 

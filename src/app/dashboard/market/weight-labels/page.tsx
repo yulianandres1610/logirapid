@@ -701,11 +701,40 @@ export default function WeightLabelsPage() {
                         <div
                           className="bg-white rounded-lg p-2 mx-auto"
                           style={{
-                            maxWidth: labelSize === '3x2' ? '260px' : '200px',
-                            aspectRatio: labelSize === '3x2' ? '3/2' : '2/1'
+                            maxWidth: labelSize === '4x6' ? '220px' : labelSize === '3x2' ? '260px' : '200px',
+                            aspectRatio: labelSize === '4x6' ? '2/3' : labelSize === '3x2' ? '3/2' : '2/1'
                           }}
                         >
-                          {labelSize === '3x2' ? (
+                          {labelSize === '4x6' ? (
+                            // 4x6 Full Preview
+                            <>
+                              <p className="font-black text-black text-xs uppercase text-center leading-tight mb-1">{selectedProduct.name}</p>
+                              <div className="border-t border-gray-300 my-1"></div>
+                              <p className="text-[8px] text-gray-500 text-center uppercase">Peso Neto</p>
+                              <p className="font-black text-black text-lg text-center leading-none mb-1">{weight || '0.000'} {selectedProduct.unitOfMeasure || 'kg'}</p>
+                              <div className="border-t border-gray-300 my-1"></div>
+                              <div className="flex justify-between text-[7px] text-gray-500 uppercase">
+                                <span>Precio/{selectedProduct.unitOfMeasure || 'kg'}</span>
+                                <span>Total ({weight || '0'} {selectedProduct.unitOfMeasure || 'kg'})</span>
+                              </div>
+                              <div className="flex justify-between items-baseline mb-0.5">
+                                <p className="font-bold text-black text-[10px]">${Math.round(pricePerKg * USD_CUP).toLocaleString()} CUP/{selectedProduct.unitOfMeasure || 'kg'}</p>
+                              </div>
+                              <p className="font-black text-black text-xl text-center leading-none">${priceCUP.toLocaleString()} CUP</p>
+                              <p className="text-gray-600 text-[10px] text-center mb-1">${priceUSD.toFixed(2)} USD</p>
+                              <div className="border-t border-gray-300 my-1"></div>
+                              <p className="text-[7px] text-gray-500">SKU: {selectedProduct.sku} | {new Date().toLocaleDateString('es-ES')}</p>
+                              <div className="border-t border-gray-300 my-1"></div>
+                              <div className="flex flex-col items-center">
+                                <div className="flex justify-center gap-px w-full">
+                                  {Array.from({ length: 50 }).map((_, i) => (
+                                    <div key={i} className="bg-black flex-1" style={{ height: '18px', minWidth: '1px', maxWidth: i % 4 === 0 ? '3px' : '2px' }} />
+                                  ))}
+                                </div>
+                                <p className="font-mono text-[8px] text-black tracking-widest mt-0.5">{barcodePreview}</p>
+                              </div>
+                            </>
+                          ) : labelSize === '3x2' ? (
                             // 3x2 Preview
                             <>
                               <div className="flex justify-between text-[8px] text-gray-500 uppercase mb-0.5">
@@ -715,7 +744,7 @@ export default function WeightLabelsPage() {
                               <div className="flex justify-between items-start mb-1">
                                 <div className="text-left">
                                   <p className="font-black text-black text-sm">{Math.round(pricePerKg * USD_CUP).toLocaleString()}</p>
-                                  <p className="text-[9px] text-gray-600">CUP</p>
+                                  <p className="text-[9px] text-gray-600">CUP/{selectedProduct.unitOfMeasure || 'kg'}</p>
                                 </div>
                                 <div className="text-right">
                                   <p className="font-black text-black text-2xl leading-none">{priceCUP.toLocaleString()}</p>
@@ -1042,9 +1071,34 @@ export default function WeightLabelsPage() {
                 {/* Label Preview - Dynamic based on size */}
                 <div
                   className="bg-white rounded-lg p-2 mb-6 mx-auto"
-                  style={{ aspectRatio: labelSize === '3x2' ? '3/2' : '2/1', maxWidth: labelSize === '3x2' ? '280px' : '220px' }}
+                  style={{
+                    aspectRatio: labelSize === '4x6' ? '2/3' : labelSize === '3x2' ? '3/2' : '2/1',
+                    maxWidth: labelSize === '4x6' ? '240px' : labelSize === '3x2' ? '280px' : '220px'
+                  }}
                 >
-                  {labelSize === '3x2' ? (
+                  {labelSize === '4x6' ? (
+                    // 4x6 Full Preview
+                    <>
+                      <p className="font-black text-black text-xs uppercase text-center leading-tight mb-1">{lastLabel.productName}</p>
+                      <div className="border-t border-gray-300 my-1"></div>
+                      <p className="text-[8px] text-gray-500 text-center uppercase">Peso Neto</p>
+                      <p className="font-black text-black text-lg text-center leading-none mb-1">{lastLabel.weight}</p>
+                      <div className="border-t border-gray-300 my-1"></div>
+                      <p className="font-black text-black text-xl text-center leading-none">${lastLabel.priceCUP.toLocaleString()} CUP</p>
+                      <p className="text-gray-600 text-[10px] text-center mb-1">${lastLabel.priceUSD.toFixed(2)} USD</p>
+                      <div className="border-t border-gray-300 my-1"></div>
+                      <p className="text-[7px] text-gray-500">{selectedProduct?.sku ? `SKU: ${selectedProduct.sku} | ` : ''}{new Date().toLocaleDateString('es-ES')}</p>
+                      <div className="border-t border-gray-300 my-1"></div>
+                      <div className="flex flex-col items-center">
+                        <div className="flex justify-center gap-px w-full">
+                          {Array.from({ length: 50 }).map((_, i) => (
+                            <div key={i} className="bg-black flex-1" style={{ height: '18px', minWidth: '1px', maxWidth: i % 4 === 0 ? '3px' : '2px' }} />
+                          ))}
+                        </div>
+                        <p className="font-mono text-[8px] text-black tracking-widest mt-0.5">{lastLabel.barcode}</p>
+                      </div>
+                    </>
+                  ) : labelSize === '3x2' ? (
                     // 3x2 Preview
                     <>
                       <div className="flex justify-between text-[8px] text-gray-500 uppercase mb-0.5">
@@ -1054,7 +1108,7 @@ export default function WeightLabelsPage() {
                       <div className="flex justify-between items-start mb-1">
                         <div className="text-left">
                           <p className="font-black text-black text-sm">{selectedProduct ? Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP).toLocaleString() : 0}</p>
-                          <p className="text-[9px] text-gray-600">CUP</p>
+                          <p className="text-[9px] text-gray-600">CUP/{selectedProduct?.unitOfMeasure || 'kg'}</p>
                         </div>
                         <div className="text-right">
                           <p className="font-black text-black text-2xl leading-none">{lastLabel.priceCUP.toLocaleString()}</p>
