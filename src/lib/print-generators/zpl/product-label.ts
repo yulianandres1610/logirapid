@@ -293,14 +293,17 @@ function generateSingleLabel4x6Zpl(
   zpl.push(`^FO${M},${y}^GB${CW},2,2^FS`)
   y += 25
 
-  // ═══ BARCODE (wide + short = rectangular, centered) ═══
+  // ═══ BARCODE (centered, slim rectangular) ═══
   if (item.barcode) {
     const barcodeCmd = getBarcodeCommand(item.barcode, item.barcodeType)
-    // BY5 makes barcode ~650 dots wide (fills most of 812 label width)
-    // Height 90 = slim/rectangular look
-    const barcodeWidth = 650
-    const barcodeX = Math.round((W - barcodeWidth) / 2)
-    zpl.push(`^FO${barcodeX},${y}^BY5`)
+    // Center barcode vertically in remaining space
+    const remainingSpace = H - y - 30
+    const barcodeAreaPad = Math.max(Math.round(remainingSpace / 2) - 60, 10)
+    y += barcodeAreaPad
+    // BY4 barcode centered horizontally (~380 dots for EAN-13, ~450 for Code128)
+    const approxWidth = 400
+    const barcodeX = Math.round((W - approxWidth) / 2)
+    zpl.push(`^FO${barcodeX},${y}^BY4`)
     zpl.push(`${barcodeCmd},90,Y,N,N^FD${item.barcode}^FS`)
   }
 
