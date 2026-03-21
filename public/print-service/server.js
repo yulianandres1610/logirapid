@@ -4,7 +4,7 @@ const path = require("path");
 const http = require("http");
 const { exec, execSync } = require("child_process");
 
-const VERSION = "1.2.0";
+const VERSION = "1.2.1";
 const platform = os.platform();
 const INSTALL_DIR = path.join(os.homedir(), ".logirapid-print-service");
 const CONFIG_PATH = path.join(INSTALL_DIR, "config.json");
@@ -87,8 +87,10 @@ function isAutoStartEnabled() {
     const plist = path.join(os.homedir(), "Library/LaunchAgents/com.logirapid.print-service.plist");
     return fs.existsSync(plist);
   } else if (platform === "win32") {
-    const shortcut = path.join(process.env.APPDATA || "", "Microsoft/Windows/Start Menu/Programs/Startup/Servisumic Print Service.lnk");
-    return fs.existsSync(shortcut);
+    const startupDir = path.join(process.env.APPDATA || "", "Microsoft\\Windows\\Start Menu\\Programs\\Startup");
+    // Check both old and new names
+    return fs.existsSync(path.join(startupDir, "Servisumic Print Service.lnk")) ||
+           fs.existsSync(path.join(startupDir, "LogiRapid Print Service.lnk"));
   }
   return false;
 }
@@ -119,15 +121,40 @@ function setAutoStart(enabled) {
       try { fs.unlinkSync(plist); } catch {}
     }
   } else if (platform === "win32") {
-    const shortcut = path.join(process.env.APPDATA || "", "Microsoft/Windows/Start Menu/Programs/Startup/Servisumic Print Service.lnk");
+    const shortcut = path.join(process.env.APPDATA || "", "Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Servisumic Print Service.lnk");
     if (enabled) {
-      const vbs = path.join(os.tmpdir(), "create-shortcut.vbs");
+      // Remove old LogiRapid shortcut if exists
+      const oldShortcut = path.join(process.env.APPDATA || "", "Microsoft\\Windows\\Start Menu\\Programs\\Startup\\LogiRapid Print Service.lnk");
+      try { fs.unlinkSync(oldShortcut); } catch {}
+      // Ensure start.bat exists
       const startBat = path.join(INSTALL_DIR, "start.bat");
-      fs.writeFileSync(vbs, `Set s=CreateObject("WScript.Shell").CreateShortcut("${shortcut}")\ns.TargetPath="cmd.exe"\ns.Arguments="/c ""${startBat}"""\ns.WorkingDirectory="${INSTALL_DIR}"\ns.WindowStyle=7\ns.Save`);
-      try { execSync(`cscript //nologo "${vbs}"`); } catch {}
+      if (!fs.existsSync(startBat)) {
+        const nodePath = process.execPath;
+        fs.writeFileSync(startBat, `@echo off\r\ntitle Servisumic Print Service\r\ncd /d "${INSTALL_DIR}"\r\n"${nodePath}" server.js\r\n`, "utf8");
+      }
+      // Create shortcut via VBScript
+      const vbs = path.join(os.tmpdir(), "create-shortcut-" + Date.now() + ".vbs");
+      const vbsContent = [
+        'Set WshShell = CreateObject("WScript.Shell")',
+        'Set Shortcut = WshShell.CreateShortcut("' + shortcut.replace(/\\/g, '\\\\') + '")',
+        'Shortcut.TargetPath = "cmd.exe"',
+        'Shortcut.Arguments = "/c """ + startBat.replace(/\\/g, '\\\\') + '"""',
+        'Shortcut.WorkingDirectory = "' + INSTALL_DIR.replace(/\\/g, '\\\\') + '"',
+        'Shortcut.WindowStyle = 7',
+        'Shortcut.Description = "Servisumic Print Service"',
+        'Shortcut.Save',
+      ].join("\r\n");
+      fs.writeFileSync(vbs, vbsContent, "utf8");
+      try {
+        execSync(`cscript //nologo "${vbs}"`, { windowsHide: true, stdio: "ignore" });
+        console.log("  [AutoStart] Shortcut creado en Startup");
+      } catch (e) {
+        console.error("  [AutoStart] Error creando shortcut:", e.message);
+      }
       try { fs.unlinkSync(vbs); } catch {}
     } else {
       try { fs.unlinkSync(shortcut); } catch {}
+      console.log("  [AutoStart] Shortcut eliminado");
     }
   }
 }
