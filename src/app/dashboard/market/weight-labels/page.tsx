@@ -68,6 +68,8 @@ export default function WeightLabelsPage() {
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [printingToService, setPrintingToService] = useState(false)
   const [labelSize, setLabelSize] = useState<'3x2' | '2x1' | '4x6'>('3x2') // Label size selector
+  const [printServices, setPrintServices] = useState<any[]>([])
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null)
 
   // Client-side mount
   useEffect(() => {
@@ -181,6 +183,17 @@ export default function WeightLabelsPage() {
         }
 
         console.log('[WeightLabels] Showing print modal')
+        // Fetch available print services for weight labels
+        fetch('/api/print-services/available?documentType=weight_label', { credentials: 'include' })
+          .then(r => r.json())
+          .then(d => {
+            if (d.success && d.data) {
+              const online = d.data.filter((s: any) => s.online)
+              setPrintServices(online.length > 0 ? online : d.data)
+              setSelectedServiceId(d.data.length === 1 ? d.data[0].id : null)
+            }
+          })
+          .catch(() => {})
         setShowPrintModal(true)
         // Reset weight for next label
         setWeight('')
@@ -257,6 +270,7 @@ export default function WeightLabelsPage() {
             labelSize: labelSize // '3x2' or '2x1'
           },
           copies,
+          serviceId: selectedServiceId,
           sourceType: 'weight_label'
         })
       })
@@ -1067,6 +1081,25 @@ export default function WeightLabelsPage() {
                     </button>
                   </div>
                 </div>
+
+                {/* Printer selector */}
+                {printServices.length > 1 && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-400 mb-2">Impresora</label>
+                    <select
+                      value={selectedServiceId || ''}
+                      onChange={(e) => setSelectedServiceId(e.target.value ? Number(e.target.value) : null)}
+                      className="w-full px-3 py-2.5 rounded-xl border-2 bg-gray-700 border-gray-600 text-white text-sm font-medium appearance-none cursor-pointer"
+                    >
+                      <option value="">Automatico</option>
+                      {printServices.map((s: any) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}{s.printerName ? ` — ${s.printerName.replace(/_/g, ' ')}` : ''}{s.online ? '' : ' (offline)'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Label Preview - Dynamic based on size */}
                 <div

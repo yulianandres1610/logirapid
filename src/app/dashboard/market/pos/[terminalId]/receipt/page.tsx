@@ -637,6 +637,7 @@ function ReceiptContent() {
             thankYouMessage: '¡Gracias por su compra!'
           },
           copies,
+          serviceId: defaultPrintServiceId || null,
           posTerminalId: parseInt(terminalId) || null,
           sourceType: 'pos_order',
           sourceId: order.id || 0
@@ -725,6 +726,8 @@ function ReceiptContent() {
             thankYouMessage: '¡Gracias por su compra!'
           },
           copies: 1,
+          serviceId: defaultPrintServiceId || null,
+          posTerminalId: parseInt(terminalId) || null,
           sourceType: 'pos_order',
           sourceId: order.id || 0
         }

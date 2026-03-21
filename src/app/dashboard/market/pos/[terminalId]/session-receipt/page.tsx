@@ -115,6 +115,20 @@ export default function SessionReceiptPage() {
   const [error, setError] = useState<string | null>(null)
   const [printing, setPrinting] = useState(false)
   const [autoPrintAttempted, setAutoPrintAttempted] = useState(false)
+  const [defaultPrintServiceId, setDefaultPrintServiceId] = useState<number | null>(null)
+
+  // Fetch terminal config to get default print service
+  useEffect(() => {
+    if (!terminalId) return
+    fetch(`/api/market/pos/terminals/${terminalId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.data?.defaultPrintServiceId) {
+          setDefaultPrintServiceId(d.data.defaultPrintServiceId)
+        }
+      })
+      .catch(() => {})
+  }, [terminalId])
 
   // Fetch session report
   useEffect(() => {
@@ -206,6 +220,7 @@ export default function SessionReceiptPage() {
         documentType: 'session_close_report',
         documentData: buildPrintData(report),
         copies: 1,
+        serviceId: defaultPrintServiceId || null,
         posTerminalId: parseInt(terminalId) || null,
         sourceType: 'pos_session',
         sourceId: report.session.id
