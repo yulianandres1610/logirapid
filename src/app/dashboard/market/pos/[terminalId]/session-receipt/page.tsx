@@ -206,6 +206,7 @@ export default function SessionReceiptPage() {
         documentType: 'session_close_report',
         documentData: buildPrintData(report),
         copies: 1,
+        posTerminalId: parseInt(terminalId) || null,
         sourceType: 'pos_session',
         sourceId: report.session.id
       }

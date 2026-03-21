@@ -87,14 +87,9 @@ interface Pagination {
 
 interface PrintService {
   id: number
-  serviceName: string
-  printers: Array<{
-    id: number
-    printerName: string
-    isOnline: boolean
-    isDefault: boolean
-    printerType: string
-  }>
+  name: string
+  printerName: string
+  online: boolean
 }
 
 interface OrderLine {
@@ -152,6 +147,7 @@ export default function ConsignmentsPage() {
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [printOrder, setPrintOrder] = useState<ConsignmentOrder | null>(null)
   const [printServices, setPrintServices] = useState<PrintService[]>([])
+  const [selectedPrintServiceId, setSelectedPrintServiceId] = useState<number | null>(null)
   const [selectedPrinter, setSelectedPrinter] = useState<{ serviceId: number; printerId: number } | null>(null)
   const [printingWithService, setPrintingWithService] = useState(false)
   const [copies, setCopies] = useState(1)
@@ -270,9 +266,17 @@ export default function ConsignmentsPage() {
     })
   }
 
-  // Print services are now resolved automatically by the server via /api/print-jobs
   const fetchPrintServices = async () => {
-    setPrintServices([])
+    try {
+      const res = await fetch('/api/print-services/available?documentType=consignment_receipt', { credentials: 'include' })
+      const data = await res.json()
+      if (data.success && data.data) {
+        setPrintServices(data.data)
+        if (data.data.length === 1) setSelectedPrintServiceId(data.data[0].id)
+      }
+    } catch {
+      setPrintServices([])
+    }
   }
 
   const fetchOrderLines = async (orderId: number) => {
@@ -314,6 +318,7 @@ export default function ConsignmentsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          serviceId: selectedPrintServiceId,
           documentType: 'consignment_receipt',
           documentData: {
             orderNumber: printOrder.orderNumber,

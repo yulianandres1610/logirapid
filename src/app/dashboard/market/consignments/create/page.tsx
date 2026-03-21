@@ -370,15 +370,11 @@ export default function CreateConsignmentOrderPage() {
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [printServices, setPrintServices] = useState<Array<{
     id: number
-    serviceName: string
-    printers: Array<{
-      id: number
-      printerName: string
-      isOnline: boolean
-      isDefault: boolean
-      printerType: string
-    }>
+    name: string
+    printerName: string
+    online: boolean
   }>>([])
+  const [selectedPrintServiceId, setSelectedPrintServiceId] = useState<number | null>(null)
   const [selectedPrinter, setSelectedPrinter] = useState<{ serviceId: number; printerId: number } | null>(null)
   const [printingWithService, setPrintingWithService] = useState(false)
   const [copies, setCopies] = useState(1)
@@ -1836,9 +1832,17 @@ export default function CreateConsignmentOrderPage() {
     return new Intl.NumberFormat('es-US', { style: 'currency', currency: 'USD' }).format(value)
   }
 
-  // Print services are now resolved automatically by the server via /api/print-jobs
   const fetchPrintServices = async () => {
-    setPrintServices([])
+    try {
+      const res = await fetch('/api/print-services/available?documentType=consignment_receipt', { credentials: 'include' })
+      const data = await res.json()
+      if (data.success && data.data) {
+        setPrintServices(data.data)
+        if (data.data.length === 1) setSelectedPrintServiceId(data.data[0].id)
+      }
+    } catch {
+      setPrintServices([])
+    }
   }
 
   // Print with silent service
@@ -1851,6 +1855,7 @@ export default function CreateConsignmentOrderPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          serviceId: selectedPrintServiceId,
           documentType: 'consignment_receipt',
           documentData: {
             orderNumber: createdOrder.orderNumber,
