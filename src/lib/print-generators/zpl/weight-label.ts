@@ -221,25 +221,26 @@ export function generateWeightLabel4x6(data: WeightLabelData): Buffer {
   const colLeft = M
   const colRight = M + Math.round(CW / 2) + 20
 
-  // Price per unit
-  zpl.push(`^FO${colLeft},${y}^A0N,26,26^FDPRECIO/${unit.toUpperCase()}^FS`)
-  zpl.push(`^FO${colRight},${y}^A0N,26,26^FDTOTAL^FS`)
+  // Price per unit header with unit of measure
+  zpl.push(`^FO${colLeft},${y}^A0N,26,26^FDPRECIO POR ${unit.toUpperCase()}^FS`)
+  zpl.push(`^FO${colRight},${y}^A0N,26,26^FDTOTAL (${data.weight})^FS`)
   y += 35
 
-  // Values
-  zpl.push(`^FO${colLeft},${y}^A0N,50,50^FD$${formattedPricePerUnit} CUP^FS`)
-  zpl.push(`^FO${colRight},${y}^A0N,70,70^FD$${formattedTotalCUP}^FS`)
-  y += 85
+  // Values with CUP label inline
+  zpl.push(`^FO${colLeft},${y}^A0N,50,50^FD$${formattedPricePerUnit} CUP/${unit}^FS`)
+  y += 65
+  zpl.push(`^FO${colLeft},${y}^A0N,70,70^FD$${formattedTotalCUP} CUP^FS`)
+  y += 90
 
-  // CUP label
-  zpl.push(`^FO${colRight},${y}^A0N,30,30^FDCUP^FS`)
-  y += 42
-
-  // USD price
+  // USD price with unit
   if (data.priceUSD !== undefined) {
     const formattedUSD = data.priceUSD.toFixed(2)
-    zpl.push(`^FO${colLeft},${y}^A0N,28,28^FDPrecio USD:^FS`)
-    zpl.push(`^FO${colRight},${y}^A0N,40,40^FD$${formattedUSD} USD^FS`)
+    const pricePerKgUSD = data.pricePerKg ? `$${data.pricePerKg.toFixed(2)} USD/${unit}` : ''
+    if (pricePerKgUSD) {
+      zpl.push(`^FO${colLeft},${y}^A0N,28,28^FD${pricePerKgUSD}^FS`)
+      y += 38
+    }
+    zpl.push(`^FO${colLeft},${y}^A0N,40,40^FDTotal: $${formattedUSD} USD^FS`)
     y += 55
   }
 
@@ -248,32 +249,24 @@ export function generateWeightLabel4x6(data: WeightLabelData): Buffer {
   zpl.push(`^FO${M},${y}^GB${CW},3,3^FS`)
   y += 25
 
-  // ═══ SKU ═══
+  // ═══ INFO LINE: SKU + Date + Rate ═══
   if (data.productSku) {
-    zpl.push(`^FO${M},${y}^A0N,26,26^FDSKU: ${escapeZpl(data.productSku)}^FS`)
-    y += 36
-  }
-
-  // ═══ DATE ═══
-  zpl.push(`^FO${M},${y}^A0N,24,24^FDFecha: ${dateText}^FS`)
-  y += 36
-
-  // ═══ EXCHANGE RATE ═══
-  if (data.exchangeRate) {
-    zpl.push(`^FO${M},${y}^A0N,22,22^FDTasa: 1 USD = ${Math.round(data.exchangeRate)} CUP^FS`)
+    zpl.push(`^FO${M},${y}^A0N,24,24^FDSKU: ${escapeZpl(data.productSku)}^FS`)
     y += 32
   }
+  zpl.push(`^FO${M},${y}^A0N,22,22^FDFecha: ${dateText}${data.exchangeRate ? '  |  Tasa: 1 USD = ' + Math.round(data.exchangeRate) + ' CUP' : ''}^FS`)
+  y += 32
 
   // ═══ SEPARATOR ═══
-  y += 10
+  y += 8
   zpl.push(`^FO${M},${y}^GB${CW},2,2^FS`)
-  y += 20
+  y += 18
 
-  // ═══ BARCODE (fills remaining space) ═══
-  const remainingHeight = H - y - 40
-  const barcodeHeight = Math.min(Math.max(remainingHeight - 30, 100), 200)
-  const barcodeX = Math.round((W - 500) / 2)
-  zpl.push(`^FO${barcodeX},${y}^BY3`)
+  // ═══ BARCODE (full width, rectangular) ═══
+  const remainingHeight = H - y - 30
+  const barcodeHeight = Math.min(Math.max(remainingHeight - 25, 80), 160)
+  // Full width barcode: use BY2 for denser bars, start close to margin
+  zpl.push(`^FO${M},${y}^BY2`)
   zpl.push(`^BEN,${barcodeHeight},Y,N^FD${data.barcode}^FS`)
 
   zpl.push('^XZ')

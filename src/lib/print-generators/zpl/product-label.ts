@@ -293,14 +293,12 @@ function generateSingleLabel4x6Zpl(
   zpl.push(`^FO${M},${y}^GB${CW},2,2^FS`)
   y += 25
 
-  // ═══ BARCODE (large, centered, fills remaining space) ═══
+  // ═══ BARCODE (full width, rectangular) ═══
   if (item.barcode) {
     const barcodeCmd = getBarcodeCommand(item.barcode, item.barcodeType)
-    // Calculate remaining space for barcode
-    const remainingHeight = H - y - 60
-    const barcodeHeight = Math.min(Math.max(remainingHeight - 30, 120), 250)
-    const barcodeX = Math.round((W - 500) / 2)
-    zpl.push(`^FO${barcodeX},${y}^BY3`)
+    const remainingHeight = H - y - 30
+    const barcodeHeight = Math.min(Math.max(remainingHeight - 25, 80), 160)
+    zpl.push(`^FO${M},${y}^BY2`)
     zpl.push(`${barcodeCmd},${barcodeHeight},Y,N,N^FD${item.barcode}^FS`)
   }
 
