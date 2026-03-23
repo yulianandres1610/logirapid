@@ -24,7 +24,7 @@ export function PrintServiceSelect({
   theme = 'light',
   className
 }: PrintServiceSelectProps) {
-  if (services.length <= 1) return null
+  if (services.length === 0) return null
 
   return (
     <div className={className}>

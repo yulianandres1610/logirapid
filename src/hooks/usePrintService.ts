@@ -48,11 +48,14 @@ export function usePrintService(): UsePrintServiceReturn {
       })
       const data = await res.json()
       if (data.success && data.data) {
+        setServices(data.data)
+        // Auto-select first online, or first available
         const online = data.data.filter((s: PrintServiceOption) => s.online)
-        const list = online.length > 0 ? online : data.data
-        setServices(list)
-        // Auto-select if only one
-        setSelectedServiceId(list.length === 1 ? list[0].id : null)
+        if (online.length === 1) {
+          setSelectedServiceId(online[0].id)
+        } else if (data.data.length === 1) {
+          setSelectedServiceId(data.data[0].id)
+        }
       }
     } catch {
       setServices([])
