@@ -181,10 +181,14 @@ function QuoteSignContent({ token }: { token: string }) {
   }
 
   const fmtUSD = (value: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(value)
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(value)
 
   const fmtCUP = (value: number) =>
-    new Intl.NumberFormat('es-CU', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(value * exchangeRate)) + ' CUP'
+    Math.round(value * exchangeRate).toLocaleString('en-US') + ' CUP'
+
+  // CUP from rounded unit price × quantity for exact integers
+  const lineCupUnit = (unitPrice: number) => Math.round(unitPrice * exchangeRate)
+  const lineCupSub = (unitPrice: number, qty: number) => Math.round(unitPrice * exchangeRate) * qty
 
   const formatDate = (date: string | null | undefined) => {
     if (!date) return ''
@@ -286,6 +290,9 @@ function QuoteSignContent({ token }: { token: string }) {
 
   const showUSD = mode === 'usd' || mode === 'dual'
   const showCUP = (mode === 'cup' || mode === 'dual') && exchangeRate > 1
+  const cupSubtotal = quote.lines.reduce((sum: number, l: any) => sum + lineCupSub(l.unitPrice, l.quantity), 0)
+  const cupDiscount = Math.round(cupSubtotal * (quote.discountPercent || 0) / 100)
+  const cupTotal = cupSubtotal - cupDiscount
   const hasDeliveryEstimates = quote.lines.some(l => l.estimatedDelivery)
 
   const deliveryBadgeConfig: Record<string, { label: string; bg: string; text: string }> = {
@@ -475,7 +482,7 @@ function QuoteSignContent({ token }: { token: string }) {
                             <span className="text-sm text-gray-700">{fmtCUP(line.unitPrice)}</span>
                           )}
                         </td>
-                        <td className="py-3 px-3 text-right text-sm font-medium text-gray-900">{fmtCUP(line.subtotal)}</td>
+                        <td className="py-3 px-3 text-right text-sm font-medium text-gray-900">{lineCupSub(line.unitPrice, line.quantity).toLocaleString('en-US') + ' CUP'}</td>
                       </>
                     )}
                     {quote.lines.some(l => l.originalPrice > 0 && l.originalPrice !== l.unitPrice) && (
@@ -552,7 +559,7 @@ function QuoteSignContent({ token }: { token: string }) {
                         <span className="text-sm font-semibold" style={{ color: BRAND.secondary }}>{fmtUSD(line.subtotal)}</span>
                       )}
                       {showCUP && (
-                        <span className="text-sm font-semibold text-gray-900">{fmtCUP(line.subtotal)}</span>
+                        <span className="text-sm font-semibold text-gray-900">{lineCupSub(line.unitPrice, line.quantity).toLocaleString('en-US') + ' CUP'}</span>
                       )}
                     </div>
                   </div>
@@ -575,13 +582,13 @@ function QuoteSignContent({ token }: { token: string }) {
                   {showCUP && (
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Subtotal CUP:</span>
-                      <span className="font-medium text-gray-700">{fmtCUP(quote.subtotal)}</span>
+                      <span className="font-medium text-gray-700">{cupSubtotal.toLocaleString('en-US') + ' CUP'}</span>
                     </div>
                   )}
                   {quote.discountPercent > 0 && (
                     <div className="flex justify-between text-sm text-green-600">
                       <span>Descuento ({quote.discountPercent}%):</span>
-                      <span>{showUSD ? `-${fmtUSD(quote.discountAmount)}` : `-${fmtCUP(quote.discountAmount)}`}</span>
+                      <span>{showUSD ? `-${fmtUSD(quote.discountAmount)}` : `-${cupDiscount.toLocaleString('en-US')} CUP`}</span>
                     </div>
                   )}
                 </div>
@@ -596,7 +603,7 @@ function QuoteSignContent({ token }: { token: string }) {
                   {showCUP && (
                     <div className="flex justify-between items-center mt-1">
                       <span className="text-sm font-bold" style={{ color: BRAND.secondary }}>Total CUP:</span>
-                      <span className={`font-bold ${showUSD ? 'text-base' : 'text-xl'}`} style={{ color: BRAND.secondary }}>{fmtCUP(quote.totalAmount)}</span>
+                      <span className={`font-bold ${showUSD ? 'text-base' : 'text-xl'}`} style={{ color: BRAND.secondary }}>{cupTotal.toLocaleString('en-US') + ' CUP'}</span>
                     </div>
                   )}
                   {showCUP && exchangeRate > 1 && (

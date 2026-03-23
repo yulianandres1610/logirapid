@@ -683,16 +683,16 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
         doc.text(String(line.quantity), margin + 65, y, { align: 'center' })
         if (hasDeliveryEstimates) doc.text(deliveryText(line.estimatedDelivery), margin + 85, y, { align: 'center' })
         doc.text(`$${line.unitPrice.toFixed(2)}`, margin + 110, y, { align: 'right' })
-        doc.text(`${Math.round(line.unitPrice * exchangeRate).toLocaleString()}`, margin + 135, y, { align: 'right' })
+        doc.text(`${lineCupUnit(line).toLocaleString()}`, margin + 135, y, { align: 'right' })
         doc.text(`$${line.subtotal.toFixed(2)}`, margin + 155, y, { align: 'right' })
-        doc.text(`${Math.round(line.subtotal * exchangeRate).toLocaleString()}`, pageWidth - margin - 4, y, { align: 'right' })
+        doc.text(`${lineCupSubtotal(line).toLocaleString()}`, pageWidth - margin - 4, y, { align: 'right' })
       } else if (mode === 'cup') {
         doc.text(productName, margin + 4, y)
         doc.text(line.productSku || '', margin + 80, y)
         doc.text(String(line.quantity), margin + 105, y, { align: 'center' })
         if (hasDeliveryEstimates) doc.text(deliveryText(line.estimatedDelivery), margin + 125, y, { align: 'center' })
-        doc.text(`${Math.round(line.unitPrice * exchangeRate).toLocaleString()}`, margin + 150, y, { align: 'right' })
-        doc.text(`${Math.round(line.subtotal * exchangeRate).toLocaleString()}`, pageWidth - margin - 4, y, { align: 'right' })
+        doc.text(`${lineCupUnit(line).toLocaleString()}`, margin + 150, y, { align: 'right' })
+        doc.text(`${lineCupSubtotal(line).toLocaleString()}`, pageWidth - margin - 4, y, { align: 'right' })
       } else {
         doc.text(productName, margin + 4, y)
         doc.text((line.productSku || '').substring(0, 15), margin + 80, y)
@@ -716,13 +716,13 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     if (mode === 'cup') {
       doc.setFont('helvetica', 'normal')
       doc.text('Subtotal CUP:', margin + 120, y)
-      doc.text(`${Math.round(quote.subtotal * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
+      doc.text(`${quoteCupSubtotal().toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
       y += 6
 
       if (quote.discountPercent > 0) {
         doc.setTextColor(220, 38, 38)
         doc.text(`Descuento (${quote.discountPercent}%):`, margin + 120, y)
-        doc.text(`-${Math.round(quote.discountAmount * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
+        doc.text(`-${quoteCupDiscount().toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
         doc.setTextColor(40, 40, 40)
         y += 6
       }
@@ -734,11 +734,11 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       doc.setFontSize(12)
       doc.setTextColor(255, 255, 255)
       doc.text('TOTAL CUP:', margin + 105, y + 2)
-      doc.text(`${Math.round(quote.totalAmount * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 4, y + 2, { align: 'right' })
+      doc.text(`${quoteCupTotal().toLocaleString()} CUP`, pageWidth - margin - 4, y + 2, { align: 'right' })
     } else if (mode === 'dual') {
       doc.setFont('helvetica', 'normal')
       doc.text('Subtotal:', margin + 100, y)
-      doc.text(`$${quote.subtotal.toFixed(2)} / ${Math.round(quote.subtotal * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
+      doc.text(`$${quote.subtotal.toFixed(2)} / ${quoteCupSubtotal().toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
       y += 6
 
       if (quote.discountPercent > 0) {
@@ -756,7 +756,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       doc.setFontSize(12)
       doc.setTextColor(255, 255, 255)
       doc.text('TOTAL:', margin + 85, y + 2)
-      doc.text(`$${quote.totalAmount.toFixed(2)} USD / ${Math.round(quote.totalAmount * exchangeRate).toLocaleString()} CUP`, pageWidth - margin - 4, y + 2, { align: 'right' })
+      doc.text(`$${quote.totalAmount.toFixed(2)} USD / ${quoteCupTotal().toLocaleString()} CUP`, pageWidth - margin - 4, y + 2, { align: 'right' })
     } else {
       doc.setFont('helvetica', 'normal')
       doc.text('Subtotal:', margin + 120, y)
@@ -905,7 +905,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       doc.text(name, m, y)
       doc.text(String(line.quantity), pageWidth - m - 18, y)
       if (mode === 'cup') {
-        doc.text(`${Math.round(line.subtotal * exchangeRate).toLocaleString()}`, pageWidth - m, y, { align: 'right' })
+        doc.text(`${lineCupSubtotal(line).toLocaleString()}`, pageWidth - m, y, { align: 'right' })
       } else {
         doc.text(`$${line.subtotal.toFixed(2)}`, pageWidth - m, y, { align: 'right' })
       }
@@ -922,7 +922,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2])
     doc.text('TOTAL:', m, y)
     if (mode === 'cup') {
-      doc.text(`${Math.round(quote.totalAmount * exchangeRate).toLocaleString()} CUP`, pageWidth - m, y, { align: 'right' })
+      doc.text(`${quoteCupTotal().toLocaleString()} CUP`, pageWidth - m, y, { align: 'right' })
     } else {
       doc.text(`$${quote.totalAmount.toFixed(2)} USD`, pageWidth - m, y, { align: 'right' })
     }
@@ -982,10 +982,17 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
   // ===================== FORMATTERS =====================
 
   const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(value)
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(value)
 
   const formatCUP = (value: number) =>
-    Math.round(value).toLocaleString() + ' CUP'
+    Math.round(value).toLocaleString('en-US') + ' CUP'
+
+  // Calculate CUP from rounded unit prices to get exact integers
+  const lineCupUnit = (line: { unitPrice: number }) => Math.round(line.unitPrice * exchangeRate)
+  const lineCupSubtotal = (line: { unitPrice: number; quantity: number }) => Math.round(line.unitPrice * exchangeRate) * line.quantity
+  const quoteCupSubtotal = () => (quote?.lines || []).reduce((sum: number, l: any) => sum + lineCupSubtotal(l), 0)
+  const quoteCupDiscount = () => Math.round(quoteCupSubtotal() * (quote?.discountPercent || 0) / 100)
+  const quoteCupTotal = () => quoteCupSubtotal() - quoteCupDiscount()
 
   const formatDate = (date: string | null | undefined) => {
     if (!date) return ''
@@ -1461,7 +1468,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
                 { label: 'Total USD', value: formatCurrency(quote.totalAmount), icon: DollarSign, color: 'blue' },
-                { label: 'Total CUP', value: formatCUP(quote.totalAmount * exchangeRate), icon: DollarSign, color: 'purple' },
+                { label: 'Total CUP', value: formatCUP(quoteCupTotal()), icon: DollarSign, color: 'purple' },
                 { label: 'Productos', value: `${totalProducts}`, icon: Package, color: 'emerald', suffix: `${totalUnits} uds` },
                 { label: 'Válida hasta', value: quote.validUntil ? formatDate(quote.validUntil) : 'Sin fecha', icon: Calendar, color: 'amber' }
               ].map((stat, idx) => (
@@ -1800,7 +1807,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                           )}
                         </td>
                         <td className="py-4 px-4 text-right text-sm text-gray-500">
-                          {formatCUP(line.unitPrice * exchangeRate)}
+                          {formatCUP(lineCupUnit(line))}
                         </td>
                         <td className="py-4 px-4 text-center">
                           {line.discountPercent > 0 && (
@@ -1828,7 +1835,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                         </td>
                         <td className="py-4 px-4 text-right">
                           <p className="font-bold text-blue-600">{formatCurrency(line.subtotal)}</p>
-                          <p className="text-xs text-gray-500">{formatCUP(line.subtotal * exchangeRate)}</p>
+                          <p className="text-xs text-gray-500">{formatCUP(lineCupSubtotal(line))}</p>
                         </td>
                       </tr>
                     ))}
@@ -1851,7 +1858,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Subtotal CUP:</span>
-                      <span className="text-gray-500">{formatCUP(quote.subtotal * exchangeRate)}</span>
+                      <span className="text-gray-500">{formatCUP(quoteCupSubtotal())}</span>
                     </div>
                     {quote.discountPercent > 0 && (
                       <div className="flex justify-between text-sm text-green-600">
@@ -1869,7 +1876,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                     <div className="flex justify-between text-lg font-semibold">
                       <span className="text-gray-500">Total CUP:</span>
                       <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                        {formatCUP(quote.totalAmount * exchangeRate)}
+                        {formatCUP(quoteCupTotal())}
                       </span>
                     </div>
                   </div>
