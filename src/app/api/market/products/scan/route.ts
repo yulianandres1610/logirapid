@@ -24,7 +24,7 @@ function parseWeightBarcode(barcode: string): { prefix: string; weight: number }
     const weight = parseInt(weightStr) / 1000  // Convertir a kg (3 decimales)
 
     // Validar que el peso sea razonable
-    if (weight <= 0 || weight > 99.999) {
+    if (weight <= 0 || weight > 9999.999) {
       return null
     }
 

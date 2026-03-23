@@ -38,21 +38,6 @@ interface Product {
   expirationDate: string | null
 }
 
-interface PrintServicePrinter {
-  id: number
-  printerName: string
-  printerType: string
-  isOnline: boolean
-}
-
-interface PrintService {
-  id: number
-  serviceCode: string
-  serviceName: string
-  status: 'pending' | 'active' | 'offline' | 'disabled'
-  printers: PrintServicePrinter[]
-}
-
 interface PrintQueue {
   productId: number
   product: Product
@@ -71,52 +56,9 @@ export default function WarehouseProductsPage() {
   const [printing, setPrinting] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [products, setProducts] = useState<Product[]>([])
-  const [services, setServices] = useState<PrintService[]>([])
-  const [selectedService, setSelectedService] = useState<number | null>(null)
-  const [selectedPrinter, setSelectedPrinter] = useState<number | null>(null)
   const [printQueue, setPrintQueue] = useState<PrintQueue[]>([])
   const [productCopies, setProductCopies] = useState<Record<number, number>>({})
 
-  // Get label printers only
-  const getLabelPrinters = useCallback(() => {
-    if (!selectedService) return []
-    const service = services.find(s => s.id === selectedService)
-    return service?.printers.filter(p =>
-      p.printerType === 'label_barcode' ||
-      p.printerType === 'label_4x6' ||
-      p.printerType.includes('label')
-    ) || []
-  }, [services, selectedService])
-
-  // Fetch services
-  const fetchServices = useCallback(async () => {
-    try {
-      const response = await fetch('/api/print/services')
-      if (response.ok) {
-        const data = await response.json()
-        const activeServices = (data.data?.services || []).filter(
-          (s: PrintService) => s.status === 'active'
-        )
-        setServices(activeServices)
-
-        // Auto-select first service with label printers
-        for (const service of activeServices) {
-          const labelPrinters = service.printers?.filter((p: PrintServicePrinter) =>
-            p.printerType === 'label_barcode' ||
-            p.printerType === 'label_4x6' ||
-            p.printerType.includes('label')
-          ) || []
-          if (labelPrinters.length > 0) {
-            setSelectedService(service.id)
-            setSelectedPrinter(labelPrinters[0].id)
-            break
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching services:', error)
-    }
-  }, [])
 
   // Search products
   const searchProducts = useCallback(async (term: string) => {
@@ -142,14 +84,11 @@ export default function WarehouseProductsPage() {
   useEffect(() => {
     const init = async () => {
       setLoading(true)
-      await Promise.all([
-        fetchServices(),
-        searchProducts('')
-      ])
+      await searchProducts('')
       setLoading(false)
     }
     init()
-  }, [fetchServices, searchProducts])
+  }, [searchProducts])
 
   // Debounced search
   useEffect(() => {
@@ -197,11 +136,6 @@ export default function WarehouseProductsPage() {
 
   // Print single product (includePrice: true = con precio CUP, false = solo nombre y codigo)
   const printProduct = async (product: Product, copies: number, includePrice: boolean = true) => {
-    if (!selectedService || !selectedPrinter) {
-      showNotification('error', 'Error', 'Selecciona una impresora')
-      return
-    }
-
     try {
       setPrinting(true)
 
@@ -210,7 +144,7 @@ export default function WarehouseProductsPage() {
         ? Math.round(product.sellingPrice * USD_CUP)
         : undefined
 
-      const response = await fetch('/api/print/jobs', {
+      const response = await fetch('/api/print-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -227,9 +161,7 @@ export default function WarehouseProductsPage() {
             expirationDate: product.expirationDate,
             labelSize: 'medium'
           },
-          copies,
-          printServiceId: selectedService,
-          printerId: selectedPrinter
+          copies
         })
       })
 
@@ -252,11 +184,6 @@ export default function WarehouseProductsPage() {
   // Print all in queue (includePrice: true = con precio CUP, false = solo nombre y codigo)
   const printQueueItems = async (includePrice: boolean) => {
     if (printQueue.length === 0) return
-
-    if (!selectedService || !selectedPrinter) {
-      showNotification('error', 'Error', 'Selecciona una impresora')
-      return
-    }
 
     try {
       setPrinting(true)
@@ -301,7 +228,6 @@ export default function WarehouseProductsPage() {
     return date <= thirtyDays
   }
 
-  const labelPrinters = getLabelPrinters()
   const totalQueueCopies = printQueue.reduce((sum, q) => sum + q.copies, 0)
 
   if (loading) {
@@ -341,78 +267,6 @@ export default function WarehouseProductsPage() {
               </p>
             </div>
           </div>
-        </div>
-
-        {/* Printer Selection */}
-        <div className={cn(
-          "p-4 rounded-xl flex items-center gap-4 flex-wrap",
-          theme === 'dark' ? 'bg-zinc-900/50 border border-zinc-800' : 'bg-gray-50 border border-gray-200'
-        )}>
-          <div className="flex items-center gap-2">
-            <Printer className="w-5 h-5 text-blue-500" />
-            <span className={cn(
-              "text-sm font-medium",
-              theme === 'dark' ? 'text-zinc-300' : 'text-gray-700'
-            )}>
-              Impresora:
-            </span>
-          </div>
-
-          <select
-            value={selectedService || ''}
-            onChange={(e) => {
-              const id = parseInt(e.target.value) || null
-              setSelectedService(id)
-              setSelectedPrinter(null)
-              // Auto-select first label printer
-              if (id) {
-                const service = services.find(s => s.id === id)
-                const labelPrinter = service?.printers.find(p =>
-                  p.printerType === 'label_barcode' || p.printerType === 'label_4x6'
-                )
-                if (labelPrinter) setSelectedPrinter(labelPrinter.id)
-              }
-            }}
-            className={cn(
-              "px-3 py-2 rounded-lg border text-sm",
-              theme === 'dark'
-                ? 'bg-zinc-800 border-zinc-700 text-zinc-200'
-                : 'bg-white border-gray-300 text-gray-900'
-            )}
-          >
-            <option value="">Seleccionar servicio...</option>
-            {services.map(s => (
-              <option key={s.id} value={s.id}>
-                {s.serviceName}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={selectedPrinter || ''}
-            onChange={(e) => setSelectedPrinter(parseInt(e.target.value) || null)}
-            disabled={!selectedService || labelPrinters.length === 0}
-            className={cn(
-              "px-3 py-2 rounded-lg border text-sm",
-              theme === 'dark'
-                ? 'bg-zinc-800 border-zinc-700 text-zinc-200'
-                : 'bg-white border-gray-300 text-gray-900',
-              (!selectedService || labelPrinters.length === 0) && 'opacity-50'
-            )}
-          >
-            <option value="">Seleccionar impresora...</option>
-            {labelPrinters.map(p => (
-              <option key={p.id} value={p.id}>
-                {p.printerName} {p.isOnline ? '(Online)' : '(Offline)'}
-              </option>
-            ))}
-          </select>
-
-          {labelPrinters.length === 0 && selectedService && (
-            <span className="text-sm text-amber-500">
-              No hay impresoras de etiquetas disponibles
-            </span>
-          )}
         </div>
 
         {/* Search */}
@@ -558,7 +412,7 @@ export default function WarehouseProductsPage() {
                       size="sm"
                       variant="outline"
                       onClick={() => printProduct(product, copies, true)}
-                      disabled={!selectedPrinter || printing}
+                      disabled={printing}
                       title="Imprimir con precio en CUP"
                       className="text-green-600 border-green-300 hover:bg-green-50"
                     >
@@ -568,7 +422,7 @@ export default function WarehouseProductsPage() {
                       size="sm"
                       variant="outline"
                       onClick={() => printProduct(product, copies, false)}
-                      disabled={!selectedPrinter || printing}
+                      disabled={printing}
                       title="Imprimir sin precio"
                     >
                       <Printer className="w-4 h-4" />
@@ -634,7 +488,7 @@ export default function WarehouseProductsPage() {
               <div className="flex items-center gap-2">
                 <Button
                   onClick={() => printQueueItems(true)}
-                  disabled={printing || !selectedPrinter}
+                  disabled={printing}
                   className="bg-green-600 hover:bg-green-700"
                 >
                   {printing ? (
@@ -647,7 +501,7 @@ export default function WarehouseProductsPage() {
                 <Button
                   variant="outline"
                   onClick={() => printQueueItems(false)}
-                  disabled={printing || !selectedPrinter}
+                  disabled={printing}
                 >
                   {printing ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />

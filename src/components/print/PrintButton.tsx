@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Printer, CheckCircle, XCircle, AlertTriangle, Loader2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Printer, CheckCircle, XCircle, AlertTriangle, Loader2, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { cn } from '@/lib/utils'
@@ -22,8 +22,6 @@ interface PrintButtonProps {
   sourceType?: string
   sourceId?: number
   copies?: number
-  printServiceId?: number
-  printerId?: number
   posTerminalId?: number
   warehouseId?: number
   onPrintStarted?: (jobNumber: string) => void
@@ -43,8 +41,6 @@ export function PrintButton({
   sourceType,
   sourceId,
   copies: defaultCopies = 1,
-  printServiceId,
-  printerId,
   posTerminalId,
   warehouseId,
   onPrintStarted,
@@ -63,6 +59,23 @@ export function PrintButton({
   const [showCopiesModal, setShowCopiesModal] = useState(false)
   const [lastJobNumber, setLastJobNumber] = useState<string | null>(null)
   const [lastStatus, setLastStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [availableServices, setAvailableServices] = useState<any[]>([])
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null)
+
+  useEffect(() => {
+    // Fetch available services for this document type
+    fetch(`/api/print-services/available?documentType=${documentType}`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.data) {
+          const online = data.data.filter((s: any) => s.online)
+          const list = online.length > 0 ? online : data.data
+          setAvailableServices(list)
+          setSelectedServiceId(list.length === 1 ? list[0].id : null)
+        }
+      })
+      .catch(() => {})
+  }, [documentType])
 
   const handlePrint = async (e?: React.MouseEvent) => {
     e?.stopPropagation()
@@ -77,7 +90,7 @@ export function PrintButton({
     setShowCopiesModal(false)
 
     try {
-      const response = await fetch('/api/print/jobs', {
+      const response = await fetch('/api/print-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -86,8 +99,7 @@ export function PrintButton({
           sourceType,
           sourceId,
           copies,
-          printServiceId,
-          printerId,
+          serviceId: selectedServiceId,
           posTerminalId,
           warehouseId
         })
@@ -131,7 +143,7 @@ export function PrintButton({
     const checkStatus = async () => {
       attempts++
       try {
-        const response = await fetch(`/api/print/jobs?status=completed&limit=1`)
+        const response = await fetch(`/api/print-jobs?status=completed&limit=1`)
         const data = await response.json()
 
         if (data.success) {
@@ -199,6 +211,9 @@ export function PrintButton({
             onCopiesChange={setCopies}
             onConfirm={() => handlePrint()}
             onCancel={() => setShowCopiesModal(false)}
+            services={availableServices}
+            selectedServiceId={selectedServiceId}
+            onServiceChange={setSelectedServiceId}
           />
         )}
       </>
@@ -225,23 +240,32 @@ export function PrintButton({
           onCopiesChange={setCopies}
           onConfirm={() => handlePrint()}
           onCancel={() => setShowCopiesModal(false)}
+          services={availableServices}
+          selectedServiceId={selectedServiceId}
+          onServiceChange={setSelectedServiceId}
         />
       )}
     </>
   )
 }
 
-// Copies selection modal
+// Copies + printer selection modal
 function CopiesModal({
   copies,
   onCopiesChange,
   onConfirm,
-  onCancel
+  onCancel,
+  services,
+  selectedServiceId,
+  onServiceChange,
 }: {
   copies: number
   onCopiesChange: (n: number) => void
   onConfirm: () => void
   onCancel: () => void
+  services: any[]
+  selectedServiceId: number | null
+  onServiceChange: (id: number | null) => void
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onCancel}>
@@ -250,30 +274,58 @@ function CopiesModal({
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-          Cantidad de copias
+          Imprimir
         </h3>
-        <div className="flex items-center justify-center gap-4 mb-4">
-          <button
-            onClick={() => onCopiesChange(Math.max(1, copies - 1))}
-            className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 text-xl font-bold hover:bg-gray-200 dark:hover:bg-gray-600"
-          >
-            -
-          </button>
-          <input
-            type="number"
-            value={copies}
-            onChange={(e) => onCopiesChange(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
-            className="w-16 h-10 text-center text-xl font-bold border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900"
-            min={1}
-            max={10}
-          />
-          <button
-            onClick={() => onCopiesChange(Math.min(10, copies + 1))}
-            className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 text-xl font-bold hover:bg-gray-200 dark:hover:bg-gray-600"
-          >
-            +
-          </button>
+
+        {/* Printer selector */}
+        {services.length > 1 && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Impresora</label>
+            <div className="relative">
+              <select
+                value={selectedServiceId || ''}
+                onChange={(e) => onServiceChange(e.target.value ? Number(e.target.value) : null)}
+                className="w-full px-3 py-2 pr-8 rounded-lg border text-sm font-medium appearance-none cursor-pointer bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white"
+              >
+                <option value="">Automatico</option>
+                {services.map((s: any) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}{s.printerName ? ` — ${s.printerName.replace(/_/g, ' ')}` : ''}{s.online ? '' : ' (offline)'}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+        )}
+
+        {/* Copies */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Copias</label>
+          <div className="flex items-center justify-center gap-4">
+            <button
+              onClick={() => onCopiesChange(Math.max(1, copies - 1))}
+              className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 text-xl font-bold hover:bg-gray-200 dark:hover:bg-gray-600"
+            >
+              -
+            </button>
+            <input
+              type="number"
+              value={copies}
+              onChange={(e) => onCopiesChange(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+              className="w-16 h-10 text-center text-xl font-bold border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900"
+              min={1}
+              max={10}
+            />
+            <button
+              onClick={() => onCopiesChange(Math.min(10, copies + 1))}
+              className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 text-xl font-bold hover:bg-gray-200 dark:hover:bg-gray-600"
+            >
+              +
+            </button>
+          </div>
         </div>
+
         <div className="flex gap-2">
           <Button variant="outline" className="flex-1" onClick={onCancel}>
             Cancelar

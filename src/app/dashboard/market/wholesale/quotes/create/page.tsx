@@ -644,6 +644,20 @@ function CreateQuotePage() {
     setLines(newLines)
   }
 
+  const updateLinePrice = (index: number, newPrice: number) => {
+    if (newPrice < 0) return
+    const newLines = [...lines]
+    const line = newLines[index]
+    line.unitPrice = newPrice
+    line.unitPriceCup = newPrice * exchangeRateBCC
+    line.subtotal = line.quantity * newPrice
+    line.subtotalCup = line.subtotal * exchangeRateBCC
+    line.profitMargin = line.costPrice > 0
+      ? ((newPrice - line.costPrice) / line.costPrice) * 100
+      : 0
+    setLines(newLines)
+  }
+
   const removeLine = (index: number) => {
     setLines(prev => prev.filter((_, i) => i !== index))
   }
@@ -738,7 +752,8 @@ function CreateQuotePage() {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-      minimumFractionDigits: 2
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 3
     }).format(value)
   }
 
@@ -1207,20 +1222,25 @@ function CreateQuotePage() {
                             )}
                           </div>
                           <div className="col-span-2 text-right">
-                            {line.hasPricelistPrice ? (
-                              <div>
-                                <span className="text-xs text-gray-400 line-through block">
-                                  {formatCurrency(line.originalPrice)}
-                                </span>
-                                <span className="text-sm font-medium text-blue-600">
-                                  {formatCurrency(line.unitPrice)}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-sm font-medium text-blue-600">
-                                {formatCurrency(line.unitPrice)}
+                            {line.hasPricelistPrice && (
+                              <span className="text-xs text-gray-400 line-through block">
+                                {formatCurrency(line.originalPrice)}
                               </span>
                             )}
+                            <div className="relative inline-flex items-center">
+                              <span className="absolute left-1.5 text-xs text-gray-400">$</span>
+                              <input
+                                type="number"
+                                value={line.unitPrice}
+                                onChange={(e) => updateLinePrice(index, parseFloat(e.target.value) || 0)}
+                                step="0.001"
+                                min="0"
+                                className={cn(
+                                  'w-24 text-right pl-4 pr-1.5 py-1 rounded-lg border text-sm font-medium text-blue-600',
+                                  theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-300'
+                                )}
+                              />
+                            </div>
                           </div>
                           <div className="col-span-2 flex items-center justify-center gap-1.5">
                             <button

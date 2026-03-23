@@ -66,10 +66,10 @@ export default function WeightLabelsPage() {
   const [isFullscreen, setIsFullscreen] = useState(true) // Start fullscreen by default
   const [mounted, setMounted] = useState(false)
   const [showPrintModal, setShowPrintModal] = useState(false)
-  const [printServices, setPrintServices] = useState<Array<{ id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; printerType: string }> }>>([])
-  const [selectedPrinter, setSelectedPrinter] = useState<{ serviceId: number; printerId: number } | null>(null)
   const [printingToService, setPrintingToService] = useState(false)
-  const [labelSize, setLabelSize] = useState<'3x2' | '2x1'>('3x2') // Label size selector
+  const [labelSize, setLabelSize] = useState<'3x2' | '2x1' | '4x6'>('3x2') // Label size selector
+  const [printServices, setPrintServices] = useState<any[]>([])
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null)
 
   // Client-side mount
   useEffect(() => {
@@ -125,9 +125,9 @@ export default function WeightLabelsPage() {
       // Limit to 3 decimal places
       const parts = weight.split('.')
       if (parts.length === 2 && parts[1].length >= 3) return
-      // Limit to reasonable weight (99.999 max)
+      // Limit to reasonable weight (9999.999 max)
       const newWeight = weight + key
-      if (parseFloat(newWeight) <= 99.999) {
+      if (parseFloat(newWeight) <= 9999.999) {
         setWeight(newWeight)
       }
     }
@@ -182,9 +182,18 @@ export default function WeightLabelsPage() {
           ))
         }
 
-        // Fetch print services and show modal
-        await fetchPrintServices()
         console.log('[WeightLabels] Showing print modal')
+        // Fetch available print services for weight labels
+        fetch('/api/print-services/available?documentType=weight_label', { credentials: 'include' })
+          .then(r => r.json())
+          .then(d => {
+            if (d.success && d.data) {
+              const online = d.data.filter((s: any) => s.online)
+              setPrintServices(online.length > 0 ? online : d.data)
+              setSelectedServiceId(d.data.length === 1 ? d.data[0].id : null)
+            }
+          })
+          .catch(() => {})
         setShowPrintModal(true)
         // Reset weight for next label
         setWeight('')
@@ -231,93 +240,16 @@ export default function WeightLabelsPage() {
     }
   }
 
-  // Fetch print services for label printing
-  const fetchPrintServices = async () => {
-    try {
-      console.log('[WeightLabels] Fetching print services...')
-      const response = await fetch('/api/print/services')
-      const data = await response.json()
-      console.log('[WeightLabels] Print services response:', data)
-
-      if (data.success && data.data?.services) {
-        const allServices = data.data.services
-        console.log('[WeightLabels] Total services:', allServices.length)
-
-        const activeServices = allServices.filter(
-          (s: { status: string; printers?: unknown[] }) =>
-            (s.status === 'active' || s.status === 'pending' || s.status === 'offline') &&
-            s.printers && s.printers.length > 0
-        )
-        console.log('[WeightLabels] Active services:', activeServices.length)
-
-        // Filter for LABEL printers (any printer that can print labels)
-        const servicesWithPrinters = activeServices.map((service: { id: number; serviceName: string; printers: Array<{ id: number; printerName: string; isOnline: boolean; printerType: string; supportedDocumentTypes?: string[] }> }) => {
-          const labelPrinters = service.printers.filter((p: { supportedDocumentTypes?: string[]; printerType: string; printerName: string }) => {
-            const name = (p.printerName || '').toLowerCase()
-            const type = (p.printerType || '').toLowerCase()
-
-            // 1. Check if supportedDocumentTypes explicitly includes weight_label or product_label
-            if (p.supportedDocumentTypes && p.supportedDocumentTypes.length > 0) {
-              const hasLabelSupport = p.supportedDocumentTypes.includes('weight_label') ||
-                                      p.supportedDocumentTypes.includes('product_label') ||
-                                      p.supportedDocumentTypes.includes('lot_label')
-              if (hasLabelSupport) {
-                console.log(`[WeightLabels] Printer ${p.printerName} has label support in documentTypes`)
-                return true
-              }
-            }
-
-            // 2. Check if printerType is a label type
-            if (type === 'label_4x6' || type === 'label_barcode') {
-              console.log(`[WeightLabels] Printer ${p.printerName} is label type: ${type}`)
-              return true
-            }
-
-            // 3. Check printer name for known label printer brands/keywords
-            const labelKeywords = ['label', 'etiqueta', 'zebra', 'dymo', 'brother', 'zd', 'ztc', 'tsc', 'godex', 'honeywell', 'sato', 'citizen', 'postek', 'barcode']
-            const isLabelPrinter = labelKeywords.some(keyword => name.includes(keyword))
-            if (isLabelPrinter) {
-              console.log(`[WeightLabels] Printer ${p.printerName} matched by name keyword`)
-              return true
-            }
-
-            console.log(`[WeightLabels] Printer ${p.printerName} not a label printer (type: ${type})`)
-            return false
-          })
-          return { ...service, printers: labelPrinters }
-        }).filter((s: { printers: unknown[] }) => s.printers.length > 0)
-
-        console.log('[WeightLabels] Services with label printers:', servicesWithPrinters.length)
-        setPrintServices(servicesWithPrinters)
-
-        // Auto-select first printer
-        if (servicesWithPrinters.length > 0 && servicesWithPrinters[0].printers.length > 0) {
-          setSelectedPrinter({
-            serviceId: servicesWithPrinters[0].id,
-            printerId: servicesWithPrinters[0].printers[0].id
-          })
-          console.log('[WeightLabels] Auto-selected printer:', servicesWithPrinters[0].printers[0].printerName)
-        }
-
-        return servicesWithPrinters
-      }
-      console.log('[WeightLabels] No services found in response')
-      return []
-    } catch (err) {
-      console.error('[WeightLabels] Error fetching print services:', err)
-      return []
-    }
-  }
-
+  // Print services are now resolved automatically by the server via /api/print-jobs
   // Print label with service
   const printWithService = async () => {
-    if (!lastLabel || !selectedPrinter) return
+    if (!lastLabel) return
 
     const pricePerKgValue = selectedProduct ? parseFloat(String(selectedProduct.sellingPrice)) || 0 : 0
 
     setPrintingToService(true)
     try {
-      const response = await fetch('/api/print/jobs', {
+      const response = await fetch('/api/print-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -338,8 +270,7 @@ export default function WeightLabelsPage() {
             labelSize: labelSize // '3x2' or '2x1'
           },
           copies,
-          printServiceId: selectedPrinter.serviceId,
-          printerId: selectedPrinter.printerId,
+          serviceId: selectedServiceId,
           sourceType: 'weight_label'
         })
       })
@@ -742,17 +673,6 @@ export default function WeightLabelsPage() {
                       <label className="block text-gray-400 text-xs mb-2 uppercase text-center">Tamaño de Etiqueta</label>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => setLabelSize('3x2')}
-                          className={cn(
-                            "flex-1 py-2 px-3 rounded-lg border transition-all text-sm",
-                            labelSize === '3x2'
-                              ? 'border-purple-500 bg-purple-900/30 text-purple-300'
-                              : 'border-gray-600 bg-gray-700/50 text-gray-400 hover:border-gray-500'
-                          )}
-                        >
-                          3x2" (76x51mm)
-                        </button>
-                        <button
                           onClick={() => setLabelSize('2x1')}
                           className={cn(
                             "flex-1 py-2 px-3 rounded-lg border transition-all text-sm",
@@ -761,7 +681,29 @@ export default function WeightLabelsPage() {
                               : 'border-gray-600 bg-gray-700/50 text-gray-400 hover:border-gray-500'
                           )}
                         >
-                          2x1" (51x25mm)
+                          2x1"
+                        </button>
+                        <button
+                          onClick={() => setLabelSize('3x2')}
+                          className={cn(
+                            "flex-1 py-2 px-3 rounded-lg border transition-all text-sm",
+                            labelSize === '3x2'
+                              ? 'border-purple-500 bg-purple-900/30 text-purple-300'
+                              : 'border-gray-600 bg-gray-700/50 text-gray-400 hover:border-gray-500'
+                          )}
+                        >
+                          3x2"
+                        </button>
+                        <button
+                          onClick={() => setLabelSize('4x6')}
+                          className={cn(
+                            "flex-1 py-2 px-3 rounded-lg border transition-all text-sm",
+                            labelSize === '4x6'
+                              ? 'border-purple-500 bg-purple-900/30 text-purple-300'
+                              : 'border-gray-600 bg-gray-700/50 text-gray-400 hover:border-gray-500'
+                          )}
+                        >
+                          4x6"
                         </button>
                       </div>
                     </div>
@@ -773,11 +715,40 @@ export default function WeightLabelsPage() {
                         <div
                           className="bg-white rounded-lg p-2 mx-auto"
                           style={{
-                            maxWidth: labelSize === '3x2' ? '260px' : '200px',
-                            aspectRatio: labelSize === '3x2' ? '3/2' : '2/1'
+                            maxWidth: labelSize === '4x6' ? '220px' : labelSize === '3x2' ? '260px' : '200px',
+                            aspectRatio: labelSize === '4x6' ? '2/3' : labelSize === '3x2' ? '3/2' : '2/1'
                           }}
                         >
-                          {labelSize === '3x2' ? (
+                          {labelSize === '4x6' ? (
+                            // 4x6 Full Preview
+                            <>
+                              <p className="font-black text-black text-xs uppercase text-center leading-tight mb-1">{selectedProduct.name}</p>
+                              <div className="border-t border-gray-300 my-1"></div>
+                              <p className="text-[8px] text-gray-500 text-center uppercase">Peso Neto</p>
+                              <p className="font-black text-black text-lg text-center leading-none mb-1">{weight || '0.000'} {selectedProduct.unitOfMeasure || 'kg'}</p>
+                              <div className="border-t border-gray-300 my-1"></div>
+                              <div className="flex justify-between text-[7px] text-gray-500 uppercase">
+                                <span>Precio/{selectedProduct.unitOfMeasure || 'kg'}</span>
+                                <span>Total ({weight || '0'} {selectedProduct.unitOfMeasure || 'kg'})</span>
+                              </div>
+                              <div className="flex justify-between items-baseline mb-0.5">
+                                <p className="font-bold text-black text-[10px]">${Math.round(pricePerKg * USD_CUP).toLocaleString()} CUP/{selectedProduct.unitOfMeasure || 'kg'}</p>
+                              </div>
+                              <p className="font-black text-black text-xl text-center leading-none">${priceCUP.toLocaleString()} CUP</p>
+                              <p className="text-gray-600 text-[10px] text-center mb-1">${priceUSD.toFixed(2)} USD</p>
+                              <div className="border-t border-gray-300 my-1"></div>
+                              <p className="text-[7px] text-gray-500">SKU: {selectedProduct.sku} | {new Date().toLocaleDateString('es-ES')}</p>
+                              <div className="border-t border-gray-300 my-1"></div>
+                              <div className="flex flex-col items-center">
+                                <div className="flex justify-center gap-px w-full">
+                                  {Array.from({ length: 50 }).map((_, i) => (
+                                    <div key={i} className="bg-black flex-1" style={{ height: '18px', minWidth: '1px', maxWidth: i % 4 === 0 ? '3px' : '2px' }} />
+                                  ))}
+                                </div>
+                                <p className="font-mono text-[8px] text-black tracking-widest mt-0.5">{barcodePreview}</p>
+                              </div>
+                            </>
+                          ) : labelSize === '3x2' ? (
                             // 3x2 Preview
                             <>
                               <div className="flex justify-between text-[8px] text-gray-500 uppercase mb-0.5">
@@ -787,7 +758,7 @@ export default function WeightLabelsPage() {
                               <div className="flex justify-between items-start mb-1">
                                 <div className="text-left">
                                   <p className="font-black text-black text-sm">{Math.round(pricePerKg * USD_CUP).toLocaleString()}</p>
-                                  <p className="text-[9px] text-gray-600">CUP</p>
+                                  <p className="text-[9px] text-gray-600">CUP/{selectedProduct.unitOfMeasure || 'kg'}</p>
                                 </div>
                                 <div className="text-right">
                                   <p className="font-black text-black text-2xl leading-none">{priceCUP.toLocaleString()}</p>
@@ -1073,18 +1044,6 @@ export default function WeightLabelsPage() {
                   <label className="block text-sm font-medium text-gray-400 mb-2">Tamaño de Etiqueta</label>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setLabelSize('3x2')}
-                      className={cn(
-                        "flex-1 py-3 px-4 rounded-xl border-2 transition-all font-medium",
-                        labelSize === '3x2'
-                          ? 'border-purple-500 bg-purple-900/30 text-purple-300'
-                          : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
-                      )}
-                    >
-                      <div className="text-lg">3" x 2"</div>
-                      <div className="text-xs opacity-70">76 x 51 mm</div>
-                    </button>
-                    <button
                       onClick={() => setLabelSize('2x1')}
                       className={cn(
                         "flex-1 py-3 px-4 rounded-xl border-2 transition-all font-medium",
@@ -1093,18 +1052,86 @@ export default function WeightLabelsPage() {
                           : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
                       )}
                     >
-                      <div className="text-lg">2" x 1"</div>
-                      <div className="text-xs opacity-70">51 x 25 mm</div>
+                      <div className="text-lg">2x1"</div>
+                      <div className="text-xs opacity-70">Basica</div>
+                    </button>
+                    <button
+                      onClick={() => setLabelSize('3x2')}
+                      className={cn(
+                        "flex-1 py-3 px-4 rounded-xl border-2 transition-all font-medium",
+                        labelSize === '3x2'
+                          ? 'border-purple-500 bg-purple-900/30 text-purple-300'
+                          : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
+                      )}
+                    >
+                      <div className="text-lg">3x2"</div>
+                      <div className="text-xs opacity-70">Mediana</div>
+                    </button>
+                    <button
+                      onClick={() => setLabelSize('4x6')}
+                      className={cn(
+                        "flex-1 py-3 px-4 rounded-xl border-2 transition-all font-medium",
+                        labelSize === '4x6'
+                          ? 'border-purple-500 bg-purple-900/30 text-purple-300'
+                          : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
+                      )}
+                    >
+                      <div className="text-lg">4x6"</div>
+                      <div className="text-xs opacity-70">Completa</div>
                     </button>
                   </div>
                 </div>
 
+                {/* Printer selector */}
+                {printServices.length > 1 && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-400 mb-2">Impresora</label>
+                    <select
+                      value={selectedServiceId || ''}
+                      onChange={(e) => setSelectedServiceId(e.target.value ? Number(e.target.value) : null)}
+                      className="w-full px-3 py-2.5 rounded-xl border-2 bg-gray-700 border-gray-600 text-white text-sm font-medium appearance-none cursor-pointer"
+                    >
+                      <option value="">Automatico</option>
+                      {printServices.map((s: any) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}{s.printerName ? ` — ${s.printerName.replace(/_/g, ' ')}` : ''}{s.online ? '' : ' (offline)'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {/* Label Preview - Dynamic based on size */}
                 <div
                   className="bg-white rounded-lg p-2 mb-6 mx-auto"
-                  style={{ aspectRatio: labelSize === '3x2' ? '3/2' : '2/1', maxWidth: labelSize === '3x2' ? '280px' : '220px' }}
+                  style={{
+                    aspectRatio: labelSize === '4x6' ? '2/3' : labelSize === '3x2' ? '3/2' : '2/1',
+                    maxWidth: labelSize === '4x6' ? '240px' : labelSize === '3x2' ? '280px' : '220px'
+                  }}
                 >
-                  {labelSize === '3x2' ? (
+                  {labelSize === '4x6' ? (
+                    // 4x6 Full Preview
+                    <>
+                      <p className="font-black text-black text-xs uppercase text-center leading-tight mb-1">{lastLabel.productName}</p>
+                      <div className="border-t border-gray-300 my-1"></div>
+                      <p className="text-[8px] text-gray-500 text-center uppercase">Peso Neto</p>
+                      <p className="font-black text-black text-lg text-center leading-none mb-1">{lastLabel.weight}</p>
+                      <div className="border-t border-gray-300 my-1"></div>
+                      <p className="font-black text-black text-xl text-center leading-none">${lastLabel.priceCUP.toLocaleString()} CUP</p>
+                      <p className="text-gray-600 text-[10px] text-center mb-1">${lastLabel.priceUSD.toFixed(2)} USD</p>
+                      <div className="border-t border-gray-300 my-1"></div>
+                      <p className="text-[7px] text-gray-500">{selectedProduct?.sku ? `SKU: ${selectedProduct.sku} | ` : ''}{new Date().toLocaleDateString('es-ES')}</p>
+                      <div className="border-t border-gray-300 my-1"></div>
+                      <div className="flex flex-col items-center">
+                        <div className="flex justify-center gap-px w-full">
+                          {Array.from({ length: 50 }).map((_, i) => (
+                            <div key={i} className="bg-black flex-1" style={{ height: '18px', minWidth: '1px', maxWidth: i % 4 === 0 ? '3px' : '2px' }} />
+                          ))}
+                        </div>
+                        <p className="font-mono text-[8px] text-black tracking-widest mt-0.5">{lastLabel.barcode}</p>
+                      </div>
+                    </>
+                  ) : labelSize === '3x2' ? (
                     // 3x2 Preview
                     <>
                       <div className="flex justify-between text-[8px] text-gray-500 uppercase mb-0.5">
@@ -1114,7 +1141,7 @@ export default function WeightLabelsPage() {
                       <div className="flex justify-between items-start mb-1">
                         <div className="text-left">
                           <p className="font-black text-black text-sm">{selectedProduct ? Math.round((parseFloat(String(selectedProduct.sellingPrice)) || 0) * USD_CUP).toLocaleString() : 0}</p>
-                          <p className="text-[9px] text-gray-600">CUP</p>
+                          <p className="text-[9px] text-gray-600">CUP/{selectedProduct?.unitOfMeasure || 'kg'}</p>
                         </div>
                         <div className="text-right">
                           <p className="font-black text-black text-2xl leading-none">{lastLabel.priceCUP.toLocaleString()}</p>
@@ -1160,47 +1187,6 @@ export default function WeightLabelsPage() {
                   )}
                 </div>
 
-                {/* Print Services */}
-                {printServices.length > 0 ? (
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-400 mb-2">Seleccionar Impresora</label>
-                    <div className="space-y-2 max-h-32 overflow-y-auto">
-                      {printServices.map(service => (
-                        service.printers.map(printer => (
-                          <button
-                            key={`${service.id}-${printer.id}`}
-                            onClick={() => setSelectedPrinter({ serviceId: service.id, printerId: printer.id })}
-                            className={cn(
-                              "w-full p-3 rounded-xl border-2 transition-all text-left flex items-center justify-between",
-                              selectedPrinter?.printerId === printer.id
-                                ? 'border-purple-500 bg-purple-900/20'
-                                : 'border-gray-600 hover:border-gray-500 bg-gray-700/50'
-                            )}
-                          >
-                            <div className="flex items-center gap-3">
-                              <Printer className="w-5 h-5 text-gray-400" />
-                              <div>
-                                <p className="font-medium text-white">{printer.printerName}</p>
-                                <p className="text-xs text-gray-400">{service.serviceName}</p>
-                              </div>
-                            </div>
-                            {printer.isOnline ? (
-                              <span className="text-xs text-green-400">Online</span>
-                            ) : (
-                              <span className="text-xs text-gray-500">Offline</span>
-                            )}
-                          </button>
-                        ))
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mb-6 p-4 rounded-xl bg-gray-700/50 text-center">
-                    <p className="text-gray-400 text-sm">No hay servicios de impresión disponibles</p>
-                    <p className="text-gray-500 text-xs mt-1">Se usará impresión del navegador</p>
-                  </div>
-                )}
-
                 {/* Action Buttons */}
                 <div className="flex gap-3">
                   <button
@@ -1210,25 +1196,23 @@ export default function WeightLabelsPage() {
                     <Package className="w-5 h-5" />
                     Descargar PDF
                   </button>
-                  {printServices.length > 0 && (
-                    <button
-                      onClick={printWithService}
-                      disabled={printingToService || !selectedPrinter}
-                      className={cn(
-                        "flex-1 py-3 rounded-xl transition-all font-bold flex items-center justify-center gap-2",
-                        printingToService || !selectedPrinter
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                          : 'bg-purple-600 hover:bg-purple-500 text-white'
-                      )}
-                    >
-                      {printingToService ? (
-                        <RefreshCw className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <Printer className="w-5 h-5" />
-                      )}
-                      Imprimir
-                    </button>
-                  )}
+                  <button
+                    onClick={printWithService}
+                    disabled={printingToService}
+                    className={cn(
+                      "flex-1 py-3 rounded-xl transition-all font-bold flex items-center justify-center gap-2",
+                      printingToService
+                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                        : 'bg-purple-600 hover:bg-purple-500 text-white'
+                    )}
+                  >
+                    {printingToService ? (
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Printer className="w-5 h-5" />
+                    )}
+                    Imprimir
+                  </button>
                 </div>
               </motion.div>
             </motion.div>

@@ -68,7 +68,7 @@ async function printOperationReport(data: {
 }) {
   try {
     // Send print job to the silent print service
-    const response = await fetch('/api/print/jobs', {
+    const response = await fetch('/api/print-jobs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

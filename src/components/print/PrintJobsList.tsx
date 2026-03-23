@@ -36,7 +36,6 @@ interface PrintJob {
 interface PrintJobsListProps {
   status?: string
   documentType?: string
-  printServiceId?: number
   limit?: number
   showPagination?: boolean
   autoRefresh?: boolean
@@ -47,7 +46,6 @@ interface PrintJobsListProps {
 export function PrintJobsList({
   status,
   documentType,
-  printServiceId,
   limit = 10,
   showPagination = true,
   autoRefresh = true,
@@ -65,22 +63,21 @@ export function PrintJobsList({
         page: page.toString(),
         limit: limit.toString(),
         ...(status && { status }),
-        ...(documentType && { documentType }),
-        ...(printServiceId && { printServiceId: printServiceId.toString() })
+        ...(documentType && { documentType })
       })
 
-      const response = await fetch(`/api/print/jobs?${params}`)
+      const response = await fetch(`/api/print-jobs?${params}`)
       if (response.ok) {
         const data = await response.json()
-        setJobs(data.data?.jobs || [])
-        setTotalPages(data.data?.pagination?.totalPages || 1)
+        setJobs(data.data || [])
+        setTotalPages(data.pagination?.totalPages || 1)
       }
     } catch (error) {
       console.error('Error fetching print jobs:', error)
     } finally {
       setLoading(false)
     }
-  }, [page, limit, status, documentType, printServiceId])
+  }, [page, limit, status, documentType])
 
   useEffect(() => {
     fetchJobs()

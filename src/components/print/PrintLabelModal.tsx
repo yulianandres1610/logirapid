@@ -2,28 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Printer, X, Loader2, CheckCircle, AlertCircle, Wifi, WifiOff, Minus, Plus, DollarSign, Tag } from 'lucide-react'
+import { Printer, X, Loader2, Minus, Plus, DollarSign, Tag, ChevronDown } from 'lucide-react'
 import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
 import { cn } from '@/lib/utils'
-
-interface PrintService {
-  id: number
-  serviceCode: string
-  serviceName: string
-  status: string
-  printers: PrinterInfo[]
-}
-
-interface PrinterInfo {
-  id: number
-  printerName: string
-  printerId: string
-  printerType: string
-  isOnline: boolean
-  isDefault: boolean
-}
 
 interface ProductVariant {
   id: number
@@ -61,28 +44,33 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
   const exchangeRates = useMarketExchangeRates()
   const USD_CUP = exchangeRates?.USD_CUP || 411
 
-  const [loading, setLoading] = useState(true)
   const [printing, setPrinting] = useState(false)
-  const [services, setServices] = useState<PrintService[]>([])
-  const [selectedService, setSelectedService] = useState<PrintService | null>(null)
-  const [selectedPrinter, setSelectedPrinter] = useState<PrinterInfo | null>(null)
   const [copies, setCopies] = useState(1)
   const [variantCopies, setVariantCopies] = useState<Record<number, number>>({})
-  const [error, setError] = useState<string | null>(null)
+  const [availableServices, setAvailableServices] = useState<any[]>([])
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null)
+  const [labelSize, setLabelSize] = useState<'2x1' | '3x2' | '4x6'>('2x1')
 
   useEffect(() => {
     if (isOpen) {
-      console.log('[PrintLabelModal] Datos recibidos:', {
-        productName: productData?.productName,
-        sku: productData?.sku,
-        barcode: productData?.barcode,
-        price: productData?.price,
-        currency: productData?.currency,
-        hasVariants: !!productData?.variants,
-        variantsCount: productData?.variants?.length || 0
-      })
+      // Fetch available print services for product_label
+      fetch('/api/print-services/available?documentType=product_label', { credentials: 'include' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.data) {
+            const online = data.data.filter((s: any) => s.online)
+            setAvailableServices(online.length > 0 ? online : data.data)
+            // Auto-select first if only one
+            if (data.data.length === 1) {
+              setSelectedServiceId(data.data[0].id)
+            } else {
+              setSelectedServiceId(null) // Let user choose or auto
+            }
+          }
+        })
+        .catch(() => {})
     }
-  }, [isOpen, productData])
+  }, [isOpen])
 
   if (!productData) {
     console.error('[PrintLabelModal] productData is null or undefined')
@@ -99,77 +87,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
     }))
   }
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchPrintServices()
-    }
-  }, [isOpen])
-
-  const fetchPrintServices = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      // Try filtering by warehouse first, fallback to all services
-      let url = warehouseId
-        ? `/api/print/services?includeOffline=false&warehouseId=${warehouseId}`
-        : '/api/print/services?includeOffline=false'
-      let response = await fetch(url, { credentials: 'include' })
-      let data = await response.json()
-
-      // If no services found for this warehouse, try without filter
-      if (data.success && warehouseId && (!data.data?.services || data.data.services.length === 0)) {
-        response = await fetch('/api/print/services?includeOffline=false', { credentials: 'include' })
-        data = await response.json()
-      }
-
-      if (!data.success) {
-        setError(data.error || 'Error al cargar servicios de impresión')
-        return
-      }
-
-      if (data.data?.services && data.data.services.length > 0) {
-        const activeServices = data.data.services.filter(
-          (s: PrintService) => s.status === 'active' && s.printers?.length > 0
-        )
-        setServices(activeServices)
-
-        if (activeServices.length > 0) {
-          const firstService = activeServices[0]
-          setSelectedService(firstService)
-
-          const labelPrinters = firstService.printers.filter((p: PrinterInfo) =>
-            p.printerType === 'label_barcode' ||
-            p.printerType === 'label_4x6' ||
-            p.printerName.toLowerCase().includes('label') ||
-            p.printerName.toLowerCase().includes('barcode') ||
-            p.printerName.toLowerCase().includes('etiqueta')
-          )
-
-          const defaultPrinter = labelPrinters.find((p: PrinterInfo) => p.isDefault && p.isOnline)
-            || labelPrinters.find((p: PrinterInfo) => p.isOnline)
-            || labelPrinters[0]
-
-          setSelectedPrinter(defaultPrinter || null)
-        } else {
-          setError('No hay servicios de impresión activos con impresoras configuradas')
-        }
-      } else {
-        setError('No se encontraron servicios de impresión.')
-      }
-    } catch (err) {
-      console.error('Error fetching print services:', err)
-      setError('Error al cargar los servicios de impresión')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handlePrint = async (includePrice: boolean) => {
-    if (!selectedService || !selectedPrinter) {
-      showNotification('error', 'Error', 'Seleccione una impresora')
-      return
-    }
-
     if (totalCopies === 0) {
       showNotification('error', 'Error', 'Seleccione al menos una etiqueta para imprimir')
       return
@@ -197,11 +115,12 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
             barcodeType: detectBarcodeType(productData.barcode || ''),
             includePrice,
             priceCUP: calculatePriceCUP(Number(productData.price) || 0),
+            priceUSD: Number(productData.price) || 0,
             currency: 'CUP',
             unitOfMeasure: productData.unitOfMeasure,
             category: productData.category,
             description: productData.description,
-            labelSize: 'medium'
+            labelSize
           },
           copies
         })
@@ -221,10 +140,12 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
                 barcodeType: detectBarcodeType(variant.barcode || ''),
                 includePrice,
                 priceCUP: calculatePriceCUP(variantPrice),
+                priceUSD: variantPrice,
                 currency: 'CUP',
                 unitOfMeasure: productData.unitOfMeasure,
                 category: productData.category,
-                labelSize: 'medium'
+                description: productData.description,
+                labelSize
               },
               copies: qty
             })
@@ -234,14 +155,14 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
 
       const jobNumbers: string[] = []
       for (const job of jobs) {
-        const response = await fetch('/api/print/jobs', {
+        const response = await fetch('/api/print-jobs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({
             ...job,
-            printServiceId: selectedService.id,
-            printerId: selectedPrinter.id,
+            warehouseId,
+            serviceId: selectedServiceId,
             sourceType: 'product',
             priority: 1
           })
@@ -259,7 +180,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
       showNotification(
         'success',
         'Imprimiendo',
-        `${totalCopies} etiqueta${totalCopies > 1 ? 's' : ''} ${priceInfo} enviada${totalCopies > 1 ? 's' : ''} a ${selectedPrinter.printerName}`
+        `${totalCopies} etiqueta${totalCopies > 1 ? 's' : ''} ${priceInfo} enviada${totalCopies > 1 ? 's' : ''} a imprimir`
       )
 
       if (onPrintSuccess && jobNumbers.length > 0) {
@@ -285,14 +206,6 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
   }
 
   if (!isOpen) return null
-
-  const labelPrinters = selectedService?.printers.filter(printer =>
-    printer.printerType === 'label_barcode' ||
-    printer.printerType === 'label_4x6' ||
-    printer.printerName.toLowerCase().includes('label') ||
-    printer.printerName.toLowerCase().includes('barcode') ||
-    printer.printerName.toLowerCase().includes('etiqueta')
-  ) || []
 
   return (
     <AnimatePresence>
@@ -332,73 +245,65 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
 
           {/* Content */}
           <div className="p-4">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-8">
-                <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mb-2" />
-                <p className="text-sm text-gray-500">Buscando impresoras...</p>
-              </div>
-            ) : error ? (
-              <div className="flex flex-col items-center justify-center py-6">
-                <AlertCircle className="w-10 h-10 text-red-500 mb-2" />
-                <p className="text-gray-600 dark:text-gray-300 text-center text-sm">{error}</p>
-                <button
-                  onClick={fetchPrintServices}
-                  className="mt-3 text-sm text-emerald-600 hover:text-emerald-700"
-                >
-                  Reintentar
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4">
-                {/* Columna izquierda: Impresora */}
+              <div>
                 <div className="space-y-3">
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    Impresora
-                  </p>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                    {labelPrinters.map(printer => (
-                      <button
-                        key={printer.id}
-                        onClick={() => setSelectedPrinter(printer)}
-                        className={cn(
-                          'w-full p-2.5 rounded-lg border transition-all text-left flex items-center gap-2',
-                          selectedPrinter?.id === printer.id
-                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30'
-                            : theme === 'dark'
-                              ? 'border-gray-600 hover:border-gray-500'
-                              : 'border-gray-200 hover:border-gray-300'
-                        )}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className={cn(
-                            'text-sm font-medium truncate',
-                            selectedPrinter?.id === printer.id
-                              ? 'text-emerald-700 dark:text-emerald-400'
-                              : 'text-gray-900 dark:text-white'
-                          )}>
-                            {printer.printerName}
-                          </p>
-                          <div className="flex items-center gap-1.5">
-                            {printer.isOnline ? (
-                              <Wifi className="w-3 h-3 text-green-500" />
-                            ) : (
-                              <WifiOff className="w-3 h-3 text-gray-400" />
-                            )}
-                            <span className="text-xs text-gray-500">
-                              {printer.isOnline ? 'Online' : 'Offline'}
-                            </span>
-                          </div>
-                        </div>
-                        {selectedPrinter?.id === printer.id && (
-                          <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                  {/* Printer selector - shown when multiple services available */}
+                  {availableServices.length > 1 && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+                        Impresora
+                      </p>
+                      <div className="relative">
+                        <select
+                          value={selectedServiceId || ''}
+                          onChange={(e) => setSelectedServiceId(e.target.value ? Number(e.target.value) : null)}
+                          className={cn(
+                            'w-full px-3 py-2 pr-8 rounded-lg border text-sm font-medium appearance-none cursor-pointer',
+                            theme === 'dark'
+                              ? 'bg-gray-700 border-gray-600 text-white'
+                              : 'bg-gray-50 border-gray-200 text-gray-900'
+                          )}
+                        >
+                          <option value="">Automatico (mejor disponible)</option>
+                          {availableServices.map((s: any) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}{s.printerName ? ` — ${s.printerName.replace(/_/g, ' ')}` : ''}{s.online ? '' : ' (offline)'}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
+                  )}
 
-                {/* Columna derecha: Productos */}
-                <div className="space-y-3">
+                  {/* Label size selector */}
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+                      Tamano de Etiqueta
+                    </p>
+                    <div className="flex gap-2">
+                      {([
+                        { key: '2x1' as const, label: '2x1"', desc: 'Nombre + Codigo' },
+                        { key: '3x2' as const, label: '3x2"', desc: 'SKU + Codigo + Precio' },
+                        { key: '4x6' as const, label: '4x6"', desc: 'Completa (CUP + USD)' },
+                      ]).map(size => (
+                        <button
+                          key={size.key}
+                          onClick={() => setLabelSize(size.key)}
+                          className={cn(
+                            'flex-1 py-2 px-2 rounded-lg border transition-all text-center',
+                            labelSize === size.key
+                              ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30'
+                              : theme === 'dark' ? 'border-gray-600 hover:border-gray-500' : 'border-gray-200 hover:border-gray-300'
+                          )}
+                        >
+                          <p className={cn('text-sm font-bold', labelSize === size.key ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300')}>{size.label}</p>
+                          <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight">{size.desc}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                     Etiquetas ({totalCopies})
                   </p>
@@ -485,18 +390,16 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
                   </div>
                 </div>
               </div>
-            )}
           </div>
 
           {/* Footer compacto */}
-          {!loading && services.length > 0 && (
-            <div className={cn(
+          <div className={cn(
               'px-4 py-3 border-t flex gap-2',
               theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
             )}>
               <button
                 onClick={() => handlePrint(true)}
-                disabled={printing || !selectedPrinter || totalCopies === 0}
+                disabled={printing || totalCopies === 0}
                 className={cn(
                   'flex-1 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 text-sm',
                   'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white',
@@ -513,7 +416,7 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
               </button>
               <button
                 onClick={() => handlePrint(false)}
-                disabled={printing || !selectedPrinter || totalCopies === 0}
+                disabled={printing || totalCopies === 0}
                 className={cn(
                   'flex-1 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 text-sm',
                   theme === 'dark'
@@ -529,7 +432,6 @@ export function PrintLabelModal({ isOpen, onClose, productData, warehouseId, onP
                 Sin Precio
               </button>
             </div>
-          )}
         </motion.div>
       </motion.div>
     </AnimatePresence>

@@ -807,9 +807,9 @@ export async function POST() {
         product_id INTEGER REFERENCES market_products(id),
         category_id INTEGER,
         price_type VARCHAR(20) DEFAULT 'fixed',
-        fixed_price DECIMAL(12,2),
+        fixed_price DECIMAL(12,3),
         discount_percent DECIMAL(5,2),
-        discount_amount DECIMAL(12,2),
+        discount_amount DECIMAL(12,3),
         min_quantity INTEGER DEFAULT 1,
         created_at TIMESTAMP DEFAULT NOW()
       )
@@ -1624,6 +1624,15 @@ export async function POST() {
       console.log('[Migration] Added signature columns to market_quotes')
     } catch (e: any) {
       console.log('[Migration] Note: signature columns -', e.message)
+    }
+
+    // Upgrade pricelist_items decimal precision to 3 decimals
+    try {
+      await db.query(`ALTER TABLE market_pricelist_items ALTER COLUMN fixed_price TYPE DECIMAL(12,3)`)
+      await db.query(`ALTER TABLE market_pricelist_items ALTER COLUMN discount_amount TYPE DECIMAL(12,3)`)
+      console.log('[Migration] Upgraded pricelist_items price columns to 3 decimals')
+    } catch (e: any) {
+      console.log('[Migration] Note: pricelist decimal upgrade -', e.message)
     }
 
     // Get table stats

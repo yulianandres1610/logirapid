@@ -70,22 +70,6 @@ interface SessionReport {
   }>
 }
 
-interface PrintService {
-  id: number
-  serviceCode: string
-  serviceName: string
-  status: string
-  printers: Array<{
-    id: number
-    printerName: string
-    printerId: string
-    printerType: string
-    isOnline: boolean
-    isDefault: boolean
-    supportedDocumentTypes?: string[]
-  }>
-}
-
 const USD_DENOMINATIONS = [
   { value: 100, label: '$100' },
   { value: 50, label: '$50' },
@@ -130,11 +114,21 @@ export default function SessionReceiptPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [printing, setPrinting] = useState(false)
-  const [printServices, setPrintServices] = useState<PrintService[]>([])
-  const [selectedService, setSelectedService] = useState<PrintService | null>(null)
-  const [selectedPrinter, setSelectedPrinter] = useState<{ id: number; printerId: string } | null>(null)
-  const [showPrinterModal, setShowPrinterModal] = useState(false)
   const [autoPrintAttempted, setAutoPrintAttempted] = useState(false)
+  const [defaultPrintServiceId, setDefaultPrintServiceId] = useState<number | null>(null)
+
+  // Fetch terminal config to get default print service
+  useEffect(() => {
+    if (!terminalId) return
+    fetch(`/api/market/pos/terminals/${terminalId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.data?.defaultPrintServiceId) {
+          setDefaultPrintServiceId(d.data.defaultPrintServiceId)
+        }
+      })
+      .catch(() => {})
+  }, [terminalId])
 
   // Fetch session report
   useEffect(() => {
@@ -164,45 +158,6 @@ export default function SessionReceiptPage() {
     fetchReport()
   }, [sessionId])
 
-  // Fetch print services - returns data directly for use
-  const fetchPrintServicesData = async (): Promise<{ services: PrintService[], thermalPrinters: Array<{ serviceId: number; printer: PrintService['printers'][0] }> }> => {
-    try {
-      const response = await fetch('/api/print/services')
-      const data = await response.json()
-
-      if (data.success && data.data.services) {
-        const validServices = data.data.services.filter((s: PrintService) =>
-          ['active', 'pending', 'offline'].includes(s.status)
-        )
-
-        // Build flat list of thermal printers
-        const thermalPrinters: Array<{ serviceId: number; printer: PrintService['printers'][0] }> = []
-        for (const service of validServices) {
-          for (const printer of service.printers || []) {
-            const type = printer.printerType?.toLowerCase() || ''
-            const name = printer.printerName?.toLowerCase() || ''
-            if (type.includes('thermal') || type.includes('receipt') ||
-                type.includes('pos') || name.includes('tm-') ||
-                name.includes('termica') || name.includes('ticket')) {
-              thermalPrinters.push({ serviceId: service.id, printer })
-            }
-          }
-        }
-
-        setPrintServices(validServices)
-        return { services: validServices, thermalPrinters }
-      }
-      return { services: [], thermalPrinters: [] }
-    } catch (err) {
-      console.error('Error fetching print services:', err)
-      return { services: [], thermalPrinters: [] }
-    }
-  }
-
-  // Initial fetch on mount
-  useEffect(() => {
-    fetchPrintServicesData()
-  }, [])
 
   // Auto-print if requested
   useEffect(() => {
@@ -255,8 +210,8 @@ export default function SessionReceiptPage() {
     }
   }
 
-  // Print with specific printer (serviceId, printerId - database ID, not string)
-  const printWithService = async (serviceId: number, printerId: number) => {
+  // Print with service (server resolves printer automatically)
+  const printWithService = async () => {
     if (!report) return
 
     setPrinting(true)
@@ -265,15 +220,15 @@ export default function SessionReceiptPage() {
         documentType: 'session_close_report',
         documentData: buildPrintData(report),
         copies: 1,
-        printServiceId: serviceId,
-        printerId: printerId,
+        serviceId: defaultPrintServiceId || null,
+        posTerminalId: parseInt(terminalId) || null,
         sourceType: 'pos_session',
         sourceId: report.session.id
       }
 
-      console.log('[Session Receipt] Sending print job to service:', serviceId, 'printer ID:', printerId)
+      console.log('[Session Receipt] Sending print job')
 
-      const response = await fetch('/api/print/jobs', {
+      const response = await fetch('/api/print-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(printData)
@@ -299,29 +254,11 @@ export default function SessionReceiptPage() {
   const handlePrint = async () => {
     if (!report) return
 
-    console.log('[Session Receipt] handlePrint called, fetching print services...')
+    console.log('[Session Receipt] handlePrint called, sending to print service...')
     setPrinting(true)
 
     try {
-      // Fetch services fresh to get current state
-      const { thermalPrinters } = await fetchPrintServicesData()
-      console.log('[Session Receipt] Found', thermalPrinters.length, 'thermal printers')
-
-      if (thermalPrinters.length === 0) {
-        // No thermal printers, use browser
-        console.log('[Session Receipt] No thermal printers, using browser print')
-        handleBrowserPrint()
-      } else if (thermalPrinters.length === 1) {
-        // Single printer - print silently
-        console.log('[Session Receipt] Single thermal printer, printing silently')
-        const { serviceId, printer } = thermalPrinters[0]
-        await printWithService(serviceId, printer.id)
-      } else {
-        // Multiple printers - show modal
-        console.log('[Session Receipt] Multiple printers, showing modal')
-        setPrinting(false)
-        setShowPrinterModal(true)
-      }
+      await printWithService()
     } catch (err) {
       console.error('[Session Receipt] Error in handlePrint:', err)
       handleBrowserPrint()
@@ -1060,65 +997,6 @@ export default function SessionReceiptPage() {
           </div>
         </div>
 
-        {/* Printer Selection Modal */}
-        {showPrinterModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className={cn(
-                'w-full max-w-md rounded-2xl p-6',
-                theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-              )}
-            >
-              <h3 className="font-bold text-lg mb-4">Seleccionar Impresora</h3>
-              <div className="space-y-2 max-h-64 overflow-auto">
-                {printServices.map(service => (
-                  <div key={service.id}>
-                    <p className="text-sm text-gray-500 mb-1">{service.serviceName}</p>
-                    {service.printers?.map(printer => (
-                      <button
-                        key={printer.id}
-                        onClick={async () => {
-                          setShowPrinterModal(false)
-                          // Print directly with the selected printer (use printer.id, not printer.printerId)
-                          await printWithService(service.id, printer.id)
-                        }}
-                        className={cn(
-                          'w-full p-3 rounded-xl text-left transition-colors mb-1',
-                          theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'
-                        )}
-                      >
-                        <p className="font-medium">{printer.printerName}</p>
-                        <p className="text-xs text-gray-500">{printer.printerType}</p>
-                      </button>
-                    ))}
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 flex gap-2">
-                <button
-                  onClick={() => setShowPrinterModal(false)}
-                  className={cn(
-                    'flex-1 py-2.5 rounded-xl font-medium',
-                    theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'
-                  )}
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => {
-                    setShowPrinterModal(false)
-                    handleBrowserPrint()
-                  }}
-                  className="flex-1 py-2.5 rounded-xl font-medium bg-blue-500 text-white hover:bg-blue-600"
-                >
-                  Usar Navegador
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
       </DashboardLayout>
     </ProtectedRoute>
   )

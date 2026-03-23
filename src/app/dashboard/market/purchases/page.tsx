@@ -70,14 +70,9 @@ interface Pagination {
 
 interface PrintService {
   id: number
-  serviceName: string
-  printers: Array<{
-    id: number
-    printerName: string
-    isOnline: boolean
-    isDefault: boolean
-    printerType: string
-  }>
+  name: string
+  printerName: string
+  online: boolean
 }
 
 interface PurchaseLine {
@@ -129,6 +124,7 @@ export default function MarketPurchasesPage() {
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [printPurchase, setPrintPurchase] = useState<Purchase | null>(null)
   const [printServices, setPrintServices] = useState<PrintService[]>([])
+  const [selectedPrintServiceId, setSelectedPrintServiceId] = useState<number | null>(null)
   const [selectedPrinter, setSelectedPrinter] = useState<{ serviceId: number; printerId: number } | null>(null)
   const [printingWithService, setPrintingWithService] = useState(false)
   const [copies, setCopies] = useState(1)
@@ -262,44 +258,16 @@ export default function MarketPurchasesPage() {
     })
   }
 
-  // Print functions
   const fetchPrintServices = async () => {
     try {
-      const response = await fetch('/api/print/services?includeOffline=false')
-      const data = await response.json()
-      if (data.success && data.data?.services) {
-        // Filter services to include thermal and standard printers (not label printers)
-        const activeServices = data.data.services
-          .filter((s: { status: string; printers?: unknown[] }) => s.status === 'active' && s.printers && s.printers.length > 0)
-          .map((service: PrintService) => ({
-            ...service,
-            printers: service.printers.filter((p: { printerType: string }) =>
-              p.printerType === 'thermal_80mm' || p.printerType === 'standard'
-            )
-          }))
-          .filter((s: PrintService) => s.printers.length > 0)
-
-        setPrintServices(activeServices)
-
-        // Auto-select first available printer (prefer thermal, then standard)
-        for (const service of activeServices) {
-          let availablePrinter = service.printers.find((p: { isOnline: boolean; printerType: string }) =>
-            p.isOnline && p.printerType === 'thermal_80mm'
-          )
-          if (!availablePrinter) {
-            availablePrinter = service.printers.find((p: { isOnline: boolean }) => p.isOnline)
-          }
-          if (!availablePrinter && service.printers.length > 0) {
-            availablePrinter = service.printers[0]
-          }
-          if (availablePrinter) {
-            setSelectedPrinter({ serviceId: service.id, printerId: availablePrinter.id })
-            break
-          }
-        }
+      const res = await fetch('/api/print-services/available?documentType=purchase_invoice', { credentials: 'include' })
+      const data = await res.json()
+      if (data.success && data.data) {
+        setPrintServices(data.data)
+        if (data.data.length === 1) setSelectedPrintServiceId(data.data[0].id)
       }
-    } catch (err) {
-      console.error('[Print] Error fetching print services:', err)
+    } catch {
+      setPrintServices([])
     }
   }
 
@@ -350,14 +318,15 @@ export default function MarketPurchasesPage() {
   }
 
   const printWithSilentService = async () => {
-    if (!printPurchase || !selectedPrinter || purchaseLines.length === 0) return
+    if (!printPurchase || purchaseLines.length === 0) return
 
     setPrintingWithService(true)
     try {
-      const response = await fetch('/api/print/jobs', {
+      const response = await fetch('/api/print-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          serviceId: selectedPrintServiceId,
           documentType: 'purchase_invoice',
           documentData: {
             companyName: companyName || 'Mercado',
@@ -385,8 +354,6 @@ export default function MarketPurchasesPage() {
             warehouseName: printPurchase.warehouseName || (purchaseData as Record<string, unknown>)?.warehouseName
           },
           copies,
-          printServiceId: selectedPrinter.serviceId,
-          printerId: selectedPrinter.printerId,
           sourceType: 'purchase',
           sourceId: printPurchase.id
         })
@@ -1135,12 +1102,10 @@ export default function MarketPurchasesPage() {
                     </div>
 
                     <div className="p-6 space-y-6">
-                      {(printServices.length === 0 || loadingPurchaseLines) ? (
+                      {loadingPurchaseLines ? (
                         <div className="text-center py-4">
                           <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-4" />
-                          <p className="text-gray-500">
-                            {loadingPurchaseLines ? 'Cargando datos...' : 'Buscando impresoras...'}
-                          </p>
+                          <p className="text-gray-500">Cargando datos...</p>
                         </div>
                       ) : (
                         <>
@@ -1160,56 +1125,6 @@ export default function MarketPurchasesPage() {
                             <div className="flex justify-between items-center">
                               <span className="text-sm text-gray-500">Productos</span>
                               <span className="font-medium text-gray-900 dark:text-white">{purchaseLines.length} items</span>
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className={cn(
-                              "block text-sm font-medium mb-2",
-                              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                            )}>
-                              Seleccionar Impresora
-                            </label>
-                            <div className="space-y-2 max-h-48 overflow-y-auto">
-                              {printServices.map(service => (
-                                service.printers.map(printer => (
-                                  <button
-                                    key={`${service.id}-${printer.id}`}
-                                    onClick={() => setSelectedPrinter({ serviceId: service.id, printerId: printer.id })}
-                                    className={cn(
-                                      'w-full p-3 rounded-xl border-2 transition-all text-left flex items-center justify-between',
-                                      selectedPrinter?.printerId === printer.id
-                                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
-                                        : theme === 'dark'
-                                          ? 'border-gray-600 bg-gray-700/50 hover:border-gray-500'
-                                          : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                                    )}
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <Printer className={cn(
-                                        "w-5 h-5",
-                                        selectedPrinter?.printerId === printer.id ? 'text-emerald-600' : 'text-gray-400'
-                                      )} />
-                                      <div>
-                                        <p className={cn(
-                                          "font-medium",
-                                          theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                        )}>
-                                          {printer.printerName}
-                                        </p>
-                                        <p className="text-xs text-gray-500">
-                                          {printer.printerType === 'thermal_80mm' ? 'Termica 80mm' : 'Estandar'}
-                                        </p>
-                                      </div>
-                                    </div>
-                                    {printer.isOnline ? (
-                                      <span className="text-xs text-emerald-500 font-medium">Online</span>
-                                    ) : (
-                                      <span className="text-xs text-gray-400">Offline</span>
-                                    )}
-                                  </button>
-                                ))
-                              ))}
                             </div>
                           </div>
 
@@ -1259,7 +1174,7 @@ export default function MarketPurchasesPage() {
                       )}
                     </div>
 
-                    {printServices.length > 0 && !loadingPurchaseLines && (
+                    {!loadingPurchaseLines && (
                       <div className={cn(
                         "flex gap-3 p-6 pt-4 border-t",
                         theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
@@ -1286,7 +1201,7 @@ export default function MarketPurchasesPage() {
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
                           onClick={printWithSilentService}
-                          disabled={printingWithService || !selectedPrinter || purchaseLines.length === 0}
+                          disabled={printingWithService || purchaseLines.length === 0}
                           className={cn(
                             "flex-1 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2",
                             "bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50"
