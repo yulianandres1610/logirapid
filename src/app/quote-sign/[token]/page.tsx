@@ -188,34 +188,49 @@ function QuoteSignContent({ token }: { token: string }) {
       const html2canvas = (await import('html2canvas')).default
       const { jsPDF } = await import('jspdf')
 
-      // Hide buttons before capture
-      const buttons = quoteContentRef.current.querySelectorAll('button')
-      buttons.forEach(b => (b as HTMLElement).style.display = 'none')
+      // Scroll to top so html2canvas captures from the beginning
+      window.scrollTo(0, 0)
+      await new Promise(r => setTimeout(r, 100))
 
-      const canvas = await html2canvas(quoteContentRef.current, {
+      // Hide buttons and signature section before capture
+      const el = quoteContentRef.current
+      const buttons = el.querySelectorAll('button')
+      const signatureSection = el.querySelector('[data-signature-section]') as HTMLElement | null
+      const downloadSection = el.querySelector('[data-download-section]') as HTMLElement | null
+      buttons.forEach(b => (b as HTMLElement).style.display = 'none')
+      if (signatureSection) signatureSection.style.display = 'none'
+      if (downloadSection) downloadSection.style.display = 'none'
+
+      const canvas = await html2canvas(el, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
-        logging: false
+        logging: false,
+        scrollY: 0,
+        scrollX: 0,
+        windowWidth: el.scrollWidth,
+        windowHeight: el.scrollHeight
       })
 
-      // Restore buttons
+      // Restore hidden elements
       buttons.forEach(b => (b as HTMLElement).style.display = '')
+      if (signatureSection) signatureSection.style.display = ''
+      if (downloadSection) downloadSection.style.display = ''
 
       const imgW = canvas.width
       const imgH = canvas.height
 
-      // Letter size with small margins (10mm)
+      // Letter width with small margins
+      const margin = 6
       const pdfW = 215.9
-      const pdfH = 279.4
-      const margin = 8
       const contentW = pdfW - margin * 2
       const contentH = (imgH * contentW) / imgW
+      const pdfH = contentH + margin * 2
 
       const doc = new jsPDF({
-        orientation: contentH > pdfH ? 'portrait' : 'portrait',
+        orientation: 'portrait',
         unit: 'mm',
-        format: contentH + margin * 2 > pdfH ? [pdfW, contentH + margin * 2] : 'letter'
+        format: [pdfW, pdfH]
       })
 
       doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin, margin, contentW, contentH)
@@ -709,7 +724,7 @@ function QuoteSignContent({ token }: { token: string }) {
           </div>
 
           {/* Download PDF Button */}
-          <div className="mx-4 sm:mx-8 mb-4 sm:mb-6 text-center">
+          <div data-download-section className="mx-4 sm:mx-8 mb-4 sm:mb-6 text-center">
             <button
               onClick={handleDownloadPdf}
               disabled={downloadingPdf}
@@ -722,7 +737,7 @@ function QuoteSignContent({ token }: { token: string }) {
           </div>
 
           {/* Signature Section */}
-          <div className="px-4 sm:px-8 pb-6 sm:pb-8">
+          <div data-signature-section className="px-4 sm:px-8 pb-6 sm:pb-8">
             <div className="border-t border-gray-200 pt-5 sm:pt-6">
               <div className="flex items-center gap-2 mb-4 sm:mb-5">
                 <PenTool className="w-4 h-4" style={{ color: BRAND.primary }} />
