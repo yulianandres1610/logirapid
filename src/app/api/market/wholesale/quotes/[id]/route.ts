@@ -40,10 +40,13 @@ export async function GET(
     const { id } = await params
     const quoteId = parseInt(id)
 
-    // Ensure estimated_delivery column exists
+    // Ensure columns and decimal precision
     try {
       await db.query('ALTER TABLE market_quote_lines ADD COLUMN IF NOT EXISTS estimated_delivery VARCHAR(20)')
-    } catch { /* column may already exist */ }
+      await db.query(`ALTER TABLE market_quote_lines ALTER COLUMN unit_price TYPE DECIMAL(12,3)`)
+      await db.query(`ALTER TABLE market_quote_lines ALTER COLUMN original_price TYPE DECIMAL(12,3)`)
+      await db.query(`ALTER TABLE market_quote_lines ALTER COLUMN subtotal TYPE DECIMAL(12,3)`)
+    } catch { /* already migrated */ }
 
     const result = await db.query(`
       SELECT
