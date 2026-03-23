@@ -11,7 +11,9 @@ import {
   PenTool,
   Loader2,
   AlertCircle,
-  Download
+  Download,
+  Camera,
+  Upload
 } from 'lucide-react'
 import SignaturePad from '@/components/ui/SignaturePad'
 import { detectBrandFromHost, brands } from '@/lib/brand-config'
@@ -93,6 +95,9 @@ function QuoteSignContent({ token }: { token: string }) {
   const [signed, setSigned] = useState(false)
   const [sigPadWidth, setSigPadWidth] = useState(350)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [uploadingDoc, setUploadingDoc] = useState(false)
+  const [uploadedDocUrl, setUploadedDocUrl] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const sigContainerRef = useRef<HTMLDivElement>(null)
   const quoteContentRef = useRef<HTMLDivElement>(null)
 
@@ -181,6 +186,57 @@ function QuoteSignContent({ token }: { token: string }) {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const addSignatureBlock = (doc: any, x: number, y: number, w: number, pageW: number) => {
+    doc.setDrawColor(200, 200, 200)
+    doc.line(x, y, x + w, y)
+    y += 8
+
+    doc.setTextColor(60, 60, 60)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    doc.text('CONFORMIDAD Y FIRMA', x, y)
+    y += 8
+
+    // Name field
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(80, 80, 80)
+    doc.text('Nombre y Apellidos:', x, y)
+    y += 2
+    doc.setDrawColor(180, 180, 180)
+    doc.line(x, y + 5, x + w, y + 5)
+    y += 14
+
+    // Cargo/Position field
+    doc.text('Cargo:', x, y)
+    y += 2
+    doc.line(x, y + 5, x + w / 2 - 5, y + 5)
+
+    // Date field on the right
+    doc.text('Fecha:', x + w / 2 + 5, y - 2)
+    doc.line(x + w / 2 + 5, y + 5, x + w, y + 5)
+    y += 14
+
+    // Signature field
+    doc.text('Firma:', x, y)
+    y += 3
+    doc.setDrawColor(200, 200, 200)
+    doc.setLineDashPattern([2, 2], 0)
+    doc.rect(x, y, w, 22)
+    doc.setLineDashPattern([], 0)
+    y += 28
+
+    // Cu\u00F1o field
+    doc.text('Cu\u00F1o:', x + w / 2 + 5, y - 28)
+    // Already inside the rect
+
+    // Footer
+    doc.setFontSize(7)
+    doc.setTextColor(150, 150, 150)
+    doc.text('Documento generado por Servisumic', pageW / 2, y + 5, { align: 'center' })
+  }
+
   const handleDownloadPdf = async () => {
     if (!quoteContentRef.current || !quote) return
     setDownloadingPdf(true)
@@ -217,23 +273,56 @@ function QuoteSignContent({ token }: { token: string }) {
       if (signatureSection) signatureSection.style.display = ''
       if (downloadSection) downloadSection.style.display = ''
 
-      const imgW = canvas.width
-      const imgH = canvas.height
+      // Letter size in mm
+      const PAGE_W = 215.9
+      const PAGE_H = 279.4
+      const margin = 8
+      const contentW = PAGE_W - margin * 2
+      const imgRatio = canvas.height / canvas.width
+      const fullImgH = contentW * imgRatio
 
-      // Letter width with small margins
-      const margin = 6
-      const pdfW = 215.9
-      const contentW = pdfW - margin * 2
-      const contentH = (imgH * contentW) / imgW
-      const pdfH = contentH + margin * 2
+      // Space needed for signature fields at the bottom
+      const SIG_BLOCK = 55
 
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: [pdfW, pdfH]
-      })
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
+      const usableH = PAGE_H - margin * 2
 
-      doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin, margin, contentW, contentH)
+      if (fullImgH + SIG_BLOCK <= usableH) {
+        // Everything fits on one page
+        doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin, margin, contentW, fullImgH)
+        addSignatureBlock(doc, margin, margin + fullImgH + 8, contentW, PAGE_W)
+      } else {
+        // Content needs pagination — image goes on page(s), sig on last
+        const availFirst = usableH
+        const totalPages = Math.ceil(fullImgH / availFirst)
+        const srcPageH = canvas.height / totalPages
+
+        for (let p = 0; p < totalPages; p++) {
+          if (p > 0) doc.addPage('letter', 'portrait')
+
+          // Slice canvas for this page
+          const sliceCanvas = document.createElement('canvas')
+          sliceCanvas.width = canvas.width
+          sliceCanvas.height = Math.min(srcPageH, canvas.height - p * srcPageH)
+          const ctx = sliceCanvas.getContext('2d')!
+          ctx.drawImage(canvas, 0, p * srcPageH, canvas.width, sliceCanvas.height, 0, 0, sliceCanvas.width, sliceCanvas.height)
+
+          const sliceH = (sliceCanvas.height / canvas.width) * contentW
+          doc.addImage(sliceCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin, margin, contentW, sliceH)
+
+          // On last page, add signature block if space, otherwise new page
+          if (p === totalPages - 1) {
+            const yAfterContent = margin + sliceH + 8
+            if (yAfterContent + SIG_BLOCK < PAGE_H - margin) {
+              addSignatureBlock(doc, margin, yAfterContent, contentW, PAGE_W)
+            } else {
+              doc.addPage('letter', 'portrait')
+              addSignatureBlock(doc, margin, margin + 10, contentW, PAGE_W)
+            }
+          }
+        }
+      }
+
       doc.save(`Oferta-${quote.quoteNumber}.pdf`)
     } catch (err) {
       console.error('Error generating PDF:', err)
@@ -863,6 +952,64 @@ function QuoteSignContent({ token }: { token: string }) {
                         Firmar y Aceptar Oferta
                       </>
                     )}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Upload Signed Document Section */}
+          <div className="px-4 sm:px-8 pb-6">
+            <div className="border border-dashed border-gray-300 rounded-xl p-5 text-center bg-gray-50">
+              <Camera className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+              <h4 className="font-semibold text-sm text-gray-700 mb-1">Subir documento firmado a mano</h4>
+              <p className="text-xs text-gray-500 mb-4">
+                Descargue el PDF, fírmelo a mano, tome una foto o escanéelo y súbalo aquí.
+              </p>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,application/pdf"
+                capture="environment"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file || !token) return
+                  setUploadingDoc(true)
+                  try {
+                    const formData = new FormData()
+                    formData.append('file', file)
+                    const res = await fetch(`/api/public/quote-sign/${token}`, { method: 'PUT', body: formData })
+                    const data = await res.json()
+                    if (data.success) {
+                      setUploadedDocUrl(data.data.url)
+                    } else {
+                      alert(data.error || 'Error al subir')
+                    }
+                  } catch {
+                    alert('Error de conexión al subir')
+                  } finally {
+                    setUploadingDoc(false)
+                  }
+                }}
+              />
+
+              {uploadedDocUrl ? (
+                <div className="rounded-lg p-3 bg-green-50 border border-green-200">
+                  <CheckCircle className="w-6 h-6 mx-auto mb-1 text-green-600" />
+                  <p className="text-sm font-medium text-green-700">Documento firmado subido correctamente</p>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingDoc}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white font-medium text-sm disabled:opacity-50"
+                    style={{ backgroundColor: BRAND.primary }}
+                  >
+                    {uploadingDoc ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    {uploadingDoc ? 'Subiendo...' : 'Tomar foto o subir archivo'}
                   </button>
                 </div>
               )}

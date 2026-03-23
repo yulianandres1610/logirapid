@@ -403,3 +403,75 @@ export async function POST(
     }, { status: 500 })
   }
 }
+
+/**
+ * PUT /api/public/quote-sign/[token]
+ * Upload signed document photo (public, no auth)
+ */
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ token: string }> }
+) {
+  try {
+    const { token } = await params
+
+    // Ensure column exists
+    try {
+      await db.query(`ALTER TABLE market_quotes ADD COLUMN IF NOT EXISTS signed_document_url TEXT`)
+    } catch { /* ignore */ }
+
+    // Validate token
+    const result = await db.query(
+      'SELECT id, quote_number, company_id FROM market_quotes WHERE signature_token = $1',
+      [token]
+    )
+
+    if (result.rows.length === 0) {
+      return NextResponse.json({ success: false, error: 'Cotización no encontrada' }, { status: 404 })
+    }
+
+    const quote = result.rows[0]
+    const formData = await request.formData()
+    const file = formData.get('file') as File | null
+
+    if (!file) {
+      return NextResponse.json({ success: false, error: 'Archivo requerido' }, { status: 400 })
+    }
+
+    // Validate file type
+    if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'application/pdf'].includes(file.type)) {
+      return NextResponse.json({ success: false, error: 'Tipo de archivo no permitido. Use imagen o PDF.' }, { status: 400 })
+    }
+
+    // Save to storage
+    const storageAdapter = await import('@/lib/storage-adapter')
+    const ext = file.name.split('.').pop() || 'jpg'
+    const fileName = `signed-quotes/${quote.company_id}/${quote.quote_number.replace(/[^a-zA-Z0-9-]/g, '_')}_firmado.${ext}`
+    const buffer = Buffer.from(await file.arrayBuffer())
+
+    const uploadResult = await storageAdapter.upload('company-private-documents', fileName, buffer, { contentType: file.type })
+
+    if (!uploadResult.success) {
+      return NextResponse.json({ success: false, error: 'Error al subir archivo' }, { status: 500 })
+    }
+
+    // Update quote with document URL
+    await db.query(
+      'UPDATE market_quotes SET signed_document_url = $1 WHERE id = $2',
+      [uploadResult.publicUrl || fileName, quote.id]
+    )
+
+    return NextResponse.json({
+      success: true,
+      message: 'Documento firmado subido exitosamente',
+      data: { url: uploadResult.publicUrl || fileName }
+    })
+
+  } catch (error) {
+    console.error('[Public Quote Sign PUT] Error:', error)
+    return NextResponse.json({
+      success: false,
+      error: 'Error al subir documento'
+    }, { status: 500 })
+  }
+}
