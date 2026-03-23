@@ -663,8 +663,10 @@ function CreateQuotePage() {
   }
 
   const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
+  const subtotalCupTotal = lines.reduce((sum, line) => sum + line.subtotalCup, 0)
   const globalDiscount = subtotal * discountPercent / 100
   const total = subtotal - globalDiscount
+  const totalCup = Math.round(total * exchangeRateBCC)
 
   // Pure check — safe to call during render (no side effects)
   const isStepValid = (step: string): boolean => {
@@ -1308,7 +1310,7 @@ function CreateQuotePage() {
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-500">Subtotal CUP:</span>
-                            <span className="font-medium text-gray-600 dark:text-gray-300">{formatCUP(subtotal * exchangeRateBCC)}</span>
+                            <span className="font-medium text-gray-600 dark:text-gray-300">{formatCUP(subtotalCupTotal)}</span>
                           </div>
                           <div className="flex justify-between text-xl font-bold pt-2 border-t border-gray-200 dark:border-gray-700">
                             <span>Total USD:</span>
@@ -1318,7 +1320,7 @@ function CreateQuotePage() {
                             <span className="text-gray-500">Total CUP:</span>
                             <span className={cn(
                               theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                            )}>{formatCUP(subtotal * exchangeRateBCC)}</span>
+                            )}>{formatCUP(subtotalCupTotal)}</span>
                           </div>
                         </div>
                       </div>
@@ -1589,7 +1591,7 @@ function CreateQuotePage() {
                       <span className="text-gray-500">Subtotal CUP:</span>
                       <span className={cn(
                         theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-                      )}>{formatCUP(subtotal * exchangeRateBCC)}</span>
+                      )}>{formatCUP(subtotalCupTotal)}</span>
                     </div>
                     {discountPercent > 0 && (
                       <div className="flex justify-between text-red-500">
@@ -1605,7 +1607,7 @@ function CreateQuotePage() {
                       <span className="text-gray-500">Total CUP:</span>
                       <span className={cn(
                         theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                      )}>{formatCUP(total * exchangeRateBCC)}</span>
+                      )}>{formatCUP(totalCup)}</span>
                     </div>
                   </div>
                 </div>
