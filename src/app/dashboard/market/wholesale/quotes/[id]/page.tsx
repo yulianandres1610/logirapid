@@ -642,16 +642,16 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       doc.text('TOTAL CUP', pageWidth - margin - 4, y, { align: 'right' })
     } else if (mode === 'cup') {
       doc.text('PRODUCTO', margin + 4, y)
-      doc.text('SKU', margin + 80, y)
-      doc.text('CANT', margin + 105, y, { align: 'center' })
-      if (hasDeliveryEstimates) doc.text('ENTREGA', margin + 125, y, { align: 'center' })
+      doc.text('SKU', margin + 55, y)
+      doc.text('CANT', margin + 100, y, { align: 'center' })
+      if (hasDeliveryEstimates) doc.text('ENTREGA', margin + 122, y, { align: 'center' })
       doc.text('P.UNIT CUP', margin + 150, y, { align: 'right' })
       doc.text('TOTAL CUP', pageWidth - margin - 4, y, { align: 'right' })
     } else {
       doc.text('PRODUCTO', margin + 4, y)
-      doc.text('SKU', margin + 80, y)
-      doc.text('CANT', margin + 105, y, { align: 'center' })
-      if (hasDeliveryEstimates) doc.text('ENTREGA', margin + 128, y, { align: 'center' })
+      doc.text('SKU', margin + 55, y)
+      doc.text('CANT', margin + 100, y, { align: 'center' })
+      if (hasDeliveryEstimates) doc.text('ENTREGA', margin + 122, y, { align: 'center' })
       doc.text('P.UNIT', margin + 150, y, { align: 'right' })
       doc.text('TOTAL', pageWidth - margin - 4, y, { align: 'right' })
     }
@@ -698,16 +698,16 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
         doc.text(`${lineCupSubtotal(line).toLocaleString()}`, pageWidth - margin - 4, y, { align: 'right' })
       } else if (mode === 'cup') {
         doc.text(productName, margin + 4, y)
-        doc.text(line.productSku || '', margin + 80, y)
-        doc.text(String(line.quantity), margin + 105, y, { align: 'center' })
-        if (hasDeliveryEstimates) doc.text(deliveryText(line.estimatedDelivery), margin + 125, y, { align: 'center' })
+        doc.text((line.productSku || '').substring(0, 12), margin + 55, y)
+        doc.text(String(line.quantity), margin + 100, y, { align: 'center' })
+        if (hasDeliveryEstimates) doc.text(deliveryText(line.estimatedDelivery), margin + 122, y, { align: 'center' })
         doc.text(`${lineCupUnit(line).toLocaleString()}`, margin + 150, y, { align: 'right' })
         doc.text(`${lineCupSubtotal(line).toLocaleString()}`, pageWidth - margin - 4, y, { align: 'right' })
       } else {
         doc.text(productName, margin + 4, y)
-        doc.text((line.productSku || '').substring(0, 15), margin + 80, y)
-        doc.text(String(line.quantity), margin + 105, y, { align: 'center' })
-        if (hasDeliveryEstimates) doc.text(deliveryText(line.estimatedDelivery), margin + 128, y, { align: 'center' })
+        doc.text((line.productSku || '').substring(0, 12), margin + 55, y)
+        doc.text(String(line.quantity), margin + 100, y, { align: 'center' })
+        if (hasDeliveryEstimates) doc.text(deliveryText(line.estimatedDelivery), margin + 122, y, { align: 'center' })
         doc.text(`${fmtUSD(line.unitPrice)}`, margin + 150, y, { align: 'right' })
         doc.text(`${fmtUSD(line.subtotal)}`, pageWidth - margin - 4, y, { align: 'right' })
       }
@@ -793,14 +793,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
 
     y += 20
 
-    // Exchange rate note
-    if (mode === 'dual' || mode === 'cup') {
-      doc.setTextColor(100, 100, 100)
-      doc.setFont('helvetica', 'italic')
-      doc.setFontSize(8)
-      doc.text(`Tasa de cambio: 1 USD = ${exchangeRate.toLocaleString()} CUP`, margin, y)
-      y += 10
-    }
+    // (exchange rate note removed)
 
     // Notes with orange left border
     if (quote.notes) {
