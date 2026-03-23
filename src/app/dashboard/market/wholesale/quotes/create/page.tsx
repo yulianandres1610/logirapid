@@ -1232,8 +1232,8 @@ function CreateQuotePage() {
                               <input
                                 type="number"
                                 value={line.unitPrice}
-                                onChange={(e) => updateLinePrice(index, parseFloat(e.target.value) || 0)}
-                                step="0.001"
+                                onChange={(e) => updateLinePrice(index, e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                                step="any"
                                 min="0"
                                 className={cn(
                                   'w-24 text-right pl-4 pr-1.5 py-1 rounded-lg border text-sm font-medium text-blue-600',

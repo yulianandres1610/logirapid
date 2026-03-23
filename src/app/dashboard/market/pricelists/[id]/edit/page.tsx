@@ -842,12 +842,12 @@ export default function EditPricelistPage() {
                                             <div className="relative">
                                               <input
                                                 type="number"
-                                                step={tier.priceType === 'discount_percent' ? '1' : '0.001'}
+                                                step="any"
                                                 min="0"
                                                 max={tier.priceType === 'discount_percent' ? '100' : undefined}
                                                 value={tier.value}
                                                 onChange={(e) => updateTier(product.productId, tier.id, {
-                                                  value: parseFloat(e.target.value) || 0
+                                                  value: e.target.value === '' ? 0 : parseFloat(e.target.value)
                                                 })}
                                                 className={cn(
                                                   'w-full px-3 py-2 rounded-lg border text-sm font-medium',
