@@ -634,7 +634,7 @@ function CreateQuotePage() {
     line.unitPrice = newPrice
     line.unitPriceCup = Math.round(newPrice * exchangeRateBCC)
     line.subtotal = quantity * newPrice
-    line.subtotalCup = Math.round(line.subtotal * exchangeRateBCC)
+    line.subtotalCup = line.unitPriceCup * quantity
     line.hasPricelistPrice = hasDiscount
     line.pricelistDiscountInfo = discountInfo
     line.profitMargin = line.costPrice > 0
@@ -651,7 +651,7 @@ function CreateQuotePage() {
     line.unitPrice = newPrice
     line.unitPriceCup = Math.round(newPrice * exchangeRateBCC)
     line.subtotal = line.quantity * newPrice
-    line.subtotalCup = Math.round(line.subtotal * exchangeRateBCC)
+    line.subtotalCup = line.unitPriceCup * line.quantity
     line.profitMargin = line.costPrice > 0
       ? ((newPrice - line.costPrice) / line.costPrice) * 100
       : 0
