@@ -267,6 +267,16 @@ export async function POST(request: NextRequest) {
     const discountAmount = discountPercent ? (subtotal * discountPercent / 100) : 0
     const totalAmount = subtotal - discountAmount
 
+    // Ensure decimal precision for 3-decimal prices
+    try {
+      await db.query(`ALTER TABLE market_quote_lines ALTER COLUMN unit_price TYPE DECIMAL(12,3)`)
+      await db.query(`ALTER TABLE market_quote_lines ALTER COLUMN original_price TYPE DECIMAL(12,3)`)
+      await db.query(`ALTER TABLE market_quote_lines ALTER COLUMN subtotal TYPE DECIMAL(12,3)`)
+      await db.query(`ALTER TABLE market_invoice_lines ALTER COLUMN unit_price TYPE DECIMAL(12,3)`)
+      await db.query(`ALTER TABLE market_invoice_lines ALTER COLUMN original_price TYPE DECIMAL(12,3)`)
+      await db.query(`ALTER TABLE market_invoice_lines ALTER COLUMN subtotal TYPE DECIMAL(12,3)`)
+    } catch (e) { /* already migrated */ }
+
     // Ensure estimated_delivery column exists
     try {
       await db.query('ALTER TABLE market_quote_lines ADD COLUMN IF NOT EXISTS estimated_delivery VARCHAR(20)')

@@ -682,9 +682,9 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
         doc.text(productName, margin + 4, y)
         doc.text(String(line.quantity), margin + 65, y, { align: 'center' })
         if (hasDeliveryEstimates) doc.text(deliveryText(line.estimatedDelivery), margin + 85, y, { align: 'center' })
-        doc.text(`$${line.unitPrice.toFixed(2)}`, margin + 110, y, { align: 'right' })
+        doc.text(`${fmtUSD(line.unitPrice)}`, margin + 110, y, { align: 'right' })
         doc.text(`${lineCupUnit(line).toLocaleString()}`, margin + 135, y, { align: 'right' })
-        doc.text(`$${line.subtotal.toFixed(2)}`, margin + 155, y, { align: 'right' })
+        doc.text(`${fmtUSD(line.subtotal)}`, margin + 155, y, { align: 'right' })
         doc.text(`${lineCupSubtotal(line).toLocaleString()}`, pageWidth - margin - 4, y, { align: 'right' })
       } else if (mode === 'cup') {
         doc.text(productName, margin + 4, y)
@@ -698,8 +698,8 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
         doc.text((line.productSku || '').substring(0, 15), margin + 80, y)
         doc.text(String(line.quantity), margin + 105, y, { align: 'center' })
         if (hasDeliveryEstimates) doc.text(deliveryText(line.estimatedDelivery), margin + 128, y, { align: 'center' })
-        doc.text(`$${line.unitPrice.toFixed(2)}`, margin + 150, y, { align: 'right' })
-        doc.text(`$${line.subtotal.toFixed(2)}`, pageWidth - margin - 4, y, { align: 'right' })
+        doc.text(`${fmtUSD(line.unitPrice)}`, margin + 150, y, { align: 'right' })
+        doc.text(`${fmtUSD(line.subtotal)}`, pageWidth - margin - 4, y, { align: 'right' })
       }
       y += 7
     }
@@ -738,13 +738,13 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     } else if (mode === 'dual') {
       doc.setFont('helvetica', 'normal')
       doc.text('Subtotal:', margin + 100, y)
-      doc.text(`$${quote.subtotal.toFixed(2)} / ${quoteCupSubtotal().toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
+      doc.text(`${fmtUSD(quote.subtotal)} / ${quoteCupSubtotal().toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
       y += 6
 
       if (quote.discountPercent > 0) {
         doc.setTextColor(220, 38, 38)
         doc.text(`Descuento (${quote.discountPercent}%):`, margin + 100, y)
-        doc.text(`-$${quote.discountAmount.toFixed(2)}`, pageWidth - margin - 4, y, { align: 'right' })
+        doc.text(`-${fmtUSD(quote.discountAmount)}`, pageWidth - margin - 4, y, { align: 'right' })
         doc.setTextColor(40, 40, 40)
         y += 6
       }
@@ -756,17 +756,17 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       doc.setFontSize(12)
       doc.setTextColor(255, 255, 255)
       doc.text('TOTAL:', margin + 85, y + 2)
-      doc.text(`$${quote.totalAmount.toFixed(2)} USD / ${quoteCupTotal().toLocaleString()} CUP`, pageWidth - margin - 4, y + 2, { align: 'right' })
+      doc.text(`${fmtUSD(quote.totalAmount)} USD / ${quoteCupTotal().toLocaleString()} CUP`, pageWidth - margin - 4, y + 2, { align: 'right' })
     } else {
       doc.setFont('helvetica', 'normal')
       doc.text('Subtotal:', margin + 120, y)
-      doc.text(`$${quote.subtotal.toFixed(2)}`, pageWidth - margin - 4, y, { align: 'right' })
+      doc.text(`${fmtUSD(quote.subtotal)}`, pageWidth - margin - 4, y, { align: 'right' })
       y += 6
 
       if (quote.discountPercent > 0) {
         doc.setTextColor(220, 38, 38)
         doc.text(`Descuento (${quote.discountPercent}%):`, margin + 120, y)
-        doc.text(`-$${quote.discountAmount.toFixed(2)}`, pageWidth - margin - 4, y, { align: 'right' })
+        doc.text(`-${fmtUSD(quote.discountAmount)}`, pageWidth - margin - 4, y, { align: 'right' })
         doc.setTextColor(40, 40, 40)
         y += 6
       }
@@ -778,7 +778,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       doc.setFontSize(12)
       doc.setTextColor(255, 255, 255)
       doc.text('TOTAL:', margin + 105, y + 2)
-      doc.text(`$${quote.totalAmount.toFixed(2)} USD`, pageWidth - margin - 4, y + 2, { align: 'right' })
+      doc.text(`${fmtUSD(quote.totalAmount)} USD`, pageWidth - margin - 4, y + 2, { align: 'right' })
     }
 
     y += 20
@@ -907,7 +907,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       if (mode === 'cup') {
         doc.text(`${lineCupSubtotal(line).toLocaleString()}`, pageWidth - m, y, { align: 'right' })
       } else {
-        doc.text(`$${line.subtotal.toFixed(2)}`, pageWidth - m, y, { align: 'right' })
+        doc.text(`${fmtUSD(line.subtotal)}`, pageWidth - m, y, { align: 'right' })
       }
       y += 4
     }
@@ -924,7 +924,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     if (mode === 'cup') {
       doc.text(`${quoteCupTotal().toLocaleString()} CUP`, pageWidth - m, y, { align: 'right' })
     } else {
-      doc.text(`$${quote.totalAmount.toFixed(2)} USD`, pageWidth - m, y, { align: 'right' })
+      doc.text(`${fmtUSD(quote.totalAmount)} USD`, pageWidth - m, y, { align: 'right' })
     }
     y += 8
 
@@ -993,6 +993,9 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
   const quoteCupSubtotal = () => (quote?.lines || []).reduce((sum: number, l: any) => sum + lineCupSubtotal(l), 0)
   const quoteCupDiscount = () => Math.round(quoteCupSubtotal() * (quote?.discountPercent || 0) / 100)
   const quoteCupTotal = () => quoteCupSubtotal() - quoteCupDiscount()
+
+  // Format USD with up to 3 decimals, no trailing zeros
+  const fmtUSD = (value: number) => '$' + value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
 
   const formatDate = (date: string | null | undefined) => {
     if (!date) return ''
