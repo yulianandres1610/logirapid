@@ -627,12 +627,12 @@ export default function CreateInvoicePage() {
             productSku: ql.productSku || '',
             quantity: ql.quantity,
             unitPrice,
-            unitPriceCup: unitPrice * exchangeRateWholesale,
+            unitPriceCup: Math.round(unitPrice * exchangeRateWholesale),
             previousUnitPrice: unitPrice,
             costPrice,
             originalPrice: ql.originalPrice || unitPrice,
             subtotal: ql.subtotal || ql.quantity * unitPrice,
-            subtotalCup: (ql.subtotal || ql.quantity * unitPrice) * exchangeRateWholesale,
+            subtotalCup: Math.round((ql.subtotal || ql.quantity * unitPrice) * exchangeRateWholesale),
             warehouseQuantities: {},
             warehouseStock: product?.warehouseStock || [],
             profitMargin,
@@ -789,7 +789,7 @@ export default function CreateInvoicePage() {
       productSku: product.sku || '',
       quantity: 0, // Will be calculated from warehouse quantities
       unitPrice,
-      unitPriceCup: unitPrice * exchangeRateWholesale, // Wholesale rate (ElToque + 15) for selling
+      unitPriceCup: Math.round(unitPrice * exchangeRateWholesale), // Wholesale rate (ElToque + 15) for selling
       previousUnitPrice: unitPrice,
       costPrice: product.costPrice,
       originalPrice: product.sellingPrice, // Keep base price for reference
@@ -847,7 +847,7 @@ export default function CreateInvoicePage() {
     }
 
     line.unitPrice = newPrice
-    line.unitPriceCup = newPrice * exchangeRateWholesale // Update CUP price with wholesale rate
+    line.unitPriceCup = Math.round(newPrice * exchangeRateWholesale) // Update CUP price with wholesale rate
     line.hasPricelistPrice = hasDiscount
     line.pricelistDiscountInfo = discountInfo
     line.currentTierMinQty = minQuantity
@@ -859,7 +859,7 @@ export default function CreateInvoicePage() {
 
     // Recalculate subtotal with new price (no manual discounts)
     line.subtotal = line.quantity * line.unitPrice
-    line.subtotalCup = line.subtotal * exchangeRateWholesale
+    line.subtotalCup = Math.round(line.subtotal * exchangeRateWholesale)
 
     setLines(newLines)
   }

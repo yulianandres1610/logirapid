@@ -606,10 +606,10 @@ function CreateQuotePage() {
       productSku: product.sku || '',
       quantity: 1,
       unitPrice,
-      unitPriceCup: unitPrice * exchangeRateBCC,
+      unitPriceCup: Math.round(unitPrice * exchangeRateBCC),
       originalPrice: product.sellingPrice,
       subtotal: unitPrice,
-      subtotalCup: unitPrice * exchangeRateBCC,
+      subtotalCup: Math.round(unitPrice * exchangeRateBCC),
       costPrice: product.costPrice,
       profitMargin,
       hasPricelistPrice: hasDiscount,
@@ -632,9 +632,9 @@ function CreateQuotePage() {
 
     line.quantity = quantity
     line.unitPrice = newPrice
-    line.unitPriceCup = newPrice * exchangeRateBCC
+    line.unitPriceCup = Math.round(newPrice * exchangeRateBCC)
     line.subtotal = quantity * newPrice
-    line.subtotalCup = line.subtotal * exchangeRateBCC
+    line.subtotalCup = Math.round(line.subtotal * exchangeRateBCC)
     line.hasPricelistPrice = hasDiscount
     line.pricelistDiscountInfo = discountInfo
     line.profitMargin = line.costPrice > 0
@@ -649,9 +649,9 @@ function CreateQuotePage() {
     const newLines = [...lines]
     const line = newLines[index]
     line.unitPrice = newPrice
-    line.unitPriceCup = newPrice * exchangeRateBCC
+    line.unitPriceCup = Math.round(newPrice * exchangeRateBCC)
     line.subtotal = line.quantity * newPrice
-    line.subtotalCup = line.subtotal * exchangeRateBCC
+    line.subtotalCup = Math.round(line.subtotal * exchangeRateBCC)
     line.profitMargin = line.costPrice > 0
       ? ((newPrice - line.costPrice) / line.costPrice) * 100
       : 0
