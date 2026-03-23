@@ -1313,15 +1313,29 @@ function CreateQuotePage() {
                             <span className="text-gray-500">Subtotal CUP:</span>
                             <span className="font-medium text-gray-600 dark:text-gray-300">{formatCUP(subtotalCupTotal)}</span>
                           </div>
-                          <div className="flex justify-between text-xl font-bold pt-2 border-t border-gray-200 dark:border-gray-700">
+                          <div className="flex justify-between font-bold pt-2 border-t border-gray-200 dark:border-gray-700">
                             <span>Total USD:</span>
-                            <span className="text-blue-600">{formatCurrency(subtotal)}</span>
+                            <span className="text-blue-600">{formatCurrency(total)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Total CUP:</span>
+                            <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>{formatCUP(totalCup)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Impuesto (10%):</span>
+                            <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                              {formatCurrency(total * 0.10)} / {formatCUP(Math.round(totalCup * 0.10))}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-xl font-bold pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <span>Total General:</span>
+                            <span className="text-green-600">{formatCurrency(total * 1.10)}</span>
                           </div>
                           <div className="flex justify-between text-lg font-semibold">
-                            <span className="text-gray-500">Total CUP:</span>
+                            <span className="text-gray-500">Total General CUP:</span>
                             <span className={cn(
                               theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                            )}>{formatCUP(subtotalCupTotal)}</span>
+                            )}>{formatCUP(totalCup + Math.round(totalCup * 0.10))}</span>
                           </div>
                         </div>
                       </div>
@@ -1600,15 +1614,29 @@ function CreateQuotePage() {
                         <span>-{formatCurrency(globalDiscount)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-xl font-bold pt-2 border-t border-blue-300 dark:border-blue-800">
+                    <div className="flex justify-between font-bold pt-2 border-t border-blue-300 dark:border-blue-800">
                       <span>Total USD:</span>
                       <span className="text-blue-600">{formatCurrency(total)}</span>
                     </div>
-                    <div className="flex justify-between text-lg font-semibold">
+                    <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Total CUP:</span>
+                      <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>{formatCUP(totalCup)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Impuesto (10%):</span>
+                      <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                        {formatCurrency(total * 0.10)} / {formatCUP(Math.round(totalCup * 0.10))}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xl font-bold pt-2 border-t border-blue-300 dark:border-blue-800">
+                      <span>Total General:</span>
+                      <span className="text-green-600">{formatCurrency(total * 1.10)}</span>
+                    </div>
+                    <div className="flex justify-between text-lg font-semibold">
+                      <span className="text-gray-500">Total General CUP:</span>
                       <span className={cn(
                         theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                      )}>{formatCUP(totalCup)}</span>
+                      )}>{formatCUP(totalCup + Math.round(totalCup * 0.10))}</span>
                     </div>
                   </div>
                 </div>

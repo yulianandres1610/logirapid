@@ -597,15 +597,29 @@ function QuoteSignContent({ token }: { token: string }) {
                   {showUSD && (
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-bold" style={{ color: BRAND.secondary }}>Total USD:</span>
-                      <span className="text-xl font-bold" style={{ color: BRAND.primary }}>{fmtUSD(quote.totalAmount)}</span>
+                      <span className="text-lg font-bold" style={{ color: BRAND.primary }}>{fmtUSD(quote.totalAmount)}</span>
                     </div>
                   )}
                   {showCUP && (
                     <div className="flex justify-between items-center mt-1">
                       <span className="text-sm font-bold" style={{ color: BRAND.secondary }}>Total CUP:</span>
-                      <span className={`font-bold ${showUSD ? 'text-base' : 'text-xl'}`} style={{ color: BRAND.secondary }}>{cupTotal.toLocaleString('en-US') + ' CUP'}</span>
+                      <span className="font-bold text-base" style={{ color: BRAND.secondary }}>{cupTotal.toLocaleString('en-US') + ' CUP'}</span>
                     </div>
                   )}
+                  <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200">
+                    <span className="text-xs text-gray-500">Impuesto sobre las ventas (10%):</span>
+                    <span className="text-sm font-medium text-gray-700">
+                      {showCUP ? Math.round(cupTotal * 0.10).toLocaleString('en-US') + ' CUP' : fmtUSD(quote.totalAmount * 0.10)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center mt-2 pt-2 border-t-2" style={{ borderColor: BRAND.primary }}>
+                    <span className="text-sm font-bold" style={{ color: BRAND.primary }}>TOTAL GENERAL:</span>
+                    <span className="text-xl font-bold" style={{ color: BRAND.primary }}>
+                      {showCUP
+                        ? (cupTotal + Math.round(cupTotal * 0.10)).toLocaleString('en-US') + ' CUP'
+                        : fmtUSD(quote.totalAmount * 1.10)}
+                    </span>
+                  </div>
                   {showCUP && exchangeRate > 1 && (
                     <p className="text-[10px] text-gray-400 text-right mt-1">Tasa: $1 = {exchangeRate} CUP</p>
                   )}
@@ -632,6 +646,33 @@ function QuoteSignContent({ token }: { token: string }) {
               </p>
             </div>
           )}
+
+          {/* Payment Info Footer */}
+          <div className="mx-4 sm:mx-8 mb-4 sm:mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <p className="text-xs font-bold text-gray-700 mb-2">Información de Pago</p>
+            <p className="text-[11px] text-gray-600 leading-relaxed">
+              Los pagos se dirigirán en Cheques certificados, o transferencias bancarias a favor de la{' '}
+              <strong>Empresa de Servicios y Suministros MPM SERVISUMIC S.U.R.L</strong> a la Cuenta No:{' '}
+              <strong>0533445000023216</strong>
+            </p>
+            <div className="mt-3 pt-3 border-t border-gray-200 flex flex-wrap gap-x-6 gap-y-1">
+              <p className="text-[11px] text-gray-500">📍 Carretera a Berroa Km 1.5 al lado del Frigorífico</p>
+              <p className="text-[11px] text-gray-500">✉️ facturacion@servisumic.com</p>
+              <p className="text-[11px] text-gray-500">📞 +5363707599</p>
+            </div>
+          </div>
+
+          {/* Download PDF Button */}
+          <div className="mx-4 sm:mx-8 mb-4 sm:mb-6 text-center">
+            <button
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-white font-medium text-sm transition-all hover:opacity-90"
+              style={{ backgroundColor: BRAND.primary }}
+            >
+              <Download className="w-4 h-4" />
+              Descargar / Imprimir Oferta
+            </button>
+          </div>
 
           {/* Signature Section */}
           <div className="px-4 sm:px-8 pb-6 sm:pb-8">
