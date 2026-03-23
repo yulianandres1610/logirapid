@@ -666,7 +666,8 @@ function CreateQuotePage() {
   const subtotalCupTotal = lines.reduce((sum, line) => sum + line.subtotalCup, 0)
   const globalDiscount = subtotal * discountPercent / 100
   const total = subtotal - globalDiscount
-  const totalCup = Math.round(total * exchangeRateBCC)
+  const globalDiscountCup = Math.round(subtotalCupTotal * discountPercent / 100)
+  const totalCup = subtotalCupTotal - globalDiscountCup
 
   // Pure check — safe to call during render (no side effects)
   const isStepValid = (step: string): boolean => {
