@@ -94,6 +94,7 @@ function QuoteSignContent({ token }: { token: string }) {
   const [sigPadWidth, setSigPadWidth] = useState(350)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const sigContainerRef = useRef<HTMLDivElement>(null)
+  const quoteContentRef = useRef<HTMLDivElement>(null)
 
   // Measure container for responsive SignaturePad
   useEffect(() => {
@@ -177,6 +178,54 @@ function QuoteSignContent({ token }: { token: string }) {
       setError('Error de conexión al firmar')
     } finally {
       setSigning(false)
+    }
+  }
+
+  const handleDownloadPdf = async () => {
+    if (!quoteContentRef.current || !quote) return
+    setDownloadingPdf(true)
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const { jsPDF } = await import('jspdf')
+
+      // Hide buttons before capture
+      const buttons = quoteContentRef.current.querySelectorAll('button')
+      buttons.forEach(b => (b as HTMLElement).style.display = 'none')
+
+      const canvas = await html2canvas(quoteContentRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false
+      })
+
+      // Restore buttons
+      buttons.forEach(b => (b as HTMLElement).style.display = '')
+
+      const imgW = canvas.width
+      const imgH = canvas.height
+
+      // Letter size with small margins (10mm)
+      const pdfW = 215.9
+      const pdfH = 279.4
+      const margin = 8
+      const contentW = pdfW - margin * 2
+      const contentH = (imgH * contentW) / imgW
+
+      const doc = new jsPDF({
+        orientation: contentH > pdfH ? 'portrait' : 'portrait',
+        unit: 'mm',
+        format: contentH + margin * 2 > pdfH ? [pdfW, contentH + margin * 2] : 'letter'
+      })
+
+      doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin, margin, contentW, contentH)
+      doc.save(`Oferta-${quote.quoteNumber}.pdf`)
+    } catch (err) {
+      console.error('Error generating PDF:', err)
+      // Fallback to print
+      window.print()
+    } finally {
+      setDownloadingPdf(false)
     }
   }
 
@@ -323,7 +372,7 @@ function QuoteSignContent({ token }: { token: string }) {
 
       <div className="max-w-[850px] mx-auto py-4 sm:py-8 px-0 sm:px-4">
         {/* Invoice document */}
-        <div className="bg-white sm:rounded-lg shadow-lg sm:border border-gray-200 overflow-hidden">
+        <div ref={quoteContentRef} className="bg-white sm:rounded-lg shadow-lg sm:border border-gray-200 overflow-hidden">
 
           {/* Header */}
           <div className="px-4 sm:px-8 pt-5 sm:pt-8 pb-4 sm:pb-6">
@@ -620,9 +669,6 @@ function QuoteSignContent({ token }: { token: string }) {
                         : fmtUSD(quote.totalAmount * 1.10)}
                     </span>
                   </div>
-                  {showCUP && exchangeRate > 1 && (
-                    <p className="text-[10px] text-gray-400 text-right mt-1">Tasa: $1 = {exchangeRate} CUP</p>
-                  )}
                 </div>
               </div>
             </div>
@@ -665,12 +711,13 @@ function QuoteSignContent({ token }: { token: string }) {
           {/* Download PDF Button */}
           <div className="mx-4 sm:mx-8 mb-4 sm:mb-6 text-center">
             <button
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-white font-medium text-sm transition-all hover:opacity-90"
+              onClick={handleDownloadPdf}
+              disabled={downloadingPdf}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-white font-medium text-sm transition-all hover:opacity-90 disabled:opacity-50"
               style={{ backgroundColor: BRAND.primary }}
             >
-              <Download className="w-4 h-4" />
-              Descargar / Imprimir Oferta
+              {downloadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {downloadingPdf ? 'Generando PDF...' : 'Descargar Oferta en PDF'}
             </button>
           </div>
 
