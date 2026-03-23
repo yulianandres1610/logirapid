@@ -1194,11 +1194,8 @@ export default function CreateInvoicePage() {
   }
 
   const formatCUP = (value: number) => {
-    return new Intl.NumberFormat('es-CU', {
-      style: 'decimal',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(Math.round(value)) + ' CUP'
+    const rounded = Math.round(value)
+    return rounded.toLocaleString('en-US') + ' CUP'
   }
 
   const filteredCustomers = customers.filter(c =>
