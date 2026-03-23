@@ -632,7 +632,7 @@ export default function CreateInvoicePage() {
             costPrice,
             originalPrice: ql.originalPrice || unitPrice,
             subtotal: ql.subtotal || ql.quantity * unitPrice,
-            subtotalCup: Math.round((ql.subtotal || ql.quantity * unitPrice) * exchangeRateWholesale),
+            subtotalCup: Math.round(unitPrice * exchangeRateWholesale) * ql.quantity,
             warehouseQuantities: {},
             warehouseStock: product?.warehouseStock || [],
             profitMargin,
@@ -859,7 +859,7 @@ export default function CreateInvoicePage() {
 
     // Recalculate subtotal with new price (no manual discounts)
     line.subtotal = line.quantity * line.unitPrice
-    line.subtotalCup = Math.round(line.subtotal * exchangeRateWholesale)
+    line.subtotalCup = line.unitPriceCup * line.quantity
 
     setLines(newLines)
   }
@@ -874,7 +874,9 @@ export default function CreateInvoicePage() {
   }
 
   const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
+  const subtotalCupTotal = lines.reduce((sum, line) => sum + line.subtotalCup, 0)
   const total = subtotal // No global discount in new flow
+  const totalCup = subtotalCupTotal
 
   // Calculate due date based on payment terms
   const calculateDueDate = useCallback((terms: string, customDate?: string): string => {
@@ -2138,7 +2140,7 @@ export default function CreateInvoicePage() {
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-500">Subtotal CUP:</span>
-                            <span className="font-medium text-gray-600 dark:text-gray-300">{formatCUP(subtotal * exchangeRateWholesale)}</span>
+                            <span className="font-medium text-gray-600 dark:text-gray-300">{formatCUP(subtotalCupTotal)}</span>
                           </div>
                           <div className="flex justify-between text-xl font-bold pt-2 border-t border-gray-200 dark:border-gray-700">
                             <span>Total USD:</span>
@@ -2148,7 +2150,7 @@ export default function CreateInvoicePage() {
                             <span className="text-gray-500">Total CUP:</span>
                             <span className={cn(
                               theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                            )}>{formatCUP(subtotal * exchangeRateWholesale)}</span>
+                            )}>{formatCUP(subtotalCupTotal)}</span>
                           </div>
                           <div className="text-xs text-center text-gray-400 mt-1">
                             Tasa mayoreo: {exchangeRateWholesale} CUP/USD
@@ -2583,7 +2585,7 @@ export default function CreateInvoicePage() {
                         </div>
                         <div className="flex justify-between text-sm text-gray-500">
                           <span>En CUP:</span>
-                          <span>{formatCUP(total * exchangeRateWholesale)}</span>
+                          <span>{formatCUP(totalCup)}</span>
                         </div>
                         <div className="flex justify-between text-xs text-gray-400 pt-1">
                           <span>Tasa mayoreo:</span>
@@ -2828,7 +2830,7 @@ export default function CreateInvoicePage() {
                         <p className="text-sm text-gray-500 mb-1">{paymentLabel}</p>
                         <p className="text-4xl font-bold text-green-600">{formatCurrency(amountToPay)}</p>
                         <p className="text-lg text-gray-500 mt-1">
-                          {formatCUP(amountToPay * exchangeRateWholesale)} <span className="text-xs">(Tasa Mayoreo: {exchangeRateWholesale})</span>
+                          {formatCUP(Math.round(amountToPay * exchangeRateWholesale))} <span className="text-xs">(Tasa Mayoreo: {exchangeRateWholesale})</span>
                         </p>
 
                         {paymentTerms !== 'immediate' && (
