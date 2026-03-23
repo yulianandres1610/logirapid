@@ -759,13 +759,7 @@ function QuoteSignContent({ token }: { token: string }) {
 
                   {/* Download PDF Button */}
                   <button
-                    onClick={() => {
-                      setDownloadingPdf(true)
-                      setTimeout(() => {
-                        window.print()
-                        setDownloadingPdf(false)
-                      }, 100)
-                    }}
+                    onClick={handleDownloadPdf}
                     disabled={downloadingPdf}
                     className="no-print w-full py-3 px-6 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] border-2"
                     style={{
