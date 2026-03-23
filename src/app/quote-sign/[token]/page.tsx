@@ -273,55 +273,24 @@ function QuoteSignContent({ token }: { token: string }) {
       if (signatureSection) signatureSection.style.display = ''
       if (downloadSection) downloadSection.style.display = ''
 
-      // Letter size in mm
+      // Letter width, dynamic height to fit everything on one page
       const PAGE_W = 215.9
-      const PAGE_H = 279.4
       const margin = 8
       const contentW = PAGE_W - margin * 2
       const imgRatio = canvas.height / canvas.width
       const fullImgH = contentW * imgRatio
+      const SIG_BLOCK = 60
+      const totalH = fullImgH + SIG_BLOCK + margin * 2 + 10
+      const PAGE_H = Math.max(279.4, totalH) // At least letter height
 
-      // Space needed for signature fields at the bottom
-      const SIG_BLOCK = 55
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [PAGE_W, PAGE_H]
+      })
 
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
-      const usableH = PAGE_H - margin * 2
-
-      if (fullImgH + SIG_BLOCK <= usableH) {
-        // Everything fits on one page
-        doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin, margin, contentW, fullImgH)
-        addSignatureBlock(doc, margin, margin + fullImgH + 8, contentW, PAGE_W)
-      } else {
-        // Content needs pagination — image goes on page(s), sig on last
-        const availFirst = usableH
-        const totalPages = Math.ceil(fullImgH / availFirst)
-        const srcPageH = canvas.height / totalPages
-
-        for (let p = 0; p < totalPages; p++) {
-          if (p > 0) doc.addPage('letter', 'portrait')
-
-          // Slice canvas for this page
-          const sliceCanvas = document.createElement('canvas')
-          sliceCanvas.width = canvas.width
-          sliceCanvas.height = Math.min(srcPageH, canvas.height - p * srcPageH)
-          const ctx = sliceCanvas.getContext('2d')!
-          ctx.drawImage(canvas, 0, p * srcPageH, canvas.width, sliceCanvas.height, 0, 0, sliceCanvas.width, sliceCanvas.height)
-
-          const sliceH = (sliceCanvas.height / canvas.width) * contentW
-          doc.addImage(sliceCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin, margin, contentW, sliceH)
-
-          // On last page, add signature block if space, otherwise new page
-          if (p === totalPages - 1) {
-            const yAfterContent = margin + sliceH + 8
-            if (yAfterContent + SIG_BLOCK < PAGE_H - margin) {
-              addSignatureBlock(doc, margin, yAfterContent, contentW, PAGE_W)
-            } else {
-              doc.addPage('letter', 'portrait')
-              addSignatureBlock(doc, margin, margin + 10, contentW, PAGE_W)
-            }
-          }
-        }
-      }
+      doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin, margin, contentW, fullImgH)
+      addSignatureBlock(doc, margin, margin + fullImgH + 8, contentW, PAGE_W)
 
       doc.save(`Oferta-${quote.quoteNumber}.pdf`)
     } catch (err) {
