@@ -535,7 +535,15 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       doc.text(barcodeCode, pageWidth - margin - 27.5, y + 32, { align: 'center' })
     }
 
-    y += 38
+    y += 20
+    // Company info below logo
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(100, 100, 100)
+    doc.text('EMPRESA DE SERVICIOS Y SUMINISTROS DE MATERIALES DE LA CONSTRUCCION SERVISUMIC S.U.R.L.', margin, y)
+    y += 3.5
+    doc.text('Carretera a Berroa Km 1.5 al lado del Frigor\u00EDfico  |  facturacion@servisumic.com  |  +5363707599', margin, y)
+    y += 14
 
     // ---- Orange accent bar ----
     doc.setFillColor(primaryRgb[0], primaryRgb[1], primaryRgb[2])
@@ -710,81 +718,81 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     y += 8
 
     // ---- TOTALS ----
+    const TAX_RATE = 0.10
     doc.setFontSize(10)
     doc.setTextColor(40, 40, 40)
 
     if (mode === 'cup') {
+      const cupSub = quoteCupSubtotal()
+      const cupDisc = quoteCupDiscount()
+      const cupAfterDisc = cupSub - cupDisc
+      const cupTax = Math.round(cupAfterDisc * TAX_RATE)
+      const cupGrand = cupAfterDisc + cupTax
+
       doc.setFont('helvetica', 'normal')
-      doc.text('Subtotal CUP:', margin + 120, y)
-      doc.text(`${quoteCupSubtotal().toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
+      doc.text('TOTAL:', margin + 120, y)
+      doc.text(`${cupAfterDisc.toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
       y += 6
+      doc.text('IMPUESTO SOBRE LAS VENTAS (10%):', margin + 80, y)
+      doc.text(`${cupTax.toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
+      y += 8
 
-      if (quote.discountPercent > 0) {
-        doc.setTextColor(220, 38, 38)
-        doc.text(`Descuento (${quote.discountPercent}%):`, margin + 120, y)
-        doc.text(`-${quoteCupDiscount().toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
-        doc.setTextColor(40, 40, 40)
-        y += 6
-      }
-
-      y += 3
-      doc.setFillColor(primaryRgb[0], primaryRgb[1], primaryRgb[2])
-      doc.rect(margin + 100, y - 5, contentWidth - 100, 12, 'F')
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(12)
-      doc.setTextColor(255, 255, 255)
-      doc.text('TOTAL CUP:', margin + 105, y + 2)
-      doc.text(`${quoteCupTotal().toLocaleString()} CUP`, pageWidth - margin - 4, y + 2, { align: 'right' })
-    } else if (mode === 'dual') {
-      doc.setFont('helvetica', 'normal')
-      doc.text('Subtotal:', margin + 100, y)
-      doc.text(`${fmtUSD(quote.subtotal)} / ${quoteCupSubtotal().toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
-      y += 6
-
-      if (quote.discountPercent > 0) {
-        doc.setTextColor(220, 38, 38)
-        doc.text(`Descuento (${quote.discountPercent}%):`, margin + 100, y)
-        doc.text(`-${fmtUSD(quote.discountAmount)}`, pageWidth - margin - 4, y, { align: 'right' })
-        doc.setTextColor(40, 40, 40)
-        y += 6
-      }
-
-      y += 3
       doc.setFillColor(primaryRgb[0], primaryRgb[1], primaryRgb[2])
       doc.rect(margin + 80, y - 5, contentWidth - 80, 12, 'F')
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(12)
       doc.setTextColor(255, 255, 255)
-      doc.text('TOTAL:', margin + 85, y + 2)
-      doc.text(`${fmtUSD(quote.totalAmount)} USD / ${quoteCupTotal().toLocaleString()} CUP`, pageWidth - margin - 4, y + 2, { align: 'right' })
-    } else {
+      doc.text('TOTAL GENERAL:', margin + 85, y + 2)
+      doc.text(`${cupGrand.toLocaleString()} CUP`, pageWidth - margin - 4, y + 2, { align: 'right' })
+    } else if (mode === 'dual') {
+      const cupSub = quoteCupSubtotal()
+      const cupDisc = quoteCupDiscount()
+      const cupAfterDisc = cupSub - cupDisc
+      const cupTax = Math.round(cupAfterDisc * TAX_RATE)
+      const cupGrand = cupAfterDisc + cupTax
+      const usdTax = quote.totalAmount * TAX_RATE
+      const usdGrand = quote.totalAmount + usdTax
+
       doc.setFont('helvetica', 'normal')
-      doc.text('Subtotal:', margin + 120, y)
-      doc.text(`${fmtUSD(quote.subtotal)}`, pageWidth - margin - 4, y, { align: 'right' })
+      doc.text('TOTAL:', margin + 100, y)
+      doc.text(`${fmtUSD(quote.totalAmount)} / ${cupAfterDisc.toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
       y += 6
+      doc.text('IMPUESTO (10%):', margin + 100, y)
+      doc.text(`${fmtUSD(usdTax)} / ${cupTax.toLocaleString()} CUP`, pageWidth - margin - 4, y, { align: 'right' })
+      y += 8
 
-      if (quote.discountPercent > 0) {
-        doc.setTextColor(220, 38, 38)
-        doc.text(`Descuento (${quote.discountPercent}%):`, margin + 120, y)
-        doc.text(`-${fmtUSD(quote.discountAmount)}`, pageWidth - margin - 4, y, { align: 'right' })
-        doc.setTextColor(40, 40, 40)
-        y += 6
-      }
-
-      y += 3
       doc.setFillColor(primaryRgb[0], primaryRgb[1], primaryRgb[2])
-      doc.rect(margin + 100, y - 5, contentWidth - 100, 12, 'F')
+      doc.rect(margin + 70, y - 5, contentWidth - 70, 12, 'F')
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(12)
       doc.setTextColor(255, 255, 255)
-      doc.text('TOTAL:', margin + 105, y + 2)
-      doc.text(`${fmtUSD(quote.totalAmount)} USD`, pageWidth - margin - 4, y + 2, { align: 'right' })
+      doc.text('TOTAL GENERAL:', margin + 75, y + 2)
+      doc.text(`${fmtUSD(usdGrand)} / ${cupGrand.toLocaleString()} CUP`, pageWidth - margin - 4, y + 2, { align: 'right' })
+    } else {
+      const usdTax = quote.totalAmount * TAX_RATE
+      const usdGrand = quote.totalAmount + usdTax
+
+      doc.setFont('helvetica', 'normal')
+      doc.text('TOTAL:', margin + 120, y)
+      doc.text(`${fmtUSD(quote.totalAmount)}`, pageWidth - margin - 4, y, { align: 'right' })
+      y += 6
+      doc.text('IMPUESTO SOBRE LAS VENTAS (10%):', margin + 80, y)
+      doc.text(`${fmtUSD(usdTax)}`, pageWidth - margin - 4, y, { align: 'right' })
+      y += 8
+
+      doc.setFillColor(primaryRgb[0], primaryRgb[1], primaryRgb[2])
+      doc.rect(margin + 80, y - 5, contentWidth - 80, 12, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(12)
+      doc.setTextColor(255, 255, 255)
+      doc.text('TOTAL GENERAL:', margin + 85, y + 2)
+      doc.text(`${fmtUSD(usdGrand)} USD`, pageWidth - margin - 4, y + 2, { align: 'right' })
     }
 
     y += 20
 
-    // Exchange rate note - only show when document contains USD (dual mode)
-    if (mode === 'dual') {
+    // Exchange rate note
+    if (mode === 'dual' || mode === 'cup') {
       doc.setTextColor(100, 100, 100)
       doc.setFont('helvetica', 'italic')
       doc.setFontSize(8)
@@ -815,10 +823,38 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       doc.setFontSize(9)
       doc.setFont('helvetica', 'normal')
       doc.text(`V\u00E1lida hasta: ${formatDate(quote.validUntil)}`, margin, y)
-      y += 5
-      doc.setDrawColor(200, 200, 200)
-      doc.line(margin, y, pageWidth - margin, y)
+      y += 8
     }
+
+    // ---- PAYMENT INFO FOOTER ----
+    doc.setDrawColor(200, 200, 200)
+    doc.line(margin, y, pageWidth - margin, y)
+    y += 6
+
+    doc.setTextColor(40, 40, 40)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.text('Informaci\u00F3n de Pago:', margin, y)
+    y += 4
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.text('Los pagos se dirigir\u00E1n en Cheques certificados, o transferencias bancarias a favor de la', margin, y)
+    y += 3.5
+    doc.setFont('helvetica', 'bold')
+    doc.text('Empresa de Servicios y Suministros MPM SERVISUMIC S.U.R.L', margin, y)
+    doc.setFont('helvetica', 'normal')
+    doc.text(' a la Cuenta No:', margin + 88, y)
+    y += 3.5
+    doc.setFont('helvetica', 'bold')
+    doc.text('0533445000023216', margin, y)
+    y += 6
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.text('Direcci\u00F3n: Carretera a Berroa Km 1.5 al lado del Frigor\u00EDfico', margin, y)
+    y += 3.5
+    doc.text('Email: facturacion@servisumic.com  |  Tel: +5363707599', margin, y)
+    y += 8
 
     // Footer
     doc.setTextColor(150, 150, 150)
@@ -1870,16 +1906,35 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                       </div>
                     )}
                     <div className={cn(
-                      'flex justify-between text-xl font-bold pt-3 border-t',
+                      'flex justify-between font-bold pt-3 border-t',
                       theme === 'dark' ? 'border-gray-700' : 'border-gray-300'
                     )}>
                       <span>Total USD:</span>
                       <span className="text-blue-600">{formatCurrency(quote.totalAmount)}</span>
                     </div>
-                    <div className="flex justify-between text-lg font-semibold">
+                    <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Total CUP:</span>
                       <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
                         {formatCUP(quoteCupTotal())}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Impuesto (10%):</span>
+                      <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                        {formatCurrency(quote.totalAmount * 0.10)} / {formatCUP(Math.round(quoteCupTotal() * 0.10))}
+                      </span>
+                    </div>
+                    <div className={cn(
+                      'flex justify-between text-xl font-bold pt-2 border-t',
+                      theme === 'dark' ? 'border-gray-700' : 'border-gray-300'
+                    )}>
+                      <span>Total General:</span>
+                      <span className="text-green-600">{formatCurrency(quote.totalAmount * 1.10)}</span>
+                    </div>
+                    <div className="flex justify-between text-lg font-semibold">
+                      <span className="text-gray-500">Total General CUP:</span>
+                      <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                        {formatCUP(quoteCupTotal() + Math.round(quoteCupTotal() * 0.10))}
                       </span>
                     </div>
                   </div>
