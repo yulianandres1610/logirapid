@@ -1197,14 +1197,6 @@ export default function CreateInvoicePage() {
     return new Intl.NumberFormat('es-CU', {
       style: 'decimal',
       minimumFractionDigits: 0,
-      maximumFractionDigits: 2
-    }).format(value) + ' CUP'
-  }
-
-  const formatCUPRounded = (value: number) => {
-    return new Intl.NumberFormat('es-CU', {
-      style: 'decimal',
-      minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(Math.round(value)) + ' CUP'
   }
@@ -2159,7 +2151,7 @@ export default function CreateInvoicePage() {
                             <span className="text-gray-500">Total CUP:</span>
                             <span className={cn(
                               theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                            )}>{formatCUPRounded(subtotal * exchangeRateWholesale)}</span>
+                            )}>{formatCUP(subtotal * exchangeRateWholesale)}</span>
                           </div>
                           <div className="text-xs text-center text-gray-400 mt-1">
                             Tasa mayoreo: {exchangeRateWholesale} CUP/USD
@@ -2594,7 +2586,7 @@ export default function CreateInvoicePage() {
                         </div>
                         <div className="flex justify-between text-sm text-gray-500">
                           <span>En CUP:</span>
-                          <span>{formatCUPRounded(total * exchangeRateWholesale)}</span>
+                          <span>{formatCUP(total * exchangeRateWholesale)}</span>
                         </div>
                         <div className="flex justify-between text-xs text-gray-400 pt-1">
                           <span>Tasa mayoreo:</span>
@@ -2839,7 +2831,7 @@ export default function CreateInvoicePage() {
                         <p className="text-sm text-gray-500 mb-1">{paymentLabel}</p>
                         <p className="text-4xl font-bold text-green-600">{formatCurrency(amountToPay)}</p>
                         <p className="text-lg text-gray-500 mt-1">
-                          {formatCUPRounded(amountToPay * exchangeRateWholesale)} <span className="text-xs">(Tasa Mayoreo: {exchangeRateWholesale})</span>
+                          {formatCUP(amountToPay * exchangeRateWholesale)} <span className="text-xs">(Tasa Mayoreo: {exchangeRateWholesale})</span>
                         </p>
 
                         {paymentTerms !== 'immediate' && (

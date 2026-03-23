@@ -761,14 +761,6 @@ function CreateQuotePage() {
     return new Intl.NumberFormat('es-CU', {
       style: 'decimal',
       minimumFractionDigits: 0,
-      maximumFractionDigits: 2
-    }).format(value) + ' CUP'
-  }
-
-  const formatCUPRounded = (value: number) => {
-    return new Intl.NumberFormat('es-CU', {
-      style: 'decimal',
-      minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(Math.round(value)) + ' CUP'
   }
@@ -1329,7 +1321,7 @@ function CreateQuotePage() {
                             <span className="text-gray-500">Total CUP:</span>
                             <span className={cn(
                               theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                            )}>{formatCUPRounded(subtotal * exchangeRateBCC)}</span>
+                            )}>{formatCUP(subtotal * exchangeRateBCC)}</span>
                           </div>
                         </div>
                       </div>
@@ -1616,7 +1608,7 @@ function CreateQuotePage() {
                       <span className="text-gray-500">Total CUP:</span>
                       <span className={cn(
                         theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                      )}>{formatCUPRounded(total * exchangeRateBCC)}</span>
+                      )}>{formatCUP(total * exchangeRateBCC)}</span>
                     </div>
                   </div>
                 </div>
