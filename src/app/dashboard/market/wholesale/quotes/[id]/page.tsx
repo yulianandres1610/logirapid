@@ -542,6 +542,8 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     doc.setTextColor(100, 100, 100)
     doc.text('EMPRESA DE SERVICIOS Y SUMINISTROS DE MATERIALES DE LA CONSTRUCCION SERVISUMIC S.U.R.L.', margin, y)
     y += 3.5
+    doc.text('NIT: 50004199243', margin, y)
+    y += 3.5
     doc.text('Carretera a Berroa Km 1.5 al lado del Frigor\u00EDfico  |  facturacion@servisumic.com  |  +5363707599', margin, y)
     y += 14
 
@@ -847,6 +849,8 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     y += 3.5
     doc.setFont('helvetica', 'bold')
     doc.text('0533445000023216', margin, y)
+    doc.setFont('helvetica', 'normal')
+    doc.text('   NIT: 50004199243', margin + 27, y)
     y += 6
 
     doc.setFont('helvetica', 'normal')
