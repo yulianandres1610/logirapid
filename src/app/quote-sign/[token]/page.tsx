@@ -651,7 +651,7 @@ function QuoteSignContent({ token }: { token: string }) {
           <div className="mx-4 sm:mx-8 mb-4 sm:mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
             <p className="text-xs font-bold text-gray-700 mb-2">Información de Pago</p>
             <p className="text-[11px] text-gray-600 leading-relaxed">
-              Los pagos se dirigirán en Cheques certificados, o transferencias bancarias a favor de la{' '}
+              Los pagos se realizarán mediante transferencias bancarias o efectivo a favor de la{' '}
               <strong>Empresa de Servicios y Suministros MPM SERVISUMIC S.U.R.L</strong> a la Cuenta No:{' '}
               <strong>0533445000023216</strong>
             </p>

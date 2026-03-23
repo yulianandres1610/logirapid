@@ -838,7 +838,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     y += 4
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(7)
-    doc.text('Los pagos se dirigir\u00E1n en Cheques certificados, o transferencias bancarias a favor de la', margin, y)
+    doc.text('Los pagos se realizar\u00E1n mediante transferencias bancarias o efectivo a favor de la', margin, y)
     y += 3.5
     doc.setFont('helvetica', 'bold')
     doc.text('Empresa de Servicios y Suministros MPM SERVISUMIC S.U.R.L', margin, y)
