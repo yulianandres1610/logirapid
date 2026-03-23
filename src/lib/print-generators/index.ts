@@ -73,6 +73,7 @@ export async function generateDocument(
       break
 
     case 'wholesale_invoice':
+    case 'wholesale_quote':
       if (isThermal) {
         buffer = generateWholesaleInvoiceEscpos(documentData as any)
         format = 'escpos'
