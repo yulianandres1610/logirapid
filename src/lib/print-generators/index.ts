@@ -1,6 +1,7 @@
 import { generatePosReceipt } from './escpos/pos-receipt'
 import { generatePurchaseInvoiceEscpos } from './escpos/purchase-invoice'
 import { generateWholesaleInvoiceEscpos } from './escpos/wholesale-invoice'
+import { generateWholesaleQuoteEscpos } from './escpos/wholesale-quote'
 import { generateConsignmentReceiptEscpos } from './escpos/consignment-receipt'
 import { generateUnifiedReceptionEscpos } from './escpos/unified-reception'
 import { generateProductLabelZpl } from './zpl/product-label'
@@ -73,9 +74,18 @@ export async function generateDocument(
       break
 
     case 'wholesale_invoice':
-    case 'wholesale_quote':
       if (isThermal) {
         buffer = generateWholesaleInvoiceEscpos(documentData as any)
+        format = 'escpos'
+      } else {
+        buffer = await generateWholesaleInvoicePdf(documentData as any)
+        format = 'pdf'
+      }
+      break
+
+    case 'wholesale_quote':
+      if (isThermal) {
+        buffer = generateWholesaleQuoteEscpos(documentData as any)
         format = 'escpos'
       } else {
         buffer = await generateWholesaleInvoicePdf(documentData as any)
