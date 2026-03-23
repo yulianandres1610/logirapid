@@ -761,8 +761,8 @@ function CreateQuotePage() {
     return new Intl.NumberFormat('es-CU', {
       style: 'decimal',
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(Math.round(value)) + ' CUP'
+      maximumFractionDigits: 2
+    }).format(value) + ' CUP'
   }
 
   const filteredCustomers = customers.filter(c =>
@@ -1183,10 +1183,10 @@ function CreateQuotePage() {
                     theme === 'dark' ? 'bg-gray-900 text-gray-400' : 'bg-gray-100 text-gray-600'
                   )}>
                     <div className="col-span-1">#</div>
-                    <div className="col-span-4">Producto</div>
-                    <div className="col-span-2 text-right">Precio USD</div>
+                    <div className="col-span-3">Producto</div>
+                    <div className="col-span-2 text-right">Precio Unit.</div>
                     <div className="col-span-2 text-center">Cantidad</div>
-                    <div className="col-span-2 text-right">Total</div>
+                    <div className="col-span-3 text-right">Total</div>
                     <div className="col-span-1"></div>
                   </div>
 
@@ -1208,7 +1208,7 @@ function CreateQuotePage() {
                           )}
                         >
                           <div className="col-span-1 text-sm text-gray-500">{index + 1}</div>
-                          <div className="col-span-4">
+                          <div className="col-span-3">
                             <div className="flex items-center gap-1.5">
                               <p className={cn(
                                 'font-medium text-sm truncate',
@@ -1241,6 +1241,9 @@ function CreateQuotePage() {
                                 )}
                               />
                             </div>
+                            <span className="text-[11px] text-gray-500 block">
+                              {formatCUP(line.unitPriceCup)}
+                            </span>
                           </div>
                           <div className="col-span-2 flex items-center justify-center gap-1.5">
                             <button
@@ -1258,7 +1261,7 @@ function CreateQuotePage() {
                               value={line.quantity}
                               onChange={(e) => updateLineQuantity(index, parseInt(e.target.value) || 1)}
                               className={cn(
-                                'w-14 text-center px-2 py-1.5 rounded-lg border text-sm font-medium',
+                                'w-20 text-center px-2 py-1.5 rounded-lg border text-sm font-medium',
                                 theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-300'
                               )}
                               min="1"
@@ -1273,11 +1276,11 @@ function CreateQuotePage() {
                               <Plus className="w-3.5 h-3.5" />
                             </button>
                           </div>
-                          <div className="col-span-2 text-right">
+                          <div className="col-span-3 text-right">
                             <span className="font-bold text-blue-600 block">
                               {formatCurrency(line.subtotal)}
                             </span>
-                            <span className="text-xs text-gray-500">
+                            <span className="text-[11px] text-gray-500 block">
                               {formatCUP(line.subtotalCup)}
                             </span>
                           </div>
