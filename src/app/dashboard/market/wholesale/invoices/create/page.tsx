@@ -701,7 +701,7 @@ export default function CreateInvoicePage() {
         price: item.fixedPrice,
         hasDiscount: true,
         discountInfo: item.minQuantity > 1
-          ? `Desde ${item.minQuantity} uds: $${item.fixedPrice.toFixed(2)} (-${discount.toFixed(0)}%)`
+          ? `Desde ${item.minQuantity} uds: $${item.fixedPrice} (-${discount.toFixed(0)}%)`
           : `Precio de lista (-${discount.toFixed(0)}%)`,
         minQuantity: item.minQuantity
       }
@@ -1188,12 +1188,20 @@ export default function CreateInvoicePage() {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency,
-      minimumFractionDigits: 2
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 3
     }).format(value)
   }
 
-  // CUP como entero (sin decimales - requisito Cuba)
   const formatCUP = (value: number) => {
+    return new Intl.NumberFormat('es-CU', {
+      style: 'decimal',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2
+    }).format(value) + ' CUP'
+  }
+
+  const formatCUPRounded = (value: number) => {
     return new Intl.NumberFormat('es-CU', {
       style: 'decimal',
       minimumFractionDigits: 0,
@@ -1891,7 +1899,7 @@ export default function CreateInvoicePage() {
                                       transition={{ duration: 1 }}
                                       className="text-[10px] text-green-500 block"
                                     >
-                                      -${(line.previousUnitPrice - line.unitPrice).toFixed(2)}
+                                      -${(line.previousUnitPrice - line.unitPrice).toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}
                                     </motion.span>
                                   )}
                                 </div>
@@ -2015,7 +2023,7 @@ export default function CreateInvoicePage() {
                                                     'font-bold text-sm',
                                                     isActive ? 'text-green-600' : theme === 'dark' ? 'text-white' : 'text-gray-900'
                                                   )}>
-                                                    ${tier.price.toFixed(2)}
+                                                    ${tier.price.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}
                                                   </p>
                                                   {tier.savings > 0 && (
                                                     <p className={cn(
@@ -2151,7 +2159,7 @@ export default function CreateInvoicePage() {
                             <span className="text-gray-500">Total CUP:</span>
                             <span className={cn(
                               theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                            )}>{formatCUP(subtotal * exchangeRateWholesale)}</span>
+                            )}>{formatCUPRounded(subtotal * exchangeRateWholesale)}</span>
                           </div>
                           <div className="text-xs text-center text-gray-400 mt-1">
                             Tasa mayoreo: {exchangeRateWholesale} CUP/USD
@@ -2586,7 +2594,7 @@ export default function CreateInvoicePage() {
                         </div>
                         <div className="flex justify-between text-sm text-gray-500">
                           <span>En CUP:</span>
-                          <span>{formatCUP(total * exchangeRateWholesale)}</span>
+                          <span>{formatCUPRounded(total * exchangeRateWholesale)}</span>
                         </div>
                         <div className="flex justify-between text-xs text-gray-400 pt-1">
                           <span>Tasa mayoreo:</span>
@@ -2831,7 +2839,7 @@ export default function CreateInvoicePage() {
                         <p className="text-sm text-gray-500 mb-1">{paymentLabel}</p>
                         <p className="text-4xl font-bold text-green-600">{formatCurrency(amountToPay)}</p>
                         <p className="text-lg text-gray-500 mt-1">
-                          {formatCUP(amountToPay * exchangeRateWholesale)} <span className="text-xs">(Tasa Mayoreo: {exchangeRateWholesale})</span>
+                          {formatCUPRounded(amountToPay * exchangeRateWholesale)} <span className="text-xs">(Tasa Mayoreo: {exchangeRateWholesale})</span>
                         </p>
 
                         {paymentTerms !== 'immediate' && (
