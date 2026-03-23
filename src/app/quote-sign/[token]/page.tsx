@@ -805,6 +805,7 @@ function QuoteSignContent({ token }: { token: string }) {
               <strong>Empresa de Servicios y Suministros MPM SERVISUMIC S.U.R.L</strong> a la Cuenta No:{' '}
               <strong>0533445000023216</strong>
             </p>
+            <p className="text-[11px] text-gray-500 mt-1">NIT: 50004199243</p>
             <div className="mt-3 pt-3 border-t border-gray-200 flex flex-wrap gap-x-6 gap-y-1">
               <p className="text-[11px] text-gray-500">📍 Carretera a Berroa Km 1.5 al lado del Frigorífico</p>
               <p className="text-[11px] text-gray-500">✉️ facturacion@servisumic.com</p>
