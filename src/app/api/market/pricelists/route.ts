@@ -129,6 +129,12 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    // Ensure decimal precision for prices (auto-migrate)
+    try {
+      await db.query(`ALTER TABLE market_pricelist_items ALTER COLUMN fixed_price TYPE DECIMAL(12,3)`)
+      await db.query(`ALTER TABLE market_pricelist_items ALTER COLUMN discount_amount TYPE DECIMAL(12,3)`)
+    } catch (e) { /* already migrated */ }
+
     // If setting as default, unset other defaults
     if (isDefault) {
       await db.query(

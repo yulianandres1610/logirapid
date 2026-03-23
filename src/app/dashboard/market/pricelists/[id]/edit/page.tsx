@@ -621,7 +621,7 @@ export default function EditPricelistPage() {
                           <p className="text-xs text-gray-500">{product.sku}</p>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <p className="font-semibold text-green-600">${product.sellingPrice.toFixed(3)}</p>
+                          <p className="font-semibold text-green-600">${product.sellingPrice.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}</p>
                           <p className="text-xs text-blue-500 flex items-center gap-1">
                             <Plus className="w-3 h-3" /> Agregar
                           </p>
@@ -715,7 +715,7 @@ export default function EditPricelistPage() {
                             <div className="flex items-center gap-2 text-xs text-gray-500">
                               <span>{product.productSku}</span>
                               <span>•</span>
-                              <span>Precio base: ${product.basePrice.toFixed(3)}</span>
+                              <span>Precio base: ${product.basePrice.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}</span>
                               <span>•</span>
                               <span className="text-blue-500">{product.tiers.length} precio(s)</span>
                             </div>
@@ -879,7 +879,7 @@ export default function EditPricelistPage() {
                                                 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                                                 : theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-900'
                                             )}>
-                                              ${finalPrice.toFixed(3)}
+                                              ${finalPrice.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}
                                               {savings > 0 && (
                                                 <span className="text-xs font-normal ml-1">
                                                   (-{savings.toFixed(0)}%)
