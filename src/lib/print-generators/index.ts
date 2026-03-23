@@ -17,6 +17,7 @@ import { generateWholesaleInvoicePdf } from './pdf/wholesale-invoice'
 import { generateSalesReportPdf } from './pdf/sales-report'
 import { generateInventoryCountReportPdf } from './pdf/inventory-count-report'
 import { generateWarehouseOperationPdf } from './pdf/warehouse-operation'
+import { generateWarehouseOperationEscpos } from './escpos/warehouse-operation'
 import { generateProductionOrderPdf } from './pdf/production-order'
 import { generateWeightLabelPdf } from './pdf/weight-label'
 
@@ -164,8 +165,13 @@ export async function generateDocument(
       break
 
     case 'warehouse_operation':
-      buffer = await generateWarehouseOperationPdf(documentData as any)
-      format = 'pdf'
+      if (isThermal) {
+        buffer = generateWarehouseOperationEscpos(documentData as any)
+        format = 'escpos'
+      } else {
+        buffer = await generateWarehouseOperationPdf(documentData as any)
+        format = 'pdf'
+      }
       break
 
     case 'production_order':

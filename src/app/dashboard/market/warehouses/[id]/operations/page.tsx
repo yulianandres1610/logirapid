@@ -39,6 +39,8 @@ import TransferHistoryView from '@/components/warehouse/TransferHistoryView'
 import AdjustmentsHistoryView from '@/components/warehouse/AdjustmentsHistoryView'
 import ProductionOrdersView from '@/components/warehouse/ProductionOrdersView'
 import { PasswordConfirmModal } from '@/components/auth/PasswordConfirmModal'
+import { usePrintService } from '@/hooks/usePrintService'
+import { PrintServiceSelect } from '@/components/print/PrintServiceSelect'
 
 interface WarehouseData {
   id: number
@@ -65,6 +67,7 @@ async function printOperationReport(data: {
   adjustmentReason?: string | null
   notes?: string
   companyName?: string
+  serviceId?: number | null
 }) {
   try {
     // Send print job to the silent print service
@@ -102,7 +105,8 @@ async function printOperationReport(data: {
         copies: 1,
         sourceType: 'warehouse_operation',
         sourceId: data.operationId,
-        warehouseId: data.warehouse.id
+        warehouseId: data.warehouse.id,
+        serviceId: data.serviceId || undefined
       })
     })
 
@@ -414,6 +418,9 @@ export default function WarehouseOperationsPage() {
   const initialOperationId = searchParams.get('operationId')
   const initialReturnType = searchParams.get('returnType') as ReturnType | null
 
+  // Print service selection
+  const { services: printServices, selectedServiceId: printServiceId, setSelectedServiceId: setPrintServiceId, fetchServices: fetchPrintServices } = usePrintService()
+
   const [warehouse, setWarehouse] = useState<WarehouseData | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -495,6 +502,7 @@ export default function WarehouseOperationsPage() {
 
     if (warehouseId) {
       fetchWarehouse()
+      fetchPrintServices('warehouse_operation')
     }
   }, [warehouseId])
 
@@ -909,7 +917,8 @@ export default function WarehouseOperationsPage() {
             products: operation.products,
             scrapReason: operation.scrapReason,
             adjustmentReason: operation.adjustmentReason,
-            notes: operation.notes
+            notes: operation.notes,
+            serviceId: printServiceId
           })
         }
 
@@ -1472,6 +1481,17 @@ export default function WarehouseOperationsPage() {
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
                 />
               </div>
+
+              {/* Printer Selection */}
+              {printServices.length > 1 && (
+                <PrintServiceSelect
+                  services={printServices}
+                  selectedServiceId={printServiceId}
+                  onSelect={setPrintServiceId}
+                  theme="light"
+                  className="mb-3"
+                />
+              )}
 
               {/* Action Buttons */}
               <div className="flex gap-3">
