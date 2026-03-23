@@ -23,6 +23,8 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import { usePrintService } from '@/hooks/usePrintService'
+import { PrintServiceSelect } from '@/components/print/PrintServiceSelect'
 
 interface SessionReport {
   session: {
@@ -116,10 +118,12 @@ export default function SessionReceiptPage() {
   const [printing, setPrinting] = useState(false)
   const [autoPrintAttempted, setAutoPrintAttempted] = useState(false)
   const [defaultPrintServiceId, setDefaultPrintServiceId] = useState<number | null>(null)
+  const { services: printServices, selectedServiceId: selectedPrintServiceId, setSelectedServiceId: setSelectedPrintServiceId, fetchServices: fetchPrintServices } = usePrintService()
 
-  // Fetch terminal config to get default print service
+  // Fetch terminal config to get default print service + available services
   useEffect(() => {
     if (!terminalId) return
+    fetchPrintServices('session_close_report')
     fetch(`/api/market/pos/terminals/${terminalId}`)
       .then(r => r.json())
       .then(d => {
@@ -220,7 +224,7 @@ export default function SessionReceiptPage() {
         documentType: 'session_close_report',
         documentData: buildPrintData(report),
         copies: 1,
-        serviceId: defaultPrintServiceId || null,
+        serviceId: selectedPrintServiceId || defaultPrintServiceId || null,
         posTerminalId: parseInt(terminalId) || null,
         sourceType: 'pos_session',
         sourceId: report.session.id
@@ -568,18 +572,26 @@ export default function SessionReceiptPage() {
                 <p className="text-sm text-gray-500">{session.sessionCode}</p>
               </div>
             </div>
-            <button
-              onClick={handleShowPrinterModal}
-              disabled={printing}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all"
-            >
-              {printing ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Printer className="w-5 h-5" />
-              )}
-              Imprimir
-            </button>
+            <div className="flex items-center gap-2">
+              <PrintServiceSelect
+                services={printServices}
+                selectedServiceId={selectedPrintServiceId}
+                onSelect={setSelectedPrintServiceId}
+                theme={theme}
+              />
+              <button
+                onClick={handleShowPrinterModal}
+                disabled={printing}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all"
+              >
+                {printing ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Printer className="w-5 h-5" />
+                )}
+                Imprimir
+              </button>
+            </div>
           </div>
 
           {/* Content */}
