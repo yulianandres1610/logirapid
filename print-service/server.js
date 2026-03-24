@@ -4,7 +4,7 @@ const path = require("path");
 const http = require("http");
 const { exec, execSync } = require("child_process");
 
-const VERSION = "1.2.3";
+const VERSION = "1.2.4";
 const platform = os.platform();
 const INSTALL_DIR = path.join(os.homedir(), ".logirapid-print-service");
 const CONFIG_PATH = path.join(INSTALL_DIR, "config.json");
@@ -67,9 +67,9 @@ function addToHistory(job, status, errorMessage) {
 
 // ─── Helpers ───
 
-function execAsync(cmd) {
+function execAsync(cmd, timeout = 10000) {
   return new Promise((resolve, reject) => {
-    exec(cmd, { encoding: "utf8", maxBuffer: 5 * 1024 * 1024, windowsHide: true }, (err, stdout) => {
+    exec(cmd, { encoding: "utf8", maxBuffer: 5 * 1024 * 1024, windowsHide: true, timeout }, (err, stdout) => {
       if (err) return reject(err);
       resolve(stdout.trim());
     });
@@ -198,12 +198,43 @@ function execPS(cmd, timeout = 15000) {
 
 async function listPrintersWindows() {
   console.log("  [Printers] Detecting Windows printers...");
+
+  // Try fast methods first (WMIC and Registry) before PowerShell
+  // WMIC is faster and doesn't require PowerShell
+
+  // Method 0 (fast): wmic
+  try {
+    console.log("  [Printers] Trying WMIC (fast)...");
+    const raw = await execAsync("wmic printer get Name,Default,PrinterStatus /format:csv", 8000);
+    const lines = raw.split("\n").map(l => l.replace(/\r/g, "").trim()).filter(l => l && !l.startsWith("Node"));
+    if (lines.length > 1) {
+      const header = lines[0].split(",").map((h) => h.trim());
+      const nameIdx = header.indexOf("Name");
+      const defaultIdx = header.indexOf("Default");
+      const results = lines.slice(1).map((line) => {
+        const cols = line.split(",").map((c) => c.trim());
+        return {
+          name: nameIdx >= 0 ? cols[nameIdx] : cols[2] || "",
+          isDefault: defaultIdx >= 0 ? cols[defaultIdx] === "TRUE" : false,
+          status: "idle",
+        };
+      }).filter((p) => p.name && p.name !== "Unknown");
+      if (results.length) {
+        console.log(`  [Printers] WMIC OK: ${results.length} printer(s)`);
+        return results;
+      }
+    }
+  } catch (e) {
+    console.log("  [Printers] WMIC failed:", e.message);
+  }
+
   console.log("  [Printers] PowerShell path:", getPowerShellPath());
 
   // Method 1: Get-CimInstance via PowerShell shell (works on all editions)
   try {
     const raw = await execPS(
-      "Get-CimInstance -ClassName Win32_Printer | Select-Object Name, PrinterStatus, Default | ConvertTo-Json -Compress"
+      "Get-CimInstance -ClassName Win32_Printer | Select-Object Name, PrinterStatus, Default | ConvertTo-Json -Compress",
+      10000
     );
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -222,7 +253,8 @@ async function listPrintersWindows() {
   // Method 2: Get-WmiObject (older PS, still works everywhere)
   try {
     const raw = await execPS(
-      "Get-WmiObject -Class Win32_Printer | Select-Object Name, PrinterStatus, Default | ConvertTo-Json -Compress"
+      "Get-WmiObject -Class Win32_Printer | Select-Object Name, PrinterStatus, Default | ConvertTo-Json -Compress",
+      10000
     );
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -241,7 +273,8 @@ async function listPrintersWindows() {
   // Method 3: Get-Printer (Pro/Enterprise only)
   try {
     const raw = await execPS(
-      "Get-Printer | Select-Object Name, PrinterStatus, IsDefault | ConvertTo-Json -Compress"
+      "Get-Printer | Select-Object Name, PrinterStatus, IsDefault | ConvertTo-Json -Compress",
+      10000
     );
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -280,31 +313,7 @@ async function listPrintersWindows() {
     console.log("  [Printers] .NET failed");
   }
 
-  // Method 5: wmic (no PowerShell needed at all)
-  try {
-    console.log("  [Printers] Trying WMIC (no PowerShell)...");
-    const raw = await execAsync("wmic printer get Name,Default,PrinterStatus /format:csv");
-    const lines = raw.split("\n").map(l => l.replace(/\r/g, "").trim()).filter(l => l && !l.startsWith("Node"));
-    if (lines.length > 1) {
-      const header = lines[0].split(",").map((h) => h.trim());
-      const nameIdx = header.indexOf("Name");
-      const defaultIdx = header.indexOf("Default");
-      const results = lines.slice(1).map((line) => {
-        const cols = line.split(",").map((c) => c.trim());
-        return {
-          name: nameIdx >= 0 ? cols[nameIdx] : cols[2] || "",
-          isDefault: defaultIdx >= 0 ? cols[defaultIdx] === "TRUE" : false,
-          status: "idle",
-        };
-      }).filter((p) => p.name && p.name !== "Unknown");
-      if (results.length) {
-        console.log(`  [Printers] WMIC OK: ${results.length} printer(s)`);
-        return results;
-      }
-    }
-  } catch (e) {
-    console.log("  [Printers] WMIC failed:", e.message);
-  }
+  // (WMIC already tried as Method 0 above)
 
   // Method 6: reg query (absolute last resort, reads from registry directly)
   try {
