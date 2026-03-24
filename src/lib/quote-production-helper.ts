@@ -35,9 +35,14 @@ export async function createProductionPlansForQuote(
   // Use quote warehouse or fallback to central warehouse for stock check and target
   const targetWarehouseId = warehouseId || centralWarehouseId
 
-  const planNumbers: string[] = []
+  // === Check for paint products first ===
+  const paintResult = await createPaintOrderForQuote(companyId, centralWarehouseId, targetWarehouseId, quoteNumber, quoteId, lines)
+
+  const planNumbers: string[] = [...paintResult.orderNumbers]
 
   for (const line of lines) {
+    // Skip paint products (already handled)
+    if (paintResult.paintProductIds.has(line.productId)) continue
     try {
       // Check current stock to calculate deficit (check across all warehouses)
       let stockOnHand = 0
@@ -152,6 +157,84 @@ export async function createProductionPlansForQuote(
   }
 
   return { plansCreated: planNumbers.length, planNumbers }
+}
+
+/**
+ * Create a paint production order for paint products in the quote
+ */
+async function createPaintOrderForQuote(
+  companyId: number,
+  centralWarehouseId: number,
+  targetWarehouseId: number,
+  quoteNumber: string,
+  quoteId: number,
+  lines: QuoteLine[]
+): Promise<{ orderNumbers: string[]; paintProductIds: Set<number> }> {
+  const paintProductIds = new Set<number>()
+  const paintLines: { colorCardId: number; packagingSpecId: number; quantityUnits: number; productId: number }[] = []
+
+  for (const line of lines) {
+    try {
+      const prodResult = await db.query(
+        'SELECT paint_color_card_id, paint_packaging_spec_id FROM market_products WHERE id = $1',
+        [line.productId]
+      )
+      const prod = prodResult.rows[0]
+      if (prod?.paint_color_card_id && prod?.paint_packaging_spec_id) {
+        paintProductIds.add(line.productId)
+        paintLines.push({
+          colorCardId: prod.paint_color_card_id,
+          packagingSpecId: prod.paint_packaging_spec_id,
+          quantityUnits: Math.ceil(line.quantity),
+          productId: line.productId
+        })
+      }
+    } catch { /* product might not have paint columns yet */ }
+  }
+
+  if (paintLines.length === 0) return { orderNumbers: [], paintProductIds }
+
+  try {
+    // Generate order number
+    const yearStr = new Date().getFullYear().toString()
+    const countResult = await db.query(
+      `SELECT COUNT(*) as c FROM paint_production_orders WHERE company_id = $1 AND order_number LIKE $2`,
+      [companyId, `PPRD-${yearStr}-%`]
+    )
+    const nextNum = (parseInt(countResult.rows[0].c) || 0) + 1
+    const orderNumber = `PPRD-${yearStr}-${String(nextNum).padStart(5, '0')}`
+
+    // Create order
+    const orderResult = await db.query(`
+      INSERT INTO paint_production_orders (company_id, order_number, status, warehouse_id, target_warehouse_id, source_quote_id, notes, planned_date)
+      VALUES ($1, $2, 'draft', $3, $4, $5, $6, $7)
+      RETURNING id
+    `, [
+      companyId, orderNumber, centralWarehouseId, targetWarehouseId, quoteId,
+      `Auto-generado por oferta ${quoteNumber}`,
+      new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0]
+    ])
+
+    const orderId = orderResult.rows[0].id
+
+    // Insert lines
+    for (const pl of paintLines) {
+      const pkg = await db.query('SELECT net_weight_kg FROM paint_packaging_specs WHERE id = $1', [pl.packagingSpecId])
+      const netWeightKg = pkg.rows[0] ? parseFloat(pkg.rows[0].net_weight_kg) : 1
+      const totalWeightKg = pl.quantityUnits * netWeightKg
+
+      await db.query(`
+        INSERT INTO paint_production_lines (paint_order_id, color_card_id, packaging_spec_id, finished_product_id, quantity_units, total_weight_kg)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [orderId, pl.colorCardId, pl.packagingSpecId, pl.productId, pl.quantityUnits, totalWeightKg])
+    }
+
+    console.log(`[QuoteProductionHelper] Created paint order ${orderNumber} with ${paintLines.length} lines from offer ${quoteNumber}`)
+    return { orderNumbers: [orderNumber], paintProductIds }
+  } catch (error) {
+    console.error('[QuoteProductionHelper] Error creating paint order:', error)
+    return { orderNumbers: [], paintProductIds }
+  }
 }
 
 async function generatePlanNumber(companyId: number): Promise<string> {
