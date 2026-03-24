@@ -195,16 +195,22 @@ async function createPaintOrderForQuote(
   if (paintLines.length === 0) return { orderNumbers: [], paintProductIds }
 
   try {
-    // Generate order number
+    // Generate order number (use MAX to avoid collision)
     const yearStr = new Date().getFullYear().toString()
-    const countResult = await db.query(
-      `SELECT COUNT(*) as c FROM paint_production_orders WHERE company_id = $1 AND order_number LIKE $2`,
-      [companyId, `PPRD-${yearStr}-%`]
+    const prefix = `PPRD-${yearStr}-`
+    const lastResult = await db.query(
+      `SELECT order_number FROM paint_production_orders WHERE company_id = $1 AND order_number LIKE $2 ORDER BY order_number DESC LIMIT 1`,
+      [companyId, `${prefix}%`]
     )
-    const nextNum = (parseInt(countResult.rows[0].c) || 0) + 1
-    const orderNumber = `PPRD-${yearStr}-${String(nextNum).padStart(5, '0')}`
+    let nextNum = 1
+    if (lastResult.rows.length > 0) {
+      const lastNum = lastResult.rows[0].order_number.split('-').pop()
+      nextNum = (parseInt(lastNum) || 0) + 1
+    }
+    const orderNumber = `${prefix}${String(nextNum).padStart(5, '0')}`
 
-    // Create order
+    // Create order in transaction
+    await db.query('BEGIN')
     const orderResult = await db.query(`
       INSERT INTO paint_production_orders (company_id, order_number, status, warehouse_id, target_warehouse_id, source_quote_id, notes, planned_date)
       VALUES ($1, $2, 'draft', $3, $4, $5, $6, $7)
@@ -229,11 +235,13 @@ async function createPaintOrderForQuote(
       `, [orderId, pl.colorCardId, pl.packagingSpecId, pl.productId, pl.quantityUnits, totalWeightKg])
     }
 
+    await db.query('COMMIT')
     console.log(`[QuoteProductionHelper] Created paint order ${orderNumber} with ${paintLines.length} lines from offer ${quoteNumber}`)
     return { orderNumbers: [orderNumber], paintProductIds }
   } catch (error) {
+    try { await db.query('ROLLBACK') } catch { /* ignore */ }
     console.error('[QuoteProductionHelper] Error creating paint order:', error)
-    return { orderNumbers: [], paintProductIds }
+    return { orderNumbers: [], paintProductIds: new Set<number>() } // Return empty set so products get regular plans
   }
 }
 

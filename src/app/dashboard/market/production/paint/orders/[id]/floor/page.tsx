@@ -52,8 +52,8 @@ export default function PaintFloorPage({ params }: { params: Promise<{ id: strin
   useEffect(() => { fetchOrder() }, [fetchOrder])
 
   // Live timer for active step
-  const activeStep = steps.find(s => s.status === 'in_progress' && !s.pausedAt)
-  const pausedStep = steps.find(s => s.status === 'in_progress' && s.pausedAt)
+  const activeStep = steps.find(s => s.status === 'in_progress')
+  const pausedStep = steps.find(s => s.status === 'paused')
 
   useEffect(() => {
     if (!activeStep?.startedAt) { setElapsed(0); return }
