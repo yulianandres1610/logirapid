@@ -155,8 +155,8 @@ export async function generateDocument(
 
     // ── PDF reports ──
     case 'cash_register_report':
+    case 'session_close_report':
       if (isThermal) {
-        // TODO: add escpos version
         buffer = await generateCashRegisterReportPdf(documentData as any)
         format = 'pdf'
       } else {
