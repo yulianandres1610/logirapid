@@ -40,6 +40,7 @@ function fmt(v: number): string {
 export function generateSessionCloseEscpos(data: any): Buffer {
   const l: string[] = []
 
+  try {
   l.push(C.INIT)
   l.push(`${GS}L\x30\x00`)
 
@@ -176,9 +177,14 @@ export function generateSessionCloseEscpos(data: any): Buffer {
   }
 
   // === OPENING / CLOSING CASH ===
-  const openingCash = data.openingCash || {}
-  const closingCash = data.closingCash || {}
-  const cashDiff = data.cashDifference || {}
+  // openingCash/closingCash can be {usd, cup, mlc} or null
+  const openingCash = data.openingCash || { usd: 0, cup: 0, mlc: 0 }
+  const closingCash = data.closingCash || { usd: 0, cup: 0, mlc: 0 }
+  // cashDifference can be a number or {usd, cup, mlc} or null
+  const rawDiff = data.cashDifference
+  const cashDiff = typeof rawDiff === 'number'
+    ? { usd: rawDiff, cup: 0, mlc: 0 }
+    : (rawDiff || { usd: 0, cup: 0, mlc: 0 })
 
   const currencies = ['usd', 'cup', 'mlc']
   const currLabels: Record<string, string> = { usd: 'USD', cup: 'CUP', mlc: 'MLC' }
@@ -232,8 +238,10 @@ export function generateSessionCloseEscpos(data: any): Buffer {
         l.push(C.BOLD_OFF)
         l.push(C.FEED)
         for (const d of items) {
-          l.push(lr(`  ${d.label} x ${d.count}`, cur === 'CUP' ? Math.round(d.total).toLocaleString() : fmt(d.total)))
-          l.push(C.FEED)
+          if (d && d.label) {
+            l.push(lr(`  ${d.label} x ${d.count || 0}`, cur === 'CUP' ? Math.round(d.total || 0).toLocaleString() : fmt(d.total || 0)))
+            l.push(C.FEED)
+          }
         }
       }
     }
@@ -322,6 +330,25 @@ export function generateSessionCloseEscpos(data: any): Buffer {
 
   l.push(C.FEED_N(4))
   l.push(C.CUT)
+
+  } catch (err) {
+    console.error('[SessionCloseEscpos] Error generating receipt:', err)
+    // Fallback: print minimal receipt
+    l.length = 0
+    l.push(C.INIT)
+    l.push(C.ALIGN_CENTER)
+    l.push(C.BOLD_ON)
+    l.push('CIERRE DE CAJA')
+    l.push(C.NORMAL)
+    l.push(C.BOLD_OFF)
+    l.push(C.FEED)
+    l.push(data.reportNumber || 'Sin numero')
+    l.push(C.FEED)
+    l.push(`Error al generar recibo completo`)
+    l.push(C.FEED)
+    l.push(C.FEED_N(4))
+    l.push(C.CUT)
+  }
 
   return Buffer.from(l.join(''), 'binary')
 }
