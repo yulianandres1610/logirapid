@@ -1635,6 +1635,226 @@ export async function POST() {
       console.log('[Migration] Note: pricelist decimal upgrade -', e.message)
     }
 
+    // ====== PAINT PRODUCTION TABLES ======
+
+    // Paint base types (clara, oscura)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS paint_base_types (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        code VARCHAR(20) NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        description TEXT,
+        formula_id INTEGER,
+        yield_kg DECIMAL(10,3) DEFAULT 1,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(company_id, code)
+      )
+    `)
+    console.log('[Migration] Created paint_base_types table')
+
+    // Paint color cards
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS paint_color_cards (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        code VARCHAR(30) NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        base_type_id INTEGER NOT NULL REFERENCES paint_base_types(id),
+        hex_color VARCHAR(7),
+        is_active BOOLEAN DEFAULT true,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(company_id, code)
+      )
+    `)
+    console.log('[Migration] Created paint_color_cards table')
+
+    // Paint color card tints (tint recipe per color)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS paint_color_card_tints (
+        id SERIAL PRIMARY KEY,
+        color_card_id INTEGER NOT NULL REFERENCES paint_color_cards(id) ON DELETE CASCADE,
+        tint_product_id INTEGER NOT NULL REFERENCES market_products(id),
+        quantity_per_kg DECIMAL(10,4) NOT NULL,
+        unit VARCHAR(10) DEFAULT 'g',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_color_card_tints_card ON paint_color_card_tints(color_card_id)`)
+    console.log('[Migration] Created paint_color_card_tints table')
+
+    // Paint packaging specs (container sizes)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS paint_packaging_specs (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        name VARCHAR(100) NOT NULL,
+        volume_liters DECIMAL(10,3) NOT NULL,
+        net_weight_kg DECIMAL(10,3) NOT NULL,
+        container_product_id INTEGER REFERENCES market_products(id),
+        label_product_id INTEGER REFERENCES market_products(id),
+        lid_product_id INTEGER REFERENCES market_products(id),
+        labor_cost_per_unit DECIMAL(10,2) DEFAULT 0,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(company_id, volume_liters)
+      )
+    `)
+    console.log('[Migration] Created paint_packaging_specs table')
+
+    // Paint mixers (equipment)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS paint_mixers (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        name VARCHAR(100) NOT NULL,
+        capacity_min_kg DECIMAL(10,2) NOT NULL,
+        capacity_max_kg DECIMAL(10,2) NOT NULL,
+        mixer_type VARCHAR(20) NOT NULL DEFAULT 'large',
+        is_available BOOLEAN DEFAULT true,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    console.log('[Migration] Created paint_mixers table')
+
+    // Paint production orders (master order)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS paint_production_orders (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        order_number VARCHAR(30) NOT NULL,
+        status VARCHAR(30) DEFAULT 'draft',
+        source_quote_id INTEGER,
+        warehouse_id INTEGER,
+        target_warehouse_id INTEGER,
+        planned_date DATE,
+        notes TEXT,
+        total_base_cost DECIMAL(12,2) DEFAULT 0,
+        total_tint_cost DECIMAL(12,2) DEFAULT 0,
+        total_packaging_cost DECIMAL(12,2) DEFAULT 0,
+        total_labor_cost DECIMAL(12,2) DEFAULT 0,
+        total_cost DECIMAL(12,2) DEFAULT 0,
+        created_by INTEGER REFERENCES users(id),
+        completed_by INTEGER REFERENCES users(id),
+        completed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(company_id, order_number)
+      )
+    `)
+    console.log('[Migration] Created paint_production_orders table')
+
+    // Paint production lines (finished products to produce)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS paint_production_lines (
+        id SERIAL PRIMARY KEY,
+        paint_order_id INTEGER NOT NULL REFERENCES paint_production_orders(id) ON DELETE CASCADE,
+        color_card_id INTEGER NOT NULL REFERENCES paint_color_cards(id),
+        packaging_spec_id INTEGER NOT NULL REFERENCES paint_packaging_specs(id),
+        finished_product_id INTEGER REFERENCES market_products(id),
+        quantity_units INTEGER NOT NULL,
+        total_weight_kg DECIMAL(10,3) NOT NULL,
+        base_cost DECIMAL(12,2) DEFAULT 0,
+        tint_cost DECIMAL(12,2) DEFAULT 0,
+        packaging_cost DECIMAL(12,2) DEFAULT 0,
+        labor_cost DECIMAL(12,2) DEFAULT 0,
+        total_cost DECIMAL(12,2) DEFAULT 0,
+        cost_per_unit DECIMAL(12,4) DEFAULT 0,
+        lot_number VARCHAR(50),
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_paint_prod_lines_order ON paint_production_lines(paint_order_id)`)
+    console.log('[Migration] Created paint_production_lines table')
+
+    // Paint production steps (multi-step workflow with time tracking)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS paint_production_steps (
+        id SERIAL PRIMARY KEY,
+        paint_order_id INTEGER NOT NULL REFERENCES paint_production_orders(id) ON DELETE CASCADE,
+        step_number INTEGER NOT NULL,
+        step_type VARCHAR(30) NOT NULL,
+        description TEXT,
+        base_type_id INTEGER REFERENCES paint_base_types(id),
+        color_card_id INTEGER REFERENCES paint_color_cards(id),
+        packaging_spec_id INTEGER REFERENCES paint_packaging_specs(id),
+        paint_line_id INTEGER REFERENCES paint_production_lines(id),
+        weight_kg DECIMAL(10,3),
+        quantity_units INTEGER,
+        mixer_id INTEGER REFERENCES paint_mixers(id),
+        mixer_batches INTEGER DEFAULT 1,
+        status VARCHAR(20) DEFAULT 'pending',
+        warehouse_requisition_id INTEGER,
+        estimated_time_minutes INTEGER,
+        actual_time_minutes INTEGER,
+        total_pause_minutes INTEGER DEFAULT 0,
+        paused_at TIMESTAMP,
+        started_at TIMESTAMP,
+        started_by INTEGER REFERENCES users(id),
+        completed_at TIMESTAMP,
+        completed_by INTEGER REFERENCES users(id),
+        operator_notes TEXT,
+        quality_check VARCHAR(20),
+        temperature DECIMAL(5,1),
+        humidity DECIMAL(5,1),
+        parent_step_id INTEGER REFERENCES paint_production_steps(id),
+        materials_cost DECIMAL(12,2) DEFAULT 0,
+        labor_cost DECIMAL(12,2) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(paint_order_id, step_number)
+      )
+    `)
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_paint_steps_order ON paint_production_steps(paint_order_id)`)
+    console.log('[Migration] Created paint_production_steps table')
+
+    // Paint production step materials
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS paint_production_step_materials (
+        id SERIAL PRIMARY KEY,
+        step_id INTEGER NOT NULL REFERENCES paint_production_steps(id) ON DELETE CASCADE,
+        product_id INTEGER NOT NULL REFERENCES market_products(id),
+        quantity_required DECIMAL(15,4) NOT NULL,
+        quantity_issued DECIMAL(15,4) DEFAULT 0,
+        unit_cost DECIMAL(10,4),
+        total_cost DECIMAL(12,2),
+        status VARCHAR(20) DEFAULT 'pending',
+        issued_at TIMESTAMP,
+        issued_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_paint_step_materials ON paint_production_step_materials(step_id)`)
+    console.log('[Migration] Created paint_production_step_materials table')
+
+    // Paint production step log (audit trail)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS paint_production_step_log (
+        id SERIAL PRIMARY KEY,
+        step_id INTEGER NOT NULL REFERENCES paint_production_steps(id) ON DELETE CASCADE,
+        action VARCHAR(50) NOT NULL,
+        details JSONB,
+        performed_by INTEGER REFERENCES users(id),
+        performed_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_paint_step_log ON paint_production_step_log(step_id)`)
+    console.log('[Migration] Created paint_production_step_log table')
+
+    // Add paint columns to products
+    try {
+      await db.query(`ALTER TABLE market_products ADD COLUMN IF NOT EXISTS paint_color_card_id INTEGER`)
+      await db.query(`ALTER TABLE market_products ADD COLUMN IF NOT EXISTS paint_packaging_spec_id INTEGER`)
+      console.log('[Migration] Added paint columns to market_products')
+    } catch (e: any) {
+      console.log('[Migration] Note: paint product columns -', e.message)
+    }
+
     // Get table stats
     const tables = [
       'market_products',
@@ -1672,7 +1892,17 @@ export async function POST() {
       'market_production_formulas',
       'market_production_formula_lines',
       'market_production_plans',
-      'market_production_plan_materials'
+      'market_production_plan_materials',
+      'paint_base_types',
+      'paint_color_cards',
+      'paint_color_card_tints',
+      'paint_packaging_specs',
+      'paint_mixers',
+      'paint_production_orders',
+      'paint_production_lines',
+      'paint_production_steps',
+      'paint_production_step_materials',
+      'paint_production_step_log'
     ]
     const tableStats = []
 
