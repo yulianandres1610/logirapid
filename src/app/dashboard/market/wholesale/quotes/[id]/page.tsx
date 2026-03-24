@@ -2528,7 +2528,8 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
             warehouseName: quote.warehouseName,
             notes: quote.notes,
             createdAt: quote.createdAt,
-            exchangeRate
+            exchangeRate,
+            salesRepName: quote.salesRepName
           }}
           documentTitle={`Oferta ${quote.quoteNumber}`}
           sourceType="wholesale_quote"

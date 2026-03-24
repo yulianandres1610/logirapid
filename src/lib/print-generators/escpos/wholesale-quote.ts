@@ -31,6 +31,7 @@ interface WholesaleQuoteData {
   createdAt: string
   notes?: string
   exchangeRate?: number
+  salesRepName?: string | null
 }
 
 const ESC = '\x1b'
@@ -103,7 +104,7 @@ export function generateWholesaleQuoteEscpos(data: WholesaleQuoteData): Buffer {
   // === HEADER ===
   l.push(C.ALIGN_CENTER)
   l.push(C.BOLD_ON)
-  l.push(C.DBL_SIZE)
+  l.push(C.DBL_H)
   l.push('OFERTA COMERCIAL')
   l.push(C.NORMAL)
   l.push(C.BOLD_OFF)
@@ -134,6 +135,11 @@ export function generateWholesaleQuoteEscpos(data: WholesaleQuoteData): Buffer {
 
   if (data.warehouseName) {
     l.push(`Almacen: ${data.warehouseName}`)
+    l.push(C.FEED)
+  }
+
+  if (data.salesRepName) {
+    l.push(lr('Comercial:', data.salesRepName))
     l.push(C.FEED)
   }
 
@@ -283,7 +289,7 @@ export function generateWholesaleQuoteEscpos(data: WholesaleQuoteData): Buffer {
   l.push(SEP)
   l.push(C.FEED)
   l.push(C.FEED)
-  l.push('Suministrador:')
+  l.push(data.salesRepName ? `Comercial: ${data.salesRepName}` : 'Comercial:')
   l.push(C.FEED)
   l.push(THIN)
   l.push(C.FEED)
