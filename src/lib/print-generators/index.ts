@@ -19,6 +19,7 @@ import { generateSalesReportPdf } from './pdf/sales-report'
 import { generateInventoryCountReportPdf } from './pdf/inventory-count-report'
 import { generateWarehouseOperationPdf } from './pdf/warehouse-operation'
 import { generateWarehouseOperationEscpos } from './escpos/warehouse-operation'
+import { generateSessionCloseEscpos } from './escpos/session-close'
 import { generateProductionOrderPdf } from './pdf/production-order'
 import { generateWeightLabelPdf } from './pdf/weight-label'
 
@@ -157,8 +158,8 @@ export async function generateDocument(
     case 'cash_register_report':
     case 'session_close_report':
       if (isThermal) {
-        buffer = await generateCashRegisterReportPdf(documentData as any)
-        format = 'pdf'
+        buffer = generateSessionCloseEscpos(documentData as any)
+        format = 'escpos'
       } else {
         buffer = await generateCashRegisterReportPdf(documentData as any)
         format = 'pdf'
