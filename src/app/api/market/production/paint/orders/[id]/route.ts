@@ -190,7 +190,16 @@ export async function POST(
 
 async function handleCalculate(orderId: number, payload: JWTPayload) {
   try {
-    // Get order lines
+    // Verify order belongs to company
+    const orderCheck = await db.query(
+      'SELECT id FROM paint_production_orders WHERE id = $1 AND company_id = $2',
+      [orderId, payload.companyId]
+    )
+    if (orderCheck.rows.length === 0) {
+      return NextResponse.json({ success: false, error: 'Orden no encontrada' }, { status: 404 })
+    }
+
+    // Get order lines (ORDER BY id for deterministic matching)
     const linesResult = await db.query(`
       SELECT pl.*, cc.name as color_name, cc.base_type_id,
              bt.name as base_type_name, bt.code as base_type_code,
@@ -200,6 +209,7 @@ async function handleCalculate(orderId: number, payload: JWTPayload) {
       JOIN paint_base_types bt ON bt.id = cc.base_type_id
       JOIN paint_packaging_specs ps ON ps.id = pl.packaging_spec_id
       WHERE pl.paint_order_id = $1
+      ORDER BY pl.id
     `, [orderId])
 
     if (linesResult.rows.length === 0) {
@@ -270,7 +280,8 @@ async function handleCalculate(orderId: number, payload: JWTPayload) {
           tintProductId: t.tint_product_id,
           tintProductName: t.tint_product_name,
           quantityPerKg: parseFloat(t.quantity_per_kg),
-          unit: t.unit
+          unit: t.unit,
+          unitCost: parseFloat(t.cost_price) || 0
         }))
       })
     }

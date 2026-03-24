@@ -108,7 +108,7 @@ export async function POST(
         }
 
         await db.query(`
-          UPDATE paint_production_steps SET paused_at = NOW() WHERE id = $1
+          UPDATE paint_production_steps SET paused_at = NOW(), status = 'paused' WHERE id = $1
         `, [stepIdNum])
 
         await db.query(`
@@ -120,7 +120,7 @@ export async function POST(
       }
 
       case 'resume': {
-        if (!step.paused_at) {
+        if (!step.paused_at || step.status !== 'paused') {
           return NextResponse.json({ success: false, error: 'El paso no está pausado' }, { status: 400 })
         }
 
@@ -130,7 +130,7 @@ export async function POST(
         const totalPause = (parseInt(step.total_pause_minutes) || 0) + pauseMinutes
 
         await db.query(`
-          UPDATE paint_production_steps SET paused_at = NULL, total_pause_minutes = $1 WHERE id = $2
+          UPDATE paint_production_steps SET paused_at = NULL, total_pause_minutes = $1, status = 'in_progress' WHERE id = $2
         `, [totalPause, stepIdNum])
 
         await db.query(`
@@ -142,8 +142,8 @@ export async function POST(
       }
 
       case 'complete': {
-        if (step.status !== 'in_progress') {
-          return NextResponse.json({ success: false, error: 'Solo se puede completar un paso en progreso' }, { status: 400 })
+        if (step.status !== 'in_progress' && step.status !== 'paused') {
+          return NextResponse.json({ success: false, error: 'Solo se puede completar un paso en progreso o pausado' }, { status: 400 })
         }
 
         // Calculate actual time
@@ -194,8 +194,11 @@ export async function POST(
       }
 
       case 'reject': {
+        if (step.status === 'completed') {
+          return NextResponse.json({ success: false, error: 'No se puede rechazar un paso ya completado' }, { status: 400 })
+        }
         await db.query(`
-          UPDATE paint_production_steps SET quality_check = 'rejected', operator_notes = $1 WHERE id = $2
+          UPDATE paint_production_steps SET quality_check = 'rejected', operator_notes = COALESCE(operator_notes || E'\n', '') || $1 WHERE id = $2
         `, [notes || 'Rechazado por control de calidad', stepIdNum])
 
         await db.query(`
@@ -207,11 +210,14 @@ export async function POST(
       }
 
       case 'add-note': {
+        if (!notes || !notes.trim()) {
+          return NextResponse.json({ success: false, error: 'Nota requerida' }, { status: 400 })
+        }
         await db.query(`
           UPDATE paint_production_steps
           SET operator_notes = CASE WHEN operator_notes IS NULL THEN $1 ELSE operator_notes || E'\n' || $1 END
           WHERE id = $2
-        `, [notes, stepIdNum])
+        `, [notes.trim(), stepIdNum])
 
         await db.query(`
           INSERT INTO paint_production_step_log (step_id, action, details, performed_by)

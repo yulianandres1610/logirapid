@@ -22,6 +22,7 @@ interface CalcTint {
   tintProductName: string
   quantityPerKg: number
   unit: string
+  unitCost: number
 }
 
 interface CalcColorCard {
@@ -105,12 +106,12 @@ export function calculatePaintProduction(
   // === STEP 1: Aggregate base needs by base type ===
   const baseNeeds = new Map<number, { baseType: CalcBaseType; totalKg: number; colors: { colorCardId: number; colorName: string; weightKg: number }[] }>()
 
-  const calcLines = lines.map(line => {
+  const calcLines = lines.filter(line => baseTypes.has(line.baseTypeId)).map(line => {
     const totalWeightKg = line.quantityUnits * line.netWeightKg
-    const bt = baseTypes.get(line.baseTypeId)
+    const bt = baseTypes.get(line.baseTypeId)!
 
     if (!baseNeeds.has(line.baseTypeId)) {
-      baseNeeds.set(line.baseTypeId, { baseType: bt!, totalKg: 0, colors: [] })
+      baseNeeds.set(line.baseTypeId, { baseType: bt, totalKg: 0, colors: [] })
     }
     const need = baseNeeds.get(line.baseTypeId)!
     need.totalKg += totalWeightKg
@@ -190,13 +191,16 @@ export function calculatePaintProduction(
       const mixer = findBestMixer(mixers, colorNeed.weightKg)
       const batches = mixer ? Math.ceil(colorNeed.weightKg / mixer.capacityMaxKg) : 1
 
-      const materials = cc.tints.map(tint => ({
-        productId: tint.tintProductId,
-        productName: tint.tintProductName,
-        quantityRequired: Math.ceil(tint.quantityPerKg * colorNeed.weightKg * 1000) / 1000,
-        unitCost: 0, // Will be filled from product cost
-        totalCost: 0
-      }))
+      const materials = cc.tints.map(tint => {
+        const qtyRequired = Math.ceil(tint.quantityPerKg * colorNeed.weightKg * 1000) / 1000
+        return {
+          productId: tint.tintProductId,
+          productName: tint.tintProductName,
+          quantityRequired: qtyRequired,
+          unitCost: tint.unitCost || 0,
+          totalCost: Math.round(qtyRequired * (tint.unitCost || 0) * 100) / 100
+        }
+      })
 
       const materialsCost = materials.reduce((sum, m) => sum + m.totalCost, 0)
 
