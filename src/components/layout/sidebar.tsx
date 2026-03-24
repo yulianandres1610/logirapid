@@ -57,7 +57,10 @@ import {
   Factory,
   Shield,
   FlaskConical,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Palette,
+  Beaker,
+  Cog
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -594,6 +597,11 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: Calendar, label: "Planificación", href: "/dashboard/market/production/planning" },
         { icon: Scale, label: "Etiquetas de Peso", href: "/dashboard/market/weight-labels" },
         { icon: Scale, label: "Dosificación", href: "/dashboard/market/production/dosification" },
+        { icon: Palette, label: "Pintura - Órdenes", href: "/dashboard/market/production/paint/orders" },
+        { icon: Palette, label: "Pintura - Colores", href: "/dashboard/market/production/paint/color-cards" },
+        { icon: Beaker, label: "Pintura - Bases", href: "/dashboard/market/production/paint/base-types" },
+        { icon: Box, label: "Pintura - Envases", href: "/dashboard/market/production/paint/packaging" },
+        { icon: Cog, label: "Pintura - Mezcladoras", href: "/dashboard/market/production/paint/mixers" },
       ]
     },
     {
