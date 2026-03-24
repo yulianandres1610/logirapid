@@ -221,6 +221,23 @@ export function generateSessionCloseEscpos(data: any): Buffer {
       }
     }
 
+    // Denominations detail
+    const denoms = data.denominationsSummary || {}
+    for (const [cur, items] of Object.entries(denoms) as [string, any[]][]) {
+      if (Array.isArray(items) && items.length > 0) {
+        l.push(THIN)
+        l.push(C.FEED)
+        l.push(C.BOLD_ON)
+        l.push(`Denominaciones ${cur}:`)
+        l.push(C.BOLD_OFF)
+        l.push(C.FEED)
+        for (const d of items) {
+          l.push(lr(`  ${d.label} x ${d.count}`, cur === 'CUP' ? Math.round(d.total).toLocaleString() : fmt(d.total)))
+          l.push(C.FEED)
+        }
+      }
+    }
+
     l.push(SEP)
     l.push(C.FEED)
   }
