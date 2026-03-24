@@ -86,6 +86,12 @@ export default function PaintOrderDetailPage({ params }: { params: Promise<{ id:
               {order.status === 'draft' ? 'Borrador' : order.status === 'planned' ? 'Planificada' :
                order.status === 'in_progress' ? 'En Producción' : order.status === 'completed' ? 'Completada' : order.status}
             </span>
+            <button
+              onClick={() => router.push(`/dashboard/market/production/paint/orders/${orderId}/floor`)}
+              className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl font-medium text-sm flex items-center gap-2"
+            >
+              <Timer className="w-4 h-4" /> Vista de Piso
+            </button>
           </div>
 
           {/* Cost Summary Cards */}
