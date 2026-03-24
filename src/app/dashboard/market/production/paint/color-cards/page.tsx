@@ -103,7 +103,7 @@ export default function PaintColorCardsPage() {
               <h1 className={cn('text-2xl font-bold', isDark ? 'text-white' : 'text-gray-900')}>Cartas de Color</h1>
               <p className="text-sm text-gray-500">Colores con receta de tintas por kg de base</p>
             </div>
-            <button onClick={() => { setShowForm(true); addTintLine() }} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm">
+            <button onClick={() => { setShowForm(true); addTintLine() }} className="flex items-center gap-2 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium text-sm">
               <Plus className="w-4 h-4" /> Nuevo Color
             </button>
           </div>
@@ -122,7 +122,7 @@ export default function PaintColorCardsPage() {
           {/* Grid */}
           {loading ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+              <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
             </div>
           ) : filtered.length === 0 ? (
             <div className={cn('text-center py-20 rounded-2xl border', isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50')}>
@@ -220,7 +220,7 @@ export default function PaintColorCardsPage() {
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <label className={cn('text-sm font-medium', isDark ? 'text-gray-300' : 'text-gray-700')}>Receta de Tintas (por kg de base)</label>
-                        <button onClick={addTintLine} className="text-xs text-blue-500 hover:text-blue-600 flex items-center gap-1">
+                        <button onClick={addTintLine} className="text-xs text-orange-500 hover:text-orange-600 flex items-center gap-1">
                           <Plus className="w-3 h-3" /> Agregar tinta
                         </button>
                       </div>
@@ -271,7 +271,7 @@ export default function PaintColorCardsPage() {
                       Cancelar
                     </button>
                     <button onClick={handleCreate} disabled={saving || !form.code || !form.name || !form.baseTypeId}
-                      className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm disabled:opacity-50 flex items-center justify-center gap-2">
+                      className="flex-1 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium text-sm disabled:opacity-50 flex items-center justify-center gap-2">
                       {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                       {saving ? 'Guardando...' : 'Crear Color'}
                     </button>

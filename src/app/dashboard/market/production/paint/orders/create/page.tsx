@@ -103,7 +103,7 @@ export default function CreatePaintOrderPage() {
 
   if (loading) return (
     <ProtectedRoute><DashboardLayout>
-      <div className="flex items-center justify-center h-[80vh]"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>
+      <div className="flex items-center justify-center h-[80vh]"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /></div>
     </DashboardLayout></ProtectedRoute>
   )
 
@@ -126,9 +126,9 @@ export default function CreatePaintOrderPage() {
           <div className={cn('rounded-xl border p-5 mb-6', isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white')}>
             <div className="flex items-center justify-between mb-4">
               <h2 className={cn('font-bold flex items-center gap-2', isDark ? 'text-white' : 'text-gray-900')}>
-                <Palette className="w-5 h-5 text-blue-500" /> Productos a Fabricar
+                <Palette className="w-5 h-5 text-orange-500" /> Productos a Fabricar
               </h2>
-              <button onClick={addLine} className="text-sm text-blue-500 hover:text-blue-600 flex items-center gap-1">
+              <button onClick={addLine} className="text-sm text-orange-500 hover:text-orange-600 flex items-center gap-1">
                 <Plus className="w-4 h-4" /> Agregar línea
               </button>
             </div>
@@ -178,11 +178,11 @@ export default function CreatePaintOrderPage() {
 
             {/* Summary */}
             {validLines.length > 0 && (
-              <div className={cn('mt-4 p-3 rounded-lg flex items-center justify-between', isDark ? 'bg-blue-900/20' : 'bg-blue-50')}>
+              <div className={cn('mt-4 p-3 rounded-lg flex items-center justify-between', isDark ? 'bg-orange-900/20' : 'bg-orange-50')}>
                 <div className="flex gap-6 text-sm">
-                  <span className="flex items-center gap-1.5"><Palette className="w-4 h-4 text-blue-500" /> {validLines.length} producto{validLines.length > 1 ? 's' : ''}</span>
-                  <span className="flex items-center gap-1.5"><Box className="w-4 h-4 text-blue-500" /> {totalUnits.toLocaleString()} unidades</span>
-                  <span className="flex items-center gap-1.5"><Calculator className="w-4 h-4 text-blue-500" /> {totalWeight.toLocaleString()} kg total</span>
+                  <span className="flex items-center gap-1.5"><Palette className="w-4 h-4 text-orange-500" /> {validLines.length} producto{validLines.length > 1 ? 's' : ''}</span>
+                  <span className="flex items-center gap-1.5"><Box className="w-4 h-4 text-orange-500" /> {totalUnits.toLocaleString()} unidades</span>
+                  <span className="flex items-center gap-1.5"><Calculator className="w-4 h-4 text-orange-500" /> {totalWeight.toLocaleString()} kg total</span>
                 </div>
               </div>
             )}
@@ -227,7 +227,7 @@ export default function CreatePaintOrderPage() {
             <button
               onClick={handleCreate}
               disabled={saving || validLines.length === 0}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-2 text-lg"
+              className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-2 text-lg"
             >
               {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Factory className="w-5 h-5" />}
               {saving ? 'Creando y calculando...' : 'Crear Orden y Calcular'}

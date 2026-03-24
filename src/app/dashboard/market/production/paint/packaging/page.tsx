@@ -81,13 +81,13 @@ export default function PaintPackagingPage() {
               <h1 className={cn('text-2xl font-bold', isDark ? 'text-white' : 'text-gray-900')}>Especificaciones de Envase</h1>
               <p className="text-sm text-gray-500">Tamaños de envase con peso neto y componentes</p>
             </div>
-            <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm">
+            <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium text-sm">
               <Plus className="w-4 h-4" /> Nuevo Envase
             </button>
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>
+            <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /></div>
           ) : specs.length === 0 ? (
             <div className={cn('text-center py-20 rounded-2xl border', isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50')}>
               <Box className="w-12 h-12 mx-auto mb-3 text-gray-300" />
@@ -98,8 +98,8 @@ export default function PaintPackagingPage() {
               {specs.map(s => (
                 <motion.div key={s.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                   className={cn('p-5 rounded-xl border text-center', isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white')}>
-                  <div className={cn('w-16 h-16 mx-auto rounded-2xl flex items-center justify-center mb-3', isDark ? 'bg-blue-900/30' : 'bg-blue-100')}>
-                    <Box className={cn('w-8 h-8', isDark ? 'text-blue-400' : 'text-blue-600')} />
+                  <div className={cn('w-16 h-16 mx-auto rounded-2xl flex items-center justify-center mb-3', isDark ? 'bg-orange-900/30' : 'bg-orange-100')}>
+                    <Box className={cn('w-8 h-8', isDark ? 'text-orange-400' : 'text-orange-600')} />
                   </div>
                   <h3 className={cn('font-bold text-lg', isDark ? 'text-white' : 'text-gray-900')}>{s.name}</h3>
                   <div className="flex justify-center gap-4 mt-2 text-sm text-gray-500">
@@ -179,7 +179,7 @@ export default function PaintPackagingPage() {
                   <div className="flex gap-3 mt-6">
                     <button onClick={() => setShowForm(false)} className={cn('px-4 py-2.5 rounded-xl font-medium text-sm', isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700')}>Cancelar</button>
                     <button onClick={handleCreate} disabled={saving || !form.name || !form.volumeLiters || !form.netWeightKg}
-                      className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm disabled:opacity-50 flex items-center justify-center gap-2">
+                      className="flex-1 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium text-sm disabled:opacity-50 flex items-center justify-center gap-2">
                       {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                       {saving ? 'Guardando...' : 'Crear Envase'}
                     </button>
