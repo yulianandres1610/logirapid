@@ -20,6 +20,8 @@ export type DocumentType =
   | 'consignment_receipt'
   | 'warehouse_operation'
   | 'wholesale_invoice'
+  | 'wholesale_quote'
+  | 'session_close_report'
 
 interface PrintDocumentModalProps {
   isOpen: boolean
@@ -45,7 +47,9 @@ const DOCUMENT_LABELS: Record<DocumentType, { label: string; icon: typeof FileTe
   unified_reception: { label: 'Comprobante de Recepción', icon: Receipt },
   consignment_receipt: { label: 'Recibo de Consignación', icon: Receipt },
   warehouse_operation: { label: 'Operación de Almacén', icon: Package },
-  wholesale_invoice: { label: 'Factura Mayorista', icon: FileText }
+  wholesale_invoice: { label: 'Factura Mayorista', icon: FileText },
+  wholesale_quote: { label: 'Oferta Comercial', icon: FileText },
+  session_close_report: { label: 'Cierre de Caja', icon: Receipt }
 }
 
 export function PrintDocumentModal({

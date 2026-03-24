@@ -39,8 +39,7 @@ import TransferHistoryView from '@/components/warehouse/TransferHistoryView'
 import AdjustmentsHistoryView from '@/components/warehouse/AdjustmentsHistoryView'
 import ProductionOrdersView from '@/components/warehouse/ProductionOrdersView'
 import { PasswordConfirmModal } from '@/components/auth/PasswordConfirmModal'
-import { usePrintService } from '@/hooks/usePrintService'
-import { PrintServiceSelect } from '@/components/print/PrintServiceSelect'
+import { PrintDocumentModal } from '@/components/print/PrintDocumentModal'
 
 interface WarehouseData {
   id: number
@@ -418,8 +417,10 @@ export default function WarehouseOperationsPage() {
   const initialOperationId = searchParams.get('operationId')
   const initialReturnType = searchParams.get('returnType') as ReturnType | null
 
-  // Print service selection
-  const { services: printServices, selectedServiceId: printServiceId, setSelectedServiceId: setPrintServiceId, fetchServices: fetchPrintServices } = usePrintService()
+  const [showPrintModal, setShowPrintModal] = useState(false)
+  const [printDocData, setPrintDocData] = useState<Record<string, unknown> | null>(null)
+  const [printDocTitle, setPrintDocTitle] = useState('')
+  const [printSourceId, setPrintSourceId] = useState<number>(0)
 
   const [warehouse, setWarehouse] = useState<WarehouseData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -502,7 +503,6 @@ export default function WarehouseOperationsPage() {
 
     if (warehouseId) {
       fetchWarehouse()
-      fetchPrintServices('warehouse_operation')
     }
   }, [warehouseId])
 
@@ -908,18 +908,36 @@ export default function WarehouseOperationsPage() {
 
         // Print report silently via print service
         if (operation.operationType) {
-          printOperationReport({
+          // Open print modal instead of printing directly
+          setPrintDocData({
             operationType: operation.operationType,
             operationNumber: data.data.operationNumber,
-            operationId: data.data.operationId,
-            warehouse: warehouse!,
-            destinationWarehouse: operation.destinationWarehouse,
-            products: operation.products,
+            warehouse: {
+              id: warehouse!.id,
+              name: warehouse!.name,
+              code: warehouse!.code
+            },
+            destinationWarehouse: operation.destinationWarehouse ? {
+              id: operation.destinationWarehouse.id,
+              name: operation.destinationWarehouse.name,
+              code: operation.destinationWarehouse.code
+            } : null,
+            products: operation.products.map((p: ScannedProduct) => ({
+              productId: p.productId,
+              name: p.name,
+              sku: p.sku,
+              quantity: p.quantity,
+              currentStock: p.currentStock,
+              realStock: p.realStock
+            })),
             scrapReason: operation.scrapReason,
             adjustmentReason: operation.adjustmentReason,
             notes: operation.notes,
-            serviceId: printServiceId
+            createdAt: new Date().toISOString()
           })
+          setPrintDocTitle(`Operación ${data.data.operationNumber}`)
+          setPrintSourceId(data.data.operationId)
+          setShowPrintModal(true)
         }
 
         // Reset after success
@@ -1482,17 +1500,6 @@ export default function WarehouseOperationsPage() {
                 />
               </div>
 
-              {/* Printer Selection */}
-              {printServices.length > 1 && (
-                <PrintServiceSelect
-                  services={printServices}
-                  selectedServiceId={printServiceId}
-                  onSelect={setPrintServiceId}
-                  theme="light"
-                  className="mb-3"
-                />
-              )}
-
               {/* Action Buttons */}
               <div className="flex gap-3">
                 <button
@@ -1540,6 +1547,19 @@ export default function WarehouseOperationsPage() {
           </div>
         )}
       </main>
+
+      {/* Print Modal */}
+      {printDocData && (
+        <PrintDocumentModal
+          isOpen={showPrintModal}
+          onClose={() => setShowPrintModal(false)}
+          documentType="warehouse_operation"
+          documentData={printDocData}
+          documentTitle={printDocTitle}
+          sourceType="warehouse_operation"
+          sourceId={printSourceId}
+        />
+      )}
     </div>
   )
 }
