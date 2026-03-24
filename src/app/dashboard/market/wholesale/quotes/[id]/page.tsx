@@ -45,8 +45,7 @@ import { useTheme } from '@/contexts/theme-context'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { cn } from '@/lib/utils'
 import { detectBrandFromHost, brands } from '@/lib/brand-config'
-import { usePrintService } from '@/hooks/usePrintService'
-import { PrintServiceSelect } from '@/components/print/PrintServiceSelect'
+import { PrintDocumentModal } from '@/components/print/PrintDocumentModal'
 
 interface QuoteLine {
   id: number
@@ -184,8 +183,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
   const [quote, setQuote] = useState<Quote | null>(null)
   const [loading, setLoading] = useState(true)
   const [exchangeRate, setExchangeRate] = useState(411)
-  const [printingService, setPrintingService] = useState(false)
-  const { services: printServices, selectedServiceId: printServiceId, setSelectedServiceId: setPrintServiceId, fetchServices: fetchPrintServices } = usePrintService()
+  const [showPrintModal, setShowPrintModal] = useState(false)
 
   // Modals
   const [showConvertModal, setShowConvertModal] = useState(false)
@@ -214,7 +212,6 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
   useEffect(() => {
     fetchQuote()
     fetchExchangeRates()
-    fetchPrintServices('wholesale_quote')
   }, [quoteId])
 
   // Close dropdowns on click outside
@@ -1197,56 +1194,10 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                 </div>
 
                 {/* Print */}
-                <PrintServiceSelect
-                  services={printServices}
-                  selectedServiceId={printServiceId}
-                  onSelect={setPrintServiceId}
-                  theme={theme}
-                />
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={async () => {
-                    if (!quote) return
-                    setPrintingService(true)
-                    try {
-                      const res = await fetch('/api/print-jobs', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          documentType: 'wholesale_quote',
-                          documentData: {
-                            quoteNumber: quote.quoteNumber,
-                            customer: quote.customer,
-                            lines: quote.lines,
-                            subtotal: quote.subtotal,
-                            discountPercent: quote.discountPercent,
-                            discountAmount: quote.discountAmount,
-                            totalAmount: quote.totalAmount,
-                            validUntil: quote.validUntil,
-                            warehouseName: quote.warehouseName,
-                            notes: quote.notes,
-                            createdAt: quote.createdAt,
-                            exchangeRate
-                          },
-                          copies: 1,
-                          serviceId: printServiceId || null,
-                          sourceType: 'wholesale_quote',
-                          sourceId: quote.id
-                        })
-                      })
-                      const result = await res.json()
-                      if (!result.success) {
-                        // Fallback to browser print
-                        window.print()
-                      }
-                    } catch {
-                      window.print()
-                    } finally {
-                      setPrintingService(false)
-                    }
-                  }}
-                  disabled={printingService}
+                  onClick={() => setShowPrintModal(true)}
                   className={cn(
                     'flex items-center gap-2 px-3 py-2 rounded-xl transition-colors',
                     theme === 'dark'
@@ -1254,7 +1205,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   )}
                 >
-                  {printingService ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+                  <Printer className="w-4 h-4" />
                   <span className="font-medium text-sm hidden sm:inline">Imprimir</span>
                 </motion.button>
 
@@ -2558,6 +2509,32 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
           </AnimatePresence>
         </div>
       </DashboardLayout>
+
+      {/* Print Modal */}
+      {quote && (
+        <PrintDocumentModal
+          isOpen={showPrintModal}
+          onClose={() => setShowPrintModal(false)}
+          documentType="wholesale_quote"
+          documentData={{
+            quoteNumber: quote.quoteNumber,
+            customer: quote.customer,
+            lines: quote.lines,
+            subtotal: quote.subtotal,
+            discountPercent: quote.discountPercent,
+            discountAmount: quote.discountAmount,
+            totalAmount: quote.totalAmount,
+            validUntil: quote.validUntil,
+            warehouseName: quote.warehouseName,
+            notes: quote.notes,
+            createdAt: quote.createdAt,
+            exchangeRate
+          }}
+          documentTitle={`Oferta ${quote.quoteNumber}`}
+          sourceType="wholesale_quote"
+          sourceId={quote.id}
+        />
+      )}
     </ProtectedRoute>
   )
 }
