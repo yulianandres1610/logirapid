@@ -1,34 +1,9 @@
 /**
  * Session Close Report - ESC/POS for 80mm thermal printers
+ * Matches the data structure from buildPrintData in session-receipt page
  */
 
-interface SessionCloseData {
-  reportNumber: string
-  companyName: string
-  terminalName: string
-  terminalCode: string
-  warehouseName?: string
-  openedBy: string
-  closedBy: string
-  openedAt: string
-  closedAt: string
-  duration: string
-  openingCash: { usd: number; cup: number; mlc: number }
-  closingCash: { usd: number; cup: number; mlc: number }
-  cashDifference: { usd: number; cup: number; mlc: number }
-  summary: {
-    totalOrders: number
-    totalProducts: number
-    totalUsd: number
-    totalCup: number
-    totalMlc: number
-    cancelledOrders: number
-  }
-  cashSummary: { usd: number; cup: number; mlc: number }
-  otherPayments: { transfer: number; qr: number; credit: number }
-  productsSold: { name: string; sku: string; quantity: number; total: number }[]
-  closingNotes?: string
-}
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 const ESC = '\x1b'
 const GS = '\x1d'
@@ -42,7 +17,6 @@ const C = {
   BOLD_ON: `${ESC}E\x01`,
   BOLD_OFF: `${ESC}E\x00`,
   DBL_H: `${GS}!\x10`,
-  DBL_SIZE: `${GS}!\x30`,
   NORMAL: `${GS}!\x00`,
   INVERSE_ON: `${GS}B\x01`,
   INVERSE_OFF: `${GS}B\x00`,
@@ -59,11 +33,11 @@ function lr(left: string, right: string): string {
   return sp > 0 ? left + ' '.repeat(sp) + right : left + ' ' + right
 }
 
-function fmtMoney(v: number, symbol: string = '$'): string {
-  return `${symbol}${v.toFixed(2)}`
+function fmt(v: number): string {
+  return '$' + v.toFixed(2)
 }
 
-export function generateSessionCloseEscpos(data: SessionCloseData): Buffer {
+export function generateSessionCloseEscpos(data: any): Buffer {
   const l: string[] = []
 
   l.push(C.INIT)
@@ -72,17 +46,19 @@ export function generateSessionCloseEscpos(data: SessionCloseData): Buffer {
   // === HEADER ===
   l.push(C.ALIGN_CENTER)
   l.push(C.BOLD_ON)
-  l.push(C.DBL_SIZE)
+  l.push(C.DBL_H)
   l.push('CIERRE DE CAJA')
   l.push(C.NORMAL)
   l.push(C.BOLD_OFF)
   l.push(C.FEED)
 
-  l.push(data.companyName)
-  l.push(C.FEED)
+  if (data.companyName) {
+    l.push(data.companyName)
+    l.push(C.FEED)
+  }
 
   l.push(C.BOLD_ON)
-  l.push(data.reportNumber)
+  l.push(data.reportNumber || '')
   l.push(C.BOLD_OFF)
   l.push(C.FEED)
 
@@ -91,22 +67,34 @@ export function generateSessionCloseEscpos(data: SessionCloseData): Buffer {
 
   // === SESSION INFO ===
   l.push(C.ALIGN_LEFT)
-  l.push(lr('Terminal:', data.terminalName))
-  l.push(C.FEED)
+  if (data.terminalName) {
+    l.push(lr('Terminal:', data.terminalName))
+    l.push(C.FEED)
+  }
   if (data.warehouseName) {
     l.push(lr('Almacen:', data.warehouseName))
     l.push(C.FEED)
   }
-  l.push(lr('Apertura:', data.openedAt))
-  l.push(C.FEED)
-  l.push(lr('Cierre:', data.closedAt))
-  l.push(C.FEED)
-  l.push(lr('Duracion:', data.duration))
-  l.push(C.FEED)
-  l.push(lr('Abierto por:', data.openedBy))
-  l.push(C.FEED)
-  l.push(lr('Cerrado por:', data.closedBy))
-  l.push(C.FEED)
+  if (data.openedAt) {
+    l.push(lr('Apertura:', data.openedAt))
+    l.push(C.FEED)
+  }
+  if (data.closedAt) {
+    l.push(lr('Cierre:', data.closedAt))
+    l.push(C.FEED)
+  }
+  if (data.duration) {
+    l.push(lr('Duracion:', data.duration))
+    l.push(C.FEED)
+  }
+  if (data.openedBy) {
+    l.push(lr('Abrio:', data.openedBy))
+    l.push(C.FEED)
+  }
+  if (data.closedBy) {
+    l.push(lr('Cerro:', data.closedBy))
+    l.push(C.FEED)
+  }
 
   l.push(SEP)
   l.push(C.FEED)
@@ -119,35 +107,39 @@ export function generateSessionCloseEscpos(data: SessionCloseData): Buffer {
   l.push(C.INVERSE_OFF)
   l.push(C.FEED)
 
-  l.push(lr('Ordenes:', String(data.summary.totalOrders)))
-  l.push(C.FEED)
-  l.push(lr('Productos:', String(data.summary.totalProducts)))
-  l.push(C.FEED)
-  if (data.summary.cancelledOrders > 0) {
-    l.push(lr('Canceladas:', String(data.summary.cancelledOrders)))
+  const summary = data.summary || {}
+  if (summary.paidOrders !== undefined) {
+    l.push(lr('Ordenes pagadas:', String(summary.paidOrders || 0)))
+    l.push(C.FEED)
+  }
+  if (summary.totalProducts !== undefined) {
+    l.push(lr('Productos vendidos:', String(summary.totalProducts || 0)))
+    l.push(C.FEED)
+  }
+  if (summary.voidedOrders > 0) {
+    l.push(lr('Ordenes anuladas:', String(summary.voidedOrders)))
+    l.push(C.FEED)
+  }
+  if (summary.refundedOrders > 0) {
+    l.push(lr('Devoluciones:', String(summary.refundedOrders)))
     l.push(C.FEED)
   }
 
   l.push(THIN)
   l.push(C.FEED)
 
-  // Sales by currency
-  if (data.summary.totalUsd > 0) {
+  if (summary.totalSales !== undefined) {
     l.push(C.BOLD_ON)
-    l.push(lr('Ventas USD:', fmtMoney(data.summary.totalUsd)))
+    l.push(lr('TOTAL VENTAS:', fmt(summary.totalSales || 0)))
     l.push(C.BOLD_OFF)
     l.push(C.FEED)
   }
-  if (data.summary.totalCup > 0) {
-    l.push(C.BOLD_ON)
-    l.push(lr('Ventas CUP:', `${Math.round(data.summary.totalCup).toLocaleString()} CUP`))
-    l.push(C.BOLD_OFF)
+  if (summary.totalDiscounts > 0) {
+    l.push(lr('Descuentos:', '-' + fmt(summary.totalDiscounts)))
     l.push(C.FEED)
   }
-  if (data.summary.totalMlc > 0) {
-    l.push(C.BOLD_ON)
-    l.push(lr('Ventas MLC:', fmtMoney(data.summary.totalMlc, 'MLC ')))
-    l.push(C.BOLD_OFF)
+  if (summary.totalRefunds > 0) {
+    l.push(lr('Devoluciones:', '-' + fmt(summary.totalRefunds)))
     l.push(C.FEED)
   }
 
@@ -155,91 +147,105 @@ export function generateSessionCloseEscpos(data: SessionCloseData): Buffer {
   l.push(C.FEED)
 
   // === CASH SUMMARY ===
-  l.push(C.INVERSE_ON)
-  l.push(C.BOLD_ON)
-  l.push(' EFECTIVO EN CAJA'.padEnd(W))
-  l.push(C.BOLD_OFF)
-  l.push(C.INVERSE_OFF)
-  l.push(C.FEED)
+  const cashSummary = data.cashSummary || {}
+  const hasCashData = Object.keys(cashSummary).length > 0
 
-  // USD
-  if (data.openingCash.usd > 0 || data.closingCash.usd > 0 || data.cashSummary.usd > 0) {
+  if (hasCashData) {
+    l.push(C.INVERSE_ON)
     l.push(C.BOLD_ON)
-    l.push('USD:')
+    l.push(' COBROS POR METODO'.padEnd(W))
     l.push(C.BOLD_OFF)
+    l.push(C.INVERSE_OFF)
     l.push(C.FEED)
-    l.push(lr('  Apertura:', fmtMoney(data.openingCash.usd)))
-    l.push(C.FEED)
-    l.push(lr('  Ventas:', fmtMoney(data.cashSummary.usd)))
-    l.push(C.FEED)
-    l.push(lr('  Cierre:', fmtMoney(data.closingCash.usd)))
-    l.push(C.FEED)
-    const diff = data.cashDifference.usd
-    l.push(lr('  Diferencia:', `${diff >= 0 ? '+' : ''}${fmtMoney(diff)}`))
-    l.push(C.FEED)
-  }
 
-  // CUP
-  if (data.openingCash.cup > 0 || data.closingCash.cup > 0 || data.cashSummary.cup > 0) {
-    l.push(C.BOLD_ON)
-    l.push('CUP:')
-    l.push(C.BOLD_OFF)
-    l.push(C.FEED)
-    l.push(lr('  Apertura:', `${Math.round(data.openingCash.cup).toLocaleString()}`))
-    l.push(C.FEED)
-    l.push(lr('  Ventas:', `${Math.round(data.cashSummary.cup).toLocaleString()}`))
-    l.push(C.FEED)
-    l.push(lr('  Cierre:', `${Math.round(data.closingCash.cup).toLocaleString()}`))
-    l.push(C.FEED)
-    const diff = Math.round(data.cashDifference.cup)
-    l.push(lr('  Diferencia:', `${diff >= 0 ? '+' : ''}${diff.toLocaleString()}`))
-    l.push(C.FEED)
-  }
+    for (const [method, info] of Object.entries(cashSummary) as [string, any][]) {
+      if (info && info.collected > 0) {
+        const methodName = method === 'cash_usd' ? 'Efectivo USD' :
+          method === 'cash_cup' ? 'Efectivo CUP' :
+          method === 'cash_mlc' ? 'Efectivo MLC' :
+          method === 'transfer' ? 'Transferencia' :
+          method === 'qr' ? 'QR' :
+          method === 'credit' ? 'Credito' : method
+        l.push(lr(`${methodName} (${info.count || 0}):`, fmt(info.collected)))
+        l.push(C.FEED)
+      }
+    }
 
-  // MLC
-  if (data.openingCash.mlc > 0 || data.closingCash.mlc > 0 || data.cashSummary.mlc > 0) {
-    l.push(C.BOLD_ON)
-    l.push('MLC:')
-    l.push(C.BOLD_OFF)
-    l.push(C.FEED)
-    l.push(lr('  Apertura:', fmtMoney(data.openingCash.mlc, '')))
-    l.push(C.FEED)
-    l.push(lr('  Ventas:', fmtMoney(data.cashSummary.mlc, '')))
-    l.push(C.FEED)
-    l.push(lr('  Cierre:', fmtMoney(data.closingCash.mlc, '')))
-    l.push(C.FEED)
-    const diff = data.cashDifference.mlc
-    l.push(lr('  Diferencia:', `${diff >= 0 ? '+' : ''}${fmtMoney(diff, '')}`))
-    l.push(C.FEED)
-  }
-
-  // Other payments
-  if (data.otherPayments.transfer > 0 || data.otherPayments.qr > 0 || data.otherPayments.credit > 0) {
     l.push(THIN)
     l.push(C.FEED)
+  }
+
+  // === OPENING / CLOSING CASH ===
+  const openingCash = data.openingCash || {}
+  const closingCash = data.closingCash || {}
+  const cashDiff = data.cashDifference || {}
+
+  const currencies = ['usd', 'cup', 'mlc']
+  const currLabels: Record<string, string> = { usd: 'USD', cup: 'CUP', mlc: 'MLC' }
+
+  let hasAnyCash = false
+  for (const cur of currencies) {
+    if ((openingCash[cur] || 0) > 0 || (closingCash[cur] || 0) > 0) {
+      hasAnyCash = true
+      break
+    }
+  }
+
+  if (hasAnyCash) {
+    l.push(C.INVERSE_ON)
+    l.push(C.BOLD_ON)
+    l.push(' EFECTIVO EN CAJA'.padEnd(W))
+    l.push(C.BOLD_OFF)
+    l.push(C.INVERSE_OFF)
+    l.push(C.FEED)
+
+    for (const cur of currencies) {
+      const opening = openingCash[cur] || 0
+      const closing = closingCash[cur] || 0
+      const diff = cashDiff[cur] || 0
+
+      if (opening > 0 || closing > 0) {
+        l.push(C.BOLD_ON)
+        l.push(`${currLabels[cur]}:`)
+        l.push(C.BOLD_OFF)
+        l.push(C.FEED)
+        l.push(lr('  Apertura:', cur === 'cup' ? Math.round(opening).toLocaleString() : fmt(opening)))
+        l.push(C.FEED)
+        l.push(lr('  Cierre:', cur === 'cup' ? Math.round(closing).toLocaleString() : fmt(closing)))
+        l.push(C.FEED)
+        const diffStr = cur === 'cup'
+          ? `${diff >= 0 ? '+' : ''}${Math.round(diff).toLocaleString()}`
+          : `${diff >= 0 ? '+' : ''}${fmt(diff)}`
+        l.push(lr('  Diferencia:', diffStr))
+        l.push(C.FEED)
+      }
+    }
+
+    l.push(SEP)
+    l.push(C.FEED)
+  }
+
+  // === OTHER PAYMENTS (array format) ===
+  const otherPayments = data.otherPayments
+  if (Array.isArray(otherPayments) && otherPayments.length > 0) {
     l.push(C.BOLD_ON)
     l.push('Otros pagos:')
     l.push(C.BOLD_OFF)
     l.push(C.FEED)
-    if (data.otherPayments.transfer > 0) {
-      l.push(lr('  Transferencia:', fmtMoney(data.otherPayments.transfer)))
-      l.push(C.FEED)
+
+    for (const p of otherPayments) {
+      if (p.amount > 0) {
+        l.push(lr(`  ${p.method} (${p.count}):`, `${fmt(p.amount)} ${p.currency || ''}`))
+        l.push(C.FEED)
+      }
     }
-    if (data.otherPayments.qr > 0) {
-      l.push(lr('  QR:', fmtMoney(data.otherPayments.qr)))
-      l.push(C.FEED)
-    }
-    if (data.otherPayments.credit > 0) {
-      l.push(lr('  Credito:', fmtMoney(data.otherPayments.credit)))
-      l.push(C.FEED)
-    }
+    l.push(THIN)
+    l.push(C.FEED)
   }
 
-  l.push(SEP)
-  l.push(C.FEED)
-
   // === TOP PRODUCTS ===
-  if (data.productsSold && data.productsSold.length > 0) {
+  const products = data.productsSold
+  if (Array.isArray(products) && products.length > 0) {
     l.push(C.INVERSE_ON)
     l.push(C.BOLD_ON)
     l.push(' PRODUCTOS VENDIDOS'.padEnd(W))
@@ -254,16 +260,15 @@ export function generateSessionCloseEscpos(data: SessionCloseData): Buffer {
     l.push(THIN)
     l.push(C.FEED)
 
-    const top = data.productsSold.slice(0, 20)
+    const top = products.slice(0, 20)
     for (const p of top) {
-      const qty = String(p.quantity).padStart(3)
-      const name = p.name.length > 24 ? p.name.substring(0, 22) + '..' : p.name
-      const total = fmtMoney(p.total)
-      l.push(lr(`${qty}  ${name}`, total))
+      const qty = String(p.quantity || 0).padStart(3)
+      const name = (p.productName || p.name || '').substring(0, 24)
+      l.push(lr(`${qty}  ${name}`, fmt(p.total || 0)))
       l.push(C.FEED)
     }
-    if (data.productsSold.length > 20) {
-      l.push(`... y ${data.productsSold.length - 20} mas`)
+    if (products.length > 20) {
+      l.push(`... y ${products.length - 20} mas`)
       l.push(C.FEED)
     }
 
@@ -273,7 +278,7 @@ export function generateSessionCloseEscpos(data: SessionCloseData): Buffer {
 
   // === NOTES ===
   if (data.closingNotes) {
-    l.push('Notas: ' + data.closingNotes.substring(0, W * 2))
+    l.push(`Notas: ${String(data.closingNotes).substring(0, W * 2)}`)
     l.push(C.FEED)
     l.push(THIN)
     l.push(C.FEED)
@@ -294,7 +299,8 @@ export function generateSessionCloseEscpos(data: SessionCloseData): Buffer {
   // Footer
   l.push(C.FEED)
   l.push(C.ALIGN_CENTER)
-  l.push(`Impreso: ${new Date().toLocaleString('es-ES')}`)
+  const now = new Date()
+  l.push(`Impreso: ${now.toLocaleDateString('es-ES')} ${now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`)
   l.push(C.FEED)
 
   l.push(C.FEED_N(4))
