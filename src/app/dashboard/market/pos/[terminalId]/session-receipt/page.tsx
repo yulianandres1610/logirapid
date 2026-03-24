@@ -1007,6 +1007,7 @@ export default function SessionReceiptPage() {
           documentTitle={`Cierre de Caja ${report.session.sessionCode || ''}`}
           sourceType="pos_session"
           sourceId={report.session.id}
+          posTerminalId={parseInt(terminalId) || undefined}
         />
       )}
     </ProtectedRoute>

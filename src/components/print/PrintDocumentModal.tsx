@@ -32,6 +32,8 @@ interface PrintDocumentModalProps {
   documentTitle: string
   sourceType?: string
   sourceId?: number
+  posTerminalId?: number
+  warehouseId?: number
   onPrintSuccess?: (jobNumber: string) => void
 }
 
@@ -61,6 +63,8 @@ export function PrintDocumentModal({
   documentTitle,
   sourceType,
   sourceId,
+  posTerminalId,
+  warehouseId,
   onPrintSuccess
 }: PrintDocumentModalProps) {
   const { showNotification } = useNotifications()
@@ -108,6 +112,8 @@ export function PrintDocumentModal({
           serviceId: selectedServiceId,
           sourceType,
           sourceId,
+          posTerminalId: posTerminalId || undefined,
+          warehouseId: warehouseId || undefined,
           priority: 1
         })
       })
