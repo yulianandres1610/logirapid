@@ -25,7 +25,7 @@ const STEP_COLORS: Record<string, string> = {
 const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
   pending: { bg: 'bg-gray-100 dark:bg-gray-700', text: 'text-gray-600 dark:text-gray-300' },
   materials_issued: { bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-400' },
-  in_progress: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-400' },
+  in_progress: { bg: 'bg-orange-100 dark:bg-orange-900/30', text: 'text-blue-700 dark:text-orange-400' },
   completed: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-400' },
 }
 
@@ -48,7 +48,7 @@ export default function PaintOrderDetailPage({ params }: { params: Promise<{ id:
 
   if (loading) return (
     <ProtectedRoute><DashboardLayout>
-      <div className="flex items-center justify-center h-[80vh]"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>
+      <div className="flex items-center justify-center h-[80vh]"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /></div>
     </DashboardLayout></ProtectedRoute>
   )
 
@@ -71,7 +71,7 @@ export default function PaintOrderDetailPage({ params }: { params: Promise<{ id:
             </button>
             <div className="flex-1">
               <h1 className={cn('text-2xl font-bold flex items-center gap-2', isDark ? 'text-white' : 'text-gray-900')}>
-                <Factory className="w-6 h-6 text-blue-500" /> {order.orderNumber}
+                <Factory className="w-6 h-6 text-orange-500" /> {order.orderNumber}
               </h1>
               <p className="text-sm text-gray-500">
                 {order.lines?.length || 0} productos · {order.steps?.length || 0} pasos
@@ -80,7 +80,7 @@ export default function PaintOrderDetailPage({ params }: { params: Promise<{ id:
             <span className={cn('px-3 py-1.5 rounded-full text-sm font-medium',
               order.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
               order.status === 'in_progress' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
-              order.status === 'planned' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+              order.status === 'planned' ? 'bg-orange-100 text-blue-700 dark:bg-orange-900/30 dark:text-orange-400' :
               'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
             )}>
               {order.status === 'draft' ? 'Borrador' : order.status === 'planned' ? 'Planificada' :
@@ -116,7 +116,7 @@ export default function PaintOrderDetailPage({ params }: { params: Promise<{ id:
           <div className={cn('rounded-xl border mb-6', isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white')}>
             <div className="p-4 border-b border-gray-200 dark:border-gray-700">
               <h2 className={cn('font-bold flex items-center gap-2', isDark ? 'text-white' : 'text-gray-900')}>
-                <Package className="w-5 h-5 text-blue-500" /> Productos ({order.lines.length})
+                <Package className="w-5 h-5 text-orange-500" /> Productos ({order.lines.length})
               </h2>
             </div>
             <div className="divide-y divide-gray-200 dark:divide-gray-700">

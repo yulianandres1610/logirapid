@@ -63,7 +63,7 @@ export default function PaintMixersPage() {
   const typeLabel = (t: string) => t === 'small' ? 'Pequeña' : t === 'large' ? 'Grande' : t
   const typeColor = (t: string) => t === 'small'
     ? isDark ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
-    : isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'
+    : isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-100 text-blue-700'
 
   return (
     <ProtectedRoute>
@@ -74,13 +74,13 @@ export default function PaintMixersPage() {
               <h1 className={cn('text-2xl font-bold', isDark ? 'text-white' : 'text-gray-900')}>Mezcladoras (Torbas)</h1>
               <p className="text-sm text-gray-500">Equipos de mezclado con capacidades en kg</p>
             </div>
-            <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm">
+            <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium text-sm">
               <Plus className="w-4 h-4" /> Nueva Mezcladora
             </button>
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>
+            <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /></div>
           ) : mixers.length === 0 ? (
             <div className={cn('text-center py-20 rounded-2xl border', isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50')}>
               <Cog className="w-12 h-12 mx-auto mb-3 text-gray-300" />
@@ -107,7 +107,7 @@ export default function PaintMixersPage() {
                     <span><strong>{m.capacityMinKg}</strong> — <strong>{m.capacityMaxKg}</strong> kg</span>
                   </div>
                   <div className={cn('mt-3 h-2 rounded-full overflow-hidden', isDark ? 'bg-gray-700' : 'bg-gray-200')}>
-                    <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full" style={{ width: '70%' }} />
+                    <div className="h-full bg-gradient-to-r from-orange-500 to-amber-500 rounded-full" style={{ width: '70%' }} />
                   </div>
                   {m.notes && <p className="text-xs text-gray-400 mt-2">{m.notes}</p>}
                   <div className="mt-2">
@@ -170,7 +170,7 @@ export default function PaintMixersPage() {
                   <div className="flex gap-3 mt-6">
                     <button onClick={() => setShowForm(false)} className={cn('px-4 py-2.5 rounded-xl font-medium text-sm', isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700')}>Cancelar</button>
                     <button onClick={handleCreate} disabled={saving || !form.name || !form.capacityMinKg || !form.capacityMaxKg}
-                      className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm disabled:opacity-50 flex items-center justify-center gap-2">
+                      className="flex-1 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium text-sm disabled:opacity-50 flex items-center justify-center gap-2">
                       {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                       {saving ? 'Guardando...' : 'Crear Mezcladora'}
                     </button>

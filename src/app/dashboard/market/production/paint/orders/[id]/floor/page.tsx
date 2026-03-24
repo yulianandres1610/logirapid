@@ -91,7 +91,7 @@ export default function PaintFloorPage({ params }: { params: Promise<{ id: strin
 
   if (loading) return (
     <div className="flex items-center justify-center h-screen bg-gray-950">
-      <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
+      <Loader2 className="w-12 h-12 animate-spin text-orange-500" />
     </div>
   )
 
@@ -122,7 +122,7 @@ export default function PaintFloorPage({ params }: { params: Promise<{ id: strin
           <div className="text-right">
             <p className="text-xs text-gray-400">{completedCount}/{steps.length} pasos</p>
             <div className="w-32 h-2 rounded-full bg-gray-800 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full" style={{ width: `${progress}%` }} />
+              <div className="h-full bg-gradient-to-r from-orange-500 to-amber-500 rounded-full" style={{ width: `${progress}%` }} />
             </div>
           </div>
         </div>
@@ -140,8 +140,8 @@ export default function PaintFloorPage({ params }: { params: Promise<{ id: strin
             {/* Step type badge */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                {(() => { const Icon = STEP_ICONS[currentStep.stepType] || Package; return <Icon className="w-6 h-6 text-blue-400" /> })()}
-                <span className="text-sm font-medium text-blue-400">{STEP_LABELS[currentStep.stepType] || currentStep.stepType}</span>
+                {(() => { const Icon = STEP_ICONS[currentStep.stepType] || Package; return <Icon className="w-6 h-6 text-orange-400" /> })()}
+                <span className="text-sm font-medium text-orange-400">{STEP_LABELS[currentStep.stepType] || currentStep.stepType}</span>
                 <span className="text-sm text-gray-500">· Paso {currentStep.stepNumber}</span>
               </div>
               {currentStep.hexColor && (
@@ -210,7 +210,7 @@ export default function PaintFloorPage({ params }: { params: Promise<{ id: strin
                     <Package className="w-6 h-6" /> Entregar Materiales
                   </button>
                   <button onClick={() => doAction(currentStep.id, 'start')} disabled={acting}
-                    className="col-span-1 py-4 rounded-xl bg-green-600 hover:bg-green-700 font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50">
+                    className="col-span-1 py-4 rounded-xl bg-orange-600 hover:bg-orange-700 font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50">
                     <Play className="w-6 h-6" /> Iniciar
                   </button>
                 </>
@@ -218,7 +218,7 @@ export default function PaintFloorPage({ params }: { params: Promise<{ id: strin
 
               {currentStep.status === 'materials_issued' && (
                 <button onClick={() => doAction(currentStep.id, 'start')} disabled={acting}
-                  className="col-span-2 py-5 rounded-xl bg-green-600 hover:bg-green-700 font-bold text-xl flex items-center justify-center gap-3 disabled:opacity-50">
+                  className="col-span-2 py-5 rounded-xl bg-orange-600 hover:bg-orange-700 font-bold text-xl flex items-center justify-center gap-3 disabled:opacity-50">
                   {acting ? <Loader2 className="w-7 h-7 animate-spin" /> : <Play className="w-7 h-7" />}
                   INICIAR PASO
                 </button>
@@ -231,7 +231,7 @@ export default function PaintFloorPage({ params }: { params: Promise<{ id: strin
                     <Pause className="w-6 h-6" /> Pausar
                   </button>
                   <button onClick={() => doAction(currentStep.id, 'complete')} disabled={acting}
-                    className="py-4 rounded-xl bg-blue-600 hover:bg-blue-700 font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50">
+                    className="py-4 rounded-xl bg-orange-600 hover:bg-orange-700 font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50">
                     {acting ? <Loader2 className="w-6 h-6 animate-spin" /> : <Square className="w-6 h-6" />}
                     Completar
                   </button>
@@ -241,11 +241,11 @@ export default function PaintFloorPage({ params }: { params: Promise<{ id: strin
               {pausedStep && (
                 <>
                   <button onClick={() => doAction(currentStep.id, 'resume')} disabled={acting}
-                    className="py-4 rounded-xl bg-green-600 hover:bg-green-700 font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50">
+                    className="py-4 rounded-xl bg-orange-600 hover:bg-orange-700 font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50">
                     <Play className="w-6 h-6" /> Reanudar
                   </button>
                   <button onClick={() => doAction(currentStep.id, 'complete')} disabled={acting}
-                    className="py-4 rounded-xl bg-blue-600 hover:bg-blue-700 font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50">
+                    className="py-4 rounded-xl bg-orange-600 hover:bg-orange-700 font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50">
                     <Square className="w-6 h-6" /> Completar
                   </button>
                 </>
@@ -298,13 +298,13 @@ export default function PaintFloorPage({ params }: { params: Promise<{ id: strin
             return (
               <div key={step.id} className={cn(
                 'flex items-center gap-3 px-4 py-3 rounded-xl border transition-all',
-                isActive ? 'border-blue-500 bg-blue-900/20' :
+                isActive ? 'border-orange-500 bg-orange-900/20' :
                 isCompleted ? 'border-green-900/30 bg-green-900/10' :
                 'border-gray-800 bg-gray-900/50'
               )}>
                 <div className={cn('p-1.5 rounded-lg',
-                  isCompleted ? 'bg-green-900/30' : isActive ? 'bg-blue-900/30' : 'bg-gray-800')}>
-                  {isCompleted ? <CheckCircle2 className="w-4 h-4 text-green-400" /> : <Icon className={cn('w-4 h-4', isActive ? 'text-blue-400' : 'text-gray-500')} />}
+                  isCompleted ? 'bg-green-900/30' : isActive ? 'bg-orange-900/30' : 'bg-gray-800')}>
+                  {isCompleted ? <CheckCircle2 className="w-4 h-4 text-green-400" /> : <Icon className={cn('w-4 h-4', isActive ? 'text-orange-400' : 'text-gray-500')} />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className={cn('text-sm font-medium truncate', isCompleted ? 'text-green-400' : isActive ? 'text-white' : 'text-gray-500')}>
@@ -315,7 +315,7 @@ export default function PaintFloorPage({ params }: { params: Promise<{ id: strin
                   <span className="text-xs text-green-400 shrink-0">{step.actualTimeMinutes} min</span>
                 )}
                 {isActive && !isCompleted && (
-                  <span className="text-xs text-blue-400 shrink-0 animate-pulse">EN CURSO</span>
+                  <span className="text-xs text-orange-400 shrink-0 animate-pulse">EN CURSO</span>
                 )}
               </div>
             )
@@ -350,7 +350,7 @@ export default function PaintFloorPage({ params }: { params: Promise<{ id: strin
                       setShowNoteModal(null)
                     }
                   }}
-                  className="flex-1 py-2.5 rounded-xl bg-blue-600 text-sm font-medium">Guardar</button>
+                  className="flex-1 py-2.5 rounded-xl bg-orange-600 text-sm font-medium">Guardar</button>
               </div>
             </motion.div>
           </motion.div>

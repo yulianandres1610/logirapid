@@ -97,7 +97,7 @@ export default function PaintBaseTypesPage() {
             </div>
             <button
               onClick={() => setShowForm(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm"
+              className="flex items-center gap-2 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium text-sm"
             >
               <Plus className="w-4 h-4" /> Nuevo Tipo de Base
             </button>
@@ -106,7 +106,7 @@ export default function PaintBaseTypesPage() {
           {/* List */}
           {loading ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+              <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
             </div>
           ) : baseTypes.length === 0 ? (
             <div className={cn('text-center py-20 rounded-2xl border', isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50')}>
@@ -256,7 +256,7 @@ export default function PaintBaseTypesPage() {
                     <button
                       onClick={handleCreate}
                       disabled={saving || !form.code || !form.name}
-                      className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="flex-1 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium text-sm disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                       {saving ? 'Guardando...' : 'Crear Tipo de Base'}

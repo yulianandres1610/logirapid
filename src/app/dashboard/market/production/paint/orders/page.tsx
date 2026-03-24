@@ -17,7 +17,7 @@ interface PaintOrder {
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; darkColor: string; icon: any }> = {
   draft: { label: 'Borrador', color: 'bg-gray-100 text-gray-700', darkColor: 'bg-gray-700 text-gray-300', icon: FileText },
-  planned: { label: 'Planificada', color: 'bg-blue-100 text-blue-700', darkColor: 'bg-blue-900/30 text-blue-400', icon: Clock },
+  planned: { label: 'Planificada', color: 'bg-orange-100 text-blue-700', darkColor: 'bg-orange-900/30 text-orange-400', icon: Clock },
   in_progress: { label: 'En Producción', color: 'bg-amber-100 text-amber-700', darkColor: 'bg-amber-900/30 text-amber-400', icon: Factory },
   completed: { label: 'Completada', color: 'bg-green-100 text-green-700', darkColor: 'bg-green-900/30 text-green-400', icon: CheckCircle2 },
 }
@@ -48,14 +48,14 @@ export default function PaintOrdersPage() {
             </div>
             <button
               onClick={() => router.push('/dashboard/market/production/paint/orders/create')}
-              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm"
+              className="flex items-center gap-2 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium text-sm"
             >
               <Plus className="w-4 h-4" /> Nueva Orden
             </button>
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>
+            <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /></div>
           ) : orders.length === 0 ? (
             <div className={cn('text-center py-20 rounded-2xl border', isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50')}>
               <Factory className="w-12 h-12 mx-auto mb-3 text-gray-300" />
@@ -80,8 +80,8 @@ export default function PaintOrdersPage() {
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className={cn('p-2.5 rounded-xl', isDark ? 'bg-blue-900/30' : 'bg-blue-100')}>
-                          <Factory className={cn('w-5 h-5', isDark ? 'text-blue-400' : 'text-blue-600')} />
+                        <div className={cn('p-2.5 rounded-xl', isDark ? 'bg-orange-900/30' : 'bg-orange-100')}>
+                          <Factory className={cn('w-5 h-5', isDark ? 'text-orange-400' : 'text-orange-600')} />
                         </div>
                         <div>
                           <h3 className={cn('font-bold', isDark ? 'text-white' : 'text-gray-900')}>{order.orderNumber}</h3>
@@ -110,7 +110,7 @@ export default function PaintOrdersPage() {
                           <span>{progress}%</span>
                         </div>
                         <div className={cn('h-1.5 rounded-full overflow-hidden', isDark ? 'bg-gray-700' : 'bg-gray-200')}>
-                          <div className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full transition-all"
+                          <div className="h-full bg-gradient-to-r from-orange-500 to-amber-500 rounded-full transition-all"
                             style={{ width: `${progress}%` }} />
                         </div>
                       </div>
