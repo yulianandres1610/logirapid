@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import { Printer, X, Loader2, Minus, Plus, FileText, Receipt, Package, ShoppingCart, ChevronDown } from 'lucide-react'
 import { useNotifications } from '@/contexts/NotificationContext'
+import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
 
 export type DocumentType =
@@ -63,24 +64,31 @@ export function PrintDocumentModal({
   onPrintSuccess
 }: PrintDocumentModalProps) {
   const { showNotification } = useNotifications()
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
 
   const [printing, setPrinting] = useState(false)
   const [copies, setCopies] = useState(1)
   const [availableServices, setAvailableServices] = useState<any[]>([])
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null)
+  const [loadingServices, setLoadingServices] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
+      setLoadingServices(true)
       fetch(`/api/print-services/available?documentType=${documentType}`, { credentials: 'include' })
         .then(r => r.json())
         .then(data => {
           if (data.success && data.data) {
+            setAvailableServices(data.data)
+            // Auto-select first online, or first if only one
             const online = data.data.filter((s: any) => s.online)
-            setAvailableServices(online.length > 0 ? online : data.data)
-            setSelectedServiceId(data.data.length === 1 ? data.data[0].id : null)
+            if (online.length === 1) setSelectedServiceId(online[0].id)
+            else if (data.data.length === 1) setSelectedServiceId(data.data[0].id)
           }
         })
         .catch(() => {})
+        .finally(() => setLoadingServices(false))
     }
   }, [isOpen, documentType])
 
@@ -137,69 +145,77 @@ export function PrintDocumentModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           onClick={(e) => e.stopPropagation()}
-          className="w-full max-w-md rounded-2xl shadow-2xl overflow-hidden bg-gray-800"
+          className={cn('w-full max-w-md rounded-2xl shadow-2xl overflow-hidden', isDark ? 'bg-gray-800' : 'bg-white')}
         >
           {/* Header */}
-          <div className="px-6 py-4 border-b border-gray-700 bg-gray-800 flex items-center justify-between">
+          <div className={cn('px-6 py-4 border-b flex items-center justify-between', isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50')}>
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-900/30">
-                <DocIcon className="w-5 h-5 text-blue-400" />
+              <div className={cn('p-2 rounded-lg', isDark ? 'bg-blue-900/30' : 'bg-blue-100')}>
+                <DocIcon className={cn('w-5 h-5', isDark ? 'text-blue-400' : 'text-blue-600')} />
               </div>
               <div>
-                <h3 className="font-semibold text-white">Imprimir {docConfig.label}</h3>
+                <h3 className={cn('font-semibold', isDark ? 'text-white' : 'text-gray-900')}>Imprimir {docConfig.label}</h3>
                 <p className="text-xs text-gray-400 truncate max-w-[200px]">{documentTitle}</p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-gray-700 transition-colors"
-            >
+            <button onClick={onClose} className={cn('p-2 rounded-lg transition-colors', isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-200')}>
               <X className="w-5 h-5 text-gray-400" />
             </button>
           </div>
 
           {/* Content */}
           <div className="p-6 space-y-6">
-            {/* Printer selector */}
-            {availableServices.length > 1 && (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Impresora</label>
+            {/* Printer selector - always shown */}
+            <div>
+              <label className={cn('block text-sm font-medium mb-2', isDark ? 'text-gray-300' : 'text-gray-700')}>
+                Servicio de impresión
+              </label>
+              {loadingServices ? (
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Cargando impresoras...
+                </div>
+              ) : availableServices.length === 0 ? (
+                <p className="text-sm text-red-500">No hay servicios de impresión disponibles</p>
+              ) : (
                 <div className="relative">
                   <select
                     value={selectedServiceId || ''}
                     onChange={(e) => setSelectedServiceId(e.target.value ? Number(e.target.value) : null)}
-                    className="w-full px-3 py-2.5 pr-8 rounded-lg border bg-gray-700 border-gray-600 text-white text-sm font-medium appearance-none cursor-pointer"
+                    className={cn(
+                      'w-full px-3 py-2.5 pr-8 rounded-lg border text-sm font-medium appearance-none cursor-pointer',
+                      isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    )}
                   >
-                    <option value="">Automatico</option>
+                    <option value="">Automático</option>
                     {availableServices.map((s: any) => (
                       <option key={s.id} value={s.id}>
-                        {s.name}{s.printerName ? ` — ${s.printerName.replace(/_/g, ' ')}` : ''}{s.online ? '' : ' (offline)'}
+                        {s.name}{s.printerName ? ` — ${s.printerName.replace(/_/g, ' ')}` : ''}{s.online ? ' ✓' : ' (offline)'}
                       </option>
                     ))}
                   </select>
                   <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Copies Selector */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className={cn('block text-sm font-medium mb-2', isDark ? 'text-gray-300' : 'text-gray-700')}>
                 Cantidad de copias
               </label>
               <div className="flex items-center justify-center gap-4">
                 <button
                   onClick={() => setCopies(Math.max(1, copies - 1))}
-                  className="w-12 h-12 rounded-xl flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white transition-colors"
+                  className={cn('w-12 h-12 rounded-xl flex items-center justify-center transition-colors', isDark ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700')}
                 >
                   <Minus className="w-5 h-5" />
                 </button>
-                <div className="w-20 h-12 rounded-xl flex items-center justify-center text-2xl font-bold bg-gray-700 text-white">
+                <div className={cn('w-20 h-12 rounded-xl flex items-center justify-center text-2xl font-bold', isDark ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-900')}>
                   {copies}
                 </div>
                 <button
                   onClick={() => setCopies(Math.min(10, copies + 1))}
-                  className="w-12 h-12 rounded-xl flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white transition-colors"
+                  className={cn('w-12 h-12 rounded-xl flex items-center justify-center transition-colors', isDark ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700')}
                 >
                   <Plus className="w-5 h-5" />
                 </button>
@@ -208,17 +224,17 @@ export function PrintDocumentModal({
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 border-t border-gray-700 bg-gray-800/50 flex gap-3">
+          <div className={cn('px-6 py-4 border-t flex gap-3', isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50')}>
             <button
               onClick={onClose}
-              className="py-3 px-4 rounded-xl font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+              className={cn('py-3 px-4 rounded-xl font-medium transition-colors', isDark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300')}
             >
               Cancelar
             </button>
 
             <button
               onClick={handlePrint}
-              disabled={printing}
+              disabled={printing || availableServices.length === 0}
               className={cn(
                 'flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors',
                 'bg-gradient-to-r from-blue-500 to-blue-600 text-white',
@@ -231,7 +247,7 @@ export function PrintDocumentModal({
               ) : (
                 <Printer className="w-5 h-5" />
               )}
-              {printing ? 'Enviando...' : `Imprimir ${copies > 1 ? `(${copies})` : ''}`}
+              {printing ? 'Enviando...' : `Imprimir${copies > 1 ? ` (${copies})` : ''}`}
             </button>
           </div>
         </motion.div>
