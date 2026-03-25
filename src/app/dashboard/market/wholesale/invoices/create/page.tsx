@@ -216,7 +216,7 @@ export default function CreateInvoicePage() {
   const [exchangeRateBCC, setExchangeRateBCC] = useState(411) // BCC rate for selling
   const [pricelistItems, setPricelistItems] = useState<PricelistItem[]>([])
   const [loadingPricelist, setLoadingPricelist] = useState(false)
-  const [exchangeRateWholesale, setExchangeRateWholesale] = useState(355) // ElToque + 15 for wholesale
+  const [exchangeRateWholesale, setExchangeRateWholesale] = useState(411) // Same as system rate
 
   // Step 1: Customer
   const [customerSearch, setCustomerSearch] = useState('')
@@ -396,7 +396,7 @@ export default function CreateInvoicePage() {
         if (result.success && result.rates) {
           setExchangeRate(result.rates.CUP || 340)
           setExchangeRateBCC(result.rates.CUP || 411)
-          setExchangeRateWholesale(result.rates.CUP_WHOLESALE || 355)
+          setExchangeRateWholesale(result.rates.CUP || 411)
         }
       }
     } catch (error) {
