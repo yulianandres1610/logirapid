@@ -404,10 +404,20 @@ export async function POST(
         return NextResponse.json({ success: false, error: 'No se especificaron cantidades por almacén' }, { status: 400 })
       }
     } else {
-      if (!invoice.warehouse_id) {
-        return NextResponse.json({ success: false, error: 'Debe seleccionar un almacén' }, { status: 400 })
+      if (invoice.warehouse_id) {
+        warehouseIds.add(invoice.warehouse_id)
+      } else {
+        // Fallback: find central warehouse or any active warehouse
+        const centralResult = await db.query(
+          'SELECT id FROM market_warehouses WHERE company_id = $1 AND is_active = true ORDER BY is_central DESC NULLS LAST LIMIT 1',
+          [payload.companyId]
+        )
+        if (centralResult.rows.length > 0) {
+          warehouseIds.add(centralResult.rows[0].id)
+        } else {
+          return NextResponse.json({ success: false, error: 'No hay almacén disponible para confirmar' }, { status: 400 })
+        }
       }
-      warehouseIds.add(invoice.warehouse_id)
     }
 
     // Get warehouse names
