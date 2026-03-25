@@ -54,18 +54,22 @@ export async function GET(request: NextRequest) {
     // Get period truncation for SQL
     const periodTrunc = period === 'year' ? 'year' : period === 'month' ? 'month' : period === 'week' ? 'week' : 'day'
 
-    // Summary statistics
+    // Summary statistics (POS + Wholesale)
     const summaryResult = await db.query(`
       SELECT
         COALESCE(SUM(total_amount), 0) as total_sales,
         COUNT(*) as total_orders,
         COALESCE(AVG(total_amount), 0) as average_ticket,
         COUNT(DISTINCT DATE(created_at)) as days_with_sales
-      FROM market_pos_orders o
-      WHERE o.company_id = $1
-        AND o.status IN ('paid', 'completed')
-        AND DATE(o.created_at) BETWEEN $2 AND $3
-        ${terminalFilter}
+      FROM (
+        SELECT total_amount, created_at FROM market_pos_orders
+        WHERE company_id = $1 AND status IN ('paid', 'completed')
+          AND DATE(created_at) BETWEEN $2 AND $3 ${terminalFilter}
+        UNION ALL
+        SELECT total_amount, created_at FROM market_invoices
+        WHERE company_id = $1 AND status IN ('confirmed', 'paid', 'partial')
+          AND DATE(created_at) BETWEEN $2 AND $3
+      ) o
     `, params)
 
     // Previous period for comparison
@@ -79,11 +83,15 @@ export async function GET(request: NextRequest) {
 
     const prevResult = await db.query(`
       SELECT COALESCE(SUM(total_amount), 0) as prev_sales
-      FROM market_pos_orders o
-      WHERE o.company_id = $1
-        AND o.status IN ('paid', 'completed')
-        AND DATE(o.created_at) BETWEEN $2 AND $3
-        ${terminalFilter}
+      FROM (
+        SELECT total_amount, created_at FROM market_pos_orders
+        WHERE company_id = $1 AND status IN ('paid', 'completed')
+          AND DATE(created_at) BETWEEN $2 AND $3 ${terminalFilter}
+        UNION ALL
+        SELECT total_amount, created_at FROM market_invoices
+        WHERE company_id = $1 AND status IN ('confirmed', 'paid', 'partial')
+          AND DATE(created_at) BETWEEN $2 AND $3
+      ) o
     `, prevParams)
 
     const currentSales = parseFloat(summaryResult.rows[0]?.total_sales) || 0
@@ -97,38 +105,65 @@ export async function GET(request: NextRequest) {
       summaryRow: summaryResult.rows[0]
     })
 
-    // Sales by period
+    // Sales by period (POS + Wholesale)
     const byPeriodResult = await db.query(`
       SELECT
         DATE_TRUNC('${periodTrunc}', created_at) as period_date,
         TO_CHAR(DATE_TRUNC('${periodTrunc}', created_at), 'YYYY-MM-DD') as date,
         COALESCE(SUM(total_amount), 0) as sales,
         COUNT(*) as orders
-      FROM market_pos_orders o
-      WHERE o.company_id = $1
-        AND o.status IN ('paid', 'completed')
-        AND DATE(o.created_at) BETWEEN $2 AND $3
-        ${terminalFilter}
+      FROM (
+        SELECT total_amount, created_at FROM market_pos_orders
+        WHERE company_id = $1 AND status IN ('paid', 'completed')
+          AND DATE(created_at) BETWEEN $2 AND $3 ${terminalFilter}
+        UNION ALL
+        SELECT total_amount, created_at FROM market_invoices
+        WHERE company_id = $1 AND status IN ('confirmed', 'paid', 'partial')
+          AND DATE(created_at) BETWEEN $2 AND $3
+      ) o
       GROUP BY DATE_TRUNC('${periodTrunc}', created_at)
       ORDER BY period_date ASC
     `, params)
 
-    // Top products
+    // Top products (POS + Wholesale)
     const byProductResult = await db.query(`
       SELECT
-        ol.product_id,
-        COALESCE(ol.product_name, p.name, 'Producto') as product_name,
-        SUM(ol.quantity) as quantity,
-        SUM(ol.total) as sales,
-        COUNT(DISTINCT o.id) as order_count
-      FROM market_pos_order_lines ol
-      JOIN market_pos_orders o ON ol.order_id = o.id
-      LEFT JOIN market_products p ON ol.product_id = p.id
-      WHERE o.company_id = $1
-        AND o.status IN ('paid', 'completed')
-        AND DATE(o.created_at) BETWEEN $2 AND $3
-        ${terminalFilter}
-      GROUP BY ol.product_id, ol.product_name, p.name
+        product_id,
+        product_name,
+        SUM(quantity) as quantity,
+        SUM(sales) as sales,
+        SUM(order_count) as order_count
+      FROM (
+        SELECT
+          ol.product_id,
+          COALESCE(ol.product_name, p.name, 'Producto') as product_name,
+          SUM(ol.quantity) as quantity,
+          SUM(ol.total) as sales,
+          COUNT(DISTINCT o.id) as order_count
+        FROM market_pos_order_lines ol
+        JOIN market_pos_orders o ON ol.order_id = o.id
+        LEFT JOIN market_products p ON ol.product_id = p.id
+        WHERE o.company_id = $1
+          AND o.status IN ('paid', 'completed')
+          AND DATE(o.created_at) BETWEEN $2 AND $3
+          ${terminalFilter}
+        GROUP BY ol.product_id, ol.product_name, p.name
+        UNION ALL
+        SELECT
+          il.product_id,
+          COALESCE(il.product_name, p.name, 'Producto') as product_name,
+          SUM(il.quantity) as quantity,
+          SUM(il.subtotal) as sales,
+          COUNT(DISTINCT i.id) as order_count
+        FROM market_invoice_lines il
+        JOIN market_invoices i ON il.invoice_id = i.id
+        LEFT JOIN market_products p ON il.product_id = p.id
+        WHERE i.company_id = $1
+          AND i.status IN ('confirmed', 'paid', 'partial')
+          AND DATE(i.created_at) BETWEEN $2 AND $3
+        GROUP BY il.product_id, il.product_name, p.name
+      ) combined
+      GROUP BY product_id, product_name
       ORDER BY sales DESC
       LIMIT 20
     `, params)

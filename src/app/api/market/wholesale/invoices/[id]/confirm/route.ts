@@ -498,15 +498,15 @@ export async function POST(
           const deliveryNumber = await generateDeliveryNumber(payload.companyId)
           const operationNumber = await generateOperationNumber(payload.companyId)
 
-          // Create operation as DONE (not pending)
+          // Create operation as PENDING — stock deducted only when warehouse dispatches
           const opResult = await client.query(`
             INSERT INTO market_warehouse_operations (
               company_id, operation_number, operation_type, status,
-              source_warehouse_id, validation_status,
+              source_warehouse_id,
               reference_type, reference_id, reference_number,
-              notes, created_by, created_at, completed_at, completed_by
-            ) VALUES ($1, $2, 'wholesale_delivery', 'done', $3, 'validated',
-              'wholesale_invoice', $4, $5, $6, $7, NOW(), NOW(), $7
+              notes, created_by, created_at
+            ) VALUES ($1, $2, 'wholesale_delivery', 'confirmed', $3,
+              'wholesale_invoice', $4, $5, $6, $7, NOW()
             ) RETURNING id
           `, [payload.companyId, operationNumber, warehouseId, invoiceId, invoice.invoice_number,
             `Entrega mayorista - Cliente: ${invoice.customer_name}`, payload.userId])
@@ -525,27 +525,20 @@ export async function POST(
             payload.userId])
           const deliveryId = delResult.rows[0].id
 
-          // Create lines and deduct stock for each product
+          // Create lines — stock NOT deducted yet, waits for warehouse dispatch
           for (const item of warehouseLines) {
             await client.query(`
               INSERT INTO market_warehouse_operation_lines (
-                operation_id, product_id, variant_id, quantity_planned, quantity_validated, created_at
-              ) VALUES ($1, $2, $3, $4, $4, NOW())
+                operation_id, product_id, variant_id, quantity_planned, created_at
+              ) VALUES ($1, $2, $3, $4, NOW())
             `, [operationId, item.productId, item.variantId, item.quantity])
 
             await client.query(`
               INSERT INTO market_invoice_delivery_lines (
                 delivery_id, invoice_line_id, product_id, variant_id,
                 quantity_to_deliver, quantity_delivered, created_at
-              ) VALUES ($1, $2, $3, $4, $5, $5, NOW())
+              ) VALUES ($1, $2, $3, $4, $5, 0, NOW())
             `, [deliveryId, item.lineId, item.productId, item.variantId, item.quantity])
-
-            // Deduct stock directly (NO reservation) - uses client for transaction safety
-            await deductStockFIFO(
-              client, warehouseId, item.productId, item.variantId, item.quantity,
-              payload.companyId, payload.userId, invoice.invoice_number,
-              invoice.customer_name, operationId, item.productName
-            )
           }
 
           createdDeliveries.push({
@@ -562,11 +555,11 @@ export async function POST(
         const opResult = await client.query(`
           INSERT INTO market_warehouse_operations (
             company_id, operation_number, operation_type, status,
-            source_warehouse_id, validation_status,
+            source_warehouse_id,
             reference_type, reference_id, reference_number,
-            notes, created_by, created_at, completed_at, completed_by
-          ) VALUES ($1, $2, 'wholesale_delivery', 'done', $3, 'validated',
-            'wholesale_invoice', $4, $5, $6, $7, NOW(), NOW(), $7
+            notes, created_by, created_at
+          ) VALUES ($1, $2, 'wholesale_delivery', 'confirmed', $3,
+            'wholesale_invoice', $4, $5, $6, $7, NOW()
           ) RETURNING id
         `, [payload.companyId, operationNumber, invoice.warehouse_id, invoiceId, invoice.invoice_number,
           `Entrega mayorista - Cliente: ${invoice.customer_name}`, payload.userId])
@@ -589,22 +582,16 @@ export async function POST(
 
           await client.query(`
             INSERT INTO market_warehouse_operation_lines (
-              operation_id, product_id, variant_id, quantity_planned, quantity_validated, created_at
-            ) VALUES ($1, $2, $3, $4, $4, NOW())
+              operation_id, product_id, variant_id, quantity_planned, created_at
+            ) VALUES ($1, $2, $3, $4, NOW())
           `, [operationId, line.product_id, line.variant_id, qty])
 
           await client.query(`
             INSERT INTO market_invoice_delivery_lines (
               delivery_id, invoice_line_id, product_id, variant_id,
               quantity_to_deliver, quantity_delivered, created_at
-            ) VALUES ($1, $2, $3, $4, $5, $5, NOW())
+            ) VALUES ($1, $2, $3, $4, $5, 0, NOW())
           `, [deliveryId, line.id, line.product_id, line.variant_id, qty])
-
-          await deductStockFIFO(
-            client, invoice.warehouse_id, line.product_id, line.variant_id, qty,
-            payload.companyId, payload.userId, invoice.invoice_number,
-            invoice.customer_name, operationId, line.product_name
-          )
         }
 
         createdDeliveries.push({
