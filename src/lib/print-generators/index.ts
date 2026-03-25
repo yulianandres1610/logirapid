@@ -84,6 +84,16 @@ export async function generateDocument(
       }
       break
 
+    case 'warehouse_pickup_ticket':
+      if (isThermal) {
+        buffer = generateWholesaleInvoiceEscpos(documentData as any)
+        format = 'escpos'
+      } else {
+        buffer = await generateWholesaleInvoicePdf(documentData as any)
+        format = 'pdf'
+      }
+      break
+
     case 'wholesale_quote':
       if (isThermal) {
         buffer = generateWholesaleQuoteEscpos(documentData as any)

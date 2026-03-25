@@ -23,6 +23,7 @@ export type DocumentType =
   | 'wholesale_invoice'
   | 'wholesale_quote'
   | 'session_close_report'
+  | 'warehouse_pickup_ticket'
 
 interface PrintDocumentModalProps {
   isOpen: boolean
@@ -52,7 +53,8 @@ const DOCUMENT_LABELS: Record<DocumentType, { label: string; icon: typeof FileTe
   warehouse_operation: { label: 'Operación de Almacén', icon: Package },
   wholesale_invoice: { label: 'Factura Mayorista', icon: FileText },
   wholesale_quote: { label: 'Oferta Comercial', icon: FileText },
-  session_close_report: { label: 'Cierre de Caja', icon: Receipt }
+  session_close_report: { label: 'Cierre de Caja', icon: Receipt },
+  warehouse_pickup_ticket: { label: 'Ticket de Recogida', icon: Package }
 }
 
 export function PrintDocumentModal({

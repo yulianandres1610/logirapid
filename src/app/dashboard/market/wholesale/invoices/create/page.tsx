@@ -40,6 +40,7 @@ import {
   QrCode
 } from 'lucide-react'
 import { useTheme } from '@/contexts/theme-context'
+import { PrintDocumentModal } from '@/components/print/PrintDocumentModal'
 import { cn } from '@/lib/utils'
 
 interface Customer {
@@ -218,6 +219,11 @@ export default function CreateInvoicePage() {
   const [loadingPricelist, setLoadingPricelist] = useState(false)
   const [exchangeRateWholesale, setExchangeRateWholesale] = useState(411) // Same as system rate
   const [includeTax, setIncludeTax] = useState(true)
+  const [showPrintModal, setShowPrintModal] = useState(false)
+  const [printDocType, setPrintDocType] = useState<string>('wholesale_invoice')
+  const [printDocData, setPrintDocData] = useState<any>(null)
+  const [printDocTitle, setPrintDocTitle] = useState('')
+  const [printSourceId, setPrintSourceId] = useState<number>(0)
 
   // Step 1: Customer
   const [customerSearch, setCustomerSearch] = useState('')
@@ -249,10 +255,12 @@ export default function CreateInvoicePage() {
     id: number
     invoiceNumber: string
     customerName: string
+    customerCode?: string
     total: number
     paymentStatus: string
     dueDate: string | null
     downpaymentAmount?: number
+    createdAt?: string
   }
   const [createdInvoice, setCreatedInvoice] = useState<CreatedInvoice | null>(null)
 
@@ -3107,7 +3115,18 @@ export default function CreateInvoicePage() {
                         <button
                           key={delivery.warehouseId}
                           onClick={() => {
-                            window.open(`/dashboard/market/wholesale/invoices/${createdInvoice.id}/print?format=warehouse-ticket&warehouse=${delivery.warehouseId}`, '_blank')
+                            setPrintDocType('warehouse_pickup_ticket')
+                            setPrintDocData({
+                              invoiceNumber: createdInvoice.invoiceNumber,
+                              customerName: createdInvoice.customerName,
+                              warehouseName: delivery.warehouseName,
+                              warehouseId: delivery.warehouseId,
+                              products: delivery.products,
+                              createdAt: createdInvoice.createdAt || new Date().toISOString()
+                            })
+                            setPrintDocTitle(`Ticket ${delivery.warehouseName}`)
+                            setPrintSourceId(createdInvoice.id)
+                            setShowPrintModal(true)
                           }}
                           className={cn(
                             'p-3 rounded-lg flex items-center justify-between transition-all border-2 hover:border-blue-500',
@@ -3136,7 +3155,17 @@ export default function CreateInvoicePage() {
                     </div>
                     <button
                       onClick={() => {
-                        window.open(`/dashboard/market/wholesale/invoices/${createdInvoice.id}/print?format=warehouse-tickets-all`, '_blank')
+                        setPrintDocType('warehouse_pickup_ticket')
+                        setPrintDocData({
+                          invoiceNumber: createdInvoice.invoiceNumber,
+                          customerName: createdInvoice.customerName,
+                          warehouseName: 'Todos los almacenes',
+                          products: deliveriesPreview.flatMap(d => d.products.map(p => ({ ...p, warehouseName: d.warehouseName }))),
+                          createdAt: createdInvoice.createdAt || new Date().toISOString()
+                        })
+                        setPrintDocTitle(`Tickets - ${createdInvoice.invoiceNumber}`)
+                        setPrintSourceId(createdInvoice.id)
+                        setShowPrintModal(true)
                       }}
                       className={cn(
                         'w-full mt-3 py-2.5 rounded-lg font-medium text-sm transition-all border-2 flex items-center justify-center gap-2',
@@ -3157,7 +3186,29 @@ export default function CreateInvoicePage() {
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       onClick={() => {
-                        window.open(`/dashboard/market/wholesale/invoices/${createdInvoice.id}/print?format=receipt`, '_blank')
+                        setPrintDocType('wholesale_invoice')
+                        setPrintDocData({
+                          invoiceNumber: createdInvoice.invoiceNumber,
+                          customerName: createdInvoice.customerName,
+                          customerCode: createdInvoice.customerCode,
+                          lines: lines.map(l => ({
+                            productName: l.productName,
+                            productSku: l.productSku,
+                            quantity: l.quantity,
+                            unitPrice: l.unitPrice,
+                            subtotal: l.subtotal
+                          })),
+                          subtotal: createdInvoice.total,
+                          total: createdInvoice.total,
+                          exchangeRate: exchangeRateWholesale,
+                          warehouseName: '',
+                          createdAt: createdInvoice.createdAt || new Date().toISOString(),
+                          paymentStatus: createdInvoice.paymentStatus,
+                          includeTax
+                        })
+                        setPrintDocTitle(`Recibo ${createdInvoice.invoiceNumber}`)
+                        setPrintSourceId(createdInvoice.id)
+                        setShowPrintModal(true)
                       }}
                       className={cn(
                         'py-4 px-4 rounded-xl flex flex-col items-center gap-2 transition-all border-2',
@@ -3172,7 +3223,29 @@ export default function CreateInvoicePage() {
                     </button>
                     <button
                       onClick={() => {
-                        window.open(`/dashboard/market/wholesale/invoices/${createdInvoice.id}/print?format=letter`, '_blank')
+                        setPrintDocType('wholesale_invoice')
+                        setPrintDocData({
+                          invoiceNumber: createdInvoice.invoiceNumber,
+                          customerName: createdInvoice.customerName,
+                          customerCode: createdInvoice.customerCode,
+                          lines: lines.map(l => ({
+                            productName: l.productName,
+                            productSku: l.productSku,
+                            quantity: l.quantity,
+                            unitPrice: l.unitPrice,
+                            subtotal: l.subtotal
+                          })),
+                          subtotal: createdInvoice.total,
+                          total: createdInvoice.total,
+                          exchangeRate: exchangeRateWholesale,
+                          warehouseName: '',
+                          createdAt: createdInvoice.createdAt || new Date().toISOString(),
+                          paymentStatus: createdInvoice.paymentStatus,
+                          includeTax
+                        })
+                        setPrintDocTitle(`Factura ${createdInvoice.invoiceNumber}`)
+                        setPrintSourceId(createdInvoice.id)
+                        setShowPrintModal(true)
                       }}
                       className={cn(
                         'py-4 px-4 rounded-xl flex flex-col items-center gap-2 transition-all border-2',
@@ -3623,6 +3696,17 @@ export default function CreateInvoicePage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Print Modal */}
+      <PrintDocumentModal
+        isOpen={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+        documentType={printDocType as any}
+        documentData={printDocData || {}}
+        documentTitle={printDocTitle}
+        sourceType="wholesale_invoice"
+        sourceId={printSourceId}
+      />
     </div>
   )
 }
