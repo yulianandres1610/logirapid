@@ -87,6 +87,7 @@ interface Quote {
   discountAmount: number
   totalAmount: number
   currency: string
+  includeTax: boolean
   validUntil: string | null
   notes: string | null
   internalNotes: string | null
@@ -722,7 +723,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     y += 8
 
     // ---- TOTALS ----
-    const TAX_RATE = 0.10
+    const TAX_RATE = quote.includeTax ? 0.10 : 0
     doc.setFontSize(10)
     doc.setTextColor(40, 40, 40)
 
@@ -1917,23 +1918,25 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                         {formatCUP(quoteCupTotal())}
                       </span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Impuesto (10%):</span>
-                      <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                        {formatCurrency(quote.totalAmount * 0.10)} / {formatCUP(Math.round(quoteCupTotal() * 0.10))}
-                      </span>
-                    </div>
+                    {quote.includeTax && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Impuesto (10%):</span>
+                        <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                          {formatCurrency(quote.totalAmount * 0.10)} / {formatCUP(Math.round(quoteCupTotal() * 0.10))}
+                        </span>
+                      </div>
+                    )}
                     <div className={cn(
                       'flex justify-between text-xl font-bold pt-2 border-t',
                       theme === 'dark' ? 'border-gray-700' : 'border-gray-300'
                     )}>
                       <span>Total General:</span>
-                      <span className="text-green-600">{formatCurrency(quote.totalAmount * 1.10)}</span>
+                      <span className="text-green-600">{formatCurrency(quote.includeTax ? quote.totalAmount * 1.10 : quote.totalAmount)}</span>
                     </div>
                     <div className="flex justify-between text-lg font-semibold">
                       <span className="text-gray-500">Total General CUP:</span>
                       <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                        {formatCUP(quoteCupTotal() + Math.round(quoteCupTotal() * 0.10))}
+                        {formatCUP(quote.includeTax ? quoteCupTotal() + Math.round(quoteCupTotal() * 0.10) : quoteCupTotal())}
                       </span>
                     </div>
                   </div>

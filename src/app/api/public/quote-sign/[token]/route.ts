@@ -220,6 +220,7 @@ export async function GET(
         discountPercent: parseFloat(q.discount_percent) || 0,
         discountAmount: parseFloat(q.discount_amount) || 0,
         totalAmount: parseFloat(q.total_amount) || 0,
+        includeTax: q.include_tax !== false,
         currency: q.currency,
         validUntil: q.valid_until,
         notes: q.notes,
