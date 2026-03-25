@@ -114,6 +114,7 @@ export async function GET(
       discountPercent: parseFloat(row.discount_percent) || 0,
       discountAmount: parseFloat(row.discount_amount) || 0,
       totalAmount: parseFloat(row.total_amount) || 0,
+      includeTax: row.include_tax !== false,
       currency: row.currency,
       validUntil: row.valid_until,
       notes: row.notes,

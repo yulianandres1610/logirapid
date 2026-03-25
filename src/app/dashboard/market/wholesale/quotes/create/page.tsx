@@ -146,6 +146,7 @@ function CreateQuotePage() {
   // Step 3: Conditions
   const [validUntil, setValidUntil] = useState('')
   const [discountPercent, setDiscountPercent] = useState(0)
+  const [includeTax, setIncludeTax] = useState(true)
   const [notes, setNotes] = useState('')
   const [internalNotes, setInternalNotes] = useState('')
 
@@ -716,6 +717,7 @@ function CreateQuotePage() {
           warehouseId: selectedWarehouseId || null,
           validUntil: validUntil || null,
           discountPercent,
+          includeTax,
           notes,
           internalNotes,
           salesRepId: selectedSalesRepId || null,
@@ -1297,6 +1299,19 @@ function CreateQuotePage() {
                     </div>
                   )}
 
+                  {/* Tax checkbox */}
+                  {lines.length > 0 && (
+                    <div className={cn('px-4 py-3 border-t', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={includeTax} onChange={e => setIncludeTax(e.target.checked)}
+                          className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500" />
+                        <span className={cn('text-sm', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                          Incluir Impuesto sobre las Ventas (10%)
+                        </span>
+                      </label>
+                    </div>
+                  )}
+
                   {/* Table Footer - Totals */}
                   {lines.length > 0 && (
                     <div className={cn(
@@ -1321,21 +1336,23 @@ function CreateQuotePage() {
                             <span className="text-gray-500">Total CUP:</span>
                             <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>{formatCUP(totalCup)}</span>
                           </div>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-gray-500">Impuesto (10%):</span>
-                            <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                              {formatCurrency(total * 0.10)} / {formatCUP(Math.round(totalCup * 0.10))}
-                            </span>
-                          </div>
+                          {includeTax && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-500">Impuesto (10%):</span>
+                              <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                                {formatCurrency(total * 0.10)} / {formatCUP(Math.round(totalCup * 0.10))}
+                              </span>
+                            </div>
+                          )}
                           <div className="flex justify-between text-xl font-bold pt-2 border-t border-gray-200 dark:border-gray-700">
                             <span>Total General:</span>
-                            <span className="text-green-600">{formatCurrency(total * 1.10)}</span>
+                            <span className="text-green-600">{formatCurrency(includeTax ? total * 1.10 : total)}</span>
                           </div>
                           <div className="flex justify-between text-lg font-semibold">
                             <span className="text-gray-500">Total General CUP:</span>
                             <span className={cn(
                               theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                            )}>{formatCUP(totalCup + Math.round(totalCup * 0.10))}</span>
+                            )}>{formatCUP(includeTax ? totalCup + Math.round(totalCup * 0.10) : totalCup)}</span>
                           </div>
                         </div>
                       </div>
@@ -1622,21 +1639,23 @@ function CreateQuotePage() {
                       <span className="text-gray-500">Total CUP:</span>
                       <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>{formatCUP(totalCup)}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Impuesto (10%):</span>
-                      <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                        {formatCurrency(total * 0.10)} / {formatCUP(Math.round(totalCup * 0.10))}
-                      </span>
-                    </div>
+                    {includeTax && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Impuesto (10%):</span>
+                        <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                          {formatCurrency(total * 0.10)} / {formatCUP(Math.round(totalCup * 0.10))}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-xl font-bold pt-2 border-t border-blue-300 dark:border-blue-800">
                       <span>Total General:</span>
-                      <span className="text-green-600">{formatCurrency(total * 1.10)}</span>
+                      <span className="text-green-600">{formatCurrency(includeTax ? total * 1.10 : total)}</span>
                     </div>
                     <div className="flex justify-between text-lg font-semibold">
                       <span className="text-gray-500">Total General CUP:</span>
                       <span className={cn(
                         theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                      )}>{formatCUP(totalCup + Math.round(totalCup * 0.10))}</span>
+                      )}>{formatCUP(includeTax ? totalCup + Math.round(totalCup * 0.10) : totalCup)}</span>
                     </div>
                   </div>
                 </div>

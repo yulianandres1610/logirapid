@@ -25,6 +25,7 @@ interface QuoteData {
   discountPercent: number
   discountAmount: number
   totalAmount: number
+  includeTax: boolean
   currency: string
   validUntil: string | null
   notes: string | null
@@ -728,18 +729,20 @@ function QuoteSignContent({ token }: { token: string }) {
                       <span className="font-bold text-base" style={{ color: BRAND.secondary }}>{cupTotal.toLocaleString('en-US') + ' CUP'}</span>
                     </div>
                   )}
-                  <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200">
-                    <span className="text-xs text-gray-500">Impuesto sobre las ventas (10%):</span>
-                    <span className="text-sm font-medium text-gray-700">
-                      {showCUP ? Math.round(cupTotal * 0.10).toLocaleString('en-US') + ' CUP' : fmtUSD(quote.totalAmount * 0.10)}
-                    </span>
-                  </div>
+                  {quote.includeTax && (
+                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200">
+                      <span className="text-xs text-gray-500">Impuesto sobre las ventas (10%):</span>
+                      <span className="text-sm font-medium text-gray-700">
+                        {showCUP ? Math.round(cupTotal * 0.10).toLocaleString('en-US') + ' CUP' : fmtUSD(quote.totalAmount * 0.10)}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center mt-2 pt-2 border-t-2" style={{ borderColor: BRAND.primary }}>
                     <span className="text-sm font-bold" style={{ color: BRAND.primary }}>TOTAL GENERAL:</span>
                     <span className="text-xl font-bold" style={{ color: BRAND.primary }}>
                       {showCUP
-                        ? (cupTotal + Math.round(cupTotal * 0.10)).toLocaleString('en-US') + ' CUP'
-                        : fmtUSD(quote.totalAmount * 1.10)}
+                        ? (quote.includeTax ? cupTotal + Math.round(cupTotal * 0.10) : cupTotal).toLocaleString('en-US') + ' CUP'
+                        : fmtUSD(quote.includeTax ? quote.totalAmount * 1.10 : quote.totalAmount)}
                     </span>
                   </div>
                 </div>

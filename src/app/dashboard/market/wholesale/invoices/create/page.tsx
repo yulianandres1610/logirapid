@@ -217,6 +217,7 @@ export default function CreateInvoicePage() {
   const [pricelistItems, setPricelistItems] = useState<PricelistItem[]>([])
   const [loadingPricelist, setLoadingPricelist] = useState(false)
   const [exchangeRateWholesale, setExchangeRateWholesale] = useState(411) // Same as system rate
+  const [includeTax, setIncludeTax] = useState(true)
 
   // Step 1: Customer
   const [customerSearch, setCustomerSearch] = useState('')
@@ -2150,21 +2151,33 @@ export default function CreateInvoicePage() {
                             <span className="text-gray-500">Total CUP:</span>
                             <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>{formatCUP(totalCup)}</span>
                           </div>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-gray-500">Impuesto (10%):</span>
-                            <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
-                              {formatCurrency(total * 0.10)} / {formatCUP(Math.round(totalCup * 0.10))}
-                            </span>
-                          </div>
+                          {includeTax && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-500">Impuesto (10%):</span>
+                              <span className={cn(theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                                {formatCurrency(total * 0.10)} / {formatCUP(Math.round(totalCup * 0.10))}
+                              </span>
+                            </div>
+                          )}
                           <div className="flex justify-between text-xl font-bold pt-2 border-t border-gray-200 dark:border-gray-700">
                             <span>Total General:</span>
-                            <span className="text-green-600">{formatCurrency(total * 1.10)}</span>
+                            <span className="text-green-600">{formatCurrency(includeTax ? total * 1.10 : total)}</span>
                           </div>
                           <div className="flex justify-between text-lg font-semibold">
                             <span className="text-gray-500">Total General CUP:</span>
                             <span className={cn(
                               theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                            )}>{formatCUP(totalCup + Math.round(totalCup * 0.10))}</span>
+                            )}>{formatCUP(includeTax ? totalCup + Math.round(totalCup * 0.10) : totalCup)}</span>
+                          </div>
+                          {/* Tax checkbox */}
+                          <div className="pt-2">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input type="checkbox" checked={includeTax} onChange={e => setIncludeTax(e.target.checked)}
+                                className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500" />
+                              <span className={cn('text-xs', theme === 'dark' ? 'text-gray-400' : 'text-gray-500')}>
+                                Incluir Impuesto (10%)
+                              </span>
+                            </label>
                           </div>
                           <div className="text-xs text-center text-gray-400 mt-1">
                             Tasa mayoreo: {exchangeRateWholesale} CUP/USD
