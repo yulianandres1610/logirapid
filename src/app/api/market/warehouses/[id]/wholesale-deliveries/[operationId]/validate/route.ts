@@ -209,7 +209,7 @@ export async function POST(
     }
 
     const operation = operationCheck.rows[0]
-    if (operation.status !== 'pending' || operation.validation_status !== 'pending_validation') {
+    if (!['pending', 'confirmed', 'in_progress'].includes(operation.status) && operation.status !== 'done') {
       return NextResponse.json({
         success: false,
         error: 'Esta operación ya no está pendiente de validación'
