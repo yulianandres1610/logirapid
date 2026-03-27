@@ -78,7 +78,7 @@ export default function PaintBaseTypesPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => router.push(`/dashboard/market/production/paint/base-types/create`)}
+                        <button onClick={() => router.push(`/dashboard/market/production/paint/base-types/${bt.id}/edit`)}
                           className="p-1.5 text-blue-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
                           <Edit className="w-4 h-4" />
                         </button>

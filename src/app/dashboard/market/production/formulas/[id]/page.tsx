@@ -1287,14 +1287,14 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
             yieldUnit: formula.yieldUnit,
             laborCostPerBatch: formula.laborCostPerBatch,
             lines: formula.lines.map((l: any) => ({
-              name: l.name || l.rawMaterialName,
-              sku: l.sku || l.rawMaterialSku,
+              name: l.materialName,
+              sku: l.materialSku || '',
               quantity: l.quantity,
-              unitCost: l.costPrice || l.unitCost || 0,
-              subtotal: l.quantity * (l.costPrice || l.unitCost || 0)
+              unitCost: l.materialCost || 0,
+              subtotal: l.quantity * (l.materialCost || 0)
             })),
-            totalMaterialsCost: formula.lines.reduce((s: number, l: any) => s + l.quantity * (l.costPrice || l.unitCost || 0), 0),
-            totalCost: formula.lines.reduce((s: number, l: any) => s + l.quantity * (l.costPrice || l.unitCost || 0), 0) + (formula.laborCostPerBatch || 0),
+            totalMaterialsCost: formula.lines.reduce((s: number, l: any) => s + l.quantity * (l.materialCost || 0), 0),
+            totalCost: formula.lines.reduce((s: number, l: any) => s + l.quantity * (l.materialCost || 0), 0) + (formula.laborCostPerBatch || 0),
             notes: formula.notes,
             createdAt: formula.createdAt
           }}
