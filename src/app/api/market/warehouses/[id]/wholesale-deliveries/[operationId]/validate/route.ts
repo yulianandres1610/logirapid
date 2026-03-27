@@ -41,6 +41,16 @@ export async function GET(
     const warehouseId = parseInt(id)
     const opId = parseInt(operationId)
 
+    // Try to find by operation ID first, then by delivery ID
+    let realOpId = opId
+    const deliveryCheck = await db.query(
+      'SELECT operation_id FROM market_invoice_deliveries WHERE id = $1',
+      [opId]
+    )
+    if (deliveryCheck.rows.length > 0 && deliveryCheck.rows[0].operation_id) {
+      realOpId = deliveryCheck.rows[0].operation_id
+    }
+
     // Get operation details
     const operationResult = await db.query(`
       SELECT
@@ -56,7 +66,7 @@ export async function GET(
       LEFT JOIN market_invoices i ON i.id = o.reference_id
       LEFT JOIN market_wholesale_customers c ON c.id = i.customer_id
       WHERE o.id = $1 AND o.company_id = $2 AND o.operation_type = 'wholesale_delivery'
-    `, [opId, payload.companyId])
+    `, [realOpId, payload.companyId])
 
     if (operationResult.rows.length === 0) {
       return NextResponse.json({
@@ -177,12 +187,19 @@ export async function POST(
       }, { status: 400 })
     }
 
+    // Resolve delivery ID → operation ID
+    let realOpId = opId
+    const delCheck = await db.query('SELECT operation_id FROM market_invoice_deliveries WHERE id = $1', [opId])
+    if (delCheck.rows.length > 0 && delCheck.rows[0].operation_id) {
+      realOpId = delCheck.rows[0].operation_id
+    }
+
     // Verify operation exists and is in correct state
     const operationCheck = await db.query(`
       SELECT id, status, validation_status
       FROM market_warehouse_operations
       WHERE id = $1 AND company_id = $2 AND operation_type = 'wholesale_delivery'
-    `, [opId, payload.companyId])
+    `, [realOpId, payload.companyId])
 
     if (operationCheck.rows.length === 0) {
       return NextResponse.json({

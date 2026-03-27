@@ -41,8 +41,15 @@ export async function POST(
     const warehouseId = parseInt(id)
     const opId = parseInt(operationId)
 
-    const body = await request.json()
-    const { discrepancyNotes } = body
+    const body = await request.json().catch(() => ({}))
+    const { discrepancyNotes } = body as any
+
+    // Resolve delivery ID → operation ID
+    let realOpId = opId
+    const delCheck = await db.query('SELECT operation_id FROM market_invoice_deliveries WHERE id = $1', [opId])
+    if (delCheck.rows.length > 0 && delCheck.rows[0].operation_id) {
+      realOpId = delCheck.rows[0].operation_id
+    }
 
     // Get operation details
     const operationResult = await db.query(`
@@ -57,7 +64,7 @@ export async function POST(
       LEFT JOIN market_invoices i ON i.id = o.reference_id
       LEFT JOIN market_wholesale_customers c ON c.id = i.customer_id
       WHERE o.id = $1 AND o.company_id = $2 AND o.operation_type = 'wholesale_delivery'
-    `, [opId, payload.companyId])
+    `, [realOpId, payload.companyId])
 
     if (operationResult.rows.length === 0) {
       return NextResponse.json({
@@ -87,7 +94,7 @@ export async function POST(
       JOIN market_products p ON p.id = l.product_id
       LEFT JOIN market_product_variants pv ON pv.id = l.variant_id
       WHERE l.operation_id = $1
-    `, [opId])
+    `, [realOpId])
 
     // Auto-validate lines that haven't been validated yet (assume full delivery)
     // This allows completing delivery without explicit validation step
@@ -501,7 +508,7 @@ export async function POST(
           completed_by = $2,
           updated_at = NOW()
         WHERE id = $3
-      `, [discrepancyNotes || null, payload.userId, opId])
+      `, [discrepancyNotes || null, payload.userId, realOpId])
 
       // 2.5. Update delivery status and timestamp
       // First ensure the columns exist
@@ -510,8 +517,8 @@ export async function POST(
 
       // Get the delivery linked to this operation
       const deliveryResult = await db.query(`
-        SELECT id FROM market_invoice_deliveries WHERE operation_id = $1
-      `, [opId])
+        SELECT id FROM market_invoice_deliveries WHERE operation_id = $1 OR id = $2
+      `, [realOpId, opId])
 
       if (deliveryResult.rows.length > 0) {
         const deliveryId = deliveryResult.rows[0].id
