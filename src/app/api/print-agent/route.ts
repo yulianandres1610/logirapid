@@ -18,7 +18,9 @@ function inferPrinterType(printerName: string | null, fallback: string): string 
   if (name.includes('tm-') || name.includes('tm_') || name.includes('epson_tm') ||
       name.includes('star_') || name.includes('bixolon') || name.includes('thermal') ||
       name.includes('receipt') || name.includes('pos_') || name.includes('t20') ||
-      name.includes('t88') || name.includes('m30') || name.includes('ct-s')) {
+      name.includes('t88') || name.includes('m30') || name.includes('ct-s') ||
+      name.includes('rongta') || name.includes('rp') || name.includes('xprinter') ||
+      name.includes('80mm') || name.includes('58mm')) {
     return 'thermal_80mm'
   }
 
