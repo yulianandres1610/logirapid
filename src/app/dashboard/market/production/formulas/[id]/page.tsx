@@ -795,12 +795,24 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
                   theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                 )}>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Precio venta:</span>
-                    <span className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                    <span className="text-gray-500">Precio de venta:</span>
+                    <span className={cn('font-bold text-base', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
                       {formatCurrency(targetProduct?.sellingPrice || 0)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Costo de fabricación:</span>
+                    <span className={cn('font-bold text-orange-600')}>
+                      {formatCurrency(totals.costPerUnit)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Ganancia por {yieldUnit}:</span>
+                    <span className={cn('font-bold', (targetProduct?.sellingPrice || 0) - totals.costPerUnit > 0 ? 'text-emerald-600' : 'text-red-500')}>
+                      {formatCurrency((targetProduct?.sellingPrice || 0) - totals.costPerUnit)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm pt-1 border-t border-gray-100 dark:border-gray-700">
                     <span className="text-gray-500">Unidad:</span>
                     <span className="text-gray-600">{yieldUnit}</span>
                   </div>
@@ -883,14 +895,22 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
 
                   {/* Margin visual */}
                   <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-700">
-                    <span className="text-sm text-gray-500">Costo por unidad</span>
+                    <span className="text-sm text-gray-500">Costo fabricación / {yieldUnit}</span>
                     <span className={cn('text-sm font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>${totals.costPerUnit.toFixed(4)}</span>
                   </div>
                   {targetProduct && targetProduct.sellingPrice > 0 && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500">Precio de venta</span>
-                      <span className={cn('text-sm font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>${targetProduct.sellingPrice.toFixed(2)}</span>
-                    </div>
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-500">Precio de venta / {yieldUnit}</span>
+                        <span className={cn('text-sm font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>${targetProduct.sellingPrice.toFixed(2)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-500">Ganancia / {yieldUnit}</span>
+                        <span className={cn('text-sm font-bold', (targetProduct.sellingPrice - totals.costPerUnit) > 0 ? 'text-emerald-600' : 'text-red-500')}>
+                          ${(targetProduct.sellingPrice - totals.costPerUnit).toFixed(4)}
+                        </span>
+                      </div>
+                    </>
                   )}
                   <div className={cn(
                     'p-3 rounded-xl mt-2',
@@ -901,10 +921,15 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
                         : theme === 'dark' ? 'bg-red-900/20' : 'bg-red-50'
                   )}>
                     <div className="flex items-center justify-between">
-                      <span className={cn(
-                        'text-sm font-medium',
-                        margin >= 30 ? 'text-emerald-600' : margin >= 15 ? 'text-amber-600' : 'text-red-600'
-                      )}>Margen estimado</span>
+                      <div>
+                        <span className={cn(
+                          'text-sm font-medium',
+                          margin >= 30 ? 'text-emerald-600' : margin >= 15 ? 'text-amber-600' : 'text-red-600'
+                        )}>Margen de Fabricación</span>
+                        <p className={cn('text-[10px]', margin >= 30 ? 'text-emerald-500' : margin >= 15 ? 'text-amber-500' : 'text-red-400')}>
+                          (Precio Venta - Costo Fabricación) / Precio Venta
+                        </p>
+                      </div>
                       <span className={cn(
                         'text-lg font-bold',
                         margin >= 30 ? 'text-emerald-600' : margin >= 15 ? 'text-amber-600' : 'text-red-600'
