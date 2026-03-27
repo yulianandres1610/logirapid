@@ -47,8 +47,9 @@ interface WarehouseForm {
 interface PrintService {
   id: number
   name: string
-  code: string
-  status?: string
+  code?: string
+  printerName?: string | null
+  online?: boolean
 }
 
 const WAREHOUSE_TYPES = [
@@ -101,7 +102,7 @@ export default function EditWarehousePage() {
         // Fetch warehouse and print services in parallel
         const [warehouseRes, printServicesRes] = await Promise.all([
           fetch(`/api/market/warehouses/${params.id}`),
-          fetch('/api/market/print-services')
+          fetch('/api/print-services/available?documentType=warehouse_operation')
         ])
 
         const warehouseData = await warehouseRes.json()
@@ -598,7 +599,7 @@ export default function EditWarehousePage() {
                       <option value="">Sin servicio de impresión</option>
                       {printServices.map(ps => (
                         <option key={ps.id} value={ps.id}>
-                          {ps.name} ({ps.code})
+                          {ps.name}{ps.printerName ? ` — ${ps.printerName}` : ''}{ps.online ? ' ✓' : ' (offline)'}
                         </option>
                       ))}
                     </select>

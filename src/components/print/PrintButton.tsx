@@ -68,10 +68,10 @@ export function PrintButton({
       .then(r => r.json())
       .then(data => {
         if (data.success && data.data) {
+          setAvailableServices(data.data)
           const online = data.data.filter((s: any) => s.online)
-          const list = online.length > 0 ? online : data.data
-          setAvailableServices(list)
-          setSelectedServiceId(list.length === 1 ? list[0].id : null)
+          if (online.length === 1) setSelectedServiceId(online[0].id)
+          else if (data.data.length === 1) setSelectedServiceId(data.data[0].id)
         }
       })
       .catch(() => {})
@@ -278,7 +278,7 @@ function CopiesModal({
         </h3>
 
         {/* Printer selector */}
-        {services.length > 1 && (
+        {services.length >= 1 && (
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Impresora</label>
             <div className="relative">
