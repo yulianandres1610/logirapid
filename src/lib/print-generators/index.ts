@@ -168,6 +168,7 @@ export async function generateDocument(
     // ── PDF reports ──
     case 'cash_register_report':
     case 'session_close_report':
+      console.log(`[GenerateDocument] session_close: printerType=${printerType}, isThermal=${isThermal}`)
       if (isThermal) {
         buffer = generateSessionCloseEscpos(documentData as any)
         format = 'escpos'
@@ -175,6 +176,7 @@ export async function generateDocument(
         buffer = await generateCashRegisterReportPdf(documentData as any)
         format = 'pdf'
       }
+      console.log(`[GenerateDocument] session_close: format=${format}, bufferLen=${buffer.length}`)
       break
 
     case 'sales_report':
