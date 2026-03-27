@@ -161,16 +161,14 @@ export default function SessionReceiptPage() {
   }, [sessionId])
 
 
-  // Auto-print if requested
+  // Auto-print disabled - user should use the Print button to select service
+  // Previously auto-sent to defaultPrintServiceId which could be wrong terminal
   useEffect(() => {
-    const doAutoPrint = async () => {
-      if (autoPrint && report && !autoPrintAttempted) {
-        setAutoPrintAttempted(true)
-        // Wait a bit for UI to render, then print
-        setTimeout(() => handlePrint(), 500)
-      }
+    if (autoPrint && report && !autoPrintAttempted) {
+      setAutoPrintAttempted(true)
+      // Open the print modal instead of auto-printing
+      setTimeout(() => setShowPrintModal(true), 500)
     }
-    doAutoPrint()
   }, [autoPrint, report, autoPrintAttempted])
 
   const formatDate = (dateStr: string) => {
@@ -309,7 +307,7 @@ export default function SessionReceiptPage() {
       cashSummary,
       otherPayments,
       denominationsSummary,
-      productsSold: productsSold.slice(0, 50), // Limit to 50 products for print
+      productsSold: productsSold.slice(0, 20).map(p => ({ productName: p.productName, quantity: p.quantity, total: p.total })),
       closingNotes: session.closingNotes
     }
   }
