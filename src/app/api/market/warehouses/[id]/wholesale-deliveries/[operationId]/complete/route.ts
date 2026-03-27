@@ -75,7 +75,7 @@ export async function POST(
 
     const operation = operationResult.rows[0]
 
-    if (operation.status !== 'pending') {
+    if (operation.status === 'done') {
       return NextResponse.json({
         success: false,
         error: 'Esta operación ya fue completada'
