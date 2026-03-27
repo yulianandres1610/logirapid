@@ -45,8 +45,11 @@ export async function GET(request: NextRequest) {
 
     console.log('[Sales Report API] Filters:', { companyId, startDate, endDate, period, terminalId })
 
-    // Build terminal filter
-    const terminalFilter = terminalId ? 'AND o.pos_terminal_id = $4' : ''
+    // Build terminal filter for POS queries
+    // For subqueries without alias, use bare column name
+    const posTerminalFilterBare = terminalId ? 'AND pos_terminal_id = $4' : ''
+    // For queries with alias 'o', use o.pos_terminal_id
+    const posTerminalFilter = terminalId ? 'AND o.pos_terminal_id = $4' : ''
     const params = terminalId
       ? [companyId, startDate, endDate, parseInt(terminalId)]
       : [companyId, startDate, endDate]
@@ -64,10 +67,10 @@ export async function GET(request: NextRequest) {
       FROM (
         SELECT total_amount, created_at FROM market_pos_orders
         WHERE company_id = $1 AND status IN ('paid', 'completed')
-          AND DATE(created_at) BETWEEN $2 AND $3 ${terminalFilter}
+          AND DATE(created_at) BETWEEN $2 AND $3 ${posTerminalFilterBare}
         UNION ALL
         SELECT total_amount, created_at FROM market_invoices
-        WHERE company_id = $1 AND status IN ('confirmed', 'paid', 'partial')
+        WHERE company_id = $1 AND status IN ('confirmed', 'paid', 'partial', 'delivered')
           AND DATE(created_at) BETWEEN $2 AND $3
       ) o
     `, params)
@@ -86,10 +89,10 @@ export async function GET(request: NextRequest) {
       FROM (
         SELECT total_amount, created_at FROM market_pos_orders
         WHERE company_id = $1 AND status IN ('paid', 'completed')
-          AND DATE(created_at) BETWEEN $2 AND $3 ${terminalFilter}
+          AND DATE(created_at) BETWEEN $2 AND $3 ${posTerminalFilterBare}
         UNION ALL
         SELECT total_amount, created_at FROM market_invoices
-        WHERE company_id = $1 AND status IN ('confirmed', 'paid', 'partial')
+        WHERE company_id = $1 AND status IN ('confirmed', 'paid', 'partial', 'delivered')
           AND DATE(created_at) BETWEEN $2 AND $3
       ) o
     `, prevParams)
@@ -115,10 +118,10 @@ export async function GET(request: NextRequest) {
       FROM (
         SELECT total_amount, created_at FROM market_pos_orders
         WHERE company_id = $1 AND status IN ('paid', 'completed')
-          AND DATE(created_at) BETWEEN $2 AND $3 ${terminalFilter}
+          AND DATE(created_at) BETWEEN $2 AND $3 ${posTerminalFilterBare}
         UNION ALL
         SELECT total_amount, created_at FROM market_invoices
-        WHERE company_id = $1 AND status IN ('confirmed', 'paid', 'partial')
+        WHERE company_id = $1 AND status IN ('confirmed', 'paid', 'partial', 'delivered')
           AND DATE(created_at) BETWEEN $2 AND $3
       ) o
       GROUP BY DATE_TRUNC('${periodTrunc}', created_at)
@@ -146,7 +149,7 @@ export async function GET(request: NextRequest) {
         WHERE o.company_id = $1
           AND o.status IN ('paid', 'completed')
           AND DATE(o.created_at) BETWEEN $2 AND $3
-          ${terminalFilter}
+          ${posTerminalFilter}
         GROUP BY ol.product_id, ol.product_name, p.name
         UNION ALL
         SELECT
@@ -159,7 +162,7 @@ export async function GET(request: NextRequest) {
         JOIN market_invoices i ON il.invoice_id = i.id
         LEFT JOIN market_products p ON il.product_id = p.id
         WHERE i.company_id = $1
-          AND i.status IN ('confirmed', 'paid', 'partial')
+          AND i.status IN ('confirmed', 'paid', 'partial', 'delivered')
           AND DATE(i.created_at) BETWEEN $2 AND $3
         GROUP BY il.product_id, il.product_name, p.name
       ) combined
@@ -184,7 +187,7 @@ export async function GET(request: NextRequest) {
       WHERE o.company_id = $1
         AND o.status IN ('paid', 'completed')
         AND DATE(o.created_at) BETWEEN $2 AND $3
-        ${terminalFilter}
+        ${posTerminalFilter}
       GROUP BY p.category
       ORDER BY sales DESC
     `, params)
@@ -219,7 +222,7 @@ export async function GET(request: NextRequest) {
       WHERE o.company_id = $1
         AND o.status IN ('paid', 'completed')
         AND DATE(o.created_at) BETWEEN $2 AND $3
-        ${terminalFilter}
+        ${posTerminalFilter}
       GROUP BY pm.payment_method, pm.currency
       ORDER BY amount DESC
     `, params)
@@ -234,7 +237,7 @@ export async function GET(request: NextRequest) {
       WHERE o.company_id = $1
         AND o.status IN ('paid', 'completed')
         AND DATE(o.created_at) BETWEEN $2 AND $3
-        ${terminalFilter}
+        ${posTerminalFilter}
       GROUP BY EXTRACT(HOUR FROM created_at)
       ORDER BY hour
     `, params)
