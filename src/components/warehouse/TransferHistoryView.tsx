@@ -7,6 +7,7 @@ import {
   AlertTriangle, X, ChevronRight, Search, Filter, Printer,
   ArrowUpRight, ArrowDownLeft, Calendar, FileText
 } from 'lucide-react'
+import { PrintDocumentModal } from '@/components/print/PrintDocumentModal'
 
 // Format quantity - show decimals only if not integer
 function formatQty(value: number): string {
@@ -89,6 +90,7 @@ export default function TransferHistoryView({
 }: TransferHistoryViewProps) {
   const [transfers, setTransfers] = useState<TransferSummary[]>([])
   const [selectedTransfer, setSelectedTransfer] = useState<TransferDetail | null>(null)
+  const [showPrintModal, setShowPrintModal] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -368,7 +370,7 @@ export default function TransferHistoryView({
               Volver al historial
             </button>
             <button
-              onClick={handlePrint}
+              onClick={() => setShowPrintModal(true)}
               className="flex items-center gap-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-800/50"
             >
               <Printer className="w-4 h-4" />
@@ -713,6 +715,25 @@ export default function TransferHistoryView({
             <p className="mt-3 text-gray-600 dark:text-gray-400">Cargando detalle...</p>
           </div>
         </div>
+      )}
+      {selectedTransfer && (
+        <PrintDocumentModal
+          isOpen={showPrintModal}
+          onClose={() => setShowPrintModal(false)}
+          documentType="warehouse_operation"
+          documentData={{
+            operationType: 'transfer',
+            operationNumber: selectedTransfer.operation.operationNumber,
+            warehouse: { id: warehouseId, name: selectedTransfer.operation.sourceWarehouse?.name || '', code: selectedTransfer.operation.sourceWarehouse?.code || '' },
+            destinationWarehouse: selectedTransfer.operation.destinationWarehouse ? { id: 0, name: selectedTransfer.operation.destinationWarehouse.name, code: selectedTransfer.operation.destinationWarehouse.code || '' } : null,
+            products: selectedTransfer.lines.map((l: any) => ({ productId: l.productId, name: l.productName, sku: l.sku, quantity: l.quantityPlanned })),
+            createdAt: selectedTransfer.operation.createdAt
+          }}
+          documentTitle={`Transferencia ${selectedTransfer.operation.operationNumber}`}
+          sourceType="warehouse_operation"
+          sourceId={selectedTransfer.operation.id}
+          warehouseId={warehouseId}
+        />
       )}
     </div>
   )
