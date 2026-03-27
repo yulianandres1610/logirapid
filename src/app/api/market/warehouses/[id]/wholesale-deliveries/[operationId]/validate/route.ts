@@ -222,7 +222,7 @@ export async function POST(
         UPDATE market_warehouse_operation_lines
         SET quantity_validated = $1
         WHERE id = $2 AND operation_id = $3
-      `, [line.quantityValidated, line.lineId, opId])
+      `, [line.quantityValidated, line.lineId, realOpId])
     }
 
     // Fetch updated lines for response
@@ -242,7 +242,7 @@ export async function POST(
       LEFT JOIN market_product_variants pv ON pv.id = l.variant_id
       WHERE l.operation_id = $1
       ORDER BY p.name
-    `, [opId])
+    `, [realOpId])
 
     const updatedLines = linesResult.rows.map(line => ({
       lineId: line.line_id,

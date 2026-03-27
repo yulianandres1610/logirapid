@@ -1732,6 +1732,24 @@ export async function POST() {
       console.log('[Migration] Note: wholesale delivery fix -', e.message)
     }
 
+    // Reconcile product stock: market_products.quantity_on_hand = sum of all warehouse stocks
+    try {
+      await db.query(`
+        UPDATE market_products p SET
+          quantity_on_hand = COALESCE((
+            SELECT SUM(ws.quantity_on_hand)
+            FROM market_warehouse_stock ws
+            WHERE ws.product_id = p.id
+          ), 0)
+        WHERE p.company_id IN (SELECT id FROM companies)
+      `)
+      // Also reset any negative reserved quantities
+      await db.query(`UPDATE market_warehouse_stock SET quantity_reserved = 0 WHERE quantity_reserved < 0 OR quantity_reserved IS NULL`)
+      console.log('[Migration] Reconciled product stock with warehouse stock')
+    } catch (e: any) {
+      console.log('[Migration] Note: stock reconciliation -', e.message)
+    }
+
     // ====== PAINT PRODUCTION TABLES ======
 
     // Paint base types (clara, oscura)
