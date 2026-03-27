@@ -1635,6 +1635,73 @@ export async function POST() {
       console.log('[Migration] Note: pricelist decimal upgrade -', e.message)
     }
 
+    // Fix: Delete wholesale delivery operations that incorrectly deducted stock
+    try {
+      // Get the operations that were created as 'done' with wholesale_delivery type
+      const badOps = await db.query(`
+        SELECT wo.id, wo.operation_number, wo.source_warehouse_id
+        FROM market_warehouse_operations wo
+        WHERE wo.operation_type = 'wholesale_delivery' AND wo.status = 'done'
+      `)
+
+      if (badOps.rows.length > 0) {
+        const opIds = badOps.rows.map((r: any) => r.id)
+
+        // Reverse stock deductions from stock_movements
+        const movements = await db.query(`
+          SELECT product_id, variant_id, from_warehouse_id, quantity
+          FROM market_stock_movements
+          WHERE reference_type = 'wholesale_delivery'
+            AND reference_id = ANY($1)
+            AND movement_type = 'wholesale_out'
+        `, [opIds])
+
+        // Add stock back
+        for (const mv of movements.rows) {
+          await db.query(`
+            UPDATE market_warehouse_stock
+            SET quantity_on_hand = quantity_on_hand + $1
+            WHERE warehouse_id = $2 AND product_id = $3 AND COALESCE(variant_id, 0) = COALESCE($4, 0)
+          `, [parseFloat(mv.quantity), mv.from_warehouse_id, mv.product_id, mv.variant_id])
+
+          await db.query(`
+            UPDATE market_products SET quantity_on_hand = quantity_on_hand + $1 WHERE id = $2
+          `, [parseFloat(mv.quantity), mv.product_id])
+        }
+
+        // Delete the bad stock movements
+        await db.query(`
+          DELETE FROM market_stock_movements
+          WHERE reference_type = 'wholesale_delivery' AND reference_id = ANY($1)
+        `, [opIds])
+
+        // Delete operation lines
+        await db.query(`
+          DELETE FROM market_warehouse_operation_lines WHERE operation_id = ANY($1)
+        `, [opIds])
+
+        // Delete delivery lines linked to these operations
+        await db.query(`
+          DELETE FROM market_invoice_delivery_lines
+          WHERE delivery_id IN (SELECT id FROM market_invoice_deliveries WHERE operation_id = ANY($1))
+        `, [opIds])
+
+        // Delete deliveries
+        await db.query(`
+          DELETE FROM market_invoice_deliveries WHERE operation_id = ANY($1)
+        `, [opIds])
+
+        // Delete the operations themselves
+        await db.query(`
+          DELETE FROM market_warehouse_operations WHERE id = ANY($1)
+        `, [opIds])
+
+        console.log(`[Migration] Fixed ${badOps.rows.length} bad wholesale delivery operations - stock restored, operations deleted`)
+      }
+    } catch (e: any) {
+      console.log('[Migration] Note: wholesale delivery fix -', e.message)
+    }
+
     // ====== PAINT PRODUCTION TABLES ======
 
     // Paint base types (clara, oscura)
