@@ -7,6 +7,7 @@ import {
   AlertTriangle, X, ChevronRight, Search, Printer,
   Calendar, FileText, Scale, Trash2, ChevronDown, ChevronUp
 } from 'lucide-react'
+import { PrintDocumentModal } from '@/components/print/PrintDocumentModal'
 
 // Format quantity - show decimals only if not integer
 function formatQty(value: number): string {
@@ -83,6 +84,8 @@ export default function AdjustmentsHistoryView({
   onSelectOperation
 }: AdjustmentsHistoryViewProps) {
   const [operations, setOperations] = useState<OperationSummary[]>([])
+  const [showPrintModal, setShowPrintModal] = useState(false)
+  const [printOp, setPrintOp] = useState<OperationSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'adjustment' | 'scrap'>('all')
@@ -545,7 +548,7 @@ export default function AdjustmentsHistoryView({
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
-                                handlePrint(op)
+                                setPrintOp(op); setShowPrintModal(true)
                               }}
                               className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500"
                             >
@@ -633,6 +636,27 @@ export default function AdjustmentsHistoryView({
           </button>
         </div>
       </div>
+      {printOp && (
+        <PrintDocumentModal
+          isOpen={showPrintModal}
+          onClose={() => setShowPrintModal(false)}
+          documentType="warehouse_operation"
+          documentData={{
+            operationType: printOp.operationType,
+            operationNumber: printOp.operationNumber,
+            warehouse: { id: warehouseId, name: '', code: '' },
+            products: printOp.lines?.map((l: any) => ({ productId: l.productId, name: l.productName || l.name, sku: l.sku || '', quantity: l.quantityPlanned || l.quantity })) || [],
+            scrapReason: (printOp as any).scrapReason || null,
+            adjustmentReason: (printOp as any).adjustmentReason || null,
+            notes: printOp.notes,
+            createdAt: printOp.createdAt
+          }}
+          documentTitle={`${printOp.operationType === 'scrap' ? 'Merma' : 'Ajuste'} ${printOp.operationNumber}`}
+          sourceType="warehouse_operation"
+          sourceId={printOp.id}
+          warehouseId={warehouseId}
+        />
+      )}
     </div>
   )
 }
