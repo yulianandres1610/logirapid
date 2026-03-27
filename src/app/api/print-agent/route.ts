@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
             copies: job.copies || 1,
           }
         } catch (genError) {
-          console.error(`[Print Agent] Error generating document for job ${job.id}:`, genError)
+          console.error(`[Print Agent] Error generating ${job.document_type} for job ${job.id}:`, genError instanceof Error ? genError.message : genError, genError instanceof Error ? genError.stack?.substring(0, 300) : '')
           return {
             id: job.id,
             document_type: job.document_type,

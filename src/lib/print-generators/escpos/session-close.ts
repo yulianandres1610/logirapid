@@ -33,8 +33,9 @@ function lr(left: string, right: string): string {
   return sp > 0 ? left + ' '.repeat(sp) + right : left + ' ' + right
 }
 
-function fmt(v: number): string {
-  return '$' + v.toFixed(2)
+function fmt(v: any): string {
+  const n = parseFloat(v)
+  return '$' + (isNaN(n) ? '0.00' : n.toFixed(2))
 }
 
 export function generateSessionCloseEscpos(data: any): Buffer {
@@ -148,7 +149,9 @@ export function generateSessionCloseEscpos(data: any): Buffer {
   l.push(C.FEED)
 
   // === CASH SUMMARY ===
-  const cashSummary = data.cashSummary || {}
+  try {
+  const rawCashSummary = data.cashSummary
+  const cashSummary = (rawCashSummary && typeof rawCashSummary === 'object' && !Array.isArray(rawCashSummary)) ? rawCashSummary : {}
   const hasCashData = Object.keys(cashSummary).length > 0
 
   if (hasCashData) {
@@ -160,7 +163,7 @@ export function generateSessionCloseEscpos(data: any): Buffer {
     l.push(C.FEED)
 
     for (const [method, info] of Object.entries(cashSummary) as [string, any][]) {
-      if (info && info.collected > 0) {
+      if (info && typeof info === 'object' && (parseFloat(info.collected) || 0) > 0) {
         const methodName = method === 'cash_usd' ? 'Efectivo USD' :
           method === 'cash_cup' ? 'Efectivo CUP' :
           method === 'cash_mlc' ? 'Efectivo MLC' :
@@ -250,7 +253,10 @@ export function generateSessionCloseEscpos(data: any): Buffer {
     l.push(C.FEED)
   }
 
+  } catch (cashErr) { console.error('[SessionClose] Cash section error:', cashErr) }
+
   // === OTHER PAYMENTS (array format) ===
+  try {
   const otherPayments = data.otherPayments
   if (Array.isArray(otherPayments) && otherPayments.length > 0) {
     l.push(C.BOLD_ON)
@@ -268,7 +274,10 @@ export function generateSessionCloseEscpos(data: any): Buffer {
     l.push(C.FEED)
   }
 
+  } catch (payErr) { console.error('[SessionClose] Payments error:', payErr) }
+
   // === TOP PRODUCTS ===
+  try {
   const products = data.productsSold
   if (Array.isArray(products) && products.length > 0) {
     l.push(C.INVERSE_ON)
@@ -300,6 +309,8 @@ export function generateSessionCloseEscpos(data: any): Buffer {
     l.push(SEP)
     l.push(C.FEED)
   }
+
+  } catch (prodErr) { console.error('[SessionClose] Products error:', prodErr) }
 
   // === NOTES ===
   if (data.closingNotes) {
