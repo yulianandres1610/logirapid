@@ -158,6 +158,26 @@ export async function GET(
       WHERE formula_id = $1
     `, [formulaId])
 
+    // Fetch modification history
+    let history: any[] = []
+    try {
+      const histResult = await db.query(`
+        SELECT h.*, CONCAT(u.firstname, ' ', u.lastname) as performed_by_name, u.email as performed_by_email
+        FROM market_production_formula_history h
+        LEFT JOIN users u ON u.id = h.performed_by
+        WHERE h.formula_id = $1
+        ORDER BY h.performed_at DESC
+        LIMIT 20
+      `, [formulaId])
+      history = histResult.rows.map((h: any) => ({
+        id: h.id,
+        action: h.action,
+        changes: h.changes,
+        performedBy: h.performed_by_name || h.performed_by_email || 'Sistema',
+        performedAt: h.performed_at
+      }))
+    } catch { /* table may not exist yet */ }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -194,7 +214,8 @@ export async function GET(
         usage: {
           totalPlans: parseInt(plansResult.rows[0].total) || 0,
           completedPlans: parseInt(plansResult.rows[0].completed) || 0
-        }
+        },
+        history
       }
     })
 
@@ -275,9 +296,31 @@ export async function PATCH(
       lines
     } = body
 
+    // Ensure history table exists
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS market_production_formula_history (
+          id SERIAL PRIMARY KEY,
+          formula_id INTEGER NOT NULL,
+          action VARCHAR(50) NOT NULL,
+          changes JSONB,
+          performed_by INTEGER,
+          performed_at TIMESTAMP DEFAULT NOW()
+        )
+      `)
+    } catch { /* ignore */ }
+
     await db.query('BEGIN')
 
     try {
+      // Snapshot before changes for history
+      const beforeSnapshot = {
+        name: existingFormula.rows[0].name,
+        targetProductId: existingFormula.rows[0].target_product_id,
+        yieldQuantity: existingFormula.rows[0].yield_quantity,
+        laborCostPerBatch: existingFormula.rows[0].labor_cost_per_batch,
+        notes: existingFormula.rows[0].notes
+      }
       // Build update query
       const updates: string[] = []
       const values: any[] = []
@@ -357,6 +400,14 @@ export async function PATCH(
           ])
         }
       }
+
+      // Record history
+      try {
+        await db.query(`
+          INSERT INTO market_production_formula_history (formula_id, action, changes, performed_by)
+          VALUES ($1, 'updated', $2, $3)
+        `, [formulaId, JSON.stringify({ before: beforeSnapshot, after: { name, targetProductId, yieldQuantity, laborCostPerBatch, notes, linesCount: lines?.length } }), payload.userId])
+      } catch { /* ignore history errors */ }
 
       await db.query('COMMIT')
 

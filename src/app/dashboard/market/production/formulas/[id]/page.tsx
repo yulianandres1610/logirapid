@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, use } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FlaskConical,
@@ -24,13 +24,16 @@ import {
   Target,
   Loader2,
   CheckCircle,
-  Activity
+  Activity,
+  Printer,
+  History
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import { PrintDocumentModal } from '@/components/print/PrintDocumentModal'
 
 interface Product {
   id: number
@@ -92,14 +95,17 @@ interface Formula {
     isCritical: boolean
     notes: string | null
   }[]
+  history?: { id: number; action: string; changes: any; performedBy: string; performedAt: string }[]
 }
 
 export default function FormulaDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { theme } = useTheme()
 
-  const [isEditing, setIsEditing] = useState(false)
+  const [isEditing, setIsEditing] = useState(searchParams.get('edit') === 'true')
+  const [showPrintModal, setShowPrintModal] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const [formula, setFormula] = useState<Formula | null>(null)
@@ -444,6 +450,17 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
               </Link>
 
               <div className="flex items-center gap-2">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowPrintModal(true)}
+                  className={cn('flex items-center gap-2 px-3 py-2 rounded-xl font-medium transition-colors',
+                    theme === 'dark' ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}
+                >
+                  <Printer className="w-4 h-4" />
+                  <span className="hidden sm:inline">Imprimir</span>
+                </motion.button>
+
                 {!isEditing ? (
                   <motion.button
                     whileHover={{ scale: 1.02 }}
@@ -1198,6 +1215,41 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
 
+        {/* History */}
+        {!isEditing && formula?.history && formula.history.length > 0 && (
+          <div className="space-y-4">
+            <h2 className={cn('text-lg font-bold flex items-center gap-2', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+              <History className="w-5 h-5 text-purple-500" /> Historial de Modificaciones
+            </h2>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+              className={cn('rounded-2xl border shadow-sm p-6', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+              <div className="space-y-4">
+                {formula.history.map((h: any, i: number) => (
+                  <div key={h.id || i} className={cn('flex items-start gap-3 pb-4', i < formula.history.length - 1 ? 'border-b' : '', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                    <div className={cn('w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5', theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100')}>
+                      <Edit className="w-4 h-4 text-purple-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                        {h.action === 'updated' ? 'Fórmula modificada' : h.action}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        por <strong>{h.performedBy}</strong> · {new Date(h.performedAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                      {h.changes?.after && (
+                        <div className="mt-2 text-xs text-gray-400 space-y-0.5">
+                          {h.changes.after.name && h.changes.before?.name !== h.changes.after.name && <p>Nombre: {h.changes.after.name}</p>}
+                          {h.changes.after.linesCount !== undefined && <p>Materias primas: {h.changes.after.linesCount} líneas</p>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        )}
+
         {/* Click outside to close product search */}
         {showProductSearch && (
           <div
@@ -1210,6 +1262,37 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
           />
         )}
       </DashboardLayout>
+
+      {formula && (
+        <PrintDocumentModal
+          isOpen={showPrintModal}
+          onClose={() => setShowPrintModal(false)}
+          documentType={'production_formula' as any}
+          documentData={{
+            formulaCode: formula.code,
+            formulaName: formula.name,
+            targetProductName: formula.targetProductName,
+            targetProductSku: formula.targetProductSku,
+            yieldQuantity: formula.yieldQuantity,
+            yieldUnit: formula.yieldUnit,
+            laborCostPerBatch: formula.laborCostPerBatch,
+            lines: formula.lines.map((l: any) => ({
+              name: l.name || l.rawMaterialName,
+              sku: l.sku || l.rawMaterialSku,
+              quantity: l.quantity,
+              unitCost: l.costPrice || l.unitCost || 0,
+              subtotal: l.quantity * (l.costPrice || l.unitCost || 0)
+            })),
+            totalMaterialsCost: formula.lines.reduce((s: number, l: any) => s + l.quantity * (l.costPrice || l.unitCost || 0), 0),
+            totalCost: formula.lines.reduce((s: number, l: any) => s + l.quantity * (l.costPrice || l.unitCost || 0), 0) + (formula.laborCostPerBatch || 0),
+            notes: formula.notes,
+            createdAt: formula.createdAt
+          }}
+          documentTitle={`Fórmula ${formula.code}`}
+          sourceType="production_formula"
+          sourceId={formula.id}
+        />
+      )}
     </ProtectedRoute>
   )
 }

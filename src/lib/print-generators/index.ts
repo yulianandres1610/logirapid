@@ -20,6 +20,7 @@ import { generateInventoryCountReportPdf } from './pdf/inventory-count-report'
 import { generateWarehouseOperationPdf } from './pdf/warehouse-operation'
 import { generateWarehouseOperationEscpos } from './escpos/warehouse-operation'
 import { generateSessionCloseEscpos } from './escpos/session-close'
+import { generateProductionFormulaEscpos } from './escpos/production-formula'
 import { generateProductionOrderPdf } from './pdf/production-order'
 import { generateWeightLabelPdf } from './pdf/weight-label'
 
@@ -199,6 +200,11 @@ export async function generateDocument(
     case 'production_order':
       buffer = await generateProductionOrderPdf(documentData as any)
       format = 'pdf'
+      break
+
+    case 'production_formula':
+      buffer = generateProductionFormulaEscpos(documentData as any)
+      format = 'escpos'
       break
 
     default:
