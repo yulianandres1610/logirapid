@@ -882,6 +882,16 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
                   </div>
 
                   {/* Margin visual */}
+                  <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <span className="text-sm text-gray-500">Costo por unidad</span>
+                    <span className={cn('text-sm font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>${totals.costPerUnit.toFixed(4)}</span>
+                  </div>
+                  {targetProduct && targetProduct.sellingPrice > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-500">Precio de venta</span>
+                      <span className={cn('text-sm font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>${targetProduct.sellingPrice.toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className={cn(
                     'p-3 rounded-xl mt-2',
                     margin >= 30
