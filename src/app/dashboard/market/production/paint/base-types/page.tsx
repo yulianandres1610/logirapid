@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Beaker, Loader2, FlaskConical, Trash2, Package } from 'lucide-react'
+import { Plus, Beaker, Loader2, FlaskConical, Trash2, Package, Edit } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
@@ -77,9 +77,15 @@ export default function PaintBaseTypesPage() {
                       <span className={cn('text-xs px-2 py-1 rounded-full font-medium', bt.isActive ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-500')}>{bt.isActive ? 'Activa' : 'Inactiva'}</span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => handleDelete(bt.id, bt.name)} className="p-1.5 text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => router.push(`/dashboard/market/production/paint/base-types/create`)}
+                          className="p-1.5 text-blue-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDelete(bt.id, bt.name)} className="p-1.5 text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
