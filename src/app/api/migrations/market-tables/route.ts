@@ -1635,120 +1635,12 @@ export async function POST() {
       console.log('[Migration] Note: pricelist decimal upgrade -', e.message)
     }
 
-    // Fix: Clean up bad wholesale deliveries for FAC-0001, FAC-0002 and reset FAC-0003
-    try {
-      // Delete ALL wholesale delivery operations and deliveries (clean slate)
-      const allWdOps = await db.query(`
-        SELECT wo.id FROM market_warehouse_operations wo
-        WHERE wo.operation_type = 'wholesale_delivery'
-      `)
-      if (allWdOps.rows.length > 0) {
-        const opIds = allWdOps.rows.map((r: any) => r.id)
-        await db.query(`DELETE FROM market_stock_movements WHERE reference_type = 'wholesale_delivery' AND reference_id = ANY($1)`, [opIds])
-        await db.query(`DELETE FROM market_warehouse_operation_lines WHERE operation_id = ANY($1)`, [opIds])
-        await db.query(`DELETE FROM market_invoice_delivery_lines WHERE delivery_id IN (SELECT id FROM market_invoice_deliveries WHERE operation_id = ANY($1))`, [opIds])
-        await db.query(`DELETE FROM market_invoice_deliveries WHERE operation_id = ANY($1)`, [opIds])
-        await db.query(`DELETE FROM market_warehouse_operations WHERE id = ANY($1)`, [opIds])
-        console.log(`[Migration] Deleted ${allWdOps.rows.length} wholesale delivery operations`)
-      }
-      // Also delete orphan deliveries without operations
-      await db.query(`DELETE FROM market_invoice_delivery_lines WHERE delivery_id IN (SELECT id FROM market_invoice_deliveries)`)
-      await db.query(`DELETE FROM market_invoice_deliveries`)
+    // (One-time wholesale delivery fixes - COMPLETED, no longer runs)
+    // These were one-time data fixes that already executed successfully.
 
-      // Mark FAC-2026-0001 and FAC-2026-0002 as delivered
-      await db.query(`UPDATE market_invoices SET status = 'paid' WHERE invoice_number IN ('FAC-2026-0001', 'FAC-2026-0002')`)
-
-      // Reset FAC-2026-0003 to confirmed (ready for testing)
-      await db.query(`UPDATE market_invoices SET status = 'confirmed' WHERE invoice_number = 'FAC-2026-0003'`)
-
-      console.log('[Migration] Cleaned up wholesale deliveries, marked FAC-0001/0002 as paid, reset FAC-0003')
-    } catch (e: any) {
-      console.log('[Migration] Note: wholesale delivery cleanup -', e.message)
-    }
-
-    // (Legacy fix - already handled above)
-    try {
-      const badOps = await db.query(`
-        SELECT wo.id, wo.operation_number, wo.source_warehouse_id
-        FROM market_warehouse_operations wo
-        WHERE wo.operation_type = 'wholesale_delivery' AND wo.status = 'done'
-      `)
-
-      if (badOps.rows.length > 0) {
-        const opIds = badOps.rows.map((r: any) => r.id)
-
-        // Reverse stock deductions from stock_movements
-        const movements = await db.query(`
-          SELECT product_id, variant_id, from_warehouse_id, quantity
-          FROM market_stock_movements
-          WHERE reference_type = 'wholesale_delivery'
-            AND reference_id = ANY($1)
-            AND movement_type = 'wholesale_out'
-        `, [opIds])
-
-        // Add stock back
-        for (const mv of movements.rows) {
-          await db.query(`
-            UPDATE market_warehouse_stock
-            SET quantity_on_hand = quantity_on_hand + $1
-            WHERE warehouse_id = $2 AND product_id = $3 AND COALESCE(variant_id, 0) = COALESCE($4, 0)
-          `, [parseFloat(mv.quantity), mv.from_warehouse_id, mv.product_id, mv.variant_id])
-
-          await db.query(`
-            UPDATE market_products SET quantity_on_hand = quantity_on_hand + $1 WHERE id = $2
-          `, [parseFloat(mv.quantity), mv.product_id])
-        }
-
-        // Delete the bad stock movements
-        await db.query(`
-          DELETE FROM market_stock_movements
-          WHERE reference_type = 'wholesale_delivery' AND reference_id = ANY($1)
-        `, [opIds])
-
-        // Delete operation lines
-        await db.query(`
-          DELETE FROM market_warehouse_operation_lines WHERE operation_id = ANY($1)
-        `, [opIds])
-
-        // Delete delivery lines linked to these operations
-        await db.query(`
-          DELETE FROM market_invoice_delivery_lines
-          WHERE delivery_id IN (SELECT id FROM market_invoice_deliveries WHERE operation_id = ANY($1))
-        `, [opIds])
-
-        // Delete deliveries
-        await db.query(`
-          DELETE FROM market_invoice_deliveries WHERE operation_id = ANY($1)
-        `, [opIds])
-
-        // Delete the operations themselves
-        await db.query(`
-          DELETE FROM market_warehouse_operations WHERE id = ANY($1)
-        `, [opIds])
-
-        console.log(`[Migration] Fixed ${badOps.rows.length} bad wholesale delivery operations - stock restored, operations deleted`)
-      }
-    } catch (e: any) {
-      console.log('[Migration] Note: wholesale delivery fix -', e.message)
-    }
-
-    // Reconcile product stock: market_products.quantity_on_hand = sum of all warehouse stocks
-    try {
-      await db.query(`
-        UPDATE market_products p SET
-          quantity_on_hand = COALESCE((
-            SELECT SUM(ws.quantity_on_hand)
-            FROM market_warehouse_stock ws
-            WHERE ws.product_id = p.id
-          ), 0)
-        WHERE p.company_id IN (SELECT id FROM companies)
-      `)
-      // Also reset any negative reserved quantities
-      await db.query(`UPDATE market_warehouse_stock SET quantity_reserved = 0 WHERE quantity_reserved < 0 OR quantity_reserved IS NULL`)
-      console.log('[Migration] Reconciled product stock with warehouse stock')
-    } catch (e: any) {
-      console.log('[Migration] Note: stock reconciliation -', e.message)
-    }
+    // (Legacy wholesale delivery fix - COMPLETED, removed to prevent re-execution)
+    // (Stock reconciliation - COMPLETED, no longer runs automatically)
+    // Was: UPDATE market_products SET quantity_on_hand = SUM(warehouse_stock)
 
     // ====== PAINT PRODUCTION TABLES ======
 
