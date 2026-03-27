@@ -1060,6 +1060,32 @@ export default function ConsignmentsPage() {
                             </div>
                           </div>
 
+                          {/* Printer selector */}
+                          {printServices.length > 0 && (
+                            <div>
+                              <label className={cn("block text-sm font-medium mb-2", theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                                Servicio de impresión
+                              </label>
+                              <div className="relative">
+                                <select
+                                  value={selectedPrintServiceId || ''}
+                                  onChange={(e) => setSelectedPrintServiceId(e.target.value ? Number(e.target.value) : null)}
+                                  className={cn(
+                                    'w-full px-3 py-2.5 pr-8 rounded-xl border text-sm font-medium appearance-none cursor-pointer',
+                                    theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                                  )}
+                                >
+                                  <option value="">Automático</option>
+                                  {printServices.map((s: any) => (
+                                    <option key={s.id} value={s.id}>
+                                      {s.name}{s.printerName ? ` — ${s.printerName.replace(/_/g, ' ')}` : ''}{s.online ? ' ✓' : ' (offline)'}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          )}
+
                           <div>
                             <label className={cn(
                               "block text-sm font-medium mb-2",
