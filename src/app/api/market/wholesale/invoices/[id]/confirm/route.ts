@@ -61,11 +61,11 @@ async function generateDeliveryNumber(companyId: number): Promise<string> {
   return `${prefix}${nextNumber.toString().padStart(4, '0')}`
 }
 
-/**
- * Deduct stock from warehouse using FIFO across all lot types
- * @param txClient - Dedicated database client for transaction safety
- */
-async function deductStockFIFO(
+// NOTE: deductStockFIFO removed - stock is deducted in the complete endpoint only
+// when warehouse dispatches the delivery, NOT at confirm time.
+
+/* eslint-disable @typescript-eslint/no-unused-vars */
+async function _deductStockFIFO_REMOVED(
   txClient: any,
   warehouseId: number,
   productId: number,

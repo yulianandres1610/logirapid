@@ -170,19 +170,16 @@ export async function POST(
         if (stockResult.rows.length > 0) {
           const stock = stockResult.rows[0]
           const previousOnHand = parseFloat(stock.quantity_on_hand) || 0
-          const previousReserved = parseFloat(stock.quantity_reserved) || 0
 
-          // Release reserved quantity (what was expected) and deduct validated quantity
-          const newReserved = Math.max(0, previousReserved - quantityExpected)
+          // Deduct validated quantity from on-hand stock
           const newOnHand = previousOnHand - quantityValidated
 
           await db.query(`
             UPDATE market_warehouse_stock SET
               quantity_on_hand = $1,
-              quantity_reserved = $2,
               updated_at = NOW()
-            WHERE id = $3
-          `, [newOnHand, newReserved, stock.id])
+            WHERE id = $2
+          `, [newOnHand, stock.id])
 
           // Create stock movement record
           await db.query(`
@@ -243,13 +240,13 @@ export async function POST(
             `, [totalResult.rows[0].total, line.variant_id])
           }
 
-          // Update main product quantity (sum across all warehouses)
+          // Update main product quantity (sum ALL warehouse stocks including variants)
           await db.query(`
             UPDATE market_products
             SET quantity_on_hand = (
               SELECT COALESCE(SUM(quantity_on_hand), 0)
               FROM market_warehouse_stock
-              WHERE product_id = $1 AND variant_id IS NULL
+              WHERE product_id = $1
             ), updated_at = NOW()
             WHERE id = $1
           `, [line.product_id])
