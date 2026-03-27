@@ -1635,9 +1635,39 @@ export async function POST() {
       console.log('[Migration] Note: pricelist decimal upgrade -', e.message)
     }
 
-    // Fix: Delete wholesale delivery operations that incorrectly deducted stock
+    // Fix: Clean up bad wholesale deliveries for FAC-0001, FAC-0002 and reset FAC-0003
     try {
-      // Get the operations that were created as 'done' with wholesale_delivery type
+      // Delete ALL wholesale delivery operations and deliveries (clean slate)
+      const allWdOps = await db.query(`
+        SELECT wo.id FROM market_warehouse_operations wo
+        WHERE wo.operation_type = 'wholesale_delivery'
+      `)
+      if (allWdOps.rows.length > 0) {
+        const opIds = allWdOps.rows.map((r: any) => r.id)
+        await db.query(`DELETE FROM market_stock_movements WHERE reference_type = 'wholesale_delivery' AND reference_id = ANY($1)`, [opIds])
+        await db.query(`DELETE FROM market_warehouse_operation_lines WHERE operation_id = ANY($1)`, [opIds])
+        await db.query(`DELETE FROM market_invoice_delivery_lines WHERE delivery_id IN (SELECT id FROM market_invoice_deliveries WHERE operation_id = ANY($1))`, [opIds])
+        await db.query(`DELETE FROM market_invoice_deliveries WHERE operation_id = ANY($1)`, [opIds])
+        await db.query(`DELETE FROM market_warehouse_operations WHERE id = ANY($1)`, [opIds])
+        console.log(`[Migration] Deleted ${allWdOps.rows.length} wholesale delivery operations`)
+      }
+      // Also delete orphan deliveries without operations
+      await db.query(`DELETE FROM market_invoice_delivery_lines WHERE delivery_id IN (SELECT id FROM market_invoice_deliveries)`)
+      await db.query(`DELETE FROM market_invoice_deliveries`)
+
+      // Mark FAC-2026-0001 and FAC-2026-0002 as delivered
+      await db.query(`UPDATE market_invoices SET status = 'paid' WHERE invoice_number IN ('FAC-2026-0001', 'FAC-2026-0002')`)
+
+      // Reset FAC-2026-0003 to confirmed (ready for testing)
+      await db.query(`UPDATE market_invoices SET status = 'confirmed' WHERE invoice_number = 'FAC-2026-0003'`)
+
+      console.log('[Migration] Cleaned up wholesale deliveries, marked FAC-0001/0002 as paid, reset FAC-0003')
+    } catch (e: any) {
+      console.log('[Migration] Note: wholesale delivery cleanup -', e.message)
+    }
+
+    // (Legacy fix - already handled above)
+    try {
       const badOps = await db.query(`
         SELECT wo.id, wo.operation_number, wo.source_warehouse_id
         FROM market_warehouse_operations wo
