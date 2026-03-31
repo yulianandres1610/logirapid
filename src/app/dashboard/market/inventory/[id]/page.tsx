@@ -838,7 +838,7 @@ export default function ProductDetailPage() {
                       'bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 border-2 border-emerald-500/30'
                     )}>
                       <p className="text-xs text-emerald-600 dark:text-emerald-400 uppercase tracking-wide mb-1">Precio Venta</p>
-                      <p className="text-3xl font-bold text-emerald-600">{symbol}{Number(product.sellingPrice).toFixed(2)}</p>
+                      <p className="text-3xl font-bold text-emerald-600">{symbol}{product.sellingPrice}</p>
                       <div className="mt-2 pt-2 border-t border-emerald-200/30 dark:border-emerald-800/30 space-y-0.5">
                         <p className="text-xs text-blue-600 font-medium">${Math.round(product.sellingPrice * USD_CUP).toLocaleString('es-ES')} CUP</p>
                         <p className="text-xs text-purple-600 font-medium">${(product.sellingPrice * USD_MLC).toFixed(2)} MLC</p>
@@ -854,7 +854,7 @@ export default function ProductDetailPage() {
                       <p className={cn(
                         'text-2xl font-bold',
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
-                      )}>{symbol}{Number(product.costPrice).toFixed(2)}</p>
+                      )}>{symbol}{product.costPrice}</p>
                       <p className="text-xs text-blue-600 mt-1">${Math.round(product.costPrice * USD_CUP).toLocaleString('es-ES')} CUP</p>
                     </div>
 
@@ -871,7 +871,7 @@ export default function ProductDetailPage() {
                         <TrendingUp className="w-5 h-5" />
                         {margin}%
                       </p>
-                      <p className="text-xs text-gray-500 mt-1">{symbol}{(product.sellingPrice - product.costPrice).toFixed(2)} ganancia</p>
+                      <p className="text-xs text-gray-500 mt-1">{symbol}{(product.sellingPrice - product.costPrice)} ganancia</p>
                     </div>
                   </div>
                 </div>
@@ -1286,10 +1286,10 @@ export default function ProductDetailPage() {
                             {/* Prices */}
                             <div className="text-right flex-shrink-0">
                               <p className="text-lg font-bold text-emerald-600">
-                                {symbol}{Number(variant.sellingPrice).toFixed(2)}
+                                {symbol}{variant.sellingPrice}
                               </p>
                               <p className="text-xs text-gray-500">
-                                Costo: {symbol}{Number(variant.costPrice || 0).toFixed(2)}
+                                Costo: {symbol}{variant.costPrice || 0}
                               </p>
                             </div>
 
