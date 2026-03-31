@@ -896,7 +896,7 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
                   {/* Margin visual */}
                   <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-700">
                     <span className="text-sm text-gray-500">Costo fabricación / {yieldUnit}</span>
-                    <span className={cn('text-sm font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>${totals.costPerUnit.toFixed(4)}</span>
+                    <span className={cn('text-sm font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>${totals.costPerUnit.toFixed(2)}</span>
                   </div>
                   {targetProduct && targetProduct.sellingPrice > 0 && (
                     <>
@@ -907,7 +907,7 @@ export default function FormulaDetailPage({ params }: { params: Promise<{ id: st
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-500">Ganancia / {yieldUnit}</span>
                         <span className={cn('text-sm font-bold', (targetProduct.sellingPrice - totals.costPerUnit) > 0 ? 'text-emerald-600' : 'text-red-500')}>
-                          ${(targetProduct.sellingPrice - totals.costPerUnit).toFixed(4)}
+                          ${(targetProduct.sellingPrice - totals.costPerUnit).toFixed(2)}
                         </span>
                       </div>
                     </>

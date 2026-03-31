@@ -1031,7 +1031,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
   const quoteCupTotal = () => quoteCupSubtotal() - quoteCupDiscount()
 
   // Format USD with up to 3 decimals, no trailing zeros
-  const fmtUSD = (value: number) => '$' + value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
+  const fmtUSD = (value: number) => '$' + value.toFixed(2)
 
   const formatDate = (date: string | null | undefined) => {
     if (!date) return ''

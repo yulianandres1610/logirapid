@@ -353,8 +353,7 @@ export default function CloseSessionPage() {
     } else if (currency === 'MLC') {
       return `$${amount.toFixed(2)} MLC`
     }
-    // USD: 4 decimales para cuadre exacto
-    return `$${amount.toFixed(4)}`
+    return `$${amount.toFixed(2)}`
   }
 
   const inventoryShortage = session?.inventoryShortageValue || 0
@@ -589,12 +588,12 @@ export default function CloseSessionPage() {
                       )}>
                         <div className="flex justify-between items-center">
                           <span className="text-green-500 font-medium">Total Ventas</span>
-                          <span className="font-bold text-xl text-green-500">${session.summary.totalSales.toFixed(4)}</span>
+                          <span className="font-bold text-xl text-green-500">${session.summary.totalSales.toFixed(2)}</span>
                         </div>
                         {session.summary.totalDiscounts > 0 && (
                           <div className="flex justify-between items-center text-sm text-amber-500 mt-1">
                             <span>Descuentos aplicados</span>
-                            <span>-${session.summary.totalDiscounts.toFixed(4)}</span>
+                            <span>-${session.summary.totalDiscounts.toFixed(2)}</span>
                           </div>
                         )}
                       </div>
@@ -941,7 +940,7 @@ export default function CloseSessionPage() {
                             ? 'bg-green-500/20 text-green-400'
                             : 'bg-red-500/20 text-red-400'
                         )}>
-                          USD: {differences.usd >= 0 ? '+' : ''}${differences.usd.toFixed(4)}
+                          USD: {differences.usd >= 0 ? '+' : ''}${differences.usd.toFixed(2)}
                         </div>
                         <div className={cn(
                           'px-4 py-2 rounded-xl text-sm font-mono',

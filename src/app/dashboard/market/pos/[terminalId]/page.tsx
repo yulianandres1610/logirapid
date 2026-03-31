@@ -1561,7 +1561,7 @@ export default function POSTerminalPage() {
                   </span>
                 )}
               </div>
-              <span className="font-bold text-lg">${cartTotals.total.toFixed(4)} <span className="text-xs text-green-600 font-normal">(${formatCUP(cartTotals.totalCUP)} CUP)</span></span>
+              <span className="font-bold text-lg">${cartTotals.total.toFixed(2)} <span className="text-xs text-green-600 font-normal">(${formatCUP(cartTotals.totalCUP)} CUP)</span></span>
             </div>
             {showMobileCart ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
           </button>
@@ -1612,12 +1612,12 @@ export default function POSTerminalPage() {
                           {item.quantity} x{' '}
                           {item.pricelistApplied && item.originalPrice > item.unitPrice ? (
                             <>
-                              <span className="line-through text-gray-400">${item.originalPrice.toFixed(4)}</span>
+                              <span className="line-through text-gray-400">${item.originalPrice.toFixed(2)}</span>
                               {' '}
-                              <span className="text-emerald-600 dark:text-emerald-400 font-medium">${item.unitPrice.toFixed(4)}</span>
+                              <span className="text-emerald-600 dark:text-emerald-400 font-medium">${item.unitPrice.toFixed(2)}</span>
                             </>
                           ) : (
-                            <>${item.unitPrice.toFixed(4)}</>
+                            <>${item.unitPrice.toFixed(2)}</>
                           )}
                           {item.discountPercent > 0 && (
                             <span className="text-green-500 ml-1">-{item.discountPercent}%</span>
@@ -1625,7 +1625,7 @@ export default function POSTerminalPage() {
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <p className="font-bold text-sm lg:text-base">${item.total.toFixed(4)}</p>
+                        <p className="font-bold text-sm lg:text-base">${item.total.toFixed(2)}</p>
                         <button
                           onClick={(e) => { e.stopPropagation(); removeFromCart(index) }}
                           className="p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
@@ -1747,24 +1747,24 @@ export default function POSTerminalPage() {
             <div className="space-y-1 lg:space-y-2 mb-2 lg:mb-4">
               <div className="flex justify-between text-xs lg:text-sm">
                 <span className="text-gray-500">Subtotal ({cartTotals.itemCount})</span>
-                <span>${cartTotals.subtotal.toFixed(4)}</span>
+                <span>${cartTotals.subtotal.toFixed(2)}</span>
               </div>
               {cartTotals.wholesaleSavings > 0 && (
                 <div className="flex justify-between text-xs lg:text-sm text-emerald-600 dark:text-emerald-400">
                   <span>Precio mayorista</span>
-                  <span>-${cartTotals.wholesaleSavings.toFixed(4)}</span>
+                  <span>-${cartTotals.wholesaleSavings.toFixed(2)}</span>
                 </div>
               )}
               {cartTotals.discounts > 0 && (
                 <div className="flex justify-between text-xs lg:text-sm text-green-500">
                   <span>Descuentos</span>
-                  <span>-${cartTotals.discounts.toFixed(4)}</span>
+                  <span>-${cartTotals.discounts.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-lg lg:text-xl font-bold pt-1 lg:pt-2 border-t border-gray-200 dark:border-gray-600">
                 <span>Total</span>
                 <div className="text-right">
-                  <span>${cartTotals.total.toFixed(4)}</span>
+                  <span>${cartTotals.total.toFixed(2)}</span>
                   <p className="text-xs lg:text-sm font-normal text-green-600">
                     ${formatCUP(cartTotals.totalCUP)} CUP
                   </p>
@@ -1823,7 +1823,7 @@ export default function POSTerminalPage() {
                 )}
               >
                 <CreditCard className="w-4 h-4 lg:w-5 lg:h-5" />
-                <span>${cartTotals.total.toFixed(4)} <span className="text-[10px] lg:text-xs opacity-80">(${formatCUP(cartTotals.totalCUP)} CUP)</span></span>
+                <span>${cartTotals.total.toFixed(2)} <span className="text-[10px] lg:text-xs opacity-80">(${formatCUP(cartTotals.totalCUP)} CUP)</span></span>
               </button>
             </div>
           </div>
@@ -1925,7 +1925,7 @@ export default function POSTerminalPage() {
                       {product.name}
                     </h3>
                     <p className="text-xs sm:text-sm lg:text-base font-bold text-blue-500">
-                      ${product.price.toFixed(4)}
+                      ${product.price.toFixed(2)}
                     </p>
 
                     {/* Precios en otras monedas (tasa ElToque) */}
@@ -2020,7 +2020,7 @@ export default function POSTerminalPage() {
             >
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-2xl font-bold">Cobrar ${cartTotals.total.toFixed(4)}</h3>
+                  <h3 className="text-2xl font-bold">Cobrar ${cartTotals.total.toFixed(2)}</h3>
                   <p className="text-sm text-green-600 font-normal">${formatCUP(cartTotals.totalCUP)} CUP</p>
                 </div>
                 <button
@@ -2457,7 +2457,7 @@ export default function POSTerminalPage() {
                     SKU: {selectedProductForDetails.sku || 'N/A'}
                   </p>
                   <p className="text-xl font-bold text-blue-500 mt-1">
-                    ${selectedProductForDetails.price.toFixed(4)}
+                    ${selectedProductForDetails.price.toFixed(2)}
                   </p>
                   {/* Precios en otras monedas (tasa ElToque) */}
                   <div className="flex gap-3 mt-1 text-sm">
