@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     // Ensure selling_price supports enough decimals for exact CUP calculation
     try {
-      await db.query(`ALTER TABLE market_products ALTER COLUMN selling_price TYPE DECIMAL(12,6)`)
+      await db.query(`ALTER TABLE market_products ALTER COLUMN selling_price TYPE DECIMAL(15,10)`)
     } catch { /* already upgraded */ }
 
     // Ensure history table exists

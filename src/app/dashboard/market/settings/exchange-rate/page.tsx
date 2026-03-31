@@ -128,8 +128,8 @@ export default function ExchangeRatePage() {
     (c.sku && c.sku.toLowerCase().includes(searchFilter.toLowerCase()))
   ) || []
 
-  // Format USD: show enough decimals to be exact, strip trailing zeros
-  const fmtUSD = (v: number) => '$' + v.toFixed(6).replace(/\.?0+$/, '')
+  // Format USD: show all decimals needed, strip trailing zeros only
+  const fmtUSD = (v: number) => '$' + v.toFixed(10).replace(/0+$/, '').replace(/\.$/, '')
   const fmt = (v: number, dec = 2) => '$' + v.toFixed(dec)
   const fmtCUP = (v: number) => v.toLocaleString('en-US') + ' CUP'
 
