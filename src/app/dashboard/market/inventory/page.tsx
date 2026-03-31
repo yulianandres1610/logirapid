@@ -948,7 +948,7 @@ export default function MarketInventoryPage() {
                       )}>
                         <p className="text-xs text-gray-500 mb-1">Precio de Costo</p>
                         <p className="text-xl font-bold text-gray-900 dark:text-white">
-                          {CURRENCY_SYMBOLS[selectedProduct.currency] || '$'}{Number(selectedProduct.costPrice).toFixed(2)}
+                          {CURRENCY_SYMBOLS[selectedProduct.currency] || '$'}{selectedProduct.costPrice}
                         </p>
                         <div className="text-xs mt-1 space-y-0.5">
                           <p className="text-blue-600">${Math.round(selectedProduct.costPrice * USD_CUP).toLocaleString('es-ES')} CUP</p>
@@ -961,7 +961,7 @@ export default function MarketInventoryPage() {
                       )}>
                         <p className="text-xs text-gray-500 mb-1">Precio de Venta</p>
                         <p className="text-xl font-bold text-emerald-600">
-                          {CURRENCY_SYMBOLS[selectedProduct.currency] || '$'}{Number(selectedProduct.sellingPrice).toFixed(2)}
+                          {CURRENCY_SYMBOLS[selectedProduct.currency] || '$'}{selectedProduct.sellingPrice}
                         </p>
                         <div className="text-xs mt-1 space-y-0.5">
                           <p className="text-green-600 font-medium">${Math.round(selectedProduct.sellingPrice * USD_CUP).toLocaleString('es-ES')} CUP</p>
