@@ -5,13 +5,14 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   DollarSign, RefreshCw, Save, Loader2, Clock, TrendingUp, TrendingDown,
   AlertTriangle, CheckCircle, Package, ArrowRight, Calendar, ArrowLeft,
-  Search, ArrowUpDown, Zap
+  Search, Zap, Printer, Tag
 } from 'lucide-react'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import { PrintDocumentModal } from '@/components/print/PrintDocumentModal'
 
 interface RateConfig {
   manualRate: number | null
@@ -47,6 +48,8 @@ export default function ExchangeRatePage() {
   const [applied, setApplied] = useState(false)
   const [searchFilter, setSearchFilter] = useState('')
   const [history, setHistory] = useState<any[]>([])
+  const [showPrintLabels, setShowPrintLabels] = useState(false)
+  const [printingLabels, setPrintingLabels] = useState(false)
 
   useEffect(() => { fetchConfig(); fetchHistory() }, [])
 
@@ -299,14 +302,31 @@ export default function ExchangeRatePage() {
               </motion.div>
             )}
 
-            {/* Success */}
+            {/* Success + Print Labels */}
             {applied && (
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-                className={cn('rounded-2xl border p-8 mb-6 text-center', isDark ? 'border-green-800 bg-green-900/20' : 'border-green-200 bg-green-50')}>
-                <CheckCircle className="w-14 h-14 text-green-500 mx-auto mb-3" />
-                <h3 className={cn('text-2xl font-bold', isDark ? 'text-white' : 'text-gray-900')}>Precios Actualizados</h3>
-                <p className="text-gray-500 mt-1">{preview?.affectedCount} productos · Tasa: {preview?.newRate} CUP/USD</p>
-                <p className="text-xs text-gray-400 mt-2">Todos los precios CUP son múltiplos de 5 · USD ajustado para exactitud</p>
+                className={cn('rounded-2xl border p-8 mb-6', isDark ? 'border-green-800 bg-green-900/20' : 'border-green-200 bg-green-50')}>
+                <div className="text-center">
+                  <CheckCircle className="w-14 h-14 text-green-500 mx-auto mb-3" />
+                  <h3 className={cn('text-2xl font-bold', isDark ? 'text-white' : 'text-gray-900')}>Precios Actualizados</h3>
+                  <p className="text-gray-500 mt-1">{preview?.affectedCount} productos · Tasa: {preview?.newRate} CUP/USD</p>
+                  <p className="text-xs text-gray-400 mt-2">Todos los precios CUP son múltiplos de 5 · USD ajustado para exactitud</p>
+                </div>
+
+                {/* Print Labels Button */}
+                <div className="mt-6 flex justify-center">
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowPrintLabels(true)}
+                    className={cn('flex items-center gap-3 px-6 py-3.5 rounded-xl font-medium transition-colors',
+                      isDark ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-white text-gray-900 hover:bg-gray-100 border border-gray-200 shadow-sm')}>
+                    <Tag className="w-5 h-5 text-orange-500" />
+                    <div className="text-left">
+                      <span className="block font-bold">Imprimir Etiquetas de Precio</span>
+                      <span className="block text-xs text-gray-500">{preview?.affectedCount} productos con nuevos precios</span>
+                    </div>
+                    <Printer className="w-5 h-5 text-gray-400" />
+                  </motion.button>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -339,6 +359,32 @@ export default function ExchangeRatePage() {
           )}
         </div>
       </div>
-    </DashboardLayout></ProtectedRoute>
+    </DashboardLayout>
+
+    {/* Print Labels Modal - uses existing product_label document type */}
+    {applied && preview && (
+      <PrintDocumentModal
+        isOpen={showPrintLabels}
+        onClose={() => setShowPrintLabels(false)}
+        documentType={'product_label' as any}
+        documentData={{
+          batchMode: true,
+          products: preview.changes.map(c => ({
+            productId: c.productId,
+            name: c.name,
+            sku: c.sku,
+            sellingPrice: c.newUSD,
+            priceCUP: c.newCUP,
+            barcode: c.sku
+          })),
+          exchangeRate: preview.newRate,
+          totalLabels: preview.affectedCount
+        }}
+        documentTitle={`Etiquetas de Precio (${preview.affectedCount} productos)`}
+        sourceType="price_change"
+        sourceId={0}
+      />
+    )}
+    </ProtectedRoute>
   )
 }

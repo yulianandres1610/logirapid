@@ -27,10 +27,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Datos inválidos' }, { status: 400 })
     }
 
-    // Ensure selling_price supports enough decimals for exact CUP calculation
+    // Upgrade ALL price columns to support full decimal precision
     try {
+      // Products
       await db.query(`ALTER TABLE market_products ALTER COLUMN selling_price TYPE DECIMAL(15,10)`)
-    } catch { /* already upgraded */ }
+      await db.query(`ALTER TABLE market_products ALTER COLUMN cost_price TYPE DECIMAL(15,10)`)
+      // POS orders
+      await db.query(`ALTER TABLE market_pos_orders ALTER COLUMN subtotal TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_pos_orders ALTER COLUMN discount_amount TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_pos_orders ALTER COLUMN tax_amount TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_pos_orders ALTER COLUMN total_amount TYPE DECIMAL(15,4)`)
+      // POS order lines
+      await db.query(`ALTER TABLE market_pos_order_lines ALTER COLUMN unit_price TYPE DECIMAL(15,10)`)
+      await db.query(`ALTER TABLE market_pos_order_lines ALTER COLUMN original_price TYPE DECIMAL(15,10)`)
+      await db.query(`ALTER TABLE market_pos_order_lines ALTER COLUMN discount_amount TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_pos_order_lines ALTER COLUMN subtotal TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_pos_order_lines ALTER COLUMN tax_amount TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_pos_order_lines ALTER COLUMN total TYPE DECIMAL(15,4)`)
+      // POS payments
+      await db.query(`ALTER TABLE market_pos_payments ALTER COLUMN amount TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_pos_payments ALTER COLUMN amount_tendered TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_pos_payments ALTER COLUMN change_amount TYPE DECIMAL(15,4)`)
+      // Wholesale quotes
+      await db.query(`ALTER TABLE market_quotes ALTER COLUMN subtotal TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_quotes ALTER COLUMN discount_amount TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_quotes ALTER COLUMN total_amount TYPE DECIMAL(15,4)`)
+      // Quote lines
+      await db.query(`ALTER TABLE market_quote_lines ALTER COLUMN unit_price TYPE DECIMAL(15,10)`)
+      await db.query(`ALTER TABLE market_quote_lines ALTER COLUMN original_price TYPE DECIMAL(15,10)`)
+      await db.query(`ALTER TABLE market_quote_lines ALTER COLUMN subtotal TYPE DECIMAL(15,4)`)
+      // Wholesale invoices
+      await db.query(`ALTER TABLE market_invoices ALTER COLUMN subtotal TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_invoices ALTER COLUMN discount_amount TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_invoices ALTER COLUMN total_amount TYPE DECIMAL(15,4)`)
+      // Invoice lines
+      await db.query(`ALTER TABLE market_invoice_lines ALTER COLUMN unit_price TYPE DECIMAL(15,10)`)
+      await db.query(`ALTER TABLE market_invoice_lines ALTER COLUMN original_price TYPE DECIMAL(15,10)`)
+      await db.query(`ALTER TABLE market_invoice_lines ALTER COLUMN subtotal TYPE DECIMAL(15,4)`)
+    } catch { /* already upgraded or column doesn't exist */ }
 
     // Ensure history table exists
     try {
