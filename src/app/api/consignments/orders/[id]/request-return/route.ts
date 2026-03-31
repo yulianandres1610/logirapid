@@ -247,52 +247,37 @@ export async function POST(
 
     // Create warehouse operation so it appears in warehouse staff's operations list
     try {
-      const opSeqResult = await db.query(`
-        SELECT COUNT(*) as count FROM market_warehouse_operations
-        WHERE company_id = $1 AND operation_type = 'supplier_return'
-      `, [payload.companyId])
+      const opSeqResult = await db.query(
+        `SELECT COUNT(*) as count FROM market_warehouse_operations WHERE company_id = $1 AND operation_type = 'supplier_return'`,
+        [payload.companyId]
+      )
       const opSeq = (parseInt(opSeqResult.rows[0].count) + 1).toString().padStart(4, '0')
       const operationNumber = `DSP-${year}-${opSeq}`
 
-      const opResult = await db.query(`
-        INSERT INTO market_warehouse_operations (
+      const opResult = await db.query(
+        `INSERT INTO market_warehouse_operations (
           company_id, operation_number, operation_type,
           source_warehouse_id, reference_type, reference_id,
           status, notes, created_by, created_at, updated_at
         ) VALUES ($1, $2, 'supplier_return', $3, 'consignment_return', $4, 'pending', $5, $6, NOW(), NOW())
-        RETURNING id
-      `, [
-        payload.companyId,
-        operationNumber,
-        targetWarehouseId,
-        returnId,
-        `Devolución a proveedor: ${order.supplier_name} - Orden ${order.order_number} - Motivo: ${reason || 'not_sold'}`,
-        payload.userId
-      ])
+        RETURNING id`,
+        [payload.companyId, operationNumber, targetWarehouseId, returnId,
+         `Devolucion proveedor: ${order.supplier_name || ''} - Orden ${order.order_number || ''} - Motivo: ${reason || 'not_sold'}`,
+         payload.userId]
+      )
 
-      const operationId = opResult.rows[0].id
-
-      // Create operation lines for each product
-      for (const line of validatedLines) {
-        await db.query(`
-          INSERT INTO market_warehouse_operation_lines (
-            operation_id, product_id, quantity_planned, quantity_done, line_status, lot_number
-          ) VALUES ($1, $2, $3, 0, 'pending', $4)
-        `, [
-          operationId,
-          line.productId,
-          line.quantity,
-          null // lot_number will be resolved during completion
-        ])
+      if (opResult.rows.length > 0) {
+        const operationId = opResult.rows[0].id
+        for (const line of validatedLines) {
+          await db.query(
+            `INSERT INTO market_warehouse_operation_lines (operation_id, product_id, quantity_planned, quantity_done, line_status)
+             VALUES ($1, $2, $3, 0, 'pending')`,
+            [operationId, line.productId, line.quantity]
+          )
+        }
       }
-
-      // Link operation to return record
-      await db.query(`
-        UPDATE consignment_returns SET notes = COALESCE(notes || E'\\n', '') || $1 WHERE id = $2
-      `, [`Operación almacén: ${operationNumber}`, returnId])
     } catch (opError) {
-      // Don't fail the return request if operation creation fails
-      console.error('[Request Return] Warning: Could not create warehouse operation:', opError)
+      console.error('[Request Return] Warning: warehouse operation creation failed:', opError)
     }
 
     return NextResponse.json({
@@ -310,9 +295,10 @@ export async function POST(
 
   } catch (error) {
     console.error('[Request Return] Error:', error)
+    const errorMsg = error instanceof Error ? error.message : 'Error desconocido'
     return NextResponse.json({
       success: false,
-      error: 'Error al crear solicitud de devolución'
+      error: `Error al crear solicitud de devolución: ${errorMsg}`
     }, { status: 500 })
   }
 }
