@@ -60,16 +60,13 @@ export async function POST(request: NextRequest) {
       // Commercial CUP: round to nearest multiple of 5
       const commercialCUP = Math.round(rawNewCUP / 5) * 5
 
-      // New USD = exact division so that USD * rate = CUP with NO rounding
-      // USD can have as many decimals as needed — it's the primary currency
-      const exactUSD = commercialCUP / newRate
-      // Store with enough precision (6 decimals) for exact CUP calculation
-      const newUSD = Math.round(exactUSD * 1000000) / 1000000
+      // New USD = exact division, no rounding — keep full precision
+      const newUSD = commercialCUP / newRate
 
       // Verify: newUSD * newRate should equal commercialCUP exactly
       const verifyCUP = Math.round(newUSD * newRate)
 
-      const priceChanged = Math.abs(newUSD - currentUSD) > 0.000001
+      const priceChanged = Math.abs(newUSD - currentUSD) > 0.0000001
 
       if (priceChanged) {
         affectedCount++
