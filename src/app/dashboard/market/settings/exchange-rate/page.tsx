@@ -12,7 +12,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
-import { PrintDocumentModal } from '@/components/print/PrintDocumentModal'
+// Print labels uses same direct /api/print-jobs pattern as BulkPrintLabelsModal
 
 interface RateConfig {
   manualRate: number | null
@@ -50,6 +50,9 @@ export default function ExchangeRatePage() {
   const [history, setHistory] = useState<any[]>([])
   const [showPrintLabels, setShowPrintLabels] = useState(false)
   const [printingLabels, setPrintingLabels] = useState(false)
+  const [labelSize, setLabelSize] = useState<'2x1' | '3x2' | '4x6'>('3x2')
+  const [printServices, setPrintServices] = useState<any[]>([])
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null)
 
   useEffect(() => { fetchConfig(); fetchHistory() }, [])
 
@@ -83,7 +86,14 @@ export default function ExchangeRatePage() {
     try {
       const res = await fetch('/api/market/exchange-rate-config/apply-prices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ newRate: preview.newRate, changes: preview.changes }) })
       const data = await res.json()
-      if (data.success) { setApplied(true); fetchConfig(); fetchHistory() }
+      if (data.success) {
+          setApplied(true); fetchConfig(); fetchHistory()
+          // Load print services for label printing
+          fetch('/api/print-services/available?documentType=product_label', { credentials: 'include' })
+            .then(r => r.json())
+            .then(d => { if (d.success && d.data) { setPrintServices(d.data); if (d.data.length === 1) setSelectedServiceId(d.data[0].id) } })
+            .catch(() => {})
+        }
     } catch {} finally { setApplying(false) }
   }
 
@@ -313,19 +323,104 @@ export default function ExchangeRatePage() {
                   <p className="text-xs text-gray-400 mt-2">Todos los precios CUP son múltiplos de 5 · USD ajustado para exactitud</p>
                 </div>
 
-                {/* Print Labels Button */}
-                <div className="mt-6 flex justify-center">
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowPrintLabels(true)}
-                    className={cn('flex items-center gap-3 px-6 py-3.5 rounded-xl font-medium transition-colors',
-                      isDark ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-white text-gray-900 hover:bg-gray-100 border border-gray-200 shadow-sm')}>
-                    <Tag className="w-5 h-5 text-orange-500" />
-                    <div className="text-left">
-                      <span className="block font-bold">Imprimir Etiquetas de Precio</span>
-                      <span className="block text-xs text-gray-500">{preview?.affectedCount} productos con nuevos precios</span>
-                    </div>
-                    <Printer className="w-5 h-5 text-gray-400" />
-                  </motion.button>
+                {/* Print Labels Section */}
+                <div className="mt-6 space-y-3">
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    {/* Label size selector */}
+                    <select value={labelSize} onChange={e => setLabelSize(e.target.value as any)}
+                      className={cn('px-3 py-2 rounded-lg border text-sm', isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200')}>
+                      <option value="2x1">2×1" (51×25mm)</option>
+                      <option value="3x2">3×2" (76×51mm)</option>
+                      <option value="4x6">4×6" (102×152mm)</option>
+                    </select>
+
+                    {/* Service selector */}
+                    {printServices.length > 1 && (
+                      <select value={selectedServiceId || ''} onChange={e => setSelectedServiceId(e.target.value ? Number(e.target.value) : null)}
+                        className={cn('px-3 py-2 rounded-lg border text-sm', isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200')}>
+                        <option value="">Auto</option>
+                        {printServices.map((s: any) => (
+                          <option key={s.id} value={s.id}>{s.name} {s.online ? '●' : '○'}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  <div className="flex justify-center gap-3">
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      disabled={printingLabels}
+                      onClick={async () => {
+                        if (!preview) return
+                        setPrintingLabels(true)
+                        try {
+                          const items = preview.changes.map(c => ({
+                            productName: c.name,
+                            sku: c.sku || '',
+                            barcode: c.sku || '',
+                            barcodeType: 'code128',
+                            priceCUP: c.newCUP,
+                            priceUSD: c.newUSD,
+                            currency: 'CUP',
+                            copies: 1
+                          }))
+                          const res = await fetch('/api/print-jobs', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                            body: JSON.stringify({
+                              documentType: 'product_label',
+                              documentData: { includePrice: true, items, labelSize },
+                              copies: 1,
+                              serviceId: selectedServiceId,
+                              sourceType: 'price_change',
+                              priority: 1
+                            })
+                          })
+                          const data = await res.json()
+                          if (data.success) alert(`Etiquetas enviadas: ${items.length} productos con precio`)
+                          else alert('Error: ' + (data.error || 'Error al imprimir'))
+                        } catch { alert('Error de conexión') } finally { setPrintingLabels(false) }
+                      }}
+                      className={cn('flex items-center gap-2 px-5 py-3 rounded-xl font-medium transition-colors',
+                        isDark ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-white text-gray-900 hover:bg-gray-100 border border-gray-200 shadow-sm')}>
+                      {printingLabels ? <Loader2 className="w-4 h-4 animate-spin" /> : <Tag className="w-4 h-4 text-orange-500" />}
+                      Con Precio ({preview?.affectedCount})
+                    </motion.button>
+
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      disabled={printingLabels}
+                      onClick={async () => {
+                        if (!preview) return
+                        setPrintingLabels(true)
+                        try {
+                          const items = preview.changes.map(c => ({
+                            productName: c.name,
+                            sku: c.sku || '',
+                            barcode: c.sku || '',
+                            barcodeType: 'code128',
+                            currency: 'CUP',
+                            copies: 1
+                          }))
+                          const res = await fetch('/api/print-jobs', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                            body: JSON.stringify({
+                              documentType: 'product_label',
+                              documentData: { includePrice: false, items, labelSize },
+                              copies: 1,
+                              serviceId: selectedServiceId,
+                              sourceType: 'price_change',
+                              priority: 1
+                            })
+                          })
+                          const data = await res.json()
+                          if (data.success) alert(`Etiquetas enviadas: ${items.length} productos sin precio`)
+                          else alert('Error: ' + (data.error || 'Error al imprimir'))
+                        } catch { alert('Error de conexión') } finally { setPrintingLabels(false) }
+                      }}
+                      className={cn('flex items-center gap-2 px-5 py-3 rounded-xl font-medium transition-colors text-gray-500',
+                        isDark ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-50 hover:bg-gray-100 border border-gray-200')}>
+                      <Printer className="w-4 h-4" />
+                      Sin Precio
+                    </motion.button>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -370,34 +465,7 @@ export default function ExchangeRatePage() {
       </div>
     </DashboardLayout>
 
-    {/* Print Labels Modal - uses existing product_label document type */}
-    {applied && preview && (
-      <PrintDocumentModal
-        isOpen={showPrintLabels}
-        onClose={() => setShowPrintLabels(false)}
-        documentType={'product_label' as any}
-        documentData={{
-          batchMode: true,
-          items: preview.changes.map(c => ({
-            productId: c.productId,
-            productName: c.name,
-            name: c.name,
-            sku: c.sku,
-            sellingPrice: c.newUSD,
-            priceUSD: c.newUSD,
-            priceCUP: c.newCUP,
-            price: c.newCUP,
-            barcode: c.sku || '',
-            copies: 1
-          })),
-          exchangeRate: preview.newRate,
-          totalLabels: preview.affectedCount
-        }}
-        documentTitle={`Etiquetas de Precio (${preview.affectedCount} productos)`}
-        sourceType="price_change"
-        sourceId={0}
-      />
-    )}
+    {/* Labels now printed directly via /api/print-jobs (same as BulkPrintLabelsModal) */}
     </ProtectedRoute>
   )
 }
