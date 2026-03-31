@@ -55,12 +55,7 @@ export function useMarketExchangeRates(): UseMarketExchangeRatesReturn {
           loading: false,
           error: null
         })
-        console.log('[useMarketExchangeRates] Tasas actualizadas:', {
-          CUP: data.rates.CUP,
-          CUP_ELTOQUE: data.rates.CUP_ELTOQUE,
-          CUP_BCC: data.rates.CUP_BCC,
-          source: data.rates.source
-        })
+        // Rates updated silently
       } else {
         console.warn('[useMarketExchangeRates] No se obtuvieron tasas del API')
         setRates(prev => ({
