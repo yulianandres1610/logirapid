@@ -66,13 +66,14 @@ export function usdToCUPRounded10(priceUSD: number, rate: number): number {
 }
 
 /**
- * Format USD amount with 4 decimal places
+ * Format USD amount with 2 decimal places (display)
+ * Backend stores full precision but UI shows 2 decimals
  *
  * @param amount - USD amount
- * @returns Formatted string like "$1.2750"
+ * @returns Formatted string like "$1.28"
  */
 export function formatUSD4(amount: number): string {
-  return `$${amount.toFixed(4)}`
+  return `$${amount.toFixed(2)}`
 }
 
 /**

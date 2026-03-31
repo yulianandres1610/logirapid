@@ -350,7 +350,7 @@ export default function CreatePaintOrderPage() {
                     {calcResult.lines?.map((line: any, i: number) => (
                       <div key={i} className={cn('flex items-center justify-between px-4 py-2 rounded-xl text-sm', isDark ? 'bg-gray-800' : 'bg-gray-50')}>
                         <span>{line.quantityUnits?.toLocaleString()} × {line.colorName} {line.packagingName}</span>
-                        <span className="font-medium">${(line.costPerUnit || 0).toFixed(4)}/ud</span>
+                        <span className="font-medium">${(line.costPerUnit || 0).toFixed(2)}/ud</span>
                       </div>
                     ))}
                   </div>

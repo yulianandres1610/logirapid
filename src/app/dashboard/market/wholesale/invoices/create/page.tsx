@@ -1899,7 +1899,7 @@ export default function CreateInvoicePage() {
                                       transition={{ duration: 1 }}
                                       className="text-[10px] text-green-500 block"
                                     >
-                                      -${(line.previousUnitPrice - line.unitPrice).toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}
+                                      -${(line.previousUnitPrice - line.unitPrice).toFixed(2)}
                                     </motion.span>
                                   )}
                                 </div>
@@ -2023,7 +2023,7 @@ export default function CreateInvoicePage() {
                                                     'font-bold text-sm',
                                                     isActive ? 'text-green-600' : theme === 'dark' ? 'text-white' : 'text-gray-900'
                                                   )}>
-                                                    ${tier.price.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}
+                                                    ${tier.price.toFixed(2)}
                                                   </p>
                                                   {tier.savings > 0 && (
                                                     <p className={cn(

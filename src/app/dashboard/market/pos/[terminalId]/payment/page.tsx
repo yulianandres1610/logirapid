@@ -806,8 +806,7 @@ function PaymentContent() {
       // CUP: entero sin decimales (requisito Cuba)
       return `${symbol}${formatCUP(amount)}`
     }
-    // USD con 4 decimales para cuadre exacto, MLC con 2
-    return `${symbol}${amount.toFixed(currency === 'USD' ? 4 : 2)}`
+    return `${symbol}${amount.toFixed(2)}`
   }
 
   // Numpad handler
@@ -912,7 +911,7 @@ function PaymentContent() {
                         {item.variantName ? `${item.productName} - ${item.variantName}` : item.productName} x{item.quantity}
                       </span>
                       <div className="ml-2 text-right">
-                        <span>${item.total.toFixed(4)}</span>
+                        <span>${item.total.toFixed(2)}</span>
                         <span className="text-xs text-green-500 ml-1">
                           ({formatCUP(lineCUP)} CUP)
                         </span>
