@@ -51,22 +51,27 @@ export async function POST(request: NextRequest) {
       const currentUSD = parseFloat(product.selling_price) || 0
       if (currentUSD <= 0) continue
 
-      // Current CUP (with old rate, may be ugly number)
-      const currentCUP = currentRate > 0 ? Math.round(currentUSD * currentRate) : 0
+      // Current commercial CUP: recover the "nice" price (eliminates USD drift)
+      const currentCommercialCUP = currentRate > 0
+        ? Math.round(currentUSD * currentRate / 5) * 5
+        : 0
+      const currentCUP = currentCommercialCUP
 
-      // New CUP with new rate (raw, possibly ugly)
-      const rawNewCUP = currentUSD * newRate
+      // Scale proportionally by rate change ratio (not raw USD × newRate)
+      const ratio = currentRate > 0 ? newRate / currentRate : 0
+      const rawNewCUP = currentCommercialCUP * ratio
 
       // Commercial CUP: round to nearest multiple of 5
       const commercialCUP = Math.round(rawNewCUP / 5) * 5
 
-      // New USD = exact division, no rounding — keep full precision
+      // New USD = exact division, ALL decimals preserved — no rounding
+      // This ensures: newUSD × newRate = commercialCUP EXACTLY (no POS rounding issues)
       const newUSD = commercialCUP / newRate
 
       // Verify: newUSD * newRate should equal commercialCUP exactly
       const verifyCUP = Math.round(newUSD * newRate)
 
-      const priceChanged = Math.abs(newUSD - currentUSD) > 0.0000001
+      const priceChanged = commercialCUP !== currentCommercialCUP
 
       if (priceChanged) {
         affectedCount++
