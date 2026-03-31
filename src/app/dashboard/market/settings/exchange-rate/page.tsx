@@ -332,31 +332,40 @@ export default function ExchangeRatePage() {
           </AnimatePresence>
 
           {/* History */}
-          {history.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-              className={cn('rounded-2xl border', isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white shadow-sm')}>
-              <div className={cn('p-4 border-b', isDark ? 'border-gray-700' : 'border-gray-200')}>
-                <h3 className={cn('font-semibold flex items-center gap-2', isDark ? 'text-white' : 'text-gray-900')}>
-                  <Clock className="w-4 h-4 text-gray-400" /> Historial de Cambios
-                </h3>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+            className={cn('rounded-2xl border', isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white shadow-sm')}>
+            <div className={cn('p-4 border-b flex items-center justify-between', isDark ? 'border-gray-700' : 'border-gray-200')}>
+              <h3 className={cn('font-semibold flex items-center gap-2', isDark ? 'text-white' : 'text-gray-900')}>
+                <Clock className="w-4 h-4 text-gray-400" /> Historial de Cambios de Tasa
+              </h3>
+              <button onClick={fetchHistory} className="text-xs text-orange-500 hover:text-orange-600 flex items-center gap-1">
+                <RefreshCw className="w-3 h-3" /> Actualizar
+              </button>
+            </div>
+            {history.length === 0 ? (
+              <div className="p-8 text-center">
+                <Clock className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                <p className={cn('text-sm', isDark ? 'text-gray-400' : 'text-gray-500')}>No hay cambios de tasa registrados</p>
+                <p className="text-xs text-gray-400 mt-1">Los cambios aparecerán aquí cuando apliques una nueva tasa</p>
               </div>
+            ) : (
               <div className={cn('divide-y', isDark ? 'divide-gray-700' : 'divide-gray-200')}>
                 {history.map((h: any, i: number) => (
                   <div key={h.id || i} className="px-4 py-3 flex items-center justify-between">
                     <div>
                       <p className={cn('text-sm font-medium font-mono', isDark ? 'text-white' : 'text-gray-900')}>
-                        {h.previousRate || '?'} → <span className="text-orange-500">{h.exchangeRate}</span> CUP
+                        {h.previousRate || '?'} → <span className="text-orange-500">{h.exchangeRate}</span> CUP/USD
                       </p>
                       <p className="text-xs text-gray-500">{h.productsAffected} productos · {h.appliedByEmail}</p>
                     </div>
                     <span className="text-xs text-gray-400">
-                      {new Date(h.appliedAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      {new Date(h.appliedAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                 ))}
               </div>
-            </motion.div>
-          )}
+            )}
+          </motion.div>
         </div>
       </div>
     </DashboardLayout>
