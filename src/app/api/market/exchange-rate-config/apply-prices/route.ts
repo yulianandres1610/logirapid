@@ -27,6 +27,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Datos inválidos' }, { status: 400 })
     }
 
+    // Ensure selling_price supports enough decimals for exact CUP calculation
+    try {
+      await db.query(`ALTER TABLE market_products ALTER COLUMN selling_price TYPE DECIMAL(12,6)`)
+    } catch { /* already upgraded */ }
+
     // Ensure history table exists
     try {
       await db.query(`
