@@ -105,7 +105,7 @@ export default function ExchangeRatePage() {
     c.name.toLowerCase().includes(searchFilter.toLowerCase()) || (c.sku && c.sku.toLowerCase().includes(searchFilter.toLowerCase()))
   ) || []
 
-  const fmtUSD = (v: number) => '$' + v.toFixed(2)
+  const fmtUSD = (v: number) => '$' + v.toFixed(10).replace(/0+$/, '').replace(/\.$/, '')
   const fmtCUP = (v: number) => v.toLocaleString('en-US') + ' CUP'
 
   if (loading) return (<ProtectedRoute><DashboardLayout><div className="flex items-center justify-center h-[80vh]"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /></div></DashboardLayout></ProtectedRoute>)

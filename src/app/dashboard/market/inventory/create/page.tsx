@@ -2062,7 +2062,7 @@ export default function CreateProductPage() {
                               setFormData({ ...formData, costPrice: cost, sellingPrice })
                             }}
                             placeholder="0.0000"
-                            step="0.0001"
+                            step="any"
                             min="0"
                             className={cn(
                               'w-full pl-8 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
@@ -2094,7 +2094,7 @@ export default function CreateProductPage() {
                             value={formData.sellingPrice}
                             onChange={(e) => setFormData({ ...formData, sellingPrice: e.target.value })}
                             placeholder="0.0000"
-                            step="0.0001"
+                            step="any"
                             min="0"
                             className={cn(
                               'w-full pl-8 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
@@ -2820,7 +2820,7 @@ export default function CreateProductPage() {
                                 "font-bold text-lg",
                                 theme === 'dark' ? 'text-white' : 'text-gray-900'
                               )}>
-                                {symbol}{parseFloat(formData.costPrice || '0').toFixed(2)}
+                                {symbol}{formData.costPrice || '0'}
                               </p>
                             </div>
                             <div className={cn(
@@ -2829,7 +2829,7 @@ export default function CreateProductPage() {
                             )}>
                               <p className="text-xs text-gray-500">Precio de Venta</p>
                               <p className="font-bold text-lg text-green-600">
-                                {symbol}{parseFloat(formData.sellingPrice || '0').toFixed(2)}
+                                {symbol}{formData.sellingPrice || '0'}
                               </p>
                             </div>
                             <div className={cn(
