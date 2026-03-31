@@ -36,6 +36,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const client = await db.getClient()
+
   try {
     const payload = await getPayload()
     if (!payload) {
@@ -46,15 +48,18 @@ export async function POST(
     const returnId = parseInt(id)
     const { lines } = await request.json() as { lines: ValidatedLine[] }
 
-    // Verify return exists and is pending
-    const returnResult = await db.query(`
+    await client.query('BEGIN')
+
+    // Verify return exists and is pending (use market_suppliers - unified table)
+    const returnResult = await client.query(`
       SELECT r.*, s.company_id
       FROM consignment_returns r
-      JOIN consignment_suppliers s ON s.id = r.supplier_id
+      JOIN market_suppliers s ON s.id = r.supplier_id
       WHERE r.id = $1 AND s.company_id = $2
     `, [returnId, payload.companyId])
 
     if (returnResult.rows.length === 0) {
+      await client.query('ROLLBACK')
       return NextResponse.json({
         success: false,
         error: 'Devolucion no encontrada'
@@ -64,6 +69,7 @@ export async function POST(
     const returnData = returnResult.rows[0]
 
     if (returnData.status !== 'pending') {
+      await client.query('ROLLBACK')
       return NextResponse.json({
         success: false,
         error: 'Solo se pueden validar devoluciones pendientes'
@@ -77,17 +83,22 @@ export async function POST(
     for (const line of lines) {
       if (line.quantityValidated <= 0) continue
 
-      // Get line details
-      const lineResult = await db.query(`
-        SELECT * FROM consignment_return_lines WHERE id = $1 AND return_id = $2
+      // Get line details with variant info
+      const lineResult = await client.query(`
+        SELECT rl.*, ol.variant_id, cli.variant_id as lot_variant_id
+        FROM consignment_return_lines rl
+        LEFT JOIN consignment_order_lines ol ON ol.id = rl.order_line_id
+        LEFT JOIN consignment_lot_inventory cli ON cli.id = rl.lot_inventory_id
+        WHERE rl.id = $1 AND rl.return_id = $2
       `, [line.lineId, returnId])
 
       if (lineResult.rows.length === 0) continue
 
       const returnLine = lineResult.rows[0]
+      const variantId = returnLine.lot_variant_id || returnLine.variant_id || null
 
       // Update return line
-      await db.query(`
+      await client.query(`
         UPDATE consignment_return_lines
         SET quantity_validated = $1
         WHERE id = $2
@@ -95,81 +106,128 @@ export async function POST(
 
       // Decrease inventory from lot
       if (returnLine.lot_inventory_id) {
-        await db.query(`
+        await client.query(`
           UPDATE consignment_lot_inventory
           SET
             quantity_available = quantity_available - $1,
-            quantity_returned = quantity_returned + $1
+            quantity_returned = COALESCE(quantity_returned, 0) + $1
           WHERE id = $2
         `, [line.quantityValidated, returnLine.lot_inventory_id])
       }
 
-      // Decrease main inventory
-      await db.query(`
-        UPDATE market_product_inventory
-        SET quantity_on_hand = quantity_on_hand - $1
+      // Decrease warehouse stock (market_warehouse_stock - primary stock table)
+      await client.query(`
+        UPDATE market_warehouse_stock
+        SET quantity_on_hand = quantity_on_hand - $1, last_movement_at = NOW(), updated_at = NOW()
         WHERE warehouse_id = $2 AND product_id = $3
-      `, [line.quantityValidated, returnData.warehouse_id, returnLine.product_id])
+          AND (variant_id = $4 OR ($4 IS NULL AND variant_id IS NULL))
+      `, [line.quantityValidated, returnData.warehouse_id, returnLine.product_id, variantId])
+
+      // Update variant stock if applicable
+      if (variantId) {
+        await client.query(`
+          UPDATE market_product_variants
+          SET quantity_on_hand = COALESCE(quantity_on_hand, 0) - $1, updated_at = NOW()
+          WHERE id = $2
+        `, [line.quantityValidated, variantId])
+      }
 
       // Update order line
-      await db.query(`
-        UPDATE consignment_order_lines
-        SET quantity_returned = quantity_returned + $1
-        WHERE id = $2
-      `, [line.quantityValidated, returnLine.order_line_id])
+      if (returnLine.order_line_id) {
+        await client.query(`
+          UPDATE consignment_order_lines
+          SET quantity_returned = COALESCE(quantity_returned, 0) + $1
+          WHERE id = $2
+        `, [line.quantityValidated, returnLine.order_line_id])
+      }
 
       totalValidated += line.quantityValidated
       totalValueValidated += line.quantityValidated * parseFloat(returnLine.unit_cost)
     }
 
     // Update return status
-    await db.query(`
+    await client.query(`
       UPDATE consignment_returns
       SET
         status = 'completed',
-        validated_by = $1,
+        total_units = $1,
+        total_value = $2,
+        validated_by = $3,
         validated_at = NOW()
-      WHERE id = $2
-    `, [payload.userId, returnId])
+      WHERE id = $4
+    `, [totalValidated, totalValueValidated, payload.userId, returnId])
 
     // Update order totals
-    await db.query(`
-      UPDATE consignment_orders
-      SET
-        total_returned = total_returned + $1,
-        updated_at = NOW()
-      WHERE id = $2
-    `, [totalValueValidated, returnData.order_id])
+    if (returnData.order_id) {
+      await client.query(`
+        UPDATE consignment_orders
+        SET
+          total_returned = COALESCE(total_returned, 0) + $1,
+          updated_at = NOW()
+        WHERE id = $2
+      `, [totalValueValidated, returnData.order_id])
+    }
 
     // Update supplier wallet - decrease available balance
-    const walletResult = await db.query(
-      'SELECT id FROM consignment_supplier_wallets WHERE supplier_id = $1',
+    const walletResult = await client.query(
+      'SELECT id, balance_available FROM consignment_supplier_wallets WHERE supplier_id = $1',
       [returnData.supplier_id]
     )
 
     if (walletResult.rows.length > 0) {
-      await db.query(`
+      const wallet = walletResult.rows[0]
+      const newBalance = parseFloat(wallet.balance_available) - totalValueValidated
+
+      await client.query(`
         UPDATE consignment_supplier_wallets
         SET
-          balance_available = balance_available - $1,
-          total_returned = total_returned + $1,
+          balance_available = $1,
+          total_returned = COALESCE(total_returned, 0) + $2,
           updated_at = NOW()
-        WHERE supplier_id = $2
-      `, [totalValueValidated, returnData.supplier_id])
+        WHERE supplier_id = $3
+      `, [newBalance, totalValueValidated, returnData.supplier_id])
 
       // Create wallet transaction
-      await db.query(`
+      await client.query(`
         INSERT INTO consignment_wallet_transactions (
-          wallet_id, order_id, transaction_type, amount, notes, created_by
-        ) VALUES ($1, $2, 'return', $3, $4, $5)
+          wallet_id, order_id, transaction_type, amount, balance_after, notes, created_by
+        ) VALUES ($1::int, $2::int, 'return', $3::numeric, $4::numeric, $5::text, $6::int)
       `, [
-        walletResult.rows[0].id,
+        wallet.id,
         returnData.order_id,
         -totalValueValidated,
+        newBalance,
         `Devolucion ${returnData.return_number}: ${totalValidated} unidades`,
         payload.userId
       ])
     }
+
+    // Check if order should be liquidated
+    if (returnData.order_id) {
+      const orderCheckResult = await client.query(`
+        SELECT
+          SUM(quantity_received) as total_received,
+          SUM(COALESCE(quantity_sold, 0)) as total_sold,
+          SUM(COALESCE(quantity_returned, 0)) as total_returned
+        FROM consignment_order_lines
+        WHERE order_id = $1
+      `, [returnData.order_id])
+
+      const orderTotals = orderCheckResult.rows[0]
+      const totalReceived = parseInt(orderTotals.total_received) || 0
+      const totalSold = parseInt(orderTotals.total_sold) || 0
+      const totalReturned = parseInt(orderTotals.total_returned) || 0
+
+      if (totalReceived > 0 && (totalSold + totalReturned) >= totalReceived) {
+        await client.query(`
+          UPDATE consignment_orders
+          SET status = 'liquidated', completed_at = NOW()
+          WHERE id = $1
+        `, [returnData.order_id])
+      }
+    }
+
+    await client.query('COMMIT')
 
     return NextResponse.json({
       success: true,
@@ -183,10 +241,13 @@ export async function POST(
     })
 
   } catch (error) {
+    await client.query('ROLLBACK')
     console.error('[Return Validate] Error:', error)
     return NextResponse.json({
       success: false,
       error: 'Error al validar devolucion'
     }, { status: 500 })
+  } finally {
+    client.release()
   }
 }

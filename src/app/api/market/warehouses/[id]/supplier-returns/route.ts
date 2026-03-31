@@ -63,9 +63,9 @@ export async function POST(
       // Columns might already be correct, continue anyway
     }
 
-    // Get supplier info
+    // Get supplier info (market_suppliers is the unified table)
     const supplierResult = await client.query(
-      'SELECT id, code, name FROM consignment_suppliers WHERE id = $1 AND company_id = $2',
+      'SELECT id, supplier_code as code, name FROM market_suppliers WHERE id = $1 AND company_id = $2',
       [supplierId, payload.companyId]
     )
 
