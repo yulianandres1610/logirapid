@@ -51,18 +51,34 @@ export async function POST(request: NextRequest) {
       const currentUSD = parseFloat(product.selling_price) || 0
       if (currentUSD <= 0) continue
 
-      // Current commercial CUP: recover the "nice" price (eliminates USD drift)
-      const currentCommercialCUP = currentRate > 0
-        ? Math.round(currentUSD * currentRate / 5) * 5
-        : 0
-      const currentCUP = currentCommercialCUP
+      // Direct CUP with new rate
+      const directCUP = Math.round(currentUSD * newRate)
 
-      // Scale proportionally by rate change ratio (not raw USD × newRate)
-      const ratio = currentRate > 0 ? newRate / currentRate : 0
-      const rawNewCUP = currentCommercialCUP * ratio
+      // Check if current USD already gives a perfect multiple of 5 with new rate
+      const alreadyPerfect = directCUP % 5 === 0
 
-      // Commercial CUP: round to nearest multiple of 5
-      const commercialCUP = Math.round(rawNewCUP / 5) * 5
+      // Current commercial CUP (recover "nice" price, eliminates USD drift)
+      let currentCUP: number
+      let commercialCUP: number
+
+      if (currentRate > 0) {
+        // Has previous rate: use ratio-based to minimize drift
+        const currentCommercialCUP = Math.round(currentUSD * currentRate / 5) * 5
+        currentCUP = currentCommercialCUP
+        const ratio = newRate / currentRate
+        const rawNewCUP = currentCommercialCUP * ratio
+        commercialCUP = Math.round(rawNewCUP / 5) * 5
+      } else {
+        // No previous rate: use direct calculation
+        currentCUP = directCUP
+        commercialCUP = Math.round(directCUP / 5) * 5
+      }
+
+      // If current price already gives perfect multiple of 5 with new rate, skip
+      if (alreadyPerfect && commercialCUP === directCUP) {
+        unchangedCount++
+        continue
+      }
 
       // New USD = exact division, ALL decimals preserved — no rounding
       // This ensures: newUSD × newRate = commercialCUP EXACTLY (no POS rounding issues)
@@ -71,7 +87,7 @@ export async function POST(request: NextRequest) {
       // Verify: newUSD * newRate should equal commercialCUP exactly
       const verifyCUP = Math.round(newUSD * newRate)
 
-      const priceChanged = commercialCUP !== currentCommercialCUP
+      const priceChanged = Math.abs(newUSD - currentUSD) > 0.0000001 || !alreadyPerfect
 
       if (priceChanged) {
         affectedCount++

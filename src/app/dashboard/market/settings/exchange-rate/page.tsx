@@ -378,13 +378,17 @@ export default function ExchangeRatePage() {
         documentType={'product_label' as any}
         documentData={{
           batchMode: true,
-          products: preview.changes.map(c => ({
+          items: preview.changes.map(c => ({
             productId: c.productId,
+            productName: c.name,
             name: c.name,
             sku: c.sku,
             sellingPrice: c.newUSD,
+            priceUSD: c.newUSD,
             priceCUP: c.newCUP,
-            barcode: c.sku
+            price: c.newCUP,
+            barcode: c.sku || '',
+            copies: 1
           })),
           exchangeRate: preview.newRate,
           totalLabels: preview.affectedCount
