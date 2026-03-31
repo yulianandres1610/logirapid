@@ -128,6 +128,8 @@ export default function ExchangeRatePage() {
     (c.sku && c.sku.toLowerCase().includes(searchFilter.toLowerCase()))
   ) || []
 
+  // Format USD: show enough decimals to be exact, strip trailing zeros
+  const fmtUSD = (v: number) => '$' + v.toFixed(6).replace(/\.?0+$/, '')
   const fmt = (v: number, dec = 2) => '$' + v.toFixed(dec)
   const fmtCUP = (v: number) => v.toLocaleString('en-US') + ' CUP'
 
@@ -269,10 +271,10 @@ export default function ExchangeRatePage() {
                             <p className={cn('font-medium truncate max-w-[200px]', isDark ? 'text-white' : 'text-gray-900')}>{c.name}</p>
                             <p className="text-xs text-gray-500">{c.sku}</p>
                           </td>
-                          <td className="px-3 py-2 text-right font-mono text-gray-500">{fmt(c.currentUSD, 3)}</td>
+                          <td className="px-3 py-2 text-right font-mono text-gray-500">{fmtUSD(c.currentUSD)}</td>
                           <td className="px-3 py-2 text-right font-mono text-gray-500">{fmtCUP(c.currentCUP)}</td>
                           <td className="px-3 py-2 text-center"><ArrowRight className="w-3 h-3 text-gray-300 inline" /></td>
-                          <td className={cn('px-3 py-2 text-right font-mono font-bold', isDark ? 'text-white' : 'text-gray-900')}>{fmt(c.newUSD, 3)}</td>
+                          <td className={cn('px-3 py-2 text-right font-mono font-bold', isDark ? 'text-white' : 'text-gray-900')}>{fmtUSD(c.newUSD)}</td>
                           <td className="px-3 py-2 text-right font-mono font-bold text-orange-600">{fmtCUP(c.newCUP)}</td>
                           <td className={cn('px-3 py-2 text-right font-mono text-xs', c.diffCUP > 0 ? 'text-red-500' : c.diffCUP < 0 ? 'text-green-500' : 'text-gray-400')}>
                             {c.diffCUP > 0 ? '+' : ''}{fmtCUP(c.diffCUP)}
