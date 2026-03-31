@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
     if (stockFilter === 'low-stock') {
       query += ` AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) <= p.minimum_stock AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) > 0`
     } else if (stockFilter === 'out-of-stock') {
-      query += ` AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) = 0`
+      query += ` AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) <= 0`
     } else if (stockFilter === 'in-stock') {
       query += ` AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) > p.minimum_stock`
     }
@@ -181,7 +181,7 @@ export async function GET(request: NextRequest) {
     if (stockFilter === 'low-stock') {
       countQuery += ` AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) <= p.minimum_stock AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) > 0`
     } else if (stockFilter === 'out-of-stock') {
-      countQuery += ` AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) = 0`
+      countQuery += ` AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) <= 0`
     } else if (stockFilter === 'in-stock') {
       countQuery += ` AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) > p.minimum_stock`
     }
@@ -302,7 +302,7 @@ export async function GET(request: NextRequest) {
         COUNT(*) as total,
         COUNT(*) FILTER (WHERE COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) > p.minimum_stock) as in_stock,
         COUNT(*) FILTER (WHERE COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) <= p.minimum_stock AND COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) > 0) as low_stock,
-        COUNT(*) FILTER (WHERE COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) = 0) as out_of_stock
+        COUNT(*) FILTER (WHERE COALESCE(stock_totals.total_on_hand, p.quantity_on_hand, 0) <= 0) as out_of_stock
       FROM market_products p
       LEFT JOIN (
         SELECT product_id, SUM(quantity_on_hand) as total_on_hand
