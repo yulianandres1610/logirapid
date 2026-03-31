@@ -125,13 +125,13 @@ export default function ExchangeRatePage() {
           {/* Hero Card */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             className={cn('p-6 rounded-2xl border mb-6', isDark ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm')}>
-            <div className="flex items-start gap-5">
-              <div className={cn('w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 bg-gradient-to-br from-orange-500 to-amber-500')}>
-                <DollarSign className="w-7 h-7 text-white" />
+            <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-5">
+              <div className={cn('w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 bg-gradient-to-br from-orange-500 to-amber-500')}>
+                <DollarSign className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
               </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-1">
-                  <span className={cn('text-3xl font-bold font-mono', isDark ? 'text-white' : 'text-gray-900')}>
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-1">
+                  <span className={cn('text-2xl sm:text-3xl font-bold font-mono', isDark ? 'text-white' : 'text-gray-900')}>
                     {config?.effectiveRate || '—'} CUP/USD
                   </span>
                   <span className={cn('text-xs px-3 py-1 rounded-lg font-medium',
@@ -174,44 +174,42 @@ export default function ExchangeRatePage() {
               </div>
             </div>
 
-            <div className="flex gap-3 items-end">
-              <div className="flex-1">
-                <div className="relative">
-                  <input type="number" step="any" value={newRate}
-                    onChange={e => { setNewRate(e.target.value); setPreview(null); setApplied(false) }}
-                    className={cn('w-full px-4 py-3.5 rounded-xl border text-xl font-bold font-mono focus:outline-none focus:ring-2 focus:ring-orange-500/30',
-                      isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900')}
-                    placeholder="Ej: 520"
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400">CUP/USD</span>
-                </div>
-
-                {/* Live difference animation */}
-                <AnimatePresence mode="wait">
-                  {rateDiff && rateDiff.diff !== 0 && (
-                    <motion.div key={newRate} initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                      className="mt-2 flex items-center gap-2">
-                      {rateDiff.direction === 'up' ? (
-                        <TrendingUp className="w-4 h-4 text-red-500" />
-                      ) : (
-                        <TrendingDown className="w-4 h-4 text-green-500" />
-                      )}
-                      <span className={cn('text-sm font-bold font-mono', rateDiff.direction === 'up' ? 'text-red-500' : 'text-green-500')}>
-                        {rateDiff.diff > 0 ? '+' : ''}{rateDiff.diff.toFixed(2)} ({rateDiff.pct > 0 ? '+' : ''}{rateDiff.pct.toFixed(1)}%)
-                      </span>
-                      <span className="text-xs text-gray-400">vs tasa actual</span>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <input type="number" step="any" value={newRate}
+                  onChange={e => { setNewRate(e.target.value); setPreview(null); setApplied(false) }}
+                  className={cn('w-full px-4 py-3.5 pr-24 rounded-xl border text-xl font-bold font-mono focus:outline-none focus:ring-2 focus:ring-orange-500/30',
+                    isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900')}
+                  placeholder="Ej: 520"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400">CUP/USD</span>
               </div>
 
               <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                 onClick={handleCalculatePreview} disabled={calculating || !newRate || parseFloat(newRate) <= 0}
-                className="px-6 py-3.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl font-medium disabled:opacity-50 flex items-center gap-2 shrink-0">
+                className="px-6 py-3.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-2 whitespace-nowrap">
                 {calculating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
                 {calculating ? 'Calculando...' : 'Calcular Impacto'}
               </motion.button>
             </div>
+
+            {/* Live difference animation */}
+            <AnimatePresence mode="wait">
+              {rateDiff && rateDiff.diff !== 0 && (
+                <motion.div key={newRate} initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                  className="mt-3 flex items-center gap-2">
+                  {rateDiff.direction === 'up' ? (
+                    <TrendingUp className="w-4 h-4 text-red-500" />
+                  ) : (
+                    <TrendingDown className="w-4 h-4 text-green-500" />
+                  )}
+                  <span className={cn('text-sm font-bold font-mono', rateDiff.direction === 'up' ? 'text-red-500' : 'text-green-500')}>
+                    {rateDiff.diff > 0 ? '+' : ''}{rateDiff.diff.toFixed(2)} ({rateDiff.pct > 0 ? '+' : ''}{rateDiff.pct.toFixed(1)}%)
+                  </span>
+                  <span className="text-xs text-gray-400">vs tasa actual</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
 
           {/* Preview Section */}
