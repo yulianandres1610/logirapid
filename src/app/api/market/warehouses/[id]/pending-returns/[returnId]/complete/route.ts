@@ -303,6 +303,29 @@ export async function POST(
       }
     }
 
+    // 10. Mark linked warehouse operation as done (if exists)
+    try {
+      await client.query(`
+        UPDATE market_warehouse_operations
+        SET status = 'done', completed_at = NOW(), confirmed_by = $1, updated_at = NOW()
+        WHERE reference_type = 'consignment_return' AND reference_id = $2 AND status = 'pending'
+      `, [payload.userId, returnIdInt])
+
+      // Update operation lines with actual quantities
+      const opResult = await client.query(`
+        SELECT id FROM market_warehouse_operations
+        WHERE reference_type = 'consignment_return' AND reference_id = $1
+      `, [returnIdInt])
+
+      if (opResult.rows.length > 0) {
+        await client.query(`
+          UPDATE market_warehouse_operation_lines
+          SET quantity_done = quantity_planned, line_status = 'done'
+          WHERE operation_id = $1
+        `, [opResult.rows[0].id])
+      }
+    } catch { /* operation may not exist for legacy returns */ }
+
     // Commit transaction
     await client.query('COMMIT')
 
