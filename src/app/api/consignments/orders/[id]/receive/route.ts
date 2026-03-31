@@ -202,10 +202,10 @@ export async function POST(
       processedLines++
     }
 
-    // Update order status to received
+    // Update order status to selling (products are now available for sale)
     await db.query(`
       UPDATE consignment_orders SET
-        status = 'received',
+        status = 'selling',
         received_at = NOW(),
         received_by = $1,
         updated_at = NOW()
