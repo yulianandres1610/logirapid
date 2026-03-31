@@ -41,21 +41,22 @@ export async function GET(
     const warehouseId = parseInt(id)
 
     // Get suppliers that have available stock in this warehouse
+    // Use market_suppliers (unified table) - lot_inventory.supplier_id references market_suppliers.id
     const suppliersResult = await db.query(`
       SELECT
-        cs.id,
-        cs.code,
-        cs.name,
+        ms.id,
+        ms.supplier_code as code,
+        ms.name,
         SUM(cli.quantity_available) as total_stock,
         SUM(cli.quantity_available * cli.unit_cost) as total_value
-      FROM consignment_suppliers cs
-      JOIN consignment_lot_inventory cli ON cli.supplier_id = cs.id
+      FROM market_suppliers ms
+      JOIN consignment_lot_inventory cli ON cli.supplier_id = ms.id
       WHERE cli.warehouse_id = $1
         AND cli.company_id = $2
         AND cli.quantity_available > 0
-      GROUP BY cs.id, cs.code, cs.name
+      GROUP BY ms.id, ms.supplier_code, ms.name
       HAVING SUM(cli.quantity_available) > 0
-      ORDER BY cs.name
+      ORDER BY ms.name
     `, [warehouseId, payload.companyId])
 
     const suppliers = suppliersResult.rows.map(row => ({

@@ -108,15 +108,18 @@ export async function POST(
     for (const line of lines) {
       if (line.quantityValidated <= 0) continue
 
-      // Get return line details
+      // Get return line details (include variant info from lot inventory)
       const lineResult = await client.query(`
         SELECT
           rl.*,
           ol.lot_number,
-          p.name as product_name
+          ol.variant_id,
+          p.name as product_name,
+          cli.variant_id as lot_variant_id
         FROM consignment_return_lines rl
         JOIN consignment_order_lines ol ON ol.id = rl.order_line_id
         JOIN market_products p ON p.id = rl.product_id
+        LEFT JOIN consignment_lot_inventory cli ON cli.id = rl.lot_inventory_id
         WHERE rl.id = $1 AND rl.return_id = $2
       `, [line.lineId, returnIdInt])
 
@@ -126,6 +129,7 @@ export async function POST(
       const maxQty = parseInt(returnLine.quantity_to_return) || 0
       const requestedQty = parseInt(String(line.quantityValidated)) || 0
       const qtyValidated = Math.min(requestedQty, maxQty)
+      const variantId = returnLine.lot_variant_id || returnLine.variant_id || null
 
       if (qtyValidated <= 0) continue
 
@@ -147,21 +151,33 @@ export async function POST(
         `, [qtyValidated, returnLine.lot_inventory_id])
       }
 
-      // 3. Update warehouse stock
+      // 3. Update warehouse stock (with variant awareness)
       await client.query(`
         UPDATE market_warehouse_stock
         SET
           quantity_on_hand = quantity_on_hand - $1,
+          last_movement_at = NOW(),
           updated_at = NOW()
         WHERE warehouse_id = $2 AND product_id = $3
-      `, [qtyValidated, warehouseId, returnLine.product_id])
+          AND (variant_id = $4 OR ($4 IS NULL AND variant_id IS NULL))
+      `, [qtyValidated, warehouseId, returnLine.product_id, variantId])
+
+      // 3b. Update variant stock if applicable
+      if (variantId) {
+        await client.query(`
+          UPDATE market_product_variants
+          SET quantity_on_hand = COALESCE(quantity_on_hand, 0) - $1, updated_at = NOW()
+          WHERE id = $2
+        `, [qtyValidated, variantId])
+      }
 
       // 4. Create inventory movement
       const stockAfterResult = await client.query(`
         SELECT COALESCE(quantity_on_hand, 0) as stock
         FROM market_warehouse_stock
         WHERE warehouse_id = $1 AND product_id = $2
-      `, [warehouseId, returnLine.product_id])
+          AND (variant_id = $3 OR ($3 IS NULL AND variant_id IS NULL))
+      `, [warehouseId, returnLine.product_id, variantId])
 
       const stockAfterValue = parseInt(stockAfterResult.rows[0]?.stock) || 0
       const stockBeforeValue = stockAfterValue + qtyValidated // Before the update, stock was higher

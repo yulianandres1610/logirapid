@@ -175,15 +175,28 @@ export async function POST(
         `, [qtyReceived, variantId])
       }
 
-      // Update main inventory (market_product_inventory)
-      await db.query(`
-        INSERT INTO market_product_inventory (
-          warehouse_id, product_id, quantity_on_hand, quantity_expected,
-          minimum_stock, last_count_date
-        ) VALUES ($1, $2, $3, 0, 0, NOW())
-        ON CONFLICT (warehouse_id, product_id) DO UPDATE SET
-          quantity_on_hand = market_product_inventory.quantity_on_hand + $3
-      `, [order.warehouse_id, orderLine.product_id, line.quantityReceived])
+      // Update main warehouse stock (market_warehouse_stock - used by POS & all modules)
+      const stockExists = await db.query(`
+        SELECT id, quantity_on_hand FROM market_warehouse_stock
+        WHERE warehouse_id = $1 AND product_id = $2 AND (variant_id = $3 OR ($3 IS NULL AND variant_id IS NULL))
+      `, [parseInt(order.warehouse_id), parseInt(orderLine.product_id), variantId])
+
+      if (stockExists.rows.length > 0) {
+        await db.query(`
+          UPDATE market_warehouse_stock SET
+            quantity_on_hand = quantity_on_hand + $1,
+            last_movement_at = NOW(),
+            updated_at = NOW()
+          WHERE id = $2
+        `, [qtyReceived, stockExists.rows[0].id])
+      } else {
+        await db.query(`
+          INSERT INTO market_warehouse_stock (
+            warehouse_id, product_id, variant_id, quantity_on_hand, quantity_reserved,
+            last_movement_at, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, 0, NOW(), NOW(), NOW())
+        `, [parseInt(order.warehouse_id), parseInt(orderLine.product_id), variantId, qtyReceived])
+      }
 
       totalUnitsReceived += line.quantityReceived
       processedLines++
