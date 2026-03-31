@@ -139,6 +139,7 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
   const [pendingConsignments, setPendingConsignments] = useState(0)
   const [pendingWholesale, setPendingWholesale] = useState(0)
   const [pendingProduction, setPendingProduction] = useState(0)
+  const [pendingReturns, setPendingReturns] = useState(0)
 
   // Fetch pending transfers count
   useEffect(() => {
@@ -171,6 +172,13 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
         if (productionData.success) {
           setPendingProduction(productionData.data.pendingCount)
         }
+
+        // Fetch pending supplier returns
+        const returnsResponse = await fetch(`/api/market/warehouses/${currentWarehouse.id}/pending-returns`)
+        const returnsData = await returnsResponse.json()
+        if (returnsData.success) {
+          setPendingReturns(returnsData.data.pendingReturns?.length || 0)
+        }
       } catch (error) {
         console.error('Error fetching pending counts:', error)
       }
@@ -191,10 +199,12 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
     const showBadge = (op.id === 'receive_transfer' && pendingCount > 0) ||
                       (op.id === 'order_reception' && pendingConsignments > 0) ||
                       (op.id === 'wholesale_delivery' && pendingWholesale > 0) ||
-                      (op.id === 'production' && pendingProduction > 0)
+                      (op.id === 'production' && pendingProduction > 0) ||
+                      (op.id === 'return' && pendingReturns > 0)
     const badgeCount = op.id === 'receive_transfer' ? pendingCount :
                        op.id === 'wholesale_delivery' ? pendingWholesale :
-                       op.id === 'production' ? pendingProduction : pendingConsignments
+                       op.id === 'production' ? pendingProduction :
+                       op.id === 'return' ? pendingReturns : pendingConsignments
 
     return (
       <motion.button
@@ -222,7 +232,7 @@ export default function OperationTypeSelector({ onSelect, currentWarehouse }: Op
             animate={{ scale: 1 }}
             className="absolute top-2 right-2 z-20 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-lg"
           >
-            <span className={`text-xs font-bold ${op.id === 'order_reception' ? 'text-teal-600' : op.id === 'wholesale_delivery' ? 'text-green-600' : op.id === 'production' ? 'text-violet-600' : 'text-purple-600'}`}>
+            <span className={`text-xs font-bold ${op.id === 'order_reception' ? 'text-teal-600' : op.id === 'wholesale_delivery' ? 'text-green-600' : op.id === 'production' ? 'text-violet-600' : op.id === 'return' ? 'text-orange-600' : 'text-purple-600'}`}>
               {badgeCount}
             </span>
           </motion.div>
