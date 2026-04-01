@@ -65,27 +65,29 @@ export async function GET() {
     await ensureTable()
     const result = await db.query('SELECT * FROM market_catalogs WHERE company_id = $1', [payload.companyId])
 
-    if (result.rows.length === 0) {
-      return NextResponse.json({ success: true, data: null })
-    }
-
-    const catalog = result.rows[0]
-
-    // Get available categories from inventory
+    // Always get available categories from inventory
     const catResult = await db.query(
       `SELECT DISTINCT category FROM market_products WHERE company_id = $1 AND is_active = true AND category IS NOT NULL AND category != '' ORDER BY category`,
       [payload.companyId]
     )
+    const availableCategories = catResult.rows.map((r: any) => r.category)
+
+    if (result.rows.length === 0) {
+      return NextResponse.json({ success: true, data: { exists: false, availableCategories } })
+    }
+
+    const catalog = result.rows[0]
 
     return NextResponse.json({
       success: true,
       data: {
+        exists: true,
         ...catalog,
         categories: catalog.categories || [],
-        availableCategories: catResult.rows.map((r: any) => r.category),
+        availableCategories,
         catalogUrl: catalog.custom_domain
           ? `https://${catalog.custom_domain}`
-          : `https://${catalog.slug}.catalogo.logirapid.com`,
+          : `/catalog/${catalog.slug}`,
         publicUrl: `/catalog/${catalog.slug}`
       }
     })
