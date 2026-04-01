@@ -99,6 +99,25 @@ export async function middleware(request: NextRequest) {
   }
 
   // ============================================================
+  // CATALOG SUBDOMAIN HANDLING - catalogo.* (must be BEFORE other subdomain handlers)
+  // ============================================================
+  if (host.startsWith('catalogo.') || host.includes('catalogo.logirapid') || host.includes('catalogo.servisumic')) {
+    // Allow static resources
+    if (pathname.startsWith('/_next') || pathname.startsWith('/images') || pathname === '/favicon.ico') {
+      return NextResponse.next()
+    }
+    // Allow catalog pages and API
+    if (pathname.startsWith('/catalog/') || pathname.startsWith('/api/public/catalog/')) {
+      return NextResponse.next()
+    }
+    // All routes on catalog subdomain → resolve by host
+    const url = request.nextUrl.clone()
+    url.pathname = '/catalog/resolve-host'
+    url.searchParams.set('h', host)
+    return NextResponse.rewrite(url)
+  }
+
+  // ============================================================
   // MARKET SUBDOMAIN HANDLING - mercado.logirapid.com
   // ============================================================
   const isMarketSubdomain = host.startsWith('mercado.') || host.includes('mercado.logirapid')
@@ -116,6 +135,11 @@ export async function middleware(request: NextRequest) {
 
     // Allow public upload page (phone upload via QR)
     if (pathname.startsWith('/upload/')) {
+      return NextResponse.next()
+    }
+
+    // Allow public catalog pages
+    if (pathname.startsWith('/catalog/') || pathname.startsWith('/api/public/catalog/')) {
       return NextResponse.next()
     }
 
@@ -263,7 +287,7 @@ export async function middleware(request: NextRequest) {
   // ============================================================
   const isFactorySubdomain =
     host.startsWith('fabrica.') ||
-    host.includes('servisumic.com') ||
+    host === 'servisumic.com' || host === 'www.servisumic.com' ||
     host.includes('fabrica.servisumic')
 
   if (isFactorySubdomain) {
@@ -284,6 +308,11 @@ export async function middleware(request: NextRequest) {
 
     // Allow public upload page (phone upload via QR)
     if (pathname.startsWith('/upload/')) {
+      return NextResponse.next()
+    }
+
+    // Allow public catalog pages
+    if (pathname.startsWith('/catalog/') || pathname.startsWith('/api/public/catalog/')) {
       return NextResponse.next()
     }
 
@@ -748,6 +777,11 @@ export async function middleware(request: NextRequest) {
     '/favicon.ico',
     '/robots.txt'
   ]
+
+  // Public catalog routes
+  if (pathname.startsWith('/catalog/') || pathname.startsWith('/api/public/catalog/')) {
+    return NextResponse.next()
+  }
 
   // Verificar si la ruta es pública
   if (publicRoutes.includes(pathname) || staticRoutes.some(route => pathname.startsWith(route))) {
