@@ -5,13 +5,16 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Store, Phone, Globe, Save, Loader2, ExternalLink, Copy, Check,
   CheckCircle, MessageCircle, Instagram, Facebook, Send, MapPin,
-  ArrowLeft, ArrowRight, Eye, Image as ImageIcon, Tag, Settings, Palette
+  ArrowLeft, ArrowRight, Eye, Image as ImageIcon, Tag, Settings, Palette,
+  Upload, Smartphone, X, Trash2
 } from 'lucide-react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import { PhoneUploadModal } from '@/components/uploads/PhoneUploadModal'
 
 type Step = 'store' | 'contact' | 'categories' | 'options' | 'domain'
 
@@ -31,7 +34,7 @@ const STEPS: WizardStep[] = [
 ]
 
 interface FormData {
-  storeName: string; description: string; logoUrl: string; bannerUrl: string; primaryColor: string
+  storeName: string; description: string; logoUrl: string; primaryColor: string
   phone: string; whatsapp: string; email: string; address: string; city: string; province: string
   facebookUrl: string; instagramUrl: string; telegramUrl: string
   categories: string[]; showStock: boolean; showUsdPrice: boolean; showCupPrice: boolean
@@ -39,7 +42,7 @@ interface FormData {
 }
 
 const defaultForm: FormData = {
-  storeName: '', description: '', logoUrl: '', bannerUrl: '', primaryColor: '#f97316',
+  storeName: '', description: '', logoUrl: '', primaryColor: '#f97316',
   phone: '', whatsapp: '', email: '', address: '', city: '', province: '',
   facebookUrl: '', instagramUrl: '', telegramUrl: '',
   categories: [], showStock: true, showUsdPrice: true, showCupPrice: true,
@@ -61,6 +64,8 @@ export default function CatalogSettingsPage() {
   const [dnsInstructions, setDnsInstructions] = useState<any>(null)
   const [copied, setCopied] = useState(false)
   const [catalogExists, setCatalogExists] = useState(false)
+  const [showPhoneUpload, setShowPhoneUpload] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
 
@@ -82,7 +87,6 @@ export default function CatalogSettingsPage() {
             storeName: data.data.store_name || '',
             description: data.data.description || '',
             logoUrl: data.data.logo_url || '',
-            bannerUrl: data.data.banner_url || '',
             primaryColor: data.data.primary_color || '#f97316',
             phone: data.data.phone || '',
             whatsapp: data.data.whatsapp || '',
@@ -111,7 +115,7 @@ export default function CatalogSettingsPage() {
     try {
       const res = await fetch('/api/market/catalog/config', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
+        body: JSON.stringify({ ...form, bannerUrl: null })
       })
       const data = await res.json()
       if (data.success) {
@@ -270,16 +274,83 @@ export default function CatalogSettingsPage() {
                     <label className="text-sm font-medium text-gray-500 mb-1 block">Descripción</label>
                     <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} placeholder="Tu ferretería de confianza en La Habana..." className={inputClass} />
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-gray-500 mb-1 block">URL del Logo</label>
-                      <input value={form.logoUrl} onChange={e => setForm({ ...form, logoUrl: e.target.value })} placeholder="https://..." className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500 mb-1 block">URL del Banner</label>
-                      <input value={form.bannerUrl} onChange={e => setForm({ ...form, bannerUrl: e.target.value })} placeholder="https://..." className={inputClass} />
-                    </div>
+
+                  {/* Logo Upload */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-500 mb-2 block">Logo de la Tienda</label>
+                    {form.logoUrl ? (
+                      <div className="flex items-center gap-4">
+                        <div className="w-24 h-24 rounded-xl overflow-hidden border-2 border-gray-200 dark:border-gray-600 relative">
+                          <Image src={form.logoUrl} alt="Logo" fill className="object-cover" />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <button onClick={() => setForm({ ...form, logoUrl: '' })}
+                            className={cn('flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-red-600',
+                              isDark ? 'bg-red-900/20 hover:bg-red-900/30' : 'bg-red-50 hover:bg-red-100')}>
+                            <Trash2 className="w-4 h-4" /> Eliminar
+                          </button>
+                          <label className={cn('flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium cursor-pointer',
+                            isDark ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700')}>
+                            <Upload className="w-4 h-4" /> Cambiar
+                            <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                              const file = e.target.files?.[0]
+                              if (!file) return
+                              setUploadingLogo(true)
+                              try {
+                                const formData = new FormData()
+                                formData.append('file', file)
+                                formData.append('folder', 'catalog-logos')
+                                const res = await fetch('/api/upload/image', { method: 'POST', body: formData })
+                                const data = await res.json()
+                                if (data.success && data.url) setForm(prev => ({ ...prev, logoUrl: data.url }))
+                              } catch {} finally { setUploadingLogo(false) }
+                            }} />
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {/* Drag & Drop area */}
+                        <label className={cn(
+                          'flex flex-col items-center justify-center w-full h-40 rounded-xl border-2 border-dashed cursor-pointer transition-all',
+                          uploadingLogo ? 'opacity-60' :
+                          isDark ? 'border-gray-600 hover:border-orange-500 bg-gray-900/30' : 'border-gray-300 hover:border-orange-500 bg-gray-50'
+                        )}>
+                          {uploadingLogo ? (
+                            <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+                          ) : (
+                            <>
+                              <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                              <p className={cn('text-sm font-medium', isDark ? 'text-gray-300' : 'text-gray-600')}>Arrastra o haz clic para subir</p>
+                              <p className="text-xs text-gray-400 mt-1">PNG, JPG o WEBP</p>
+                            </>
+                          )}
+                          <input type="file" accept="image/*" className="hidden" disabled={uploadingLogo} onChange={async (e) => {
+                            const file = e.target.files?.[0]
+                            if (!file) return
+                            setUploadingLogo(true)
+                            try {
+                              const fd = new FormData()
+                              fd.append('file', file)
+                              fd.append('folder', 'catalog-logos')
+                              const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
+                              const data = await res.json()
+                              if (data.success && data.url) setForm(prev => ({ ...prev, logoUrl: data.url }))
+                            } catch {} finally { setUploadingLogo(false) }
+                          }} />
+                        </label>
+
+                        {/* Phone upload button */}
+                        <button onClick={() => setShowPhoneUpload(true)}
+                          className={cn('w-full py-3 rounded-xl flex items-center justify-center gap-2 font-medium text-sm border transition-all',
+                            isDark ? 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50')}>
+                          <Smartphone className="w-4 h-4" />
+                          Subir desde el teléfono
+                        </button>
+                      </div>
+                    )}
                   </div>
+
                   <div>
                     <label className="text-sm font-medium text-gray-500 mb-1 flex items-center gap-1"><Palette className="w-3.5 h-3.5" /> Color Principal</label>
                     <div className="flex gap-3 items-center">
@@ -510,6 +581,27 @@ export default function CatalogSettingsPage() {
 
         </div>
       </div>
-    </DashboardLayout></ProtectedRoute>
+    </DashboardLayout>
+
+    {/* Phone Upload Modal */}
+    <PhoneUploadModal
+      isOpen={showPhoneUpload}
+      onClose={() => setShowPhoneUpload(false)}
+      purpose="product_image"
+      onUploadComplete={async (fileUrl: string) => {
+        setShowPhoneUpload(false)
+        setUploadingLogo(true)
+        try {
+          const response = await fetch(`/api/upload/image?path=${encodeURIComponent(fileUrl)}&bucket=company-private-documents`)
+          if (response.ok) {
+            const data = await response.json()
+            if (data.success && data.url) {
+              setForm(prev => ({ ...prev, logoUrl: data.url }))
+            }
+          }
+        } catch {} finally { setUploadingLogo(false) }
+      }}
+    />
+    </ProtectedRoute>
   )
 }

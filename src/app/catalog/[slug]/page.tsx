@@ -1,15 +1,20 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, Phone, MapPin, MessageCircle, Package, ShoppingBag, ExternalLink, Instagram, Facebook, Send, Loader2, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { Search, Phone, MapPin, MessageCircle, Package, ShoppingBag, ExternalLink, Instagram, Facebook, Send, Loader2, ChevronLeft, ChevronRight, X, ShoppingCart, Plus, Minus, Trash2 } from 'lucide-react'
 import Image from 'next/image'
 import { useParams } from 'next/navigation'
 
 interface StoreInfo {
-  name: string; description: string | null; logoUrl: string | null; bannerUrl: string | null
+  name: string; description: string | null; logoUrl: string | null
   primaryColor: string; phone: string | null; whatsapp: string | null; email: string | null
   address: string | null; city: string | null; province: string | null
   facebookUrl: string | null; instagramUrl: string | null; telegramUrl: string | null
+}
+
+interface CartItem {
+  product: Product
+  quantity: number
 }
 
 interface Product {
@@ -35,6 +40,35 @@ export default function CatalogPage() {
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [cart, setCart] = useState<CartItem[]>([])
+  const [showCart, setShowCart] = useState(false)
+
+  const addToCart = (product: Product) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.product.id === product.id)
+      if (existing) {
+        const max = product.stock || 999
+        if (existing.quantity >= max) return prev
+        return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i)
+      }
+      return [...prev, { product, quantity: 1 }]
+    })
+  }
+
+  const removeFromCart = (productId: number) => setCart(prev => prev.filter(i => i.product.id !== productId))
+
+  const updateCartQty = (productId: number, delta: number) => {
+    setCart(prev => prev.map(i => {
+      if (i.product.id !== productId) return i
+      const max = i.product.stock || 999
+      const newQty = Math.max(1, Math.min(i.quantity + delta, max))
+      return { ...i, quantity: newQty }
+    }))
+  }
+
+  const cartTotal = cart.reduce((sum, i) => sum + (i.product.priceUSD || 0) * i.quantity, 0)
+  const cartTotalCUP = cart.reduce((sum, i) => sum + (i.product.priceCUP || 0) * i.quantity, 0)
+  const cartItemCount = cart.reduce((sum, i) => sum + i.quantity, 0)
 
   const fetchCatalog = useCallback(async () => {
     setLoading(true)
@@ -120,6 +154,15 @@ export default function CatalogPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Cart Button */}
+              <button onClick={() => setShowCart(true)} className="relative p-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">
+                <ShoppingCart className="w-5 h-5" />
+                {cartItemCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center" style={{ backgroundColor: primaryColor }}>
+                    {cartItemCount}
+                  </span>
+                )}
+              </button>
               {store?.whatsapp && (
                 <a href={`https://wa.me/${store.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener"
                   className="p-2 rounded-lg text-white text-sm font-medium flex items-center gap-1.5" style={{ backgroundColor: '#25D366' }}>
@@ -137,22 +180,12 @@ export default function CatalogPage() {
         </div>
       </header>
 
-      {/* Banner / Hero */}
-      {store?.bannerUrl ? (
-        <div className="relative h-40 sm:h-56 overflow-hidden">
-          <Image src={store.bannerUrl} alt="Banner" fill className="object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-          {store.description && (
-            <div className="absolute bottom-4 left-4 right-4">
-              <p className="text-white text-sm sm:text-base max-w-2xl">{store.description}</p>
-            </div>
-          )}
+      {/* Description */}
+      {store?.description && (
+        <div className="py-4 px-4 text-center" style={{ backgroundColor: primaryColor + '10' }}>
+          <p className="text-gray-700 max-w-2xl mx-auto text-sm">{store.description}</p>
         </div>
-      ) : store?.description ? (
-        <div className="py-6 px-4 text-center" style={{ backgroundColor: primaryColor + '10' }}>
-          <p className="text-gray-700 max-w-2xl mx-auto">{store.description}</p>
-        </div>
-      ) : null}
+      )}
 
       {/* Info bar */}
       <div className="bg-white border-b">
@@ -267,17 +300,15 @@ export default function CatalogPage() {
                     </p>
                   )}
 
-                  {/* WhatsApp button */}
-                  {store?.whatsapp && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); openWhatsApp(product) }}
-                      className="mt-2 w-full py-2 rounded-lg text-white text-xs font-medium flex items-center justify-center gap-1.5 hover:opacity-90 transition-opacity"
-                      style={{ backgroundColor: '#25D366' }}
-                    >
-                      <MessageCircle className="w-3.5 h-3.5" />
-                      Consultar
-                    </button>
-                  )}
+                  {/* Add to cart */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); addToCart(product) }}
+                    className="mt-2 w-full py-2 rounded-lg text-white text-xs font-medium flex items-center justify-center gap-1.5 hover:opacity-90 transition-opacity"
+                    style={{ backgroundColor: primaryColor }}
+                  >
+                    <ShoppingCart className="w-3.5 h-3.5" />
+                    {cart.find(i => i.product.id === product.id) ? `En carrito (${cart.find(i => i.product.id === product.id)!.quantity})` : 'Agregar'}
+                  </button>
                 </div>
               </div>
             ))}
@@ -345,19 +376,121 @@ export default function CatalogPage() {
                   {selectedProduct.stock > 0 ? `${selectedProduct.stock} ${selectedProduct.unit} disponibles` : 'Producto agotado'}
                 </p>
               )}
-              {store?.whatsapp && selectedProduct.stock && selectedProduct.stock > 0 && (
-                <button
-                  onClick={() => openWhatsApp(selectedProduct)}
-                  className="mt-4 w-full py-3.5 rounded-xl text-white font-bold flex items-center justify-center gap-2 text-lg"
-                  style={{ backgroundColor: '#25D366' }}
-                >
-                  <MessageCircle className="w-5 h-5" />
-                  Consultar por WhatsApp
-                </button>
+              {selectedProduct.stock && selectedProduct.stock > 0 && (
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => { addToCart(selectedProduct); setSelectedProduct(null) }}
+                    className="flex-1 py-3.5 rounded-xl text-white font-bold flex items-center justify-center gap-2 text-lg"
+                    style={{ backgroundColor: primaryColor }}
+                  >
+                    <ShoppingCart className="w-5 h-5" />
+                    Agregar al carrito
+                  </button>
+                  {store?.whatsapp && (
+                    <button
+                      onClick={() => openWhatsApp(selectedProduct)}
+                      className="py-3.5 px-4 rounded-xl text-white font-bold flex items-center justify-center"
+                      style={{ backgroundColor: '#25D366' }}
+                    >
+                      <MessageCircle className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </div>
         </div>
+      )}
+
+      {/* Cart Drawer */}
+      {showCart && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={() => setShowCart(false)}>
+          <div className="bg-white w-full max-w-md h-full overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b flex items-center justify-between sticky top-0 bg-white z-10">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <ShoppingCart className="w-5 h-5" /> Mi Carrito ({cartItemCount})
+              </h2>
+              <button onClick={() => setShowCart(false)} className="p-2 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
+            </div>
+
+            {cart.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                <ShoppingCart className="w-16 h-16 mb-3 opacity-30" />
+                <p className="text-lg font-medium">Carrito vacío</p>
+                <p className="text-sm">Agrega productos desde el catálogo</p>
+              </div>
+            ) : (
+              <>
+                <div className="divide-y">
+                  {cart.map(item => (
+                    <div key={item.product.id} className="p-4 flex gap-3">
+                      <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 shrink-0 relative">
+                        {item.product.imageUrl ? (
+                          <Image src={item.product.imageUrl} alt={item.product.name} fill className="object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center"><Package className="w-6 h-6 text-gray-300" /></div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 text-sm line-clamp-2">{item.product.name}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          {item.product.priceCUP !== null && (
+                            <span className="text-sm font-bold" style={{ color: primaryColor }}>{item.product.priceCUP?.toLocaleString('es-ES')} CUP</span>
+                          )}
+                          {item.product.priceUSD !== null && (
+                            <span className="text-xs text-gray-500">${item.product.priceUSD?.toFixed(2)}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <button onClick={() => updateCartQty(item.product.id, -1)} className="p-1 rounded-md bg-gray-100 hover:bg-gray-200"><Minus className="w-3.5 h-3.5" /></button>
+                          <span className="text-sm font-bold w-8 text-center">{item.quantity}</span>
+                          <button onClick={() => updateCartQty(item.product.id, 1)} className="p-1 rounded-md bg-gray-100 hover:bg-gray-200"><Plus className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => removeFromCart(item.product.id)} className="ml-auto p-1 text-red-500 hover:bg-red-50 rounded-md"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Cart Total */}
+                <div className="p-4 border-t bg-gray-50 sticky bottom-0">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-gray-500">Total</span>
+                    <div className="text-right">
+                      <p className="text-xl font-bold" style={{ color: primaryColor }}>{cartTotalCUP.toLocaleString('es-ES')} CUP</p>
+                      <p className="text-sm text-gray-500">${cartTotal.toFixed(2)} USD</p>
+                    </div>
+                  </div>
+                  {store?.whatsapp && (
+                    <button
+                      onClick={() => {
+                        const phone = store!.whatsapp!.replace(/\D/g, '')
+                        const items = cart.map(i => `- ${i.product.name} x${i.quantity}${i.product.priceCUP ? ` (${(i.product.priceCUP * i.quantity).toLocaleString('es-ES')} CUP)` : ''}`).join('\n')
+                        const msg = encodeURIComponent(`Hola! Me interesan estos productos:\n\n${items}\n\nTotal: ${cartTotalCUP.toLocaleString('es-ES')} CUP ($${cartTotal.toFixed(2)} USD)\n\n¿Están disponibles?`)
+                        window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
+                      }}
+                      className="w-full py-3.5 rounded-xl text-white font-bold flex items-center justify-center gap-2"
+                      style={{ backgroundColor: '#25D366' }}
+                    >
+                      <MessageCircle className="w-5 h-5" />
+                      Enviar pedido por WhatsApp
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Floating cart button (mobile) */}
+      {cartItemCount > 0 && !showCart && (
+        <button onClick={() => setShowCart(true)}
+          className="fixed bottom-6 right-6 z-40 p-4 rounded-full text-white shadow-2xl flex items-center gap-2"
+          style={{ backgroundColor: primaryColor }}>
+          <ShoppingCart className="w-6 h-6" />
+          <span className="font-bold">{cartItemCount}</span>
+        </button>
       )}
 
       {/* Footer */}
