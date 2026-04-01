@@ -99,6 +99,30 @@ export async function middleware(request: NextRequest) {
   }
 
   // ============================================================
+  // CATALOG SUBDOMAIN HANDLING - catalogo.* (must be BEFORE other subdomain handlers)
+  // ============================================================
+  if (host.startsWith('catalogo.') || host.includes('catalogo.logirapid') || host.includes('catalogo.servisumic')) {
+    // Allow static resources
+    if (pathname.startsWith('/_next') || pathname.startsWith('/images') || pathname === '/favicon.ico') {
+      return NextResponse.next()
+    }
+    // Allow catalog pages and API
+    if (pathname.startsWith('/catalog/') || pathname.startsWith('/api/public/catalog/')) {
+      return NextResponse.next()
+    }
+    // Root → resolve catalog by host
+    if (pathname === '/' || pathname === '') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/catalog/_resolve'
+      return NextResponse.rewrite(url)
+    }
+    // All other routes → redirect to catalog resolver
+    const url = request.nextUrl.clone()
+    url.pathname = '/catalog/_resolve'
+    return NextResponse.rewrite(url)
+  }
+
+  // ============================================================
   // MARKET SUBDOMAIN HANDLING - mercado.logirapid.com
   // ============================================================
   const isMarketSubdomain = host.startsWith('mercado.') || host.includes('mercado.logirapid')
@@ -268,7 +292,7 @@ export async function middleware(request: NextRequest) {
   // ============================================================
   const isFactorySubdomain =
     host.startsWith('fabrica.') ||
-    host.includes('servisumic.com') ||
+    host === 'servisumic.com' || host === 'www.servisumic.com' ||
     host.includes('fabrica.servisumic')
 
   if (isFactorySubdomain) {
@@ -761,23 +785,6 @@ export async function middleware(request: NextRequest) {
 
   // Public catalog routes
   if (pathname.startsWith('/catalog/') || pathname.startsWith('/api/public/catalog/')) {
-    return NextResponse.next()
-  }
-
-  // Catalog subdomain: catalogo.* → rewrite to /catalog/[slug] resolved from DB
-  if (host.startsWith('catalogo.') || host.includes('catalogo.logirapid') || host.includes('catalogo.servisumic')) {
-    // For catalog subdomains, serve the catalog page
-    // The slug will be resolved by the catalog page itself based on the host
-    if (pathname === '/' || pathname === '') {
-      // Rewrite root to a special catalog resolver
-      const url = request.nextUrl.clone()
-      url.pathname = '/api/public/catalog/resolve'
-      url.searchParams.set('host', host)
-      // Instead of API, redirect to catalog with host-based resolution
-      // For now, rewrite to the catalog page that resolves by host
-      url.pathname = '/catalog/_resolve'
-      return NextResponse.rewrite(url)
-    }
     return NextResponse.next()
   }
 
