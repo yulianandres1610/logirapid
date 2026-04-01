@@ -113,12 +113,12 @@ export async function middleware(request: NextRequest) {
     // Root → resolve catalog by host
     if (pathname === '/' || pathname === '') {
       const url = request.nextUrl.clone()
-      url.pathname = '/catalog/_resolve'
+      url.pathname = '/catalog/find'
       return NextResponse.rewrite(url)
     }
     // All other routes → redirect to catalog resolver
     const url = request.nextUrl.clone()
-    url.pathname = '/catalog/_resolve'
+    url.pathname = '/catalog/find'
     return NextResponse.rewrite(url)
   }
 
