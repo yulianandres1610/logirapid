@@ -516,6 +516,9 @@ export default function WarehouseOperationsPage() {
       } else if (initialOperationType === 'receive_transfer') {
         setOperation({ ...initialOperationState, operationType: initialOperationType })
         fetchPendingTransfers()
+      } else if (initialOperationType === 'wholesale_delivery') {
+        setOperation({ ...initialOperationState, operationType: initialOperationType })
+        fetchPendingWholesaleDeliveries()
       } else {
         setOperation({ ...initialOperationState, operationType: initialOperationType })
       }

@@ -148,8 +148,11 @@ export async function GET(
             operationNumber: delivery.delivery_number,
             invoiceNumber: delivery.invoice_number,
             invoiceId: delivery.invoice_id,
-            customerName: delivery.customer_name || 'Cliente',
-            customerCode: delivery.customer_code,
+            customer: {
+              id: delivery.customer_id || 0,
+              name: delivery.customer_name || 'Cliente',
+              code: delivery.customer_code || ''
+            },
             status: delivery.status,
             createdAt: delivery.created_at,
             createdBy: delivery.created_by_name,
