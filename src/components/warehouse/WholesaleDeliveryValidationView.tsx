@@ -395,12 +395,12 @@ export default function WholesaleDeliveryValidationView({
             </div>
             <div>
               <p className="text-xs text-gray-500">Cliente</p>
-              <p className="font-medium text-gray-900 dark:text-white">{operation.customer.name}</p>
-              <p className="text-sm text-gray-500">{operation.customer.code}</p>
+              <p className="font-medium text-gray-900 dark:text-white">{operation.customer?.name || 'Cliente'}</p>
+              <p className="text-sm text-gray-500">{operation.customer?.code || ''}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500">Almacen</p>
-              <p className="font-medium text-gray-900 dark:text-white">{operation.sourceWarehouse.name}</p>
+              <p className="font-medium text-gray-900 dark:text-white">{operation.sourceWarehouse?.name || 'Almacén'}</p>
             </div>
           </div>
         </div>
