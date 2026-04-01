@@ -38,6 +38,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
 
 interface Session {
   id: number
@@ -131,6 +132,8 @@ interface Terminal {
 export default function POSSessionsHistoryPage() {
   const { theme } = useTheme()
   const router = useRouter()
+  const exchangeRates = useMarketExchangeRates()
+  const USD_CUP = exchangeRates?.USD_CUP || 505
   const [sessions, setSessions] = useState<Session[]>([])
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const [loading, setLoading] = useState(true)
@@ -255,7 +258,7 @@ export default function POSSessionsHistoryPage() {
     if (currency === 'MLC') {
       return `$${amount.toFixed(2)} MLC`
     }
-    return `$${amount.toFixed(2)}`
+    return `$${amount.toFixed(2)} USD`
   }
 
   const getDuration = (openedAt: string, closedAt: string | null) => {
@@ -427,8 +430,9 @@ export default function POSSessionsHistoryPage() {
                     <div>
                       <p className="text-sm text-gray-500">Ventas Totales</p>
                       <p className={cn('text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                        ${stats.totalSales.toFixed(2)}
+                        ${stats.totalSales.toFixed(2)} USD
                       </p>
+                      <p className="text-xs text-green-600">{Math.round(stats.totalSales * USD_CUP).toLocaleString('es-ES')} CUP</p>
                     </div>
                   </div>
                 </div>
@@ -639,7 +643,8 @@ export default function POSSessionsHistoryPage() {
                           <div className="hidden md:flex items-center gap-6">
                             <div className="text-right">
                               <p className="text-xs text-gray-500">Ventas</p>
-                              <p className="font-bold text-green-500">${session.totalSales.toFixed(2)}</p>
+                              <p className="font-bold text-green-500">${session.totalSales.toFixed(2)} USD</p>
+                              <p className="text-[10px] text-green-600">{Math.round(session.totalSales * USD_CUP).toLocaleString('es-ES')} CUP</p>
                             </div>
                             <div className="text-right">
                               <p className="text-xs text-gray-500">Órdenes</p>
@@ -801,7 +806,8 @@ export default function POSSessionsHistoryPage() {
                       <div className="grid grid-cols-2 gap-4">
                         <div className="text-center">
                           <p className="text-xs text-gray-500 mb-1">Total Ventas</p>
-                          <p className="text-2xl font-bold text-green-500">${selectedSession.totalSales.toFixed(2)}</p>
+                          <p className="text-2xl font-bold text-green-500">${selectedSession.totalSales.toFixed(2)} USD</p>
+                          <p className="text-xs text-green-600">{Math.round(selectedSession.totalSales * USD_CUP).toLocaleString('es-ES')} CUP</p>
                           <p className="text-xs text-gray-400">{selectedSession.totalOrders} órdenes</p>
                         </div>
                         {selectedSession.cashDifference !== null && (
@@ -874,6 +880,9 @@ export default function POSSessionsHistoryPage() {
                               <div className="flex items-center gap-3">
                                 <div className="text-right">
                                   <p className="font-bold text-lg">{formatCurrency(order.totalAmount, order.currency)}</p>
+                                  {order.currency !== 'CUP' && (
+                                    <p className="text-xs text-green-600">{Math.round(order.totalAmount * USD_CUP).toLocaleString('es-ES')} CUP</p>
+                                  )}
                                   <div className="flex flex-wrap gap-1 justify-end">
                                     {order.payments?.slice(0, 2).map((p, i) => (
                                       <span
