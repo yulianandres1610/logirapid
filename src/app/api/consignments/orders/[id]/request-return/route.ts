@@ -195,14 +195,14 @@ export async function POST(
     // Get unique warehouse from lines (for now we support one warehouse per return)
     const targetWarehouseId = validatedLines[0].warehouseId
 
-    // Generate return number
+    // Generate return number using MAX to avoid duplicate key
     const year = new Date().getFullYear()
     const seqResult = await db.query(`
-      SELECT COUNT(*) as count
+      SELECT COALESCE(MAX(CAST(SUBSTRING(return_number FROM '\\d+$') AS INTEGER)), 0) as max_seq
       FROM consignment_returns
-      WHERE EXTRACT(YEAR FROM created_at) = $1
-    `, [year])
-    const seq = (parseInt(seqResult.rows[0].count) + 1).toString().padStart(4, '0')
+      WHERE return_number LIKE $1
+    `, [`DEV-SUPP-${year}-%`])
+    const seq = ((parseInt(seqResult.rows[0].max_seq) || 0) + 1).toString().padStart(4, '0')
     const returnNumber = `DEV-SUPP-${year}-${seq}`
 
     // Create return with status 'pending'
