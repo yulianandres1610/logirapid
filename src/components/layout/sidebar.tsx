@@ -699,6 +699,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: Wallet, label: "Mi Wallet", href: "/dashboard/market/wallet" },
     { icon: Truck, label: "Entregas", href: "/dashboard/market/deliveries" },
     { icon: DollarSign, label: "Tasa de Cambio", href: "/dashboard/market/settings/exchange-rate", requiredRole: 'MARKET_MANAGER' },
+    { icon: ShoppingBag, label: "Catálogo Digital", href: "/dashboard/market/settings/catalog", requiredRole: 'MARKET_MANAGER' },
     { icon: Settings, label: "Configuración", href: "/dashboard/market/settings" },
   ]
 
