@@ -96,7 +96,7 @@ export async function GET(
       LEFT JOIN market_product_variants pv ON pv.id = l.variant_id
       WHERE l.operation_id = $1
       ORDER BY p.name
-    `, [opId])
+    `, [realOpId])
 
     const lines = linesResult.rows.map(line => ({
       lineId: line.line_id,
@@ -125,14 +125,14 @@ export async function GET(
           invoiceNumber: operation.invoice_number,
           invoiceId: operation.invoice_id,
           sourceWarehouse: {
-            id: operation.source_warehouse_id,
-            name: operation.source_warehouse_name,
-            code: operation.source_warehouse_code
+            id: operation.source_warehouse_id || 0,
+            name: operation.source_warehouse_name || 'Almacén',
+            code: operation.source_warehouse_code || ''
           },
           customer: {
-            id: operation.customer_id,
-            name: operation.customer_name,
-            code: operation.customer_code
+            id: operation.customer_id || 0,
+            name: operation.customer_name || 'Cliente',
+            code: operation.customer_code || ''
           },
           status: operation.status,
           validationStatus: operation.validation_status,
