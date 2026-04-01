@@ -110,15 +110,10 @@ export async function middleware(request: NextRequest) {
     if (pathname.startsWith('/catalog/') || pathname.startsWith('/api/public/catalog/')) {
       return NextResponse.next()
     }
-    // Root → resolve catalog by host
-    if (pathname === '/' || pathname === '') {
-      const url = request.nextUrl.clone()
-      url.pathname = '/catalog/find'
-      return NextResponse.rewrite(url)
-    }
-    // All other routes → redirect to catalog resolver
+    // All routes on catalog subdomain → resolve by host
     const url = request.nextUrl.clone()
-    url.pathname = '/catalog/find'
+    url.pathname = '/catalog/resolve-host'
+    url.searchParams.set('h', host)
     return NextResponse.rewrite(url)
   }
 

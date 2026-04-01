@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Search, Phone, MapPin, MessageCircle, Package, ShoppingBag, ExternalLink, Instagram, Facebook, Send, Loader2, ChevronLeft, ChevronRight, X, ShoppingCart, Plus, Minus, Trash2 } from 'lucide-react'
 import Image from 'next/image'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams, useRouter } from 'next/navigation'
 
 interface StoreInfo {
   name: string; description: string | null; logoUrl: string | null
@@ -26,7 +26,27 @@ interface Category { name: string; count: number }
 
 export default function CatalogPage() {
   const params = useParams()
-  const slug = params.slug as string
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const rawSlug = params.slug as string
+
+  // If slug is 'resolve-host', resolve the real slug from the host query param
+  const [resolvedSlug, setResolvedSlug] = useState<string | null>(rawSlug === 'resolve-host' ? null : rawSlug)
+
+  useEffect(() => {
+    if (rawSlug === 'resolve-host') {
+      const host = searchParams.get('h') || window.location.hostname
+      fetch(`/api/public/catalog/resolve?host=${encodeURIComponent(host)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.slug) setResolvedSlug(data.slug)
+          else setError('Catálogo no encontrado para este dominio')
+        })
+        .catch(() => setError('Error al resolver catálogo'))
+    }
+  }, [rawSlug, searchParams])
+
+  const slug = resolvedSlug || ''
 
   const [store, setStore] = useState<StoreInfo | null>(null)
   const [products, setProducts] = useState<Product[]>([])
@@ -71,6 +91,7 @@ export default function CatalogPage() {
   const cartItemCount = cart.reduce((sum, i) => sum + i.quantity, 0)
 
   const fetchCatalog = useCallback(async () => {
+    if (!slug) return
     setLoading(true)
     try {
       const params = new URLSearchParams({ page: String(page), limit: '48' })
