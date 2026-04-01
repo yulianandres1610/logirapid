@@ -749,6 +749,11 @@ export async function middleware(request: NextRequest) {
     '/robots.txt'
   ]
 
+  // Public catalog routes
+  if (pathname.startsWith('/catalog/') || pathname.startsWith('/api/public/catalog/')) {
+    return NextResponse.next()
+  }
+
   // Verificar si la ruta es pública
   if (publicRoutes.includes(pathname) || staticRoutes.some(route => pathname.startsWith(route))) {
     return NextResponse.next()
