@@ -754,6 +754,23 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Catalog subdomain: catalogo.* → rewrite to /catalog/[slug] resolved from DB
+  if (host.startsWith('catalogo.') || host.includes('catalogo.logirapid') || host.includes('catalogo.servisumic')) {
+    // For catalog subdomains, serve the catalog page
+    // The slug will be resolved by the catalog page itself based on the host
+    if (pathname === '/' || pathname === '') {
+      // Rewrite root to a special catalog resolver
+      const url = request.nextUrl.clone()
+      url.pathname = '/api/public/catalog/resolve'
+      url.searchParams.set('host', host)
+      // Instead of API, redirect to catalog with host-based resolution
+      // For now, rewrite to the catalog page that resolves by host
+      url.pathname = '/catalog/_resolve'
+      return NextResponse.rewrite(url)
+    }
+    return NextResponse.next()
+  }
+
   // Verificar si la ruta es pública
   if (publicRoutes.includes(pathname) || staticRoutes.some(route => pathname.startsWith(route))) {
     return NextResponse.next()

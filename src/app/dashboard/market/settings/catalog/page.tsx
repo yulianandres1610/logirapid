@@ -66,6 +66,7 @@ export default function CatalogSettingsPage() {
   const [catalogExists, setCatalogExists] = useState(false)
   const [showPhoneUpload, setShowPhoneUpload] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [showWizard, setShowWizard] = useState(false)
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
 
@@ -80,6 +81,7 @@ export default function CatalogSettingsPage() {
         setAvailableCategories(data.data.availableCategories || [])
         if (data.data.exists) {
           setCatalogExists(true)
+          setShowWizard(false)
           setCatalogSlug(data.data.slug || '')
           setCatalogUrl(data.data.catalogUrl || data.data.publicUrl || '')
           setDnsInstructions(data.data.dns_instructions)
@@ -104,6 +106,8 @@ export default function CatalogSettingsPage() {
             customDomain: data.data.custom_domain || '',
             isActive: data.data.is_active !== false
           })
+        } else {
+          setShowWizard(true)
         }
       }
     } catch {} finally { setLoading(false) }
@@ -124,6 +128,9 @@ export default function CatalogSettingsPage() {
         setCatalogSlug(data.data.slug)
         setDnsInstructions(data.data.dnsInstructions)
         setCatalogExists(true)
+        setShowWizard(false)
+        setCurrentStep('store')
+        fetchConfig()
         setTimeout(() => setSaved(false), 3000)
       }
     } catch {} finally { setSaving(false) }
@@ -203,6 +210,110 @@ export default function CatalogSettingsPage() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Summary View (when catalog exists and wizard is closed) */}
+          {catalogExists && !showWizard && (
+            <div className="space-y-4">
+              {/* Catalog Card */}
+              <div className={cn('rounded-2xl border overflow-hidden', isDark ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm')}>
+                <div className="p-6">
+                  <div className="flex items-start gap-4">
+                    {form.logoUrl ? (
+                      <Image src={form.logoUrl} alt={form.storeName} width={64} height={64} className="w-16 h-16 rounded-xl object-cover border" />
+                    ) : (
+                      <div className={cn('w-16 h-16 rounded-xl flex items-center justify-center', isDark ? 'bg-gray-700' : 'bg-gray-100')}>
+                        <Store className="w-7 h-7 text-gray-400" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h2 className={cn('text-xl font-bold', isDark ? 'text-white' : 'text-gray-900')}>{form.storeName}</h2>
+                        <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
+                          form.isActive ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                        )}>{form.isActive ? 'Activo' : 'Inactivo'}</span>
+                      </div>
+                      {form.description && <p className="text-sm text-gray-500 line-clamp-2">{form.description}</p>}
+                    </div>
+                  </div>
+
+                  {/* Info Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5">
+                    {form.phone && (
+                      <div><p className="text-[10px] text-gray-400 uppercase">Teléfono</p><p className={cn('text-sm font-medium', isDark ? 'text-white' : 'text-gray-900')}>{form.phone}</p></div>
+                    )}
+                    {form.whatsapp && (
+                      <div><p className="text-[10px] text-gray-400 uppercase">WhatsApp</p><p className="text-sm font-medium text-green-600">{form.whatsapp}</p></div>
+                    )}
+                    {form.email && (
+                      <div><p className="text-[10px] text-gray-400 uppercase">Email</p><p className={cn('text-sm font-medium truncate', isDark ? 'text-white' : 'text-gray-900')}>{form.email}</p></div>
+                    )}
+                    {form.city && (
+                      <div><p className="text-[10px] text-gray-400 uppercase">Ciudad</p><p className={cn('text-sm font-medium', isDark ? 'text-white' : 'text-gray-900')}>{form.city}{form.province ? `, ${form.province}` : ''}</p></div>
+                    )}
+                  </div>
+
+                  {/* Categories */}
+                  {form.categories.length > 0 && (
+                    <div className="mt-4 pt-4 border-t dark:border-gray-700">
+                      <p className="text-[10px] text-gray-400 uppercase mb-2">Categorías publicadas</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {form.categories.map(cat => (
+                          <span key={cat} className={cn('px-2.5 py-1 rounded-full text-xs font-medium', isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-100 text-orange-700')}>{cat}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* URL */}
+                  <div className={cn('mt-4 pt-4 border-t flex items-center justify-between gap-2', isDark ? 'border-gray-700' : 'border-gray-200')}>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-gray-400 uppercase">URL del Catálogo</p>
+                      <code className={cn('text-sm font-mono break-all', isDark ? 'text-orange-400' : 'text-orange-600')}>{catalogUrl || `/catalog/${catalogSlug}`}</code>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}${catalogUrl.startsWith('/') ? catalogUrl : `/catalog/${catalogSlug}`}`); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                        {copied ? <CheckCircle className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-gray-400" />}
+                      </button>
+                      <a href={catalogUrl.startsWith('http') ? catalogUrl : `/catalog/${catalogSlug}`} target="_blank" rel="noopener"
+                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                        <ExternalLink className="w-4 h-4 text-gray-400" />
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* DNS Instructions */}
+                  {dnsInstructions && (
+                    <div className={cn('mt-4 pt-4 border-t', isDark ? 'border-gray-700' : 'border-gray-200')}>
+                      <p className="text-[10px] text-gray-400 uppercase mb-2">Instrucciones DNS — {dnsInstructions.domain}</p>
+                      {(dnsInstructions.records || []).map((r: any, i: number) => (
+                        <div key={i} className={cn('p-2 rounded-lg font-mono text-xs mb-1', isDark ? 'bg-gray-900' : 'bg-gray-50')}>
+                          <span className="text-gray-400">{r.type}</span> <span className={cn('font-bold', isDark ? 'text-white' : 'text-gray-900')}>{r.name}</span> → <span className="text-orange-500">{r.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className={cn('px-6 py-4 border-t flex gap-3', isDark ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50')}>
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    onClick={() => { setShowWizard(true); setCurrentStep('store') }}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700">
+                    <Settings className="w-4 h-4" /> Editar Catálogo
+                  </motion.button>
+                  <a href={catalogUrl.startsWith('http') ? catalogUrl : `/catalog/${catalogSlug}`} target="_blank" rel="noopener"
+                    className={cn('flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm',
+                      isDark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200')}>
+                    <Eye className="w-4 h-4" /> Ver Catálogo
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Wizard (create new or edit) */}
+          {showWizard && <>
 
           {/* Stepper */}
           <div className="mb-8">
@@ -578,6 +689,8 @@ export default function CatalogSettingsPage() {
               )}
             </motion.button>
           </div>
+
+          </>}
 
         </div>
       </div>
