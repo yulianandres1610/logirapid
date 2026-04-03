@@ -150,7 +150,12 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
 
   const getReceiptUrl = (path: string) => {
     if (path.startsWith('http')) return path
-    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${path}`
+    // If path already includes bucket name, use as-is
+    if (path.startsWith('company-documents/') || path.startsWith('company-private-documents/')) {
+      return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${path}`
+    }
+    // Otherwise prepend the bucket name
+    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/company-documents/${path}`
   }
 
   const isPdfReceipt = expense?.receiptType === 'application/pdf' || expense?.receiptPath?.endsWith('.pdf')
