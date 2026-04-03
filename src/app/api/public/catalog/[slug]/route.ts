@@ -143,6 +143,7 @@ export async function GET(
       name: p.name,
       description: p.description,
       sku: p.sku,
+      barcode: p.barcode || null,
       category: p.category,
       imageUrl: p.image_url,
       unit: p.unit_of_measure || 'unidad',

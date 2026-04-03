@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { motion } from 'framer-motion'
 import { ArrowLeft, Package, ShoppingCart, MessageCircle, Phone, MapPin, Star, Loader2, Minus, Plus, Share2, Truck, Shield, Clock, ThumbsUp, User } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import JsBarcode from 'jsbarcode'
 
 interface Product {
-  id: number; name: string; description: string | null; sku: string; category: string | null
+  id: number; name: string; description: string | null; sku: string; barcode: string | null; category: string | null
   imageUrl: string | null; unit: string; priceUSD: number | null; priceCUP: number | null; stock: number | null
 }
 
@@ -44,7 +45,7 @@ export default function ProductDetailPage() {
   // Generate real scannable barcode
   useEffect(() => {
     if (product && barcodeRef.current) {
-      const barcodeValue = product.sku || `P${product.id}`
+      const barcodeValue = product.barcode || product.sku || `P${product.id}`
       try {
         JsBarcode(barcodeRef.current, barcodeValue, {
           format: 'CODE128',
@@ -154,8 +155,11 @@ export default function ProductDetailPage() {
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-4 py-6">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
+        className="max-w-6xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+          {/* Animated sections */}
 
           {/* Product Image */}
           <div>
@@ -292,15 +296,17 @@ export default function ProductDetailPage() {
 
         {/* Description */}
         {product.description && (
-          <div className="mt-8 bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+          <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+            className="mt-8 bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
             <h3 className="font-bold text-gray-900 text-lg mb-3">Descripción del producto</h3>
             <p className="text-gray-600 leading-relaxed">{product.description}</p>
             {product.sku && <p className="text-xs text-gray-400 mt-4">SKU: {product.sku}</p>}
-          </div>
+          </motion.div>
         )}
 
         {/* Reviews Section */}
-        <div className="mt-8 bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+          className="mt-8 bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-bold text-gray-900 text-lg">Opiniones de clientes</h3>
             <div className="flex items-center gap-2">
@@ -356,11 +362,12 @@ export default function ProductDetailPage() {
               </div>
             ))}
           </div>
-        </div>
+        </motion.div>
 
         {/* Related Products */}
         {relatedProducts.length > 0 && (
-          <div className="mt-8">
+          <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+            className="mt-8">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Productos relacionados</h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {relatedProducts.map(rp => (
@@ -382,9 +389,9 @@ export default function ProductDetailPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </motion.div>
         )}
-      </div>
+      </motion.div>
     </div>
   )
 }
