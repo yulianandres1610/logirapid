@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
             url,
             isPrimary,
             true,
-            'gemini-2.0-flash-exp',
+            'gemini-2.0-flash',
             contentType,
             imageBuffer.length,
             barcode,
@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
             url,
             isPrimary,
             true,
-            'gemini-2.0-flash-exp',
+            'gemini-2.0-flash',
             contentType,
             imageBuffer.length,
             payload.userId,
@@ -297,7 +297,7 @@ export async function GET() {
   return NextResponse.json({
     success: true,
     configured: isGeminiConfigured(),
-    model: process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp',
+    model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
     actions: ['clean', 'generate', 'enhance', 'analyze']
   })
 }

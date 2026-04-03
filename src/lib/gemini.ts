@@ -13,7 +13,7 @@ const GEMINI_TARGET_SIZE = 1024 // Redimensionar a max 1024px si es muy grande
 const STANDARD_IMAGE_SIZE = 1024 // Tamaño estándar para todas las imágenes de productos
 
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
 // Modelo para generación y edición de imágenes de productos
 const IMAGE_GENERATION_MODEL = 'gemini-3-pro-image-preview'
 // Modelo para edición de imágenes (fotos de empleados, etc.)
@@ -454,7 +454,7 @@ Square 1024x1024, product centered at 75%, bright studio lighting, sharp focus, 
 Style: Clean Amazon product photo with completely white background.`
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GOOGLE_AI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_AI_API_KEY}`,
       {
         method: 'POST',
         headers: {
