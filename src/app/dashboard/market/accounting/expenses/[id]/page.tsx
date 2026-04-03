@@ -57,6 +57,8 @@ interface ExpenseDetail {
   vendorName: string | null
   receiptPath: string | null
   receiptType: string | null
+  receiptNumber: string | null
+  notes: string | null
   createdById: number
   createdByName: string
   createdByEmail: string
@@ -276,43 +278,109 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
 
-            {/* Summary Cards */}
+            {/* Hero Header Card (like purchases) */}
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+              className={cn('p-6 rounded-2xl border', theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm')}>
+              <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
+                    <Receipt className="w-7 h-7 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Gasto #{expense.id}</p>
+                    <h2 className={cn('text-xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{expense.description}</h2>
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      {accountingConfig && (
+                        <span className={cn('px-2.5 py-0.5 rounded-full text-xs font-medium',
+                          accountingConfig.color === 'blue' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                          accountingConfig.color === 'amber' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                          accountingConfig.color === 'purple' && 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                        )}>{accountingConfig.label}</span>
+                      )}
+                      {expense.categoryName && (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">{expense.categoryName}</span>
+                      )}
+                      {expense.receiptNumber && (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">#{expense.receiptNumber}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-3xl font-bold text-orange-600">{formatCurrency(expense.amount, expense.currency)}</p>
+                  <p className="text-sm text-gray-500">{formatDate(expense.expenseDate)}</p>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Activity Timeline */}
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+              className={cn('p-6 rounded-2xl border', theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200 shadow-sm')}>
+              <h3 className={cn('text-sm font-semibold mb-4 flex items-center gap-2', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                <Clock className="w-4 h-4 text-gray-400" /> Historial de Actividad
+              </h3>
+              <div className="relative">
+                <div className="absolute left-4 top-3 bottom-3 w-0.5 bg-gray-200 dark:bg-gray-700" />
+                <div className="space-y-4">
+                  {/* Created */}
+                  <div className="flex items-start gap-4 relative">
+                    <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center z-10 shadow-sm">
+                      <DollarSign className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="flex-1 pt-1">
+                      <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Gasto registrado</p>
+                      <p className="text-xs text-gray-500">por {expense.createdByName} · {formatDateTime(expense.createdAt)}</p>
+                    </div>
+                  </div>
+                  {/* AI Categorized */}
+                  {expense.aiSuggestion && (
+                    <div className="flex items-start gap-4 relative">
+                      <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center z-10 shadow-sm">
+                        <Sparkles className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="flex-1 pt-1">
+                        <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          Categorizado por IA: {expense.aiSuggestion}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Confianza: {expense.aiConfidence ? Math.round(expense.aiConfidence * 100) : 0}%
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {/* Modified */}
+                  {expense.updatedAt !== expense.createdAt && (
+                    <div className="flex items-start gap-4 relative">
+                      <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center z-10 shadow-sm">
+                        <Edit className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="flex-1 pt-1">
+                        <p className={cn('text-sm font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Gasto modificado</p>
+                        <p className="text-xs text-gray-500">{formatDateTime(expense.updatedAt)}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Stats Grid (like purchases) */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className={cn(
-                'p-4 rounded-xl',
-                theme === 'dark' ? 'bg-orange-900/20' : 'bg-orange-50'
-              )}>
-                <p className="text-sm text-orange-600 mb-1">Monto Total</p>
-                <p className="text-2xl font-bold text-orange-600">
-                  {formatCurrency(expense.amount, expense.currency)}
-                </p>
+              <div className={cn('p-4 rounded-xl border', theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200')}>
+                <p className="text-xs text-gray-500 uppercase mb-1">Monto</p>
+                <p className="text-xl font-bold text-orange-600">{formatCurrency(expense.amount)}</p>
               </div>
-              <div className={cn(
-                'p-4 rounded-xl',
-                theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-50'
-              )}>
-                <p className="text-sm text-gray-500 mb-1">Fecha del Gasto</p>
-                <p className="text-lg font-bold text-gray-900 dark:text-white">
-                  {formatDate(expense.expenseDate)}
-                </p>
+              <div className={cn('p-4 rounded-xl border', theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200')}>
+                <p className="text-xs text-gray-500 uppercase mb-1">Fecha</p>
+                <p className={cn('text-lg font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{formatDate(expense.expenseDate)}</p>
               </div>
-              <div className={cn(
-                'p-4 rounded-xl',
-                theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-50'
-              )}>
-                <p className="text-sm text-gray-500 mb-1">Categoría</p>
-                <p className="text-lg font-bold text-gray-900 dark:text-white">
-                  {expense.categoryName || 'Sin categoría'}
-                </p>
+              <div className={cn('p-4 rounded-xl border', theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200')}>
+                <p className="text-xs text-gray-500 uppercase mb-1">Proveedor</p>
+                <p className={cn('text-lg font-bold truncate', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{expense.vendorName || '—'}</p>
               </div>
-              <div className={cn(
-                'p-4 rounded-xl',
-                theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-50'
-              )}>
-                <p className="text-sm text-gray-500 mb-1">Proveedor</p>
-                <p className="text-lg font-bold text-gray-900 dark:text-white">
-                  {expense.vendorName || 'No especificado'}
-                </p>
+              <div className={cn('p-4 rounded-xl border', theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200')}>
+                <p className="text-xs text-gray-500 uppercase mb-1">Items</p>
+                <p className={cn('text-lg font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{expense.items.length || 1}</p>
               </div>
             </div>
 
@@ -462,25 +530,27 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                 )}
 
+                {/* Notes */}
+                {expense.notes && (
+                  <div className={cn('p-5 rounded-2xl border', theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200')}>
+                    <h3 className="text-sm font-medium text-gray-500 mb-3">Notas / Comentarios</h3>
+                    <p className="text-gray-700 dark:text-gray-300">{expense.notes}</p>
+                  </div>
+                )}
+
                 {/* AI Analysis */}
                 {(expense.aiSuggestion || expense.aiAnalysis) && (
-                  <div className={cn(
-                    'p-5 rounded-2xl border',
-                    theme === 'dark' ? 'bg-purple-900/20 border-purple-800' : 'bg-purple-50 border-purple-200'
-                  )}>
-                    <h3 className="text-sm font-medium text-purple-600 mb-3 flex items-center gap-2">
-                      <Sparkles className="w-4 h-4" />
-                      Análisis de IA
+                  <div className={cn('p-5 rounded-2xl border', theme === 'dark' ? 'bg-orange-900/20 border-orange-800' : 'bg-orange-50 border-orange-200')}>
+                    <h3 className="text-sm font-medium text-orange-600 mb-3 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" /> Análisis de IA
                     </h3>
                     {expense.aiSuggestion && (
                       <div className="mb-3">
-                        <p className="text-xs text-purple-500 mb-1">Categoría Sugerida</p>
+                        <p className="text-xs text-orange-500 mb-1">Categoría Sugerida</p>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-purple-700 dark:text-purple-300">
-                            {expense.aiSuggestion}
-                          </span>
+                          <span className="font-medium text-orange-700 dark:text-orange-300">{expense.aiSuggestion}</span>
                           {expense.aiConfidence && (
-                            <span className="text-xs px-2 py-0.5 bg-purple-200 dark:bg-purple-800 rounded-full">
+                            <span className="text-xs px-2 py-0.5 bg-orange-200 dark:bg-orange-800 rounded-full">
                               {Math.round(expense.aiConfidence * 100)}% confianza
                             </span>
                           )}
@@ -489,50 +559,12 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
                     )}
                     {expense.aiAnalysis && (
                       <div>
-                        <p className="text-xs text-purple-500 mb-1">Razonamiento</p>
-                        <p className="text-sm text-purple-700 dark:text-purple-300">
-                          {expense.aiAnalysis}
-                        </p>
+                        <p className="text-xs text-orange-500 mb-1">Razonamiento</p>
+                        <p className="text-sm text-orange-700 dark:text-orange-300">{expense.aiAnalysis}</p>
                       </div>
                     )}
                   </div>
                 )}
-
-                {/* Metadata */}
-                <div className={cn(
-                  'p-5 rounded-2xl border',
-                  theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
-                )}>
-                  <h3 className="text-sm font-medium text-gray-500 mb-3 flex items-center gap-2">
-                    <Clock className="w-4 h-4" />
-                    Registro
-                  </h3>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500">Creado por:</span>
-                      <div className="flex items-center gap-2">
-                        <User className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">
-                          {expense.createdByName}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500">Fecha de registro:</span>
-                      <span className="text-sm text-gray-600 dark:text-gray-300">
-                        {formatDateTime(expense.createdAt)}
-                      </span>
-                    </div>
-                    {expense.updatedAt !== expense.createdAt && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-500">Última actualización:</span>
-                        <span className="text-sm text-gray-600 dark:text-gray-300">
-                          {formatDateTime(expense.updatedAt)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
               </div>
 
               {/* Right Column - Receipt */}
