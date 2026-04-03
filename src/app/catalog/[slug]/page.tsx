@@ -132,9 +132,9 @@ export default function CatalogPage() {
               {(store?.logoMobileUrl || store?.logoDesktopUrl || store?.logoUrl) ? (
                 <>
                   {/* Mobile logo */}
-                  <img src={store.logoMobileUrl || store.logoUrl || ''} alt={store.name} className="sm:hidden w-10 h-10 rounded-xl object-cover" />
+                  <img src={store.logoMobileUrl || store.logoUrl || ''} alt={store.name} className="sm:hidden h-12 object-contain" />
                   {/* Desktop logo */}
-                  <img src={store.logoDesktopUrl || store.logoUrl || ''} alt={store.name} className="hidden sm:block h-10 max-w-[160px] object-contain" />
+                  <img src={store.logoDesktopUrl || store.logoUrl || ''} alt={store.name} className="hidden sm:block h-10 max-w-[200px] object-contain" />
                 </>
               ) : (
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: primaryColor + '20' }}>
