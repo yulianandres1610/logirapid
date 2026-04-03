@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, Phone, MapPin, MessageCircle, Package, ShoppingBag, ExternalLink, Instagram, Facebook, Send, Loader2, ChevronLeft, ChevronRight, X, ShoppingCart, Plus, Minus, Trash2 } from 'lucide-react'
-import Image from 'next/image'
+import { Search, Phone, MapPin, MessageCircle, Package, ShoppingBag, Instagram, Facebook, Send, Loader2, ChevronLeft, ChevronRight, X, ShoppingCart, Plus, Minus, Trash2 } from 'lucide-react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 
 interface StoreInfo {
@@ -274,7 +273,7 @@ export default function CatalogPage() {
             {products.map(product => (
               <div
                 key={product.id}
-                onClick={() => setSelectedProduct(product)}
+                onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
                 className="bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all cursor-pointer group"
               >
                 {/* Image */}
@@ -355,70 +354,7 @@ export default function CatalogPage() {
         )}
       </div>
 
-      {/* Product Detail Modal */}
-      {selectedProduct && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" onClick={() => setSelectedProduct(null)}>
-          <div className="bg-white w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl" onClick={e => e.stopPropagation()}>
-            <div className="relative">
-              <div className="aspect-video bg-gray-100 relative">
-                {selectedProduct.imageUrl ? (
-                  <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="absolute inset-0 w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center"><Package className="w-16 h-16 text-gray-300" /></div>
-                )}
-              </div>
-              <button onClick={() => setSelectedProduct(null)} className="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-5">
-              {selectedProduct.category && (
-                <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-500">{selectedProduct.category}</span>
-              )}
-              <h2 className="text-xl font-bold text-gray-900 mt-2">{selectedProduct.name}</h2>
-              {selectedProduct.description && (
-                <p className="text-gray-600 text-sm mt-2">{selectedProduct.description}</p>
-              )}
-              <div className="mt-4 flex items-end gap-3">
-                {selectedProduct.priceCUP !== null && (
-                  <p className="text-3xl font-bold" style={{ color: primaryColor }}>
-                    {selectedProduct.priceCUP.toLocaleString('es-ES')} CUP
-                  </p>
-                )}
-                {selectedProduct.priceUSD !== null && (
-                  <p className="text-lg text-gray-500 font-medium pb-0.5">${selectedProduct.priceUSD.toFixed(2)} USD</p>
-                )}
-              </div>
-              {selectedProduct.stock !== null && (
-                <p className="text-sm text-gray-500 mt-2">
-                  {selectedProduct.stock > 0 ? `${selectedProduct.stock} ${selectedProduct.unit} disponibles` : 'Producto agotado'}
-                </p>
-              )}
-              {selectedProduct.stock && selectedProduct.stock > 0 && (
-                <div className="mt-4 flex gap-2">
-                  <button
-                    onClick={() => { addToCart(selectedProduct); setSelectedProduct(null) }}
-                    className="flex-1 py-3.5 rounded-xl text-white font-bold flex items-center justify-center gap-2 text-lg"
-                    style={{ backgroundColor: primaryColor }}
-                  >
-                    <ShoppingCart className="w-5 h-5" />
-                    Agregar al carrito
-                  </button>
-                  {store?.whatsapp && (
-                    <button
-                      onClick={() => openWhatsApp(selectedProduct)}
-                      className="py-3.5 px-4 rounded-xl text-white font-bold flex items-center justify-center"
-                      style={{ backgroundColor: '#25D366' }}
-                    >
-                      <MessageCircle className="w-5 h-5" />
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Product detail is now a separate page: /catalog/[slug]/product/[productId] */}
 
       {/* Cart Drawer */}
       {showCart && (
