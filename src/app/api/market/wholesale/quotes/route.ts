@@ -223,6 +223,19 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    // Ensure full decimal precision on all price columns (auto-migrate)
+    try {
+      await db.query(`ALTER TABLE market_quotes ALTER COLUMN subtotal TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_quotes ALTER COLUMN discount_amount TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_quotes ALTER COLUMN total_amount TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_quote_lines ALTER COLUMN unit_price TYPE DECIMAL(15,10)`)
+      await db.query(`ALTER TABLE market_quote_lines ALTER COLUMN original_price TYPE DECIMAL(15,10)`)
+      await db.query(`ALTER TABLE market_quote_lines ALTER COLUMN subtotal TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_quote_lines ALTER COLUMN discount_amount TYPE DECIMAL(15,10)`)
+      await db.query(`ALTER TABLE market_pricelist_items ALTER COLUMN fixed_price TYPE DECIMAL(15,10)`)
+      await db.query(`ALTER TABLE market_pricelist_items ALTER COLUMN discount_amount TYPE DECIMAL(15,10)`)
+    } catch { /* already migrated */ }
+
     // Verify customer belongs to company
     const customerResult = await db.query(
       'SELECT id, pricelist_id FROM market_wholesale_customers WHERE id = $1 AND company_id = $2',
