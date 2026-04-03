@@ -415,23 +415,42 @@ export default function CatalogPage() {
       )}
 
       {/* Footer */}
-      <footer className="bg-white border-t mt-12">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <span className="font-bold text-gray-700">{store?.name}</span>
-            <div className="flex items-center gap-3">
-              {store?.instagramUrl && (
-                <a href={store.instagramUrl} target="_blank" rel="noopener" className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600"><Instagram className="w-5 h-5" /></a>
-              )}
+      <footer className="bg-gray-900 text-white mt-12">
+        <div className="max-w-7xl mx-auto px-4 py-10">
+          <div className="flex flex-col items-center gap-6">
+            {/* Social Icons */}
+            <div className="flex items-center gap-4">
               {store?.facebookUrl && (
-                <a href={store.facebookUrl} target="_blank" rel="noopener" className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600"><Facebook className="w-5 h-5" /></a>
+                <a href={store.facebookUrl} target="_blank" rel="noopener" className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+                  <Facebook className="w-5 h-5" />
+                </a>
+              )}
+              {store?.instagramUrl && (
+                <a href={store.instagramUrl} target="_blank" rel="noopener" className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+                  <Instagram className="w-5 h-5" />
+                </a>
               )}
               {store?.telegramUrl && (
-                <a href={store.telegramUrl} target="_blank" rel="noopener" className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600"><Send className="w-5 h-5" /></a>
+                <a href={store.telegramUrl} target="_blank" rel="noopener" className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+                  <Send className="w-5 h-5" />
+                </a>
+              )}
+              {store?.whatsapp && (
+                <a href={`https://wa.me/${store.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener" className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+                  <MessageCircle className="w-5 h-5" />
+                </a>
+              )}
+              {store?.phone && (
+                <a href={`tel:${store.phone}`} className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+                  <Phone className="w-5 h-5" />
+                </a>
               )}
             </div>
+            {store?.address && (
+              <p className="text-sm text-gray-400 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{store.address}</p>
+            )}
+            <p className="text-xs text-gray-500">© {new Date().getFullYear()} {store?.name} · Powered by LogiRapid</p>
           </div>
-          <p className="text-xs text-gray-400 mt-3 text-center">© {new Date().getFullYear()} {store?.name}</p>
         </div>
       </footer>
     </div>
