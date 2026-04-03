@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Search, Phone, MapPin, MessageCircle, Package, ShoppingBag, Instagram, Facebook, Send, Loader2, ChevronLeft, ChevronRight, X, ShoppingCart, Plus, Minus, Trash2, Flame, Star, ArrowRight } from 'lucide-react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 
@@ -20,6 +21,38 @@ interface Product {
 
 interface CartItem { product: Product; quantity: number }
 interface Category { name: string; count: number }
+
+// Lazy-loading image with fade-in and placeholder
+function LazyImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  const [loaded, setLoaded] = useState(false)
+  const [inView, setInView] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!ref.current) return
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) { setInView(true); observer.disconnect() }
+    }, { rootMargin: '200px' })
+    observer.observe(ref.current)
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <div ref={ref} className="absolute inset-0">
+      {!loaded && <div className="absolute inset-0 bg-gray-100 animate-pulse" />}
+      {inView && (
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setLoaded(true)}
+          className={`${className || ''} transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        />
+      )}
+    </div>
+  )
+}
 
 export default function CatalogPage() {
   const params = useParams()
@@ -183,17 +216,20 @@ export default function CatalogPage() {
 
       {/* Hero / Description */}
       {store?.description && !search && selectedCategory === 'all' && page === 1 && (
-        <div className="py-8 px-4" style={{ background: `linear-gradient(135deg, ${primaryColor}15, ${primaryColor}05)` }}>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }}
+          className="py-8 px-4" style={{ background: `linear-gradient(135deg, ${primaryColor}15, ${primaryColor}05)` }}>
           <div className="max-w-7xl mx-auto text-center">
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{store.name}</h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">{store.description}</p>
+            <motion.h2 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+              className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{store.name}</motion.h2>
+            <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+              className="text-gray-600 max-w-2xl mx-auto">{store.description}</motion.p>
             {store.address && (
               <p className="text-sm text-gray-500 mt-3 flex items-center justify-center gap-1">
                 <MapPin className="w-3.5 h-3.5" />{store.address}
               </p>
             )}
           </div>
-        </div>
+        </motion.div>
       )}
 
       <div className="max-w-7xl mx-auto px-4 py-6 flex-1">
@@ -212,7 +248,7 @@ export default function CatalogPage() {
                   className="min-w-[160px] sm:min-w-[200px] bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all cursor-pointer snap-start group">
                   <div className="aspect-square bg-gray-50 relative overflow-hidden">
                     {product.imageUrl ? (
-                      <img src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                      <LazyImage src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center"><Package className="w-8 h-8 text-gray-300" /></div>
                     )}
@@ -267,15 +303,18 @@ export default function CatalogPage() {
           <>
           {/* Desktop grid */}
           <div className="hidden sm:grid sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {products.map(product => {
-              const inCart = cart.find(i => i.product.id === product.id)
+            {products.map((product, i) => {
+              const inCart = cart.find(c => c.product.id === product.id)
               return (
-                <div key={product.id}
-                  className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 group flex flex-col">
+                <motion.div key={product.id}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(i * 0.05, 0.5), duration: 0.3 }}
+                  className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl transition-shadow duration-300 group flex flex-col">
                   <div onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
                     className="aspect-square bg-gray-50 relative overflow-hidden cursor-pointer">
                     {product.imageUrl ? (
-                      <img src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      <LazyImage src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center"><Package className="w-10 h-10 text-gray-200" /></div>
                     )}
@@ -312,22 +351,26 @@ export default function CatalogPage() {
                       )}
                     </div>
                   </div>
-                </div>
+                </motion.div>
               )
             })}
           </div>
 
           {/* Mobile: horizontal card list (1 product per row) */}
           <div className="sm:hidden space-y-3">
-            {products.map(product => {
-              const inCart = cart.find(i => i.product.id === product.id)
+            {products.map((product, i) => {
+              const inCart = cart.find(c => c.product.id === product.id)
               return (
-                <div key={product.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden flex hover:shadow-md transition-all">
+                <motion.div key={product.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: Math.min(i * 0.04, 0.4), duration: 0.25 }}
+                  className="bg-white rounded-xl border border-gray-100 overflow-hidden flex hover:shadow-md transition-shadow">
                   {/* Image */}
                   <div onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
                     className="w-28 h-28 bg-gray-50 relative overflow-hidden cursor-pointer shrink-0">
                     {product.imageUrl ? (
-                      <img src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-cover" />
+                      <LazyImage src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center"><Package className="w-8 h-8 text-gray-200" /></div>
                     )}
@@ -365,7 +408,7 @@ export default function CatalogPage() {
                       )}
                     </div>
                   </div>
-                </div>
+                </motion.div>
               )
             })}
           </div>
