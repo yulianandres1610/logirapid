@@ -8,6 +8,8 @@ import {
   Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts'
 import { DollarSign, ShoppingCart, TrendingUp, Users, X, Receipt, Clock, CreditCard, ExternalLink, RefreshCw, Banknote, Smartphone, Zap } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { useTheme } from '@/contexts/theme-context'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { ReportFilters } from '@/components/market/reports/ReportFilters'
@@ -94,6 +96,7 @@ interface RealtimeData {
 }
 
 export default function SalesReportPage() {
+  const { theme } = useTheme()
   const router = useRouter()
   const reportRef = useRef<HTMLDivElement>(null)
   const [data, setData] = useState<SalesData | null>(null)
