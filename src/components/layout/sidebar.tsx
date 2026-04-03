@@ -754,6 +754,52 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: DollarSign, label: "Tasa de Cambio", href: "/dashboard/market/settings/exchange-rate" },
   ]
 
+  // Menu items para MARKET_ECONOMICA (Contabilidad, Gastos, Reportes, RRHH, Conversaciones, Tasa de Cambio)
+  const marketEconomicaMenuItems = [
+    { icon: MessageCircle, label: "Conversaciones", href: "/dashboard/market/chat" },
+    {
+      icon: Calculator,
+      label: "Contabilidad",
+      href: "/dashboard/market/accounting",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: BarChart3, label: "Dashboard", href: "/dashboard/market/accounting" },
+        { icon: Receipt, label: "Gastos", href: "/dashboard/market/accounting/expenses" },
+        { icon: Wallet, label: "Nomina", href: "/dashboard/market/accounting/payroll" },
+        { icon: FileCheck, label: "Solicitudes", href: "/dashboard/market/accounting/requests" },
+      ]
+    },
+    {
+      icon: BarChart3,
+      label: "Reportes",
+      href: "/dashboard/market/reports",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: TrendingUp, label: "Ventas", href: "/dashboard/market/reports/sales" },
+        { icon: Percent, label: "Márgenes", href: "/dashboard/market/reports/margins" },
+        { icon: Receipt, label: "Gastos", href: "/dashboard/market/reports/expenses" },
+        { icon: Package, label: "Inventario", href: "/dashboard/market/reports/inventory" },
+        { icon: Monitor, label: "Terminales POS", href: "/dashboard/market/reports/pos-terminals" },
+      ]
+    },
+    {
+      icon: Briefcase,
+      label: "Recursos Humanos",
+      href: "/dashboard/market/hr",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: Users, label: "Empleados", href: "/dashboard/market/hr/employees" },
+        { icon: FileText, label: "Contratos", href: "/dashboard/market/hr/contracts" },
+        { icon: Building2, label: "Departamentos", href: "/dashboard/market/hr/departments" },
+        { icon: Clock, label: "Horarios Fijos", href: "/dashboard/market/hr/schedules" },
+        { icon: CalendarClock, label: "Turnos Rotativos", href: "/dashboard/market/hr/scheduling" },
+        { icon: Calendar, label: "Asistencia", href: "/dashboard/market/hr/attendance" },
+        { icon: Fingerprint, label: "Kioscos", href: "/dashboard/market/hr/kiosks" },
+      ]
+    },
+    { icon: DollarSign, label: "Tasa de Cambio", href: "/dashboard/market/settings/exchange-rate" },
+  ]
+
   // Hook para verificar servicios habilitados
   const { hasService, hasSubmodule } = useEnabledServices()
 
@@ -805,6 +851,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     if (user?.role === 'MARKET_ALMACENERO') return marketAlmaceneroMenuItems
     if (user?.role === 'MARKET_VENDEDOR') return marketVendedorMenuItems
     if (user?.role === 'MARKET_MANAGER_TIENDA') return marketManagerTiendaMenuItems
+    if (user?.role === 'MARKET_ECONOMICA') return marketEconomicaMenuItems
     // Filtrar items que requieren rol específico
     // ADMIN y SUPER_ADMIN pueden ver todos los items incluyendo los que requieren MARKET_MANAGER
     const higherRoles = ['ADMIN', 'SUPER_ADMIN', 'MARKET_MANAGER']

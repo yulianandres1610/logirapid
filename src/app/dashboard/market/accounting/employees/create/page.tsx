@@ -64,6 +64,7 @@ const ROLES = [
   { value: 'MARKET_COMERCIAL', label: 'Comercial', description: 'Ventas, puede ver sus comisiones' },
   { value: 'MARKET_ALMACENERO', label: 'Almacenero', description: 'Inventario, sin acceso a nóminas' },
   { value: 'MARKET_VENDEDOR', label: 'Vendedor', description: 'Solo POS, ve sus ventas y comisiones' },
+  { value: 'MARKET_ECONOMICA', label: 'Económica', description: 'Contabilidad, gastos, reportes, RRHH, tasa de cambio' },
   { value: 'MARKET_GUARDIA', label: 'Guardia', description: 'Solo acceso al kiosko de puerta (control de visitantes)' }
 ]
 
