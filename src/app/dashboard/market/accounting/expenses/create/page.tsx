@@ -1671,7 +1671,7 @@ export default function CreateExpensePage() {
                     <div className="mb-6">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                          <Layers className="w-5 h-5 text-purple-500" />
+                          <Layers className="w-5 h-5 text-orange-500" />
                           Items agrupados por categoría
                         </h3>
                         <span className="text-sm text-gray-500">
@@ -1688,7 +1688,7 @@ export default function CreateExpensePage() {
                             className={cn(
                               "border rounded-xl p-4 transition-all",
                               group.selected
-                                ? "border-purple-300 bg-purple-50 dark:bg-purple-900/10 dark:border-purple-700"
+                                ? "border-orange-300 bg-orange-50 dark:bg-orange-900/10 dark:border-orange-700"
                                 : "border-gray-200 dark:border-gray-700 opacity-60"
                             )}
                           >
@@ -1698,7 +1698,7 @@ export default function CreateExpensePage() {
                                 type="checkbox"
                                 checked={group.selected}
                                 onChange={() => toggleGroupSelection(group.categoryName)}
-                                className="mt-1 w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                                className="mt-1 w-5 h-5 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
                               />
 
                               <div className="flex-1">
@@ -1711,7 +1711,7 @@ export default function CreateExpensePage() {
                                     className={cn(
                                       "px-3 py-1.5 text-sm font-medium rounded-lg border",
                                       "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600",
-                                      "focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                      "focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                                     )}
                                   >
                                     <option value="">Sin categoría</option>
@@ -1721,7 +1721,7 @@ export default function CreateExpensePage() {
                                   </select>
                                   <span className={cn(
                                     "text-xs px-2 py-0.5 rounded-full",
-                                    "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+                                    "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
                                   )}>
                                     {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
                                   </span>
@@ -1742,7 +1742,7 @@ export default function CreateExpensePage() {
                                   <span className="text-gray-500">
                                     Subtotal: ${group.subtotal.toFixed(2)} + Tax: ${group.tax.toFixed(2)}
                                   </span>
-                                  <span className="font-bold text-purple-600 dark:text-purple-400">
+                                  <span className="font-bold text-orange-600 dark:text-orange-400">
                                     Total: ${group.total.toFixed(2)}
                                   </span>
                                 </div>
@@ -1757,7 +1757,7 @@ export default function CreateExpensePage() {
                                   className={cn(
                                     "mt-2 w-full px-3 py-2 text-sm border rounded-lg",
                                     "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600",
-                                    "focus:ring-2 focus:ring-purple-500 focus:border-purple-500",
+                                    "focus:ring-2 focus:ring-orange-500 focus:border-orange-500",
                                     !group.selected && "opacity-50 cursor-not-allowed"
                                   )}
                                 />
@@ -1768,11 +1768,11 @@ export default function CreateExpensePage() {
                       </div>
 
                       {/* Summary */}
-                      <div className="mt-4 p-4 bg-gradient-to-r from-purple-50 to-orange-50 dark:from-purple-900/20 dark:to-orange-900/20 rounded-xl border border-purple-200 dark:border-purple-800">
+                      <div className="mt-4 p-4 bg-gradient-to-r from-orange-50 to-orange-50 dark:from-orange-900/20 dark:to-orange-900/20 rounded-xl border border-orange-200 dark:border-orange-800">
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-sm text-gray-600 dark:text-gray-400">
-                              Se crearán <span className="font-bold text-purple-600">{categoryGroups.filter(g => g.selected).length}</span> gastos
+                              Se crearán <span className="font-bold text-orange-600">{categoryGroups.filter(g => g.selected).length}</span> gastos
                             </p>
                             <p className="text-xs text-gray-500 mt-1">
                               Cada categoría generará un gasto separado con el mismo recibo
@@ -1780,7 +1780,7 @@ export default function CreateExpensePage() {
                           </div>
                           <div className="text-right">
                             <p className="text-xs text-gray-500">Total seleccionado</p>
-                            <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                            <p className="text-xl font-bold text-orange-600 dark:text-orange-400">
                               ${categoryGroups.filter(g => g.selected).reduce((sum, g) => sum + g.total, 0).toFixed(2)}
                             </p>
                           </div>
@@ -1811,6 +1811,22 @@ export default function CreateExpensePage() {
                             placeholder="Nombre del proveedor"
                             className="w-full px-4 py-2 border rounded-xl bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
                           />
+                        </div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">No. Factura/Recibo</label>
+                          <input type="text" value={formData.receiptNumber}
+                            onChange={(e) => setFormData(prev => ({ ...prev, receiptNumber: e.target.value }))}
+                            placeholder="Ej: FAC-001"
+                            className="w-full px-4 py-2 border rounded-xl bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Notas</label>
+                          <input type="text" value={formData.notes}
+                            onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                            placeholder="Comentario (opcional)"
+                            className="w-full px-4 py-2 border rounded-xl bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white" />
                         </div>
                       </div>
                     </div>
