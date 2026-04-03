@@ -210,20 +210,38 @@ export async function GET(request: NextRequest) {
       ORDER BY sales DESC
     `, [companyId, startDate, endDate])
 
-    // Sales by payment method
+    // Sales by payment method (POS + Wholesale)
     const byPaymentResult = await db.query(`
-      SELECT
-        COALESCE(pm.payment_method, 'efectivo') as payment_method,
-        COALESCE(pm.currency, 'USD') as currency,
-        COUNT(DISTINCT o.id) as orders,
-        COALESCE(SUM(pm.amount), 0) as amount
-      FROM market_pos_orders o
-      LEFT JOIN market_pos_payments pm ON o.id = pm.order_id
-      WHERE o.company_id = $1
-        AND o.status IN ('paid', 'completed')
-        AND DATE(o.created_at) BETWEEN $2 AND $3
-        ${posTerminalFilter}
-      GROUP BY pm.payment_method, pm.currency
+      SELECT payment_method, currency, SUM(orders) as orders, SUM(amount) as amount
+      FROM (
+        -- POS payments
+        SELECT
+          COALESCE(pm.payment_method, 'efectivo') as payment_method,
+          COALESCE(pm.currency, 'USD') as currency,
+          COUNT(DISTINCT o.id) as orders,
+          COALESCE(SUM(pm.amount), 0) as amount
+        FROM market_pos_orders o
+        LEFT JOIN market_pos_payments pm ON o.id = pm.order_id
+        WHERE o.company_id = $1
+          AND o.status IN ('paid', 'completed')
+          AND DATE(o.created_at) BETWEEN $2 AND $3
+          ${posTerminalFilter}
+        GROUP BY pm.payment_method, pm.currency
+        UNION ALL
+        -- Wholesale invoice payments
+        SELECT
+          COALESCE(wip.payment_method, 'transferencia') as payment_method,
+          COALESCE(wip.currency, 'USD') as currency,
+          COUNT(DISTINCT wip.invoice_id) as orders,
+          COALESCE(SUM(wip.amount), 0) as amount
+        FROM market_invoice_payments wip
+        JOIN market_invoices wi ON wi.id = wip.invoice_id
+        WHERE wi.company_id = $1
+          AND wi.status IN ('confirmed', 'paid', 'partial', 'delivered')
+          AND DATE(wip.created_at) BETWEEN $2 AND $3
+        GROUP BY wip.payment_method, wip.currency
+      ) combined
+      GROUP BY payment_method, currency
       ORDER BY amount DESC
     `, params)
 
