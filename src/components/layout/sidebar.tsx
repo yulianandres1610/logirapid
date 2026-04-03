@@ -847,11 +847,12 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
 
   // Seleccionar menú para empresas MARKET según el rol del empleado
   const getMarketMenu = () => {
-    if (user?.role === 'MARKET_COMERCIAL') return marketComercialMenuItems
-    if (user?.role === 'MARKET_ALMACENERO') return marketAlmaceneroMenuItems
-    if (user?.role === 'MARKET_VENDEDOR') return marketVendedorMenuItems
-    if (user?.role === 'MARKET_MANAGER_TIENDA') return marketManagerTiendaMenuItems
-    if (user?.role === 'MARKET_ECONOMICA') return marketEconomicaMenuItems
+    const role = user?.role as string
+    if (role === 'MARKET_COMERCIAL') return marketComercialMenuItems
+    if (role === 'MARKET_ALMACENERO') return marketAlmaceneroMenuItems
+    if (role === 'MARKET_VENDEDOR') return marketVendedorMenuItems
+    if (role === 'MARKET_MANAGER_TIENDA') return marketManagerTiendaMenuItems
+    if (role === 'MARKET_ECONOMICA') return marketEconomicaMenuItems
     // Filtrar items que requieren rol específico
     // ADMIN y SUPER_ADMIN pueden ver todos los items incluyendo los que requieren MARKET_MANAGER
     const higherRoles = ['ADMIN', 'SUPER_ADMIN', 'MARKET_MANAGER']
