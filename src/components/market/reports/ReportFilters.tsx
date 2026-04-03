@@ -79,6 +79,9 @@ export function ReportFilters({
       const start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0]
       const end = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0]
       return { start, end }
+    }},
+    { label: 'Todos', getValue: () => {
+      return { start: '2020-01-01', end: new Date().toISOString().split('T')[0] }
     }}
   ]
 
