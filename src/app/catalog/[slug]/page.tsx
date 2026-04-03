@@ -6,6 +6,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation'
 
 interface StoreInfo {
   name: string; description: string | null; logoUrl: string | null
+  logoMobileUrl: string | null; logoDesktopUrl: string | null
   primaryColor: string; phone: string | null; whatsapp: string | null; email: string | null
   address: string | null; city: string | null; province: string | null
   facebookUrl: string | null; instagramUrl: string | null; telegramUrl: string | null
@@ -128,8 +129,13 @@ export default function CatalogPage() {
         <div className="px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              {store?.logoUrl ? (
-                <img src={store.logoUrl} alt={store.name} className="w-10 h-10 rounded-xl object-cover" />
+              {(store?.logoMobileUrl || store?.logoDesktopUrl || store?.logoUrl) ? (
+                <>
+                  {/* Mobile logo */}
+                  <img src={store.logoMobileUrl || store.logoUrl || ''} alt={store.name} className="sm:hidden w-10 h-10 rounded-xl object-cover" />
+                  {/* Desktop logo */}
+                  <img src={store.logoDesktopUrl || store.logoUrl || ''} alt={store.name} className="hidden sm:block h-10 max-w-[160px] object-contain" />
+                </>
               ) : (
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: primaryColor + '20' }}>
                   <ShoppingBag className="w-5 h-5" style={{ color: primaryColor }} />

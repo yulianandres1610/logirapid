@@ -34,7 +34,7 @@ const STEPS: WizardStep[] = [
 ]
 
 interface FormData {
-  storeName: string; description: string; logoUrl: string; primaryColor: string
+  storeName: string; description: string; logoUrl: string; logoMobileUrl: string; logoDesktopUrl: string; primaryColor: string
   phone: string; whatsapp: string; email: string; address: string; city: string; province: string
   facebookUrl: string; instagramUrl: string; telegramUrl: string
   categories: string[]; showStock: boolean; showUsdPrice: boolean; showCupPrice: boolean
@@ -42,7 +42,7 @@ interface FormData {
 }
 
 const defaultForm: FormData = {
-  storeName: '', description: '', logoUrl: '', primaryColor: '#f97316',
+  storeName: '', description: '', logoUrl: '', logoMobileUrl: '', logoDesktopUrl: '', primaryColor: '#f97316',
   phone: '', whatsapp: '', email: '', address: '', city: '', province: '',
   facebookUrl: '', instagramUrl: '', telegramUrl: '',
   categories: [], showStock: true, showUsdPrice: true, showCupPrice: true,
@@ -89,6 +89,8 @@ export default function CatalogSettingsPage() {
             storeName: data.data.store_name || '',
             description: data.data.description || '',
             logoUrl: data.data.logo_url || '',
+            logoMobileUrl: data.data.logo_mobile_url || '',
+            logoDesktopUrl: data.data.logo_desktop_url || '',
             primaryColor: data.data.primary_color || '#f97316',
             phone: data.data.phone || '',
             whatsapp: data.data.whatsapp || '',
@@ -119,7 +121,7 @@ export default function CatalogSettingsPage() {
     try {
       const res = await fetch('/api/market/catalog/config', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, bannerUrl: null })
+        body: JSON.stringify({ ...form, bannerUrl: null, logoMobileUrl: form.logoMobileUrl, logoDesktopUrl: form.logoDesktopUrl })
       })
       const data = await res.json()
       if (data.success) {
@@ -460,6 +462,78 @@ export default function CatalogSettingsPage() {
                         </button>
                       </div>
                     )}
+                  </div>
+
+                  {/* Logo Mobile & Desktop */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-500 mb-2 block">Logo Móvil <span className="text-xs text-gray-400">(cuadrado, 200×200px)</span></label>
+                      {form.logoMobileUrl ? (
+                        <div className="flex items-center gap-3">
+                          <img src={form.logoMobileUrl} alt="Logo móvil" className="w-16 h-16 rounded-xl object-cover border" />
+                          <div className="flex flex-col gap-1">
+                            <button onClick={() => setForm({ ...form, logoMobileUrl: '' })} className="text-xs text-red-500 hover:underline">Eliminar</button>
+                            <label className="text-xs text-orange-500 hover:underline cursor-pointer">
+                              Cambiar
+                              <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                                const file = e.target.files?.[0]; if (!file) return
+                                const fd = new FormData(); fd.append('file', file); fd.append('folder', 'catalog-logos')
+                                const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
+                                const data = await res.json()
+                                if (data.success && data.url) setForm(prev => ({ ...prev, logoMobileUrl: data.url }))
+                              }} />
+                            </label>
+                          </div>
+                        </div>
+                      ) : (
+                        <label className={cn('flex flex-col items-center justify-center h-24 rounded-xl border-2 border-dashed cursor-pointer transition-all',
+                          isDark ? 'border-gray-600 hover:border-orange-500 bg-gray-900/30' : 'border-gray-300 hover:border-orange-500 bg-gray-50')}>
+                          <Upload className="w-5 h-5 text-gray-400 mb-1" />
+                          <p className="text-xs text-gray-400">Subir logo móvil</p>
+                          <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                            const file = e.target.files?.[0]; if (!file) return
+                            const fd = new FormData(); fd.append('file', file); fd.append('folder', 'catalog-logos')
+                            const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
+                            const data = await res.json()
+                            if (data.success && data.url) setForm(prev => ({ ...prev, logoMobileUrl: data.url }))
+                          }} />
+                        </label>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500 mb-2 block">Logo PC <span className="text-xs text-gray-400">(horizontal, 400×100px)</span></label>
+                      {form.logoDesktopUrl ? (
+                        <div className="flex items-center gap-3">
+                          <img src={form.logoDesktopUrl} alt="Logo PC" className="h-12 max-w-[120px] rounded-lg object-contain border" />
+                          <div className="flex flex-col gap-1">
+                            <button onClick={() => setForm({ ...form, logoDesktopUrl: '' })} className="text-xs text-red-500 hover:underline">Eliminar</button>
+                            <label className="text-xs text-orange-500 hover:underline cursor-pointer">
+                              Cambiar
+                              <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                                const file = e.target.files?.[0]; if (!file) return
+                                const fd = new FormData(); fd.append('file', file); fd.append('folder', 'catalog-logos')
+                                const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
+                                const data = await res.json()
+                                if (data.success && data.url) setForm(prev => ({ ...prev, logoDesktopUrl: data.url }))
+                              }} />
+                            </label>
+                          </div>
+                        </div>
+                      ) : (
+                        <label className={cn('flex flex-col items-center justify-center h-24 rounded-xl border-2 border-dashed cursor-pointer transition-all',
+                          isDark ? 'border-gray-600 hover:border-orange-500 bg-gray-900/30' : 'border-gray-300 hover:border-orange-500 bg-gray-50')}>
+                          <Upload className="w-5 h-5 text-gray-400 mb-1" />
+                          <p className="text-xs text-gray-400">Subir logo PC</p>
+                          <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                            const file = e.target.files?.[0]; if (!file) return
+                            const fd = new FormData(); fd.append('file', file); fd.append('folder', 'catalog-logos')
+                            const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
+                            const data = await res.json()
+                            if (data.success && data.url) setForm(prev => ({ ...prev, logoDesktopUrl: data.url }))
+                          }} />
+                        </label>
+                      )}
+                    </div>
                   </div>
 
                   <div>
