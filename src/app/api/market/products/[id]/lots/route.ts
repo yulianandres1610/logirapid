@@ -79,7 +79,7 @@ export async function GET(
         LEFT JOIN consignment_orders co ON co.id = col.order_id
         LEFT JOIN market_suppliers cs ON cs.id = cli.supplier_id
         LEFT JOIN market_warehouses mw ON mw.id = cli.warehouse_id
-        WHERE cli.product_id = $1 AND cli.company_id = $2
+        WHERE cli.product_id = $1 AND cli.company_id = $2 AND cli.quantity_available > 0
         ORDER BY cli.received_at DESC
       `, [productId, parseInt(companyId)])
 
@@ -131,7 +131,7 @@ export async function GET(
           SELECT mpl.purchase_id FROM market_purchase_lines mpl WHERE mpl.id = pli.purchase_line_id LIMIT 1
         )
         LEFT JOIN market_warehouses mw ON mw.id = pli.warehouse_id
-        WHERE pli.product_id = $1 AND pli.company_id = $2
+        WHERE pli.product_id = $1 AND pli.company_id = $2 AND pli.quantity_available > 0
         ORDER BY pli.created_at DESC
       `, [productId, parseInt(companyId)])
 
@@ -180,7 +180,7 @@ export async function GET(
         FROM production_lot_inventory pli
         LEFT JOIN market_production_orders mpo ON mpo.id = pli.production_order_id
         LEFT JOIN market_warehouses mw ON mw.id = pli.warehouse_id
-        WHERE pli.product_id = $1 AND pli.company_id = $2
+        WHERE pli.product_id = $1 AND pli.company_id = $2 AND pli.quantity_available > 0
         ORDER BY pli.received_at DESC
       `, [productId, parseInt(companyId)])
 
