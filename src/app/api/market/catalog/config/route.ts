@@ -51,6 +51,11 @@ async function ensureTable() {
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `)
+  // Add new columns if missing
+  try {
+    await db.query(`ALTER TABLE market_catalogs ADD COLUMN IF NOT EXISTS logo_mobile_url TEXT`)
+    await db.query(`ALTER TABLE market_catalogs ADD COLUMN IF NOT EXISTS logo_desktop_url TEXT`)
+  } catch { /* already exists */ }
 }
 
 /**
@@ -110,6 +115,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const {
       storeName, description, logoUrl, bannerUrl, primaryColor,
+      logoMobileUrl, logoDesktopUrl,
       phone, whatsapp, email, address, city, province,
       facebookUrl, instagramUrl, telegramUrl,
       categories, showStock, showUsdPrice, showCupPrice,
@@ -158,7 +164,8 @@ export async function POST(request: NextRequest) {
           phone = $6, whatsapp = $7, email = $8, address = $9, city = $10, province = $11,
           facebook_url = $12, instagram_url = $13, telegram_url = $14,
           categories = $15, show_stock = $16, show_usd_price = $17, show_cup_price = $18,
-          custom_domain = $19, dns_instructions = $20, is_active = $21, updated_at = NOW()
+          custom_domain = $19, dns_instructions = $20, is_active = $21,
+          logo_mobile_url = $23, logo_desktop_url = $24, updated_at = NOW()
         WHERE company_id = $22
       `, [
         storeName, description || null, logoUrl || null, bannerUrl || null, primaryColor || '#f97316',
@@ -166,7 +173,8 @@ export async function POST(request: NextRequest) {
         facebookUrl || null, instagramUrl || null, telegramUrl || null,
         JSON.stringify(categories || []), showStock !== false, showUsdPrice !== false, showCupPrice !== false,
         customDomain || null, dnsInstructions ? JSON.stringify(dnsInstructions) : null, isActive !== false,
-        payload.companyId
+        payload.companyId,
+        logoMobileUrl || null, logoDesktopUrl || null
       ])
     } else {
       // Insert
@@ -176,14 +184,16 @@ export async function POST(request: NextRequest) {
           phone, whatsapp, email, address, city, province,
           facebook_url, instagram_url, telegram_url,
           categories, show_stock, show_usd_price, show_cup_price,
-          custom_domain, subdomain, dns_instructions, is_active
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+          custom_domain, subdomain, dns_instructions, is_active,
+          logo_mobile_url, logo_desktop_url
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
       `, [
         payload.companyId, slug, storeName, description || null, logoUrl || null, bannerUrl || null, primaryColor || '#f97316',
         phone || null, whatsapp || null, email || null, address || null, city || null, province || null,
         facebookUrl || null, instagramUrl || null, telegramUrl || null,
         JSON.stringify(categories || []), showStock !== false, showUsdPrice !== false, showCupPrice !== false,
-        customDomain || null, slug, dnsInstructions ? JSON.stringify(dnsInstructions) : null, isActive !== false
+        customDomain || null, slug, dnsInstructions ? JSON.stringify(dnsInstructions) : null, isActive !== false,
+        logoMobileUrl || null, logoDesktopUrl || null
       ])
     }
 
