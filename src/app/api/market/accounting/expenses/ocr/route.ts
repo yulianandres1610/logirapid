@@ -138,6 +138,7 @@ INSTRUCCIONES:
      * Suministros (papelería, artículos de oficina)
      * Mantenimiento (limpieza, reparaciones)
      * Servicios (electricidad, agua, internet, teléfono)
+     * Arrendamiento (alquiler de local, espacio, renta, arrendamiento)
      * Transporte (combustible, pasajes, envíos)
      * Inventario (mercancía para venta)
      * Alimentos (comida, bebidas, snacks)
