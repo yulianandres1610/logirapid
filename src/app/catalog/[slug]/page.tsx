@@ -162,7 +162,7 @@ export default function CatalogPage() {
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               {store?.logoUrl ? (
-                <Image src={store.logoUrl} alt={store.name} width={40} height={40} className="w-10 h-10 rounded-lg object-cover" />
+                <img src={store.logoUrl} alt={store.name} className="w-10 h-10 rounded-lg object-cover" />
               ) : (
                 <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: primaryColor + '20' }}>
                   <ShoppingBag className="w-5 h-5" style={{ color: primaryColor }} />
@@ -209,16 +209,13 @@ export default function CatalogPage() {
       )}
 
       {/* Info bar */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 py-2 flex flex-wrap items-center gap-4 text-xs text-gray-500">
-          {store?.address && (
+      {store?.address && (
+        <div className="bg-white border-b">
+          <div className="max-w-7xl mx-auto px-4 py-2 flex flex-wrap items-center gap-4 text-xs text-gray-500">
             <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{store.address}</span>
-          )}
-          <span className="flex items-center gap-1 font-medium" style={{ color: primaryColor }}>
-            1 USD = {exchangeRate.toLocaleString('es-ES')} CUP
-          </span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Search + Categories */}
       <div className="max-w-7xl mx-auto px-4 py-4">
@@ -283,7 +280,7 @@ export default function CatalogPage() {
                 {/* Image */}
                 <div className="aspect-square bg-gray-100 relative overflow-hidden">
                   {product.imageUrl ? (
-                    <Image src={product.imageUrl} alt={product.name} fill className="object-cover group-hover:scale-105 transition-transform" />
+                    <img src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Package className="w-10 h-10 text-gray-300" />
@@ -365,7 +362,7 @@ export default function CatalogPage() {
             <div className="relative">
               <div className="aspect-video bg-gray-100 relative">
                 {selectedProduct.imageUrl ? (
-                  <Image src={selectedProduct.imageUrl} alt={selectedProduct.name} fill className="object-cover" />
+                  <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="absolute inset-0 w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center"><Package className="w-16 h-16 text-gray-300" /></div>
                 )}
@@ -447,7 +444,7 @@ export default function CatalogPage() {
                     <div key={item.product.id} className="p-4 flex gap-3">
                       <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 shrink-0 relative">
                         {item.product.imageUrl ? (
-                          <Image src={item.product.imageUrl} alt={item.product.name} fill className="object-cover" />
+                          <img src={item.product.imageUrl} alt={item.product.name} className="absolute inset-0 w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center"><Package className="w-6 h-6 text-gray-300" /></div>
                         )}
@@ -516,14 +513,9 @@ export default function CatalogPage() {
 
       {/* Footer */}
       <footer className="bg-white border-t mt-12">
-        <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              {store?.logoUrl ? (
-                <Image src={store.logoUrl} alt={store?.name || ''} width={32} height={32} className="w-8 h-8 rounded-lg object-cover" />
-              ) : null}
-              <span className="font-bold text-gray-700">{store?.name}</span>
-            </div>
+            <span className="font-bold text-gray-700">{store?.name}</span>
             <div className="flex items-center gap-3">
               {store?.instagramUrl && (
                 <a href={store.instagramUrl} target="_blank" rel="noopener" className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600">
@@ -542,8 +534,8 @@ export default function CatalogPage() {
               )}
             </div>
           </div>
-          <p className="text-xs text-gray-400 mt-4 text-center">
-            © {new Date().getFullYear()} {store?.name}. Powered by LogiRapid
+          <p className="text-xs text-gray-400 mt-3 text-center">
+            © {new Date().getFullYear()} {store?.name}
           </p>
         </div>
       </footer>
