@@ -11,7 +11,7 @@ interface Product {
 }
 
 interface StoreInfo {
-  name: string; logoUrl: string | null; primaryColor: string
+  name: string; logoUrl: string | null; logoDesktopUrl: string | null; primaryColor: string
   whatsapp: string | null; phone: string | null
   address: string | null; city: string | null; province: string | null
 }
@@ -138,13 +138,17 @@ export default function ProductDetailPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <button onClick={() => router.push(`/catalog/${slug}`)} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
-            <ArrowLeft className="w-5 h-5" />
-            <span className="text-sm font-medium">Catálogo</span>
+        <div className="px-4 sm:px-8 lg:px-12 py-3 flex items-center justify-between">
+          <button onClick={() => router.push(`/catalog/${slug}`)} className="p-2 rounded-xl hover:bg-gray-100 transition-colors shrink-0">
+            <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
-          <div />
-          <button onClick={share} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
+          {/* Center logo */}
+          <div className="flex-1 flex justify-center">
+            {(store?.logoDesktopUrl || store?.logoUrl) && (
+              <img src={store.logoDesktopUrl || store.logoUrl || ''} alt={store?.name || ''} className="h-12 max-w-[260px] object-contain" />
+            )}
+          </div>
+          <button onClick={share} className="p-2 rounded-xl hover:bg-gray-100 transition-colors shrink-0">
             <Share2 className="w-5 h-5 text-gray-500" />
           </button>
         </div>
@@ -264,17 +268,23 @@ export default function ProductDetailPage() {
 
             {/* Trust badges */}
             <div className="grid grid-cols-3 gap-3 pt-4 border-t border-gray-200">
-              <div className="text-center">
-                <Truck className="w-5 h-5 mx-auto text-gray-400 mb-1" />
-                <p className="text-[11px] text-gray-500">Entrega disponible</p>
+              <div className="text-center p-3 rounded-xl" style={{ backgroundColor: primaryColor + '08' }}>
+                <div className="w-9 h-9 rounded-full mx-auto mb-1.5 flex items-center justify-center" style={{ backgroundColor: primaryColor + '15' }}>
+                  <Truck className="w-4 h-4" style={{ color: primaryColor }} />
+                </div>
+                <p className="text-[11px] font-medium" style={{ color: primaryColor }}>Entrega disponible</p>
               </div>
-              <div className="text-center">
-                <Shield className="w-5 h-5 mx-auto text-gray-400 mb-1" />
-                <p className="text-[11px] text-gray-500">Producto verificado</p>
+              <div className="text-center p-3 rounded-xl" style={{ backgroundColor: primaryColor + '08' }}>
+                <div className="w-9 h-9 rounded-full mx-auto mb-1.5 flex items-center justify-center" style={{ backgroundColor: primaryColor + '15' }}>
+                  <Shield className="w-4 h-4" style={{ color: primaryColor }} />
+                </div>
+                <p className="text-[11px] font-medium" style={{ color: primaryColor }}>Producto verificado</p>
               </div>
-              <div className="text-center">
-                <Clock className="w-5 h-5 mx-auto text-gray-400 mb-1" />
-                <p className="text-[11px] text-gray-500">Respuesta rápida</p>
+              <div className="text-center p-3 rounded-xl" style={{ backgroundColor: primaryColor + '08' }}>
+                <div className="w-9 h-9 rounded-full mx-auto mb-1.5 flex items-center justify-center" style={{ backgroundColor: primaryColor + '15' }}>
+                  <Clock className="w-4 h-4" style={{ color: primaryColor }} />
+                </div>
+                <p className="text-[11px] font-medium" style={{ color: primaryColor }}>Respuesta rápida</p>
               </div>
             </div>
           </div>
