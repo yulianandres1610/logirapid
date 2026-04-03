@@ -279,6 +279,13 @@ export async function POST(
               updated_at = NOW()
             WHERE id = $1
           `, [row.order_id])
+
+          // Zero out remaining lots to prevent phantom stock
+          await client.query(`
+            UPDATE consignment_lot_inventory SET quantity_available = 0
+            WHERE order_line_id IN (SELECT id FROM consignment_order_lines WHERE order_id = $1)
+              AND quantity_available > 0
+          `, [row.order_id])
         }
       }
     }
