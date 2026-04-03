@@ -490,12 +490,16 @@ export default function CreateExpensePage() {
     setExtractedItems(items)
 
     // Auto-fill form with OCR results (datos compartidos)
+    // Round to 2 decimals for display (USD amounts)
+    const displayAmount = hasMultiple
+      ? (data.total || 0)
+      : (data.amount || data.total || 0)
     setFormData(prev => ({
       ...prev,
       vendorName: data.vendorName || prev.vendorName,
       expenseDate: data.date || prev.expenseDate,
       description: hasMultiple ? `${items.length} items detectados` : (data.description || prev.description),
-      amount: hasMultiple ? String(data.total || 0) : (data.amount ? String(data.amount) : prev.amount)
+      amount: displayAmount ? String(Math.round(displayAmount * 100) / 100) : prev.amount
     }))
 
     if (hasMultiple && items.length > 0) {
