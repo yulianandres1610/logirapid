@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Phone, MapPin, MessageCircle, Package, ShoppingBag, Instagram, Facebook, Send, Loader2, ChevronLeft, ChevronRight, X, ShoppingCart, Plus, Minus, Trash2, Flame, Star, ArrowRight } from 'lucide-react'
+import { Search, Phone, MapPin, MessageCircle, Package, ShoppingBag, Instagram, Facebook, Send, Loader2, ChevronLeft, ChevronRight, X, ShoppingCart, Plus, Minus, Trash2, Flame, Star, ArrowRight, Check } from 'lucide-react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 
 interface StoreInfo {
@@ -120,6 +120,10 @@ export default function CatalogPage() {
     return () => clearTimeout(t)
   }, [searchInput])
 
+  const [justAdded, setJustAdded] = useState<number | null>(null)
+  const [cartBounce, setCartBounce] = useState(false)
+  const [addToast, setAddToast] = useState<string | null>(null)
+
   const addToCart = (product: Product) => {
     setCart(prev => {
       const existing = prev.find(i => i.product.id === product.id)
@@ -129,6 +133,13 @@ export default function CatalogPage() {
       }
       return [...prev, { product, quantity: 1 }]
     })
+    // Visual feedback
+    setJustAdded(product.id)
+    setCartBounce(true)
+    setAddToast(product.name)
+    setTimeout(() => setJustAdded(null), 800)
+    setTimeout(() => setCartBounce(false), 600)
+    setTimeout(() => setAddToast(null), 2000)
   }
   const removeFromCart = (id: number) => setCart(prev => prev.filter(i => i.product.id !== id))
   const updateCartQty = (id: number, delta: number) => {
@@ -195,14 +206,25 @@ export default function CatalogPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button onClick={() => setShowCart(true)} className="relative p-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors">
+              <motion.button
+                onClick={() => setShowCart(true)}
+                animate={cartBounce ? { scale: [1, 1.3, 1], rotate: [0, -10, 10, 0] } : {}}
+                transition={{ duration: 0.5 }}
+                className="relative p-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors">
                 <ShoppingCart className="w-5 h-5 text-gray-700" />
-                {cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center animate-pulse" style={{ backgroundColor: primaryColor }}>
-                    {cartCount}
-                  </span>
-                )}
-              </button>
+                <AnimatePresence>
+                  {cartCount > 0 && (
+                    <motion.span
+                      key={cartCount}
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center"
+                      style={{ backgroundColor: primaryColor }}>
+                      {cartCount}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </motion.button>
               {store?.whatsapp && (
                 <a href={`https://wa.me/${store.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener"
                   className="hidden sm:flex p-2.5 rounded-xl text-white items-center gap-1.5 text-sm font-medium" style={{ backgroundColor: '#25D366' }}>
@@ -345,9 +367,17 @@ export default function CatalogPage() {
                           <button onClick={() => updateCartQty(product.id, 1)} className="p-1.5 rounded-lg hover:bg-white/50"><Plus className="w-3.5 h-3.5" style={{ color: primaryColor }} /></button>
                         </div>
                       ) : (
-                        <button onClick={() => addToCart(product)} className="w-full py-2 rounded-xl text-white text-xs font-medium flex items-center justify-center gap-1.5 hover:opacity-90" style={{ backgroundColor: primaryColor }}>
-                          <ShoppingCart className="w-3.5 h-3.5" /> Agregar
-                        </button>
+                        <motion.button
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => addToCart(product)}
+                          className="w-full py-2 rounded-xl text-white text-xs font-medium flex items-center justify-center gap-1.5"
+                          style={{ backgroundColor: justAdded === product.id ? '#10b981' : primaryColor }}>
+                          {justAdded === product.id ? (
+                            <><Check className="w-3.5 h-3.5" /> Agregado</>
+                          ) : (
+                            <><ShoppingCart className="w-3.5 h-3.5" /> Agregar</>
+                          )}
+                        </motion.button>
                       )}
                     </div>
                   </div>
@@ -402,9 +432,11 @@ export default function CatalogPage() {
                           <button onClick={() => updateCartQty(product.id, 1)} className="p-1 rounded"><Plus className="w-3 h-3" style={{ color: primaryColor }} /></button>
                         </div>
                       ) : (
-                        <button onClick={() => addToCart(product)} className="px-3 py-1.5 rounded-lg text-white text-xs font-medium flex items-center gap-1 hover:opacity-90" style={{ backgroundColor: primaryColor }}>
-                          <ShoppingCart className="w-3 h-3" /> Agregar
-                        </button>
+                        <motion.button whileTap={{ scale: 0.9 }} onClick={() => addToCart(product)}
+                          className="px-3 py-1.5 rounded-lg text-white text-xs font-medium flex items-center gap-1"
+                          style={{ backgroundColor: justAdded === product.id ? '#10b981' : primaryColor }}>
+                          {justAdded === product.id ? <><Check className="w-3 h-3" /> Listo</> : <><ShoppingCart className="w-3 h-3" /> Agregar</>}
+                        </motion.button>
                       )}
                     </div>
                   </div>
@@ -497,6 +529,22 @@ export default function CatalogPage() {
           </div>
         </div>
       )}
+
+      {/* Add to cart toast */}
+      <AnimatePresence>
+        {addToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: 20, x: '-50%' }}
+            className="fixed bottom-24 left-1/2 z-50 px-5 py-3 rounded-2xl shadow-2xl text-white text-sm font-medium flex items-center gap-2 whitespace-nowrap"
+            style={{ backgroundColor: primaryColor }}>
+            <ShoppingCart className="w-4 h-4" />
+            <span className="line-clamp-1 max-w-[200px]">{addToast}</span>
+            <span className="opacity-70">agregado</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Floating cart (mobile) */}
       {cartCount > 0 && !showCart && (
