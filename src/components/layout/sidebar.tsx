@@ -754,8 +754,11 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { icon: DollarSign, label: "Tasa de Cambio", href: "/dashboard/market/settings/exchange-rate" },
   ]
 
-  // Menu items para MARKET_ECONOMICA (Contabilidad, Gastos, Reportes, RRHH, Conversaciones, Tasa de Cambio)
+  // Menu items para MARKET_ECONOMICA (Dashboard, Compras, Consignaciones, Contabilidad, Reportes, RRHH, Conversaciones, Tasa de Cambio)
   const marketEconomicaMenuItems = [
+    { icon: Home, label: "Dashboard", href: "/dashboard/market" },
+    { icon: FileText, label: "Compras", href: "/dashboard/market/purchases" },
+    { icon: ClipboardList, label: "Consignaciones", href: "/dashboard/market/consignments" },
     { icon: MessageCircle, label: "Conversaciones", href: "/dashboard/market/chat" },
     {
       icon: Calculator,
