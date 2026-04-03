@@ -6,7 +6,7 @@ import { db } from '@/lib/database'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-const BUCKET_NAME = 'company-private-documents'
+const BUCKET_NAME = 'company-documents'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
