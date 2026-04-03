@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       console.log('[Categorize API] No categories found, creating defaults for company:', companyId)
 
       const defaultCategories = [
-        { name: 'Alquiler', code: 'RENT', type: 'opex', desc: 'Gastos de alquiler del local' },
+        { name: 'Arrendamiento', code: 'RENT', type: 'opex', desc: 'Arrendamiento, alquiler de local, renta' },
         { name: 'Servicios', code: 'UTIL', type: 'opex', desc: 'Electricidad, agua, internet, telefono' },
         { name: 'Salarios', code: 'SAL', type: 'opex', desc: 'Pago de nominas y salarios' },
         { name: 'Inventario', code: 'INV', type: 'cogs', desc: 'Compra de mercancia para venta' },
@@ -187,7 +187,8 @@ export async function POST(request: NextRequest) {
         // Impuestos
         'impuestos': 'Impuestos', 'tax': 'Impuestos',
         // Alquiler
-        'alquiler': 'Alquiler', 'renta': 'Alquiler', 'arriendo': 'Alquiler'
+        'alquiler': 'Arrendamiento', 'renta': 'Arrendamiento', 'arriendo': 'Arrendamiento',
+        'arrendamiento': 'Arrendamiento', 'arrendacion': 'Arrendamiento', 'local': 'Arrendamiento'
       }
 
       for (const [term, categoryName] of Object.entries(termMappings)) {
@@ -329,9 +330,11 @@ Responde ÚNICAMENTE en formato JSON:
           'utilities': 'Servicios',
           'luz': 'Servicios',
           // Alquiler
-          'renta': 'Alquiler',
-          'rent': 'Alquiler',
-          'arriendo': 'Alquiler',
+          'renta': 'Arrendamiento',
+          'rent': 'Arrendamiento',
+          'arriendo': 'Arrendamiento',
+          'arrendamiento': 'Arrendamiento',
+          'alquiler': 'Arrendamiento',
           // Salarios
           'nomina': 'Salarios',
           'payroll': 'Salarios',
