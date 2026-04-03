@@ -194,19 +194,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
     }
 
-    // Ensure downpayment columns exist (inline migration)
-    await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS downpayment_type VARCHAR(20)`)
-    await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS downpayment_value DECIMAL(12,2)`)
-    await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS downpayment_amount DECIMAL(12,2)`)
-    await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS wholesale_exchange_rate DECIMAL(10,2)`)
+    // Ensure columns exist + full decimal precision (inline migration)
+    try {
+      await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS downpayment_type VARCHAR(20)`)
+      await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS downpayment_value DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS downpayment_amount DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS wholesale_exchange_rate DECIMAL(10,4)`)
+      await db.query(`ALTER TABLE market_invoices ALTER COLUMN subtotal TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_invoices ALTER COLUMN discount_amount TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_invoices ALTER COLUMN total_amount TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_invoices ALTER COLUMN amount_paid TYPE DECIMAL(15,4)`)
+      await db.query(`ALTER TABLE market_invoices ALTER COLUMN amount_due TYPE DECIMAL(15,4)`)
+    } catch { /* already migrated */ }
 
-    // Ensure invoice_lines columns exist (inline migration)
-    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS warehouse_quantities JSONB DEFAULT '{}'`)
-    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS original_price DECIMAL(12,2)`)
-    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS cost_price DECIMAL(12,2)`)
-    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS variant_id INTEGER`)
-    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS product_sku VARCHAR(100)`)
-    await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS quantity_delivered DECIMAL(12,2) DEFAULT 0`)
+    // Ensure invoice_lines columns exist + precision
+    try {
+      await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS warehouse_quantities JSONB DEFAULT '{}'`)
+      await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS variant_id INTEGER`)
+      await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS product_sku VARCHAR(100)`)
+      await db.query(`ALTER TABLE market_invoice_lines ADD COLUMN IF NOT EXISTS quantity_delivered DECIMAL(15,3) DEFAULT 0`)
+      await db.query(`ALTER TABLE market_invoice_lines ALTER COLUMN unit_price TYPE DECIMAL(15,10)`)
+      await db.query(`ALTER TABLE market_invoice_lines ALTER COLUMN original_price TYPE DECIMAL(15,10)`)
+      await db.query(`ALTER TABLE market_invoice_lines ALTER COLUMN cost_price TYPE DECIMAL(15,10)`)
+      await db.query(`ALTER TABLE market_invoice_lines ALTER COLUMN subtotal TYPE DECIMAL(15,4)`)
+    } catch { /* already migrated */ }
 
     const body = await request.json()
     const {
