@@ -54,9 +54,9 @@ export default function CatalogPage() {
   const slug = resolvedSlug || ''
   const primaryColor = store?.primaryColor || '#f97316'
 
-  const fetchCatalog = useCallback(async () => {
+  const fetchCatalog = useCallback(async (silent = false) => {
     if (!slug) return
-    setLoading(true)
+    if (!silent) setLoading(true)
     try {
       const p = new URLSearchParams({ page: String(page), limit: '48' })
       if (search) p.set('search', search)
@@ -68,19 +68,17 @@ export default function CatalogPage() {
         setProducts(data.data.products)
         setCategories(data.data.categories)
         setTotalPages(data.data.pagination.totalPages)
-      } else { setError(data.error || 'Catálogo no encontrado') }
-    } catch { setError('Error de conexión') }
-    finally { setLoading(false) }
+      } else if (!silent) { setError(data.error || 'Catálogo no encontrado') }
+    } catch { if (!silent) setError('Error de conexión') }
+    finally { if (!silent) setLoading(false) }
   }, [slug, search, selectedCategory, page])
 
-  useEffect(() => { fetchCatalog() }, [fetchCatalog])
+  useEffect(() => { fetchCatalog(false) }, [fetchCatalog])
 
-  // Auto-refresh every 30s for real-time stock updates
+  // Silent auto-refresh every 60s (no loading spinner, no flicker)
   useEffect(() => {
     if (!slug) return
-    const interval = setInterval(() => {
-      fetchCatalog()
-    }, 30000)
+    const interval = setInterval(() => fetchCatalog(true), 60000)
     return () => clearInterval(interval)
   }, [slug, fetchCatalog])
 
@@ -208,7 +206,7 @@ export default function CatalogPage() {
               <h2 className="text-xl font-bold text-gray-900">Más Vendidos</h2>
             </div>
             <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x">
-              {topSellers.slice(0, 8).map(product => (
+              {topSellers.slice(0, topSellers.length >= 6 ? 6 : topSellers.length >= 4 ? 4 : 2).map(product => (
                 <div key={`top-${product.id}`}
                   onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
                   className="min-w-[160px] sm:min-w-[200px] bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all cursor-pointer snap-start group">
@@ -273,7 +271,7 @@ export default function CatalogPage() {
               const inCart = cart.find(i => i.product.id === product.id)
               return (
                 <div key={product.id}
-                  className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 group">
+                  className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 group flex flex-col">
                   <div onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
                     className="aspect-square bg-gray-50 relative overflow-hidden cursor-pointer">
                     {product.imageUrl ? (
@@ -290,7 +288,7 @@ export default function CatalogPage() {
                       </span>
                     )}
                   </div>
-                  <div className="p-3">
+                  <div className="p-3 flex flex-col flex-1">
                     <p onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
                       className="font-medium text-gray-900 text-sm line-clamp-2 mb-1.5 leading-tight cursor-pointer hover:underline">{product.name}</p>
                     <div className="space-y-0.5 mb-2">
@@ -299,18 +297,20 @@ export default function CatalogPage() {
                       )}
                       {product.priceUSD !== null && <p className="text-xs text-gray-400">${product.priceUSD.toFixed(2)} USD</p>}
                     </div>
-                    {product.stock !== null && <p className="text-[11px] text-gray-400 mb-2">{product.stock > 0 ? `${product.stock} disponibles` : 'Agotado'}</p>}
-                    {inCart ? (
-                      <div className="flex items-center justify-between rounded-xl py-1 px-1" style={{ backgroundColor: primaryColor + '15' }}>
-                        <button onClick={() => updateCartQty(product.id, -1)} className="p-1.5 rounded-lg hover:bg-white/50"><Minus className="w-3.5 h-3.5" style={{ color: primaryColor }} /></button>
-                        <span className="text-sm font-bold" style={{ color: primaryColor }}>{inCart.quantity}</span>
-                        <button onClick={() => updateCartQty(product.id, 1)} className="p-1.5 rounded-lg hover:bg-white/50"><Plus className="w-3.5 h-3.5" style={{ color: primaryColor }} /></button>
-                      </div>
-                    ) : (
-                      <button onClick={() => addToCart(product)} className="w-full py-2 rounded-xl text-white text-xs font-medium flex items-center justify-center gap-1.5 hover:opacity-90" style={{ backgroundColor: primaryColor }}>
-                        <ShoppingCart className="w-3.5 h-3.5" /> Agregar
-                      </button>
-                    )}
+                    {product.stock !== null && <p className="text-[11px] text-gray-400 mb-auto">{product.stock > 0 ? `${product.stock} disponibles` : 'Agotado'}</p>}
+                    <div className="mt-auto pt-2">
+                      {inCart ? (
+                        <div className="flex items-center justify-between rounded-xl py-1 px-1" style={{ backgroundColor: primaryColor + '15' }}>
+                          <button onClick={() => updateCartQty(product.id, -1)} className="p-1.5 rounded-lg hover:bg-white/50"><Minus className="w-3.5 h-3.5" style={{ color: primaryColor }} /></button>
+                          <span className="text-sm font-bold" style={{ color: primaryColor }}>{inCart.quantity}</span>
+                          <button onClick={() => updateCartQty(product.id, 1)} className="p-1.5 rounded-lg hover:bg-white/50"><Plus className="w-3.5 h-3.5" style={{ color: primaryColor }} /></button>
+                        </div>
+                      ) : (
+                        <button onClick={() => addToCart(product)} className="w-full py-2 rounded-xl text-white text-xs font-medium flex items-center justify-center gap-1.5 hover:opacity-90" style={{ backgroundColor: primaryColor }}>
+                          <ShoppingCart className="w-3.5 h-3.5" /> Agregar
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               )
