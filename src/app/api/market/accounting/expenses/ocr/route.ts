@@ -146,6 +146,7 @@ IMPORTANTE:
 Responde ÚNICAMENTE en formato JSON con esta estructura:
 {
   "vendorName": "nombre del negocio",
+  "receiptNumber": "número de factura o recibo (ej: FAC-001, No. 12345, etc.) o null si no se detecta",
   "date": "YYYY-MM-DD",
   "items": [
     { "description": "descripción del item", "amount": 0.00, "suggestedCategory": "Categoria" }
@@ -242,6 +243,7 @@ IMPORTANTE: Solo responde con el JSON, sin texto adicional, sin markdown.`
         success: true,
         data: {
           vendorName: extractedData.vendorName || null,
+          receiptNumber: extractedData.receiptNumber || null,
           date: extractedData.date || null,
           items,
           subtotal: typeof extractedData.subtotal === 'number' ? extractedData.subtotal : 0,

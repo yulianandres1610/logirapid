@@ -11,7 +11,7 @@ interface JWTPayload {
   companyName: string
 }
 
-// Migración: Crear tabla de items de gastos si no existe
+// Migración: Crear tabla de items + nuevos campos
 async function ensureExpenseItemsTable() {
   try {
     await db.query(`
@@ -24,18 +24,15 @@ async function ensureExpenseItemsTable() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `)
-    // Índice para búsqueda rápida por expense_id
-    await db.query(`
-      CREATE INDEX IF NOT EXISTS idx_expense_items_expense_id
-      ON market_expense_items(expense_id)
-    `)
-  } catch (error) {
-    // Tabla ya existe, ignorar error
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_expense_items_expense_id ON market_expense_items(expense_id)`)
+    // Add new columns
+    await db.query(`ALTER TABLE market_expenses ADD COLUMN IF NOT EXISTS receipt_number VARCHAR(100)`)
+    await db.query(`ALTER TABLE market_expenses ADD COLUMN IF NOT EXISTS notes TEXT`)
+  } catch {
     console.log('[Expenses API] Table check completed')
   }
 }
 
-// Ejecutar migración al cargar el módulo
 ensureExpenseItemsTable()
 
 /**
@@ -265,8 +262,9 @@ export async function POST(request: NextRequest) {
             company_id, description, amount, currency, expense_date,
             category_id, vendor_name, receipt_path, receipt_type,
             ai_category_suggestion, ai_confidence, ai_analysis,
+            receipt_number, notes,
             created_by, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW())
           RETURNING id
         `, [
           companyId,
@@ -276,11 +274,13 @@ export async function POST(request: NextRequest) {
           sharedData.expenseDate,
           expense.categoryId || null,
           sharedData.vendorName || null,
-          sharedData.receiptPath || null,  // Mismo recibo para todos
+          sharedData.receiptPath || null,
           sharedData.receiptType || null,
           expense.aiSuggestion || expense.categoryName || null,
           expense.aiConfidence || null,
           null,
+          sharedData.receiptNumber || null,
+          expense.notes || sharedData.notes || null,
           userId
         ])
 
@@ -333,7 +333,9 @@ export async function POST(request: NextRequest) {
       receiptType,
       aiSuggestion,
       aiConfidence,
-      aiAnalysis
+      aiAnalysis,
+      receiptNumber,
+      notes
     } = body
 
     if (!description || !amount || !expenseDate) {
@@ -348,8 +350,9 @@ export async function POST(request: NextRequest) {
         company_id, description, amount, currency, expense_date,
         category_id, vendor_name, receipt_path, receipt_type,
         ai_category_suggestion, ai_confidence, ai_analysis,
+        receipt_number, notes,
         created_by, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW())
       RETURNING id
     `, [
       companyId,
@@ -364,6 +367,8 @@ export async function POST(request: NextRequest) {
       aiSuggestion || null,
       aiConfidence || null,
       aiAnalysis || null,
+      receiptNumber || null,
+      notes || null,
       userId
     ])
 

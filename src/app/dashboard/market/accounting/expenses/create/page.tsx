@@ -111,6 +111,8 @@ export default function CreateExpensePage() {
     expenseDate: new Date().toISOString().split('T')[0],
     categoryId: '',
     vendorName: '',
+    receiptNumber: '',
+    notes: '',
     receiptFile: null as File | null,
     receiptPreview: '' as string,
     isPdf: false
@@ -497,6 +499,7 @@ export default function CreateExpensePage() {
     setFormData(prev => ({
       ...prev,
       vendorName: data.vendorName || prev.vendorName,
+      receiptNumber: data.receiptNumber || prev.receiptNumber,
       expenseDate: data.date || prev.expenseDate,
       description: hasMultiple ? `${items.length} items detectados` : (data.description || prev.description),
       amount: displayAmount ? String(Math.round(displayAmount * 100) / 100) : prev.amount
@@ -827,6 +830,8 @@ export default function CreateExpensePage() {
               currency: formData.currency,
               expenseDate: formData.expenseDate,
               vendorName: formData.vendorName || null,
+              receiptNumber: formData.receiptNumber || null,
+              notes: formData.notes || null,
               receiptPath,
               receiptType: formData.receiptFile?.type || null
             }
@@ -853,6 +858,8 @@ export default function CreateExpensePage() {
             expenseDate: formData.expenseDate,
             categoryId: formData.categoryId ? parseInt(formData.categoryId) : null,
             vendorName: formData.vendorName || null,
+            receiptNumber: formData.receiptNumber || null,
+            notes: formData.notes || null,
             receiptPath,
             aiSuggestion: aiSuggestion?.categoryName,
             aiConfidence: aiSuggestion?.confidence
@@ -1933,6 +1940,37 @@ export default function CreateExpensePage() {
                           className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500"
                         />
                       </div>
+                    </div>
+
+                    {/* Receipt Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        No. Factura/Recibo
+                      </label>
+                      <div className="relative">
+                        <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input
+                          type="text"
+                          value={formData.receiptNumber}
+                          onChange={(e) => setFormData(prev => ({ ...prev, receiptNumber: e.target.value }))}
+                          placeholder="Ej: FAC-001, No. 12345"
+                          className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Notes */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Comentario/Notas
+                      </label>
+                      <textarea
+                        value={formData.notes}
+                        onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                        placeholder="Observaciones sobre este gasto (opcional)"
+                        rows={2}
+                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 resize-none"
+                      />
                     </div>
                   </div>
                   )}
