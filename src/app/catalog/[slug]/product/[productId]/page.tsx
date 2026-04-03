@@ -115,7 +115,7 @@ export default function ProductDetailPage() {
             <ArrowLeft className="w-5 h-5" />
             <span className="text-sm font-medium">Catálogo</span>
           </button>
-          <span className="font-bold text-gray-900 text-sm">{store?.name}</span>
+          <div />
           <button onClick={share} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
             <Share2 className="w-5 h-5 text-gray-500" />
           </button>
@@ -126,21 +126,46 @@ export default function ProductDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 
           {/* Product Image */}
-          <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
-            <div className="aspect-square relative bg-white">
-              {product.imageUrl ? (
-                <img src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-contain p-6" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <Package className="w-24 h-24 text-gray-200" />
-                </div>
-              )}
-              {product.stock !== null && product.stock <= 5 && product.stock > 0 && (
-                <span className="absolute top-4 left-4 bg-red-500 text-white text-sm px-3 py-1 rounded-full font-medium">
-                  Últimas {product.stock} unidades
-                </span>
-              )}
+          <div>
+            <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+              <div className="aspect-square relative bg-white">
+                {product.imageUrl ? (
+                  <img src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-contain p-6" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Package className="w-24 h-24 text-gray-200" />
+                  </div>
+                )}
+                {product.stock !== null && product.stock <= 5 && product.stock > 0 && (
+                  <span className="absolute top-4 left-4 bg-red-500 text-white text-sm px-3 py-1 rounded-full font-medium">
+                    Últimas {product.stock} unidades
+                  </span>
+                )}
+              </div>
             </div>
+            {/* Barcode */}
+            {product.sku && (
+              <div className="mt-3 bg-white rounded-xl border border-gray-100 p-4 text-center">
+                <svg className="mx-auto" viewBox="0 0 200 60" width="200" height="60">
+                  {product.sku.split('').map((char, i) => {
+                    const code = char.charCodeAt(0)
+                    const x = 10 + i * (180 / Math.max(product.sku.length, 1))
+                    const w = code % 2 === 0 ? 2 : 1
+                    return <rect key={i} x={x} y={0} width={w} height={45} fill="black" />
+                  })}
+                  {/* Additional bars for density */}
+                  {product.sku.split('').map((char, i) => {
+                    const code = char.charCodeAt(0)
+                    const x = 10 + i * (180 / Math.max(product.sku.length, 1)) + 2.5
+                    const w = code % 3 === 0 ? 1.5 : 0.8
+                    return <rect key={`b${i}`} x={x} y={0} width={w} height={45} fill="black" />
+                  })}
+                  <text x="100" y="57" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="#666">
+                    {product.sku}
+                  </text>
+                </svg>
+              </div>
+            )}
           </div>
 
           {/* Product Info */}
