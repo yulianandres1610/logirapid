@@ -576,38 +576,55 @@ export default function SalesReportPage() {
 
             {activeTab === 'payments' && data && (
               <div className="space-y-6">
-                {/* Payment Methods Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {(() => {
-                    const methods = data.byPaymentMethod || []
-                    const totalAmount = methods.reduce((s, m) => s + parseFloat(String(m.amount)), 0)
-                    const totalOrders = methods.reduce((s, m) => s + parseInt(String(m.orders)), 0)
-                    const uniqueMethods = [...new Set(methods.map(m => m.paymentMethod))]
+                {/* Payment Methods Summary - by currency */}
+                {(() => {
+                  const methods = data.byPaymentMethod || []
+                  const totalOrders = methods.reduce((s, m) => s + parseInt(String(m.orders)), 0)
+                  // Group totals by currency
+                  const byCurrency: Record<string, { amount: number; orders: number }> = {}
+                  methods.forEach(m => {
+                    const cur = m.currency || 'USD'
+                    if (!byCurrency[cur]) byCurrency[cur] = { amount: 0, orders: 0 }
+                    byCurrency[cur].amount += parseFloat(String(m.amount))
+                    byCurrency[cur].orders += parseInt(String(m.orders))
+                  })
+                  const currencies = Object.entries(byCurrency).sort((a, b) => b[1].amount - a[1].amount)
 
-                    return (
-                      <>
-                        <div className={cn('p-4 rounded-xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
-                          <p className="text-xs text-gray-500 uppercase">Total Cobrado</p>
-                          <p className="text-2xl font-bold text-orange-600">{formatCurrency(totalAmount)}</p>
+                  return (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {/* Total by each currency */}
+                      {currencies.map(([cur, data]) => (
+                        <div key={cur} className={cn('p-4 rounded-xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                          <p className="text-xs text-gray-500 uppercase">Total {cur}</p>
+                          <p className="text-2xl font-bold text-orange-600">
+                            {cur === 'CUP'
+                              ? `${Math.round(data.amount).toLocaleString('es-ES')} CUP`
+                              : `$${data.amount.toLocaleString('es', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${cur}`}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">{data.orders} transacciones</p>
                         </div>
-                        <div className={cn('p-4 rounded-xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
-                          <p className="text-xs text-gray-500 uppercase">Transacciones</p>
-                          <p className={cn('text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{totalOrders}</p>
-                        </div>
-                        <div className={cn('p-4 rounded-xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
-                          <p className="text-xs text-gray-500 uppercase">Métodos</p>
-                          <p className={cn('text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{uniqueMethods.length}</p>
-                        </div>
-                        <div className={cn('p-4 rounded-xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
-                          <p className="text-xs text-gray-500 uppercase">Ticket Promedio</p>
-                          <p className={cn('text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                            {totalOrders > 0 ? formatCurrency(totalAmount / totalOrders) : '$0.00'}
+                      ))}
+                      {/* Total transactions */}
+                      <div className={cn('p-4 rounded-xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                        <p className="text-xs text-gray-500 uppercase">Total Transacciones</p>
+                        <p className={cn('text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{totalOrders}</p>
+                      </div>
+                      {/* Ticket promedio by currency */}
+                      {currencies.map(([cur, data]) => (
+                        <div key={`avg-${cur}`} className={cn('p-4 rounded-xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                          <p className="text-xs text-gray-500 uppercase">Ticket Prom. {cur}</p>
+                          <p className={cn('text-xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                            {data.orders > 0
+                              ? cur === 'CUP'
+                                ? `${Math.round(data.amount / data.orders).toLocaleString('es-ES')} CUP`
+                                : `$${(data.amount / data.orders).toLocaleString('es', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${cur}`
+                              : '—'}
                           </p>
                         </div>
-                      </>
-                    )
-                  })()}
-                </div>
+                      ))}
+                    </div>
+                  )
+                })()}
 
                 {/* Pie Chart + Table side by side */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
