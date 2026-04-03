@@ -126,25 +126,25 @@ export default function CatalogPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-40">
-        <div className="px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+        <div className="px-4 sm:px-8 lg:px-12 py-4">
+          <div className="flex items-center justify-between gap-3 sm:gap-6">
+            <div className="flex items-center shrink-0">
               {(store?.logoMobileUrl || store?.logoDesktopUrl || store?.logoUrl) ? (
                 <>
                   {/* Mobile logo */}
-                  <img src={store.logoMobileUrl || store.logoUrl || ''} alt={store.name} className="sm:hidden h-12 object-contain" />
-                  {/* Desktop logo */}
-                  <img src={store.logoDesktopUrl || store.logoUrl || ''} alt={store.name} className="hidden sm:block h-10 max-w-[200px] object-contain" />
+                  <img src={store.logoMobileUrl || store.logoUrl || ''} alt={store.name} className="sm:hidden h-14 object-contain" />
+                  {/* Desktop logo - larger, pushed right with margin */}
+                  <img src={store.logoDesktopUrl || store.logoUrl || ''} alt={store.name} className="hidden sm:block h-12 max-w-[240px] object-contain ml-4" />
                 </>
               ) : (
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: primaryColor + '20' }}>
-                  <ShoppingBag className="w-5 h-5" style={{ color: primaryColor }} />
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: primaryColor + '20' }}>
+                  <ShoppingBag className="w-6 h-6" style={{ color: primaryColor }} />
                 </div>
               )}
             </div>
 
-            {/* Search - closer to logo */}
-            <div className="flex-1 max-w-2xl mx-2 sm:mx-3">
+            {/* Search */}
+            <div className="flex-1 max-w-3xl mx-2 sm:mx-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input value={searchInput} onChange={e => setSearchInput(e.target.value)}
