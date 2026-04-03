@@ -123,7 +123,7 @@ export default function CatalogPage() {
   )
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-40">
         <div className="px-4 sm:px-8 lg:px-12 py-4">
@@ -188,7 +188,7 @@ export default function CatalogPage() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-4 py-6 flex-1">
 
         {/* Top Sellers Section */}
         {showTopSellers && (
