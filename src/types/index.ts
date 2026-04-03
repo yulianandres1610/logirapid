@@ -27,6 +27,7 @@ export type UserRole =
   | 'MARKET_COMERCIAL'  // Comercial (Compras, Marketplace, Inventario)
   | 'MARKET_ALMACENERO' // Almacenero (solo su almacen asignado)
   | 'MARKET_VENDEDOR'   // Vendedor (solo POS con terminales asignados)
+  | 'MARKET_ECONOMICA'  // Económica (contabilidad, gastos, reportes, RRHH, tasa de cambio)
 
 export interface Company {
   id: string
