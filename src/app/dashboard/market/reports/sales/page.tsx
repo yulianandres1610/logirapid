@@ -98,7 +98,7 @@ export default function SalesReportPage() {
   const reportRef = useRef<HTMLDivElement>(null)
   const [data, setData] = useState<SalesData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'trend' | 'products' | 'categories' | 'terminals' | 'hours' | 'realtime'>('trend')
+  const [activeTab, setActiveTab] = useState<'trend' | 'products' | 'categories' | 'terminals' | 'hours' | 'payments' | 'realtime'>('trend')
 
   // Realtime data
   const [realtimeData, setRealtimeData] = useState<RealtimeData | null>(null)
@@ -218,6 +218,7 @@ export default function SalesReportPage() {
     { id: 'categories', label: 'Por Categoría' },
     { id: 'terminals', label: 'Por Terminal' },
     { id: 'hours', label: 'Por Hora' },
+    { id: 'payments', label: 'Por Método de Pago', icon: CreditCard },
     { id: 'realtime', label: 'Tiempo Real', icon: Zap }
   ]
 
@@ -567,6 +568,188 @@ export default function SalesReportPage() {
                     <Bar dataKey="orders" name="Órdenes" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+            )}
+
+            {activeTab === 'payments' && data && (
+              <div className="space-y-6">
+                {/* Payment Methods Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {(() => {
+                    const methods = data.byPaymentMethod || []
+                    const totalAmount = methods.reduce((s, m) => s + parseFloat(String(m.amount)), 0)
+                    const totalOrders = methods.reduce((s, m) => s + parseInt(String(m.orders)), 0)
+                    const uniqueMethods = [...new Set(methods.map(m => m.paymentMethod))]
+
+                    return (
+                      <>
+                        <div className={cn('p-4 rounded-xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                          <p className="text-xs text-gray-500 uppercase">Total Cobrado</p>
+                          <p className="text-2xl font-bold text-orange-600">{formatCurrency(totalAmount)}</p>
+                        </div>
+                        <div className={cn('p-4 rounded-xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                          <p className="text-xs text-gray-500 uppercase">Transacciones</p>
+                          <p className={cn('text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{totalOrders}</p>
+                        </div>
+                        <div className={cn('p-4 rounded-xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                          <p className="text-xs text-gray-500 uppercase">Métodos</p>
+                          <p className={cn('text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{uniqueMethods.length}</p>
+                        </div>
+                        <div className={cn('p-4 rounded-xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                          <p className="text-xs text-gray-500 uppercase">Ticket Promedio</p>
+                          <p className={cn('text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                            {totalOrders > 0 ? formatCurrency(totalAmount / totalOrders) : '$0.00'}
+                          </p>
+                        </div>
+                      </>
+                    )
+                  })()}
+                </div>
+
+                {/* Pie Chart + Table side by side */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Pie Chart */}
+                  <div className={cn('p-5 rounded-2xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                    <h3 className={cn('font-semibold mb-4', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      Distribución por Método de Pago
+                    </h3>
+                    {(() => {
+                      const methods = data.byPaymentMethod || []
+                      const COLORS = ['#f97316', '#3b82f6', '#10b981', '#8b5cf6', '#ef4444', '#eab308']
+                      // Group by method (combine currencies)
+                      const grouped = methods.reduce((acc, m) => {
+                        const key = formatPaymentMethod(m.paymentMethod)
+                        if (!acc[key]) acc[key] = { name: key, value: 0, orders: 0 }
+                        acc[key].value += parseFloat(String(m.amount))
+                        acc[key].orders += parseInt(String(m.orders))
+                        return acc
+                      }, {} as Record<string, { name: string; value: number; orders: number }>)
+                      const pieData = Object.values(grouped).sort((a, b) => b.value - a.value)
+                      const total = pieData.reduce((s, d) => s + d.value, 0)
+
+                      return pieData.length > 0 ? (
+                        <>
+                          <ResponsiveContainer width="100%" height={280}>
+                            <PieChart>
+                              <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100}
+                                dataKey="value" nameKey="name" paddingAngle={3}>
+                                {pieData.map((_, i) => (
+                                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                              <Legend />
+                            </PieChart>
+                          </ResponsiveContainer>
+                          {/* Percentage labels */}
+                          <div className="mt-4 space-y-2">
+                            {pieData.map((d, i) => (
+                              <div key={d.name} className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                                  <span className={cn('text-sm', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>{d.name}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-sm font-bold" style={{ color: COLORS[i % COLORS.length] }}>
+                                    {total > 0 ? ((d.value / total) * 100).toFixed(1) : 0}%
+                                  </span>
+                                  <span className={cn('text-sm font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{formatCurrency(d.value)}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-gray-500 text-center py-12">No hay datos de pagos para el periodo</p>
+                      )
+                    })()}
+                  </div>
+
+                  {/* Table */}
+                  <div className={cn('p-5 rounded-2xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                    <h3 className={cn('font-semibold mb-4', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                      Detalle por Método y Moneda
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className={cn('border-b', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                            <th className="text-left py-3 px-2 text-gray-500 font-medium">Método</th>
+                            <th className="text-left py-3 px-2 text-gray-500 font-medium">Moneda</th>
+                            <th className="text-right py-3 px-2 text-gray-500 font-medium">Órdenes</th>
+                            <th className="text-right py-3 px-2 text-gray-500 font-medium">Monto</th>
+                            <th className="text-right py-3 px-2 text-gray-500 font-medium">%</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const methods = data.byPaymentMethod || []
+                            const total = methods.reduce((s, m) => s + parseFloat(String(m.amount)), 0)
+                            return methods.length > 0 ? methods.map((m, i) => {
+                              const amount = parseFloat(String(m.amount))
+                              const pct = total > 0 ? ((amount / total) * 100).toFixed(1) : '0'
+                              return (
+                                <tr key={i} className={cn('border-b', theme === 'dark' ? 'border-gray-700/50' : 'border-gray-100')}>
+                                  <td className="py-3 px-2">
+                                    <div className="flex items-center gap-2">
+                                      {getPaymentMethodIcon(m.paymentMethod)}
+                                      <span className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                        {formatPaymentMethod(m.paymentMethod)}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-2">
+                                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                      {m.currency}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-2 text-right font-medium text-gray-900 dark:text-white">{m.orders}</td>
+                                  <td className="py-3 px-2 text-right font-bold text-orange-600">{formatCurrency(amount)}</td>
+                                  <td className="py-3 px-2 text-right">
+                                    <div className="flex items-center justify-end gap-2">
+                                      <div className="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                        <div className="h-full bg-orange-500 rounded-full" style={{ width: `${pct}%` }} />
+                                      </div>
+                                      <span className="text-xs text-gray-500 w-10 text-right">{pct}%</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            }) : (
+                              <tr><td colSpan={5} className="text-center py-8 text-gray-500">No hay datos</td></tr>
+                            )
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bar Chart - Amount by method */}
+                <div className={cn('p-5 rounded-2xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                  <h3 className={cn('font-semibold mb-4', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                    Comparativa de Montos
+                  </h3>
+                  {(() => {
+                    const methods = data.byPaymentMethod || []
+                    const barData = methods.map(m => ({
+                      name: `${formatPaymentMethod(m.paymentMethod)} (${m.currency})`,
+                      monto: parseFloat(String(m.amount)),
+                      ordenes: parseInt(String(m.orders))
+                    }))
+                    return barData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={barData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#E5E7EB'} />
+                          <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                          <YAxis tick={{ fontSize: 11 }} />
+                          <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                          <Bar dataKey="monto" name="Monto" fill="#f97316" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : null
+                  })()}
+                </div>
               </div>
             )}
 
