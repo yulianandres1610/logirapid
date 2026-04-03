@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Package, ShoppingCart, MessageCircle, Phone, MapPin, Star, Loader2, Minus, Plus, Share2, Truck, Shield, Clock, ThumbsUp, User } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
+import JsBarcode from 'jsbarcode'
 
 interface Product {
   id: number; name: string; description: string | null; sku: string; category: string | null
@@ -34,10 +35,37 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true)
   const [quantity, setQuantity] = useState(1)
   const [addedToCart, setAddedToCart] = useState(false)
+  const barcodeRef = useRef<SVGSVGElement>(null)
 
   const primaryColor = store?.primaryColor || '#f97316'
   const avgRating = 4.7
   const totalReviews = MOCK_REVIEWS.length
+
+  // Generate real scannable barcode
+  useEffect(() => {
+    if (product && barcodeRef.current) {
+      const barcodeValue = product.sku || `P${product.id}`
+      try {
+        JsBarcode(barcodeRef.current, barcodeValue, {
+          format: 'CODE128',
+          width: 2,
+          height: 50,
+          displayValue: true,
+          fontSize: 14,
+          margin: 10,
+          background: '#ffffff',
+          lineColor: '#000000'
+        })
+      } catch {
+        // Fallback if barcode generation fails
+        try {
+          JsBarcode(barcodeRef.current, String(product.id), {
+            format: 'CODE128', width: 2, height: 50, displayValue: true, fontSize: 14, margin: 10
+          })
+        } catch { /* ignore */ }
+      }
+    }
+  }, [product])
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -143,29 +171,10 @@ export default function ProductDetailPage() {
                 )}
               </div>
             </div>
-            {/* Barcode */}
-            {product.sku && (
-              <div className="mt-3 bg-white rounded-xl border border-gray-100 p-4 text-center">
-                <svg className="mx-auto" viewBox="0 0 200 60" width="200" height="60">
-                  {product.sku.split('').map((char, i) => {
-                    const code = char.charCodeAt(0)
-                    const x = 10 + i * (180 / Math.max(product.sku.length, 1))
-                    const w = code % 2 === 0 ? 2 : 1
-                    return <rect key={i} x={x} y={0} width={w} height={45} fill="black" />
-                  })}
-                  {/* Additional bars for density */}
-                  {product.sku.split('').map((char, i) => {
-                    const code = char.charCodeAt(0)
-                    const x = 10 + i * (180 / Math.max(product.sku.length, 1)) + 2.5
-                    const w = code % 3 === 0 ? 1.5 : 0.8
-                    return <rect key={`b${i}`} x={x} y={0} width={w} height={45} fill="black" />
-                  })}
-                  <text x="100" y="57" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="#666">
-                    {product.sku}
-                  </text>
-                </svg>
-              </div>
-            )}
+            {/* Barcode - scannable CODE128 */}
+            <div className="mt-3 bg-white rounded-xl border border-gray-100 p-4 text-center">
+              <svg ref={barcodeRef} className="mx-auto" />
+            </div>
           </div>
 
           {/* Product Info */}
