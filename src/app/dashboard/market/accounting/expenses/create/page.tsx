@@ -1467,6 +1467,49 @@ export default function CreateExpensePage() {
                               Eliminar y subir otra
                             </button>
                           </div>
+                        ) : processingOCR ? (
+                          /* Phone upload OCR animation - same style as file upload */
+                          <div className="space-y-4 relative">
+                            <div className="relative inline-block mx-auto">
+                              <div className={cn(
+                                "relative w-24 h-28 rounded-lg flex items-center justify-center overflow-hidden",
+                                "bg-gradient-to-br from-blue-100 to-cyan-100 dark:from-blue-900/30 dark:to-cyan-900/30"
+                              )}>
+                                <Smartphone className="w-12 h-12 text-cyan-600" />
+                                <motion.div
+                                  className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_rgba(34,211,238,0.8)]"
+                                  initial={{ top: '0%' }}
+                                  animate={{ top: ['0%', '100%', '0%'] }}
+                                  transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                                />
+                              </div>
+                            </div>
+                            <AnimatePresence>
+                              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="relative">
+                                <div className={cn(
+                                  "relative overflow-hidden rounded-2xl p-6 backdrop-blur-xl border",
+                                  theme === 'dark' ? 'bg-gray-900/80 border-cyan-500/30' : 'bg-white/80 border-cyan-400/40'
+                                )}>
+                                  <div className="flex items-center gap-4">
+                                    <div className="relative">
+                                      <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                        className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/30">
+                                        <Sparkles className="w-6 h-6 text-white" />
+                                      </motion.div>
+                                    </div>
+                                    <div className="flex-1">
+                                      <p className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                        Escaneando recibo...
+                                      </p>
+                                      <p className="text-sm text-gray-500">
+                                        {ocrSteps[ocrStep]?.text || 'Procesando imagen del teléfono'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            </AnimatePresence>
+                          </div>
                         ) : (
                           <div className="space-y-4">
                             <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto">
