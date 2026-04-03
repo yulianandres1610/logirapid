@@ -213,7 +213,7 @@ async function _deductStockFIFO_REMOVED(
       }
       remainingQty -= toDeduct
     }
-    await txClient.query(`DELETE FROM consignment_lot_inventory WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available <= 0`, [warehouseId, productId, companyId])
+    // Empty consignment lots stay in DB to preserve FK references from return_lines
     await txClient.query('RELEASE SAVEPOINT sp_consignment')
   } catch {
     await txClient.query('ROLLBACK TO SAVEPOINT sp_consignment')

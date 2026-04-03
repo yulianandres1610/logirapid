@@ -754,18 +754,8 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // 2.5 Cleanup empty lots after FIFO deductions
-        await db.query(`
-          DELETE FROM consignment_lot_inventory
-          WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3
-            AND quantity_available <= 0
-        `, [warehouseId, productId, companyId])
-
-        await db.query(`
-          DELETE FROM purchase_lot_inventory
-          WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3
-            AND quantity_available <= 0
-        `, [warehouseId, productId, companyId])
+        // 2.5 Empty lots stay in DB (quantity_available=0) to preserve FK references
+        // from consignment_return_lines.lot_inventory_id. Do NOT delete them.
 
         // 3. Update warehouse stock (covers both consignment and purchase deductions)
         // IMPORTANT: Use UPSERT to ensure stock record exists before deducting

@@ -150,15 +150,13 @@ export async function POST(request: NextRequest) {
     await db.query('BEGIN')
 
     try {
-      // 1. Delete empty lots (quantity_available = 0)
-      const deleteEmpty = await db.query(`
-        DELETE FROM consignment_lot_inventory
-        WHERE company_id = $1 AND quantity_available <= 0
-        RETURNING id, lot_number
-      `, [payload.companyId])
-
-      results.lotsDeleted = deleteEmpty.rowCount || 0
-      console.log(`[Consolidate] Deleted ${results.lotsDeleted} empty lots`)
+      // 1. Empty lots stay in DB (FK from return_lines), just count them
+      const emptyCount = await db.query(
+        `SELECT COUNT(*) as count FROM consignment_lot_inventory WHERE company_id = $1 AND quantity_available <= 0`,
+        [payload.companyId]
+      )
+      results.lotsDeleted = 0
+      console.log(`[Consolidate] Found ${emptyCount.rows[0].count} empty lots (kept for FK integrity)`)
 
       // 2. Find and consolidate duplicate lots (same lot_number, product, variant)
       const duplicates = await db.query(`
@@ -199,7 +197,7 @@ export async function POST(request: NextRequest) {
               WHERE id = $3
             `, [mergeQty, mergeSold, keepLotId])
 
-            await db.query(`DELETE FROM consignment_lot_inventory WHERE id = $1`, [mergeLotId])
+            await db.query(`UPDATE consignment_lot_inventory SET quantity_available = 0 WHERE id = $1`, [mergeLotId])
             results.lotsConsolidated++
             console.log(`[Consolidate] Merged lot ${mergeLotId} into ${keepLotId}`)
           }

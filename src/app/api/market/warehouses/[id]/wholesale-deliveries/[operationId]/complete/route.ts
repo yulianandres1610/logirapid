@@ -345,10 +345,7 @@ export async function POST(
             console.log(`[Wholesale FIFO] Consignment lot ${lot.lot_number}: deducted ${toDeduct}, remaining ${remainingQty}`)
           }
 
-          await db.query(`
-            DELETE FROM consignment_lot_inventory
-            WHERE warehouse_id = $1 AND product_id = $2 AND company_id = $3 AND quantity_available <= 0
-          `, [warehouseId, line.product_id, payload.companyId])
+          // Empty consignment lots stay in DB to preserve FK references from return_lines
         } catch (err) {
           console.log('[Wholesale FIFO] consignment_lot_inventory not available:', err)
         }

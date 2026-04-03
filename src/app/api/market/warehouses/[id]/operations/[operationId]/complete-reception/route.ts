@@ -403,9 +403,9 @@ export async function POST(
                   WHERE id = $2
                 `, [toTransfer, destLot.rows[0].id])
 
-                // Eliminar lote origen vacío
-                await db.query(`DELETE FROM consignment_lot_inventory WHERE id = $1`, [lot.id])
-                console.log(`[Transfer] Consolidado y eliminado lote consignación ${lot.lot_number} (${lot.id})`)
+                // Set source lot to 0 (don't delete — FK from return_lines)
+                await db.query(`UPDATE consignment_lot_inventory SET quantity_available = 0 WHERE id = $1`, [lot.id])
+                console.log(`[Transfer] Consolidado lote consignación ${lot.lot_number} (${lot.id}) → qty=0`)
               } else {
                 // MOVER el lote completo: solo actualizar warehouse_id
                 await db.query(`
