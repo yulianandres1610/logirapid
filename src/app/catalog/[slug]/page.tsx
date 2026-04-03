@@ -74,6 +74,16 @@ export default function CatalogPage() {
   }, [slug, search, selectedCategory, page])
 
   useEffect(() => { fetchCatalog() }, [fetchCatalog])
+
+  // Auto-refresh every 30s for real-time stock updates
+  useEffect(() => {
+    if (!slug) return
+    const interval = setInterval(() => {
+      fetchCatalog()
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [slug, fetchCatalog])
+
   useEffect(() => {
     const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 400)
     return () => clearTimeout(t)
