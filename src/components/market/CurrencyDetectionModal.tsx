@@ -40,14 +40,6 @@ const CURRENCY_OPTIONS: {
     color: 'text-blue-600',
     bgColor: 'bg-blue-50 dark:bg-blue-900/20',
     borderColor: 'border-blue-500'
-  },
-  {
-    value: 'MLC',
-    label: 'MLC (Moneda Libremente Convertible)',
-    description: 'Tarjeta MLC - similar a USD',
-    color: 'text-purple-600',
-    bgColor: 'bg-purple-50 dark:bg-purple-900/20',
-    borderColor: 'border-purple-500'
   }
 ]
 
@@ -73,7 +65,6 @@ export function CurrencyDetectionModal({
   const getConvertedValue = (currency: CurrencyType): number => {
     if (currency === 'USD') return total
     if (currency === 'CUP') return total / rates.USD_CUP
-    if (currency === 'MLC') return total / rates.USD_MLC
     return total
   }
 
@@ -239,9 +230,9 @@ export function CurrencyDetectionModal({
                             ${convertedValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
                           </span>
                         </div>
-                        {option.value !== 'USD' && (
+                        {option.value === 'CUP' && (
                           <p className="text-[11px] text-gray-400 mt-0.5">
-                            Tasa: 1 USD = {option.value === 'CUP' ? rates.USD_CUP.toLocaleString() : rates.USD_MLC.toFixed(2)} {option.value}
+                            Tasa: 1 USD = {rates.USD_CUP.toLocaleString()} CUP
                           </p>
                         )}
                       </div>
@@ -253,7 +244,7 @@ export function CurrencyDetectionModal({
               {/* Rates timestamp */}
               <div className="flex items-center justify-center gap-1.5 text-xs text-gray-400">
                 <Clock className="w-3 h-3" />
-                <span>Tasas ElToque {getTimeSinceUpdate()}</span>
+                <span>Tasa del sistema: 1 USD = {rates.USD_CUP.toLocaleString()} CUP</span>
               </div>
             </div>
 
