@@ -499,7 +499,7 @@ export default function CreateExpensePage() {
     setFormData(prev => ({
       ...prev,
       vendorName: data.vendorName || prev.vendorName,
-      receiptNumber: data.receiptNumber || prev.receiptNumber,
+      receiptNumber: (data as any).receiptNumber || prev.receiptNumber,
       expenseDate: data.date || prev.expenseDate,
       description: hasMultiple ? `${items.length} items detectados` : (data.description || prev.description),
       amount: displayAmount ? String(Math.round(displayAmount * 100) / 100) : prev.amount

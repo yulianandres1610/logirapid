@@ -141,14 +141,10 @@ export default function CatalogPage() {
                   <ShoppingBag className="w-5 h-5" style={{ color: primaryColor }} />
                 </div>
               )}
-              <div className="hidden sm:block">
-                <h1 className="font-bold text-gray-900 text-sm">{store?.name}</h1>
-                {store?.city && <p className="text-[11px] text-gray-500">{store.city}{store.province ? `, ${store.province}` : ''}</p>}
-              </div>
             </div>
 
-            {/* Search - centered */}
-            <div className="flex-1 max-w-xl mx-4">
+            {/* Search - closer to logo */}
+            <div className="flex-1 max-w-2xl mx-2 sm:mx-3">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input value={searchInput} onChange={e => setSearchInput(e.target.value)}
