@@ -122,7 +122,6 @@ export default function CatalogPage() {
 
   const [justAdded, setJustAdded] = useState<number | null>(null)
   const [cartBounce, setCartBounce] = useState(false)
-  const [addToast, setAddToast] = useState<string | null>(null)
 
   const addToCart = (product: Product) => {
     setCart(prev => {
@@ -136,10 +135,8 @@ export default function CatalogPage() {
     // Visual feedback
     setJustAdded(product.id)
     setCartBounce(true)
-    setAddToast(product.name)
     setTimeout(() => setJustAdded(null), 800)
     setTimeout(() => setCartBounce(false), 600)
-    setTimeout(() => setAddToast(null), 2000)
   }
   const removeFromCart = (id: number) => setCart(prev => prev.filter(i => i.product.id !== id))
   const updateCartQty = (id: number, delta: number) => {
@@ -530,33 +527,30 @@ export default function CatalogPage() {
         </div>
       )}
 
-      {/* Add to cart toast */}
+      {/* Floating cart (mobile) - animated on add */}
       <AnimatePresence>
-        {addToast && (
-          <motion.div
-            initial={{ opacity: 0, y: 50, x: '-50%' }}
-            animate={{ opacity: 1, y: 0, x: '-50%' }}
-            exit={{ opacity: 0, y: 20, x: '-50%' }}
-            className="fixed bottom-24 left-1/2 z-50 px-5 py-3 rounded-2xl shadow-2xl text-white text-sm font-medium flex items-center gap-2 whitespace-nowrap"
+        {cartCount > 0 && !showCart && (
+          <motion.button
+            key="floating-cart"
+            initial={{ opacity: 0, y: 30, scale: 0.8 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 30, scale: 0.8 }}
+            onClick={() => setShowCart(true)}
+            className="fixed bottom-6 right-6 z-40 py-3 px-5 rounded-2xl text-white shadow-2xl flex items-center gap-3"
             style={{ backgroundColor: primaryColor }}>
-            <ShoppingCart className="w-4 h-4" />
-            <span className="line-clamp-1 max-w-[200px]">{addToast}</span>
-            <span className="opacity-70">agregado</span>
-          </motion.div>
+            <motion.div animate={cartBounce ? { scale: [1, 1.4, 1], rotate: [0, -15, 15, 0] } : {}} transition={{ duration: 0.4 }}>
+              <ShoppingCart className="w-5 h-5" />
+            </motion.div>
+            <motion.span key={cartCount} initial={{ scale: 1.5, color: '#fff' }} animate={{ scale: 1 }} className="font-bold">
+              {cartCount}
+            </motion.span>
+            <span className="text-sm opacity-80">|</span>
+            <motion.span key={cartTotalCUP} initial={{ y: -5, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="font-bold text-sm">
+              {cartTotalCUP.toLocaleString('es-ES')} CUP
+            </motion.span>
+          </motion.button>
         )}
       </AnimatePresence>
-
-      {/* Floating cart (mobile) */}
-      {cartCount > 0 && !showCart && (
-        <button onClick={() => setShowCart(true)}
-          className="fixed bottom-6 right-6 z-40 py-3 px-5 rounded-2xl text-white shadow-2xl flex items-center gap-3 hover:scale-105 transition-transform"
-          style={{ backgroundColor: primaryColor }}>
-          <ShoppingCart className="w-5 h-5" />
-          <span className="font-bold">{cartCount}</span>
-          <span className="text-sm opacity-80">|</span>
-          <span className="font-bold text-sm">{cartTotalCUP.toLocaleString('es-ES')} CUP</span>
-        </button>
-      )}
 
       {/* Footer */}
       <footer className="bg-white border-t mt-12">
