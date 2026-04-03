@@ -235,7 +235,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate role
-    const validRoles = ['MARKET_MANAGER', 'MARKET_MANAGER_TIENDA', 'MARKET_COMERCIAL', 'MARKET_ALMACENERO', 'MARKET_VENDEDOR', 'MARKET_GUARDIA']
+    const validRoles = ['MARKET_MANAGER', 'MARKET_MANAGER_TIENDA', 'MARKET_COMERCIAL', 'MARKET_ALMACENERO', 'MARKET_VENDEDOR', 'MARKET_ECONOMICA', 'MARKET_GUARDIA']
     if (!validRoles.includes(role)) {
       return NextResponse.json({
         success: false,
