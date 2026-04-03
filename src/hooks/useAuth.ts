@@ -23,9 +23,12 @@ export function useAuth(): UseAuthReturn {
 
   // Verify session with server (check if user still exists in DB)
   const verifySession = useCallback(async () => {
-    // Skip verification for kiosk routes (they use PIN auth, not JWT)
-    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/door-kiosk')) {
-      return true
+    // Skip verification for public routes (no auth needed)
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname
+      if (path.startsWith('/door-kiosk') || path.startsWith('/catalog/') || path.startsWith('/pay/') || path.startsWith('/quote-sign') || path.startsWith('/tracking')) {
+        return true
+      }
     }
 
     try {
