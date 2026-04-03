@@ -122,6 +122,22 @@ export async function GET(
       catParams
     )
 
+    // Get top selling products (last 30 days)
+    let topSellingIds: number[] = []
+    try {
+      const topResult = await db.query(`
+        SELECT ol.product_id, SUM(ol.quantity) as qty_sold
+        FROM market_pos_order_lines ol
+        JOIN market_pos_orders o ON ol.order_id = o.id
+        WHERE o.company_id = $1 AND o.status IN ('paid', 'completed')
+          AND o.created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY ol.product_id
+        ORDER BY qty_sold DESC
+        LIMIT 12
+      `, [companyId])
+      topSellingIds = topResult.rows.map((r: any) => parseInt(r.product_id))
+    } catch { /* table may not exist */ }
+
     const products = productsResult.rows.map((p: any) => ({
       id: p.id,
       name: p.name,
@@ -132,7 +148,8 @@ export async function GET(
       unit: p.unit_of_measure || 'unidad',
       priceUSD: catalog.show_usd_price ? parseFloat(p.selling_price) : null,
       priceCUP: catalog.show_cup_price ? Math.round(parseFloat(p.selling_price) * exchangeRate) : null,
-      stock: catalog.show_stock ? parseFloat(p.total_stock) : null
+      stock: catalog.show_stock ? parseFloat(p.total_stock) : null,
+      isTopSeller: topSellingIds.includes(p.id)
     }))
 
     return NextResponse.json({
