@@ -125,7 +125,7 @@ export default function CatalogPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-3">
+        <div className="px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               {store?.logoUrl ? (
@@ -415,41 +415,41 @@ export default function CatalogPage() {
       )}
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white mt-12">
-        <div className="max-w-7xl mx-auto px-4 py-10">
-          <div className="flex flex-col items-center gap-6">
+      <footer className="bg-white border-t mt-12">
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="flex flex-col items-center gap-5">
             {/* Social Icons */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               {store?.facebookUrl && (
-                <a href={store.facebookUrl} target="_blank" rel="noopener" className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+                <a href={store.facebookUrl} target="_blank" rel="noopener" className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors text-gray-600">
                   <Facebook className="w-5 h-5" />
                 </a>
               )}
               {store?.instagramUrl && (
-                <a href={store.instagramUrl} target="_blank" rel="noopener" className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+                <a href={store.instagramUrl} target="_blank" rel="noopener" className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors text-gray-600">
                   <Instagram className="w-5 h-5" />
                 </a>
               )}
               {store?.telegramUrl && (
-                <a href={store.telegramUrl} target="_blank" rel="noopener" className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+                <a href={store.telegramUrl} target="_blank" rel="noopener" className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors text-gray-600">
                   <Send className="w-5 h-5" />
                 </a>
               )}
               {store?.whatsapp && (
-                <a href={`https://wa.me/${store.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener" className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+                <a href={`https://wa.me/${store.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener" className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors text-gray-600">
                   <MessageCircle className="w-5 h-5" />
                 </a>
               )}
               {store?.phone && (
-                <a href={`tel:${store.phone}`} className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+                <a href={`tel:${store.phone}`} className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors text-gray-600">
                   <Phone className="w-5 h-5" />
                 </a>
               )}
             </div>
             {store?.address && (
-              <p className="text-sm text-gray-400 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{store.address}</p>
+              <p className="text-sm text-gray-500 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{store.address}</p>
             )}
-            <p className="text-xs text-gray-500">© {new Date().getFullYear()} {store?.name} · Powered by LogiRapid</p>
+            <p className="text-xs text-gray-400">© {new Date().getFullYear()} {store?.name} · Powered by LogiRapid</p>
           </div>
         </div>
       </footer>
