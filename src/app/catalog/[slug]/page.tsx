@@ -266,7 +266,8 @@ export default function CatalogPage() {
             {search && <p className="text-gray-400 text-sm mt-2">Intenta con otra búsqueda</p>}
           </div>
         ) : (
-          {/* Mobile: 1 col list | Tablet: 3 cols | Desktop: 4-5 cols */}
+          <>
+          {/* Desktop grid */}
           <div className="hidden sm:grid sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {products.map(product => {
               const inCart = cart.find(i => i.product.id === product.id)
@@ -368,6 +369,7 @@ export default function CatalogPage() {
               )
             })}
           </div>
+          </>
         )}
 
         {/* Pagination */}
