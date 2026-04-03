@@ -1998,27 +1998,27 @@ export default function CreateExpensePage() {
                   </div>
 
                   <div className="p-6 space-y-4">
-                    {/* Receipt Preview */}
-                    {formData.receiptFile && (
+                    {/* Receipt Preview (file upload or phone upload) */}
+                    {(formData.receiptFile || phoneReceiptPath) && (
                       <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-xl">
                         {formData.isPdf ? (
                           <div className="w-24 h-24 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
                             <FileText className="w-10 h-10 text-red-600" />
                           </div>
+                        ) : formData.receiptPreview ? (
+                          <img src={formData.receiptPreview} alt="Receipt" className="w-24 h-24 object-cover rounded-lg" />
                         ) : (
-                          <img
-                            src={formData.receiptPreview}
-                            alt="Receipt"
-                            className="w-24 h-24 object-cover rounded-lg"
-                          />
+                          <div className="w-24 h-24 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                            <Smartphone className="w-10 h-10 text-blue-600" />
+                          </div>
                         )}
                         <div>
                           <p className="text-sm text-gray-500">Recibo adjunto</p>
                           <p className="font-medium text-gray-900 dark:text-white">
-                            {formData.receiptFile?.name}
+                            {formData.receiptFile?.name || 'Subido desde teléfono'}
                           </p>
                           <p className="text-xs text-gray-500">
-                            {formData.isPdf ? 'PDF - ' : ''}{((formData.receiptFile?.size || 0) / 1024).toFixed(1)} KB
+                            {formData.receiptFile ? `${formData.isPdf ? 'PDF - ' : ''}${((formData.receiptFile.size || 0) / 1024).toFixed(1)} KB` : 'Imagen capturada'}
                           </p>
                         </div>
                       </div>
@@ -2049,13 +2049,27 @@ export default function CreateExpensePage() {
                       <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
                         <span className="text-gray-500">Categoria</span>
                         <span className="font-medium text-gray-900 dark:text-white">
-                          {categories.find(c => c.id === parseInt(formData.categoryId))?.name || 'Sin categoria'}
+                          {hasMultipleItems && categoryGroups.length > 0
+                            ? categoryGroups.filter(g => g.selected).map(g => g.categoryName).join(', ')
+                            : categories.find(c => c.id === parseInt(formData.categoryId))?.name || 'Sin categoria'}
                         </span>
                       </div>
                       {formData.vendorName && (
                         <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
                           <span className="text-gray-500">Proveedor</span>
                           <span className="font-medium text-gray-900 dark:text-white">{formData.vendorName}</span>
+                        </div>
+                      )}
+                      {formData.receiptNumber && (
+                        <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                          <span className="text-gray-500">No. Factura</span>
+                          <span className="font-medium text-gray-900 dark:text-white font-mono">{formData.receiptNumber}</span>
+                        </div>
+                      )}
+                      {formData.notes && (
+                        <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                          <span className="text-gray-500">Notas</span>
+                          <span className="font-medium text-gray-900 dark:text-white text-right max-w-[60%]">{formData.notes}</span>
                         </div>
                       )}
                     </div>
