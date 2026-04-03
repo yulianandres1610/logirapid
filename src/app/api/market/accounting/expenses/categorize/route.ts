@@ -13,7 +13,7 @@ interface JWTPayload {
 }
 
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
 
 /**
  * POST /api/market/accounting/expenses/categorize

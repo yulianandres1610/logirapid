@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
 
 // Modelo para OCR de documentos/facturas (soporta PDFs e imágenes)
-const OCR_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
+const OCR_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
 
 interface JWTPayload {
   userId: number
