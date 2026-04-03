@@ -28,10 +28,13 @@ export function CompanyProvider({
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Skip company info loading for kiosk routes (they use PIN auth, not JWT)
-    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/door-kiosk')) {
-      setIsLoading(false)
-      return
+    // Skip company info loading for public routes (no auth)
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname
+      if (path.startsWith('/door-kiosk') || path.startsWith('/catalog/') || path.startsWith('/pay/') || path.startsWith('/quote-sign') || path.startsWith('/tracking')) {
+        setIsLoading(false)
+        return
+      }
     }
 
     // Intentar obtener la información de la empresa de las cookies
