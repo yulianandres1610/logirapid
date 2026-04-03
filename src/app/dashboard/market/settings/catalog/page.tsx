@@ -779,7 +779,7 @@ export default function CatalogSettingsPage() {
         setShowPhoneUpload(false)
         setUploadingLogo(true)
         try {
-          const response = await fetch(`/api/upload/image?path=${encodeURIComponent(fileUrl)}&bucket=company-private-documents`)
+          const response = await fetch(`/api/upload/image?path=${encodeURIComponent(fileUrl)}&bucket=company-documents`)
           if (response.ok) {
             const data = await response.json()
             if (data.success && data.url) {

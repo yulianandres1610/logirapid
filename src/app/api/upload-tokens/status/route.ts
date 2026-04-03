@@ -4,7 +4,7 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { db } from '@/lib/database'
 
-const BUCKET_NAME = 'company-private-documents'
+const BUCKET_NAME = 'company-documents'
 
 interface JWTPayload {
   userId: number

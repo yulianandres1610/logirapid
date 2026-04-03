@@ -61,7 +61,17 @@ export async function POST(request: NextRequest) {
         }, { status: 500 })
       }
 
-      const { data: fileData, error: downloadError } = await storageAdapter.download('company-private-documents', storagePath)
+      // Try company-documents first (phone upload), fallback to company-private-documents
+      let fileData: any = null
+      let downloadError: any = null
+      const result1 = await storageAdapter.download('company-documents', storagePath)
+      if (result1.data) {
+        fileData = result1.data
+      } else {
+        const result2 = await storageAdapter.download('company-private-documents', storagePath)
+        fileData = result2.data
+        downloadError = result2.error
+      }
 
       if (downloadError || !fileData) {
         console.error('[OCR] Error downloading from storage:', downloadError)
