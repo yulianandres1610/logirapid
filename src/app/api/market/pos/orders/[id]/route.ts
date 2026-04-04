@@ -54,6 +54,8 @@ export async function GET(
         s.session_code,
         w.name as warehouse_name,
         COALESCE(u.firstname || ' ' || u.lastname, u.email) as created_by_name,
+        o.employee_id,
+        COALESCE(emp.firstname || ' ' || emp.lastname, emp.email, u.firstname || ' ' || u.lastname, u.email) as employee_name,
         COALESCE(c.firstname || ' ' || c.lastname, c.firstname, c.lastname) as customer_full_name,
         c.phone as customer_phone,
         c.email as customer_email
@@ -62,6 +64,7 @@ export async function GET(
       LEFT JOIN market_pos_sessions s ON o.pos_session_id = s.id
       LEFT JOIN market_warehouses w ON o.warehouse_id = w.id
       LEFT JOIN users u ON o.created_by = u.id
+      LEFT JOIN users emp ON o.employee_id = emp.id
       LEFT JOIN customers c ON o.customer_id = c.id
       WHERE o.id = $1 AND o.company_id = $2
     `, [orderId, companyId])
@@ -122,6 +125,8 @@ export async function GET(
         syncedAt: order.synced_at,
         createdBy: order.created_by,
         createdByName: order.created_by_name,
+        employeeId: order.employee_id,
+        employeeName: order.employee_name,
         createdAt: order.created_at,
         updatedAt: order.updated_at,
         lines: linesResult.rows.map(line => ({
