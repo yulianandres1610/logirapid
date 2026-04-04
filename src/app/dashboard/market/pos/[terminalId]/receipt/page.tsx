@@ -250,6 +250,7 @@ interface Order {
   status: string
   createdAt: string
   createdByName: string
+  employeeName: string | null
   lines: OrderLine[]
   payments: Payment[]
   exchangeRate?: number // Tasa USD -> CUP al momento de la venta
