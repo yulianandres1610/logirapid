@@ -55,7 +55,7 @@ export async function GET(
         w.name as warehouse_name,
         COALESCE(u.firstname || ' ' || u.lastname, u.email) as created_by_name,
         o.employee_id,
-        COALESCE(emp.firstname || ' ' || emp.lastname, emp.email, u.firstname || ' ' || u.lastname, u.email) as employee_name,
+        COALESCE(eu.firstname || ' ' || eu.lastname, eu.email) as employee_name,
         COALESCE(c.firstname || ' ' || c.lastname, c.firstname, c.lastname) as customer_full_name,
         c.phone as customer_phone,
         c.email as customer_email
@@ -64,7 +64,8 @@ export async function GET(
       LEFT JOIN market_pos_sessions s ON o.pos_session_id = s.id
       LEFT JOIN market_warehouses w ON o.warehouse_id = w.id
       LEFT JOIN users u ON o.created_by = u.id
-      LEFT JOIN users emp ON o.employee_id = emp.id
+      LEFT JOIN market_employees me ON o.employee_id = me.id
+      LEFT JOIN users eu ON me.user_id = eu.id
       LEFT JOIN customers c ON o.customer_id = c.id
       WHERE o.id = $1 AND o.company_id = $2
     `, [orderId, companyId])

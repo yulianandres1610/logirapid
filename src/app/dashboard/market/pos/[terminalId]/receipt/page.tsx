@@ -606,7 +606,7 @@ function ReceiptContent() {
             terminalName: order.terminalName, // Nombre del terminal
             date: new Date(order.createdAt).toLocaleDateString('es-ES'),
             time: new Date(order.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-            cashierName: order.employeeName || order.createdByName,
+            cashierName: order.employeeName,
             customerName: order.customerName,
             items: order.lines.map(l => ({
               name: l.productName,
@@ -696,7 +696,7 @@ function ReceiptContent() {
             terminalName: order.terminalName,
             date: new Date(order.createdAt).toLocaleDateString('es-ES'),
             time: new Date(order.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-            cashierName: order.employeeName || order.createdByName,
+            cashierName: order.employeeName,
             customerName: order.customerName,
             items: order.lines.map(l => ({
               name: l.productName,

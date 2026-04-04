@@ -359,9 +359,9 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Verify session is open
+    // Verify session is open and get employee
     const sessionCheck = await db.query(`
-      SELECT id, status FROM market_pos_sessions
+      SELECT id, status, employee_id, opened_by FROM market_pos_sessions
       WHERE id = $1 AND company_id = $2
     `, [sessionId, companyId])
 
@@ -377,6 +377,19 @@ export async function POST(request: NextRequest) {
         success: false,
         error: 'La sesión está cerrada'
       }, { status: 400 })
+    }
+
+    // Resolve employee: use provided employeeId, or get from session, or find by user
+    let resolvedEmployeeId = employeeId || sessionCheck.rows[0].employee_id || null
+    if (!resolvedEmployeeId) {
+      // Find employee by the authenticated user
+      const empResult = await db.query(
+        'SELECT id FROM market_employees WHERE user_id = $1 AND company_id = $2 AND is_active = true LIMIT 1',
+        [userId, companyId]
+      )
+      if (empResult.rows.length > 0) {
+        resolvedEmployeeId = empResult.rows[0].id
+      }
     }
 
     // Check if offline order already synced
@@ -545,7 +558,7 @@ export async function POST(request: NextRequest) {
       'draft',
       offlineId || null,
       offlineId ? new Date().toISOString() : null,
-      employeeId || null,
+      resolvedEmployeeId || null,
       userId
     ])
 
