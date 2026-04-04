@@ -420,6 +420,7 @@ function ReceiptContent() {
               status: 'pending_sync',
               createdAt: offlineOrder.createdAt,
               createdByName: 'Usuario',
+              employeeName: null,
               lines: offlineOrder.lines.map((l, idx) => ({
                 id: idx,
                 productName: l.productName,
@@ -461,6 +462,7 @@ function ReceiptContent() {
                     status: 'pending_sync',
                     createdAt: new Date().toISOString(),
                     createdByName: 'Usuario',
+              employeeName: null,
                     lines: paymentData.cart.map((item: { productName: string; productSku?: string; quantity: number; unitPrice: number; discountAmount?: number; total: number }, idx: number) => ({
                       id: idx,
                       productName: item.productName,
