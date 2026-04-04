@@ -384,8 +384,8 @@ export async function POST(request: NextRequest) {
     if (!resolvedEmployeeId) {
       // Find employee by the authenticated user
       const empResult = await db.query(
-        'SELECT id FROM market_employees WHERE user_id = $1 AND company_id = $2 AND is_active = true LIMIT 1',
-        [userId, companyId]
+        'SELECT id FROM market_employees WHERE user_id = $1 AND company_id = $2 AND status = $3 LIMIT 1',
+        [userId, companyId, 'active']
       )
       if (empResult.rows.length > 0) {
         resolvedEmployeeId = empResult.rows[0].id
