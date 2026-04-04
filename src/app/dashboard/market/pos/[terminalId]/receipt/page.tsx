@@ -233,9 +233,10 @@ interface Payment {
   method: string
   amount: number
   currency: string
-  amountTendered?: number | null  // Para efectivo: cuánto entregó el cliente
-  changeAmount?: number | null    // Para efectivo: cambio devuelto
-  changeCurrency?: string | null  // Para efectivo: moneda del cambio (USD o CUP)
+  amountTendered?: number | null
+  changeAmount?: number | null
+  changeCurrency?: string | null
+  reference?: string | null
 }
 
 interface Order {
@@ -635,7 +636,8 @@ function ReceiptContent() {
               currency: p.currency,
               amountTendered: p.amountTendered ?? undefined,
               changeAmount: p.changeAmount ?? undefined,
-              changeCurrency: p.changeCurrency ?? undefined
+              changeCurrency: p.changeCurrency ?? undefined,
+              reference: p.reference ?? undefined
             })),
             thankYouMessage: '¡Gracias por su compra!'
           },
@@ -723,7 +725,8 @@ function ReceiptContent() {
               currency: p.currency,
               amountTendered: p.amountTendered ?? undefined,
               changeAmount: p.changeAmount ?? undefined,
-              changeCurrency: p.changeCurrency ?? undefined
+              changeCurrency: p.changeCurrency ?? undefined,
+              reference: p.reference ?? undefined
             })),
             thankYouMessage: '¡Gracias por su compra!'
           },
