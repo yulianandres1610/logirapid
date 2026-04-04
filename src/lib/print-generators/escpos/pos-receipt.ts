@@ -16,6 +16,7 @@ interface ReceiptPayment {
   amountTendered?: number    // Para efectivo: cuánto entregó el cliente
   changeAmount?: number      // Para efectivo: cambio devuelto
   changeCurrency?: string    // Moneda del cambio (siempre CUP normalmente)
+  reference?: string         // Referencia de transferencia/tarjeta
 }
 
 interface ReceiptData {
@@ -263,6 +264,12 @@ export function generatePosReceipt(data: ReceiptData): Buffer {
     // Método de pago: solo $ y número (sin símbolo de moneda)
     lines.push(formatLine(payment.method + ':', formatCurrency(payment.amount), PAPER_WIDTH))
     lines.push(Commands.FEED_LINE)
+
+    // Referencia de pago (transferencia, tarjeta)
+    if (payment.reference) {
+      lines.push(formatLine('  Ref:', payment.reference, PAPER_WIDTH))
+      lines.push(Commands.FEED_LINE)
+    }
 
     // Para efectivo, mostrar monto entregado y cambio CON símbolo de moneda
     if (payment.amountTendered !== undefined && payment.amountTendered > 0) {
