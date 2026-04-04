@@ -372,6 +372,7 @@ function PaymentContent() {
   const [theme, setTheme] = useState<Theme>('dark')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [warehouseId, setWarehouseId] = useState<string | null>(null)
+  const [employeeId, setEmployeeId] = useState<number | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
   const [selectedMethod, setSelectedMethod] = useState<'cash' | 'card' | 'transfer' | 'credit'>('cash')
@@ -427,8 +428,9 @@ function PaymentContent() {
           setCart(paymentData.cart)
           setSessionId(paymentData.sessionId?.toString() || null)
           setWarehouseId(paymentData.warehouseId?.toString() || null)
+          setEmployeeId(paymentData.employeeId || null)
           setError(null)
-          console.log('[Payment] Loaded cart from localStorage:', paymentData.cart.length, 'items')
+          console.log('[Payment] Loaded cart from localStorage:', paymentData.cart.length, 'items, employee:', paymentData.employeeId)
         } else {
           setError('Datos del carrito expirados o inválidos')
         }
@@ -718,6 +720,7 @@ function PaymentContent() {
         sessionId: parseInt(sessionId),
         terminalId: parseInt(terminalId),
         warehouseId: warehouseId ? parseInt(warehouseId) : null,
+        employeeId: employeeId || null,
         currency: 'USD',
         lines: orderLines,
         payments: orderPayments
