@@ -1808,6 +1808,8 @@ export default function POSTerminalPage() {
                     sessionId: session.id,
                     warehouseId: terminal?.warehouseId || null,
                     terminalId: parseInt(terminalId),
+                    employeeId: authenticatedEmployee?.employeeId || null,
+                    employeeName: authenticatedEmployee?.fullName || null,
                     timestamp: Date.now()
                   }
                   localStorage.setItem('pos_payment_data', JSON.stringify(paymentData))
