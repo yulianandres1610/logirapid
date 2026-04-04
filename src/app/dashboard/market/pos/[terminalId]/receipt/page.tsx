@@ -606,7 +606,7 @@ function ReceiptContent() {
             terminalName: order.terminalName, // Nombre del terminal
             date: new Date(order.createdAt).toLocaleDateString('es-ES'),
             time: new Date(order.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-            cashierName: order.createdByName,
+            cashierName: order.employeeName || order.createdByName,
             customerName: order.customerName,
             items: order.lines.map(l => ({
               name: l.productName,
@@ -683,9 +683,8 @@ function ReceiptContent() {
     console.log('[Receipt] Auto-print check:', { order: !!order, hasAutoprinted, autoPrint, isClient, defaultPrintServiceId })
     if (!order || hasAutoprinted || !autoPrint || !isClient) return
 
-    const triggerAutoPrint = async () => {
-      setHasAutoprinted(true)
-      console.log('[Receipt] Auto-print triggered for order:', order.orderNumber)
+    const triggerAutoPrint = async (attempt = 1) => {
+      console.log('[Receipt] Auto-print triggered for order:', order.orderNumber, 'attempt:', attempt)
 
       try {
         const printPayload = {
@@ -697,7 +696,7 @@ function ReceiptContent() {
             terminalName: order.terminalName,
             date: new Date(order.createdAt).toLocaleDateString('es-ES'),
             time: new Date(order.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-            cashierName: order.createdByName,
+            cashierName: order.employeeName || order.createdByName,
             customerName: order.customerName,
             items: order.lines.map(l => ({
               name: l.productName,
@@ -744,17 +743,29 @@ function ReceiptContent() {
 
         if (printData.success) {
           console.log('[Receipt] Auto-print job sent successfully:', printData.data?.jobNumber)
+          setHasAutoprinted(true)
         } else {
           console.error('[Receipt] Auto-print failed:', printData.error)
+          // Retry up to 2 more times
+          if (attempt < 3) {
+            setTimeout(() => triggerAutoPrint(attempt + 1), 1500)
+          } else {
+            setHasAutoprinted(true) // Give up after 3 attempts
+          }
         }
       } catch (err) {
         console.error('[Receipt] Auto-print error:', err)
+        if (attempt < 3) {
+          setTimeout(() => triggerAutoPrint(attempt + 1), 1500)
+        } else {
+          setHasAutoprinted(true)
+        }
       }
     }
 
-    // Small delay to ensure everything is loaded
-    console.log('[Receipt] Scheduling auto-print in 500ms...')
-    const timer = setTimeout(triggerAutoPrint, 500)
+    // Delay to ensure order is fully persisted in DB
+    console.log('[Receipt] Scheduling auto-print in 1000ms...')
+    const timer = setTimeout(triggerAutoPrint, 1000)
     return () => clearTimeout(timer)
   }, [order, hasAutoprinted, autoPrint, isClient, exchangeRate, defaultPrintServiceId])
 
