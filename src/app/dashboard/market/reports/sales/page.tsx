@@ -704,16 +704,11 @@ export default function SalesReportPage() {
                         <tbody>
                           {(() => {
                             const methods = data.byPaymentMethod || []
-                            // Calculate totals per currency for accurate percentages
-                            const totalByCurrency: Record<string, number> = {}
-                            methods.forEach(m => {
-                              const cur = m.currency || 'USD'
-                              totalByCurrency[cur] = (totalByCurrency[cur] || 0) + parseFloat(String(m.amount))
-                            })
+                            const totalOrders = methods.reduce((s, m) => s + parseInt(String(m.orders)), 0)
                             return methods.length > 0 ? methods.map((m, i) => {
                               const amount = parseFloat(String(m.amount))
-                              const currencyTotal = totalByCurrency[m.currency || 'USD'] || 0
-                              const pct = currencyTotal > 0 ? ((amount / currencyTotal) * 100).toFixed(1) : '0'
+                              const orders = parseInt(String(m.orders))
+                              const pct = totalOrders > 0 ? ((orders / totalOrders) * 100).toFixed(1) : '0'
                               return (
                                 <tr key={i} className={cn('border-b', theme === 'dark' ? 'border-gray-700/50' : 'border-gray-100')}>
                                   <td className="py-3 px-2">
