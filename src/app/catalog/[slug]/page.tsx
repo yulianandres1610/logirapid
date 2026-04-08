@@ -579,7 +579,8 @@ export default function CatalogPage() {
                   {store?.whatsapp && (
                     <button onClick={() => {
                       const phone = store!.whatsapp!.replace(/\D/g, '')
-                      const items = cart.map(i => `• ${i.product.name} x${i.quantity} — ${i.product.priceCUP ? (i.product.priceCUP * i.quantity).toLocaleString('es-ES') + ' CUP' : ''}`).join('\n')
+                      const baseUrl = window.location.origin
+                      const items = cart.map(i => `• ${i.product.name} x${i.quantity} — ${i.product.priceCUP ? (i.product.priceCUP * i.quantity).toLocaleString('es-ES') + ' CUP' : ''}\n  ${baseUrl}/catalog/${slug}/product/${i.product.id}`).join('\n')
                       const msg = encodeURIComponent(`Hola! Me interesan:\n\n${items}\n\n*Total: ${cartTotalCUP.toLocaleString('es-ES')} CUP ($${cartTotal.toFixed(2)} USD)*\n\n¿Están disponibles?`)
                       window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
                     }} className="w-full py-3.5 rounded-xl text-white font-bold flex items-center justify-center gap-2 text-lg" style={{ backgroundColor: '#25D366' }}>

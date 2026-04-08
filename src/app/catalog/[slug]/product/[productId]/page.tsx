@@ -93,8 +93,9 @@ export default function ProductDetailPage() {
   const openWhatsApp = () => {
     if (!store?.whatsapp || !product) return
     const phone = store.whatsapp.replace(/\D/g, '')
+    const productUrl = `${window.location.origin}/catalog/${slug}/product/${productId}`
     const msg = encodeURIComponent(
-      `Hola! Me interesa:\n\n*${product.name}*\nCantidad: ${quantity}\n${product.priceCUP ? `Precio: ${(product.priceCUP * quantity).toLocaleString('es-ES')} CUP` : ''}${product.priceUSD ? ` ($${(product.priceUSD * quantity).toFixed(2)} USD)` : ''}\n\n¿Está disponible?`
+      `Hola! Me interesa:\n\n*${product.name}*\nCantidad: ${quantity}\n${product.priceCUP ? `Precio: ${(product.priceCUP * quantity).toLocaleString('es-ES')} CUP` : ''}${product.priceUSD ? ` ($${(product.priceUSD * quantity).toFixed(2)} USD)` : ''}\n\nVer producto: ${productUrl}\n\n¿Está disponible?`
     )
     window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
   }

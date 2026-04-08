@@ -634,7 +634,7 @@ export default function ProductDetailPage() {
 
   const getMargin = (p: Product) => {
     if (p.costPrice === 0) return 0
-    return Math.round(((p.sellingPrice - p.costPrice) / p.costPrice) * 100)
+    return Math.round(((Number(p.sellingPrice) - Number(p.costPrice)) / Number(p.costPrice)) * 100)
   }
 
   const formatDate = (dateString: string) => {
@@ -988,7 +988,7 @@ export default function ProductDetailPage() {
                       <p className="text-lg sm:text-xl font-bold text-emerald-600 font-mono break-all">{symbol}{product.sellingPrice}</p>
                       <div className="mt-2 pt-2 border-t border-emerald-200/30 dark:border-emerald-800/30 space-y-0.5">
                         <p className="text-xs text-blue-600 font-medium">${Math.round(product.sellingPrice * USD_CUP).toLocaleString('es-ES')} CUP</p>
-                        <p className="text-xs text-purple-600 font-medium">${(product.sellingPrice * USD_MLC).toFixed(2)} MLC</p>
+                        <p className="text-xs text-purple-600 font-medium">${(Number(product.sellingPrice) * USD_MLC).toFixed(2)} MLC</p>
                       </div>
                     </div>
 
@@ -1018,7 +1018,7 @@ export default function ProductDetailPage() {
                         <TrendingUp className="w-5 h-5" />
                         {margin}%
                       </p>
-                      <p className="text-xs text-gray-500 mt-1 break-all">{symbol}{(product.sellingPrice - product.costPrice).toFixed(10).replace(/0+$/, '').replace(/\.$/, '')} ganancia</p>
+                      <p className="text-xs text-gray-500 mt-1 break-all">{symbol}{(Number(product.sellingPrice) - Number(product.costPrice)).toFixed(10).replace(/0+$/, '').replace(/\.$/, '')} ganancia</p>
                     </div>
                   </div>
                 </div>
@@ -1052,7 +1052,7 @@ export default function ProductDetailPage() {
                   value: `${margin}%`,
                   icon: Percent,
                   color: margin >= 30 ? 'emerald' : margin >= 15 ? 'amber' : 'red',
-                  subtext: `${symbol}${(product.sellingPrice - product.costPrice).toFixed(2)} ganancia`
+                  subtext: `${symbol}${(Number(product.sellingPrice) - Number(product.costPrice)).toFixed(2)} ganancia`
                 },
                 {
                   label: 'Velocidad',
