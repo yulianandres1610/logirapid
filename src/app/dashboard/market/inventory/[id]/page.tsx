@@ -41,7 +41,10 @@ import {
   ExternalLink,
   Settings,
   Trash2,
-  Factory
+  Factory,
+  Download,
+  Facebook,
+  Instagram
 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -301,6 +304,190 @@ export default function ProductDetailPage() {
   const [movementSummary, setMovementSummary] = useState<MovementSummary | null>(null)
   const [currentWarehouseStock, setCurrentWarehouseStock] = useState<Record<string, { onHand: number; reserved: number }>>({})
   const [movementsLoading, setMovementsLoading] = useState(false)
+  const [generatingImage, setGeneratingImage] = useState<string | null>(null)
+
+  // Generate social media image using Canvas
+  const generateSocialImage = async (platform: 'facebook' | 'instagram') => {
+    if (!product) return
+    setGeneratingImage(platform)
+
+    const w = platform === 'facebook' ? 940 : 1080
+    const h = platform === 'facebook' ? 788 : 1350
+
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')!
+
+    // Brand colors
+    const orange = '#f97316'
+    const darkBg = '#1a1a2e'
+    const white = '#ffffff'
+
+    // Background gradient
+    const grad = ctx.createLinearGradient(0, 0, w, h)
+    grad.addColorStop(0, darkBg)
+    grad.addColorStop(1, '#16213e')
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, w, h)
+
+    // Orange accent bar at top
+    ctx.fillStyle = orange
+    ctx.fillRect(0, 0, w, 6)
+
+    // Orange accent corner decoration
+    ctx.beginPath()
+    ctx.moveTo(0, 0)
+    ctx.lineTo(120, 0)
+    ctx.lineTo(0, 120)
+    ctx.closePath()
+    ctx.fillStyle = orange + '30'
+    ctx.fill()
+
+    // Bottom right decoration
+    ctx.beginPath()
+    ctx.moveTo(w, h)
+    ctx.lineTo(w - 120, h)
+    ctx.lineTo(w, h - 120)
+    ctx.closePath()
+    ctx.fill()
+
+    // Load product image
+    const imgSize = platform === 'facebook' ? 320 : 500
+    const imgX = platform === 'facebook' ? 50 : (w - imgSize) / 2
+    const imgY = platform === 'facebook' ? (h - imgSize) / 2 - 20 : 120
+
+    try {
+      if (product.imageUrl) {
+        const img = new window.Image()
+        img.crossOrigin = 'anonymous'
+        await new Promise<void>((resolve) => {
+          img.onload = () => resolve()
+          img.onerror = () => resolve()
+          img.src = product.imageUrl!
+        })
+        if (img.complete && img.naturalWidth > 0) {
+          // White rounded rectangle background for image
+          ctx.fillStyle = white
+          const padding = 15
+          const roundRect = (x: number, y: number, w: number, h: number, r: number) => {
+            ctx.beginPath()
+            ctx.moveTo(x + r, y)
+            ctx.lineTo(x + w - r, y)
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r)
+            ctx.lineTo(x + w, y + h - r)
+            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
+            ctx.lineTo(x + r, y + h)
+            ctx.quadraticCurveTo(x, y + h, x, y + h - r)
+            ctx.lineTo(x, y + r)
+            ctx.quadraticCurveTo(x, y, x + r, y)
+            ctx.closePath()
+          }
+          roundRect(imgX - padding, imgY - padding, imgSize + padding * 2, imgSize + padding * 2, 20)
+          ctx.fill()
+
+          // Draw image
+          const scale = Math.min(imgSize / img.naturalWidth, imgSize / img.naturalHeight)
+          const dw = img.naturalWidth * scale
+          const dh = img.naturalHeight * scale
+          ctx.drawImage(img, imgX + (imgSize - dw) / 2, imgY + (imgSize - dh) / 2, dw, dh)
+        }
+      }
+    } catch {}
+
+    // Text section
+    const textX = platform === 'facebook' ? 420 : 60
+    let textY = platform === 'facebook' ? 130 : imgY + (product.imageUrl ? 560 : 120)
+    const textW = platform === 'facebook' ? 480 : w - 120
+
+    // Category badge
+    if (product.category) {
+      ctx.fillStyle = orange + '40'
+      ctx.font = 'bold 16px Arial, sans-serif'
+      const catW = ctx.measureText(product.category).width + 24
+      const roundRect = (x: number, y: number, w: number, h: number, r: number) => {
+        ctx.beginPath()
+        ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r)
+        ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
+        ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r)
+        ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath()
+      }
+      roundRect(textX, textY, catW, 30, 15)
+      ctx.fill()
+      ctx.fillStyle = orange
+      ctx.fillText(product.category, textX + 12, textY + 21)
+      textY += 50
+    }
+
+    // Product name
+    ctx.fillStyle = white
+    ctx.font = `bold ${platform === 'facebook' ? 32 : 38}px Arial, sans-serif`
+    const words = product.name.split(' ')
+    let line = ''
+    const maxLineW = textW
+    for (const word of words) {
+      const test = line + word + ' '
+      if (ctx.measureText(test).width > maxLineW && line) {
+        ctx.fillText(line.trim(), textX, textY)
+        textY += platform === 'facebook' ? 40 : 48
+        line = word + ' '
+      } else { line = test }
+    }
+    ctx.fillText(line.trim(), textX, textY)
+    textY += platform === 'facebook' ? 50 : 60
+
+    // CUP price (big, orange)
+    const priceCUP = Math.round(product.sellingPrice * USD_CUP)
+    ctx.fillStyle = orange
+    ctx.font = `bold ${platform === 'facebook' ? 56 : 64}px Arial, sans-serif`
+    ctx.fillText(`${priceCUP.toLocaleString('es-ES')} CUP`, textX, textY)
+    textY += platform === 'facebook' ? 45 : 55
+
+    // USD price
+    ctx.fillStyle = '#94a3b8'
+    ctx.font = `${platform === 'facebook' ? 24 : 28}px Arial, sans-serif`
+    ctx.fillText(`$${product.sellingPrice.toFixed(2)} USD`, textX, textY)
+    textY += platform === 'facebook' ? 40 : 50
+
+    // Stock available
+    const totalStock = warehouseStock.reduce((s, w) => s + (w.quantityOnHand || 0), 0)
+    if (totalStock > 0) {
+      ctx.fillStyle = '#4ade80'
+      ctx.font = `bold ${platform === 'facebook' ? 18 : 20}px Arial, sans-serif`
+      ctx.fillText(`✓ ${totalStock} disponibles`, textX, textY)
+    }
+
+    // Logo text at bottom
+    ctx.fillStyle = orange
+    ctx.font = `bold ${platform === 'facebook' ? 20 : 24}px Arial, sans-serif`
+    const logoText = 'ServiSumic'
+    const logoX = platform === 'facebook' ? w - ctx.measureText(logoText).width - 40 : (w - ctx.measureText(logoText).width) / 2
+    const logoY = h - (platform === 'facebook' ? 40 : 50)
+    ctx.fillText(logoText, logoX, logoY)
+
+    // Subtitle
+    ctx.fillStyle = '#64748b'
+    ctx.font = `${platform === 'facebook' ? 14 : 16}px Arial, sans-serif`
+    const subText = 'Ferreteria y Mercado'
+    const subX = platform === 'facebook' ? w - ctx.measureText(subText).width - 40 : (w - ctx.measureText(subText).width) / 2
+    ctx.fillText(subText, subX, logoY + 22)
+
+    // Orange bottom bar
+    ctx.fillStyle = orange
+    ctx.fillRect(0, h - 6, w, 6)
+
+    // Download
+    canvas.toBlob((blob) => {
+      if (!blob) return
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${product.name.replace(/[^a-zA-Z0-9]/g, '-')}-${platform}.png`
+      a.click()
+      URL.revokeObjectURL(url)
+      setGeneratingImage(null)
+    }, 'image/png')
+  }
 
   // Collapsible sections
   const [showVariants, setShowVariants] = useState(true)
@@ -698,6 +885,36 @@ export default function ProductDetailPage() {
                 >
                   <Printer className="w-4 h-4" />
                   <span className="font-medium hidden sm:inline">Imprimir</span>
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => generateSocialImage('facebook')}
+                  disabled={generatingImage === 'facebook'}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-2 rounded-xl transition-colors',
+                    theme === 'dark'
+                      ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50'
+                      : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                  )}
+                  title="Descargar imagen para Facebook (940x788)"
+                >
+                  {generatingImage === 'facebook' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Facebook className="w-4 h-4" />}
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => generateSocialImage('instagram')}
+                  disabled={generatingImage === 'instagram'}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-2 rounded-xl transition-colors',
+                    theme === 'dark'
+                      ? 'bg-pink-900/30 text-pink-400 hover:bg-pink-900/50'
+                      : 'bg-pink-50 text-pink-600 hover:bg-pink-100'
+                  )}
+                  title="Descargar imagen para Instagram (1080x1350)"
+                >
+                  {generatingImage === 'instagram' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Instagram className="w-4 h-4" />}
                 </motion.button>
                 <Link href={`/dashboard/market/inventory/${product.id}/edit`}>
                   <motion.button
