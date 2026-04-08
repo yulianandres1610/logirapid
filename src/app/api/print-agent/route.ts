@@ -113,6 +113,7 @@ export async function GET(request: NextRequest) {
           const targetPrinter = job.printer_name
             || (service.printer_mappings && service.printer_mappings[job.document_type])
             || service.selected_printer
+            || (agentPrinters.length > 0 ? agentPrinters[0].name : null)
 
           // Infer printer type from the target printer name (not from service default)
           const inferredPrinterType = inferPrinterType(targetPrinter, service.printer_type)

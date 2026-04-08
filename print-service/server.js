@@ -4,7 +4,7 @@ const path = require("path");
 const http = require("http");
 const { exec, execSync } = require("child_process");
 
-const VERSION = "1.2.4";
+const VERSION = "1.2.5";
 const platform = os.platform();
 const INSTALL_DIR = path.join(os.homedir(), ".logirapid-print-service");
 const CONFIG_PATH = path.join(INSTALL_DIR, "config.json");
@@ -483,17 +483,32 @@ async function processJob(job, server, token) {
     if (!job.data) throw new Error("Job sin datos para imprimir");
     if (!job.format) throw new Error("Job sin formato especificado");
 
-    console.log(`  [Job] ${job.id.substring(0, 8)} tipo=${job.document_type} formato=${job.format} impresora=${job.printer_name || "(auto)"} copias=${job.copies || 1} datos=${(job.data || "").length} bytes`);
+    // Resolve printer name: use job's printer, or find first thermal printer
+    let resolvedPrinter = job.printer_name;
+    if (!resolvedPrinter && (job.format === "escpos")) {
+      // Find first thermal/receipt printer available
+      const allPrinters = cachedPrinters || [];
+      const thermal = allPrinters.find(p => {
+        const nm = (p.name || p.systemName || '').toLowerCase();
+        return nm.includes('tm-') || nm.includes('tm_') || nm.includes('receipt') ||
+          nm.includes('thermal') || nm.includes('rongta') || nm.includes('t20') ||
+          nm.includes('t30') || nm.includes('80mm') || nm.includes('pos');
+      });
+      if (thermal) resolvedPrinter = thermal.name || thermal.systemName;
+      console.log(`  [Job] Auto-resolved printer: ${resolvedPrinter} (from ${allPrinters.length} printers)`);
+    }
+
+    console.log(`  [Job] ${job.id.substring(0, 8)} tipo=${job.document_type} formato=${job.format} impresora=${resolvedPrinter || "(auto)"} copias=${job.copies || 1} datos=${(job.data || "").length} bytes`);
 
     // Check printer is online before sending
-    const isOnline = await checkPrinterOnline(job.printer_name);
+    const isOnline = await checkPrinterOnline(resolvedPrinter);
     if (!isOnline) {
-      throw new Error(`Impresora "${job.printer_name}" sin conexion`);
+      throw new Error(`Impresora "${resolvedPrinter}" sin conexion`);
     }
 
     if (job.format === "zpl" || job.format === "escpos" || job.format === "tspl") {
-      console.log(`  [Job] Enviando RAW (${job.format}) a ${job.printer_name || "default"}...`);
-      await printRawBytes(job.printer_name, job.data, job.copies || 1);
+      console.log(`  [Job] Enviando RAW (${job.format}) a ${resolvedPrinter || "default"}...`);
+      await printRawBytes(resolvedPrinter, job.data, job.copies || 1);
     } else if (job.format === "pdf") {
       console.log(`  [Job] Enviando PDF a ${job.printer_name || "default"}...`);
       await printPDF(job.printer_name, job.data, job.copies || 1);
