@@ -63,6 +63,7 @@ export default function CatalogPage() {
   const [resolvedSlug, setResolvedSlug] = useState<string | null>(rawSlug === 'resolve-host' ? null : rawSlug)
   const [store, setStore] = useState<StoreInfo | null>(null)
   const [products, setProducts] = useState<Product[]>([])
+  const [topSellersData, setTopSellersData] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -99,6 +100,7 @@ export default function CatalogPage() {
       if (data.success) {
         setStore(data.data.store)
         setProducts(data.data.products)
+        if (data.data.topSellers) setTopSellersData(data.data.topSellers)
         setCategories(data.data.categories)
         setTotalPages(data.data.pagination.totalPages)
       } else if (!silent) { setError(data.error || 'Catálogo no encontrado') }
@@ -149,7 +151,7 @@ export default function CatalogPage() {
   const cartTotalCUP = cart.reduce((s, i) => s + (i.product.priceCUP || 0) * i.quantity, 0)
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0)
 
-  const topSellers = products.filter(p => p.isTopSeller)
+  const topSellers = topSellersData.length > 0 ? topSellersData : products.filter(p => p.isTopSeller)
   const showTopSellers = topSellers.length > 0 && !search && selectedCategory === 'all' && page === 1
   const paintProducts = products.filter(p => p.category?.toLowerCase().includes('pintura') && p.stock && p.stock > 0)
   const showPaintCarousel = paintProducts.length > 0 && !search && selectedCategory === 'all' && page === 1

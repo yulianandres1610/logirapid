@@ -167,7 +167,7 @@ export async function GET(
       } catch {}
     }
 
-    const products = productsResult.rows.map((p: any) => ({
+    const mapProduct = (p: any) => ({
       id: p.id,
       name: p.name,
       description: p.description,
@@ -180,7 +180,28 @@ export async function GET(
       priceCUP: catalog.show_cup_price ? Math.round(parseFloat(p.selling_price) * exchangeRate) : null,
       stock: catalog.show_stock ? parseFloat(p.total_stock) : null,
       isTopSeller: topSellingIds.includes(p.id)
-    }))
+    })
+
+    const products = productsResult.rows.map(mapProduct)
+
+    // Fetch full top seller products independently (not limited by pagination)
+    let topSellerProducts: any[] = []
+    if (topSellingIds.length > 0) {
+      try {
+        const topFullResult = await db.query(`
+          SELECT p.id, p.name, p.description, p.sku, p.barcode, p.category,
+            p.selling_price, p.cost_price, p.currency, p.image_url, p.unit_of_measure,
+            COALESCE(SUM(ws.quantity_on_hand), 0) as total_stock
+          FROM market_products p
+          LEFT JOIN market_warehouse_stock ws ON ws.product_id = p.id
+          WHERE p.id = ANY($1) AND p.is_active = true
+          GROUP BY p.id
+          HAVING COALESCE(SUM(ws.quantity_on_hand), 0) > 0
+          ORDER BY array_position($1, p.id)
+        `, [topSellingIds])
+        topSellerProducts = topFullResult.rows.map((p: any) => ({ ...mapProduct(p), isTopSeller: true }))
+      } catch {}
+    }
 
     return NextResponse.json({
       success: true,
@@ -204,6 +225,7 @@ export async function GET(
         },
         exchangeRate,
         categories: categoriesResult.rows.map((c: any) => ({ name: c.category, count: parseInt(c.count) })),
+        topSellers: topSellerProducts,
         products,
         pagination: {
           page,
