@@ -306,10 +306,19 @@ export default function ProductDetailPage() {
   const [movementsLoading, setMovementsLoading] = useState(false)
   const [generatingImage, setGeneratingImage] = useState<string | null>(null)
 
+  const [showImageModal, setShowImageModal] = useState(false)
+  const [imageProgress, setImageProgress] = useState(0)
+  const [imageProgressText, setImageProgressText] = useState('')
+
   // Generate social media image using Canvas (clean white design)
   const generateSocialImage = async (platform: 'facebook' | 'instagram') => {
     if (!product) return
     setGeneratingImage(platform)
+    setShowImageModal(true)
+    setImageProgress(0)
+    setImageProgressText('Preparando diseño...')
+
+    const price = Number(product.sellingPrice) || 0
 
     const w = platform === 'facebook' ? 940 : 1080
     const h = platform === 'facebook' ? 788 : 1350
@@ -340,6 +349,9 @@ export default function ProductDetailPage() {
     // Orange accent line at very top
     ctx.fillStyle = orange
     ctx.fillRect(0, 0, w, 5)
+
+    setImageProgress(20)
+    setImageProgressText('Cargando imagen del producto...')
 
     // Product image (centered, large)
     const imgSize = platform === 'facebook' ? 350 : 480
@@ -375,6 +387,9 @@ export default function ProductDetailPage() {
       }
     } catch {}
 
+    setImageProgress(50)
+    setImageProgressText('Generando diseño...')
+
     // Category badge (orange pill, top-left on image area)
     if (product.category) {
       ctx.font = 'bold 18px Arial, sans-serif'
@@ -409,8 +424,11 @@ export default function ProductDetailPage() {
     ctx.fillText(line.trim(), cx, ty)
     ty += platform === 'facebook' ? 50 : 60
 
+    setImageProgress(70)
+    setImageProgressText('Agregando precios...')
+
     // Price CUP (big, orange, centered)
-    const priceCUP = Math.round(product.sellingPrice * USD_CUP)
+    const priceCUP = Math.round(price * USD_CUP)
     ctx.fillStyle = orange
     ctx.font = `bold ${platform === 'facebook' ? 64 : 72}px Arial, sans-serif`
     ctx.fillText(`${priceCUP.toLocaleString('es-ES')} CUP`, cx, ty)
@@ -419,7 +437,7 @@ export default function ProductDetailPage() {
     // Price USD (gray, smaller)
     ctx.fillStyle = '#6b7280'
     ctx.font = `${platform === 'facebook' ? 26 : 30}px Arial, sans-serif`
-    ctx.fillText(`$${product.sellingPrice.toFixed(2)} USD`, cx, ty)
+    ctx.fillText(`$${price.toFixed(2)} USD`, cx, ty)
     ty += platform === 'facebook' ? 35 : 45
 
     // Stock (green)
@@ -429,6 +447,9 @@ export default function ProductDetailPage() {
       ctx.font = `bold ${platform === 'facebook' ? 20 : 22}px Arial, sans-serif`
       ctx.fillText(`Disponible`, cx, ty)
     }
+
+    setImageProgress(90)
+    setImageProgressText('Finalizando...')
 
     // Bottom bar with URL
     const barH = platform === 'facebook' ? 60 : 70
@@ -442,6 +463,9 @@ export default function ProductDetailPage() {
     // Reset text align
     ctx.textAlign = 'left'
 
+    setImageProgress(100)
+    setImageProgressText('Descargando imagen...')
+
     // Download
     canvas.toBlob((blob) => {
       if (!blob) return
@@ -451,7 +475,11 @@ export default function ProductDetailPage() {
       a.download = `${product.name.replace(/[^a-zA-Z0-9]/g, '-')}-${platform}.png`
       a.click()
       URL.revokeObjectURL(url)
-      setGeneratingImage(null)
+      setTimeout(() => {
+        setGeneratingImage(null)
+        setShowImageModal(false)
+        setImageProgress(0)
+      }, 500)
     }, 'image/png')
   }
 
@@ -2402,6 +2430,45 @@ export default function ProductDetailPage() {
 
           </div>
         </div>
+
+        {/* Social Image Generation Modal */}
+        <AnimatePresence>
+          {showImageModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className={cn('w-full max-w-sm rounded-2xl p-6 shadow-2xl', theme === 'dark' ? 'bg-gray-800' : 'bg-white')}
+              >
+                <div className="text-center mb-4">
+                  <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center mb-3">
+                    {generatingImage === 'facebook' ? <Facebook className="w-7 h-7 text-white" /> : <Instagram className="w-7 h-7 text-white" />}
+                  </div>
+                  <h3 className={cn('text-lg font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                    Generando imagen {generatingImage === 'facebook' ? 'Facebook' : 'Instagram'}
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">{imageProgressText}</p>
+                </div>
+                {/* Progress bar */}
+                <div className="w-full h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mb-3">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${imageProgress}%` }}
+                    transition={{ duration: 0.3 }}
+                    className="h-full bg-gradient-to-r from-orange-500 to-amber-500 rounded-full"
+                  />
+                </div>
+                <p className="text-center text-xs text-gray-400">{imageProgress}%</p>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Print Label Modal */}
         {product && showPrintModal && (
