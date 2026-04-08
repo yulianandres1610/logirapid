@@ -92,6 +92,10 @@ export async function GET(request: NextRequest) {
       ) lots
       JOIN market_products p ON lots.product_id = p.id
       JOIN market_warehouses w ON lots.warehouse_id = w.id
+      -- Only show if real warehouse stock > 0
+      JOIN market_warehouse_stock mws ON mws.product_id = lots.product_id
+        AND mws.warehouse_id = lots.warehouse_id
+        AND mws.quantity_on_hand > 0
       ORDER BY lots.expiration_date ASC
     `, [companyId, expiringDays])
 
