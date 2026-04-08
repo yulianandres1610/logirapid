@@ -334,198 +334,132 @@ export default function ProductDetailPage() {
     const canvas = document.createElement('canvas')
     canvas.width = w; canvas.height = h
     const ctx = canvas.getContext('2d')!
+    const or = '#f97316'
+    const orDark = '#ea580c'
+    const cx = w / 2
 
-    const orange = '#f97316'
-    const darkText = '#111827'
-
-    const rr = (x: number, y: number, rw: number, rh: number, r: number) => {
-      ctx.beginPath()
-      ctx.moveTo(x + r, y); ctx.lineTo(x + rw - r, y); ctx.quadraticCurveTo(x + rw, y, x + rw, y + r)
-      ctx.lineTo(x + rw, y + rh - r); ctx.quadraticCurveTo(x + rw, y + rh, x + rw - r, y + rh)
-      ctx.lineTo(x + r, y + rh); ctx.quadraticCurveTo(x, y + rh, x, y + rh - r)
-      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath()
-    }
-
-    // ── Background ──
-    ctx.fillStyle = '#fafafa'
+    // ── Orange background ──
+    ctx.fillStyle = or
     ctx.fillRect(0, 0, w, h)
 
-    // Orange gradient header bar
-    const hdrH = platform === 'facebook' ? 90 : 110
-    const hdrGrad = ctx.createLinearGradient(0, 0, w, 0)
-    hdrGrad.addColorStop(0, '#ea580c')
-    hdrGrad.addColorStop(1, '#f97316')
-    ctx.fillStyle = hdrGrad
-    ctx.fillRect(0, 0, w, hdrH)
+    // ── White pentagon/arrow shape in center ──
+    const topY = platform === 'facebook' ? 100 : 130
+    const peakY = platform === 'facebook' ? 15 : 20
+    const sideX = platform === 'facebook' ? 80 : 90
+    const botY = h - (platform === 'facebook' ? 75 : 90)
 
-    // Diagonal cut on header
+    ctx.fillStyle = '#ffffff'
     ctx.beginPath()
-    ctx.moveTo(0, hdrH)
-    ctx.lineTo(w, hdrH - 30)
-    ctx.lineTo(w, hdrH)
+    ctx.moveTo(sideX, topY)              // top-left
+    ctx.lineTo(cx, peakY)                // top peak
+    ctx.lineTo(w - sideX, topY)          // top-right
+    ctx.lineTo(w - sideX, botY)          // bottom-right
+    ctx.lineTo(sideX, botY)              // bottom-left
     ctx.closePath()
-    ctx.fillStyle = '#fafafa'
     ctx.fill()
 
-    setImageProgress(15)
-    setImageProgressText('Cargando logo...')
+    // ── Decorative darker orange triangles behind ──
+    ctx.fillStyle = orDark
+    // Left triangle
+    ctx.beginPath()
+    ctx.moveTo(0, topY - 30)
+    ctx.lineTo(sideX + 60, topY + 20)
+    ctx.lineTo(0, topY + 80)
+    ctx.closePath()
+    ctx.fill()
+    // Right triangle
+    ctx.beginPath()
+    ctx.moveTo(w, topY - 30)
+    ctx.lineTo(w - sideX - 60, topY + 20)
+    ctx.lineTo(w, topY + 80)
+    ctx.closePath()
+    ctx.fill()
 
-    // ── Logo ──
-    try {
-      const logoRes = await fetch('/api/market/catalog/config')
-      const logoData = await logoRes.json()
-      const logoUrl = logoData.data?.logo_desktop_url || logoData.data?.logo_url
-      if (logoUrl) {
-        const logo = await loadImage(logoUrl)
-        if (logo) {
-          const logoH = platform === 'facebook' ? 45 : 55
-          const logoW = (logo.naturalWidth / logo.naturalHeight) * logoH
-          ctx.drawImage(logo, 30, (hdrH - 30) / 2 - logoH / 2, logoW, logoH)
-        }
-      }
-    } catch {}
-
-    // Header text right
-    ctx.fillStyle = '#ffffff'
-    ctx.textAlign = 'right'
-    ctx.font = `bold ${platform === 'facebook' ? 16 : 18}px Arial, sans-serif`
-    ctx.fillText('catalogo.servisumic.com', w - 30, hdrH / 2 - 5)
-    ctx.font = `${platform === 'facebook' ? 13 : 15}px Arial, sans-serif`
-    ctx.fillStyle = '#ffffff99'
-    ctx.fillText('Ferreteria y Mercado', w - 30, hdrH / 2 + 15)
-    ctx.textAlign = 'left'
-
-    setImageProgress(30)
+    setImageProgress(20)
     setImageProgressText('Cargando producto...')
 
-    // ── Product image ──
-    const imgS = platform === 'facebook' ? 300 : 420
+    // ── Product image (centered in white area) ──
+    const imgS = platform === 'facebook' ? 280 : 380
     const imgX = (w - imgS) / 2
-    const imgY = hdrH + (platform === 'facebook' ? 25 : 40)
-
-    // White card with shadow
-    ctx.shadowColor = 'rgba(0,0,0,0.1)'
-    ctx.shadowBlur = 40
-    ctx.shadowOffsetY = 8
-    ctx.fillStyle = '#ffffff'
-    rr(imgX - 25, imgY - 25, imgS + 50, imgS + 50, 20)
-    ctx.fill()
-    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0
-
-    // Orange border accent
-    ctx.strokeStyle = orange
-    ctx.lineWidth = 3
-    rr(imgX - 25, imgY - 25, imgS + 50, imgS + 50, 20)
-    ctx.stroke()
+    const imgY = topY + (platform === 'facebook' ? 30 : 50)
 
     if (product.imageUrl) {
       const img = await loadImage(product.imageUrl)
       if (img) {
-        ctx.save()
-        rr(imgX - 5, imgY - 5, imgS + 10, imgS + 10, 14)
-        ctx.clip()
         const sc = Math.min(imgS / img.naturalWidth, imgS / img.naturalHeight)
         const dw = img.naturalWidth * sc, dh = img.naturalHeight * sc
         ctx.drawImage(img, imgX + (imgS - dw) / 2, imgY + (imgS - dh) / 2, dw, dh)
-        ctx.restore()
       }
     }
 
-    // Category pill
-    if (product.category) {
-      ctx.font = 'bold 15px Arial, sans-serif'
-      const catText = product.category.toUpperCase()
-      const catW = ctx.measureText(catText).width + 24
-      ctx.fillStyle = orange
-      rr(imgX - 20, imgY - 20, catW, 30, 15)
-      ctx.fill()
-      ctx.fillStyle = '#fff'
-      ctx.fillText(catText, imgX - 8, imgY + 2)
-    }
+    setImageProgress(50)
+    setImageProgressText('Agregando precios...')
 
-    setImageProgress(60)
-    setImageProgressText('Agregando información...')
-
-    // ── Text section ──
-    let ty = imgY + imgS + (platform === 'facebook' ? 55 : 70)
-    const cx = w / 2
+    // ── Product name ──
+    let ty = imgY + imgS + (platform === 'facebook' ? 25 : 40)
     ctx.textAlign = 'center'
-
-    // Product name
-    ctx.fillStyle = darkText
-    const fs = platform === 'facebook' ? 30 : 36
+    ctx.fillStyle = '#111827'
+    const fs = platform === 'facebook' ? 28 : 34
     ctx.font = `bold ${fs}px Arial, sans-serif`
     const nameWords = product.name.split(' ')
     let ln = ''
     for (const wd of nameWords) {
       const test = ln + wd + ' '
-      if (ctx.measureText(test).width > w - 100 && ln) {
+      if (ctx.measureText(test).width > w - 200 && ln) {
         ctx.fillText(ln.trim(), cx, ty); ty += fs + 6; ln = wd + ' '
       } else ln = test
     }
     ctx.fillText(ln.trim(), cx, ty)
-    ty += platform === 'facebook' ? 45 : 55
+    ty += platform === 'facebook' ? 40 : 50
 
-    // Price card
-    const priceCardW = platform === 'facebook' ? 400 : 480
-    const priceCardH = platform === 'facebook' ? 100 : 120
-    const priceCardX = (w - priceCardW) / 2
-    ctx.fillStyle = '#fff8f0'
-    rr(priceCardX, ty - 10, priceCardW, priceCardH, 16)
-    ctx.fill()
-    ctx.strokeStyle = orange + '40'
-    ctx.lineWidth = 2
-    rr(priceCardX, ty - 10, priceCardW, priceCardH, 16)
-    ctx.stroke()
+    // ── CUP Price (big orange) ──
+    ctx.fillStyle = or
+    ctx.font = `bold ${platform === 'facebook' ? 58 : 68}px Arial, sans-serif`
+    ctx.fillText(`${priceCUP.toLocaleString('es-ES')} CUP`, cx, ty)
+    ty += platform === 'facebook' ? 38 : 48
 
-    // CUP price
-    ctx.fillStyle = orange
-    ctx.font = `bold ${platform === 'facebook' ? 52 : 60}px Arial, sans-serif`
-    ctx.fillText(`${priceCUP.toLocaleString('es-ES')} CUP`, cx, ty + (platform === 'facebook' ? 38 : 45))
+    // ── USD Price ──
+    ctx.fillStyle = '#6b7280'
+    ctx.font = `${platform === 'facebook' ? 24 : 28}px Arial, sans-serif`
+    ctx.fillText(`$${price.toFixed(2)} USD`, cx, ty)
 
-    // USD price
-    ctx.fillStyle = '#9ca3af'
-    ctx.font = `${platform === 'facebook' ? 22 : 26}px Arial, sans-serif`
-    ctx.fillText(`$${price.toFixed(2)} USD`, cx, ty + (platform === 'facebook' ? 68 : 80))
-
-    ty += priceCardH + (platform === 'facebook' ? 15 : 25)
-
-    // Disponible badge
-    const totalStock = warehouseStock.reduce((s, ws) => s + (ws.quantityOnHand || 0), 0)
-    if (totalStock > 0) {
-      const badgeText = `✓ Disponible · ${totalStock} en stock`
-      ctx.font = `bold ${platform === 'facebook' ? 18 : 20}px Arial, sans-serif`
-      const badgeW = ctx.measureText(badgeText).width + 30
-      ctx.fillStyle = '#dcfce7'
-      rr((w - badgeW) / 2, ty, badgeW, 34, 17)
-      ctx.fill()
-      ctx.fillStyle = '#16a34a'
-      ctx.fillText(badgeText, cx, ty + 23)
-    }
-
-    setImageProgress(90)
+    setImageProgress(80)
     setImageProgressText('Finalizando...')
 
-    // ── Footer bar ──
-    const footH = platform === 'facebook' ? 50 : 60
-    const footGrad = ctx.createLinearGradient(0, h - footH, w, h)
-    footGrad.addColorStop(0, '#ea580c')
-    footGrad.addColorStop(1, '#f97316')
-    ctx.fillStyle = footGrad
+    // ── Orange footer bar ──
+    const footH = platform === 'facebook' ? 60 : 75
+    ctx.fillStyle = or
     ctx.fillRect(0, h - footH, w, footH)
 
-    // Diagonal cut on footer
+    // Phone left
+    ctx.fillStyle = '#ffffff'
+    ctx.textAlign = 'left'
+    ctx.font = `bold ${platform === 'facebook' ? 20 : 24}px Arial, sans-serif`
+    // Phone icon circle
+    const phoneY = h - footH / 2
     ctx.beginPath()
-    ctx.moveTo(0, h - footH)
-    ctx.lineTo(w, h - footH + 20)
-    ctx.lineTo(0, h - footH + 20)
-    ctx.closePath()
-    ctx.fillStyle = '#fafafa'
+    ctx.arc(sideX - 10, phoneY, 14, 0, Math.PI * 2)
     ctx.fill()
-
+    ctx.fillStyle = or
+    ctx.font = `bold 16px Arial, sans-serif`
+    ctx.fillText('✆', sideX - 18, phoneY + 6)
     ctx.fillStyle = '#ffffff'
     ctx.font = `bold ${platform === 'facebook' ? 20 : 24}px Arial, sans-serif`
-    ctx.fillText('www.catalogo.servisumic.com', cx, h - footH / 2 + 12)
+    ctx.fillText('+5352584700', sideX + 12, phoneY + 7)
+
+    // URL right
+    ctx.textAlign = 'right'
+    // Globe icon circle
+    ctx.fillStyle = '#ffffff'
+    ctx.beginPath()
+    ctx.arc(w - sideX + 10 - ctx.measureText('catalogo.servisumic.com').width - 25, phoneY, 14, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = or
+    ctx.font = `bold 16px Arial, sans-serif`
+    ctx.fillText('⊕', w - sideX + 10 - ctx.measureText('catalogo.servisumic.com').width - 33, phoneY + 6)
+    ctx.fillStyle = '#1e3a5f'
+    ctx.font = `bold ${platform === 'facebook' ? 20 : 24}px Arial, sans-serif`
+    ctx.fillText('catalogo.servisumic.com', w - sideX + 10, phoneY + 7)
 
     ctx.textAlign = 'left'
 
