@@ -310,7 +310,16 @@ export default function ProductDetailPage() {
   const [imageProgress, setImageProgress] = useState(0)
   const [imageProgressText, setImageProgressText] = useState('')
 
-  // Generate social media image using Canvas (clean white design)
+  const loadImage = (src: string): Promise<HTMLImageElement | null> => {
+    return new Promise(resolve => {
+      const img = new window.Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => resolve(img)
+      img.onerror = () => resolve(null)
+      img.src = src
+    })
+  }
+
   const generateSocialImage = async (platform: 'facebook' | 'instagram') => {
     if (!product) return
     setGeneratingImage(platform)
@@ -319,154 +328,210 @@ export default function ProductDetailPage() {
     setImageProgressText('Preparando diseño...')
 
     const price = Number(product.sellingPrice) || 0
-
+    const priceCUP = Math.round(price * USD_CUP)
     const w = platform === 'facebook' ? 940 : 1080
     const h = platform === 'facebook' ? 788 : 1350
     const canvas = document.createElement('canvas')
     canvas.width = w; canvas.height = h
     const ctx = canvas.getContext('2d')!
-    const orange = '#f97316'
-    const dark = '#1f2937'
 
-    const roundRect = (x: number, y: number, rw: number, rh: number, r: number) => {
+    const orange = '#f97316'
+    const darkText = '#111827'
+
+    const rr = (x: number, y: number, rw: number, rh: number, r: number) => {
       ctx.beginPath()
-      ctx.moveTo(x + r, y); ctx.lineTo(x + rw - r, y)
-      ctx.quadraticCurveTo(x + rw, y, x + rw, y + r)
+      ctx.moveTo(x + r, y); ctx.lineTo(x + rw - r, y); ctx.quadraticCurveTo(x + rw, y, x + rw, y + r)
       ctx.lineTo(x + rw, y + rh - r); ctx.quadraticCurveTo(x + rw, y + rh, x + rw - r, y + rh)
       ctx.lineTo(x + r, y + rh); ctx.quadraticCurveTo(x, y + rh, x, y + rh - r)
-      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y)
-      ctx.closePath()
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath()
     }
 
-    // White background
-    ctx.fillStyle = '#ffffff'
+    // ── Background ──
+    ctx.fillStyle = '#fafafa'
     ctx.fillRect(0, 0, w, h)
 
-    // Subtle gray top section
-    ctx.fillStyle = '#f8f9fa'
-    ctx.fillRect(0, 0, w, platform === 'facebook' ? 520 : 750)
+    // Orange gradient header bar
+    const hdrH = platform === 'facebook' ? 90 : 110
+    const hdrGrad = ctx.createLinearGradient(0, 0, w, 0)
+    hdrGrad.addColorStop(0, '#ea580c')
+    hdrGrad.addColorStop(1, '#f97316')
+    ctx.fillStyle = hdrGrad
+    ctx.fillRect(0, 0, w, hdrH)
 
-    // Orange accent line at very top
-    ctx.fillStyle = orange
-    ctx.fillRect(0, 0, w, 5)
+    // Diagonal cut on header
+    ctx.beginPath()
+    ctx.moveTo(0, hdrH)
+    ctx.lineTo(w, hdrH - 30)
+    ctx.lineTo(w, hdrH)
+    ctx.closePath()
+    ctx.fillStyle = '#fafafa'
+    ctx.fill()
 
-    setImageProgress(20)
-    setImageProgressText('Cargando imagen del producto...')
+    setImageProgress(15)
+    setImageProgressText('Cargando logo...')
 
-    // Product image (centered, large)
-    const imgSize = platform === 'facebook' ? 350 : 480
-    const imgX = (w - imgSize) / 2
-    const imgY = platform === 'facebook' ? 60 : 80
-
+    // ── Logo ──
     try {
-      if (product.imageUrl) {
-        const img = new window.Image()
-        img.crossOrigin = 'anonymous'
-        await new Promise<void>((resolve) => { img.onload = () => resolve(); img.onerror = () => resolve(); img.src = product.imageUrl! })
-        if (img.complete && img.naturalWidth > 0) {
-          // Shadow
-          ctx.shadowColor = 'rgba(0,0,0,0.08)'
-          ctx.shadowBlur = 30
-          ctx.shadowOffsetY = 10
-          ctx.fillStyle = '#ffffff'
-          roundRect(imgX - 20, imgY - 20, imgSize + 40, imgSize + 40, 24)
-          ctx.fill()
-          ctx.shadowColor = 'transparent'
-          ctx.shadowBlur = 0
-          ctx.shadowOffsetY = 0
-
-          // Clip and draw image
-          ctx.save()
-          roundRect(imgX - 10, imgY - 10, imgSize + 20, imgSize + 20, 18)
-          ctx.clip()
-          const sc = Math.min(imgSize / img.naturalWidth, imgSize / img.naturalHeight)
-          const dw = img.naturalWidth * sc, dh = img.naturalHeight * sc
-          ctx.drawImage(img, imgX + (imgSize - dw) / 2, imgY + (imgSize - dh) / 2, dw, dh)
-          ctx.restore()
+      const logoRes = await fetch('/api/market/catalog/config')
+      const logoData = await logoRes.json()
+      const logoUrl = logoData.data?.logo_desktop_url || logoData.data?.logo_url
+      if (logoUrl) {
+        const logo = await loadImage(logoUrl)
+        if (logo) {
+          const logoH = platform === 'facebook' ? 45 : 55
+          const logoW = (logo.naturalWidth / logo.naturalHeight) * logoH
+          ctx.drawImage(logo, 30, (hdrH - 30) / 2 - logoH / 2, logoW, logoH)
         }
       }
     } catch {}
 
-    setImageProgress(50)
-    setImageProgressText('Generando diseño...')
+    // Header text right
+    ctx.fillStyle = '#ffffff'
+    ctx.textAlign = 'right'
+    ctx.font = `bold ${platform === 'facebook' ? 16 : 18}px Arial, sans-serif`
+    ctx.fillText('catalogo.servisumic.com', w - 30, hdrH / 2 - 5)
+    ctx.font = `${platform === 'facebook' ? 13 : 15}px Arial, sans-serif`
+    ctx.fillStyle = '#ffffff99'
+    ctx.fillText('Ferreteria y Mercado', w - 30, hdrH / 2 + 15)
+    ctx.textAlign = 'left'
 
-    // Category badge (orange pill, top-left on image area)
+    setImageProgress(30)
+    setImageProgressText('Cargando producto...')
+
+    // ── Product image ──
+    const imgS = platform === 'facebook' ? 300 : 420
+    const imgX = (w - imgS) / 2
+    const imgY = hdrH + (platform === 'facebook' ? 25 : 40)
+
+    // White card with shadow
+    ctx.shadowColor = 'rgba(0,0,0,0.1)'
+    ctx.shadowBlur = 40
+    ctx.shadowOffsetY = 8
+    ctx.fillStyle = '#ffffff'
+    rr(imgX - 25, imgY - 25, imgS + 50, imgS + 50, 20)
+    ctx.fill()
+    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0
+
+    // Orange border accent
+    ctx.strokeStyle = orange
+    ctx.lineWidth = 3
+    rr(imgX - 25, imgY - 25, imgS + 50, imgS + 50, 20)
+    ctx.stroke()
+
+    if (product.imageUrl) {
+      const img = await loadImage(product.imageUrl)
+      if (img) {
+        ctx.save()
+        rr(imgX - 5, imgY - 5, imgS + 10, imgS + 10, 14)
+        ctx.clip()
+        const sc = Math.min(imgS / img.naturalWidth, imgS / img.naturalHeight)
+        const dw = img.naturalWidth * sc, dh = img.naturalHeight * sc
+        ctx.drawImage(img, imgX + (imgS - dw) / 2, imgY + (imgS - dh) / 2, dw, dh)
+        ctx.restore()
+      }
+    }
+
+    // Category pill
     if (product.category) {
-      ctx.font = 'bold 18px Arial, sans-serif'
-      const catW = ctx.measureText(product.category.toUpperCase()).width + 28
+      ctx.font = 'bold 15px Arial, sans-serif'
+      const catText = product.category.toUpperCase()
+      const catW = ctx.measureText(catText).width + 24
       ctx.fillStyle = orange
-      roundRect(imgX - 10, imgY - 10, catW, 34, 17)
+      rr(imgX - 20, imgY - 20, catW, 30, 15)
       ctx.fill()
-      ctx.fillStyle = '#ffffff'
-      ctx.fillText(product.category.toUpperCase(), imgX + 4, imgY + 14)
+      ctx.fillStyle = '#fff'
+      ctx.fillText(catText, imgX - 8, imgY + 2)
     }
 
-    // Text below image
-    let ty = platform === 'facebook' ? 470 : 640
+    setImageProgress(60)
+    setImageProgressText('Agregando información...')
+
+    // ── Text section ──
+    let ty = imgY + imgS + (platform === 'facebook' ? 55 : 70)
     const cx = w / 2
-
-    // Product name (centered, dark, bold)
-    ctx.fillStyle = dark
     ctx.textAlign = 'center'
-    const fontSize = platform === 'facebook' ? 34 : 40
-    ctx.font = `bold ${fontSize}px Arial, sans-serif`
-    const maxW = w - 120
-    const words = product.name.split(' ')
-    let line = ''
-    for (const word of words) {
-      const test = line + word + ' '
-      if (ctx.measureText(test).width > maxW && line) {
-        ctx.fillText(line.trim(), cx, ty)
-        ty += fontSize + 8
-        line = word + ' '
-      } else { line = test }
+
+    // Product name
+    ctx.fillStyle = darkText
+    const fs = platform === 'facebook' ? 30 : 36
+    ctx.font = `bold ${fs}px Arial, sans-serif`
+    const nameWords = product.name.split(' ')
+    let ln = ''
+    for (const wd of nameWords) {
+      const test = ln + wd + ' '
+      if (ctx.measureText(test).width > w - 100 && ln) {
+        ctx.fillText(ln.trim(), cx, ty); ty += fs + 6; ln = wd + ' '
+      } else ln = test
     }
-    ctx.fillText(line.trim(), cx, ty)
-    ty += platform === 'facebook' ? 50 : 60
+    ctx.fillText(ln.trim(), cx, ty)
+    ty += platform === 'facebook' ? 45 : 55
 
-    setImageProgress(70)
-    setImageProgressText('Agregando precios...')
+    // Price card
+    const priceCardW = platform === 'facebook' ? 400 : 480
+    const priceCardH = platform === 'facebook' ? 100 : 120
+    const priceCardX = (w - priceCardW) / 2
+    ctx.fillStyle = '#fff8f0'
+    rr(priceCardX, ty - 10, priceCardW, priceCardH, 16)
+    ctx.fill()
+    ctx.strokeStyle = orange + '40'
+    ctx.lineWidth = 2
+    rr(priceCardX, ty - 10, priceCardW, priceCardH, 16)
+    ctx.stroke()
 
-    // Price CUP (big, orange, centered)
-    const priceCUP = Math.round(price * USD_CUP)
+    // CUP price
     ctx.fillStyle = orange
-    ctx.font = `bold ${platform === 'facebook' ? 64 : 72}px Arial, sans-serif`
-    ctx.fillText(`${priceCUP.toLocaleString('es-ES')} CUP`, cx, ty)
-    ty += platform === 'facebook' ? 40 : 50
+    ctx.font = `bold ${platform === 'facebook' ? 52 : 60}px Arial, sans-serif`
+    ctx.fillText(`${priceCUP.toLocaleString('es-ES')} CUP`, cx, ty + (platform === 'facebook' ? 38 : 45))
 
-    // Price USD (gray, smaller)
-    ctx.fillStyle = '#6b7280'
-    ctx.font = `${platform === 'facebook' ? 26 : 30}px Arial, sans-serif`
-    ctx.fillText(`$${price.toFixed(2)} USD`, cx, ty)
-    ty += platform === 'facebook' ? 35 : 45
+    // USD price
+    ctx.fillStyle = '#9ca3af'
+    ctx.font = `${platform === 'facebook' ? 22 : 26}px Arial, sans-serif`
+    ctx.fillText(`$${price.toFixed(2)} USD`, cx, ty + (platform === 'facebook' ? 68 : 80))
 
-    // Stock (green)
+    ty += priceCardH + (platform === 'facebook' ? 15 : 25)
+
+    // Disponible badge
     const totalStock = warehouseStock.reduce((s, ws) => s + (ws.quantityOnHand || 0), 0)
     if (totalStock > 0) {
+      const badgeText = `✓ Disponible · ${totalStock} en stock`
+      ctx.font = `bold ${platform === 'facebook' ? 18 : 20}px Arial, sans-serif`
+      const badgeW = ctx.measureText(badgeText).width + 30
+      ctx.fillStyle = '#dcfce7'
+      rr((w - badgeW) / 2, ty, badgeW, 34, 17)
+      ctx.fill()
       ctx.fillStyle = '#16a34a'
-      ctx.font = `bold ${platform === 'facebook' ? 20 : 22}px Arial, sans-serif`
-      ctx.fillText(`Disponible`, cx, ty)
+      ctx.fillText(badgeText, cx, ty + 23)
     }
 
     setImageProgress(90)
     setImageProgressText('Finalizando...')
 
-    // Bottom bar with URL
-    const barH = platform === 'facebook' ? 60 : 70
-    const barY = h - barH
-    ctx.fillStyle = orange
-    ctx.fillRect(0, barY, w, barH)
-    ctx.fillStyle = '#ffffff'
-    ctx.font = `bold ${platform === 'facebook' ? 22 : 26}px Arial, sans-serif`
-    ctx.fillText('www.catalogo.servisumic.com', cx, barY + barH / 2 + 8)
+    // ── Footer bar ──
+    const footH = platform === 'facebook' ? 50 : 60
+    const footGrad = ctx.createLinearGradient(0, h - footH, w, h)
+    footGrad.addColorStop(0, '#ea580c')
+    footGrad.addColorStop(1, '#f97316')
+    ctx.fillStyle = footGrad
+    ctx.fillRect(0, h - footH, w, footH)
 
-    // Reset text align
+    // Diagonal cut on footer
+    ctx.beginPath()
+    ctx.moveTo(0, h - footH)
+    ctx.lineTo(w, h - footH + 20)
+    ctx.lineTo(0, h - footH + 20)
+    ctx.closePath()
+    ctx.fillStyle = '#fafafa'
+    ctx.fill()
+
+    ctx.fillStyle = '#ffffff'
+    ctx.font = `bold ${platform === 'facebook' ? 20 : 24}px Arial, sans-serif`
+    ctx.fillText('www.catalogo.servisumic.com', cx, h - footH / 2 + 12)
+
     ctx.textAlign = 'left'
 
     setImageProgress(100)
-    setImageProgressText('Descargando imagen...')
+    setImageProgressText('Descargando...')
 
-    // Download
     canvas.toBlob((blob) => {
       if (!blob) return
       const url = URL.createObjectURL(blob)
@@ -475,11 +540,7 @@ export default function ProductDetailPage() {
       a.download = `${product.name.replace(/[^a-zA-Z0-9]/g, '-')}-${platform}.png`
       a.click()
       URL.revokeObjectURL(url)
-      setTimeout(() => {
-        setGeneratingImage(null)
-        setShowImageModal(false)
-        setImageProgress(0)
-      }, 500)
+      setTimeout(() => { setGeneratingImage(null); setShowImageModal(false); setImageProgress(0) }, 500)
     }, 'image/png')
   }
 
