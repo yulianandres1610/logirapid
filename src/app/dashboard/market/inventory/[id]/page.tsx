@@ -306,175 +306,141 @@ export default function ProductDetailPage() {
   const [movementsLoading, setMovementsLoading] = useState(false)
   const [generatingImage, setGeneratingImage] = useState<string | null>(null)
 
-  // Generate social media image using Canvas
+  // Generate social media image using Canvas (clean white design)
   const generateSocialImage = async (platform: 'facebook' | 'instagram') => {
     if (!product) return
     setGeneratingImage(platform)
 
     const w = platform === 'facebook' ? 940 : 1080
     const h = platform === 'facebook' ? 788 : 1350
-
     const canvas = document.createElement('canvas')
-    canvas.width = w
-    canvas.height = h
+    canvas.width = w; canvas.height = h
     const ctx = canvas.getContext('2d')!
-
-    // Brand colors
     const orange = '#f97316'
-    const darkBg = '#1a1a2e'
-    const white = '#ffffff'
+    const dark = '#1f2937'
 
-    // Background gradient
-    const grad = ctx.createLinearGradient(0, 0, w, h)
-    grad.addColorStop(0, darkBg)
-    grad.addColorStop(1, '#16213e')
-    ctx.fillStyle = grad
+    const roundRect = (x: number, y: number, rw: number, rh: number, r: number) => {
+      ctx.beginPath()
+      ctx.moveTo(x + r, y); ctx.lineTo(x + rw - r, y)
+      ctx.quadraticCurveTo(x + rw, y, x + rw, y + r)
+      ctx.lineTo(x + rw, y + rh - r); ctx.quadraticCurveTo(x + rw, y + rh, x + rw - r, y + rh)
+      ctx.lineTo(x + r, y + rh); ctx.quadraticCurveTo(x, y + rh, x, y + rh - r)
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y)
+      ctx.closePath()
+    }
+
+    // White background
+    ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, w, h)
 
-    // Orange accent bar at top
+    // Subtle gray top section
+    ctx.fillStyle = '#f8f9fa'
+    ctx.fillRect(0, 0, w, platform === 'facebook' ? 520 : 750)
+
+    // Orange accent line at very top
     ctx.fillStyle = orange
-    ctx.fillRect(0, 0, w, 6)
+    ctx.fillRect(0, 0, w, 5)
 
-    // Orange accent corner decoration
-    ctx.beginPath()
-    ctx.moveTo(0, 0)
-    ctx.lineTo(120, 0)
-    ctx.lineTo(0, 120)
-    ctx.closePath()
-    ctx.fillStyle = orange + '30'
-    ctx.fill()
-
-    // Bottom right decoration
-    ctx.beginPath()
-    ctx.moveTo(w, h)
-    ctx.lineTo(w - 120, h)
-    ctx.lineTo(w, h - 120)
-    ctx.closePath()
-    ctx.fill()
-
-    // Load product image
-    const imgSize = platform === 'facebook' ? 320 : 500
-    const imgX = platform === 'facebook' ? 50 : (w - imgSize) / 2
-    const imgY = platform === 'facebook' ? (h - imgSize) / 2 - 20 : 120
+    // Product image (centered, large)
+    const imgSize = platform === 'facebook' ? 350 : 480
+    const imgX = (w - imgSize) / 2
+    const imgY = platform === 'facebook' ? 60 : 80
 
     try {
       if (product.imageUrl) {
         const img = new window.Image()
         img.crossOrigin = 'anonymous'
-        await new Promise<void>((resolve) => {
-          img.onload = () => resolve()
-          img.onerror = () => resolve()
-          img.src = product.imageUrl!
-        })
+        await new Promise<void>((resolve) => { img.onload = () => resolve(); img.onerror = () => resolve(); img.src = product.imageUrl! })
         if (img.complete && img.naturalWidth > 0) {
-          // White rounded rectangle background for image
-          ctx.fillStyle = white
-          const padding = 15
-          const roundRect = (x: number, y: number, w: number, h: number, r: number) => {
-            ctx.beginPath()
-            ctx.moveTo(x + r, y)
-            ctx.lineTo(x + w - r, y)
-            ctx.quadraticCurveTo(x + w, y, x + w, y + r)
-            ctx.lineTo(x + w, y + h - r)
-            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
-            ctx.lineTo(x + r, y + h)
-            ctx.quadraticCurveTo(x, y + h, x, y + h - r)
-            ctx.lineTo(x, y + r)
-            ctx.quadraticCurveTo(x, y, x + r, y)
-            ctx.closePath()
-          }
-          roundRect(imgX - padding, imgY - padding, imgSize + padding * 2, imgSize + padding * 2, 20)
+          // Shadow
+          ctx.shadowColor = 'rgba(0,0,0,0.08)'
+          ctx.shadowBlur = 30
+          ctx.shadowOffsetY = 10
+          ctx.fillStyle = '#ffffff'
+          roundRect(imgX - 20, imgY - 20, imgSize + 40, imgSize + 40, 24)
           ctx.fill()
+          ctx.shadowColor = 'transparent'
+          ctx.shadowBlur = 0
+          ctx.shadowOffsetY = 0
 
-          // Draw image
-          const scale = Math.min(imgSize / img.naturalWidth, imgSize / img.naturalHeight)
-          const dw = img.naturalWidth * scale
-          const dh = img.naturalHeight * scale
+          // Clip and draw image
+          ctx.save()
+          roundRect(imgX - 10, imgY - 10, imgSize + 20, imgSize + 20, 18)
+          ctx.clip()
+          const sc = Math.min(imgSize / img.naturalWidth, imgSize / img.naturalHeight)
+          const dw = img.naturalWidth * sc, dh = img.naturalHeight * sc
           ctx.drawImage(img, imgX + (imgSize - dw) / 2, imgY + (imgSize - dh) / 2, dw, dh)
+          ctx.restore()
         }
       }
     } catch {}
 
-    // Text section
-    const textX = platform === 'facebook' ? 420 : 60
-    let textY = platform === 'facebook' ? 130 : imgY + (product.imageUrl ? 560 : 120)
-    const textW = platform === 'facebook' ? 480 : w - 120
-
-    // Category badge
+    // Category badge (orange pill, top-left on image area)
     if (product.category) {
-      ctx.fillStyle = orange + '40'
-      ctx.font = 'bold 16px Arial, sans-serif'
-      const catW = ctx.measureText(product.category).width + 24
-      const roundRect = (x: number, y: number, w: number, h: number, r: number) => {
-        ctx.beginPath()
-        ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r)
-        ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
-        ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r)
-        ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath()
-      }
-      roundRect(textX, textY, catW, 30, 15)
-      ctx.fill()
+      ctx.font = 'bold 18px Arial, sans-serif'
+      const catW = ctx.measureText(product.category.toUpperCase()).width + 28
       ctx.fillStyle = orange
-      ctx.fillText(product.category, textX + 12, textY + 21)
-      textY += 50
+      roundRect(imgX - 10, imgY - 10, catW, 34, 17)
+      ctx.fill()
+      ctx.fillStyle = '#ffffff'
+      ctx.fillText(product.category.toUpperCase(), imgX + 4, imgY + 14)
     }
 
-    // Product name
-    ctx.fillStyle = white
-    ctx.font = `bold ${platform === 'facebook' ? 32 : 38}px Arial, sans-serif`
+    // Text below image
+    let ty = platform === 'facebook' ? 470 : 640
+    const cx = w / 2
+
+    // Product name (centered, dark, bold)
+    ctx.fillStyle = dark
+    ctx.textAlign = 'center'
+    const fontSize = platform === 'facebook' ? 34 : 40
+    ctx.font = `bold ${fontSize}px Arial, sans-serif`
+    const maxW = w - 120
     const words = product.name.split(' ')
     let line = ''
-    const maxLineW = textW
     for (const word of words) {
       const test = line + word + ' '
-      if (ctx.measureText(test).width > maxLineW && line) {
-        ctx.fillText(line.trim(), textX, textY)
-        textY += platform === 'facebook' ? 40 : 48
+      if (ctx.measureText(test).width > maxW && line) {
+        ctx.fillText(line.trim(), cx, ty)
+        ty += fontSize + 8
         line = word + ' '
       } else { line = test }
     }
-    ctx.fillText(line.trim(), textX, textY)
-    textY += platform === 'facebook' ? 50 : 60
+    ctx.fillText(line.trim(), cx, ty)
+    ty += platform === 'facebook' ? 50 : 60
 
-    // CUP price (big, orange)
+    // Price CUP (big, orange, centered)
     const priceCUP = Math.round(product.sellingPrice * USD_CUP)
     ctx.fillStyle = orange
-    ctx.font = `bold ${platform === 'facebook' ? 56 : 64}px Arial, sans-serif`
-    ctx.fillText(`${priceCUP.toLocaleString('es-ES')} CUP`, textX, textY)
-    textY += platform === 'facebook' ? 45 : 55
+    ctx.font = `bold ${platform === 'facebook' ? 64 : 72}px Arial, sans-serif`
+    ctx.fillText(`${priceCUP.toLocaleString('es-ES')} CUP`, cx, ty)
+    ty += platform === 'facebook' ? 40 : 50
 
-    // USD price
-    ctx.fillStyle = '#94a3b8'
-    ctx.font = `${platform === 'facebook' ? 24 : 28}px Arial, sans-serif`
-    ctx.fillText(`$${product.sellingPrice.toFixed(2)} USD`, textX, textY)
-    textY += platform === 'facebook' ? 40 : 50
+    // Price USD (gray, smaller)
+    ctx.fillStyle = '#6b7280'
+    ctx.font = `${platform === 'facebook' ? 26 : 30}px Arial, sans-serif`
+    ctx.fillText(`$${product.sellingPrice.toFixed(2)} USD`, cx, ty)
+    ty += platform === 'facebook' ? 35 : 45
 
-    // Stock available
-    const totalStock = warehouseStock.reduce((s, w) => s + (w.quantityOnHand || 0), 0)
+    // Stock (green)
+    const totalStock = warehouseStock.reduce((s, ws) => s + (ws.quantityOnHand || 0), 0)
     if (totalStock > 0) {
-      ctx.fillStyle = '#4ade80'
-      ctx.font = `bold ${platform === 'facebook' ? 18 : 20}px Arial, sans-serif`
-      ctx.fillText(`✓ ${totalStock} disponibles`, textX, textY)
+      ctx.fillStyle = '#16a34a'
+      ctx.font = `bold ${platform === 'facebook' ? 20 : 22}px Arial, sans-serif`
+      ctx.fillText(`Disponible`, cx, ty)
     }
 
-    // Logo text at bottom
+    // Bottom bar with URL
+    const barH = platform === 'facebook' ? 60 : 70
+    const barY = h - barH
     ctx.fillStyle = orange
-    ctx.font = `bold ${platform === 'facebook' ? 20 : 24}px Arial, sans-serif`
-    const logoText = 'ServiSumic'
-    const logoX = platform === 'facebook' ? w - ctx.measureText(logoText).width - 40 : (w - ctx.measureText(logoText).width) / 2
-    const logoY = h - (platform === 'facebook' ? 40 : 50)
-    ctx.fillText(logoText, logoX, logoY)
+    ctx.fillRect(0, barY, w, barH)
+    ctx.fillStyle = '#ffffff'
+    ctx.font = `bold ${platform === 'facebook' ? 22 : 26}px Arial, sans-serif`
+    ctx.fillText('www.catalogo.servisumic.com', cx, barY + barH / 2 + 8)
 
-    // Subtitle
-    ctx.fillStyle = '#64748b'
-    ctx.font = `${platform === 'facebook' ? 14 : 16}px Arial, sans-serif`
-    const subText = 'Ferreteria y Mercado'
-    const subX = platform === 'facebook' ? w - ctx.measureText(subText).width - 40 : (w - ctx.measureText(subText).width) / 2
-    ctx.fillText(subText, subX, logoY + 22)
-
-    // Orange bottom bar
-    ctx.fillStyle = orange
-    ctx.fillRect(0, h - 6, w, 6)
+    // Reset text align
+    ctx.textAlign = 'left'
 
     // Download
     canvas.toBlob((blob) => {
