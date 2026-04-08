@@ -334,61 +334,31 @@ export default function ProductDetailPage() {
     const canvas = document.createElement('canvas')
     canvas.width = w; canvas.height = h
     const ctx = canvas.getContext('2d')!
-    const or = '#f97316'
-    const orLight = '#fdba74'
-    const cx = w / 2
     const isFB = platform === 'facebook'
+    const cx = w / 2
 
-    // ── Orange background ──
-    ctx.fillStyle = or
-    ctx.fillRect(0, 0, w, h)
-
-    // ── Footer bar (draw first so pentagon overlaps correctly) ──
-    const footH = isFB ? 60 : 80
-    const footY = h - footH
-
-    // ── White pentagon shape (widens toward bottom, straight sides) ──
-    const peakY = isFB ? 8 : 12
-    const topCornerY = isFB ? 110 : 220
-    const topSideX = isFB ? 50 : 45
-    const botSideX = isFB ? 12 : 10
-    const botY = footY - 2
-
-    ctx.fillStyle = '#ffffff'
-    ctx.beginPath()
-    ctx.moveTo(topSideX, topCornerY)          // top-left corner
-    ctx.lineTo(cx, peakY)                      // top peak
-    ctx.lineTo(w - topSideX, topCornerY)      // top-right corner
-    ctx.lineTo(w - botSideX, botY)            // bottom-right
-    ctx.lineTo(botSideX, botY)                // bottom-left
-    ctx.closePath()
-    ctx.fill()
-
-    // ── Decorative lighter orange triangles (behind pentagon corners) ──
-    ctx.fillStyle = orLight
-    // Left triangle
-    const triH = isFB ? 70 : 140
-    ctx.beginPath()
-    ctx.moveTo(0, topCornerY - triH * 0.4)
-    ctx.lineTo(topSideX + (isFB ? 80 : 160), topCornerY + triH * 0.15)
-    ctx.lineTo(0, topCornerY + triH * 0.6)
-    ctx.closePath()
-    ctx.fill()
-    // Right triangle
-    ctx.beginPath()
-    ctx.moveTo(w, topCornerY - triH * 0.4)
-    ctx.lineTo(w - topSideX - (isFB ? 80 : 160), topCornerY + triH * 0.15)
-    ctx.lineTo(w, topCornerY + triH * 0.6)
-    ctx.closePath()
-    ctx.fill()
+    // ── Load template image as background ──
+    const templateUrl = isFB ? '/images/template-facebook.png' : '/images/template-instagram.png'
+    const templateImg = await loadImage(templateUrl)
+    if (templateImg) {
+      ctx.drawImage(templateImg, 0, 0, w, h)
+    } else {
+      // White fallback if template not found
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, w, h)
+    }
 
     setImageProgress(20)
     setImageProgressText('Cargando producto...')
 
-    // ── Product image (centered in white area) ──
-    const imgS = isFB ? 280 : 420
+    // ── Product image (centered in white area of template) ──
+    const footH = isFB ? 65 : 80
+    const topArea = isFB ? 160 : 280
+    const availH = h - footH - topArea
+    const imgS = Math.min(isFB ? 320 : 420, availH * 0.55)
     const imgX = (w - imgS) / 2
-    const imgY = topCornerY + (isFB ? 20 : 40)
+    const imgCenterY = topArea + availH * 0.35
+    const imgY = imgCenterY - imgS / 2
 
     if (product.imageUrl) {
       const img = await loadImage(product.imageUrl)
@@ -419,8 +389,8 @@ export default function ProductDetailPage() {
     ctx.fillText(ln.trim(), cx, ty)
     ty += isFB ? 40 : 55
 
-    // ── CUP Price (big orange) ──
-    ctx.fillStyle = or
+    // ── CUP Price (big) ──
+    ctx.fillStyle = '#f97316'
     ctx.font = `bold ${isFB ? 58 : 72}px Arial, sans-serif`
     ctx.fillText(`${priceCUP.toLocaleString('es-ES')} CUP`, cx, ty)
     ty += isFB ? 38 : 50
@@ -430,66 +400,8 @@ export default function ProductDetailPage() {
     ctx.font = `${isFB ? 24 : 30}px Arial, sans-serif`
     ctx.fillText(`$${price.toFixed(2)} USD`, cx, ty)
 
-    setImageProgress(80)
+    setImageProgress(90)
     setImageProgressText('Finalizando...')
-
-    // ── Orange footer bar ──
-    ctx.fillStyle = or
-    ctx.fillRect(0, footY, w, footH)
-
-    const phoneY = footY + footH / 2
-    const pad = isFB ? 30 : 40
-    const footFS = isFB ? 18 : 22
-
-    // Phone left - white circle with phone icon
-    ctx.fillStyle = '#ffffff'
-    const iconR = isFB ? 13 : 16
-    ctx.beginPath()
-    ctx.arc(pad + iconR, phoneY, iconR, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.fillStyle = or
-    ctx.font = `bold ${isFB ? 14 : 17}px Arial, sans-serif`
-    ctx.textAlign = 'center'
-    ctx.fillText('✆', pad + iconR, phoneY + (isFB ? 5 : 6))
-    ctx.fillStyle = '#ffffff'
-    ctx.textAlign = 'left'
-    ctx.font = `bold ${footFS}px Arial, sans-serif`
-    ctx.fillText('+5352584700', pad + iconR * 2 + 10, phoneY + (isFB ? 6 : 7))
-
-    // Logo center in footer
-    try {
-      const logoRes = await fetch('/api/market/catalog/config')
-      const logoData = await logoRes.json()
-      const logoUrl = logoData.data?.logo_desktop_url || logoData.data?.logo_url
-      if (logoUrl) {
-        const logo = await loadImage(logoUrl)
-        if (logo) {
-          const logoH = footH - 16
-          const logoW = (logo.naturalWidth / logo.naturalHeight) * logoH
-          ctx.drawImage(logo, cx - logoW / 2, footY + 8, logoW, logoH)
-        }
-      }
-    } catch {}
-
-    // URL right - white circle with globe icon
-    ctx.fillStyle = '#ffffff'
-    ctx.font = `bold ${footFS}px Arial, sans-serif`
-    const urlText = 'catalogo.servisumic.com'
-    const urlW = ctx.measureText(urlText).width
-    const urlEndX = w - pad
-    const globeX = urlEndX - urlW - 10 - iconR
-    ctx.beginPath()
-    ctx.arc(globeX, phoneY, iconR, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.fillStyle = or
-    ctx.font = `bold ${isFB ? 14 : 17}px Arial, sans-serif`
-    ctx.textAlign = 'center'
-    ctx.fillText('⊕', globeX, phoneY + (isFB ? 5 : 6))
-    ctx.fillStyle = '#ffffff'
-    ctx.textAlign = 'right'
-    ctx.font = `bold ${footFS}px Arial, sans-serif`
-    ctx.fillText(urlText, urlEndX, phoneY + (isFB ? 6 : 7))
-
     ctx.textAlign = 'left'
 
     setImageProgress(100)
