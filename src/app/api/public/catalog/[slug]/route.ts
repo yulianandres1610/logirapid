@@ -122,7 +122,7 @@ export async function GET(
       catParams
     )
 
-    // Get top selling products (last 30 days) - POS + wholesale combined
+    // Get top selling products (last 90 days) - POS + wholesale combined
     let topSellingIds: number[] = []
     try {
       const topResult = await db.query(`
@@ -131,7 +131,7 @@ export async function GET(
           FROM market_pos_order_lines ol
           JOIN market_pos_orders o ON ol.order_id = o.id
           WHERE o.company_id = $1 AND o.status IN ('paid', 'completed')
-            AND o.created_at >= NOW() - INTERVAL '30 days'
+            AND o.created_at >= NOW() - INTERVAL '90 days'
           GROUP BY ol.product_id
         ),
         wholesale_sales AS (
@@ -139,7 +139,7 @@ export async function GET(
           FROM market_invoice_lines il
           JOIN market_invoices i ON il.invoice_id = i.id
           WHERE i.company_id = $1 AND i.status IN ('delivered', 'paid', 'completed', 'confirmed', 'validated')
-            AND COALESCE(i.delivered_at, i.created_at) >= NOW() - INTERVAL '30 days'
+            AND COALESCE(i.delivered_at, i.created_at) >= NOW() - INTERVAL '90 days'
           GROUP BY il.product_id
         )
         SELECT COALESCE(p.product_id, w.product_id) as product_id,
@@ -150,7 +150,22 @@ export async function GET(
         LIMIT 6
       `, [companyId])
       topSellingIds = topResult.rows.map((r: any) => parseInt(r.product_id))
-    } catch { /* tables may not exist */ }
+    } catch (e) {
+      console.log('[Catalog] Top sellers query failed:', e instanceof Error ? e.message : e)
+    }
+
+    // Fallback: if no sales data, pick products with most stock
+    if (topSellingIds.length === 0) {
+      try {
+        const fallbackResult = await db.query(`
+          SELECT id FROM market_products
+          WHERE company_id = $1 AND is_active = true AND quantity_on_hand > 0
+          ORDER BY quantity_on_hand DESC
+          LIMIT 6
+        `, [companyId])
+        topSellingIds = fallbackResult.rows.map((r: any) => parseInt(r.id))
+      } catch {}
+    }
 
     const products = productsResult.rows.map((p: any) => ({
       id: p.id,

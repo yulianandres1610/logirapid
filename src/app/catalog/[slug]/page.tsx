@@ -270,7 +270,7 @@ export default function CatalogPage() {
                 <button onClick={() => scrollCarousel(topRef, 'right')} className="p-1.5 rounded-full bg-white border border-gray-200 hover:bg-gray-50 transition-colors"><ChevronRight className="w-4 h-4 text-gray-600" /></button>
               </div>
             </div>
-            <div ref={topRef} className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory scroll-smooth -mx-4 px-4">
+            <div ref={topRef} className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory scroll-smooth -mx-4 px-4" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x' }}>
               {topSellers.map(product => (
                 <div key={`top-${product.id}`}
                   onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
@@ -317,7 +317,7 @@ export default function CatalogPage() {
                 <button onClick={() => scrollCarousel(paintRef, 'right')} className="p-1.5 rounded-full bg-white border border-gray-200 hover:bg-gray-50 transition-colors"><ChevronRight className="w-4 h-4 text-gray-600" /></button>
               </div>
             </div>
-            <div ref={paintRef} className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory scroll-smooth -mx-4 px-4">
+            <div ref={paintRef} className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory scroll-smooth -mx-4 px-4" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x' }}>
               {paintProducts.map(product => (
                 <div key={`paint-${product.id}`}
                   onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
