@@ -374,7 +374,6 @@ export default function ProductDetailPage() {
         setImageProgress(100)
         setImageProgressText('Descargando...')
 
-        // Convert base64 to blob and download
         const byteChars = atob(data.imageBase64)
         const byteArray = new Uint8Array(byteChars.length)
         for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i)
@@ -386,98 +385,16 @@ export default function ProductDetailPage() {
         a.click()
         URL.revokeObjectURL(url)
         setTimeout(() => { setGeneratingImage(null); setShowImageModal(false); setImageProgress(0) }, 500)
-        return
+      } else {
+        setImageProgressText(`Error: ${data.error || 'No se pudo generar'}`)
+        setTimeout(() => { setGeneratingImage(null); setShowImageModal(false); setImageProgress(0) }, 3000)
       }
-
-      // If Gemini fails, fallback to template
-      console.log('[Social Image] Gemini failed, using template fallback:', data.error)
-      setImageProgressText('Usando template local...')
-      await generateSocialImageFallback(platform, price, priceCUP)
 
     } catch (error) {
       console.error('[Social Image] Error:', error)
-      setImageProgressText('Usando template local...')
-      await generateSocialImageFallback(platform, price, priceCUP)
+      setImageProgressText('Error al generar imagen')
+      setTimeout(() => { setGeneratingImage(null); setShowImageModal(false); setImageProgress(0) }, 3000)
     }
-  }
-
-  const generateSocialImageFallback = async (platform: 'facebook' | 'instagram', price: number, priceCUP: number) => {
-    if (!product) return
-    const w = platform === 'facebook' ? 940 : 1080
-    const h = platform === 'facebook' ? 788 : 1350
-    const canvas = document.createElement('canvas')
-    canvas.width = w; canvas.height = h
-    const ctx = canvas.getContext('2d')!
-    const isFB = platform === 'facebook'
-    const cx = w / 2
-
-    const templateUrl = isFB ? '/images/template-facebook.png' : '/images/template-instagram.png'
-    const templateImg = await loadImage(templateUrl)
-    if (templateImg) {
-      ctx.drawImage(templateImg, 0, 0, w, h)
-    } else {
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, w, h)
-    }
-
-    setImageProgress(50)
-
-    const footH = isFB ? 65 : 80
-    const topArea = isFB ? 160 : 280
-    const availH = h - footH - topArea
-    const imgS = Math.min(isFB ? 320 : 420, availH * 0.55)
-    const imgX = (w - imgS) / 2
-    const imgCenterY = topArea + availH * 0.35
-    const imgY = imgCenterY - imgS / 2
-
-    if (product.imageUrl) {
-      const img = await loadImage(product.imageUrl)
-      if (img) {
-        const sc = Math.min(imgS / img.naturalWidth, imgS / img.naturalHeight)
-        const dw = img.naturalWidth * sc, dh = img.naturalHeight * sc
-        ctx.drawImage(img, imgX + (imgS - dw) / 2, imgY + (imgS - dh) / 2, dw, dh)
-      }
-    }
-
-    let ty = imgY + imgS + (isFB ? 20 : 30)
-    ctx.textAlign = 'center'
-    ctx.fillStyle = '#111827'
-    const fs = isFB ? 28 : 36
-    ctx.font = `bold ${fs}px Arial, sans-serif`
-    const nameWords = product.name.split(' ')
-    let ln = ''
-    for (const wd of nameWords) {
-      const test = ln + wd + ' '
-      if (ctx.measureText(test).width > w - 200 && ln) {
-        ctx.fillText(ln.trim(), cx, ty); ty += fs + 6; ln = wd + ' '
-      } else ln = test
-    }
-    ctx.fillText(ln.trim(), cx, ty)
-    ty += isFB ? 40 : 55
-
-    ctx.fillStyle = '#f97316'
-    ctx.font = `bold ${isFB ? 58 : 72}px Arial, sans-serif`
-    ctx.fillText(`${priceCUP.toLocaleString('es-ES')} CUP`, cx, ty)
-    ty += isFB ? 38 : 50
-
-    ctx.fillStyle = '#6b7280'
-    ctx.font = `${isFB ? 24 : 30}px Arial, sans-serif`
-    ctx.fillText(`$${price.toFixed(2)} USD`, cx, ty)
-    ctx.textAlign = 'left'
-
-    setImageProgress(100)
-    setImageProgressText('Descargando...')
-
-    canvas.toBlob((blob) => {
-      if (!blob) return
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${product.name.replace(/[^a-zA-Z0-9]/g, '-')}-${platform}.png`
-      a.click()
-      URL.revokeObjectURL(url)
-      setTimeout(() => { setGeneratingImage(null); setShowImageModal(false); setImageProgress(0) }, 500)
-    }, 'image/png')
   }
 
   // Collapsible sections

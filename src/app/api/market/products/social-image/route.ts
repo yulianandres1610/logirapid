@@ -44,34 +44,35 @@ export async function POST(request: NextRequest) {
     }
 
     const isFB = platform === 'facebook'
-    const dimensions = isFB ? '940x788' : '1080x1350'
+    const dimensions = isFB ? '940x788 pixels (landscape)' : '1080x1350 pixels (portrait)'
 
-    // Build the prompt for Gemini to generate a social media post image
-    const prompt = `Generate a professional social media product advertisement image for ${isFB ? 'Facebook' : 'Instagram'}.
+    const prompt = `Create a product advertisement image. Follow this EXACT template design:
 
-EXACT SPECIFICATIONS:
-- Dimensions: ${dimensions} pixels
-- This is a ${isFB ? 'Facebook post (landscape)' : 'Instagram post (portrait)'}
+CANVAS: ${dimensions}
 
-DESIGN REQUIREMENTS:
-- Modern, clean, professional e-commerce advertisement
-- Orange theme (#f97316 as primary color) with white accents
-- Geometric design with an orange background and a large white pentagon/arrow shape in the center
-- The product should be prominently displayed in the center of the white area
-- Product name: "${productName}"
-- Price displayed large and bold: ${priceCUP ? `${priceCUP.toLocaleString()} CUP` : ''}${priceUSD ? ` ($${priceUSD} USD)` : ''}
-- Store: "${storeName || 'Servisumic'}"
-- Orange footer bar at bottom with:
-  - Phone: ${phone || '+5352584700'} on the left
-  - Store logo/name "${storeName || 'Servisumic - Ferretería y Mercado'}" in the center
-  - URL: ${catalogUrl || 'catalogo.servisumic.com'} on the right
-- Footer icons should be white circles with phone and globe symbols
-- Light orange decorative triangles on the sides behind the white area
-- NO mockup phone or device - just the product floating/centered
-- Text should be crisp and readable
-- The overall style should match a professional hardware store / ferretería advertisement
+LAYOUT (top to bottom):
+1. TOP SECTION (~20% height): Solid orange background (#f97316). A white pentagon/arrow shape starts here with its peak pointing up at the top center. Two lighter orange (#fdba74) decorative triangles on the left and right sides, partially behind the white shape.
 
-CRITICAL: The image must look like a ready-to-post social media advertisement. Professional quality, sharp text, clean layout.`
+2. CENTER SECTION (~65% height): The white pentagon shape widens as it goes down, filling most of the width. Inside this white area:
+   - The product image centered and large (occupying ~50% of the white area)
+   - Below the product: the product name "${productName}" in bold dark text
+   - Below the name: "${priceCUP ? priceCUP.toLocaleString() + ' CUP' : ''}" in LARGE bold orange (#f97316) text
+   - Below CUP price: "$${priceUSD || '0.00'} USD" in smaller gray text
+
+3. FOOTER BAR (~8% height): Solid orange (#f97316) bar at the very bottom with:
+   - Left: white phone icon circle + "+5352584700" in white text
+   - Center: "Servisumic - Ferretería y Mercado" in white bold text
+   - Right: white globe icon circle + "catalogo.servisumic.com" in white text
+
+STYLE RULES:
+- Clean, modern, minimalist e-commerce ad
+- The product floats naturally in the white area, no frame or border around it
+- Text must be sharp, crisp, and perfectly readable
+- Orange color is EXACTLY #f97316
+- White area background is pure white #FFFFFF
+- Professional typography, centered alignment
+- NO shadows, NO gradients on the white area
+- The design must look identical every time, only the product/price changes`
 
     const contents: any[] = [{ text: prompt }]
 
