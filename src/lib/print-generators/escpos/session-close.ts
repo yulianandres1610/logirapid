@@ -52,8 +52,10 @@ function fmtCUP(v: any): string {
 export function generateSessionCloseEscpos(data: any): Buffer {
   const l: string[] = []
 
-  // Initialize printer (no GS L margin - not all printers support it)
+  // Initialize printer
   l.push(C.INIT)
+  // Set left margin for centering on 80mm paper (same as pos-receipt)
+  l.push(`${GS}L\x30\x00`)
 
   // === HEADER ===
   l.push(C.ALIGN_CENTER)
