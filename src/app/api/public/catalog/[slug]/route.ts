@@ -147,7 +147,7 @@ export async function GET(
         FROM pos_sales p
         FULL OUTER JOIN wholesale_sales w ON p.product_id = w.product_id
         ORDER BY qty_sold DESC
-        LIMIT 20
+        LIMIT 6
       `, [companyId])
       topSellingIds = topResult.rows.map((r: any) => parseInt(r.product_id))
     } catch { /* tables may not exist */ }

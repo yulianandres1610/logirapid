@@ -276,11 +276,11 @@ export default function CatalogPage() {
                 <button onClick={() => scrollCarousel(topRef, 'right')} className="p-1.5 rounded-full bg-white border border-gray-200 hover:bg-gray-50 transition-colors"><ChevronRight className="w-4 h-4 text-gray-600" /></button>
               </div>
             </div>
-            <div ref={topRef} className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x scroll-smooth">
+            <div ref={topRef} className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory scroll-smooth -mx-4 px-4">
               {topSellers.map(product => (
                 <div key={`top-${product.id}`}
                   onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
-                  className="min-w-[160px] sm:min-w-[200px] bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all cursor-pointer snap-start group flex-shrink-0">
+                  className="w-[140px] sm:w-[180px] md:w-[200px] flex-shrink-0 bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all cursor-pointer snap-start group">
                   <div className="aspect-square bg-gray-50 relative overflow-hidden">
                     {product.imageUrl ? (
                       <LazyImage src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
@@ -323,11 +323,11 @@ export default function CatalogPage() {
                 <button onClick={() => scrollCarousel(paintRef, 'right')} className="p-1.5 rounded-full bg-white border border-gray-200 hover:bg-gray-50 transition-colors"><ChevronRight className="w-4 h-4 text-gray-600" /></button>
               </div>
             </div>
-            <div ref={paintRef} className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x scroll-smooth">
+            <div ref={paintRef} className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory scroll-smooth -mx-4 px-4">
               {paintProducts.map(product => (
                 <div key={`paint-${product.id}`}
                   onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
-                  className="min-w-[160px] sm:min-w-[200px] bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all cursor-pointer snap-start group flex-shrink-0">
+                  className="w-[140px] sm:w-[180px] md:w-[200px] flex-shrink-0 bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all cursor-pointer snap-start group">
                   <div className="aspect-square bg-gray-50 relative overflow-hidden">
                     {product.imageUrl ? (
                       <LazyImage src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
