@@ -389,8 +389,8 @@ export async function PUT(
         }, { status: 400 })
       }
 
-      // Check permission
-      if (!['ADMIN', 'SUPER_ADMIN'].includes(payload.role)) {
+      // Check permission (MARKET_MANAGER has full access)
+      if (!['ADMIN', 'SUPER_ADMIN', 'MARKET_MANAGER'].includes(payload.role)) {
         const userPerm = await db.query(`
           SELECT can_refund FROM market_pos_users
           WHERE pos_terminal_id = $1 AND user_id = $2
