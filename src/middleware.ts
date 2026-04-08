@@ -98,6 +98,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/supplier/login', request.url))
   }
 
+  // Allow print service files on ALL subdomains (auto-update needs this)
+  if (pathname === '/print-service-server.js' || pathname.startsWith('/api/print-agent')) {
+    return NextResponse.next()
+  }
+
   // ============================================================
   // CATALOG SUBDOMAIN HANDLING - catalogo.* (must be BEFORE other subdomain handlers)
   // ============================================================
@@ -298,7 +303,7 @@ export async function middleware(request: NextRequest) {
     }
 
     // Allow print service agent files (public, no auth needed)
-    if (pathname.startsWith('/print-service/') || pathname.startsWith('/api/print-agent')) {
+    if (pathname.startsWith('/print-service') || pathname.startsWith('/api/print-agent')) {
       return NextResponse.next()
     }
 
