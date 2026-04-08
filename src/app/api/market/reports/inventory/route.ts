@@ -77,15 +77,18 @@ export async function GET(request: NextRequest) {
 
         UNION ALL
 
-        -- Consignment lots
+        -- Consignment lots (exclude liquidated orders)
         SELECT
-          product_id, warehouse_id, lot_number, expiration_date,
-          quantity_available, unit_cost, 'consignación' as source_type
-        FROM consignment_lot_inventory
-        WHERE company_id = $1
-          AND expiration_date IS NOT NULL
-          AND expiration_date <= CURRENT_DATE + $2::integer
-          AND quantity_available > 0
+          cli.product_id, cli.warehouse_id, cli.lot_number, cli.expiration_date,
+          cli.quantity_available, cli.unit_cost, 'consignación' as source_type
+        FROM consignment_lot_inventory cli
+        LEFT JOIN consignment_order_lines col ON col.id = cli.order_line_id
+        LEFT JOIN consignment_orders co ON co.id = col.order_id
+        WHERE cli.company_id = $1
+          AND cli.expiration_date IS NOT NULL
+          AND cli.expiration_date <= CURRENT_DATE + $2::integer
+          AND cli.quantity_available > 0
+          AND (co.status IS NULL OR co.status NOT IN ('liquidated', 'returned'))
       ) lots
       JOIN market_products p ON lots.product_id = p.id
       JOIN market_warehouses w ON lots.warehouse_id = w.id
