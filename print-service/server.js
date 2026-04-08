@@ -390,7 +390,7 @@ async function printRawBytes(printerName, rawData, copies = 1) {
       await execPS(
         `$bytes = [System.IO.File]::ReadAllBytes('${escapedFile}'); ` +
         `Add-Type -TypeDefinition '` +
-        `using System; using System.Runtime.InteropServices; ` +
+        `using System; using System.Runtime.InteropServices; using System.Threading; ` +
         `public class RawPrint { ` +
         `[StructLayout(LayoutKind.Sequential)] public struct DOCINFOA { [MarshalAs(UnmanagedType.LPStr)] public string pDocName; [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile; [MarshalAs(UnmanagedType.LPStr)] public string pDatatype; } ` +
         `[DllImport("winspool.drv", EntryPoint="OpenPrinterA", SetLastError=true)] public static extern bool OpenPrinter(string p, out IntPtr h, IntPtr d); ` +
@@ -403,7 +403,10 @@ async function printRawBytes(printerName, rawData, copies = 1) {
         `public static bool Send(string name, byte[] data) { IntPtr h; DOCINFOA di = new DOCINFOA(); di.pDocName = "RAW"; di.pDatatype = "RAW"; ` +
         `if (!OpenPrinter(name, out h, IntPtr.Zero)) return false; ` +
         `if (StartDocPrinter(h, 1, ref di) == 0) { ClosePrinter(h); return false; } ` +
-        `StartPagePrinter(h); int w; bool ok = WritePrinter(h, data, data.Length, out w); ` +
+        `StartPagePrinter(h); bool ok = true; int chunkSize = 1024; ` +
+        `for (int i = 0; i < data.Length; i += chunkSize) { ` +
+        `int len = Math.Min(chunkSize, data.Length - i); byte[] chunk = new byte[len]; Array.Copy(data, i, chunk, 0, len); int w; ` +
+        `if (!WritePrinter(h, chunk, len, out w)) { ok = false; break; } Thread.Sleep(10); } ` +
         `EndPagePrinter(h); EndDocPrinter(h); ClosePrinter(h); return ok; } }'; ` +
         `$ok = [RawPrint]::Send('${escapedPrinter}', $bytes); ` +
         `if (-not $ok) { throw 'WritePrinter failed' }`
