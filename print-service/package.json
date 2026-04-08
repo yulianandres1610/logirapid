@@ -1,6 +1,6 @@
 {
   "name": "logirapid-print-service",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "LogiRapid Print Service - Agente local de impresion",
   "main": "server.js",
   "scripts": {
