@@ -232,12 +232,6 @@ export default function CatalogPage() {
                   )}
                 </AnimatePresence>
               </motion.button>
-              {store?.whatsapp && (
-                <a href={`https://wa.me/${store.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener"
-                  className="hidden sm:flex p-2.5 rounded-xl text-white items-center gap-1.5 text-sm font-medium" style={{ backgroundColor: '#25D366' }}>
-                  <MessageCircle className="w-4 h-4" />
-                </a>
-              )}
             </div>
           </div>
         </div>
@@ -618,6 +612,15 @@ export default function CatalogPage() {
           </motion.button>
         )}
       </AnimatePresence>
+
+      {/* Floating WhatsApp button */}
+      {store?.whatsapp && (
+        <a href={`https://wa.me/${store.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener"
+          className="fixed bottom-6 left-6 z-40 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-white hover:scale-110 transition-transform"
+          style={{ backgroundColor: '#25D366' }}>
+          <MessageCircle className="w-7 h-7" />
+        </a>
+      )}
 
       {/* Footer */}
       <footer className="bg-white border-t mt-12">
