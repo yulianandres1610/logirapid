@@ -325,10 +325,84 @@ export default function ProductDetailPage() {
     setGeneratingImage(platform)
     setShowImageModal(true)
     setImageProgress(0)
-    setImageProgressText('Preparando diseño...')
+    setImageProgressText('Generando diseño con IA...')
 
     const price = Number(product.sellingPrice) || 0
     const priceCUP = Math.round(price * USD_CUP)
+
+    try {
+      // Get product image as base64 if available
+      let productImageBase64 = ''
+      if (product.imageUrl) {
+        setImageProgress(10)
+        setImageProgressText('Cargando imagen del producto...')
+        try {
+          const imgRes = await fetch(product.imageUrl)
+          const imgBlob = await imgRes.blob()
+          productImageBase64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve((reader.result as string).split(',')[1] || '')
+            reader.readAsDataURL(imgBlob)
+          })
+        } catch { /* continue without image */ }
+      }
+
+      setImageProgress(30)
+      setImageProgressText('Gemini está diseñando la imagen...')
+
+      const res = await fetch('/api/market/products/social-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productName: product.name,
+          productImageBase64,
+          priceCUP,
+          priceUSD: price.toFixed(2),
+          platform,
+          storeName: 'Servisumic',
+          phone: '+5352584700',
+          catalogUrl: 'catalogo.servisumic.com'
+        })
+      })
+
+      setImageProgress(80)
+      setImageProgressText('Procesando resultado...')
+
+      const data = await res.json()
+
+      if (data.success && data.imageBase64) {
+        setImageProgress(100)
+        setImageProgressText('Descargando...')
+
+        // Convert base64 to blob and download
+        const byteChars = atob(data.imageBase64)
+        const byteArray = new Uint8Array(byteChars.length)
+        for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i)
+        const blob = new Blob([byteArray], { type: data.mimeType || 'image/png' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${product.name.replace(/[^a-zA-Z0-9]/g, '-')}-${platform}.png`
+        a.click()
+        URL.revokeObjectURL(url)
+        setTimeout(() => { setGeneratingImage(null); setShowImageModal(false); setImageProgress(0) }, 500)
+        return
+      }
+
+      // If Gemini fails, fallback to template
+      console.log('[Social Image] Gemini failed, using template fallback:', data.error)
+      setImageProgressText('Usando template local...')
+      await generateSocialImageFallback(platform, price, priceCUP)
+
+    } catch (error) {
+      console.error('[Social Image] Error:', error)
+      setImageProgressText('Usando template local...')
+      await generateSocialImageFallback(platform, price, priceCUP)
+    }
+  }
+
+  const generateSocialImageFallback = async (platform: 'facebook' | 'instagram', price: number, priceCUP: number) => {
+    if (!product) return
     const w = platform === 'facebook' ? 940 : 1080
     const h = platform === 'facebook' ? 788 : 1350
     const canvas = document.createElement('canvas')
@@ -337,21 +411,17 @@ export default function ProductDetailPage() {
     const isFB = platform === 'facebook'
     const cx = w / 2
 
-    // ── Load template image as background ──
     const templateUrl = isFB ? '/images/template-facebook.png' : '/images/template-instagram.png'
     const templateImg = await loadImage(templateUrl)
     if (templateImg) {
       ctx.drawImage(templateImg, 0, 0, w, h)
     } else {
-      // White fallback if template not found
       ctx.fillStyle = '#ffffff'
       ctx.fillRect(0, 0, w, h)
     }
 
-    setImageProgress(20)
-    setImageProgressText('Cargando producto...')
+    setImageProgress(50)
 
-    // ── Product image (centered in white area of template) ──
     const footH = isFB ? 65 : 80
     const topArea = isFB ? 160 : 280
     const availH = h - footH - topArea
@@ -369,10 +439,6 @@ export default function ProductDetailPage() {
       }
     }
 
-    setImageProgress(50)
-    setImageProgressText('Agregando precios...')
-
-    // ── Product name ──
     let ty = imgY + imgS + (isFB ? 20 : 30)
     ctx.textAlign = 'center'
     ctx.fillStyle = '#111827'
@@ -389,19 +455,14 @@ export default function ProductDetailPage() {
     ctx.fillText(ln.trim(), cx, ty)
     ty += isFB ? 40 : 55
 
-    // ── CUP Price (big) ──
     ctx.fillStyle = '#f97316'
     ctx.font = `bold ${isFB ? 58 : 72}px Arial, sans-serif`
     ctx.fillText(`${priceCUP.toLocaleString('es-ES')} CUP`, cx, ty)
     ty += isFB ? 38 : 50
 
-    // ── USD Price ──
     ctx.fillStyle = '#6b7280'
     ctx.font = `${isFB ? 24 : 30}px Arial, sans-serif`
     ctx.fillText(`$${price.toFixed(2)} USD`, cx, ty)
-
-    setImageProgress(90)
-    setImageProgressText('Finalizando...')
     ctx.textAlign = 'left'
 
     setImageProgress(100)
