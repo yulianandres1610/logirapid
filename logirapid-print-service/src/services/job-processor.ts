@@ -572,7 +572,8 @@ class JobProcessor {
     const escposDocuments = [
       'pos_receipt', 'unified_reception', 'purchase_invoice', 'invoice',
       'consignment_receipt', 'wholesale_invoice', 'production_order',
-      'production_materials_receipt', 'production_reception_receipt'
+      'production_materials_receipt', 'production_reception_receipt',
+      'session_close_report', 'warehouse_operation', 'production_formula'
     ]
     const useEscPos = printer.supportsEscpos &&
                       printer.printerType !== 'standard' &&
