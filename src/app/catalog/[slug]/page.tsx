@@ -151,6 +151,16 @@ export default function CatalogPage() {
 
   const topSellers = products.filter(p => p.isTopSeller)
   const showTopSellers = topSellers.length > 0 && !search && selectedCategory === 'all' && page === 1
+  const paintProducts = products.filter(p => p.category?.toLowerCase().includes('pintura') && p.stock && p.stock > 0)
+  const showPaintCarousel = paintProducts.length > 0 && !search && selectedCategory === 'all' && page === 1
+
+  const scrollCarousel = (ref: React.RefObject<HTMLDivElement | null>, dir: 'left' | 'right') => {
+    if (!ref.current) return
+    const scrollAmount = ref.current.clientWidth * 0.7
+    ref.current.scrollBy({ left: dir === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' })
+  }
+  const topRef = useRef<HTMLDivElement>(null)
+  const paintRef = useRef<HTMLDivElement>(null)
 
   if (error) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -253,18 +263,24 @@ export default function CatalogPage() {
 
       <div className="max-w-7xl mx-auto px-4 py-6 flex-1">
 
-        {/* Top Sellers Section */}
+        {/* Top Sellers Carousel */}
         {showTopSellers && (
           <div className="mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <Flame className="w-5 h-5 text-orange-500" />
-              <h2 className="text-xl font-bold text-gray-900">Más Vendidos</h2>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Flame className="w-5 h-5 text-orange-500" />
+                <h2 className="text-xl font-bold text-gray-900">Más Vendidos</h2>
+              </div>
+              <div className="flex gap-1">
+                <button onClick={() => scrollCarousel(topRef, 'left')} className="p-1.5 rounded-full bg-white border border-gray-200 hover:bg-gray-50 transition-colors"><ChevronLeft className="w-4 h-4 text-gray-600" /></button>
+                <button onClick={() => scrollCarousel(topRef, 'right')} className="p-1.5 rounded-full bg-white border border-gray-200 hover:bg-gray-50 transition-colors"><ChevronRight className="w-4 h-4 text-gray-600" /></button>
+              </div>
             </div>
-            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x">
-              {topSellers.slice(0, topSellers.length >= 6 ? 6 : topSellers.length >= 4 ? 4 : 2).map(product => (
+            <div ref={topRef} className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x scroll-smooth">
+              {topSellers.map(product => (
                 <div key={`top-${product.id}`}
                   onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
-                  className="min-w-[160px] sm:min-w-[200px] bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all cursor-pointer snap-start group">
+                  className="min-w-[160px] sm:min-w-[200px] bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all cursor-pointer snap-start group flex-shrink-0">
                   <div className="aspect-square bg-gray-50 relative overflow-hidden">
                     {product.imageUrl ? (
                       <LazyImage src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
@@ -274,11 +290,61 @@ export default function CatalogPage() {
                     <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold text-white flex items-center gap-1" style={{ backgroundColor: primaryColor }}>
                       <Flame className="w-3 h-3" /> Popular
                     </div>
+                    {product.stock !== null && product.stock <= 5 && product.stock > 0 && (
+                      <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-red-500">Últimas {product.stock}</div>
+                    )}
                   </div>
                   <div className="p-3">
                     <p className="font-medium text-gray-900 text-sm line-clamp-1">{product.name}</p>
                     {product.priceCUP !== null && (
                       <p className="text-lg font-bold mt-0.5" style={{ color: primaryColor }}>{product.priceCUP.toLocaleString('es-ES')} <span className="text-xs font-normal">CUP</span></p>
+                    )}
+                    {product.priceUSD !== null && (
+                      <p className="text-xs text-gray-500">${product.priceUSD.toFixed(2)} USD</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Paint Products Carousel */}
+        {showPaintCarousel && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🎨</span>
+                <h2 className="text-xl font-bold text-gray-900">Pinturas</h2>
+                <span className="text-sm text-gray-500">Fabricación propia</span>
+              </div>
+              <div className="flex gap-1">
+                <button onClick={() => scrollCarousel(paintRef, 'left')} className="p-1.5 rounded-full bg-white border border-gray-200 hover:bg-gray-50 transition-colors"><ChevronLeft className="w-4 h-4 text-gray-600" /></button>
+                <button onClick={() => scrollCarousel(paintRef, 'right')} className="p-1.5 rounded-full bg-white border border-gray-200 hover:bg-gray-50 transition-colors"><ChevronRight className="w-4 h-4 text-gray-600" /></button>
+              </div>
+            </div>
+            <div ref={paintRef} className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x scroll-smooth">
+              {paintProducts.map(product => (
+                <div key={`paint-${product.id}`}
+                  onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
+                  className="min-w-[160px] sm:min-w-[200px] bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all cursor-pointer snap-start group flex-shrink-0">
+                  <div className="aspect-square bg-gray-50 relative overflow-hidden">
+                    {product.imageUrl ? (
+                      <LazyImage src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center"><Package className="w-8 h-8 text-gray-300" /></div>
+                    )}
+                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-blue-600 flex items-center gap-1">
+                      🎨 Pintura
+                    </div>
+                  </div>
+                  <div className="p-3">
+                    <p className="font-medium text-gray-900 text-sm line-clamp-1">{product.name}</p>
+                    {product.priceCUP !== null && (
+                      <p className="text-lg font-bold mt-0.5" style={{ color: primaryColor }}>{product.priceCUP.toLocaleString('es-ES')} <span className="text-xs font-normal">CUP</span></p>
+                    )}
+                    {product.priceUSD !== null && (
+                      <p className="text-xs text-gray-500">${product.priceUSD.toFixed(2)} USD</p>
                     )}
                   </div>
                 </div>

@@ -122,21 +122,35 @@ export async function GET(
       catParams
     )
 
-    // Get top selling products (last 30 days)
+    // Get top selling products (last 30 days) - POS + wholesale combined
     let topSellingIds: number[] = []
     try {
       const topResult = await db.query(`
-        SELECT ol.product_id, SUM(ol.quantity) as qty_sold
-        FROM market_pos_order_lines ol
-        JOIN market_pos_orders o ON ol.order_id = o.id
-        WHERE o.company_id = $1 AND o.status IN ('paid', 'completed')
-          AND o.created_at >= NOW() - INTERVAL '30 days'
-        GROUP BY ol.product_id
+        WITH pos_sales AS (
+          SELECT ol.product_id, SUM(ol.quantity) as qty
+          FROM market_pos_order_lines ol
+          JOIN market_pos_orders o ON ol.order_id = o.id
+          WHERE o.company_id = $1 AND o.status IN ('paid', 'completed')
+            AND o.created_at >= NOW() - INTERVAL '30 days'
+          GROUP BY ol.product_id
+        ),
+        wholesale_sales AS (
+          SELECT il.product_id, SUM(COALESCE(il.quantity_delivered, il.quantity)) as qty
+          FROM market_invoice_lines il
+          JOIN market_invoices i ON il.invoice_id = i.id
+          WHERE i.company_id = $1 AND i.status IN ('delivered', 'paid', 'completed', 'confirmed', 'validated')
+            AND COALESCE(i.delivered_at, i.created_at) >= NOW() - INTERVAL '30 days'
+          GROUP BY il.product_id
+        )
+        SELECT COALESCE(p.product_id, w.product_id) as product_id,
+               COALESCE(p.qty, 0) + COALESCE(w.qty, 0) as qty_sold
+        FROM pos_sales p
+        FULL OUTER JOIN wholesale_sales w ON p.product_id = w.product_id
         ORDER BY qty_sold DESC
-        LIMIT 12
+        LIMIT 20
       `, [companyId])
       topSellingIds = topResult.rows.map((r: any) => parseInt(r.product_id))
-    } catch { /* table may not exist */ }
+    } catch { /* tables may not exist */ }
 
     const products = productsResult.rows.map((p: any) => ({
       id: p.id,
