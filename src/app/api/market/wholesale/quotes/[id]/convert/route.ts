@@ -40,8 +40,11 @@ export async function POST(
 
     const { id } = await params
     const quoteId = parseInt(id)
-    const body = await request.json()
-    const { dueDate } = body
+    let dueDate: string | null = null
+    try {
+      const body = await request.json()
+      dueDate = body.dueDate || null
+    } catch { /* empty body is ok */ }
 
     // Verify quote exists and is in accepted status (or sent for quick conversion)
     const checkResult = await db.query(`

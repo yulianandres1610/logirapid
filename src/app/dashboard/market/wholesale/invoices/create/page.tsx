@@ -140,6 +140,7 @@ interface QuoteSummary {
   status: string
   createdAt: string
   linesCount: number
+  warehouseId?: number | null
 }
 
 const STEPS = [
@@ -203,6 +204,7 @@ export default function CreateInvoicePage() {
   const [loadingQuotes, setLoadingQuotes] = useState(false)
   const [quoteSearch, setQuoteSearch] = useState('')
   const [fromQuoteId, setFromQuoteId] = useState<number | null>(null)
+  const [fromQuoteWarehouseId, setFromQuoteWarehouseId] = useState<number | null>(null)
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep)
 
@@ -611,6 +613,11 @@ export default function CreateInvoicePage() {
         }
       }
 
+      // Store quote warehouse for invoice creation
+      setFromQuoteId(quote.id)
+      const quoteWarehouseId = quoteData.warehouseId
+      setFromQuoteWarehouseId(quoteWarehouseId || null)
+
       // Map quote lines to invoice lines
       if (quoteData.lines && quoteData.lines.length > 0) {
         const invoiceLines: InvoiceLine[] = quoteData.lines.map((ql: {
@@ -629,6 +636,10 @@ export default function CreateInvoicePage() {
           const costPriceCup = costPrice * exchangeRate
           const profitMargin = costPrice > 0 ? ((unitPrice - costPrice) / costPrice) * 100 : 0
 
+          // Assign full quantity to quote's warehouse
+          const wq: Record<string, number> = {}
+          if (quoteWarehouseId) wq[String(quoteWarehouseId)] = ql.quantity
+
           return {
             productId: ql.productId,
             variantId: null,
@@ -642,7 +653,7 @@ export default function CreateInvoicePage() {
             originalPrice: ql.originalPrice || unitPrice,
             subtotal: ql.subtotal || ql.quantity * unitPrice,
             subtotalCup: Math.round(unitPrice * exchangeRateWholesale) * ql.quantity,
-            warehouseQuantities: {},
+            warehouseQuantities: wq,
             warehouseStock: product?.warehouseStock || [],
             profitMargin,
             costPriceCup,
@@ -1112,7 +1123,7 @@ export default function CreateInvoicePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerId: selectedCustomer.id,
-          warehouseId: null, // Multi-warehouse mode, no single warehouse
+          warehouseId: fromQuoteWarehouseId || null, // From quote warehouse or multi-warehouse mode
           pricelistId: selectedCustomer.pricelistId,
           dueDate: effectiveDueDate,
           discountPercent: 0, // No global discount in new flow
