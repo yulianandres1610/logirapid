@@ -202,60 +202,53 @@ export async function POST(
     }
     const paymentNumber = `PAG-${year}-${String(nextNumber).padStart(4, '0')}`
 
-    await db.transaction(async (client) => {
-      // Build notes with original currency info
-      const paymentNotes = [
-        notes,
-        currency && currency !== 'USD' && originalAmount ? `Original: ${originalAmount} ${currency}` : null
-      ].filter(Boolean).join(' | ') || null
+    // Build notes
+    const paymentNotes = [
+      notes,
+      currency && currency !== 'USD' && originalAmount ? `Original: ${originalAmount} ${currency}` : null
+    ].filter(Boolean).join(' | ') || null
 
-      await client.query(`
-        INSERT INTO market_invoice_payments (
-          invoice_id, payment_number, amount, payment_method,
-          reference, payment_date, notes, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      `, [
-        invoiceId,
-        paymentNumber,
-        Number(effectiveAmount.toFixed(4)),
-        paymentMethod,
-        reference || null,
-        paymentDate || new Date().toISOString().split('T')[0],
-        paymentNotes,
-        payload.userId
-      ])
+    const currentPaid = parseFloat(invoice.amount_paid) || 0
+    const totalAmount = parseFloat(invoice.total_amount) || 0
+    const newAmountPaid = Math.round((currentPaid + effectiveAmount) * 10000) / 10000
+    const newAmountDue = Math.max(0, Math.round((totalAmount - newAmountPaid) * 10000) / 10000)
+    const isPaid = newAmountDue <= 0.01
 
-      // Update invoice amounts
-      const currentPaid = parseFloat(invoice.amount_paid) || 0
-      const totalAmount = parseFloat(invoice.total_amount) || 0
-      const newAmountPaid = Number((currentPaid + effectiveAmount).toFixed(4))
-      const newAmountDue = Number(Math.max(0, totalAmount - newAmountPaid).toFixed(4))
-      const newPaymentStatus = newAmountDue <= 0.01 ? 'paid' : 'partial'
+    console.log('[Payment] Processing:', { invoiceId, safeAmount, effectiveAmount, currentPaid, newAmountPaid, newAmountDue, isPaid })
 
-      console.log('[Payment] Updating invoice:', { invoiceId, currentPaid, effectiveAmount, newAmountPaid, newAmountDue, newPaymentStatus })
+    // Insert payment
+    await db.query(`
+      INSERT INTO market_invoice_payments (
+        invoice_id, payment_number, amount, payment_method, reference, payment_date, notes, created_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [
+      invoiceId, paymentNumber, effectiveAmount, paymentMethod,
+      reference || null, paymentDate || new Date().toISOString().split('T')[0],
+      paymentNotes, payload.userId
+    ])
 
-      await client.query(`
-        UPDATE market_invoices SET
-          amount_paid = $1,
-          amount_due = $2,
-          payment_status = $3,
-          paid_at = CASE WHEN $3::text = 'paid' THEN NOW() ELSE paid_at END,
-          updated_at = NOW()
-        WHERE id = $4
-      `, [newAmountPaid, newAmountDue, newPaymentStatus, invoiceId])
+    // Update invoice
+    if (isPaid) {
+      await db.query(`
+        UPDATE market_invoices SET amount_paid = $1, amount_due = $2, payment_status = 'paid', paid_at = NOW(), updated_at = NOW()
+        WHERE id = $3
+      `, [newAmountPaid, newAmountDue, invoiceId])
+    } else {
+      await db.query(`
+        UPDATE market_invoices SET amount_paid = $1, amount_due = $2, payment_status = 'partial', updated_at = NOW()
+        WHERE id = $3
+      `, [newAmountPaid, newAmountDue, invoiceId])
+    }
 
-      // Update customer balance (ignore if column doesn't exist)
-      try {
-        await client.query(`
-          UPDATE market_wholesale_customers SET
-            current_balance = COALESCE(current_balance, 0) - $1,
-            updated_at = NOW()
-          WHERE id = $2
-        `, [effectiveAmount, invoice.customer_id])
-      } catch (balErr) {
-        console.log('[Payment] Customer balance update skipped:', balErr instanceof Error ? balErr.message : balErr)
-      }
-    })
+    // Update customer balance
+    try {
+      await db.query(`
+        UPDATE market_wholesale_customers SET current_balance = COALESCE(current_balance, 0) - $1, updated_at = NOW()
+        WHERE id = $2
+      `, [effectiveAmount, invoice.customer_id])
+    } catch (balErr) {
+      console.log('[Payment] Customer balance update skipped:', balErr instanceof Error ? balErr.message : balErr)
+    }
 
     return NextResponse.json({
       success: true,
